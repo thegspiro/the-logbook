@@ -854,6 +854,16 @@ class Motion(Base):
     votes_for: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     votes_against: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     votes_abstain: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    votes_recused: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # What the vote needed to carry: see app/utils/motion_votes.py. NULL reads
+    # as the default, a majority of the votes cast.
+    threshold: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # Each member's vote, when the vote was taken by roll call:
+    # [{"user_id": str | None, "name": str, "vote": yes|no|abstain|recuse}].
+    # The totals above are derived from it when it is recorded.
+    roll_call: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Metadata
     created_at: Mapped[datetime] = mapped_column(

@@ -276,6 +276,19 @@ class TemplateListItem(UTCResponseBase):
 # ============================================
 
 
+class RollCallEntry(BaseModel):
+    """One member's vote in a roll call.
+
+    ``user_id`` is filled in by the server from the minutes' own roll and is
+    ignored on the way in: a vote belongs to the person the minutes record as
+    present, not to whoever the request names.
+    """
+
+    name: str = Field(..., min_length=1, max_length=200)
+    vote: Literal["yes", "no", "abstain", "recuse"]
+    user_id: Optional[str] = None
+
+
 class MotionBase(BaseModel):
     """Base motion schema"""
 
@@ -298,6 +311,19 @@ class MotionBase(BaseModel):
     votes_for: Optional[int] = Field(None, ge=0)
     votes_against: Optional[int] = Field(None, ge=0)
     votes_abstain: Optional[int] = Field(None, ge=0)
+    votes_recused: Optional[int] = Field(None, ge=0)
+    threshold: Optional[Literal["majority_cast", "majority_present", "two_thirds"]] = (
+        Field(
+            None,
+            description="What the motion needed to carry; a majority of the votes "
+            "cast when unset",
+        )
+    )
+    roll_call: Optional[List[RollCallEntry]] = Field(
+        None,
+        description="Each member's vote. When given, the vote totals are "
+        "counted from it and any totals sent with it are ignored",
+    )
     election_id: Optional[str] = Field(
         None, max_length=36, description="The ballot that decided this motion"
     )
@@ -330,6 +356,11 @@ class MotionUpdate(BaseModel):
     votes_for: Optional[int] = Field(None, ge=0)
     votes_against: Optional[int] = Field(None, ge=0)
     votes_abstain: Optional[int] = Field(None, ge=0)
+    votes_recused: Optional[int] = Field(None, ge=0)
+    threshold: Optional[Literal["majority_cast", "majority_present", "two_thirds"]] = (
+        None
+    )
+    roll_call: Optional[List[RollCallEntry]] = None
     order: Optional[int] = Field(None, ge=0)
     election_id: Optional[str] = Field(None, max_length=36)
     ballot_item_id: Optional[str] = Field(None, max_length=100)
@@ -342,6 +373,11 @@ class MotionResponse(MotionBase):
     minutes_id: str
     order: int
     election_title: Optional[str] = None
+    suggested_status: Optional[str] = Field(
+        None,
+        description="passed or failed when the counts and threshold decide it; "
+        "the recorded status is the secretary's",
+    )
     created_at: datetime
     updated_at: datetime
 

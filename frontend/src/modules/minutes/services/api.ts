@@ -10,6 +10,7 @@ import type {
   MeetingMinutes,
   Motion,
   MotionCreate,
+  MotionUpdate,
   ActionItem,
   ActionItemAssignee,
   ActionItemCreate,
@@ -111,6 +112,11 @@ export const minutesService = {
 
   async addMotion(minutesId: string, data: MotionCreate): Promise<Motion> {
     const response = await api.post<Motion>(`/minutes-records/${minutesId}/motions`, data);
+    return response.data;
+  },
+
+  async updateMotion(minutesId: string, motionId: string, data: MotionUpdate): Promise<Motion> {
+    const response = await api.put<Motion>(`/minutes-records/${minutesId}/motions/${motionId}`, data);
     return response.data;
   },
 

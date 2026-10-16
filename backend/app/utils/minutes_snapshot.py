@@ -65,6 +65,17 @@ def _section_snapshot(section: dict) -> dict:
     return entry
 
 
+def _vote_detail(motion: Any) -> dict[str, Any]:
+    """How a motion's vote was taken, only for the parts that were recorded, so
+    a snapshot sealed before they existed keeps the hash it was sealed with."""
+    detail: dict[str, Any] = {}
+    for key in ("threshold", "votes_recused", "roll_call"):
+        value = getattr(motion, key, None)
+        if value is not None:
+            detail[key] = value
+    return detail
+
+
 def build_snapshot(
     minutes: Any,
     election_results: Iterable[Any],
@@ -134,6 +145,7 @@ def build_snapshot(
                     if getattr(m, "section_key", None)
                     else {}
                 ),
+                **_vote_detail(m),
             }
             for m in sorted(minutes.motions or [], key=lambda m: (m.order, m.id))
         ],

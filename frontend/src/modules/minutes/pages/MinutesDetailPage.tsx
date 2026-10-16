@@ -46,6 +46,8 @@ import { CarryForwardDialog } from '../components/CarryForwardDialog';
 import { ClosedSessionsPanel } from '../components/ClosedSessionsPanel';
 import { ElectionResultsPanel } from '../components/ElectionResultsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
+import { MotionVoteFields } from '../components/MotionVoteFields';
+import { MotionVoteSummary } from '../components/MotionVoteSummary';
 import { MeetingTimeCapture } from '../components/MeetingTimeCapture';
 import { PersonPicker } from '../components/PersonPicker';
 import { SectionMotion } from '../components/SectionMotion';
@@ -53,6 +55,9 @@ import { RevisionsPanel } from '../components/RevisionsPanel';
 import { SuggestChangeForm } from '../components/SuggestChangeForm';
 import { SuggestionsPanel } from '../components/SuggestionsPanel';
 import { useMinutesSuggestions } from '../hooks/useMinutesSuggestions';
+import { motionMakers } from '../utils/motionMakers';
+import { emptyVoteDraft, voteDraftPayload } from '../utils/voteDraft';
+import type { VoteDraft } from '../utils/voteDraft';
 
 const STATUS_BADGES: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -144,10 +149,8 @@ export const MinutesDetailPage: React.FC = () => {
     moved_by: '',
     seconded_by: '',
     status: 'passed',
-    votes_for: undefined,
-    votes_against: undefined,
-    votes_abstain: undefined,
   });
+  const [voteDraft, setVoteDraft] = useState<VoteDraft>(emptyVoteDraft());
 
   // Action item form
   const [showActionForm, setShowActionForm] = useState(false);
@@ -498,6 +501,7 @@ export const MinutesDetailPage: React.FC = () => {
       try {
         await minutesService.addMotion(minutesId, {
           ...motionForm,
+          ...voteDraftPayload(voteDraft, motionMakers(minutes?.attendees ?? [])),
           order: minutes?.motions.length || 0,
         });
         setShowMotionForm(false);
@@ -506,16 +510,25 @@ export const MinutesDetailPage: React.FC = () => {
           moved_by: '',
           seconded_by: '',
           status: 'passed',
-          votes_for: undefined,
-          votes_against: undefined,
-          votes_abstain: undefined,
         });
+        setVoteDraft(emptyVoteDraft());
         void fetchMinutes();
         toast.success('Motion added');
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add motion'));
       }
     });
+
+  const handleUseSuggestedResult = async (motionId: string, status: 'passed' | 'failed') => {
+    if (!minutesId) return;
+    try {
+      await minutesService.updateMotion(minutesId, motionId, { status });
+      await fetchMinutes();
+      toast.success(`Result changed to ${status}`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to change the result'));
+    }
+  };
 
   const handleDeleteMotion = async (motionId: string) => {
     if (!minutesId) return;
@@ -1297,65 +1310,12 @@ export const MinutesDetailPage: React.FC = () => {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div>
-                  <label htmlFor="votes-for" className="sr-only">
-                    Votes for
-                  </label>
-                  <input
-                    id="votes-for"
-                    type="number"
-                    min={0}
-                    value={motionForm.votes_for ?? ''}
-                    onChange={(e) =>
-                      setMotionForm({ ...motionForm, votes_for: e.target.value ? parseInt(e.target.value) : undefined })
-                    }
-                    placeholder="Votes for"
-                    aria-label="Votes for"
-                    className="form-input"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="votes-against" className="sr-only">
-                    Votes against
-                  </label>
-                  <input
-                    id="votes-against"
-                    type="number"
-                    min={0}
-                    value={motionForm.votes_against ?? ''}
-                    onChange={(e) =>
-                      setMotionForm({
-                        ...motionForm,
-                        votes_against: e.target.value ? parseInt(e.target.value) : undefined,
-                      })
-                    }
-                    placeholder="Votes against"
-                    aria-label="Votes against"
-                    className="form-input"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="votes-abstain" className="sr-only">
-                    Abstentions
-                  </label>
-                  <input
-                    id="votes-abstain"
-                    type="number"
-                    min={0}
-                    value={motionForm.votes_abstain ?? ''}
-                    onChange={(e) =>
-                      setMotionForm({
-                        ...motionForm,
-                        votes_abstain: e.target.value ? parseInt(e.target.value) : undefined,
-                      })
-                    }
-                    placeholder="Abstentions"
-                    aria-label="Abstentions"
-                    className="form-input"
-                  />
-                </div>
-              </div>
+              <MotionVoteFields
+                idPrefix="motion"
+                attendees={minutes.attendees ?? []}
+                value={voteDraft}
+                onChange={setVoteDraft}
+              />
               {ballots && ballots.length > 0 && (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
@@ -1439,12 +1399,6 @@ export const MinutesDetailPage: React.FC = () => {
                       <div className="text-theme-text-muted mt-2 space-x-4 text-xs">
                         {motion.moved_by && <span>Moved by: {motion.moved_by}</span>}
                         {motion.seconded_by && <span>Seconded by: {motion.seconded_by}</span>}
-                        {motion.votes_for !== null && motion.votes_for !== undefined && (
-                          <span>
-                            Vote: {motion.votes_for}-{motion.votes_against || 0}
-                            {motion.votes_abstain ? ` (${motion.votes_abstain} abstain)` : ''}
-                          </span>
-                        )}
                         {motion.election_id && (
                           <span>
                             Decided by ballot:{' '}
@@ -1457,6 +1411,16 @@ export const MinutesDetailPage: React.FC = () => {
                           </span>
                         )}
                       </div>
+                      <MotionVoteSummary
+                        motion={motion}
+                        onUseSuggested={
+                          canManage && isEditable
+                            ? (status) => {
+                                void handleUseSuggestedResult(motion.id, status);
+                              }
+                            : undefined
+                        }
+                      />
                     </div>
                     {canManage && isEditable && (
                       <button

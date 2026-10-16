@@ -49,6 +49,7 @@ from app.services.separation_of_duties import assert_different_person
 from app.services.template_service import TemplateService
 from app.utils.minutes_attendance import normalize_attendee
 from app.utils.model_updates import apply_updates
+from app.utils.motion_votes import settle_roll_call, tally
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.rich_text import normalize_format, section_is_blank
@@ -195,6 +196,22 @@ class MinuteService:
         }
         if str(ballot_item_id) not in known:
             raise ValueError("That item is not on the election's ballot")
+
+    @staticmethod
+    def _vote_record(roll_call, attendees) -> dict:
+        """The stored vote fields a roll call gives: the settled roll and the
+        totals counted from it, or ``{}`` when there is no roll call.
+
+        The totals are always derived, never taken from the request, so a
+        roll call and its counts cannot disagree.
+        """
+        if not roll_call:
+            return {}
+        entries = [
+            e.model_dump() if hasattr(e, "model_dump") else dict(e) for e in roll_call
+        ]
+        settled = settle_roll_call(entries, attendees)
+        return {"roll_call": settled, **tally(settled)}
 
     @staticmethod
     def _check_meeting_times(started, ended) -> None:
@@ -387,6 +404,13 @@ class MinuteService:
                 await self._check_motion_ballot(
                     motion_data.election_id, motion_data.ballot_item_id, organization_id
                 )
+                votes = {
+                    "votes_for": motion_data.votes_for,
+                    "votes_against": motion_data.votes_against,
+                    "votes_abstain": motion_data.votes_abstain,
+                    "votes_recused": motion_data.votes_recused,
+                    **self._vote_record(motion_data.roll_call, minutes.attendees),
+                }
                 motion = Motion(
                     minutes_id=minutes.id,
                     order=motion_data.order if motion_data.order else i,
@@ -395,11 +419,10 @@ class MinuteService:
                     seconded_by=motion_data.seconded_by,
                     discussion_notes=motion_data.discussion_notes,
                     status=MotionStatus(motion_data.status),
-                    votes_for=motion_data.votes_for,
-                    votes_against=motion_data.votes_against,
-                    votes_abstain=motion_data.votes_abstain,
+                    threshold=motion_data.threshold,
                     election_id=motion_data.election_id,
                     ballot_item_id=motion_data.ballot_item_id,
+                    **votes,
                 )
                 self.db.add(motion)
 
@@ -1011,6 +1034,13 @@ class MinuteService:
         await self._check_motion_ballot(
             data.election_id, data.ballot_item_id, organization_id
         )
+        votes = {
+            "votes_for": data.votes_for,
+            "votes_against": data.votes_against,
+            "votes_abstain": data.votes_abstain,
+            "votes_recused": data.votes_recused,
+            **self._vote_record(data.roll_call, minutes.attendees),
+        }
         motion = Motion(
             minutes_id=minutes_id,
             order=data.order,
@@ -1020,11 +1050,10 @@ class MinuteService:
             section_key=data.section_key,
             discussion_notes=data.discussion_notes,
             status=MotionStatus(data.status),
-            votes_for=data.votes_for,
-            votes_against=data.votes_against,
-            votes_abstain=data.votes_abstain,
+            threshold=data.threshold,
             election_id=data.election_id,
             ballot_item_id=data.ballot_item_id,
+            **votes,
         )
         self.db.add(motion)
         await self.db.commit()
@@ -1062,6 +1091,13 @@ class MinuteService:
         if "status" in update_data:
             update_data["status"] = MotionStatus(update_data["status"])
         self._check_motion_section(minutes, update_data.get("section_key"))
+
+        # A roll call replaces the totals; clearing it leaves the totals as
+        # they were, since they are then the record of a vote taken by count.
+        if "roll_call" in update_data:
+            record = self._vote_record(data.roll_call, minutes.attendees)
+            update_data.pop("roll_call")
+            update_data.update(record or {"roll_call": None})
 
         if "election_id" in update_data or "ballot_item_id" in update_data:
             election_id = update_data.get("election_id", motion.election_id)

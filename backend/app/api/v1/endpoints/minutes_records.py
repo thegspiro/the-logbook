@@ -74,6 +74,7 @@ from app.services.minutes_record_service import (
 )
 from app.utils import download_names
 from app.utils.minutes_pdf import render_minutes_pdf
+from app.utils.motion_votes import vote_summary
 from app.utils.org_timezone import resolve_scheduling_timezone, scheduling_timezone
 
 router = APIRouter()
@@ -1155,12 +1156,7 @@ async def download_minutes_pdf(
                     if m.election_id
                     else None
                 ),
-                "vote_display": (
-                    f"Vote {m.votes_for}-{m.votes_against or 0}"
-                    + (f" ({m.votes_abstain} abstain)" if m.votes_abstain else "")
-                    if m.votes_for is not None
-                    else ""
-                ),
+                "vote_display": vote_summary(m),
             }
             for index, m in enumerate(minutes.motions or [], 1)
         ],
