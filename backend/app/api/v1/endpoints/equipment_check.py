@@ -45,6 +45,8 @@ from app.schemas.equipment_check import (
     ComplianceReportResponse,
     CrossTemplateLinkRequest,
     CrossTemplateLinkResponse,
+    CrossTemplateUnlinkRequest,
+    CrossTemplateUnlinkResponse,
     DeployedLotUpdateRequest,
     EquipmentCheckCompleteItems,
     EquipmentCheckTemplateCreate,
@@ -450,6 +452,32 @@ async def auto_link_inventory_items(
     try:
         return await service.auto_link_report(
             str(current_user.organization_id),
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
+@router.post("/inventory-links/undo", response_model=CrossTemplateUnlinkResponse)
+async def unlink_inventory_items_across_templates(
+    data: CrossTemplateUnlinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
+):
+    """Undo links made on the department-wide report, across templates.
+
+    Each position is cleared only while it is still linked to the item named
+    in the request; one re-linked since is left as it is and counted in
+    ``skipped``. All or nothing.
+
+    **Requires permission: inventory.check_manage**
+    """
+    service = EquipmentCheckService(db)
+    try:
+        return await service.unlink_inventory_items_across_templates(
+            str(current_user.organization_id),
+            data.links,
             user_id=str(current_user.id),
             user_name=_user_display_name(current_user),
         )

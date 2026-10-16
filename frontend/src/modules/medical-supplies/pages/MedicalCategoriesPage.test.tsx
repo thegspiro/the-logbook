@@ -260,6 +260,20 @@ describe('MedicalCategoriesPage low stock threshold', () => {
     mockCheckPermission.mockReturnValue(false);
   });
 
+  it('says how many supplies a category holds before it is opened', async () => {
+    mockGetCategories.mockResolvedValue([
+      { ...AIRWAY, item_count: 3 },
+      { ...TRAUMA, item_count: 1 },
+    ]);
+    renderWithRouter(<MedicalCategoriesPage />);
+
+    const show = await screen.findByRole('button', { name: 'Show 3 supplies' });
+    expect(screen.getByRole('button', { name: 'Show 1 supply' })).toBeInTheDocument();
+
+    await userEvent.click(show);
+    expect(screen.getByRole('button', { name: 'Hide 3 supplies' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('prints the threshold when set and nothing when the API sends null', async () => {
     mockGetCategories.mockResolvedValue([
       { ...AIRWAY, low_stock_threshold: null },

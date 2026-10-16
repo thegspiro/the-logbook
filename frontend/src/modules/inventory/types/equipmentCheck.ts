@@ -389,6 +389,14 @@ export interface AutoLinkedGroup {
   /** The "also called" name that produced the match, when it was not the item's own name. */
   matchedAlias?: string | null;
   positionCount: number;
+  /** The positions this pass wrote; ones linked by hand meanwhile are left out. */
+  positions: LinkReportPosition[];
+}
+
+/** What an undo cleared, and how many positions had been re-linked since. */
+export interface CrossTemplateUnlinkResult {
+  unlinked: number;
+  skipped: number;
 }
 
 export interface AutoLinkResult extends CrossTemplateLinkResult {

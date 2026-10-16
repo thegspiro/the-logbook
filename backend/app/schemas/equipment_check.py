@@ -1198,6 +1198,10 @@ class AutoLinkedGroup(BaseModel):
     # why "BVM" was linked to "Bag Valve Mask".
     matched_alias: Optional[str] = None
     position_count: int
+    # The positions this pass actually wrote — positions linked by hand in
+    # the meantime are left out — so the screen can link to each template and
+    # undo exactly these.
+    positions: List[LinkReportPosition] = Field(default_factory=list)
 
 
 class AutoLinkResponse(CrossTemplateLinkResponse):
@@ -1205,6 +1209,25 @@ class AutoLinkResponse(CrossTemplateLinkResponse):
 
     left_for_review: int = 0
     groups: List[AutoLinkedGroup] = Field(default_factory=list)
+
+
+class CrossTemplateUnlinkRequest(BaseModel):
+    """Links to undo: template item id -> the inventory item it was linked to.
+
+    The expected item is part of the request so a position re-linked by hand
+    since is recognised and left alone. Capped like the link request.
+    """
+
+    links: Dict[str, str] = Field(..., min_length=1, max_length=2000)
+
+
+class CrossTemplateUnlinkResponse(BaseModel):
+    """How many positions were unlinked, and how many had changed meanwhile."""
+
+    model_config = _camel_config
+
+    unlinked: int = 0
+    skipped: int = 0
 
 
 # CheckTemplateItemResponse references DeployedLot, which is declared with the

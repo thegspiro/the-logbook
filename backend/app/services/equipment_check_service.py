@@ -4874,6 +4874,7 @@ class EquipmentCheckService:
                     "confidence": best["confidence"],
                     "matched_alias": best.get("matched_alias"),
                     "position_count": group["position_count"],
+                    "positions": group["positions"],
                 }
             )
 
@@ -4893,11 +4894,98 @@ class EquipmentCheckService:
             user_name=user_name,
             source="catalog_auto_link",
         )
+        # A position somebody linked by hand in the meantime was not written,
+        # so it is neither reported as linked nor offered for undo: undoing it
+        # would clear a choice this pass never made.
+        skipped_ids = {str(p["template_item_id"]) for p in result["skipped_positions"]}
+        for entry in applied:
+            entry["positions"] = [
+                p
+                for p in entry["positions"]
+                if str(p["template_item_id"]) not in skipped_ids
+            ]
+            entry["position_count"] = len(entry["positions"])
         return {
             **result,
             "left_for_review": left_for_review,
-            "groups": applied,
+            "groups": [entry for entry in applied if entry["positions"]],
         }
+
+    async def unlink_inventory_items_across_templates(
+        self,
+        organization_id: str,
+        links: Dict[str, str],
+        *,
+        user_id: str,
+        user_name: str,
+        source: str = "catalog_auto_link_undo",
+    ) -> Dict[str, int]:
+        """Undo links the automatic pass made, position by position.
+
+        ``links`` maps template item id -> the inventory item it was linked
+        to. A position is cleared only while it still points at that item:
+        if someone has since re-linked it in the builder, that newer choice
+        is theirs and stays, counted in ``skipped``. This is the mirror of
+        the rule ``link_inventory_items_across_templates`` follows, and for
+        the same reason — the screen asking is showing a snapshot.
+
+        All or nothing, and every id is resolved through an org-scoped
+        template (XC-1), as on the link side.
+        """
+        if not links:
+            return {"unlinked": 0, "skipped": 0}
+
+        result = await self.db.execute(
+            select(CheckTemplateItem, EquipmentCheckTemplate.id)
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                CheckTemplateItem.id.in_(list(links)),
+                EquipmentCheckTemplate.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        found = {item.id: (item, template_id) for item, template_id in result.all()}
+        unknown = set(links) - set(found)
+        if unknown:
+            raise ValueError(
+                f"{len(unknown)} checklist item(s) were not found and nothing "
+                f"was unlinked"
+            )
+
+        unlinked = 0
+        skipped = 0
+        for item_id, expected in links.items():
+            item, template_id = found[item_id]
+            if str(item.inventory_item_id or "") != str(expected):
+                skipped += 1
+                continue
+            old = item.inventory_item_id
+            item.inventory_item_id = None
+            await self.log_template_change(
+                organization_id=organization_id,
+                template_id=template_id,
+                user_id=user_id,
+                user_name=user_name,
+                action="update",
+                entity_type="item",
+                entity_id=item_id,
+                entity_name=item.name,
+                changes={
+                    "inventory_item_id": {"old": old, "new": None},
+                    "source": source,
+                },
+            )
+            unlinked += 1
+
+        await self.db.commit()
+        return {"unlinked": unlinked, "skipped": skipped}
 
     # ------------------------------------------------------------------
     # Private Helpers

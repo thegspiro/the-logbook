@@ -956,6 +956,8 @@ export interface InventoryCategory {
   active: boolean;
   created_at: string;
   updated_at: string;
+  /** Active items filed here. Sent by the medical category list only. */
+  item_count?: number | null;
 }
 
 export interface InventoryItem {
@@ -1011,6 +1013,13 @@ export interface InventoryItem {
   lot_stock?: number | null;
   /** True when the item is stocked as lots, so `lot_stock` is the count to show. */
   is_lot_stocked?: boolean;
+  /**
+   * Soonest expiry among lots still holding stock, expired ones included, and
+   * its distance in days from the department's today. Sent by the medical
+   * supply list only.
+   */
+  next_expiration_date?: string | null;
+  days_until_next_expiration?: number | null;
   last_inspection_date?: string;
   next_inspection_due?: string;
   inspection_interval_days?: number;

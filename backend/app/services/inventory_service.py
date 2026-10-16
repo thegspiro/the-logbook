@@ -9300,6 +9300,55 @@ class InventoryService:
         )
         return {str(item_id): size for item_id, size in result.all()}
 
+    async def next_lot_expirations(
+        self, organization_id: str, item_ids: Iterable[str]
+    ) -> Dict[str, date]:
+        """``{item_id: soonest expiry}`` across lots that still hold stock.
+
+        Expired lots count: a lot past its date with units left in it is the
+        most urgent thing on the shelf, and leaving it out would show the next
+        good date over stock that has to be pulled. Empty lots and lots with
+        no date have nothing to report.
+        """
+        ids = {str(i) for i in item_ids}
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                InventoryLot.inventory_item_id, func.min(InventoryLot.expiration_date)
+            )
+            .where(
+                InventoryLot.organization_id == str(organization_id),
+                InventoryLot.inventory_item_id.in_(ids),
+                InventoryLot.quantity > 0,
+                InventoryLot.expiration_date.is_not(None),
+            )
+            .group_by(InventoryLot.inventory_item_id)
+        )
+        return {str(item_id): soonest for item_id, soonest in result.all()}
+
+    async def category_item_counts(
+        self, organization_id: str, category_ids: Iterable[str]
+    ) -> Dict[str, int]:
+        """Active items filed under each category, org-scoped, in one query.
+
+        Active only, matching the supply list a category card opens, so the
+        count on the card and the rows under it agree.
+        """
+        ids = {str(i) for i in category_ids}
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(InventoryItem.category_id, func.count(InventoryItem.id))
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.category_id.in_(ids),
+                InventoryItem.active.is_(True),
+            )
+            .group_by(InventoryItem.category_id)
+        )
+        return {str(cat_id): int(n) for cat_id, n in result.all()}
+
     async def pool_item_ids_by_name(
         self,
         organization_id: str,

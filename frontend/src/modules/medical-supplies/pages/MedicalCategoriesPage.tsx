@@ -34,6 +34,15 @@ const EMPTY_FORM: FormState = { name: '', description: '', low_stock_threshold: 
 // pointed at Medical Supplies, which pages through all of them.
 const CATEGORY_ITEMS_LIMIT = 100;
 
+/**
+ * "3 supplies" when the server sent a count, plain "supplies" when it did not,
+ * so the card says how much is inside before it is opened.
+ */
+function supplyCountLabel(count: number | null | undefined): string {
+  if (count == null) return 'supplies';
+  return `${formatNumber(count)} ${count === 1 ? 'supply' : 'supplies'}`;
+}
+
 interface CategorySupplies {
   items: InventoryItem[];
   total: number;
@@ -366,7 +375,7 @@ const MedicalCategoriesPage: React.FC = () => {
                 ) : (
                   <ChevronRight className="h-4 w-4" aria-hidden="true" />
                 )}
-                {expandedIds.has(category.id) ? 'Hide supplies' : 'Show supplies'}
+                {`${expandedIds.has(category.id) ? 'Hide' : 'Show'} ${supplyCountLabel(category.item_count)}`}
               </button>
               {expandedIds.has(category.id) && (
                 <div id={`category-supplies-${category.id}`}>

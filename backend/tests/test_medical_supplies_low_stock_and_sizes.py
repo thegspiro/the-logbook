@@ -24,6 +24,7 @@ from app.models.inventory import (
 )
 from app.models.user import Organization
 from app.services.inventory_service import InventoryService
+from app.utils.org_timezone import resolve_org_today
 
 pytestmark = pytest.mark.integration
 
@@ -187,3 +188,97 @@ class TestExpiringLotSizes:
         )
 
         assert sizes == {}
+
+
+class TestNextExpiry:
+    async def test_each_supply_carries_its_soonest_stocked_expiry(
+        self, db_session, stock
+    ):
+        org, items = stock
+        today = await resolve_org_today(db_session, org.id)
+        expired = today - timedelta(days=10)
+        db_session.add_all(
+            [
+                # Expired with units left: the most urgent date, so it wins.
+                InventoryLot(
+                    id=str(uuid.uuid4()),
+                    organization_id=org.id,
+                    inventory_item_id=items["low"].id,
+                    quantity=1,
+                    expiration_date=expired,
+                ),
+                InventoryLot(
+                    id=str(uuid.uuid4()),
+                    organization_id=org.id,
+                    inventory_item_id=items["low"].id,
+                    quantity=4,
+                    expiration_date=today + timedelta(days=90),
+                ),
+                # An empty lot has nothing left to expire.
+                InventoryLot(
+                    id=str(uuid.uuid4()),
+                    organization_id=org.id,
+                    inventory_item_id=items["fine"].id,
+                    quantity=0,
+                    expiration_date=today - timedelta(days=30),
+                ),
+            ]
+        )
+        await db_session.flush()
+
+        result = await _list(db_session, org)
+
+        by_name = {i.name: i for i in result.items}
+        assert by_name["Gauze"].next_expiration_date == expired
+        assert by_name["Gauze"].days_until_next_expiration == -10
+        assert by_name["Cannula"].next_expiration_date is None
+        assert by_name["Shears"].days_until_next_expiration is None
+        peds_lot = date.today() + timedelta(days=5)
+        assert by_name["Oxygen Mask"].next_expiration_date == peds_lot
+        assert by_name["Oxygen Mask"].days_until_next_expiration == (
+            (peds_lot - today).days
+        )
+
+    async def test_ignores_another_departments_lots(self, db_session, stock):
+        _org, items = stock
+
+        soonest = await InventoryService(db_session).next_lot_expirations(
+            str(uuid.uuid4()), [items["peds"].id]
+        )
+
+        assert soonest == {}
+
+
+class TestCategoryCounts:
+    async def test_each_medical_category_counts_its_active_supplies(
+        self, db_session, stock
+    ):
+        org, items = stock
+        items["fine"].active = False
+        db_session.add(
+            InventoryCategory(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                name="Empty",
+                item_type=ItemType.MEDICAL,
+            )
+        )
+        await db_session.flush()
+
+        categories = await ms.list_medical_categories(
+            active_only=True, db=db_session, current_user=_user(org)
+        )
+
+        assert {c.name: c.item_count for c in categories} == {
+            "Airway": 3,
+            "Empty": 0,
+        }
+
+    async def test_ignores_another_departments_items(self, db_session, stock):
+        _org, items = stock
+
+        counts = await InventoryService(db_session).category_item_counts(
+            str(uuid.uuid4()), [items["low"].category_id]
+        )
+
+        assert counts == {}

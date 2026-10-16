@@ -471,6 +471,9 @@ class InventoryCategoryResponse(InventoryCategoryBase):
     created_by: Optional[UUID] = None
     # Override: DB column is "extra_data"; SQLAlchemy reserves "metadata" as a class attr
     metadata: Optional[Dict[str, Any]] = Field(None, validation_alias="extra_data")
+    # Active items filed here. Set by the medical category list only; other
+    # lists leave it empty rather than report a count they did not take.
+    item_count: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -749,6 +752,11 @@ class InventoryItemResponse(InventoryItemBase):
     # the item has no lots — there is nothing to prefer over `quantity`.
     lot_stock: Optional[int] = None
     is_lot_stocked: bool = False
+    # The soonest expiry among lots still holding stock (expired ones
+    # included), and its distance from the department's today. Set by the
+    # medical supply list only; other lists leave both empty.
+    next_expiration_date: Optional[date] = None
+    days_until_next_expiration: Optional[int] = None
 
     # The requesting member's own pin position, 0-based, or null when they
     # have not pinned this item. Personal to the caller: two members reading

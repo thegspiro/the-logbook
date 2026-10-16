@@ -142,11 +142,19 @@ async def list_medical_categories(
     **Requires permission: inventory.view_medical or inventory.view**
     """
     service = InventoryService(db)
-    return await service.get_categories(
+    categories = await service.get_categories(
         organization_id=current_user.organization_id,
         item_types=MEDICAL_ITEM_TYPES,
         active_only=active_only,
     )
+    counts = await service.category_item_counts(
+        str(current_user.organization_id), [c.id for c in categories]
+    )
+    # Transient, like lot_stock on items: read by the response schema and
+    # never persisted.
+    for category in categories:
+        category.item_count = counts.get(str(category.id), 0)
+    return categories
 
 
 @router.post(
@@ -419,6 +427,18 @@ async def list_medical_items(
             else None
         ),
     )
+    soonest = await service.next_lot_expirations(
+        str(current_user.organization_id), [i.id for i in items]
+    )
+    if soonest:
+        today = await resolve_org_today(db, current_user.organization_id)
+        # Transient, like lot_stock: read by the response schema only.
+        for item in items:
+            expires = soonest.get(str(item.id))
+            item.next_expiration_date = expires
+            item.days_until_next_expiration = (
+                (expires - today).days if expires else None
+            )
     return ItemsListResponse(items=items, total=total, skip=skip, limit=limit)
 
 
