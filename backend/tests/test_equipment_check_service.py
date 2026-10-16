@@ -59,6 +59,7 @@ class TestCloneCompartment:
             required_quantity=None,
             expected_quantity=None,
             critical_minimum_quantity=None,
+            count_unit=None,
             min_level=None,
             level_unit=None,
             serial_number="S-1",
@@ -865,7 +866,17 @@ class TestAuthoritativeCheckTiming:
             patch.object(
                 service,
                 "_load_checkable_template_items",
-                AsyncMock(return_value={"item-1": MagicMock()}),
+                AsyncMock(
+                    return_value={
+                        # Quantities stated: a bare MagicMock's attributes are
+                        # truthy mocks, which par resolution cannot order.
+                        "item-1": MagicMock(
+                            required_quantity=None,
+                            expected_quantity=None,
+                            critical_minimum_quantity=None,
+                        )
+                    }
+                ),
             ),
             patch.object(
                 service, "_compute_check_status", return_value=(1, 1, 0, "pass")
@@ -927,7 +938,17 @@ class TestAuthoritativeCheckTiming:
             patch.object(
                 service,
                 "_load_checkable_template_items",
-                AsyncMock(return_value={"item-1": MagicMock()}),
+                AsyncMock(
+                    return_value={
+                        # Quantities stated: a bare MagicMock's attributes are
+                        # truthy mocks, which par resolution cannot order.
+                        "item-1": MagicMock(
+                            required_quantity=None,
+                            expected_quantity=None,
+                            critical_minimum_quantity=None,
+                        )
+                    }
+                ),
             ),
             patch.object(service, "get_check", AsyncMock(return_value=check)),
             patch.object(service, "_resolve_expiration", return_value=None),
@@ -1570,17 +1591,14 @@ class TestShiftCheckStatusItemCount:
         assert summaries[0]["total_items"] == 3
 
 
-class TestSnapshottedTargetQuantity:
-    """The filed record's ``required_quantity`` is the target this service
-    means, not half of it.
+class TestCountPassFloorAndPar:
+    """A count answers two questions, and each has its own number.
 
-    ``_target_quantity`` is ``required_quantity or expected_quantity``. The
-    snapshot used to take the column alone, which gave the service two
-    definitions of "short": ``_compute_check_status`` and ``update_check``'s
-    recompute read this snapshot, while ``_is_short`` and ``swap_item_lot``'s
-    submitter limits read the resolved value. A position carrying
-    ``required_quantity = 0`` beside a positive ``expected_quantity`` was short
-    by one rule and full by the other.
+    Min to Pass (and Critical Min, even when Min to Pass is blank) decides
+    whether the line fails. Par decides the shortfall a restock fills. The
+    department chose this split on 2026-10-16: short of par alone is a
+    restock line, not a failure, so a truck is not failed for being one roll
+    of tape under par unless the admin set a floor.
     """
 
     @staticmethod
@@ -1596,104 +1614,184 @@ class TestSnapshottedTargetQuantity:
             "serial_number": None,
             "lot_number": None,
             "expiration_date": None,
+            "inventory_item_id": None,
+            "unit_of_measure": None,
         }
         values.update(overrides)
         return SimpleNamespace(**values)
 
-    def test_a_zero_minimum_falls_through_to_the_expected_count(self):
+    def judge(self, template, found, status="pass"):
+        item = {"template_item_id": "ti-1", "status": status, "quantity_found": found}
+        EquipmentCheckService._snapshot_from_template(item, template)
+        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+            [item], today=date.today()
+        )
+        return item, failed, overall
+
+    # -- The rule table the department signed off on -------------------------
+
+    def test_between_min_and_par_passes(self):
+        item, failed, overall = self.judge(
+            self.template_item(expected_quantity=10, required_quantity=6), 8
+        )
+        assert item["status"] == "pass"
+        assert failed == 0
+        assert overall == "pass"
+
+    def test_below_min_fails(self):
+        item, failed, _ = self.judge(
+            self.template_item(expected_quantity=10, required_quantity=6), 5
+        )
+        assert item["status"] == "fail"
+        assert failed == 1
+
+    def test_par_only_short_passes(self):
+        # The behaviour change: this used to fail.
+        item, failed, overall = self.judge(self.template_item(expected_quantity=10), 8)
+        assert item["status"] == "pass"
+        assert failed == 0
+        assert overall == "pass"
+
+    def test_min_only_at_min_passes(self):
+        item, failed, _ = self.judge(self.template_item(required_quantity=6), 6)
+        assert item["status"] == "pass"
+        assert failed == 0
+
+    def test_below_critical_fails_without_a_min(self):
+        item, failed, _ = self.judge(
+            self.template_item(expected_quantity=10, critical_minimum_quantity=3), 2
+        )
+        assert item["status"] == "fail"
+        assert failed == 1
+
+    def test_at_critical_without_a_min_passes(self):
+        item, _, _ = self.judge(
+            self.template_item(expected_quantity=10, critical_minimum_quantity=3), 3
+        )
+        assert item["status"] == "pass"
+
+    def test_a_crew_fail_is_never_downgraded(self):
+        # A full drawer can still hold the wrong size.
+        item, failed, _ = self.judge(
+            self.template_item(expected_quantity=10), 10, status="fail"
+        )
+        assert item["status"] == "fail"
+        assert failed == 1
+
+    # -- What the filed record keeps ------------------------------------------
+
+    def test_snapshot_keeps_min_raw_and_par_resolved(self):
+        item = {}
+        EquipmentCheckService._snapshot_from_template(
+            item, self.template_item(expected_quantity=10, required_quantity=6)
+        )
+        assert item["required_quantity"] == 6
+        assert item["expected_quantity"] == 10
+
+    def test_par_never_sits_below_min(self):
+        # Restocking to a par under Min to Pass would leave the line failing.
+        item = {}
+        EquipmentCheckService._snapshot_from_template(
+            item, self.template_item(expected_quantity=4, required_quantity=6)
+        )
+        assert item["expected_quantity"] == 6
+
+    def test_a_zero_minimum_leaves_par_to_the_expected_count(self):
         item = {}
         EquipmentCheckService._snapshot_from_template(
             item, self.template_item(required_quantity=0, expected_quantity=4)
         )
-        assert item["required_quantity"] == 4
+        assert item["expected_quantity"] == 4
+        assert item["required_quantity"] == 0
 
-    def test_a_required_minimum_still_outranks_the_expected_count(self):
-        item = {}
-        EquipmentCheckService._snapshot_from_template(
-            item, self.template_item(required_quantity=6, expected_quantity=4)
-        )
-        assert item["required_quantity"] == 6
-
-    def test_an_uncounted_position_snapshots_no_target(self):
+    def test_an_uncounted_position_snapshots_no_quantities(self):
         item = {}
         EquipmentCheckService._snapshot_from_template(item, self.template_item())
         assert item["required_quantity"] is None
+        assert item["expected_quantity"] is None
 
-    def test_an_absent_minimum_falls_through_to_the_expected_count(self):
-        # The common configuration, not an edge case: the template builder
-        # sends `required_quantity` only when its field is filled, and the
-        # field starts blank — so a count item whose author set an expected
-        # quantity and nothing else arrives here with NULL.
-        item = {}
+    def test_the_count_unit_is_snapshotted_for_counts_only(self):
+        counted = {}
         EquipmentCheckService._snapshot_from_template(
-            item, self.template_item(required_quantity=None, expected_quantity=4)
+            counted, self.template_item(unit_of_measure="rolls")
         )
-        assert item["required_quantity"] == 4
+        assert counted["count_unit"] == "rolls"
+        checked = {}
+        EquipmentCheckService._snapshot_from_template(
+            checked, self.template_item(check_type="function", unit_of_measure="ea")
+        )
+        assert checked["count_unit"] is None
 
-    def test_an_absent_minimum_brings_the_shortfall_check_into_play(self):
-        # The sharper half of the change. A snapshot of None did not merely
-        # compare loosely — `_compute_check_status` skips the branch entirely
-        # when `req_qty is None`, so no shortfall was ever detected on the
-        # configuration most count items actually have.
-        template = self.template_item(required_quantity=None, expected_quantity=4)
-        item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 1}
-        EquipmentCheckService._snapshot_from_template(item, template)
-
-        _, _, failed, overall = EquipmentCheckService._compute_check_status(
+    def test_a_pre_par_snapshot_is_judged_by_its_single_target(self):
+        # Rows filed before par was recorded stored min-else-par in
+        # required_quantity. Re-judging one (completing an old incomplete
+        # check) must not quietly pass what was filed as short.
+        item = {
+            "template_item_id": "ti-1",
+            "status": "pass",
+            "quantity_found": 8,
+            "required_quantity": 10,
+            "critical_minimum_quantity": None,
+        }
+        _, _, failed, _ = EquipmentCheckService._compute_check_status(
             [item], today=date.today()
         )
-
         assert item["status"] == "fail"
         assert failed == 1
-        assert overall == "fail"
 
-    def test_a_status_the_crew_already_failed_is_unaffected(self):
-        # Why the practical blast radius is small. The app computes the
-        # shortfall against the resolved target itself and submits `fail`, and
-        # `_compute_check_status` only ever upgrades a status — so on the
-        # normal path this change alters nothing. It bites a payload claiming
-        # `pass` on a short count: a stale offline-queue entry, an older
-        # client, a direct API caller.
-        template = self.template_item(required_quantity=None, expected_quantity=4)
-        item = {"template_item_id": "ti-1", "status": "fail", "quantity_found": 1}
-        EquipmentCheckService._snapshot_from_template(item, template)
 
-        _, _, failed, overall = EquipmentCheckService._compute_check_status(
-            [item], today=date.today()
+@pytest.mark.unit
+class TestParResolution:
+    """``_target_quantity`` is par: what a restock and a swap fill up to."""
+
+    @staticmethod
+    def item(**values):
+        base = {"required_quantity": None, "expected_quantity": None}
+        base.update(values)
+        return SimpleNamespace(**base)
+
+    def test_par_alone(self):
+        assert (
+            EquipmentCheckService._target_quantity(self.item(expected_quantity=10))
+            == 10
         )
 
-        assert item["status"] == "fail"
-        assert failed == 1
-        assert overall == "fail"
-
-    def test_the_shortfall_verdict_now_agrees_with_is_short(self):
-        # The point of the change. Counting 1 against a position whose real
-        # target is 4 is a shortfall by `_is_short`, and the filed record has
-        # to say so rather than passing because the raw column read 0.
-        template = self.template_item(required_quantity=0, expected_quantity=4)
-        item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 1}
-        EquipmentCheckService._snapshot_from_template(item, template)
-
-        _, _, failed, overall = EquipmentCheckService._compute_check_status(
-            [item], today=date.today()
+    def test_min_alone_is_par(self):
+        assert (
+            EquipmentCheckService._target_quantity(self.item(required_quantity=6)) == 6
         )
 
-        assert item["status"] == "fail"
-        assert failed == 1
-        assert overall == "fail"
-
-    def test_a_position_at_its_expected_count_still_passes(self):
-        template = self.template_item(required_quantity=0, expected_quantity=4)
-        item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 4}
-        EquipmentCheckService._snapshot_from_template(item, template)
-
-        _, _, failed, overall = EquipmentCheckService._compute_check_status(
-            [item], today=date.today()
+    def test_the_larger_wins(self):
+        assert (
+            EquipmentCheckService._target_quantity(
+                self.item(required_quantity=6, expected_quantity=10)
+            )
+            == 10
         )
 
-        assert item["status"] == "pass"
-        assert failed == 0
-        assert overall == "pass"
+    def test_uncounted(self):
+        assert EquipmentCheckService._target_quantity(self.item()) is None
+
+    def test_zero_is_still_counted(self):
+        assert (
+            EquipmentCheckService._target_quantity(self.item(expected_quantity=0)) == 0
+        )
+
+
+@pytest.mark.unit
+class TestPassFloor:
+    def test_none_without_either(self):
+        assert EquipmentCheckService._pass_floor(None, None) is None
+
+    def test_min(self):
+        assert EquipmentCheckService._pass_floor(6, None) == 6
+
+    def test_critical_without_min(self):
+        assert EquipmentCheckService._pass_floor(None, 3) == 3
+
+    def test_the_higher_floor_wins(self):
+        # A misordered template (critical above min) still fails below critical.
+        assert EquipmentCheckService._pass_floor(2, 3) == 3
 
 
 @pytest.mark.unit

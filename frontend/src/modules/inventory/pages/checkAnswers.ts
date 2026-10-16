@@ -19,27 +19,19 @@ import type { CheckItemAnswer, CheckItemSpec } from './CheckItemControls';
 /** The controls call these too, so the two layouts cannot drift apart. */
 export function countAnswer(item: CheckItemSpec, next: number): Partial<CheckItemAnswer> {
   const par = item.expectedQuantity ?? null;
+  const floor = item.passFloor ?? null;
   const value = Math.max(0, next);
   const short = par !== null && value < par;
   return {
     quantityFound: value,
     /*
-     * A count short of par is recorded as a failure.
-     *
-     * This used to store `pass`, on the reasoning that a restock is not a
-     * fault. That reasoning never reached a crew: the only screen holding it
-     * was `CountControl`, which nothing rendered, while the accordion stores
-     * `fail` and `EquipmentCheckService._compute_check_status` rewrites any
-     * `quantity_found < required_quantity` to `fail` regardless of what is
-     * sent. Storing `pass` here told a crew the truck had no fault immediately
-     * before the saved report gave it one.
-     *
-     * The distinction the design asks for is kept where it belongs — in what
-     * the sweep *reports*. `stopRestocks` derives a shortfall from the number
-     * and the par, and `stopFailures` leaves it out, so a short count is a
-     * restock line on screen and a failure on the record.
+     * Two numbers, two questions (department decision, 2026-10-16). The pass
+     * floor — Min to Pass, else Critical Min — decides the verdict, exactly
+     * as `EquipmentCheckService._pass_floor` does, so the sweep never offers
+     * a pass the server refuses. Par decides the restock: short of par alone
+     * passes, and `stopRestocks` lists it as a supply line.
      */
-    status: short ? 'fail' : 'pass',
+    status: floor !== null && value < floor ? 'fail' : 'pass',
     restockNeeded: short,
   };
 }

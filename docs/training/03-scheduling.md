@@ -2431,7 +2431,7 @@ Every item asks for one of four kinds of answer:
 | Type         | What you do                                                    | What passing means                                                                                                  |
 | ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **Function** | Select **Pass** or **Fail**                                    | It works. Selecting an answer moves you straight on to the next item                                                |
-| **Count**    | Set the count with the stepper                                 | The count is at or above its target (its _par_). Short of par is filed as a failure                                 |
+| **Count**    | Set the count with the stepper                                 | The count is at or above its **Min to Pass**. Short of _par_ but at the minimum passes and becomes a restock line   |
 | **Level**    | Enter the reading, then pass or fail                           | The reading meets its minimum. An empty box means "not read yet", not zero. The reading is kept, so trends show     |
 | **Expiry**   | Check the serial number, lot number and expiry date on record, then pass or fail | The date on record has not passed. Items close to their date show amber on every shift until they are replaced |
 
@@ -2460,11 +2460,25 @@ check, or an officer who can edit checklists, can add photos to it.
 
 ![Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below](./images/03-72-check-item-controls.png)
 
-**Critical minimum.** A count item can have a critical minimum. The item shows
-a red **CRITICAL — below minimum** warning only when your count is _below_ it.
-A count exactly at the minimum is not critical, and neither is any count that
-meets the item's par, so a full position never shows the warning. The failure
-email uses the same rule.
+**Par, Min to Pass and Critical Min.** A count item can carry three numbers,
+and they answer two different questions:
+
+| Number           | What it does                                                                                 |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| **Par**          | What the truck should carry. A count below par shows **Restock _N_** and goes on the restock list. It does **not** fail the item |
+| **Min to Pass**  | A count below it fails the item, shown as **Below minimum (_N_) — fails**                    |
+| **Critical Min** | A count below it fails the item even when Min to Pass is blank, shows a red **CRITICAL — below minimum** warning, and alerts leadership in the failure email |
+
+For example, with par 10 and Min to Pass 6, a count of 8 passes and asks for 2
+more; a count of 5 fails. With only a par of 10 set, a count of 3 still passes
+and asks for 7. A count exactly at a minimum is not below it, and a count that
+meets par is never critical.
+
+**Count units.** A count item can say what is counted — each, rolls, boxes,
+pairs, packs, bottles, or the department's own word — and the count reads with
+it, for example "8/10 each". Count a partly used pack in the smaller unit (12
+each rather than half a box). An item linked to an inventory item always counts
+in that item's unit.
 
 #### Counts carried over from last time
 
@@ -2610,7 +2624,8 @@ the flag as it was. Logging a repair does not clear it.
 | No checklist covers the truck on your shift    | No checklist appears for that shift                                                                              |
 | The checklist names seats you don't hold       | You don't see it. Members in those seats do                                                                      |
 | You marked an expired item **Pass**            | It is filed as failed, with "expired" as the reason                                                              |
-| You entered a count below par                  | It is filed as failed, with "under required quantity" as the reason                                              |
+| You entered a count below par, at or above its minimum | It passes, and the shortfall goes on the restock list                                                    |
+| You entered a count below Min to Pass or Critical Min  | It is filed as failed. You cannot mark it **Pass**                                                       |
 | Every item passes                              | The truck's deficiency flag clears, if it was set                                                                |
 | You try to open a check someone already filed  | My Checklists shows **Submitted for this shift**. Only one check per checklist per shift is kept                 |
 | A checklist has only optional items, and you answered none | You can still submit, after confirming the warning                                                   |
@@ -2922,10 +2937,10 @@ and lot numbers, image, critical minimum and the inventory link. You never need
 to open it to finish an item. You can fill a whole truck's names and answer
 types without opening anything.
 
-> **What if the critical minimum is above par?** When you publish, The
-> Logbook lists it in a **Save with warnings?** box. You can go back and fix it,
-> or save anyway. A minimum equal to par is allowed: it means any shortfall is
-> critical.
+> **What if the numbers are out of order?** They should run Critical Min ≤
+> Min to Pass ≤ Par. The item editor says so as soon as they do not, and when
+> you publish, The Logbook lists the item in a **Save with warnings?** box. You
+> can go back and fix it, or save anyway. Equal numbers are allowed.
 
 ![Equipment check template builder with the template header and sections](./images/03-22-equipment-check-builder.png)
 

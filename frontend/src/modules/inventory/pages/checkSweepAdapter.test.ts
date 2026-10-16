@@ -93,11 +93,36 @@ describe('toLapStops — structure', () => {
 });
 
 describe('toLapStops — items', () => {
-  it('takes par from requiredQuantity where a template carries both columns', () => {
+  it('takes par as the larger column where a template carries both', () => {
     const stops = toLapStops({
       compartments: [comp({ id: 'c', items: [item({ id: 'gauze', requiredQuantity: 10, expectedQuantity: 4 })] })],
     });
     expect(stops[0]?.items[0]?.expectedQuantity).toBe(10);
+  });
+
+  it('takes par from expectedQuantity above Min to Pass, and the floor from Min to Pass', () => {
+    const stops = toLapStops({
+      compartments: [comp({ id: 'c', items: [item({ id: 'gauze', requiredQuantity: 6, expectedQuantity: 10 })] })],
+    });
+    expect(stops[0]?.items[0]?.expectedQuantity).toBe(10);
+    expect(stops[0]?.items[0]?.passFloor).toBe(6);
+  });
+
+  it('takes the floor from Critical Min when Min to Pass is blank', () => {
+    const stops = toLapStops({
+      compartments: [
+        comp({ id: 'c', items: [item({ id: 'masks', expectedQuantity: 6, criticalMinimumQuantity: 2 })] }),
+      ],
+    });
+    expect(stops[0]?.items[0]?.passFloor).toBe(2);
+  });
+
+  it('carries no floor for a par-only count, and the unit it is counted in', () => {
+    const stops = toLapStops({
+      compartments: [comp({ id: 'c', items: [item({ id: 'tape', expectedQuantity: 4, unitOfMeasure: 'rolls' })] })],
+    });
+    expect(stops[0]?.items[0]?.passFloor).toBeUndefined();
+    expect(stops[0]?.items[0]?.countUnit).toBe('rolls');
   });
 
   it('carries the last recorded count forward', () => {

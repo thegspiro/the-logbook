@@ -155,6 +155,43 @@ class TestSubmissionObservationValidation:
                 today=date.today(),
             )
 
+    def test_a_pass_short_of_par_but_above_min_is_accepted(self):
+        # Short of par is a restock, not a failure, so "pass" is truthful.
+        item = self.submission(quantity_found=8)
+        EquipmentCheckService._validate_and_snapshot_submission(
+            [item],
+            {
+                "item-1": self.template_item(
+                    "count", required_quantity=6, expected_quantity=10
+                )
+            },
+            today=date.today(),
+        )
+        assert item["status"] == "pass"
+        assert item["expected_quantity"] == 10
+
+    def test_a_pass_short_of_a_par_only_position_is_accepted(self):
+        item = self.submission(quantity_found=3)
+        EquipmentCheckService._validate_and_snapshot_submission(
+            [item],
+            {"item-1": self.template_item("count", expected_quantity=10)},
+            today=date.today(),
+        )
+        assert item["status"] == "pass"
+
+    def test_a_pass_below_critical_minimum_is_refused(self):
+        item = self.submission(quantity_found=2)
+        with pytest.raises(ValueError, match="contradicts"):
+            EquipmentCheckService._validate_and_snapshot_submission(
+                [item],
+                {
+                    "item-1": self.template_item(
+                        "count", expected_quantity=10, critical_minimum_quantity=3
+                    )
+                },
+                today=date.today(),
+            )
+
     def test_a_crew_may_fail_an_item_the_numbers_say_is_fine(self):
         """A measurement can refute a pass. It cannot refute a fail.
 
