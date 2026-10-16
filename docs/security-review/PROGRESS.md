@@ -16,18 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (branch `claude/friendly-babbage-uted34`, to be opened)**: Feature 17
-(Training core), pass 8. 0 new findings, 0 fixed — the real delta since pass
-7 was entirely already-fixed XC-1/XC-3 sweeps and correctness-only changes
-landed by other sessions, re-verified by direct read rather than trusting
-commit messages. TR7-1 (`POST /training/enrollments` duplicates and lags the
-fixed enrollment path) re-verified still OPEN/FLAGGED, and the gap widened —
-a new prerequisite-enforcement check landed on the fixed path only, so the
-duplicate now also bypasses that gate. A correction to pass 7's own route-
-count claim is recorded (true count 92, not 49; conclusion — 0 missing auth
-— unchanged). Docs-only — no application code changed. See
-`TR-17-training-core.md`'s **Pass 8** section. Row 17 → ✅ (pending this PR's
-merge); next is Feature 18 (Training extended).
+**PR (branch `claude/security-review-training-extended-p8`, to be opened)**:
+Feature 18 (Training extended), pass 8. Watchdog pickup. **0 new findings.**
+Real delta since pass 7 (PR #2975): nine of twelve declared files changed,
+carrying two substantial new features (crew-recorded training; external
+course mappings + manual report upload + auto-crediting) and two
+already-landed fixes (`CompetencyService`'s missing `_validate_references`;
+cohort-roster sync now honouring pipeline prerequisites), all read in full
+and verified to follow this codebase's established tenant-isolation and
+separation-of-duties patterns from the start — not gaps this pass had to
+close. Every standing TRX finding (TRX-1 through TRX-10, TRX7-1) re-verified
+unchanged at its current citation. Route count 91 → 99 in this feature's six
+files (three new crew-training routes, three new course-mapping/upload
+routes), all carrying an auth dependency; total application routes unchanged
+in kind at 270/270 clean (no new top-level page). See
+`TRX-18-training-extended.md`'s **Pass 8** section. Row 18 → ✅ (pending this
+PR's merge); next is Feature 19 (Skills testing).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17 Training core pass 8, PR #3298, before it merged), preserved for history</summary>
+
+**PR [#3298](https://github.com/thegspiro/the-logbook/pull/3298)** (branch
+`claude/friendly-babbage-uted34`): Feature 17 (Training core), pass 8. 0 new
+findings, 0 fixed — the real delta since pass 7 was entirely already-fixed
+XC-1/XC-3 sweeps and correctness-only changes landed by other sessions,
+re-verified by direct read rather than trusting commit messages. TR7-1
+(`POST /training/enrollments` duplicates and lags the fixed enrollment path)
+re-verified still OPEN/FLAGGED, and the gap widened — a new
+prerequisite-enforcement check landed on the fixed path only, so the
+duplicate now also bypasses that gate. A correction to pass 7's own
+route-count claim is recorded (true count 92, not 49; conclusion — 0 missing
+auth — unchanged). Docs-only — no application code changed. See
+`TR-17-training-core.md`'s **Pass 8** section. Row 17 → ✅ (merged); next was
+Feature 18 (Training extended).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3294, Feature 16 Events & requests pass 8, before it merged), preserved for history</summary>
@@ -19446,7 +19469,7 @@ here.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
@@ -32592,3 +32615,72 @@ updated (SCH-19 row added to the Scheduling Module table). Rotation row 15
 was already ✅ from #3291's merge; this addendum does not change it, nor the
 "next: Feature 16 (Events & requests)" pointer — the rotation does not
 advance again until this PR merges, per "one PR at a time."
+
+### 2026-10-16 — Feature 18 (Training extended, pass 8) — watchdog pickup, 0 new findings, real delta (nine of twelve files changed)
+
+**Step 0.** `list_pull_requests`/`search_pull_requests` (`is:open
+head:claude/security-review-`, and a broader `is:open security` sweep)
+returned 0 results. PR #3298 (Feature 17, Training core, pass 8) had
+already merged (confirmed: its merge commit is `origin/main`'s tip). Row 17
+was already ✅ from that merge; row 18 (Training extended) was the first
+`⬜`.
+
+**Shallow-clone check.** `git rev-parse --is-shallow-repository` → `true`,
+and the grafted boundaries fall inside this pass's own review window —
+`git log <range>` over this feature's files returned an incomplete list and,
+at its oldest-looking entry, misrepresented a real multi-day-old merge as a
+100%-new parentless root (a graft boundary, not a rewrite). Pass 7's own
+baseline commit (`5b8f175bb756b7e2fbe6aca731190c38521ba664`) was fetched
+directly by SHA and diffed tree-to-tree against current `main` for each of
+the twelve declared files — immune to the grafting — and that content diff,
+not `git log`, is what scoped this pass.
+
+**Baseline.** Pass 7 merged as PR #2975 (2026-10-06). Since then: nine of
+twelve declared files changed (`training_waivers.py`, `course_cohorts.py`,
+`course_syllabus.py` are byte-identical to pass 7).
+
+**Findings: 0 new, 0 fixed by this pass.** Two substantial new features —
+crew-recorded training (shift officers can file a drill for everyone
+present, routed to review, with separation of duties enforced both at the
+batch-approval endpoint and inside `review_submission` itself so a single
+entry cannot be approved by its own recorder either) and external course
+mappings + a manual Target Solutions report upload + single-provider
+auto-crediting (every client-supplied id validated in-org, member matching
+requires an exact single match, auto-crediting gated to one
+owner-approved provider rather than defaulting on) — plus two already-landed
+fixes (`CompetencyService` gained the `_validate_references` its siblings
+already had; cohort-roster sync now consults the same authoritative
+prerequisite check the enroll picker and bulk enrollment already used,
+instead of re-deriving it) were all read in full against every
+CHECKLIST.md dimension and found to follow this codebase's established
+tenant-isolation and separation-of-duties patterns from the start. Five
+mypy-remediation commits were also read hunk-by-hunk; the one hunk that
+looked like a logic change (`model.user_id` → `TrainingRecord.user_id`) is
+provably identical at runtime (the calling tuple guarantees `model is
+TrainingRecord` whenever that branch executes) — a type-checker narrowing,
+not a different column. Every standing TRX finding (TRX-1 through TRX-10,
+TRX7-1) re-verified unchanged at its current citation.
+
+**Route re-enumeration:** 91 → 99 (18+30+5+19+17+6) across this feature's
+six endpoint files — the three new crew-recorded-training routes, two new
+course-mapping routes, and one new report-upload route — every one carrying
+`get_current_user`/`require_permission`/`require_all_permissions` in its own
+signature (AST-walked, not regex-counted). Total application routes: 270,
+unchanged in kind from Feature 17 pass 8's own count (`check_route_
+permissions.py --strict`, 0 errors, 0 warnings) — confirming none of this
+pass's new routes is a new top-level page.
+
+**Gate**, run against this sandbox's installed tool versions: `flake8`/
+`black --check`/`isort --check-only` clean over `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — single head `c903fc771081`, 601
+revisions; `check_route_permissions.py --strict` — 270 routes, 0 errors;
+`pytest tests/ -q -k "training or cohort or syllabus or waiver or external
+or enhancement or submission or xapi or crew"` — 2022 passed, 1
+pre-existing skip; frontend `npm run typecheck`/`npm run lint` both clean
+(after `npm ci` to fill in this sandbox's incomplete `node_modules/`, which
+affected an unrelated file only — confirmed no `package-lock.json` change).
+
+Findings doc: [`TRX-18-training-extended.md`](./TRX-18-training-extended.md)'s
+**Pass 8** section. No `KNOWN_LIMITATIONS.md` change needed — nothing new
+was flagged, and no standing entry needed correction. Rotation row 18 → ✅
+(pending this PR's merge). Next: Feature 19 (Skills testing).
