@@ -126,7 +126,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, inspect, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reporting import persist_task_error_log
@@ -725,6 +725,23 @@ async def _stock_alert_recipients(
     return recipients
 
 
+async def _refresh_if_expired(db: AsyncSession, org: Any) -> None:
+    """Reload an organization row that a per-org rollback expired.
+
+    Runners that load their organizations before the loop roll the shared
+    session back when one org fails, and the rollback expires every instance
+    the session holds. Reading an expired attribute on an AsyncSession
+    lazy-loads outside the greenlet (MissingGreenlet), so without this every
+    org after the first failure failed too. Call it first thing inside the
+    per-org ``try`` so a refresh that cannot run is reported against that org
+    alone, and have the handler use an id captured before the loop, never the
+    row. A no-op on a loaded row and on the plain stand-ins unit tests pass.
+    """
+    state = inspect(org, raiseerr=False)
+    if state is not None and state.expired:
+        await db.refresh(org)
+
+
 async def _for_each_org(
     db: AsyncSession,
     task_name: str,
@@ -745,10 +762,13 @@ async def _for_each_org(
         select(Organization).where(Organization.active.isnot(False))
     )
     organizations = list(orgs.scalars().all())
+    # Captured while the rows are loaded, so reporting a failed org never
+    # touches a row a rollback expired (see _refresh_if_expired).
+    org_ids = [str(org.id) for org in organizations]
     results = []
     total = 0
     rolled_back = False
-    for org in organizations:
+    for org, org_id in zip(organizations, org_ids):
         # A session rollback expires every loaded instance, these Organization
         # rows included, and an expired attribute cannot lazy-load outside the
         # async context (MissingGreenlet). Without the refresh, the first
@@ -761,7 +781,6 @@ async def _for_each_org(
                 await db.refresh(org)
             except Exception as e:
                 logger.warning(f"{task_name}: could not reload org after rollback: {e}")
-        org_id = str(org.id)
         try:
             count = await callback(db, org)
             total += count
@@ -1364,11 +1383,14 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_reminders = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             # The org's EVENT_REMINDER rule, if it made one. Absent means on,
             # so an org that never opened the notifications screen keeps the
             # reminders it has always had.
@@ -1585,9 +1607,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"Event reminders failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "Event reminders", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"Event reminders failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Event reminders", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -1602,7 +1624,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         if org_reminders > 0 or org_emails > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "in_app_reminders": org_reminders,
                     "emails_sent": org_emails,
                 }
@@ -1664,11 +1686,14 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_notifications = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             events_result = await db.execute(
                 select(Event)
                 .options(selectinload(Event.rsvps))
@@ -1792,9 +1817,9 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"Post-event validation failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "Post-event validation", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"Post-event validation failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Post-event validation", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -1809,7 +1834,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
         if org_notifications > 0 or org_emails > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "notifications": org_notifications,
                     "emails_sent": org_emails,
                 }
@@ -1869,11 +1894,14 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_notifications = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             sr_cfg = (org.settings or {}).get("shift_reports", {})
             psv_cfg = sr_cfg.get("post_shift_validation", {})
             if not psv_cfg.get("enabled", True):
@@ -2208,9 +2236,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"Post-shift validation failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "Post-shift validation", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"Post-shift validation failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Post-shift validation", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -2225,7 +2253,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
         if org_notifications > 0 or org_emails > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "notifications": org_notifications,
                     "emails_sent": org_emails,
                 }
@@ -2285,11 +2313,14 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_notifications = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             reminder_cfg = (org.settings or {}).get("shift_reminders", {})
             if not reminder_cfg.get("enabled", True):
                 continue
@@ -2676,9 +2707,9 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"Shift reminders failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "Shift reminders", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"Shift reminders failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Shift reminders", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -2693,7 +2724,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
         if org_notifications > 0 or org_emails > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "notifications": org_notifications,
                     "emails_sent": org_emails,
                 }
@@ -2967,11 +2998,14 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_notifications = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             sr_cfg = (org.settings or {}).get("shift_reports", {})
             ms_cfg = sr_cfg.get("member_summary", {})
             if not ms_cfg.get("enabled", True):
@@ -3396,9 +3430,9 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"End-of-shift summary failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "End-of-shift summary", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"End-of-shift summary failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "End-of-shift summary", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -3413,7 +3447,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
         if org_notifications > 0 or org_emails > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "notifications": org_notifications,
                     "emails_sent": org_emails,
                 }
@@ -3467,11 +3501,14 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_escalations = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             sr_cfg = (org.settings or {}).get("shift_reports", {})
             fu_cfg = sr_cfg.get("follow_up", {})
             if not fu_cfg.get("enabled", True):
@@ -3672,9 +3709,9 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"Trainee report escalation failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "Trainee report escalation", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"Trainee report escalation failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Trainee report escalation", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -3689,7 +3726,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
         if org_escalations > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "escalations": org_escalations,
                     "emails_sent": org_emails,
                 }
@@ -5587,13 +5624,21 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
         # (CRON2-31-13).
         .where(Organization.active.isnot(False))
     )
-    all_configs = list(configs.scalars().all())
+    # Plain values, not the loaded rows: the rollback after one org's failure
+    # expires every instance in the session, and reading an expired config
+    # outside an await raises MissingGreenlet — from inside the handler, which
+    # ended the whole run at the first failing department.
+    targets = [
+        (
+            str(config.organization_id),
+            config.auto_report_frequency,
+            config.report_day_of_month or 1,
+        )
+        for config in configs.scalars().all()
+    ]
 
-    for config in all_configs:
+    for org_id, freq, report_day in targets:
         try:
-            freq = config.auto_report_frequency
-            report_day = config.report_day_of_month or 1
-            org_id = str(config.organization_id)
             # The department's date, not UTC's. This runs at 06:30 UTC, which
             # on the 1st is still the last day of the previous month on the
             # West Coast: a UTC date would send, and label, a report for a
@@ -5661,19 +5706,15 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(
-                f"Compliance auto-report failed for org {config.organization_id}: {e}"
-            )
-            await persist_task_error_log(
-                str(config.organization_id), "Compliance auto-report", e
-            )
+            logger.error(f"Compliance auto-report failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Compliance auto-report", e)
             try:
                 await db.rollback()
             except Exception:
                 pass
             results.append(
                 {
-                    "org_id": str(config.organization_id),
+                    "org_id": org_id,
                     "error": str(e),
                 }
             )
@@ -5753,11 +5794,14 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_reminders = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             org_tz_name = org.timezone or "America/New_York"
             try:
                 org_tz = ZoneInfo(org_tz_name)
@@ -5929,9 +5973,9 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"Series end reminders failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "Series end reminders", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"Series end reminders failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Series end reminders", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -5946,7 +5990,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
         if org_reminders > 0 or org_emails > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "in_app_reminders": org_reminders,
                     "emails_sent": org_emails,
                 }
@@ -6232,11 +6276,14 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
     total_auto_checkouts = 0
     results = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_reminders = 0
         org_checkouts = 0
 
         try:
+            await _refresh_if_expired(db, org)
             shifts_result = await db.execute(
                 select(Shift)
                 .where(Shift.organization_id == str(org.id))
@@ -6350,7 +6397,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
         except Exception as e:
             logger.error(
                 "shift_auto_checkout error for org {}: {}",
-                org.id,
+                org_id,
                 e,
             )
             # Orgs share one session: without this rollback a failed flush
@@ -6364,7 +6411,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
         if org_reminders > 0 or org_checkouts > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "reminders": org_reminders,
                     "auto_checkouts": org_checkouts,
                 }
@@ -6605,9 +6652,12 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
     total_sent = 0
     results = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_sent = 0
         try:
+            await _refresh_if_expired(db, org)
             pipeline = get_pipeline_settings(org)
             trigger = (pipeline.get("email_triggers", {}) or {}).get(
                 "days_before_event", {}
@@ -6792,8 +6842,8 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
             if org_sent:
                 results.append({"organization": str(org.id), "reminders": org_sent})
         except Exception as e:
-            logger.warning("Event request reminders failed for org {}: {}", org.id, e)
-            await persist_task_error_log(str(org.id), "Event request reminders", e)
+            logger.warning("Event request reminders failed for org {}: {}", org_id, e)
+            await persist_task_error_log(org_id, "Event request reminders", e)
             try:
                 await db.rollback()
             except Exception:
