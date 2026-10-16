@@ -116,6 +116,8 @@ export interface MedicalSupplyPlacement {
   templateItemId: string;
   itemName: string;
   compartmentName?: string | null;
+  /** The checklist's nesting, outermost first: ["Main Compartment", "Jump Bag"]. */
+  compartmentPath?: string[];
   templateId?: string | null;
   templateName?: string | null;
   apparatusId?: string | null;

@@ -1024,6 +1024,8 @@ export interface InventoryItem {
   storage_path?: string | null;
   /** How many apparatus checklists carry it. Sent by the medical supply list only. */
   apparatus_count?: number | null;
+  /** Each position carrying it, as the checklist names it: "Medic 1 › Main Compartment › Jump Bag". Medical list only. */
+  apparatus_places?: string[] | null;
   last_inspection_date?: string;
   next_inspection_due?: string;
   inspection_interval_days?: number;

@@ -43,7 +43,7 @@ describe('SupplyWhereSection', () => {
 
   it('shows the storage path with its note, and each apparatus with what is aboard', async () => {
     mockGetItemPlacements.mockResolvedValue([
-      placement({ expirationDate: '2026-01-31', isExpired: true }),
+      placement({ expirationDate: '2026-01-31', isExpired: true, compartmentPath: ['Main Compartment', 'Jump Bag'] }),
       placement({
         templateItemId: 'ti-2',
         apparatusName: null,
@@ -58,7 +58,8 @@ describe('SupplyWhereSection', () => {
     expect(screen.getByText('Left side')).toBeInTheDocument();
     const list = await screen.findByRole('list', { name: 'Apparatus that carry it' });
     const [medic, typeTemplate] = within(list).getAllByRole('listitem');
-    expect(medic).toHaveTextContent('Medic 1 · Jump Bag');
+    // The whole nesting, as the checklist has it.
+    expect(medic).toHaveTextContent('Medic 1 · Main Compartment › Jump Bag');
     expect(medic).toHaveTextContent('3 of 4 aboard');
     expect(medic).toHaveTextContent('Expired Jan 31, 2026');
     // Never counted: the target stands in, and says so.

@@ -256,7 +256,7 @@ describe('MedicalSuppliesPage', () => {
       expect(expiringTab).toHaveFocus();
     });
 
-    it('shows where each supply is kept and how many apparatus carry it', async () => {
+    it('shows where each supply is kept and the apparatus places the checklist names', async () => {
       mockGetItems.mockResolvedValue({
         items: [
           {
@@ -267,6 +267,7 @@ describe('MedicalSuppliesPage', () => {
             // Filed automatically from this same text: not repeated as a note.
             storage_location: 'medical  cabinet',
             apparatus_count: 2,
+            apparatus_places: ['Medic 1 › Main Compartment › Jump Bag', 'Medic 1 › Rear Cabinet', 'Medic 2 › Jump Bag'],
           },
           {
             id: 'item-2',
@@ -275,6 +276,7 @@ describe('MedicalSuppliesPage', () => {
             storage_path: null,
             storage_location: 'Top drawer',
             apparatus_count: 0,
+            apparatus_places: [],
           },
         ],
         total: 2,
@@ -289,9 +291,14 @@ describe('MedicalSuppliesPage', () => {
       expect(gauze).not.toHaveTextContent(/medical {2}cabinet/i);
       const shears = screen.getByRole('row', { name: /Shears/ });
       expect(shears).toHaveTextContent('Top drawer');
-      expect(within(shears).queryByRole('button', { name: /apparatus/ })).not.toBeInTheDocument();
+      expect(within(shears).queryByRole('list', { name: /Apparatus carrying/ })).not.toBeInTheDocument();
 
-      await userEvent.click(within(gauze).getByRole('button', { name: /On 2 apparatus/ }));
+      // The first two places read as the checklist names them; the rest open the dialog.
+      const places = within(gauze).getByRole('list', { name: 'Apparatus carrying Gauze Pads' });
+      expect(within(places).getByText('Medic 1 › Main Compartment › Jump Bag')).toBeInTheDocument();
+      expect(within(places).getByText('Medic 1 › Rear Cabinet')).toBeInTheDocument();
+      expect(within(places).queryByText('Medic 2 › Jump Bag')).not.toBeInTheDocument();
+      await userEvent.click(within(places).getByRole('button', { name: '1 more apparatus places for Gauze Pads' }));
       expect(await screen.findByRole('dialog', { name: 'Lots — Gauze Pads' })).toBeInTheDocument();
       expect(mockGetItemPlacements).toHaveBeenCalledWith('item-1');
     });

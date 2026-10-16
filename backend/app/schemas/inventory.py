@@ -790,6 +790,9 @@ class InventoryItemResponse(InventoryItemBase):
     # medical supply list only; other lists leave both empty.
     storage_path: Optional[str] = None
     apparatus_count: Optional[int] = None
+    # Each apparatus position carrying it, as the checklist names it:
+    # "Medic 1 › Main Compartment › Jump Bag". Medical supply list only.
+    apparatus_places: Optional[List[str]] = None
 
     # The requesting member's own pin position, 0-based, or null when they
     # have not pinned this item. Personal to the caller: two members reading
