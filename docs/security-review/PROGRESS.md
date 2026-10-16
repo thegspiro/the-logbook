@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3339](https://github.com/thegspiro/the-logbook/pull/3339)** (branch
+`claude/security-review-grants-fundraising`): Feature 22 (Grants &
+fundraising), pass 8. Watchdog pickup: PR #3336
+(Feature 21, Admin hours, pass 8) merged (`6e90eec5`) with nothing started
+for the next feature since; this pass is that pickup. **0 new findings.**
+Five standing findings open since pass 7 — GF-7 (lifecycle/overspend), GF-8
+(`is_anonymous` not enforced), GF-24a (report ranges in UTC not org
+timezone), GF-27a (KPI/filter status-set mismatch), GF-33 (no real
+pagination) — are all now resolved by four non-rotation commits landed
+since pass 7, verified end to end rather than taken from
+`KNOWN_LIMITATIONS.md`'s own say-so. GF-9's other two thirds (unbounded
+money fields, donor-PII gate breadth) remain open, unchanged. Route surface
+re-enumerated (45/45, unchanged). See `GF-22-grants-fundraising.md`'s
+**Pass 8** section. Row 22 → ✅ (pending this PR's merge); next is Feature
+23 (Medical supplies).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 8, PR #3336, merged), preserved for history</summary>
+
 **PR [#3336](https://github.com/thegspiro/the-logbook/pull/3336)** (branch
 `claude/security-review-admin-hours`): Feature 21 (Admin hours), pass 8.
 Watchdog pickup: PR #3330 (Feature 20, Compliance, pass 8) merged
@@ -30,6 +49,8 @@ open or flagged findings as of this pass. Route surface re-enumerated
 (30/30, unchanged). See `AH-21-admin-hours.md`'s **Pass 8** section. Row
 21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
 fundraising).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 8, PR #3330, merged), preserved for history</summary>
@@ -19537,7 +19558,7 @@ here.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
@@ -19557,6 +19578,88 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-16 — Feature 22 (Grants & fundraising, pass 8) — watchdog pickup, 5 standing findings closed by non-rotation commits (verified), 0 new findings
+
+**Step 0.** `search_pull_requests`/`list_pull_requests` (`is:open
+head:claude/security-review-`) returned 0 results — PR #3336 (Feature 21,
+Admin hours, pass 8) had just merged (`6e90eec5`, 2026-10-16T20:43:56Z)
+with nothing started for the next feature in the following hour (first
+observed by a watchdog check at 2026-10-16T21:46Z). Row 21 was already ✅;
+row 22 (Grants & fundraising) was the first `⬜`.
+
+**Baseline.** Pass 7 landed as `9da13118` (2026-10-07, docs-only, 0
+fixed/0 new). Since then, four non-rotation commits touch this feature's
+six declared backend files (`grants.py`, `grant_service.py`,
+`fundraising_service.py`, `models/grant.py`, `schemas/grant.py`) and its
+frontend module, all already shipped with their own tests and
+`KNOWN_LIMITATIONS.md` updates before this pass started — every one
+re-verified end to end against the current code, not trusted from the
+commit messages or `KNOWN_LIMITATIONS.md`'s own "Resolved" banner:
+
+- **GF-7 — ✅ FIXED (`5006f2a7b`, 2026-10-11).** `APPLICATION_STATUS_TRANSITIONS`
+  (`app/models/grant.py`) is now the grant lifecycle; `update_application`
+  calls `assert_status_transition` before any write, confirmed wired at
+  `grant_service.py:497`. Overspend warns via `app/utils/grant_spending.py`
+  and audits `grant_overspend_recorded`; never blocks a write.
+- **GF-8 — ✅ FIXED (`06e97bb3e`, 2026-10-11).** `app/services/donor_privacy.py`
+  masks donor/donation identity fields for an anonymous record when the
+  caller holds only `fundraising.view`; `fundraising.manage` is unaffected.
+  Confirmed applied at `GET /grants/donations`, `/donors`, `/donors/{id}`,
+  and the dashboard's `recent_donations`.
+- **GF-24a — ✅ FIXED (`a4a79323f`, 2026-10-11).** The grant and fundraising
+  report methods now resolve their date range via
+  `resolve_local_range_utc` (org timezone, UTC fallback) instead of a bare
+  UTC bound — confirmed at `grant_service.py:1341`,
+  `fundraising_service.py:272,786`.
+- **GF-27a — ✅ FIXED (`77799048`, 2026-10-11).** `APPLICATION_STATUS_GROUPS`
+  (`app/models/grant.py`) is the one definition shared by
+  `get_dashboard_data()`'s KPI counts and a new `status_group` filter on
+  `GET /grants/applications` (unknown group → 400); the dashboard cards
+  link to the matching group.
+- **GF-33 — ✅ FIXED (same commit).** `GET /grants/applications` now reports
+  `X-Total-Count` and takes `search`/`sort`/`order`, paginating server-side
+  via `count_applications`/`list_applications`; pipeline columns load 25
+  at a time with Show more. `search` is `like_pattern`-escaped
+  (`escape=LIKE_ESCAPE_CHAR`), confirmed at `grant_service.py:236-245`.
+
+**GF-9 stays split, as pass 7 recorded it.** The float-money third stays
+fixed (unchanged since pass 7). The other two thirds are still open,
+unchanged: every money field in `app/schemas/grant.py` is still
+`Field(..., ge=0)`/`Field(None, ge=0)` with no upper bound (zero/unbounded
+amounts), and `list_donors`/`get_donor` still return the full
+`DonorResponse` — name, email, lifetime total, dates — to any
+`fundraising.view` holder for a non-anonymous donor, with no narrower
+read-only projection (donor-PII gate breadth). Both re-confirmed by direct
+code read, not carried forward from a prior pass's wording.
+
+**Result: 0 new findings.** Route surface re-enumerated from scratch:
+45/45 routes (and 45/45 `require_permission` dependencies, all
+`fundraising.view`/`fundraising.manage`) byte-identical in count to pass
+7 — GF-27a/33 added query parameters to existing routes, not new ones.
+`check_route_permissions.py --strict`: 270 application routes, 0
+errors/warnings. Org-scoping re-verified on every by-id/list query
+(`_application_filters` always starts with `organization_id ==`;
+`get_application`/`count_applications` both take and filter on it), LIKE
+escaping present on every `ilike` call including the new application
+search, GF-35's SQL-side pagination and GF-36's
+`populate_existing=True` reload fix both unchanged, GF-1–6's cross-org FK
+validation (`_validate_application_fks`, `_opportunity_in_org`)
+unchanged. Full write-up:
+[`GF-22-grants-fundraising.md`](./GF-22-grants-fundraising.md) → **Pass
+8**.
+
+Completion gate green: flake8/black/isort clean (CI-pinned versions),
+migrations single head (609 revisions), 827 scoped backend tests passed
+(up from 718 at pass 7) plus 1 pre-existing skip, `check_route_permissions
+--strict` clean (270 routes), frontend typecheck clean (`npm ci` from the
+repo root first — sandbox's `node_modules` predated a `@tiptap/*`
+dependency, the same environment gap AH-21's pass 8 hit; not a code
+defect), frontend lint clean, 61/61 grants-fundraising module frontend
+tests (14 files). No application source file is modified by this
+PR — documentation only (`GF-22-grants-fundraising.md`'s new **Pass 8**
+section, this rotation-table/Open-PR/Log update). Rotation row 22 → ✅
+(pending this PR's merge); next is Feature 23 (Medical supplies).
 
 ### 2026-10-16 — Feature 21 (Admin hours, pass 8) — watchdog pickup, 2 fixes already landed verified, 0 new findings, feature now at zero open findings
 
