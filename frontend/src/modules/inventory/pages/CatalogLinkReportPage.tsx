@@ -328,6 +328,9 @@ const CatalogLinkReportPage: React.FC = () => {
         'Every checklist line whose name matches one catalog item exactly or closely is linked on every template. ' +
         'Lines that match two items equally, match loosely or match nothing stay here for you to choose.',
       confirmLabel: 'Link matches',
+      // Not destructive: the default danger style puts a red trash can on a
+      // dialog that only adds links.
+      variant: 'info',
     });
     if (!confirmed) return;
     setSaving(true);
@@ -392,13 +395,13 @@ const CatalogLinkReportPage: React.FC = () => {
             Choose the catalog item once and it links everywhere the line appears.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 self-start">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
           {matched.length > 0 && (
             <button
               type="button"
               onClick={() => void autoLink()}
               disabled={loading || saving}
-              className="btn-secondary flex items-center gap-1 text-sm"
+              className="btn-secondary flex items-center gap-1 text-sm whitespace-nowrap"
             >
               <Wand2 className="h-4 w-4" /> Link matches automatically
             </button>
