@@ -135,7 +135,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | --- | ------------------------------------------------------------------------- | ---------------- | ------------------------------------------ | ------ |
 | W70 | Administrative hours: clock in and out by QR, manage categories and hours | member → admin   | `/admin-hours`, `/admin-hours/manage`      | ✅     |
 | W71 | Medical screening                                                         | admin            | `/medical-screening`                       | ✅     |
-| W72 | Reports                                                                   | admin, chief     | `/reports`                                 | ⬜     |
+| W72 | Reports                                                                   | admin, chief     | `/reports`                                 | ✅     |
 | W73 | Integrations                                                              | admin            | `/integrations`                            | ⬜     |
 | W74 | IP security, and a member's access request                                | member → admin   | `/ip-security/my-requests`, `/ip-security` | ⬜     |
 | W75 | Audit log, error monitoring and analytics                                 | admin            | `/admin/audit-log`, `/admin/errors`        | ⬜     |
@@ -218,8 +218,44 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Admin hours, a later pass** — scanning a second category's QR code while
   clocked in is refused, but the page neither names the running session nor
   offers its Clock Out (W70-5).
+- **Reports, a later pass** — every renderer prints its period and row dates
+  as ISO strings (`2026-01-01 — 2026-12-31`), unlike the rest of the app
+  (W72-4).
 
 ## Log
+
+### W72 — Reports — 2026-10-16
+
+Driven as:
+
+- `admin` generating all thirteen reports, the Admin Hours report on the page
+  with its CSV, and a saved report;
+- `chief` (`reports.view` without `admin_hours.manage`) on the page and the
+  report viewer at 390×844.
+
+Held:
+
+- every report generates;
+- Admin Hours totals match the admin-hours summary;
+- CSV export;
+- a double-clicked save records once;
+- the server refuses what the caller's permissions do not cover.
+
+Fixed:
+
+- W72-1 (MED — the page offered reports `/available` would have hidden, and
+  the catalog never listed Admin Hours, so it could not be hidden or saved).
+- W72-2 (MED — the Admin Hours report dated evening entries by their UTC
+  day).
+- W72-3 (LOW — "Qr Scan", unnamed Run / Edit on saved reports, viewer touch
+  targets).
+
+Open, as a lead: W72-4 (NIT — ISO dates in every renderer).
+
+Gate: typecheck and lint are clean; 74 reports frontend tests and 1,109
+report-related backend tests pass.
+
+Next: W73.
 
 ### W71 — Medical screening — 2026-10-16
 

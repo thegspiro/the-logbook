@@ -326,6 +326,7 @@ export const SavedReportsPage: React.FC = () => {
                         type="button"
                         onClick={() => void handleRun(report)}
                         disabled={generatingReportType !== null}
+                        aria-label={`Run ${report.name}`}
                         className="btn-primary inline-flex items-center gap-1"
                       >
                         <Play className="h-4 w-4" aria-hidden="true" />
@@ -336,6 +337,7 @@ export const SavedReportsPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => openEdit(report)}
+                        aria-label={`Edit ${report.name}`}
                         className="btn-secondary inline-flex items-center gap-1"
                       >
                         <Pencil className="h-4 w-4" aria-hidden="true" />
