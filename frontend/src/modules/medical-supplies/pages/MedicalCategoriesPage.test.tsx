@@ -185,7 +185,7 @@ describe('MedicalCategoriesPage supplies per category', () => {
     mockCheckPermission.mockReturnValue(false);
     mockGetItems.mockResolvedValue({
       items: [
-        { id: 'item-1', name: 'Bag Valve Mask', quantity: 2 },
+        { id: 'item-1', name: 'Bag Valve Mask', size: 'Adult', quantity: 2 },
         { id: 'item-2', name: 'Nasal Cannula', quantity: 0, is_lot_stocked: true, lot_stock: 12 },
       ],
       total: 2,
@@ -207,7 +207,7 @@ describe('MedicalCategoriesPage supplies per category', () => {
     await userEvent.click(toggles[0] ?? document.body);
 
     const list = await screen.findByRole('list', { name: 'Supplies in Airway' });
-    expect(list).toHaveTextContent('Bag Valve Mask');
+    expect(list).toHaveTextContent('Bag Valve Mask — Adult');
     // Lot-stocked: the lots are the stock, not the stale column.
     expect(list).toHaveTextContent('12 on hand');
     expect(mockGetItems).toHaveBeenCalledWith({
@@ -250,5 +250,39 @@ describe('MedicalCategoriesPage supplies per category', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Server unavailable');
     expect(screen.queryByText('No supplies in this category yet.')).not.toBeInTheDocument();
+  });
+});
+
+describe('MedicalCategoriesPage low stock threshold', () => {
+  beforeEach(() => {
+    mockGetCategories.mockReset();
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(false);
+  });
+
+  it('says how many supplies a category holds before it is opened', async () => {
+    mockGetCategories.mockResolvedValue([
+      { ...AIRWAY, item_count: 3 },
+      { ...TRAUMA, item_count: 1 },
+    ]);
+    renderWithRouter(<MedicalCategoriesPage />);
+
+    const show = await screen.findByRole('button', { name: 'Show 3 supplies' });
+    expect(screen.getByRole('button', { name: 'Show 1 supply' })).toBeInTheDocument();
+
+    await userEvent.click(show);
+    expect(screen.getByRole('button', { name: 'Hide 3 supplies' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('prints the threshold when set and nothing when the API sends null', async () => {
+    mockGetCategories.mockResolvedValue([
+      { ...AIRWAY, low_stock_threshold: null },
+      { ...TRAUMA, low_stock_threshold: 4 },
+    ]);
+    renderWithRouter(<MedicalCategoriesPage />);
+    await screen.findByText('Airway');
+
+    expect(screen.getByText('Low stock at 4 or below')).toBeInTheDocument();
+    expect(screen.getAllByText(/Low stock at/)).toHaveLength(1);
   });
 });

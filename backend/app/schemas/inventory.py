@@ -471,8 +471,39 @@ class InventoryCategoryResponse(InventoryCategoryBase):
     created_by: Optional[UUID] = None
     # Override: DB column is "extra_data"; SQLAlchemy reserves "metadata" as a class attr
     metadata: Optional[Dict[str, Any]] = Field(None, validation_alias="extra_data")
+    # Active items filed here. Set by the medical category list only; other
+    # lists leave it empty rather than report a count they did not take.
+    item_count: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class MedicalStorageRoom(BaseModel):
+    """A room or place a supply can be filed under."""
+
+    id: str
+    name: str
+
+
+class MedicalStorageAreaOption(BaseModel):
+    """An active storage area, with its room and readable path resolved."""
+
+    id: str
+    name: str
+    label: Optional[str] = None
+    storage_type: Optional[str] = None
+    parent_id: Optional[str] = None
+    location_id: Optional[str] = None
+    location_name: Optional[str] = None
+    # "Cabinet B › Shelf 2": the area's own name last.
+    path: str
+
+
+class MedicalStorageOptionsResponse(BaseModel):
+    """What the medical supply form can file a supply under."""
+
+    rooms: List[MedicalStorageRoom] = Field(default_factory=list)
+    areas: List[MedicalStorageAreaOption] = Field(default_factory=list)
 
 
 class InventoryCategoryDeleteResult(BaseModel):
@@ -749,6 +780,16 @@ class InventoryItemResponse(InventoryItemBase):
     # the item has no lots — there is nothing to prefer over `quantity`.
     lot_stock: Optional[int] = None
     is_lot_stocked: bool = False
+    # The soonest expiry among lots still holding stock (expired ones
+    # included), and its distance from the department's today. Set by the
+    # medical supply list only; other lists leave both empty.
+    next_expiration_date: Optional[date] = None
+    days_until_next_expiration: Optional[int] = None
+    # Where it is: "Station 1 › Supply Room › Shelf 2" from the item's room
+    # and storage area, and how many apparatus checklists carry it. Set by the
+    # medical supply list only; other lists leave both empty.
+    storage_path: Optional[str] = None
+    apparatus_count: Optional[int] = None
 
     # The requesting member's own pin position, 0-based, or null when they
     # have not pinned this item. Personal to the caller: two members reading
@@ -865,6 +906,8 @@ class ExpiringLotResponse(InventoryLotResponse):
     """A stock lot nearing expiration, with its item name for display."""
 
     item_name: Optional[str] = None
+    # Set by the medical route only; gear lots leave it empty.
+    item_size: Optional[str] = None
     days_until_expiration: Optional[int] = None
 
 

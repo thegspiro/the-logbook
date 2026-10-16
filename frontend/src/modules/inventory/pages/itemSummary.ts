@@ -52,7 +52,9 @@ export function formatItemSummary(item: ItemSummarySource): ItemSummaryLabel[] {
     item.checkType === CheckType.COUNT &&
     configuredNumber(item.criticalMinimumQuantity) &&
     configuredNumber(item.expectedQuantity) &&
-    Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
+    // Equal is a real setting — any shortfall is critical — since a count is
+    // critical only when strictly below the minimum. Above it can never apply.
+    Number(item.criticalMinimumQuantity) > Number(item.expectedQuantity)
   ) {
     problems.push({ text: 'Fix critical minimum', tone: 'problem' });
   }

@@ -28,6 +28,7 @@ from app.models.training import ShiftEquipmentCheck, ShiftEquipmentCheckItem
 from app.models.user import Organization, User
 from app.schemas.equipment_check import (
     ApparatusInventoryResponse,
+    AutoLinkResponse,
     CheckLogResponse,
     CheckTemplateCompartmentClone,
     CheckTemplateCompartmentCreate,
@@ -44,6 +45,8 @@ from app.schemas.equipment_check import (
     ComplianceReportResponse,
     CrossTemplateLinkRequest,
     CrossTemplateLinkResponse,
+    CrossTemplateUnlinkRequest,
+    CrossTemplateUnlinkResponse,
     DeployedLotUpdateRequest,
     EquipmentCheckCompleteItems,
     EquipmentCheckTemplateCreate,
@@ -421,6 +424,58 @@ async def link_inventory_items_across_templates(
     service = EquipmentCheckService(db)
     try:
         return await service.link_inventory_items_across_templates(
+            str(current_user.organization_id),
+            data.links,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
+@router.post("/inventory-links/auto", response_model=AutoLinkResponse)
+async def auto_link_inventory_items(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
+):
+    """Link every unlinked position whose catalog match is clear.
+
+    A name is linked when its best match on the department-wide report is
+    exact or strong and beats the runner-up; ties, weak matches and names
+    with no match are left on the report (``leftForReview``). All or nothing,
+    and positions linked by hand meanwhile are kept, as in
+    ``POST /inventory-links``.
+
+    **Requires permission: inventory.check_manage**
+    """
+    service = EquipmentCheckService(db)
+    try:
+        return await service.auto_link_report(
+            str(current_user.organization_id),
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
+@router.post("/inventory-links/undo", response_model=CrossTemplateUnlinkResponse)
+async def unlink_inventory_items_across_templates(
+    data: CrossTemplateUnlinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
+):
+    """Undo links made on the department-wide report, across templates.
+
+    Each position is cleared only while it is still linked to the item named
+    in the request; one re-linked since is left as it is and counted in
+    ``skipped``. All or nothing.
+
+    **Requires permission: inventory.check_manage**
+    """
+    service = EquipmentCheckService(db)
+    try:
+        return await service.unlink_inventory_items_across_templates(
             str(current_user.organization_id),
             data.links,
             user_id=str(current_user.id),

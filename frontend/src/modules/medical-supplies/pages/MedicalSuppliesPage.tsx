@@ -9,7 +9,7 @@
  * know what is about to lapse before they want an inventory count.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router';
 import {
   AlertTriangle,
@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   ArrowUpDown,
   CalendarClock,
+  Layers,
   PackagePlus,
   Pencil,
   Plus,
@@ -25,6 +26,7 @@ import {
   Stethoscope,
   Tag,
   TrendingDown,
+  Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
@@ -42,11 +44,19 @@ import type { SortDirection } from '../../../components/ux/SortableHeader';
 import { SkeletonCard } from '../../../components/ux/Skeleton';
 import { MedicalItemFormModal } from '../components/MedicalItemFormModal';
 import { ReceiveDeliveryModal } from '../components/ReceiveDeliveryModal';
+import { MedicalItemLotsModal } from '../components/MedicalItemLotsModal';
 import { MedicalImportExportModal } from '../components/MedicalImportExportModal';
-import { EXPIRY_WINDOW_DAYS } from '../types';
+import { EXPIRY_WINDOW_DAYS, storageNote, supplyLabel } from '../types';
+import type { MedicalStorageOptions } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 
 type Tab = 'expiring' | 'stock';
+
+const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
+  { id: 'expiring', label: 'Expiring stock' },
+  { id: 'stock', label: 'All supplies' },
+];
+const TAB_PANEL_ID = 'medical-supplies-panel';
 const PAGE_SIZE = 200;
 
 /** Severity of a dated lot, by how long is left on it. */
@@ -63,6 +73,57 @@ function expiryLabel(days: number | undefined): string {
   if (days === 0) return 'Expires today';
   return `${days}d left`;
 }
+
+/**
+ * Colour for a supply's next expiry. Beyond the expiring window a date is just
+ * a date; colour is kept for the ones that need action.
+ */
+function nextExpiryTone(item: InventoryItem): string {
+  const days = item.days_until_next_expiration;
+  if (!item.next_expiration_date || days == null) return 'text-theme-text-muted';
+  if (days > EXPIRY_WINDOW_DAYS) return 'text-theme-text-secondary';
+  return expiryTone(days);
+}
+
+/**
+ * The list request's storage filter, from the select's "room:<id>" or
+ * "area:<id>" value. The server widens either one: a room includes every area
+ * inside it, an area every area nested under it.
+ */
+function storageParams(filter: string): { location_id?: string; storage_area_id?: string } {
+  const [kind, id] = filter.split(':');
+  if (!id) return {};
+  if (kind === 'room') return { location_id: id };
+  if (kind === 'area') return { storage_area_id: id };
+  return {};
+}
+
+/**
+ * Where a supply is kept: its storage path, a note that adds to it, and how
+ * many apparatus carry it — the badge opens the supply's dialog, which lists
+ * them.
+ */
+const SupplyWhere: React.FC<{ item: InventoryItem; onOpen: () => void }> = ({ item, onOpen }) => {
+  const note = storageNote(item);
+  const carriers = item.apparatus_count ?? 0;
+  return (
+    <div className="space-y-1">
+      {item.storage_path ? <div className="text-theme-text-primary">{item.storage_path}</div> : !note && <div>—</div>}
+      {note && <div className="text-xs">{note}</div>}
+      {carriers > 0 && (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="badge touch-target-phone inline-flex items-center gap-1 bg-sky-500/10 text-sky-800 dark:text-sky-300"
+          aria-label={`On ${carriers} apparatus — show where ${supplyLabel(item)} is`}
+        >
+          <Truck className="h-3 w-3" aria-hidden="true" />
+          On {carriers} apparatus
+        </button>
+      )}
+    </div>
+  );
+};
 
 /**
  * Identity of an item query: what the rendered rows are an answer to.
@@ -122,16 +183,28 @@ interface StatTileProps {
   label: string;
   value: number;
   tone: string;
+  /** What the tile shows when pressed: the list behind its number. */
+  onSelect: () => void;
+  /** Spoken name, since the number and its caption read as two fragments. */
+  actionLabel: string;
 }
 
-const StatTile: React.FC<StatTileProps> = ({ icon, label, value, tone }) => (
-  <div className="card flex items-center gap-3 p-4">
+// Buttons, not cards: a tile with a count on it reads as a way into the
+// things it counts, and one that ignored the tap left the officer scrolling
+// a full list to find the two low items it had just announced.
+const StatTile: React.FC<StatTileProps> = ({ icon, label, value, tone, onSelect, actionLabel }) => (
+  <button
+    type="button"
+    onClick={onSelect}
+    aria-label={actionLabel}
+    className="card hover:bg-theme-surface-secondary flex items-center gap-3 p-4 text-left transition-colors"
+  >
     <div className={`rounded-md p-2 ${tone}`}>{icon}</div>
     <div className="min-w-0">
       <p className="text-theme-text-primary text-xl font-semibold tabular-nums">{formatNumber(value)}</p>
       <p className="text-theme-text-muted truncate text-xs">{label}</p>
     </div>
-  </div>
+  </button>
 );
 
 const MedicalSuppliesPage: React.FC = () => {
@@ -175,7 +248,15 @@ const MedicalSuppliesPage: React.FC = () => {
   // one page would only reorder whichever rows happened to be fetched.
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
-  const sortKey = sortField && sortDirection ? `${sortField}:${sortDirection}` : '';
+  const [lowStockOnly, setLowStockOnly] = useState(false);
+  // "room:<id>" or "area:<id>"; empty for everywhere.
+  const [storageFilter, setStorageFilter] = useState('');
+  const storageQuery = useMemo(() => storageParams(storageFilter), [storageFilter]);
+  const [storageOptions, setStorageOptions] = useState<MedicalStorageOptions | null>(null);
+  // Part of the query key, so turning a filter on or off is a new query:
+  // it resets the page and the selection like any other filter.
+  const sortKey = `${sortField && sortDirection ? `${sortField}:${sortDirection}` : ''}${lowStockOnly ? '\u0000low' : ''}${storageFilter ? `\u0000${storageFilter}` : ''}`;
+  const [lotsItem, setLotsItem] = useState<InventoryItem | null>(null);
   // Ids, not rows: a refreshed page hands back new objects for the same items.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [isBulkRetiring, setIsBulkRetiring] = useState(false);
@@ -276,6 +357,8 @@ const MedicalSuppliesPage: React.FC = () => {
               category_id: categoryFilter || undefined,
               sort_by: (sortDirection && sortField) || undefined,
               sort_order: (sortField && sortDirection) || undefined,
+              low_stock: lowStockOnly || undefined,
+              ...storageQuery,
               skip: page * PAGE_SIZE,
               limit: PAGE_SIZE,
             },
@@ -393,7 +476,7 @@ const MedicalSuppliesPage: React.FC = () => {
         })
       );
     },
-    [debouncedSearch, categoryFilter, sortField, sortDirection, sortKey, page]
+    [debouncedSearch, categoryFilter, sortField, sortDirection, sortKey, lowStockOnly, storageQuery, page]
   );
 
   const loadSectionsRef = useRef(loadSections);
@@ -410,6 +493,23 @@ const MedicalSuppliesPage: React.FC = () => {
   // since each section's newest request wins, those filter-driven requests
   // superseded an explicit refresh's four, letting cached summary, category
   // and expiring responses land while the refresh's fresh data was discarded.
+  // Only the filter needs these, and a page that cannot load them still lists
+  // every supply, so a failure hides the filter rather than raising an alert.
+  useEffect(() => {
+    let cancelled = false;
+    medicalSuppliesService
+      .getStorageOptions()
+      .then((options) => {
+        if (!cancelled) setStorageOptions(options);
+      })
+      .catch(() => {
+        if (!cancelled) setStorageOptions(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     void loadSectionsRef.current(ALL_SECTIONS);
     return () => itemsAbortController.current?.abort();
@@ -448,6 +548,24 @@ const MedicalSuppliesPage: React.FC = () => {
       else next.add(itemId);
       return next;
     });
+
+  // Arrow keys, Home and End move between tabs and select as they go
+  // (automatic activation): both views are already loaded, so switching is
+  // instant and there is nothing to confirm.
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const index = TABS.findIndex((t) => t.id === tab);
+    let next: number;
+    if (event.key === 'ArrowRight') next = (index + 1) % TABS.length;
+    else if (event.key === 'ArrowLeft') next = (index - 1 + TABS.length) % TABS.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = TABS.length - 1;
+    else return;
+    event.preventDefault();
+    const target = TABS[next];
+    if (!target) return;
+    setTab(target.id);
+    document.getElementById(`medical-tab-${target.id}`)?.focus();
+  };
 
   const allOnPageSelected = items.length > 0 && items.every((item) => selectedIds.has(item.id));
   const toggleAllOnPage = () => setSelectedIds(allOnPageSelected ? new Set() : new Set(items.map((item) => item.id)));
@@ -606,11 +724,10 @@ const MedicalSuppliesPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowImportExport(true)}
-                  className="btn-icon"
-                  aria-label="Import or export medical supplies"
-                  title="Import / export"
+                  className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium whitespace-nowrap"
                 >
-                  <ArrowUpDown className="h-4 w-4" />
+                  <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+                  Import / export
                 </button>
                 <button
                   type="button"
@@ -664,53 +781,68 @@ const MedicalSuppliesPage: React.FC = () => {
             label="Supply items"
             value={summary.total_items}
             tone="bg-sky-500/10"
+            actionLabel={`Show all ${summary.total_items} supplies`}
+            onSelect={() => {
+              setLowStockOnly(false);
+              setPage(0);
+              setTab('stock');
+            }}
           />
           <StatTile
             icon={<CalendarClock className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
             label={`Expiring within ${summary.expiring_within_days} days`}
             value={summary.expiring_soon}
             tone="bg-amber-500/10"
+            actionLabel={`Show ${summary.expiring_soon} lots expiring within ${summary.expiring_within_days} days`}
+            onSelect={() => setTab('expiring')}
           />
           <StatTile
             icon={<AlertTriangle className="h-4 w-4 text-red-700 dark:text-red-400" />}
             label="Already expired"
             value={summary.expired}
             tone="bg-red-500/10"
+            actionLabel={`Show ${summary.expired} expired lots`}
+            onSelect={() => setTab('expiring')}
           />
           <StatTile
             icon={<TrendingDown className="h-4 w-4 text-orange-700 dark:text-orange-400" />}
             label="Low stock"
             value={summary.low_stock}
             tone="bg-orange-500/10"
+            actionLabel={`Show ${summary.low_stock} supplies at or below their reorder point`}
+            onSelect={() => {
+              setLowStockOnly(true);
+              setPage(0);
+              setTab('stock');
+            }}
           />
         </div>
       )}
 
-      <div className="tab-scroll mb-4">
-        <button
-          type="button"
-          onClick={() => setTab('expiring')}
-          aria-current={tab === 'expiring' ? 'page' : undefined}
-          className={`mobile-touch-target px-4 py-2 text-sm font-medium ${
-            tab === 'expiring'
-              ? 'border-b-2 border-sky-600 text-sky-700 dark:border-sky-400 dark:text-sky-400'
-              : 'text-theme-text-muted hover:text-theme-text-primary'
-          }`}
-        >
-          Expiring stock
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('stock')}
-          aria-current={tab === 'stock' ? 'page' : undefined}
-          className={`mobile-touch-target px-4 py-2 text-sm font-medium ${
-            tab === 'stock'
-              ? 'border-b-2 border-sky-600 text-sky-700 dark:border-sky-400 dark:text-sky-400'
-              : 'text-theme-text-muted hover:text-theme-text-primary'
-          }`}
-        >
-          All supplies
-        </button>
+      {/* A real tablist (WAI-ARIA tabs pattern): screen readers announce
+          "tab, 1 of 2, selected", and the arrow keys move between tabs with
+          only the selected one in the Tab order. */}
+      <div className="tab-scroll mb-4" role="tablist" aria-label="Medical supply views">
+        {TABS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`medical-tab-${id}`}
+            aria-selected={tab === id}
+            aria-controls={TAB_PANEL_ID}
+            tabIndex={tab === id ? 0 : -1}
+            onClick={() => setTab(id)}
+            onKeyDown={handleTabKeyDown}
+            className={`mobile-touch-target px-4 py-2 text-sm font-medium ${
+              tab === id
+                ? 'border-b-2 border-sky-600 text-sky-700 dark:border-sky-400 dark:text-sky-400'
+                : 'text-theme-text-muted hover:text-theme-text-primary'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {tab === 'expiring' && errors.expiring && (
@@ -743,338 +875,455 @@ const MedicalSuppliesPage: React.FC = () => {
         />
       )}
 
-      {tab === 'expiring' && loading.expiring && !loaded.expiring ? (
-        <SkeletonCard />
-      ) : tab === 'expiring' ? (
-        <section aria-label="Expiring stock">
-          {loaded.expiring && expiring.length === 0 && noSuppliesYet ? (
-            // "Nothing expiring" over an empty catalog reads as an all-clear
-            // for stock nobody has entered (CLAUDE.md pitfall #29: an empty set
-            // is not a passing one).
-            <EmptyState icon={Stethoscope} title="No medical supplies yet" description={emptyCatalogHint} />
-          ) : loaded.expiring && expiring.length === 0 ? (
-            <EmptyState
-              icon={CalendarClock}
-              title="Nothing expiring"
-              description={`No medical stock lot expires within ${EXPIRY_WINDOW_DAYS} days.`}
-            />
-          ) : (
-            <div className="card overflow-x-auto p-0">
-              <table className="rwd-table w-full text-sm">
-                <thead>
-                  <tr className="border-theme-surface-border border-b">
-                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">Item</th>
-                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">Lot</th>
-                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                      Expires
-                    </th>
-                    <th className="text-theme-text-muted px-4 py-3 text-right text-xs font-semibold uppercase">
-                      On hand
-                    </th>
-                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {expiring.map((lot) => (
-                    <tr key={lot.id} className="border-theme-surface-border border-b last:border-0">
-                      <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
-                        {lot.item_name ?? '—'}
-                      </td>
-                      <td data-label="Lot" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
-                        {lot.lot_number || '—'}
-                      </td>
-                      <td data-label="Expires" className="text-theme-text-muted px-4 py-3">
-                        {lot.expiration_date ? formatDate(lot.expiration_date, tz) : '—'}
-                      </td>
-                      <td data-label="On hand" className="text-theme-text-primary px-4 py-3 text-right tabular-nums">
-                        {formatNumber(lot.quantity)}
-                      </td>
-                      <td
-                        data-label="Status"
-                        className={`px-4 py-3 font-medium ${expiryTone(lot.days_until_expiration)}`}
-                      >
-                        {expiryLabel(lot.days_until_expiration)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      ) : (
-        <section aria-label="All supplies" aria-busy={loading.items}>
-          <div className="mb-4 flex flex-wrap gap-2">
-            <div className="relative min-w-[200px] flex-1">
-              <Search className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(0);
-                }}
-                placeholder="Search supplies"
-                aria-label="Search medical supplies"
-                className="form-input w-full pl-9"
-              />
-            </div>
-            <select
-              value={categoryFilter}
-              onChange={(e) => {
-                setCategoryFilter(e.target.value);
-                setPage(0);
-              }}
-              aria-label="Filter by category"
-              className="form-input w-auto"
-              // Disabled only before the list has ever loaded. A *failed* list
-              // leaves the control usable: the server still filters, and the
-              // section alert above says why the names are missing.
-              disabled={loading.categories && !loaded.categories}
-            >
-              <option value="">
-                {loading.categories && !loaded.categories ? 'Loading categories…' : 'All categories'}
-              </option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/*
-           * Rows are shown only when they answer the query that is on screen.
-           * Anything else is a pending request (skeleton) or a failed one -- and
-           * a failed one renders nothing here, because the alert above already
-           * says what happened and "No medical supplies yet" would contradict
-           * it. The controls above stay mounted throughout: putting the
-           * skeleton over them would unmount the search box mid-keystroke.
-           */}
-          {itemsFilterKey !== filterKey ? (
-            loading.items ? (
-              <SkeletonCard />
-            ) : null
-          ) : loaded.items && items.length === 0 ? (
-            debouncedSearch || categoryFilter ? (
+      <div role="tabpanel" id={TAB_PANEL_ID} aria-labelledby={`medical-tab-${tab}`}>
+        {tab === 'expiring' && loading.expiring && !loaded.expiring ? (
+          <SkeletonCard />
+        ) : tab === 'expiring' ? (
+          <section aria-label="Expiring stock">
+            {loaded.expiring && expiring.length === 0 && noSuppliesYet ? (
+              // "Nothing expiring" over an empty catalog reads as an all-clear
+              // for stock nobody has entered (CLAUDE.md pitfall #29: an empty set
+              // is not a passing one).
+              <EmptyState icon={Stethoscope} title="No medical supplies yet" description={emptyCatalogHint} />
+            ) : loaded.expiring && expiring.length === 0 ? (
               <EmptyState
-                icon={Search}
-                title="No matching supplies"
-                description="Try a different search or category."
+                icon={CalendarClock}
+                title="Nothing expiring"
+                description={`No medical stock lot expires within ${EXPIRY_WINDOW_DAYS} days.`}
               />
             ) : (
-              <EmptyState icon={Stethoscope} title="No medical supplies yet" description={emptyCatalogHint} />
-            )
-          ) : (
-            <>
-              {canManage && selectedIds.size > 0 && (
-                <div
-                  className="card mb-3 flex flex-wrap items-center justify-between gap-3 p-3"
-                  role="region"
-                  aria-label="Selected supplies"
-                >
-                  <p className="text-theme-text-primary text-sm" aria-live="polite">
-                    {formatNumber(selectedIds.size)} selected
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button type="button" className="btn-secondary" onClick={() => setSelectedIds(new Set())}>
-                      Clear
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-primary inline-flex items-center gap-2"
-                      disabled={isBulkRetiring}
-                      onClick={() => void handleBulkRetire()}
-                    >
-                      <Archive className="h-4 w-4" />
-                      {isBulkRetiring ? 'Retiring…' : 'Retire selected'}
-                    </button>
-                  </div>
-                </div>
-              )}
               <div className="card overflow-x-auto p-0">
                 <table className="rwd-table w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
-                      {canManage && (
-                        <th className="w-10 px-4 py-3 text-left">
-                          <input
-                            type="checkbox"
-                            className="form-checkbox"
-                            checked={allOnPageSelected}
-                            onChange={toggleAllOnPage}
-                            aria-label="Select every supply on this page"
-                          />
-                        </th>
-                      )}
-                      <th className="px-4 py-3 text-left">
-                        <SortableHeader
-                          label="Item"
-                          field="name"
-                          currentSort={sortField}
-                          currentDirection={sortDirection}
-                          onSort={handleSort}
-                        />
+                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
+                        Item
                       </th>
-                      <th className="px-4 py-3 text-left">
-                        <SortableHeader
-                          label="Category"
-                          field="category"
-                          currentSort={sortField}
-                          currentDirection={sortDirection}
-                          onSort={handleSort}
-                        />
+                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">Lot</th>
+                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
+                        Expires
                       </th>
-                      <th className="px-4 py-3 text-right">
-                        <SortableHeader
-                          label="On hand"
-                          field="on_hand"
-                          currentSort={sortField}
-                          currentDirection={sortDirection}
-                          onSort={handleSort}
-                        />
-                      </th>
-                      <th className="px-4 py-3 text-right">
-                        <SortableHeader
-                          label="Reorder at"
-                          field="reorder_point"
-                          currentSort={sortField}
-                          currentDirection={sortDirection}
-                          onSort={handleSort}
-                        />
+                      <th className="text-theme-text-muted px-4 py-3 text-right text-xs font-semibold uppercase">
+                        On hand
                       </th>
                       <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                        Storage
+                        Status
                       </th>
-                      {canManage && (
-                        <th className="px-4 py-3 text-right">
-                          <span className="sr-only">Actions</span>
-                        </th>
-                      )}
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item) => {
-                      const isLow =
-                        item.reorder_point !== undefined && onHandQuantity(item) <= (item.reorder_point ?? 0);
-                      return (
-                        <tr key={item.id} className="border-theme-surface-border border-b last:border-0">
-                          {canManage && (
-                            <td data-label="Select" className="px-4 py-3">
-                              <input
-                                type="checkbox"
-                                className="form-checkbox"
-                                checked={selectedIds.has(item.id)}
-                                onChange={() => toggleSelected(item.id)}
-                                aria-label={`Select ${item.name}`}
-                              />
-                            </td>
-                          )}
-                          <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
-                            {item.name}
-                            {item.unit_of_measure && (
-                              <span className="text-theme-text-muted ml-1 text-xs">({item.unit_of_measure})</span>
-                            )}
-                          </td>
-                          <td data-label="Category" className="text-theme-text-muted px-4 py-3">
-                            {categoryName(item)}
-                          </td>
-                          <td
-                            data-label="On hand"
-                            className={`px-4 py-3 text-right tabular-nums ${
-                              isLow ? 'font-semibold text-orange-800 dark:text-orange-300' : 'text-theme-text-primary'
-                            }`}
-                          >
-                            {formatNumber(onHandQuantity(item))}
-                            {isLow && <span className="ml-1 text-xs"> Low</span>}
-                          </td>
-                          <td
-                            data-label="Reorder at"
-                            className="text-theme-text-muted px-4 py-3 text-right tabular-nums"
-                          >
-                            {item.reorder_point === undefined ? '—' : formatNumber(item.reorder_point)}
-                          </td>
-                          <td data-label="Storage" className="text-theme-text-muted px-4 py-3">
-                            {item.storage_location || '—'}
-                          </td>
-                          {canManage && (
-                            <td data-label="Actions" className="px-4 py-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => setEditingItem(item)}
-                                className="btn-icon"
-                                aria-label={`Edit ${item.name}`}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void handleRetire(item)}
-                                className="btn-icon"
-                                aria-label={`Retire ${item.name}`}
-                              >
-                                <Archive className="h-4 w-4" />
-                              </button>
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
+                    {expiring.map((lot) => (
+                      <tr key={lot.id} className="border-theme-surface-border border-b last:border-0">
+                        <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
+                          {lot.item_name ? supplyLabel({ name: lot.item_name, size: lot.item_size }) : '—'}
+                        </td>
+                        <td data-label="Lot" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
+                          {lot.lot_number || '—'}
+                        </td>
+                        <td data-label="Expires" className="text-theme-text-muted px-4 py-3">
+                          {lot.expiration_date ? formatDate(lot.expiration_date, tz) : '—'}
+                        </td>
+                        <td data-label="On hand" className="text-theme-text-primary px-4 py-3 text-right tabular-nums">
+                          {formatNumber(lot.quantity)}
+                        </td>
+                        <td
+                          data-label="Status"
+                          className={`px-4 py-3 font-medium ${expiryTone(lot.days_until_expiration)}`}
+                        >
+                          {expiryLabel(lot.days_until_expiration)}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-            </>
-          )}
+            )}
+          </section>
+        ) : (
+          <section aria-label="All supplies" aria-busy={loading.items}>
+            <div className="mb-4 flex flex-wrap gap-2">
+              <div className="relative min-w-[200px] flex-1">
+                <Search className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(0);
+                  }}
+                  placeholder="Search supplies"
+                  aria-label="Search medical supplies"
+                  className="form-input w-full pl-9"
+                />
+              </div>
+              <select
+                value={categoryFilter}
+                onChange={(e) => {
+                  setCategoryFilter(e.target.value);
+                  setPage(0);
+                }}
+                aria-label="Filter by category"
+                className="form-input w-auto"
+                // Disabled only before the list has ever loaded. A *failed* list
+                // leaves the control usable: the server still filters, and the
+                // section alert above says why the names are missing.
+                disabled={loading.categories && !loaded.categories}
+              >
+                <option value="">
+                  {loading.categories && !loaded.categories ? 'Loading categories…' : 'All categories'}
+                </option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              {storageOptions && (storageOptions.rooms.length > 0 || storageOptions.areas.length > 0) && (
+                <select
+                  value={storageFilter}
+                  onChange={(e) => {
+                    setStorageFilter(e.target.value);
+                    setPage(0);
+                  }}
+                  aria-label="Filter by storage location"
+                  className="form-input w-auto"
+                >
+                  <option value="">All locations</option>
+                  {storageOptions.rooms.map((room) => (
+                    <optgroup key={room.id} label={room.name}>
+                      <option value={`room:${room.id}`}>All of {room.name}</option>
+                      {storageOptions.areas
+                        .filter((a) => a.location_id === room.id)
+                        .map((area) => (
+                          <option key={area.id} value={`area:${area.id}`}>
+                            {area.path}
+                          </option>
+                        ))}
+                    </optgroup>
+                  ))}
+                  {storageOptions.areas.some((a) => !a.location_id) && (
+                    <optgroup label="No room">
+                      {storageOptions.areas
+                        .filter((a) => !a.location_id)
+                        .map((area) => (
+                          <option key={area.id} value={`area:${area.id}`}>
+                            {area.path}
+                          </option>
+                        ))}
+                    </optgroup>
+                  )}
+                </select>
+              )}
+            </div>
 
-          {pagerNavigable && itemPage.total > 0 && (
-            <nav className="mt-4 flex items-center justify-between gap-3" aria-label="Medical supplies pagination">
-              <button
-                type="button"
-                className="btn-secondary"
-                // Keyed on the requested `page`, not on the loaded
-                // `itemPage.skip`. After a rejected Next those disagree --
-                // page 1, skip 0 -- and keying on skip disabled the one
-                // control that could get back to a page that loads.
-                disabled={loading.items || !filtersSettled || page === 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
+            {lowStockOnly && (
+              <div
+                className="alert-warning mb-3 flex flex-wrap items-center justify-between gap-2 text-sm"
+                role="status"
               >
-                Previous
-              </button>
-              <p className="text-theme-text-muted text-sm" aria-live="polite">
-                {pagerAnswersScreen
-                  ? `Showing ${formatNumber(itemPage.skip + 1)}–${formatNumber(
-                      Math.min(itemPage.skip + items.length, itemPage.total)
-                    )} of ${formatNumber(itemPage.total)}`
-                  : `Page ${formatNumber(page + 1)}`}
-              </p>
-              <button
-                type="button"
-                className="btn-secondary"
-                // Disabled while a page is in flight, and bounded by the known
-                // total. The enabled state otherwise came from the *previous*
-                // response, so a second activation before this one landed
-                // stepped past the last page -- skip=400 on a 201-item catalog,
-                // an empty table and a range reading "Showing 401-201 of 201".
-                //
-                // Also disabled when the totals belong to a different query:
-                // stepping forward on them would ask for page 2 of a query
-                // whose page 1 never arrived.
-                disabled={
-                  loading.items ||
-                  !filtersSettled ||
-                  !pagerAnswersScreen ||
-                  itemPage.skip + itemPage.limit >= itemPage.total
-                }
-                onClick={() => setPage((p) => Math.min(p + 1, Math.max(0, Math.ceil(itemPage.total / PAGE_SIZE) - 1)))}
-              >
-                Next
-              </button>
-            </nav>
-          )}
-        </section>
-      )}
+                <span>Showing only supplies at or below their reorder point.</span>
+                <button
+                  type="button"
+                  className="touch-target-phone font-medium underline"
+                  onClick={() => {
+                    setLowStockOnly(false);
+                    setPage(0);
+                  }}
+                >
+                  Show all supplies
+                </button>
+              </div>
+            )}
+
+            {/*
+             * Rows are shown only when they answer the query that is on screen.
+             * Anything else is a pending request (skeleton) or a failed one -- and
+             * a failed one renders nothing here, because the alert above already
+             * says what happened and "No medical supplies yet" would contradict
+             * it. The controls above stay mounted throughout: putting the
+             * skeleton over them would unmount the search box mid-keystroke.
+             */}
+            {itemsFilterKey !== filterKey ? (
+              loading.items ? (
+                <SkeletonCard />
+              ) : null
+            ) : loaded.items && items.length === 0 ? (
+              lowStockOnly && !debouncedSearch && !categoryFilter && !storageFilter ? (
+                <EmptyState
+                  icon={TrendingDown}
+                  title="Nothing is low"
+                  description="No supply is at or below its reorder point."
+                />
+              ) : debouncedSearch || categoryFilter || lowStockOnly || storageFilter ? (
+                <EmptyState
+                  icon={Search}
+                  title="No matching supplies"
+                  description="Try a different search, category or location."
+                />
+              ) : (
+                <EmptyState icon={Stethoscope} title="No medical supplies yet" description={emptyCatalogHint} />
+              )
+            ) : (
+              <>
+                {canManage && selectedIds.size > 0 && (
+                  <div
+                    className="card mb-3 flex flex-wrap items-center justify-between gap-3 p-3"
+                    role="region"
+                    aria-label="Selected supplies"
+                  >
+                    <p className="text-theme-text-primary text-sm" aria-live="polite">
+                      {formatNumber(selectedIds.size)} selected
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button type="button" className="btn-secondary" onClick={() => setSelectedIds(new Set())}>
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-primary inline-flex items-center gap-2"
+                        disabled={isBulkRetiring}
+                        onClick={() => void handleBulkRetire()}
+                      >
+                        <Archive className="h-4 w-4" />
+                        {isBulkRetiring ? 'Retiring…' : 'Retire selected'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {canManage && (
+                  // The header checkbox lives in <thead>, which the phone layout
+                  // hides, so phones get their own select-all above the cards.
+                  <label className="text-theme-text-secondary touch-target-phone mb-2 flex items-center gap-2 text-sm md:hidden">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={allOnPageSelected}
+                      onChange={toggleAllOnPage}
+                    />
+                    Select all on this page
+                  </label>
+                )}
+                <div className="card overflow-x-auto p-0">
+                  <table className="rwd-table w-full text-sm">
+                    <thead>
+                      <tr className="border-theme-surface-border border-b">
+                        {canManage && (
+                          <th className="w-10 px-4 py-3 text-left">
+                            <input
+                              type="checkbox"
+                              className="form-checkbox"
+                              checked={allOnPageSelected}
+                              onChange={toggleAllOnPage}
+                              aria-label="Select every supply on this page"
+                            />
+                          </th>
+                        )}
+                        <th className="px-4 py-3 text-left">
+                          <SortableHeader
+                            label="Item"
+                            field="name"
+                            currentSort={sortField}
+                            currentDirection={sortDirection}
+                            onSort={handleSort}
+                          />
+                        </th>
+                        <th className="px-4 py-3 text-left">
+                          <SortableHeader
+                            label="Category"
+                            field="category"
+                            currentSort={sortField}
+                            currentDirection={sortDirection}
+                            onSort={handleSort}
+                          />
+                        </th>
+                        <th className="px-4 py-3 text-right">
+                          <SortableHeader
+                            label="On hand"
+                            field="on_hand"
+                            currentSort={sortField}
+                            currentDirection={sortDirection}
+                            onSort={handleSort}
+                          />
+                        </th>
+                        <th className="px-4 py-3 text-right">
+                          <SortableHeader
+                            label="Reorder at"
+                            field="reorder_point"
+                            currentSort={sortField}
+                            currentDirection={sortDirection}
+                            onSort={handleSort}
+                          />
+                        </th>
+                        <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
+                          Next expiry
+                        </th>
+                        <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
+                          Where
+                        </th>
+                        <th className="px-4 py-3 text-right">
+                          <span className="sr-only">Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item) => {
+                        const isLow =
+                          // `!= null`: an unset reorder point arrives as null, and
+                          // the strict check flagged every empty supply as Low.
+                          item.reorder_point != null && onHandQuantity(item) <= item.reorder_point;
+                        return (
+                          <tr key={item.id} className="border-theme-surface-border border-b last:border-0">
+                            {canManage && (
+                              // Empty label: the checkbox's own aria-label names
+                              // the row, and a "Select" caption on every phone card
+                              // was noise.
+                              <td data-label="" className="px-4 py-3">
+                                <input
+                                  type="checkbox"
+                                  className="form-checkbox"
+                                  checked={selectedIds.has(item.id)}
+                                  onChange={() => toggleSelected(item.id)}
+                                  aria-label={`Select ${item.name}`}
+                                />
+                              </td>
+                            )}
+                            <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
+                              {item.name}
+                              {item.size && (
+                                <span className="text-theme-text-secondary ml-1 text-xs font-normal">
+                                  · {item.size}
+                                </span>
+                              )}
+                              {item.unit_of_measure && (
+                                <span className="text-theme-text-muted ml-1 text-xs">({item.unit_of_measure})</span>
+                              )}
+                            </td>
+                            <td data-label="Category" className="text-theme-text-muted px-4 py-3">
+                              {categoryName(item)}
+                            </td>
+                            <td
+                              data-label="On hand"
+                              className={`px-4 py-3 text-right tabular-nums ${
+                                isLow ? 'font-semibold text-orange-800 dark:text-orange-300' : 'text-theme-text-primary'
+                              }`}
+                            >
+                              {formatNumber(onHandQuantity(item))}
+                              {isLow && <span className="ml-1 text-xs"> Low</span>}
+                            </td>
+                            <td
+                              data-label="Reorder at"
+                              className="text-theme-text-muted px-4 py-3 text-right tabular-nums"
+                            >
+                              {item.reorder_point == null ? '—' : formatNumber(item.reorder_point)}
+                            </td>
+                            <td data-label="Next expiry" className={`px-4 py-3 ${nextExpiryTone(item)}`}>
+                              {item.next_expiration_date ? (
+                                <>
+                                  {formatDate(item.next_expiration_date, tz)}
+                                  <span className="ml-1 text-xs">
+                                    ({expiryLabel(item.days_until_next_expiration ?? undefined)})
+                                  </span>
+                                </>
+                              ) : (
+                                '—'
+                              )}
+                            </td>
+                            <td data-label="Where" className="text-theme-text-muted px-4 py-3">
+                              <SupplyWhere item={item} onOpen={() => setLotsItem(item)} />
+                            </td>
+                            <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap">
+                              {/* Lots for everyone who can see the list: a crew
+                                member checking what is in date needs them as
+                                much as the officer who maintains them. */}
+                              <button
+                                type="button"
+                                onClick={() => setLotsItem(item)}
+                                className="btn-icon"
+                                aria-label={`Lots for ${supplyLabel(item)}`}
+                                title="Stock lots"
+                              >
+                                <Layers className="h-4 w-4" />
+                              </button>
+                              {canManage && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingItem(item)}
+                                    className="btn-icon"
+                                    aria-label={`Edit ${item.name}`}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleRetire(item)}
+                                    className="btn-icon"
+                                    aria-label={`Retire ${item.name}`}
+                                  >
+                                    <Archive className="h-4 w-4" />
+                                  </button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {pagerNavigable && itemPage.total > 0 && (
+              <nav className="mt-4 flex items-center justify-between gap-3" aria-label="Medical supplies pagination">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  // Keyed on the requested `page`, not on the loaded
+                  // `itemPage.skip`. After a rejected Next those disagree --
+                  // page 1, skip 0 -- and keying on skip disabled the one
+                  // control that could get back to a page that loads.
+                  disabled={loading.items || !filtersSettled || page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  Previous
+                </button>
+                <p className="text-theme-text-muted text-sm" aria-live="polite">
+                  {pagerAnswersScreen
+                    ? `Showing ${formatNumber(itemPage.skip + 1)}–${formatNumber(
+                        Math.min(itemPage.skip + items.length, itemPage.total)
+                      )} of ${formatNumber(itemPage.total)}`
+                    : `Page ${formatNumber(page + 1)}`}
+                </p>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  // Disabled while a page is in flight, and bounded by the known
+                  // total. The enabled state otherwise came from the *previous*
+                  // response, so a second activation before this one landed
+                  // stepped past the last page -- skip=400 on a 201-item catalog,
+                  // an empty table and a range reading "Showing 401-201 of 201".
+                  //
+                  // Also disabled when the totals belong to a different query:
+                  // stepping forward on them would ask for page 2 of a query
+                  // whose page 1 never arrived.
+                  disabled={
+                    loading.items ||
+                    !filtersSettled ||
+                    !pagerAnswersScreen ||
+                    itemPage.skip + itemPage.limit >= itemPage.total
+                  }
+                  onClick={() =>
+                    setPage((p) => Math.min(p + 1, Math.max(0, Math.ceil(itemPage.total / PAGE_SIZE) - 1)))
+                  }
+                >
+                  Next
+                </button>
+              </nav>
+            )}
+          </section>
+        )}
+      </div>
 
       {editingItem && (
         <MedicalItemFormModal
@@ -1096,6 +1345,14 @@ const MedicalSuppliesPage: React.FC = () => {
       )}
 
       {showDeliveryModal && <ReceiveDeliveryModal onClose={() => setShowDeliveryModal(false)} onSaved={handleSaved} />}
+      {lotsItem && (
+        <MedicalItemLotsModal
+          item={lotsItem}
+          canManage={canManage}
+          onClose={() => setLotsItem(null)}
+          onChanged={() => void refresh()}
+        />
+      )}
       {showImportExport && (
         <MedicalImportExportModal
           onClose={() => setShowImportExport(false)}
@@ -1105,6 +1362,8 @@ const MedicalSuppliesPage: React.FC = () => {
             category_id: categoryFilter || undefined,
             sort_by: (sortDirection && sortField) || undefined,
             sort_order: (sortField && sortDirection) || undefined,
+            low_stock: lowStockOnly || undefined,
+            ...storageQuery,
           }}
         />
       )}
