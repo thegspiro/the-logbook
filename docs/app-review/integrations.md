@@ -1,7 +1,131 @@
 # Application Review — Integrations (Tier B)
 
 **Prefix:** `INT2` · **Iteration:** B12 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-16 (pass 5)
+
+---
+
+## Pass 5 (2026-10-16) — two ways the connection status could be made untrue (2 fixed, 1 constant removed, 2 flagged)
+
+Lens for this pass: the surface added since pass 4 in August (Google Workspace, Claude
+MCP, PayPal, NFC ID cards, the health / sync-history / retry-sync routes), the update
+discipline the B4–B11 passes applied, and an AST dead-code scan that counts `tests/` as
+a reference source. This module is different from the rest of the rotation: it has no
+`apply_updates` path (the only thing an update writes is a JSON `config`, validated per
+type by `INTEGRATION_CONFIG_SCHEMAS`), so the null-on-NOT-NULL lens is not applicable and
+what was driven over HTTP instead was the **status lifecycle** — connect, disconnect and
+the config merge — against the real schema, all nine routes inventoried
+(`integrations.manage` on every one but `/connected`, which projects status only).
+
+### INT2-1 — MEDIUM — `POST /{id}/disconnect` turned a `coming_soon` integration into a connectable one — ✅ FIXED
+
+`connect_integration` refuses a row whose status is `coming_soon` ("This integration is
+not yet available"). `disconnect_integration` had no such check and wrote
+`status = "available"` unconditionally, which is precisely the value the connect gate
+lets through. Reproduced over HTTP: `connect` on Zapier → 400; `disconnect` → 200 and the
+row reads `available`; `connect` again → **200, connected and enabled**, for an
+integration (Zapier, Active911, WhatsApp, NFIRS, NEMSIS, ePCR…) that has no service
+behind it. Reachable with `integrations.manage` and two requests; the UI never offers
+Disconnect on such a row, so it needs a direct client, but it defeated the one control
+that keeps the catalog's unreleased entries inert and left a "connected" badge on a
+feature that does nothing. Fixed in the handler: a `coming_soon` row answers 400 with
+the same message `connect` uses, before any write. A released integration still
+disconnects (control test).
+
+### INT2-2 — LOW/MED — a chat or webhook integration could be "connected" with no destination — ✅ FIXED
+
+`SlackConfig` / `DiscordConfig` / `TeamsConfig` type `webhook_url` as a plain `str`, and
+`GenericWebhookConfig.url` likewise, so `""` passes the schema; a blank secret is a
+control value (`_extract_secrets` drops it: "keep the stored one"). On a **first**
+connect there is no stored one. The Connect button in `IntegrationsPage` is not disabled
+on an empty field, so clicking it produced a success toast, `status="connected"`,
+`enabled=true`, and an integration whose every send fails with "No webhook URL
+configured" (confirmed for all four types: `connect` 200, then `test-connection` →
+`{"success": false, "message": "No webhook URL configured"}`).
+
+Fixed server-side with `_require_destination`, called after validation on connect, and
+on update for an already-connected row: the effective URL must be non-blank, where
+"effective" follows how each key is really merged — a secret is the supplied value or
+else the stored secret (so a reconnect after a disconnect, or a blank on a connected
+row, still means _keep_), and the generic webhook's `url`, which is **public** config, is
+the supplied value when sent, so a blank there is rejected rather than silently
+overwriting the stored URL in the `{**stored, **public}` merge (found by the reconnect
+control test failing on the first draft). 422 with "Enter the webhook URL for Slack".
+Frontend unchanged: the error reaches the existing toast through `getErrorMessage`.
+
+Tests: `tests/test_integrations_lifecycle_integration.py` (22). 11 refusal cases fail on
+the unmodified endpoint; the 11 controls — released integration still disconnects, a
+destination connects, reconnect keeps it, blank-means-keep on a connected PATCH, an
+integration with no destination (iCal) still connects, a non-URL edit of a connected
+generic webhook still saves — pass either way.
+
+### INT2-3 — LOW/MED — credential-based integrations also connect with no credentials — 🚩 FLAGGED (owner decision)
+
+The same first-connect gap exists for PayPal, Documenso, Cal.com and Salesforce: `connect`
+with an empty (or minimal) config returns 200 and marks them connected and enabled, and
+`test-connection` then reports "PayPal client ID and secret are required" / "No Documenso
+API token configured" / "No Cal.com API key configured" / "Salesforce client credentials
+are not configured". Unlike a chat webhook, these have defaults for everything but the
+credential and a deliberate two-step ("connect, then test") is arguable, so requiring
+credentials at connect is a product call, not a clear bug. Mirrored to
+`docs/KNOWN_LIMITATIONS.md` (INT2-3) with the options.
+
+### INT2-4 — LOW — `ensure_catalog` only inserts, so a catalog edit never reaches an existing organization — 🚩 FLAGGED (owner decision)
+
+`ensure_catalog` adds a row for a type the organization lacks and never touches an existing
+one, and no migration reconciles them (no revision mentions `coming_soon`). A catalog entry
+that is later promoted from `coming_soon` to `available`, demoted the other way, or reworded
+therefore stays as it was seeded for every existing department; only new organizations see
+the change. The git history of the catalog was squashed into one commit, so whether any entry
+has actually drifted could not be established from it. Fixing it means deciding which columns
+the catalog owns (status, description, category) and writing a reconciliation — and a status
+reconcile can flip a row a department sees as connected — so it is flagged, not applied.
+
+### INT2-5 — INFO — unused `COLOR_RED` in the Discord sender — ✅ REMOVED
+
+The scan (counting `tests/`, `scripts/` and `alembic/`) over the endpoints, health service,
+schemas, model and every module in `integration_services/` found one unreferenced name:
+`COLOR_RED` in `discord_service.py`, a palette entry nothing used. Removed. No `# noqa`
+suppressions exist in the integrations code.
+
+### Verified good ✅ (this pass)
+
+- **INT-1 / INT-3 / INT-4 still hold** (re-read, and the suites that pin them pass):
+  `assert_outbound_url_safe` at store and send time, the `integrations.manage` gate on every
+  config route with `/connected` registered first and status-only, and `exclude_unset` in
+  `_validate_config`.
+- **Org scoping.** Every by-id read and write filters `organization_id`
+  (`_get_org_integration` for the health routes); the sync-history query filters both
+  `integration_id` and `organization_id`; `ensure_catalog` is keyed on the caller's org.
+- **Retry Sync.** Row lock held across the cooldown check and the run row, a 60 s
+  per-integration cooldown plus a per-IP limit, 409 when not connected, the failed run's
+  staged writes rolled back before the result is recorded.
+- **Audit.** Update writes its entry in the same transaction (and requires it for the
+  Claude MCP type); connect and disconnect log after commit, best-effort — consistent with
+  the other integrations, and unchanged.
+- **Google Workspace** connect, update and disconnect are all behind
+  `_require_google_workspace_admin` (`admin.access`), and `_check_google_workspace_ready`
+  runs on both connect and update.
+
+### Not read (scope, stated plainly)
+
+`salesforce_sync.py`, `calcom_sync.py` and the public inbound webhook routers were covered by
+the INT-27 security review (2026-09-06) and not re-read; the individual connector services
+were scanned for dead names only, not read for delivery logic; `IntegrationsPage.tsx`
+(2,500 lines) was read at its config builder, connect, save and disconnect handlers.
+
+### Completion gate (pass 5)
+
+| Check                                        | Result                                                              |
+| -------------------------------------------- | ------------------------------------------------------------------- |
+| `flake8 app/ tests/`                         | ✅ exit 0, no output                                                |
+| `black --check app/ tests/`                  | ✅ 1755 files unchanged                                             |
+| `isort --check` (changed files)              | ✅                                                                  |
+| Related backend suites (9 integration files) | ✅ 247 passed                                                       |
+| New file                                     | ✅ 22 pass; 11 fail without the fix; 0 under the unit job's markers |
+| `check_route_permissions.py --strict`        | ✅ 0 errors, 0 warnings                                             |
+| Frontend                                     | n/a — no frontend change                                            |
 
 ---
 

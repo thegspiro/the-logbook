@@ -465,6 +465,45 @@ def _secrets_to_clear_for_base_url_change(
     return {secret_key} if config[secret_key] == "" else set()
 
 
+# The one setting without which these integrations have nothing to send to.
+_DESTINATION_KEYS = {
+    "slack": "webhook_url",
+    "discord": "webhook_url",
+    "microsoft-teams": "webhook_url",
+    "generic-webhook": "url",
+}
+
+
+def _require_destination(integration: Integration, config: dict[str, Any]) -> None:
+    """Refuse to leave a chat or webhook integration connected with nowhere to post.
+
+    The config schemas type the URL as a plain ``str``, so ``""`` satisfies
+    them. A blank secret means "keep the stored one", but on a first connect
+    there is none, which produced a green "connected" badge on an integration
+    whose every send fails with "No webhook URL configured". A reconnect after
+    a disconnect still works with a blank secret, because disconnecting keeps
+    it. The generic webhook's ``url`` is public config, so a blank there is the
+    value, not a request to keep: it overwrites the stored one in the merge.
+    """
+    key = _DESTINATION_KEYS.get(integration.integration_type)
+    if key is None:
+        return
+    supplied = config.get(key)
+    if key in SECRET_CONFIG_KEYS:
+        effective = (supplied.strip() if isinstance(supplied, str) else "") or (
+            integration.get_secret(key) or ""
+        )
+    elif key in config:
+        effective = supplied.strip() if isinstance(supplied, str) else ""
+    else:
+        effective = (integration.config or {}).get(key) or ""
+    if not effective:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Enter the webhook URL for {integration.name}",
+        )
+
+
 def _validate_urls_in_config(config: dict[str, Any]) -> None:
     """Validate any URL fields in config for SSRF protection."""
     url_keys = {"url", "webhook_url", "api_url", "api_base_url", "instance_url"}
@@ -688,6 +727,7 @@ async def connect_integration(
     secrets_to_clear = _secrets_to_clear_for_base_url_change(integration, config)
     # Validate config schema
     config = _validate_config(integration.integration_type, config)
+    _require_destination(integration, config)
     await _check_google_workspace_ready(db, integration, config)
     # Validate URLs for SSRF
     _validate_urls_in_config(config)
@@ -757,6 +797,14 @@ async def disconnect_integration(
             status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
         )
 
+    # Disconnecting writes status="available", which is exactly what the
+    # connect endpoint's coming_soon gate checks for. Letting it through would
+    # promote an unreleased integration to connectable with one extra call.
+    if integration.status == "coming_soon":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This integration is not yet available",
+        )
     _require_google_workspace_admin(integration, current_user)
 
     integration.status = "available"
@@ -868,6 +916,8 @@ async def update_integration(
     _require_google_workspace_admin(integration, current_user)
     validation_config = {**(integration.config or {}), **config}
     config = _validate_config(integration.integration_type, validation_config)
+    if integration.status == "connected":
+        _require_destination(integration, config)
     await _check_google_workspace_ready(db, integration, config)
     # Validate URLs for SSRF
     _validate_urls_in_config(config)
