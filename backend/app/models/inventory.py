@@ -779,6 +779,9 @@ class InventoryItem(Base):
         storage_path: Optional[str]
         apparatus_count: Optional[int]
         apparatus_places: Optional[List[str]]
+        apparatus_stock: Optional[int]
+        apparatus_uncounted: Optional[int]
+        is_low_stock: Optional[bool]
 
     __table_args__ = (
         Index("idx_inventory_items_org_category", "organization_id", "category_id"),

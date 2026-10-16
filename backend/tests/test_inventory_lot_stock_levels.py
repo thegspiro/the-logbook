@@ -54,13 +54,20 @@ def _item(item_id, quantity, reorder_point):
     return item
 
 
-def _wire_low_stock(mock_db, items, lot_totals):
-    """First select returns the candidate items, second the per-item lot sums."""
+def _wire_low_stock(mock_db, items, lot_totals, medical_ids=()):
+    """The candidate items, then the per-item lot sums, then which of them are
+    medical supplies (none, by default: truck stock is counted for medical
+    supplies only, and has its own integration tests in
+    test_medical_supplies_truck_stock.py)."""
     items_result = MagicMock()
     items_result.scalars.return_value.all.return_value = items
     totals_result = MagicMock()
     totals_result.all.return_value = lot_totals
-    mock_db.execute = AsyncMock(side_effect=[items_result, totals_result])
+    medical_result = MagicMock()
+    medical_result.scalars.return_value.all.return_value = list(medical_ids)
+    mock_db.execute = AsyncMock(
+        side_effect=[items_result, totals_result, medical_result]
+    )
 
 
 class TestLowStockUsesLotsWhenPresent:

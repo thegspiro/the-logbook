@@ -1026,6 +1026,11 @@ export interface InventoryItem {
   apparatus_count?: number | null;
   /** Each position carrying it, as the checklist names it: "Medic 1 › Main Compartment › Jump Bag". Medical list only. */
   apparatus_places?: string[] | null;
+  /** In-date units on the trucks, and how many positions entered it uncounted (at their target). Medical list only. */
+  apparatus_stock?: number | null;
+  apparatus_uncounted?: number | null;
+  /** At or below the reorder point on shelf plus trucks — the server's call. Medical list only. */
+  is_low_stock?: boolean | null;
   last_inspection_date?: string;
   next_inspection_due?: string;
   inspection_interval_days?: number;

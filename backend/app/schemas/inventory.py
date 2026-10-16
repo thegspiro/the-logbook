@@ -478,6 +478,29 @@ class InventoryCategoryResponse(InventoryCategoryBase):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
+class MedicalExpiringStockRow(BaseModel):
+    """A medical supply expiring soon, on a shelf or aboard an apparatus.
+
+    ``where`` is the storage path for a shelf lot and the checklist's own
+    naming ("Medic 1 › Main Compartment › Jump Bag") for truck stock, so the
+    one list says where to go to pull it.
+    """
+
+    key: str
+    location: Literal["shelf", "apparatus"]
+    inventory_item_id: str
+    item_name: Optional[str] = None
+    item_size: Optional[str] = None
+    # The shelf lot, or the checklist position the units sit in.
+    lot_id: Optional[str] = None
+    template_item_id: Optional[str] = None
+    lot_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    days_until_expiration: Optional[int] = None
+    quantity: int = 0
+    where: Optional[str] = None
+
+
 class MedicalStorageRoom(BaseModel):
     """A room or place a supply can be filed under."""
 
@@ -793,6 +816,14 @@ class InventoryItemResponse(InventoryItemBase):
     # Each apparatus position carrying it, as the checklist names it:
     # "Medic 1 › Main Compartment › Jump Bag". Medical supply list only.
     apparatus_places: Optional[List[str]] = None
+    # In-date units on the trucks, how many positions entered that figure at
+    # their target because nobody has counted them, and whether the supply is
+    # at or below its reorder point on shelf plus trucks — the server's call,
+    # so the list cannot disagree with the Low stock tile it opens from.
+    # Medical supply list only.
+    apparatus_stock: Optional[int] = None
+    apparatus_uncounted: Optional[int] = None
+    is_low_stock: Optional[bool] = None
 
     # The requesting member's own pin position, 0-based, or null when they
     # have not pinned this item. Personal to the caller: two members reading
