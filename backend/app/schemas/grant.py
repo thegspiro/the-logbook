@@ -13,6 +13,7 @@ from uuid import UUID
 from pydantic import (
     BaseModel,
     ConfigDict,
+    EmailStr,
     Field,
     computed_field,
     field_validator,
@@ -286,6 +287,40 @@ class GrantOpportunityResponse(GrantOpportunityBase):
 # ============================================
 
 
+class GrantBudgetSummary(BaseModel):
+    """An application's budget at a glance: an amount per budget category.
+
+    The categories are the ones ``GrantBudgetItem`` lines use
+    (``BudgetItemCategory``), so the summary and the line-item budget speak
+    the same language. Amounts are floats rather than ``Decimal`` because the
+    summary is stored in a JSON column, which cannot serialize a Decimal.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    equipment: Optional[float] = Field(None, ge=0)
+    personnel: Optional[float] = Field(None, ge=0)
+    training: Optional[float] = Field(None, ge=0)
+    contractual: Optional[float] = Field(None, ge=0)
+    supplies: Optional[float] = Field(None, ge=0)
+    travel: Optional[float] = Field(None, ge=0)
+    construction: Optional[float] = Field(None, ge=0)
+    indirect: Optional[float] = Field(None, ge=0)
+    other: Optional[float] = Field(None, ge=0)
+    notes: Optional[str] = Field(None, max_length=5000)
+
+
+class GrantKeyContact(BaseModel):
+    """One person attached to an application (program officer, signatory...)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=255)
+    role: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, max_length=50)
+    email: Optional[EmailStr] = None
+
+
 class GrantApplicationBase(BaseModel):
     """Base grant application schema"""
 
@@ -305,8 +340,8 @@ class GrantApplicationBase(BaseModel):
     grant_end_date: Optional[date] = None
     project_description: Optional[str] = None
     narrative_summary: Optional[str] = None
-    budget_summary: Optional[Dict[str, Any]] = None
-    key_contacts: Optional[List[Dict[str, Any]]] = None
+    budget_summary: Optional[GrantBudgetSummary] = None
+    key_contacts: Optional[List[GrantKeyContact]] = Field(None, max_length=50)
     federal_award_id: Optional[str] = Field(None, max_length=100)
     nfirs_compliant: Optional[bool] = None
     performance_period_months: Optional[int] = Field(None, ge=0)
@@ -342,8 +377,8 @@ class GrantApplicationUpdate(BaseModel):
     grant_end_date: Optional[date] = None
     project_description: Optional[str] = None
     narrative_summary: Optional[str] = None
-    budget_summary: Optional[Dict[str, Any]] = None
-    key_contacts: Optional[List[Dict[str, Any]]] = None
+    budget_summary: Optional[GrantBudgetSummary] = None
+    key_contacts: Optional[List[GrantKeyContact]] = Field(None, max_length=50)
     federal_award_id: Optional[str] = Field(None, max_length=100)
     nfirs_compliant: Optional[bool] = None
     performance_period_months: Optional[int] = Field(None, ge=0)
@@ -359,6 +394,13 @@ class GrantApplicationUpdate(BaseModel):
 
 class GrantApplicationResponse(GrantApplicationBase):
     """Schema for grant application response with nested relations"""
+
+    # Read back as stored rather than through the request models: the columns
+    # are untyped JSON and a direct API caller could have written any shape
+    # before the request schemas were tightened, so a strict read would turn
+    # one odd row into a 500 on the whole application.
+    budget_summary: Optional[Dict[str, Any]] = None
+    key_contacts: Optional[List[Dict[str, Any]]] = None
 
     id: UUID
     organization_id: UUID

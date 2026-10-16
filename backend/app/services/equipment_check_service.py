@@ -632,9 +632,21 @@ class EquipmentCheckService:
                 compartment, parent_id, organization_id
             )
 
-        for key, value in data.items():
-            if key not in self.PROTECTED_FIELDS and hasattr(compartment, key):
-                setattr(compartment, key, value)
+        updates = {
+            key: value
+            for key, value in data.items()
+            if key not in self.PROTECTED_FIELDS and hasattr(compartment, key)
+        }
+        # A null aimed at a NOT NULL column (container_type, name, ...) is
+        # refused up front, with apply_updates' wording, so it surfaces as a 400
+        # rather than a flush-time IntegrityError. Checked before any write so a
+        # refused payload leaves the compartment untouched.
+        for key, value in updates.items():
+            column = CheckTemplateCompartment.__table__.columns.get(key)
+            if value is None and column is not None and not column.nullable:
+                raise ValueError(f"Field '{key}' cannot be cleared")
+        for key, value in updates.items():
+            setattr(compartment, key, value)
 
         await self._advance_content_revision(str(compartment.template_id))
         await self.db.commit()

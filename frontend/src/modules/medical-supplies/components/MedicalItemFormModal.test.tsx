@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
-import type { InventoryCategory } from '../../../services/eventServices';
+import type { InventoryCategory, InventoryItem } from '../../../services/eventServices';
 
 const mockCreateItem = vi.fn();
 const mockUpdateItem = vi.fn();
@@ -65,5 +65,69 @@ describe('MedicalItemFormModal', () => {
       expect.objectContaining({ name: 'Gauze pads', category_id: 'cat-bandages', tracking_type: 'pool' })
     );
     expect(onSaved).toHaveBeenCalled();
+  });
+
+  describe('editing', () => {
+    const existing: InventoryItem = {
+      id: 'item-7',
+      organization_id: 'org-1',
+      name: 'Gauze pads',
+      category_id: 'cat-bandages',
+      condition: 'good',
+      status: 'available',
+      tracking_type: 'pool',
+      quantity: 12,
+      quantity_issued: 0,
+      is_lot_stocked: false,
+      active: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      mockUpdateItem.mockReset();
+      mockUpdateItem.mockResolvedValue({ id: 'item-7' });
+    });
+
+    it('omits a blanked on-hand count rather than sending a null the server refuses', async () => {
+      renderWithRouter(
+        <MedicalItemFormModal
+          categories={[category]}
+          categoriesError={null}
+          item={existing}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      );
+
+      const user = userEvent.setup();
+      await user.clear(screen.getByLabelText('On hand'));
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      const payload = mockUpdateItem.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(payload.quantity).toBeUndefined();
+      expect(payload.name).toBe('Gauze pads');
+    });
+
+    it('still sends a typed count, zero included', async () => {
+      renderWithRouter(
+        <MedicalItemFormModal
+          categories={[category]}
+          categoriesError={null}
+          item={existing}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      );
+
+      const user = userEvent.setup();
+      const onHand = screen.getByLabelText('On hand');
+      await user.clear(onHand);
+      await user.type(onHand, '0');
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      expect(mockUpdateItem).toHaveBeenCalledWith('item-7', expect.objectContaining({ quantity: 0 }));
+    });
   });
 });

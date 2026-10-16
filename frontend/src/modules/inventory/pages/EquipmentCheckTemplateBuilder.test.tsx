@@ -899,6 +899,69 @@ describe('EquipmentCheckTemplateBuilder clearing a field on save', () => {
   });
 });
 
+describe('EquipmentCheckTemplateBuilder save never nulls a NOT NULL field', () => {
+  // expiration_warning_days and container_type are NOT NULL columns. Save sent
+  // an explicit null for a blank box, so the backend refused the whole save
+  // (or, for container_type, failed it at flush) over one emptied field.
+  const expiryTemplate = () => {
+    const copy = structuredClone(template);
+    const radio = copy.compartments[0]?.items[0];
+    if (radio) radio.checkType = 'expiry';
+    return copy;
+  };
+
+  const lastSavePayload = (id: string): Record<string, unknown> | undefined => {
+    const saves = (updateCheckItem.mock.calls as unknown[][]).filter(
+      (call) => call[0] === id && typeof call[1] === 'object' && call[1] !== null && 'name' in call[1]
+    );
+    return saves[saves.length - 1]?.[1] as Record<string, unknown> | undefined;
+  };
+
+  beforeEach(() => {
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(expiryTemplate());
+    updateCheckItem.mockReset();
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockReset();
+    updateCompartment.mockResolvedValue({});
+    updateEquipmentCheckTemplate.mockReset();
+    updateEquipmentCheckTemplate.mockResolvedValue(template);
+    reorderItems.mockReset();
+    reorderItems.mockResolvedValue(undefined);
+    mockViewport('laptop');
+  });
+
+  it('omits a blank expiration warning, as the auto-save path does', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    const warning = await screen.findByRole('spinbutton', { name: 'Expiration warning days for Radio' });
+
+    await user.clear(warning);
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    await waitFor(() => expect(lastSavePayload('radio')).toBeDefined());
+    expect(lastSavePayload('radio')?.expiration_warning_days).toBeUndefined();
+    expect(lastSavePayload('flashlight')?.expiration_warning_days).toBe(30);
+  });
+
+  it('saves a custom storage type left blank as a compartment, never null', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    // The medical bag: stored as 'bag', so 'compartment' below can only come
+    // from the blank custom label, not from a value that was already there.
+    const storageType = await screen.findByDisplayValue('Bag');
+    await user.selectOptions(storageType, '__custom__');
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    await waitFor(() =>
+      expect(updateCompartment).toHaveBeenCalledWith('bag', expect.objectContaining({ container_type: 'compartment' }))
+    );
+    for (const call of updateCompartment.mock.calls as unknown[][]) {
+      expect((call[1] as Record<string, unknown>).container_type).not.toBeNull();
+    }
+  });
+});
+
 describe('EquipmentCheckTemplateBuilder movement persistence', () => {
   beforeEach(() => {
     vi.clearAllMocks();

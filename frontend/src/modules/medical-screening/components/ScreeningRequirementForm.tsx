@@ -42,6 +42,13 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
     if (!isOneTime && (!frequencyMonths || Number(frequencyMonths) < 1)) {
       newErrors.frequency = 'Frequency must be at least 1 month';
     }
+    // The column is NOT NULL, so a blank cannot be saved as "no grace period";
+    // it used to be replaced with 30 behind the user's back. Ask instead.
+    if (!gracePeriodDays.trim()) {
+      newErrors.gracePeriod = 'Grace period is required (enter 0 for none)';
+    } else if (!Number.isInteger(Number(gracePeriodDays)) || Number(gracePeriodDays) < 0) {
+      newErrors.gracePeriod = 'Grace period must be a whole number of days, 0 or more';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -68,7 +75,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
         frequency_months: isOneTime ? null : Number(frequencyMonths),
         applies_to_roles: roles.length > 0 ? roles : null,
         is_active: isActive,
-        grace_period_days: Number(gracePeriodDays) || 30,
+        grace_period_days: Number(gracePeriodDays),
       };
       await onSave(data);
     } else {
@@ -79,7 +86,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
         frequency_months: isOneTime ? undefined : Number(frequencyMonths),
         applies_to_roles: roles.length > 0 ? roles : undefined,
         is_active: isActive,
-        grace_period_days: Number(gracePeriodDays) || 30,
+        grace_period_days: Number(gracePeriodDays),
       };
       await onSave(data);
     }
@@ -218,7 +225,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
               see tests/test_medical_screening_requirement_fields_are_unwired.py. */}
           <div>
             <label htmlFor="req-grace" className={labelClass}>
-              Grace Period (days past expiration)
+              Grace Period (days past expiration) *
             </label>
             <input
               id="req-grace"
@@ -228,6 +235,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
               onChange={(e) => setGracePeriodDays(e.target.value)}
               className={inputClass + ' w-32'}
             />
+            {errors.gracePeriod && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.gracePeriod}</p>}
             <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
               Not enforced yet — a screening is marked non-compliant the day after its expiration date; this value is
               saved but does not extend that deadline.

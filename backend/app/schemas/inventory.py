@@ -2410,6 +2410,9 @@ class ReorderRequestUpdate(BaseModel):
     # W41-5: link (or relink) the inventory item, which receiving requires.
     # Refused once stock has been received against the current link.
     item_id: Optional[UUID] = None
+    # Null clears the category; a non-null id must belong to the caller's org
+    # (checked by the service, as on create).
+    category_id: Optional[UUID] = None
     item_name: Optional[str] = Field(None, min_length=1, max_length=255)
     quantity_requested: Optional[int] = Field(None, ge=1)
     quantity_received: Optional[int] = Field(None, ge=0)
