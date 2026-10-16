@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockGetShiftCalls = vi.fn();
@@ -164,5 +164,60 @@ describe('ShiftCallsSection — the incident type comes from the department list
     await user.click(await screen.findByRole('button', { name: /edit call/i }));
 
     expect(screen.getByLabelText(/Incident Type/)).toHaveValue('structure fire');
+  });
+});
+
+describe('ShiftCallsSection — clearing a field on edit', () => {
+  const recorded = {
+    ...call,
+    incident_number: 'CAD-9',
+    dispatched_at: '2026-01-01T10:00:00Z',
+    cleared_at: '2026-01-01T11:00:00Z',
+    notes: 'Mutual aid from Station 4',
+  };
+
+  beforeEach(() => {
+    mockGetShiftCalls.mockReset();
+    mockGetShiftCalls.mockResolvedValue([recorded]);
+    mockCreateCall.mockReset();
+    mockCreateCall.mockResolvedValue(recorded);
+    mockUpdateCall.mockReset();
+    mockUpdateCall.mockResolvedValue(recorded);
+  });
+
+  it('sends null for every emptied optional field, so the clear persists', async () => {
+    // The update endpoint reads exclude_unset: an omitted key keeps the stored
+    // value, so an emptied incident number came back after a success toast.
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: /edit call/i }));
+
+    await user.clear(screen.getByLabelText('Incident #'));
+    fireEvent.change(screen.getByLabelText('Dispatched'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Cleared'), { target: { value: '' } });
+    await user.clear(screen.getByLabelText('Notes'));
+    await user.click(screen.getByRole('button', { name: 'Update Call' }));
+
+    await waitFor(() => {
+      expect(mockUpdateCall).toHaveBeenCalledWith(
+        'call-1',
+        expect.objectContaining({ incident_number: null, dispatched_at: null, cleared_at: null, notes: null })
+      );
+    });
+  });
+
+  it('still omits blank fields when logging a new call', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: /log call/i }));
+    await user.selectOptions(screen.getByLabelText(/Incident Type/), 'Fire');
+    await user.click(screen.getByRole('button', { name: 'Save Call' }));
+
+    await waitFor(() => expect(mockCreateCall).toHaveBeenCalled());
+    const payload = mockCreateCall.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.incident_number).toBeUndefined();
+    expect(payload.notes).toBeUndefined();
+    expect(payload.dispatched_at).toBeUndefined();
+    expect(payload.cleared_at).toBeUndefined();
   });
 });

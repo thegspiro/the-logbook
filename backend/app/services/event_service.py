@@ -2640,6 +2640,29 @@ class EventService:
         if check_in and check_out and check_out <= check_in:
             return None, "Override check-out time must be after check-in time"
 
+        # A duration auto-derived from the previous pair of override times
+        # stops describing anything once either time is cleared, yet it would
+        # still outrank the remaining clock when finalize credits training and
+        # admin hours. Only a derived value is dropped: one that differs from
+        # the old span was entered on purpose (here or by a training session's
+        # correction), stands independently of the times, and a request that
+        # names the duration itself always wins.
+        previous_in = rsvp.override_check_in_at
+        previous_out = rsvp.override_check_out_at
+        clears_derived_duration = False
+        if (
+            previous_in
+            and previous_out
+            and not (check_in and check_out)
+            and "override_duration_minutes" not in override_fields
+            and rsvp.override_duration_minutes is not None
+        ):
+            previous_span = int((previous_out - previous_in).total_seconds() / 60)
+            clears_derived_duration = rsvp.override_duration_minutes in {
+                previous_span,
+                max(0, previous_span),
+            }
+
         for field, value in override_fields.items():
             setattr(rsvp, field, value)
 
@@ -2659,6 +2682,8 @@ class EventService:
                 rsvp.override_check_out_at - rsvp.override_check_in_at
             ).total_seconds() / 60
             rsvp.override_duration_minutes = int(duration)
+        elif clears_derived_duration:
+            rsvp.override_duration_minutes = None
 
         rsvp.overridden_by = str(manager_id)
         rsvp.overridden_at = now

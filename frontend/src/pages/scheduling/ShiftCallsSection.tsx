@@ -158,7 +158,16 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
         await schedulingService.createCall(shiftId, payload);
         toast.success('Call logged');
       } else if (formMode) {
-        await schedulingService.updateCall(formMode, payload);
+        // The update endpoint reads exclude_unset, so a blank field must go as
+        // null — omitted, an emptied incident number, note or time would keep
+        // its stored value behind the success toast (CLAUDE.md pitfall #1).
+        await schedulingService.updateCall(formMode, {
+          ...payload,
+          incident_number: payload.incident_number ?? null,
+          dispatched_at: payload.dispatched_at ?? null,
+          cleared_at: payload.cleared_at ?? null,
+          notes: payload.notes ?? null,
+        });
         toast.success('Call updated');
       }
       closeForm();

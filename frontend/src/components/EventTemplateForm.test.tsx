@@ -207,6 +207,25 @@ describe('EventTemplateForm clearing a field (workflow review W21)', () => {
     );
   });
 
+  // reminder_schedule is NOT NULL JSON, so an emptied schedule is an empty
+  // list rather than null; omitting it kept the old schedule.
+  it('sends an emptied reminder schedule as an empty list when editing', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <EventTemplateForm
+        initialData={{ ...template, send_reminders: true, reminder_target: 'going', reminder_schedule: [168, 24] }}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />
+    );
+
+    await user.clear(screen.getByLabelText(/Reminder Schedule/));
+    await user.click(screen.getByRole('button', { name: /Save|Update/ }));
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ reminder_schedule: [] }));
+  });
+
   it('still leaves blank fields out when creating', async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
@@ -218,5 +237,6 @@ describe('EventTemplateForm clearing a field (workflow review W21)', () => {
     const sent = onSubmit.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(sent).not.toHaveProperty('default_location');
     expect(sent).not.toHaveProperty('default_duration_minutes');
+    expect(sent).not.toHaveProperty('reminder_schedule');
   });
 });

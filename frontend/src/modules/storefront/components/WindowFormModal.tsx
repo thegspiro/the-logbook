@@ -11,6 +11,7 @@ import { Modal } from '../../../components/Modal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { formCoercions } from '../../../utils/formValues';
 import { storefrontService, type WindowOfferingInput } from '../services/api';
 import { toDateInputValue } from '../utils/formatting';
 import type { StoreOrderWindow, StoreProduct } from '../types';
@@ -101,18 +102,23 @@ export const WindowFormModal: React.FC<WindowFormModalProps> = ({ isOpen, window
           sortOrder: index,
         }));
 
+    // A cleared box must reach the PUT as null — the update endpoint treats an
+    // omitted key as "keep". A cleared open/close time is safe to send: the
+    // scheduler skips auto-open/auto-close for a window with no time set, the
+    // same as one created without one.
+    const { text, pick } = formCoercions(Boolean(window));
     const payload = {
       name: form.name.trim(),
-      description: form.description.trim() || undefined,
-      opensAt: form.opensAt ? localToUTC(form.opensAt, tz) : undefined,
-      closesAt: form.closesAt ? localToUTC(form.closesAt, tz) : undefined,
+      description: text(form.description),
+      opensAt: pick(form.opensAt && localToUTC(form.opensAt, tz)),
+      closesAt: pick(form.closesAt && localToUTC(form.closesAt, tz)),
       autoOpen: form.autoOpen,
       autoClose: form.autoClose,
-      expectedDeliveryDate: form.expectedDeliveryDate || undefined,
-      pickupInstructions: form.pickupInstructions.trim() || undefined,
+      expectedDeliveryDate: pick(form.expectedDeliveryDate),
+      pickupInstructions: text(form.pickupInstructions),
       includeAllProducts: form.includeAllProducts,
       notifyOnOpen: form.notifyOnOpen,
-      notes: form.notes.trim() || undefined,
+      notes: text(form.notes),
       offerings,
     };
 
