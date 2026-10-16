@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { McpServiceKeyPanel } from '../components/integrations/McpServiceKeyPanel';
 import { McpOAuthPanel } from '../components/integrations/McpOAuthPanel';
+import { IcalFeedPanel } from '../components/integrations/IcalFeedPanel';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import {
   Plug,
@@ -70,13 +71,13 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     icon: <Calendar className="h-6 w-6" />,
     color: 'text-blue-700 dark:text-blue-400',
     bgColor: 'bg-blue-500/10',
-    features: ['Event sync', 'Two-way sync', 'Auto-create events'],
+    features: ['One-way publishing', 'Dedicated department calendar', 'Members subscribe'],
   },
   outlook: {
     icon: <Calendar className="h-6 w-6" />,
     color: 'text-sky-700 dark:text-sky-400',
     bgColor: 'bg-sky-500/10',
-    features: ['Calendar sync', 'Email notifications', 'Contact sync'],
+    features: ['One-way publishing', 'Dedicated department calendar', 'Members subscribe'],
   },
   slack: {
     icon: <MessageSquare className="h-6 w-6" />,
@@ -100,7 +101,7 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     icon: <Link className="h-6 w-6" />,
     color: 'text-orange-700 dark:text-orange-400',
     bgColor: 'bg-orange-500/10',
-    features: ['Calendar feed URL', 'Auto-updates', 'Filtered feeds'],
+    features: ['Department events feed', 'Works in any calendar app', 'Resettable link'],
   },
   'microsoft-teams': {
     icon: <MessageSquare className="h-6 w-6" />,
@@ -1879,6 +1880,9 @@ const IntegrationsPage: React.FC = () => {
                     </span>
                   ))}
                 </div>
+                {integration.integration_type === 'ical' &&
+                  integration.status === ConnectionStatus.CONNECTED &&
+                  canManage && <IcalFeedPanel integrationId={integration.id} />}
                 <div className="flex flex-wrap justify-end gap-2">
                   {integration.status !== 'coming_soon' && canManage && (
                     <RouterLink

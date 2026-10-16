@@ -37,7 +37,7 @@ from app.api.dependencies import (
 from app.api.v1.endpoints.minutes import (
     _adopting_title,
     _build_action_item_response,
-    _build_response,
+    _respond,
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
@@ -1090,7 +1090,7 @@ async def recall_minutes(
         event_data={"minutes_id": minutes_id, "title": minutes.title},
         user_id=str(current_user.id),
     )
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("/{minutes_id}/apply-outline", response_model=MinutesResponse)
@@ -1119,7 +1119,7 @@ async def apply_outline(
         event_data={"minutes_id": minutes_id, "template_id": data.template_id},
         user_id=str(current_user.id),
     )
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.get("/{minutes_id}/agenda-sync", response_model=AgendaSyncPreview)
@@ -1167,7 +1167,7 @@ async def apply_agenda_sync(
         event_data={"minutes_id": minutes_id, "accepted": len(data.accept)},
         user_id=str(current_user.id),
     )
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 # ============================================

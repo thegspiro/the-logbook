@@ -27,6 +27,7 @@ export type {
   MedicalStorageOptions,
   MedicalStorageRoom,
   MedicalSupplyPlacement,
+  MedicalExpiringStockRow,
 } from '../../../services/medicalSuppliesService';
 
 /**

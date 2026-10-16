@@ -693,7 +693,8 @@ footer settings, and one outline per meeting type is the default.
   only when a meeting type has more than one outline.
 - **Apply an outline** (`POST /{id}/apply-outline {template_id}`) on a draft lays
   an outline over it: its sections in its order, keeping every section that
-  already has text and any section the outline lacks.
+  already has text and any section the outline lacks. An agenda-born section
+  and one marked _not taken up_ are kept even while empty.
 - Outline sections are validated on save: unique lowercase keys, order
   renumbered. The editor will not save an outline with no sections; the API
   still accepts an empty list, as it always has.
@@ -784,8 +785,10 @@ Once minutes are adopted, the people the department names sign them, in the app.
   or adopted the minutes, since signing is a separate attestation from adopting.
   A slot is signed once; a person may sign more than one slot.
 - **What a signature is tied to**: the adopted version current when it was given.
-  It records that revision's SHA-256 and the panel flags a signature whose hash
-  no longer matches (`intact`). **Reopening the minutes supersedes the revision
+  It records that revision's SHA-256 and the panel flags a signature whose
+  stored hash no longer matches the revision row it was given on (`intact`):
+  that catches a signature or revision record being altered, not a recomputation
+  of the live text, which the revision's own integrity check covers. **Reopening the minutes supersedes the revision
   and leaves its signatures on file against the text they were given for; the
   corrected version starts unsigned** and must be signed again.
 - **Printed**: the PDF's approval block lists each signature with the name and
@@ -814,9 +817,15 @@ needs_motion, motion_text, documents[{id, name}]}`, at most 60. They are edited
   with agenda items skips the "choose an outline" question.
 - **Linked documents**: a library file may be linked only if it is in the
   caller's organization **and in a folder the caller could open themselves**, and
-  the stored name comes from the library, never from the request. The section
-  links to the Documents page; opening a file is still governed by the folder's
-  own rules.
+  the stored name comes from the library, never from the request. The name is
+  then **narrowed again for each reader**: every meeting and minutes response
+  shows a viewer only the links to files _they_ could open, so a title in a
+  leadership-only folder never reaches a member who could not open the file. The
+  stored copy is not changed. An editor who cannot see some links does not
+  unlink them by saving: on an update, links the editor could not have seen are
+  kept, and only a link they could see and removed is removed. The section links
+  to the Documents page; opening a file is still governed by the folder's own
+  rules.
 - **Sections cannot be forged**: `agenda_key` and `documents` on a section are
   set by the server. A client saving sections gets them taken back from the
   stored section by key, and a section the record does not already hold as

@@ -75,6 +75,7 @@ class EmailKind(str, enum.Enum):
     # Optional, about the member's own activity
     EVENT_REMINDERS = "event_reminders"
     EVENT_WAITLIST = "event_waitlist"
+    EVENT_CHANGES = "event_changes"
     TRAINING_REMINDERS = "training_reminders"
     SHIFT_NOTICES = "shift_notices"
     INVENTORY_UPDATES = "inventory_updates"
@@ -96,6 +97,7 @@ class EmailKind(str, enum.Enum):
     FINANCE_DUTIES = "finance_duties"
     MINUTES_DUTIES = "minutes_duties"
     DOCUMENT_DUTIES = "document_duties"
+    FUNDRAISING_DUTIES = "fundraising_duties"
 
 
 class EmailAudience(str, enum.Enum):
@@ -143,7 +145,10 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         label="Department messages",
         required=True,
         audience=_M,
-        includes=("Messages sent from Communications > Messages",),
+        includes=(
+            "Messages sent from Communications > Messages",
+            "Announcements an event's organizer sends about an event",
+        ),
         rationale=(
             "Email is the channel of record for department announcements; "
             "urgent ones may also be texted to members who agreed to texts."
@@ -202,6 +207,8 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "Reminders before events",
             "An event series you created is ending",
             "The answer to an attendance request you made",
+            "Reminders, check-in confirmations and missed-event notices an "
+            "event's organizer sends",
         ),
         rationale="The events calendar and the bell carry the same dates.",
         legacy_preference="event_reminders",
@@ -221,6 +228,26 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "The bell carries the same notice, and the event shows you as "
             "Going; with this off, a member who reads only email may not "
             "learn their seat is confirmed."
+        ),
+    ),
+    # Not under Event reminders either: a reminder repeats what the member
+    # already knows, while a cancellation or a moved start time is news that
+    # changes whether they turn up. No legacy switch, so muting reminders
+    # leaves this on.
+    EmailKind.EVENT_CHANGES: EmailPolicy(
+        label="Event changes and cancellations",
+        required=False,
+        audience=_M,
+        includes=(
+            "An event you said you are going to, or might go to, was cancelled",
+            "An event you said you are going to, or might go to, changed its "
+            "title, time or location",
+            "A follow-up an event's organizer sends about the event",
+        ),
+        rationale=(
+            "The bell carries the same notice and the event page shows the "
+            "change; with this off, a member who reads only email may turn up "
+            "to an event that moved or was called off."
         ),
     ),
     EmailKind.TRAINING_REMINDERS: EmailPolicy(
@@ -433,6 +460,19 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "A weekly list of document folders only full administrators can open",
         ),
         rationale="Documents lists the same folders to full administrators.",
+    ),
+    EmailKind.FUNDRAISING_DUTIES: EmailPolicy(
+        label="Grants and fundraising reminders",
+        required=False,
+        audience=_O,
+        includes=(
+            "A grant compliance task coming due, due today or overdue",
+            "A pledge coming due with money still outstanding",
+        ),
+        rationale=(
+            "Grants & Fundraising lists the same tasks and pledges with "
+            "their due dates."
+        ),
     ),
 }
 

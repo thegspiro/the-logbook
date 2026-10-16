@@ -936,6 +936,11 @@ class FakeExecuteResult:
     def scalars(self):
         return FakeScalars(self._items)
 
+    def scalar_one_or_none(self):
+        # The auto-sync runner re-fetches each integration by id inside its
+        # loop; these tests drive a single row, so that row is the answer.
+        return self._items[0] if self._items else None
+
 
 def make_integration_row(*, org_id="org-1", config=None):
     return SimpleNamespace(

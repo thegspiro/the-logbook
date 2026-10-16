@@ -30,6 +30,10 @@ from app.schemas.meetings import (
     MeetingsSummary,
     MeetingUpdate,
 )
+from app.services.agenda_document_access import (
+    has_linked_documents,
+    narrow_documents,
+)
 from app.services.meetings_service import MeetingsService
 
 router = APIRouter()
@@ -67,8 +71,18 @@ async def list_meetings(
     # Same for the attendee / action-item counts each card renders.
     await service.attach_child_counts(list(meetings))
 
+    shaped: list = []
+    for m in meetings:
+        if has_linked_documents(m.agenda_items):
+            narrowed = MeetingResponse.model_validate(m)
+            await narrow_documents(
+                db, current_user.organization_id, current_user, narrowed.agenda_items
+            )
+            shaped.append(narrowed)
+        else:
+            shaped.append(m)
     return {
-        "meetings": meetings,
+        "meetings": shaped,
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -111,6 +125,12 @@ async def create_meeting(
         username=current_user.username,
     )
 
+    if has_linked_documents(result.agenda_items):
+        created = MeetingDetailResponse.model_validate(result)
+        await narrow_documents(
+            db, current_user.organization_id, current_user, created.agenda_items
+        )
+        return created
     return result
 
 
@@ -126,6 +146,12 @@ async def get_meeting(
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
     await service.attach_creator_names(current_user.organization_id, [meeting])
+    if has_linked_documents(meeting.agenda_items):
+        detail = MeetingDetailResponse.model_validate(meeting)
+        await narrow_documents(
+            db, current_user.organization_id, current_user, detail.agenda_items
+        )
+        return detail
     return meeting
 
 
@@ -143,9 +169,15 @@ async def update_meeting(
     # — apply_updates is what tells the two apart.
     update_data = meeting.model_dump(exclude_unset=True)
     if "agenda_items" in update_data:
+        stored = await service.get_meeting_by_id(
+            meeting_id, current_user.organization_id
+        )
         try:
             update_data["agenda_items"] = await service.settle_agenda_items(
-                update_data["agenda_items"], current_user.organization_id, current_user
+                update_data["agenda_items"],
+                current_user.organization_id,
+                current_user,
+                existing=(stored.agenda_items if stored else None),
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -170,6 +202,12 @@ async def update_meeting(
         username=current_user.username,
     )
 
+    if has_linked_documents(result.agenda_items):
+        updated = MeetingResponse.model_validate(result)
+        await narrow_documents(
+            db, current_user.organization_id, current_user, updated.agenda_items
+        )
+        return updated
     return result
 
 

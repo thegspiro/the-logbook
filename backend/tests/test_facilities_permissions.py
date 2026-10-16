@@ -447,6 +447,18 @@ def test_file_crud_uses_four_distinct_facility_grants():
             "facilities.edit",
             "facilities.manage",
         },
+        # One-step uploads: the same grants as the two-step create, and no
+        # documents.manage (the gap these closed).
+        ("POST", "/{facility_id}/photos/upload"): {
+            "facilities.create",
+            "facilities.edit",
+            "facilities.manage",
+        },
+        ("POST", "/{facility_id}/documents/upload"): {
+            "facilities.create",
+            "facilities.edit",
+            "facilities.manage",
+        },
         ("PATCH", "/photos/{photo_id}"): {"facilities.edit", "facilities.manage"},
         ("PATCH", "/documents/{document_id}"): {"facilities.edit", "facilities.manage"},
         ("DELETE", "/photos/{photo_id}"): {

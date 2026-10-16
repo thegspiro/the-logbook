@@ -62,6 +62,7 @@ class TestPublicRouteErrorResponses:
             ("/api/public/v1/organization/info", "get", {"401", "404", "429"}),
             ("/api/public/v1/forms/{slug}", "get", {"404", "429"}),
             ("/api/public/v1/calendar/{token}.ics", "get", {"404", "429"}),
+            ("/api/public/v1/calendar/org/{token}.ics", "get", {"404", "429"}),
             ("/api/public/v1/finance/approvals/{token}", "get", {"404", "429"}),
             (
                 "/api/public/v1/application-status/{token}/withdraw",

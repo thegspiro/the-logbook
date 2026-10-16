@@ -74,6 +74,16 @@ AUTH_FAILURE_NO_PASSWORD = "no_password"
 AUTH_FAILURE_ACCOUNT_LOCKED = "account_locked"
 AUTH_FAILURE_INVALID_PASSWORD = "invalid_password"
 
+# AuthService.last_password_change_failure values: which control refused a
+# self-service password change, for the audit trail. The member is shown the
+# message instead; the password itself is never recorded.
+PASSWORD_CHANGE_FAILURE_INVALID_CURRENT = "invalid_current_password"
+PASSWORD_CHANGE_FAILURE_MINIMUM_AGE = "minimum_age"
+PASSWORD_CHANGE_FAILURE_WEAK = "weak_password"
+PASSWORD_CHANGE_FAILURE_BREACHED = "breached_password"
+PASSWORD_CHANGE_FAILURE_REUSED = "password_reused"
+PASSWORD_CHANGE_FAILURE_SAME_AS_CURRENT = "same_as_current"
+
 
 async def _check_password_history(
     db: AsyncSession, user_id: str, new_password: str
@@ -138,6 +148,11 @@ class AuthService:
         self.db = db
         # Set by authenticate_user when it refuses a sign-in.
         self.last_auth_failure: Optional[AuthFailure] = None
+        # Set by change_password when it refuses a change.
+        self.last_password_change_failure: Optional[str] = None
+        # Set by reset_password_with_token to the member whose password the
+        # token reset, so the audit row names them.
+        self.last_reset_user: Optional[User] = None
 
     async def authenticate_user(
         self, username: str, password: str
@@ -745,6 +760,7 @@ class AuthService:
         """
         # Verify current password. An account with no hash (SSO-only) has no
         # current password to match, so it is refused here like a wrong one.
+        self.last_password_change_failure = None
         current_hash = user.password_hash
         current_valid, _ = (
             verify_password(current_password, current_hash)
@@ -752,6 +768,7 @@ class AuthService:
             else (False, None)
         )
         if not current_hash or not current_valid:
+            self.last_password_change_failure = PASSWORD_CHANGE_FAILURE_INVALID_CURRENT
             return (
                 False,
                 "Current password is incorrect. Please verify your existing password and try again.",
@@ -780,6 +797,7 @@ class AuthService:
             )
             age = (datetime.now(timezone.utc) - pwd_changed).days
             if age < min_age_days:
+                self.last_password_change_failure = PASSWORD_CHANGE_FAILURE_MINIMUM_AGE
                 return False, (
                     f"Password was changed recently. You must wait at least "
                     f"{min_age_days} day(s) before changing your password again."
@@ -788,14 +806,17 @@ class AuthService:
         # Validate new password strength
         is_valid, error_msg = validate_password_strength(new_password)
         if not is_valid:
+            self.last_password_change_failure = PASSWORD_CHANGE_FAILURE_WEAK
             return False, error_msg
 
         is_valid, error_msg = await check_password_not_breached(new_password)
         if not is_valid:
+            self.last_password_change_failure = PASSWORD_CHANGE_FAILURE_BREACHED
             return False, error_msg
 
         # Check password history (HIPAA §164.312(d))
         if await _check_password_history(self.db, str(user.id), new_password):
+            self.last_password_change_failure = PASSWORD_CHANGE_FAILURE_REUSED
             return False, (
                 f"This password was used recently. You cannot reuse any of your "
                 f"last {settings.HIPAA_PASSWORD_HISTORY_COUNT} passwords."
@@ -804,6 +825,7 @@ class AuthService:
         # Also check against current password
         same_as_current, _ = verify_password(new_password, current_hash)
         if same_as_current:
+            self.last_password_change_failure = PASSWORD_CHANGE_FAILURE_SAME_AS_CURRENT
             return False, "New password must be different from your current password."
 
         # Save current password to history before changing
@@ -1049,9 +1071,13 @@ class AuthService:
         """
         Reset a user's password using a valid reset token.
 
+        On success ``last_reset_user`` holds the member whose password was
+        reset; it stays ``None`` on every refusal.
+
         Returns:
             Tuple of (success, error_message)
         """
+        self.last_reset_user = None
         # SEC-01: Validate token format/length before hashing
         if not raw_token or len(raw_token) > 256:
             return (
@@ -1125,5 +1151,6 @@ class AuthService:
 
         await self.db.commit()
         logger.info("Password successfully reset via token")
+        self.last_reset_user = user
 
         return True, None

@@ -427,7 +427,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
   it('does not call a count critical when it is at the minimum, only below it', async () => {
     render({ criticalMinimumQuantity: 2, quantityOnTruck: 2 });
 
-    expect(await screen.findByText(/Below required \(4\)/)).toBeInTheDocument();
+    expect(await screen.findByText(/Below minimum \(4\) — fails/)).toBeInTheDocument();
     expect(screen.queryByText(/CRITICAL/)).not.toBeInTheDocument();
   });
 
@@ -435,6 +435,30 @@ describe('EquipmentCheckForm quantity seeding', () => {
     render({ criticalMinimumQuantity: 2, quantityOnTruck: 1 });
 
     expect(await screen.findByText('CRITICAL — below minimum (2)')).toBeInTheDocument();
+  });
+
+  it('reads short of par but at the minimum as a restock, in the count unit', async () => {
+    render({ requiredQuantity: 6, expectedQuantity: 10, quantityOnTruck: 8, unitOfMeasure: 'each' });
+
+    expect(await screen.findByText('8/10 each')).toBeInTheDocument();
+    expect(screen.getByText('Restock 2 each')).toBeInTheDocument();
+    expect(screen.queryByText(/fails/)).not.toBeInTheDocument();
+  });
+
+  it('reads a par-only shortfall as a restock, not a failure', async () => {
+    render({ requiredQuantity: undefined, expectedQuantity: 10, quantityOnTruck: 3 });
+
+    expect(await screen.findByText(/^Restock 7/)).toBeInTheDocument();
+    expect(screen.queryByText(/Below minimum/)).not.toBeInTheDocument();
+  });
+
+  it('fails below Critical Min even with no Min to Pass', async () => {
+    const user = userEvent.setup();
+    render({ requiredQuantity: undefined, expectedQuantity: 10, criticalMinimumQuantity: 3, quantityOnTruck: 2 });
+    const input = await screen.findByDisplayValue('2');
+    await user.click(input);
+
+    expect(await screen.findByText('CRITICAL — below minimum (3)')).toBeInTheDocument();
   });
 
   it('does not count a carried-over number as checked', async () => {
@@ -531,7 +555,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     // The shortfall a crew can see stays a shortfall — and files as a failure
     // rather than quietly passing.
     expect(screen.getByDisplayValue('18')).toBeInTheDocument();
-    expect(screen.getByText(/Below required \(24\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Below minimum \(24\) — fails/)).toBeInTheDocument();
   });
 
   it('asks before recording a short compartment as full', async () => {
@@ -544,7 +568,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     // Par writes over what is shown, so putting six gauze on the record that
     // are not in the bag has to be a decision, not a fast path — and the
     // decision needs the size of the claim, not just the fact of one.
-    expect(await screen.findByText(/This item is.* below the required quantity/)).toBeInTheDocument();
+    expect(await screen.findByText(/This item is.* below par/)).toBeInTheDocument();
     expect(screen.getByText('18 → 24')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Keep the counts/ }));
 
@@ -577,7 +601,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     await waitFor(() => {
       expect(screen.getByText('1/1')).toBeInTheDocument();
     });
-    expect(screen.queryByText(/showing below the required quantity/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/below par/)).not.toBeInTheDocument();
   });
 
   it('sets a zero-minimum position to its expected count, not to zero', async () => {
@@ -710,7 +734,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     // Three names joined by commas inside a paragraph is not something a crew
     // can read at 6am, and prose cannot say how short each one is.
     const dialog = within(await screen.findByRole('dialog'));
-    expect(dialog.getByText(/These 3 items are below the required quantity/)).toBeInTheDocument();
+    expect(dialog.getByText(/These 3 items are below par/)).toBeInTheDocument();
     expect(dialog.getByText('Item 1')).toBeInTheDocument();
     expect(dialog.getByText('Item 3')).toBeInTheDocument();
     expect(dialog.getAllByText('1 → 10')).toHaveLength(3);

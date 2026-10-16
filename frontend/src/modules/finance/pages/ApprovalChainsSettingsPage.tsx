@@ -455,26 +455,37 @@ const ApprovalChainsSettingsPage: React.FC = () => {
     });
 
   const handleDelete = async (id: string) => {
+    // A request's approval history is stored against the chain and goes with
+    // it, so the backend refuses to delete a chain any request has used and
+    // says why; that message is shown as is.
     if (
       !(await confirm({
         title: 'Delete approval chain',
-        message:
-          'Requests that already went through this chain keep their approval history, but nothing new will be routed by it.',
+        message: (
+          <div className="space-y-2">
+            <p>Only a chain that no request has been routed through yet can be deleted.</p>
+            <p>
+              If requests have used it, deleting would erase their approval history, so it is refused. Turn the chain
+              off instead: edit it and clear Active. Nothing new is routed through it, and the history is kept.
+            </p>
+          </div>
+        ),
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
     ) {
       return;
     }
-
-    try {
-      await deleteApprovalChain(id);
-      toast.success('Approval chain deleted');
-    } catch {
-      // Error handled by store
-    } finally {
-      void refreshCoverage();
-    }
+    await run(async () => {
+      try {
+        await deleteApprovalChain(id);
+        toast.success('Approval chain deleted');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not delete the chain.'));
+      } finally {
+        void refreshCoverage();
+      }
+    });
   };
 
   const handleSaveChain = (data: ApprovalChainUpdatePayload) =>
@@ -515,25 +526,23 @@ const ApprovalChainsSettingsPage: React.FC = () => {
     });
 
   const handleDeleteStep = async (chain: ApprovalChain, step: ApprovalChainStep) => {
-    // What the cascade does, from finance_service.py: every request's record
-    // for this step goes with it (ApprovalStepRecord.step_id is ON DELETE
-    // CASCADE), and nothing re-evaluates the requests it leaves behind — the
-    // next step becomes current without its email being sent, and a request
-    // with no step left pending is never finalized.
+    // Every request routed through a chain gets a record for each of its
+    // steps, and those records cascade with the step, so delete_chain_step
+    // refuses a step any request has used. A step added since the chain was
+    // last used has none and deletes.
     if (
       !(await confirm({
         title: 'Delete step',
         message: (
           <div className="space-y-2">
             <p>
-              Deleting &ldquo;{step.name}&rdquo; also removes it from every request routed through this chain, including
-              the record of who approved or denied it and their notes.
+              &ldquo;{step.name}&rdquo; can be deleted only if no request has been routed through it yet, such as a step
+              added since the chain was last used.
             </p>
             <p>
-              A request waiting on this step moves on to the next one, and an Email approver on that next step is not
-              sent a link. A request with no later step is left waiting with nothing to approve.
+              If requests have used it, deleting is refused so the record of who approved or denied it is kept. To
+              change who approves future requests, edit the step, or set up a new chain and turn this one off.
             </p>
-            <p>This can&rsquo;t be undone.</p>
           </div>
         ),
         confirmLabel: 'Delete step',

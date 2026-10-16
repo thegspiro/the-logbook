@@ -32,6 +32,12 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Select
 
 from app.core.audit import log_audit_event
+from app.models.apparatus import (
+    CheckItemDeployedLot,
+    CheckTemplateCompartment,
+    CheckTemplateItem,
+    EquipmentCheckTemplate,
+)
 from app.models.inventory import (
     MEDICAL_ITEM_TYPES,
     AssignmentType,
@@ -8541,15 +8547,171 @@ class InventoryService:
         ``get_low_stock_items_for_alerts`` for why lot-stocked items are
         counted from in-date lots and never from ``quantity``.
         """
+        breakdown = await self.stock_breakdown(organization_id, items)
+        return {
+            item_id: (parts["shelf"] + parts["apparatus"], parts["from_lots"])
+            for item_id, parts in breakdown.items()
+        }
+
+    async def stock_breakdown(
+        self, organization_id: str, items: List[InventoryItem]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Where each item's ready stock is: ``{item_id: {shelf, apparatus,
+        uncounted, from_lots}}``.
+
+        ``shelf`` is the stock-room figure (in-date lots, or ``quantity`` for
+        an item stocked without lots). ``apparatus`` is the in-date stock on
+        the trucks, and is counted for **medical supplies only**: the
+        department decided (2026-10-16) that a medical supply is low when the
+        department as a whole is short, not when one shelf is, because units
+        on a truck are as usable as units in the cabinet. Gear keeps judging
+        the shelf, so its alerts and reorders are unchanged. ``uncounted`` is
+        how many truck positions entered the figure at their target because
+        no crew has counted them yet.
+
+        ``ready_on_hand`` sums shelf and apparatus from here, so the low-stock
+        list, its alert email and the automatic reorder all read one number.
+
+        A medical supply marked ``apparatus_only`` has no stock room, so its
+        shelf is 0 whatever ``quantity`` holds and it is judged on the trucks
+        alone. ``quantity`` is ignored rather than trusted because a supply
+        switched to apparatus-only keeps the count it had before, and that
+        stale shelf figure would otherwise hold it above its reorder point.
+        """
         lot_totals = await self._in_date_lot_totals(
             organization_id, [i.id for i in items]
         )
-        ready: Dict[str, Tuple[int, bool]] = {}
+        medical = await self._medical_item_ids(organization_id, [i.id for i in items])
+        aboard = await self.apparatus_ready_stock(organization_id, sorted(medical))
+        result: Dict[str, Dict[str, Any]] = {}
         for item in items:
             from_lots = item.id in lot_totals
-            on_hand = lot_totals[item.id] if from_lots else (item.quantity or 0)
-            ready[item.id] = (on_hand, from_lots)
-        return ready
+            shelf = lot_totals[item.id] if from_lots else (item.quantity or 0)
+            if item.apparatus_only and str(item.id) in medical:
+                shelf = 0
+            truck = aboard.get(str(item.id), {"quantity": 0, "uncounted": 0})
+            result[item.id] = {
+                "shelf": shelf,
+                "apparatus": truck["quantity"],
+                "uncounted": truck["uncounted"],
+                "from_lots": from_lots,
+            }
+        return result
+
+    async def _medical_item_ids(
+        self, organization_id: str, item_ids: List[str]
+    ) -> Set[str]:
+        """The ids among these that are medical supplies, org-scoped."""
+        if not item_ids:
+            return set()
+        rows = await self.db.execute(
+            select(InventoryItem.id)
+            .join(InventoryCategory, InventoryCategory.id == InventoryItem.category_id)
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.id.in_([str(i) for i in item_ids]),
+                InventoryCategory.item_type.in_(list(MEDICAL_ITEM_TYPES)),
+            )
+        )
+        return {str(i) for i in rows.scalars().all()}
+
+    async def apparatus_ready_stock(
+        self, organization_id: str, item_ids: List[str]
+    ) -> Dict[str, Dict[str, int]]:
+        """In-date units of each item aboard the apparatus.
+
+        ``{item_id: {"quantity": units, "uncounted": positions}}``, summed over
+        every position on an active checklist template linked to the item.
+
+        A position counts the way ``EquipmentCheckService._on_truck`` does —
+        its in-stock deployed lots where it has any, else the last count, else
+        the position's target, since an uncounted position is assumed full
+        until a crew says otherwise (those are tallied in ``uncounted`` so a
+        screen can say the figure includes them). Expired units are left out,
+        exactly as expired shelf lots are: a crew cannot use them either.
+        """
+        ids = [str(i) for i in item_ids]
+        if not ids:
+            return {}
+        org = str(organization_id)
+        positions = (
+            await self.db.execute(
+                select(
+                    CheckTemplateItem.id,
+                    CheckTemplateItem.inventory_item_id,
+                    CheckTemplateItem.quantity_on_truck,
+                    CheckTemplateItem.required_quantity,
+                    CheckTemplateItem.expected_quantity,
+                    CheckTemplateItem.has_expiration,
+                    CheckTemplateItem.expiration_date,
+                )
+                .join(
+                    CheckTemplateCompartment,
+                    CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+                )
+                .join(
+                    EquipmentCheckTemplate,
+                    EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+                )
+                .where(
+                    CheckTemplateItem.inventory_item_id.in_(ids),
+                    EquipmentCheckTemplate.organization_id == org,
+                    EquipmentCheckTemplate.is_active.is_(True),
+                )
+            )
+        ).all()
+        if not positions:
+            return {}
+        today = await resolve_org_today(self.db, org)
+        lot_rows = (
+            await self.db.execute(
+                select(
+                    CheckItemDeployedLot.template_item_id,
+                    CheckItemDeployedLot.quantity,
+                    CheckItemDeployedLot.expiration_date,
+                ).where(
+                    CheckItemDeployedLot.organization_id == org,
+                    CheckItemDeployedLot.template_item_id.in_(
+                        [p[0] for p in positions]
+                    ),
+                    CheckItemDeployedLot.quantity > 0,
+                )
+            )
+        ).all()
+        lots: Dict[str, List[Tuple[int, Optional[date]]]] = {}
+        for position_id, quantity, expires in lot_rows:
+            lots.setdefault(str(position_id), []).append((int(quantity), expires))
+
+        totals: Dict[str, Dict[str, int]] = {}
+        for (
+            position_id,
+            item_id,
+            on_truck,
+            required,
+            expected,
+            has_expiration,
+            expires,
+        ) in positions:
+            entry = totals.setdefault(str(item_id), {"quantity": 0, "uncounted": 0})
+            aboard = lots.get(str(position_id))
+            if aboard:
+                entry["quantity"] += sum(
+                    qty for qty, when in aboard if when is None or when >= today
+                )
+                continue
+            # The position's own date covers every unit when no lot is
+            # recorded; past it, nothing aboard is usable.
+            if has_expiration and expires is not None and expires < today:
+                continue
+            if on_truck is not None:
+                entry["quantity"] += int(on_truck)
+                continue
+            # Par, as _target_quantity resolves it: the larger of the two.
+            target = max(required or 0, expected or 0)
+            if target:
+                entry["quantity"] += int(target)
+                entry["uncounted"] += 1
+        return totals
 
     @staticmethod
     def is_at_or_below_reorder_point(
@@ -9402,6 +9564,29 @@ class InventoryService:
             parts.extend(area["path"])
         return " › ".join(parts) or None
 
+    async def storage_paths_for(
+        self, organization_id: str, item_ids: Iterable[str]
+    ) -> Dict[str, Optional[str]]:
+        """``{item_id: "Room › Cabinet › Shelf"}`` for these items, org-scoped."""
+        ids = [str(i) for i in item_ids]
+        if not ids:
+            return {}
+        items = (
+            (
+                await self.db.execute(
+                    select(InventoryItem).where(
+                        InventoryItem.id.in_(ids),
+                        InventoryItem.organization_id == str(organization_id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        areas = await self.storage_area_index(str(organization_id))
+        rooms = await self.location_names(str(organization_id))
+        return {str(i.id): self.storage_path(i, areas, rooms) for i in items}
+
     @staticmethod
     def area_and_descendants(
         areas: Dict[str, Dict[str, Any]], area_id: str
@@ -9461,6 +9646,25 @@ class InventoryService:
                 InventoryItem.organization_id == org,
                 InventoryCategory.item_type.in_(list(item_types)),
                 or_(*conditions),
+            )
+        )
+        return [str(i) for i in rows.scalars().all()]
+
+    async def item_ids_kept_in_stock(
+        self, organization_id: str, item_types: Iterable[ItemType]
+    ) -> List[str]:
+        """Items that have a stock room behind them (not ``apparatus_only``).
+
+        The population a delivery can be received into: a supply kept on the
+        apparatus only has no shelf for a delivery to land on.
+        """
+        rows = await self.db.execute(
+            select(InventoryItem.id)
+            .join(InventoryCategory, InventoryCategory.id == InventoryItem.category_id)
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryCategory.item_type.in_(list(item_types)),
+                InventoryItem.apparatus_only.is_(False),
             )
         )
         return [str(i) for i in rows.scalars().all()]

@@ -1360,6 +1360,20 @@ class Settings(BaseSettings):
     AUTHENTIK_ALLOWED_DOMAINS: str = ""
 
     # ============================================
+    # Calendar publishing (Google Calendar / Outlook)
+    # ============================================
+    # One-way publishing of department events to a dedicated Google or
+    # Outlook calendar. While this is off the two catalog cards report
+    # "coming soon" and cannot be connected, a row an older release left
+    # "connected" is presented the same way (it never held credentials), and
+    # the calendar_sync scheduled task does nothing. Turning it on makes the
+    # cards connectable and lets the task publish for an integration that
+    # holds tokens and a calendar id, but no screen can complete the sign-in
+    # yet, so nothing is published. The department iCalendar (ICS) feed does
+    # not depend on this switch.
+    CALENDAR_SYNC_ENABLED: bool = False
+
+    # ============================================
     # Claude (MCP) OAuth 2.1 authorization server
     # ============================================
     # Lets a member connect an MCP client (the claude.ai custom-connector

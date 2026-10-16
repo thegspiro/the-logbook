@@ -78,6 +78,7 @@ import {
   normalizeCheckType,
   soonestExpiration,
   submitterMaySwap,
+  passFloor,
   targetQuantity,
   isBelowCriticalMinimum,
 } from '../types/equipmentCheck';
@@ -213,7 +214,7 @@ const ShortfallList: React.FC<{
   return (
     <div className="space-y-3 text-left">
       <p>
-        {items.length === 1 ? 'This item is' : `These ${items.length} items are`} below the required quantity. Recording{' '}
+        {items.length === 1 ? 'This item is' : `These ${items.length} items are`} below par. Recording{' '}
         {items.length === 1 ? 'it' : 'them'} at par says the missing stock is now on the truck.
       </p>
       <ul className="border-theme-surface-border divide-theme-surface-border divide-y rounded-md border">
@@ -1320,13 +1321,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const next = { ...prev };
       for (const item of items) {
         const existing = next[item.id];
-        const required = targetQuantity(item);
+        const par = targetQuantity(item);
+        const floor = passFloor(item.requiredQuantity, item.criticalMinimumQuantity);
         const shown = existing?.quantityFound;
         const patch: Partial<ItemResult> = { status: 'pass' };
-        if (item.checkType === 'count' && required != null) {
+        if (item.checkType === 'count' && (par != null || floor != null)) {
           // Nothing carried means nothing to confirm; leave it for the crew.
           if (shown == null) continue;
-          patch.status = shown >= required ? 'pass' : 'fail';
+          // Short of par alone is a restock, not a failure.
+          patch.status = floor != null && shown < floor ? 'fail' : 'pass';
         }
         next[item.id] = { status: 'not_checked', ...existing, ...patch };
       }
@@ -1812,7 +1815,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           check_type: item.checkType,
           status: getEffectiveStatus(item, result, today),
           quantity_found: result?.quantityFound,
-          required_quantity: targetQuantity(item) ?? undefined,
+          // Advisory: the server snapshots both quantities off the template.
+          required_quantity: item.requiredQuantity ?? undefined,
           critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
           level_reading: result?.levelReading,
           level_unit: item.levelUnit || undefined,
@@ -2159,12 +2163,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return passFailButtons;
 
       case 'count': {
-        const required = targetQuantity(item);
-        const expected = item.expectedQuantity ?? required;
+        // Par sets the restock; Min to Pass (or Critical Min) sets the verdict.
+        const par = targetQuantity(item);
+        const floor = passFloor(item.requiredQuantity, item.criticalMinimumQuantity);
         const criticalMin = item.criticalMinimumQuantity;
         const currentQty = result?.quantityFound ?? 0;
-        const isAtPar = required != null && currentQty >= required;
-        const isCritical = isBelowCriticalMinimum(currentQty, criticalMin, required);
+        const isAtPar = par == null || currentQty >= par;
+        const isBelowFloor = floor != null && currentQty < floor;
+        const isCritical = isBelowCriticalMinimum(currentQty, criticalMin, par);
         const hasBeenSet = result?.quantityFound != null;
         // Seeded from the running count but not yet affirmed by this crew. The
         // number is shown so they only correct what changed; it is not a check.
@@ -2178,7 +2184,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           // number and are still nothing the crew can use, so this must not
           // read as the healthy state.
           if (isExpired) return 'text-theme-alert-danger-title font-bold';
-          if (isCritical) return 'text-theme-alert-danger-title font-bold';
+          if (isCritical || isBelowFloor) return 'text-theme-alert-danger-title font-bold';
           if (!isAtPar) return 'text-theme-alert-warning-text font-medium';
           return 'text-theme-alert-success-title font-medium';
         };
@@ -2187,7 +2193,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           const clamped = Math.max(0, qty);
           updateResult(item.id, {
             quantityFound: clamped,
-            status: required != null ? (clamped >= required ? 'pass' : 'fail') : 'pass',
+            status: floor != null && clamped < floor ? 'fail' : 'pass',
           });
         };
 
@@ -2198,9 +2204,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             aria-label={item.name}
           >
             <div className="min-w-0 space-y-0.5 text-xs">
-              {expected != null && (
+              {par != null && (
                 <span className={`block ${getQtyColor()}`}>
-                  {hasBeenSet ? currentQty : '—'}/{expected}
+                  {hasBeenSet ? currentQty : '—'}/{par}
                   {unit ? ` ${unit}` : ''}
                 </span>
               )}
@@ -2210,8 +2216,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   CRITICAL — below minimum ({criticalMin})
                 </span>
               )}
-              {hasBeenSet && !isAtPar && !isCritical && required != null && (
-                <span className="text-theme-alert-warning-text block text-[10px]">Below required ({required})</span>
+              {hasBeenSet && isBelowFloor && !isCritical && (
+                <span className="text-theme-alert-danger-title block text-[10px] font-semibold">
+                  Below minimum ({floor}) — fails
+                </span>
+              )}
+              {hasBeenSet && !isAtPar && !isBelowFloor && !isCritical && par != null && (
+                <span className="text-theme-alert-warning-text block text-[10px]">
+                  Restock {par - currentQty}
+                  {unit ? ` ${unit}` : ''}
+                </span>
               )}
               {prevQty != null && hasBeenSet && currentQty !== prevQty && (
                 <span className="text-theme-text-muted block text-[10px]">Last: {prevQty}</span>
@@ -2235,7 +2249,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   min="0"
                   inputMode="numeric"
                   className={`bg-theme-surface focus:ring-theme-focus-ring h-11 w-14 [appearance:textfield] border-y text-center text-sm font-medium focus:ring-2 focus:outline-none focus:ring-inset [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
-                    hasBeenSet && isCritical
+                    hasBeenSet && (isCritical || isBelowFloor)
                       ? 'border-theme-alert-danger-icon text-theme-alert-danger-title border-2'
                       : hasBeenSet && !isAtPar
                         ? 'border-theme-alert-warning-icon text-theme-alert-warning-text'

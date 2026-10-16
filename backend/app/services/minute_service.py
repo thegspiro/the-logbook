@@ -531,7 +531,15 @@ class MinuteService:
                 wanted["title"] = have.get("title") or wanted["title"]
             merged.append(wanted)
         for leftover in existing.values():
-            if not section_is_blank(leftover):
+            # An agenda item is part of the meeting's order of business even
+            # while it is empty, and one marked not taken up is a statement in
+            # the record; only a section that is none of these and holds no
+            # words is dropped.
+            if (
+                not section_is_blank(leftover)
+                or leftover.get("not_taken_up")
+                or agenda_item_key_of(leftover)
+            ):
                 merged.append(
                     {
                         **leftover,

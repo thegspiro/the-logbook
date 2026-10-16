@@ -164,7 +164,7 @@ Ubuntu, for example, from the deadsnakes PPA). The script checks before it
 installs anything and stops with this explanation if no suitable Python is
 found; it does not add package sources itself.
 
-**Also needs Node.js 22 or newer with npm 11 or newer** — the script builds the
+**Also needs Node.js 22.22.1 or newer with npm 10 or newer** — the script builds the
 frontend with `npm run build`, and `frontend/package.json` declares those
 engines. The script installs the distribution's `nodejs` and `npm` packages
 without checking their versions, and most distributions ship an older pair, so

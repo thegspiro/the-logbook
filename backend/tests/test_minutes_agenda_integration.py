@@ -518,3 +518,168 @@ class TestNotTakenUp:
 
         assert next(s for s in saved if s["key"] == "agenda-b")["not_taken_up"] is True
         assert next(s for s in saved if s["key"] == "agenda-a")["not_taken_up"] is False
+
+
+class TestApplyingAnOutlineKeepsTheAgenda:
+    async def test_a_not_taken_up_item_survives_an_outline(self, world, clerk):
+        meeting = await _meeting(
+            world, clerk, [_item("a", "Old business"), _item("b", "New business")]
+        )
+        minutes = await _draft(world, clerk, meeting["id"])
+        sections = [
+            {**s, "not_taken_up": s["key"] == "agenda-b"} for s in minutes["sections"]
+        ]
+        async with _meetings_client(world.db, clerk) as c:
+            await c.put(f"/minutes/{minutes['id']}", json={"sections": sections})
+            outlines = (await c.get("/minutes/templates")).json()
+            outline_id = outlines[0]["id"]
+            resp = await c.post(
+                f"/minutes/{minutes['id']}/apply-outline",
+                json={"template_id": outline_id},
+            )
+            assert resp.status_code == 200, resp.text
+
+        by_key = {s["key"]: s for s in resp.json()["sections"]}
+        assert "agenda-b" in by_key
+        assert by_key["agenda-b"]["not_taken_up"] is True
+
+    async def test_a_blank_agenda_section_is_not_dropped_by_an_outline(
+        self, world, clerk
+    ):
+        meeting = await _meeting(world, clerk, [_item("a", "Old business")])
+        minutes = await _draft(world, clerk, meeting["id"])
+        async with _meetings_client(world.db, clerk) as c:
+            outline_id = (await c.get("/minutes/templates")).json()[0]["id"]
+            resp = await c.post(
+                f"/minutes/{minutes['id']}/apply-outline",
+                json={"template_id": outline_id},
+            )
+
+        keys = [s["key"] for s in resp.json()["sections"]]
+        assert "agenda-a" in keys
+
+
+MANAGER_WITH_LIBRARY = [
+    "meetings.view",
+    "meetings.manage",
+    "minutes.view",
+    "minutes.manage",
+    "documents.view",
+    "documents.manage",
+]
+SECRET = "Confidential personnel review"
+
+
+async def _board_document(world: _World) -> Document:
+    folder = DocumentFolder(
+        organization_id=world.org_id,
+        name="Board only",
+        visibility=FolderVisibility.LEADERSHIP,
+    )
+    world.db.add(folder)
+    await world.db.flush()
+    return await _document(world, SECRET, folder)
+
+
+class TestLinkedDocumentNamesReachOnlyThoseWhoCanOpenThem:
+    """Linking is checked against the linker, but the name is read by everyone
+    who can read the meeting or the minutes."""
+
+    async def _linked(self, world):
+        library_manager = await _user(
+            world.db, world.org_id, "Librarian", MANAGER_WITH_LIBRARY
+        )
+        document = await _board_document(world)
+        meeting = await _meeting(
+            world,
+            library_manager,
+            [_item("a", "Executive item", documents=[{"id": document.id}])],
+        )
+        return library_manager, document, meeting
+
+    async def test_a_viewer_without_access_is_not_shown_the_name(self, world):
+        _, _, meeting = await self._linked(world)
+        viewer = await _user(
+            world.db, world.org_id, "Viewer", ["meetings.view", "minutes.view"]
+        )
+        async with _meetings_client(world.db, viewer) as c:
+            listing = await c.get("/meetings")
+            detail = await c.get(f"/meetings/{meeting['id']}")
+
+        assert listing.status_code == 200
+        assert detail.status_code == 200
+        assert SECRET not in listing.text
+        assert SECRET not in detail.text
+        assert detail.json()["agenda_items"][0]["documents"] == []
+
+    async def test_a_library_manager_still_sees_it(self, world):
+        manager, _, meeting = await self._linked(world)
+        async with _meetings_client(world.db, manager) as c:
+            listing = await c.get("/meetings")
+            detail = await c.get(f"/meetings/{meeting['id']}")
+
+        assert SECRET in listing.text
+        assert SECRET in detail.text
+
+    async def test_the_minutes_sections_are_narrowed_the_same_way(self, world):
+        manager, _, meeting = await self._linked(world)
+        minutes = await _draft(world, manager, meeting["id"])
+        # Draft minutes are shown to minutes managers only, so the reader to
+        # narrow for is one who manages minutes without library access.
+        other_manager = await _user(
+            world.db, world.org_id, "Other", ["minutes.view", "minutes.manage"]
+        )
+
+        async with _meetings_client(world.db, other_manager) as c:
+            seen = await c.get(f"/minutes/{minutes['id']}")
+        async with _meetings_client(world.db, manager) as c:
+            full = await c.get(f"/minutes/{minutes['id']}")
+
+        assert seen.status_code == 200
+        assert SECRET not in seen.text
+        assert SECRET in full.text
+
+    async def test_an_editor_who_cannot_see_a_link_does_not_unlink_it(self, world):
+        manager, document, meeting = await self._linked(world)
+        editor = await _user(world.db, world.org_id, "Editor", CLERK_PERMISSIONS)
+
+        async with _meetings_client(world.db, editor) as c:
+            shown = (await c.get(f"/meetings/{meeting['id']}")).json()
+            assert shown["agenda_items"][0]["documents"] == []
+            saved = await c.patch(
+                f"/meetings/{meeting['id']}",
+                json={
+                    "agenda_items": [
+                        {**shown["agenda_items"][0], "title": "Executive item (rev)"}
+                    ]
+                },
+            )
+            assert saved.status_code == 200, saved.text
+
+        async with _meetings_client(world.db, manager) as c:
+            after = (await c.get(f"/meetings/{meeting['id']}")).json()
+        item = after["agenda_items"][0]
+        assert item["title"] == "Executive item (rev)"
+        assert [d["id"] for d in item["documents"]] == [document.id]
+
+    async def test_an_editor_who_can_see_a_link_can_remove_it(self, world):
+        manager, _, meeting = await self._linked(world)
+        async with _meetings_client(world.db, manager) as c:
+            shown = (await c.get(f"/meetings/{meeting['id']}")).json()
+            await c.patch(
+                f"/meetings/{meeting['id']}",
+                json={"agenda_items": [{**shown["agenda_items"][0], "documents": []}]},
+            )
+            after = (await c.get(f"/meetings/{meeting['id']}")).json()
+
+        assert after["agenda_items"][0]["documents"] == []
+
+    async def test_removing_the_whole_item_drops_its_hidden_links_too(self, world):
+        manager, _, meeting = await self._linked(world)
+        editor = await _user(world.db, world.org_id, "Editor", CLERK_PERMISSIONS)
+        async with _meetings_client(world.db, editor) as c:
+            await c.patch(f"/meetings/{meeting['id']}", json={"agenda_items": []})
+        async with _meetings_client(world.db, manager) as c:
+            after = (await c.get(f"/meetings/{meeting['id']}")).json()
+
+        assert after["agenda_items"] == []

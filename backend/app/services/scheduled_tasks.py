@@ -105,6 +105,9 @@ Recommended crontab (add to host or container cron):
 # Every 30 minutes — auto-sync Salesforce for orgs with auto-sync enabled
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=salesforce_auto_sync
 
+# Every 5 minutes — publish events to connected Google Calendar / Outlook calendars (no-op unless CALENDAR_SYNC_ENABLED)
+*/5 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=calendar_sync
+
 # Every 15 minutes — election lifecycle: auto-open flagged drafts, auto-close overdue elections, pre-close non-voter reminders
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=election_lifecycle
 
@@ -113,6 +116,9 @@ Recommended crontab (add to host or container cron):
 
 # Daily at 8:10 AM — remind budget-line owners before a draft year's request deadline
 10 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=budget_request_reminders
+
+# Daily at 8:20 AM — remind about grant compliance tasks and pledges coming due
+20 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=grant_reminders
 -----------------------------------------------------
 """
 
@@ -123,7 +129,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, inspect, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reporting import persist_task_error_log
@@ -312,6 +318,19 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "08:10",
         "cron": "10 8 * * *",
+    },
+    "grant_reminders": {
+        "description": (
+            "Email grant compliance-task reminders (to the assignee, else the "
+            "fundraising.manage holders) from each task's reminder_days_before "
+            "and on its due date, and pledge reminders to the fundraising."
+            "manage holders 14 days and 1 day before the due date (once per "
+            "member, item, due date and reminder — safe to run more than once "
+            "a day)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "08:20",
+        "cron": "20 8 * * *",
     },
     "prospect_attendance_advance": {
         "description": (
@@ -522,6 +541,12 @@ SCHEDULE = {
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
     },
+    "calendar_sync": {
+        "description": "Publish department events to each connected Google Calendar or Outlook integration's calendar: create, update and delete what changed, retrying failures with backoff (no-op unless CALENDAR_SYNC_ENABLED)",
+        "frequency": "every 5 minutes",
+        "recommended_time": "*/5 * * * *",
+        "cron": "*/5 * * * *",
+    },
     "mark_overdue_dues": {
         "description": "Mark fully-unpaid member dues past their due date as overdue (nothing else sets this status)",
         "frequency": "daily",
@@ -709,6 +734,23 @@ async def _stock_alert_recipients(
     return recipients
 
 
+async def _refresh_if_expired(db: AsyncSession, org: Any) -> None:
+    """Reload an organization row that a per-org rollback expired.
+
+    Runners that load their organizations before the loop roll the shared
+    session back when one org fails, and the rollback expires every instance
+    the session holds. Reading an expired attribute on an AsyncSession
+    lazy-loads outside the greenlet (MissingGreenlet), so without this every
+    org after the first failure failed too. Call it first thing inside the
+    per-org ``try`` so a refresh that cannot run is reported against that org
+    alone, and have the handler use an id captured before the loop, never the
+    row. A no-op on a loaded row and on the plain stand-ins unit tests pass.
+    """
+    state = inspect(org, raiseerr=False)
+    if state is not None and state.expired:
+        await db.refresh(org)
+
+
 async def _for_each_org(
     db: AsyncSession,
     task_name: str,
@@ -729,10 +771,13 @@ async def _for_each_org(
         select(Organization).where(Organization.active.isnot(False))
     )
     organizations = list(orgs.scalars().all())
+    # Captured while the rows are loaded, so reporting a failed org never
+    # touches a row a rollback expired (see _refresh_if_expired).
+    org_ids = [str(org.id) for org in organizations]
     results = []
     total = 0
     rolled_back = False
-    for org in organizations:
+    for org, org_id in zip(organizations, org_ids):
         # A session rollback expires every loaded instance, these Organization
         # rows included, and an expired attribute cannot lazy-load outside the
         # async context (MissingGreenlet). Without the refresh, the first
@@ -745,7 +790,6 @@ async def _for_each_org(
                 await db.refresh(org)
             except Exception as e:
                 logger.warning(f"{task_name}: could not reload org after rollback: {e}")
-        org_id = str(org.id)
         try:
             count = await callback(db, org)
             total += count
@@ -1348,11 +1392,14 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_reminders = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             # The org's EVENT_REMINDER rule, if it made one. Absent means on,
             # so an org that never opened the notifications screen keeps the
             # reminders it has always had.
@@ -1569,9 +1616,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"Event reminders failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "Event reminders", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"Event reminders failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Event reminders", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -1586,7 +1633,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         if org_reminders > 0 or org_emails > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "in_app_reminders": org_reminders,
                     "emails_sent": org_emails,
                 }
@@ -1606,15 +1653,22 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
 
 async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
     """
-    Send a notification to event organizers after their event ends,
-    asking them to validate attendance records and event timing.
+    Ask an event's organizers, after it ends, to validate its attendance
+    records and timing.
 
     Runs every 30 minutes. Looks for events that ended within the last
-    2 hours and haven't already had a validation notification sent.
-    Sends an in-app notification (and optionally email) to the event
-    creator with a link to the event detail page.
+    2 hours and haven't already had a validation notification sent or
+    their attendance finalized. The prompt goes to the event's organizer
+    and alternate organizer — whoever runs the event now, which after a
+    handover is not whoever created it — and falls back to the creator
+    only when neither is an eligible member. Each recipient gets an in-app
+    notification with a link to the event, plus an email if their own
+    event-duties email preference allows it.
 
-    Tracks sent status in custom_fields.validation_notification_sent.
+    Tracks sent status in custom_fields.validation_notification_sent. The
+    marker is set even when nobody is left to tell, so an event whose
+    organizers and creator have all left is not re-examined on every run;
+    either way an event is prompted at most once.
     """
     from datetime import timedelta
     from datetime import timezone as dt_timezone
@@ -1625,8 +1679,8 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
     from app.core.utils import generate_uuid
     from app.models.event import Event
     from app.models.notification import NotificationChannel, NotificationLog
-    from app.models.user import User
     from app.services.email_service import EmailService
+    from app.services.event_organizer_service import EventOrganizerService
 
     now = datetime.now(dt_timezone.utc)
     # Look back 2 hours for recently ended events
@@ -1641,11 +1695,14 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_notifications = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             events_result = await db.execute(
                 select(Event)
                 .options(selectinload(Event.rsvps))
@@ -1653,9 +1710,10 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                 .where(Event.is_cancelled == False)  # noqa: E712
                 .where(Event.end_datetime <= now)
                 .where(Event.end_datetime >= lookback)
-                .where(Event.created_by.isnot(None))
             )
             events = list(events_result.scalars().all())
+            organizer_service = EventOrganizerService(db)
+            required_kinds = department_required_kinds(org)
 
             for event in events:
                 custom = event.custom_fields or {}
@@ -1668,16 +1726,9 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                 ):
                     continue
 
-                # Find the event creator
-                creator_result = await db.execute(
-                    select(User).where(
-                        User.id == event.created_by,
-                        User.is_active == True,  # noqa: E712
-                    )
-                )
-                creator = creator_result.scalar_one_or_none()
-                if not creator:
-                    # Mark as sent to avoid retrying for deleted/inactive users
+                recipients = await organizer_service.organizer_duty_recipients(event)
+                if not recipients:
+                    # Nobody left to ask; mark it so later runs skip it.
                     event.custom_fields = {
                         **custom,
                         "validation_notification_sent": True,
@@ -1696,75 +1747,78 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                     f"event timing before finalizing."
                 )
 
-                # In-app notification
-                try:
-                    in_app_log = NotificationLog(
-                        id=generate_uuid(),
-                        organization_id=str(org.id),
-                        recipient_id=str(creator.id),
-                        channel=NotificationChannel.IN_APP,
-                        category="event_validation",
-                        subject=subject,
-                        message=message,
-                        action_url=event_url,
-                        notification_metadata={"event_id": str(event.id)},
-                        delivered=True,
-                    )
-                    db.add(in_app_log)
-                    org_notifications += 1
-                except Exception as e:
-                    logger.error(
-                        f"Failed to create post-event validation notification "
-                        f"for user {creator.id}, event {event.id}: {e}"
-                    )
-
-                # Email notification (if user has email prefs enabled)
-                if creator.email and member_receives_email(
-                    creator.notification_preferences,
-                    EmailKind.EVENT_DUTIES,
-                    department_required_kinds(org),
-                ):
+                for recipient in recipients:
+                    # In-app notification
                     try:
-                        from app.services.email_service import wrap_email_body
-
-                        full_event_url = f"{settings.FRONTEND_URL}/events/{event.id}"
-                        e_first = _html.escape(
-                            creator.preferred_name or creator.first_name or ""
-                        )
-                        e_title = _html.escape(event.title or "")
-                        email_service = EmailService(organization=org)
-                        sent_count, _ = await email_service.send_email(
-                            to_emails=[creator.email],
+                        in_app_log = NotificationLog(
+                            id=generate_uuid(),
+                            organization_id=str(org.id),
+                            recipient_id=str(recipient.id),
+                            channel=NotificationChannel.IN_APP,
+                            category="event_validation",
                             subject=subject,
-                            html_body=wrap_email_body(
-                                org,
-                                "Please Validate Attendance",
-                                f"<p>Hello {e_first},</p>"
-                                f'<p>Your event "<strong>{e_title}</strong>" has ended. '
-                                f"{checked_in_count} of {rsvp_count} attendees checked in.</p>"
-                                f"<p>Please review and confirm the attendance records and "
-                                f"event timing before finalizing.</p>"
-                                f'<p style="text-align: center;">'
-                                f'<a href="{_html.escape(full_event_url)}" class="button" role="link">'
-                                f"Review Event</a></p>",
-                            ),
-                            text_body=(
-                                f"Hi {creator.preferred_name or creator.first_name},\n\n"
-                                f'Your event "{event.title}" has ended. '
-                                f"{checked_in_count} of {rsvp_count} attendees checked in.\n\n"
-                                f"Please review and confirm the attendance records and "
-                                f"event timing before finalizing.\n\n"
-                                f"Review Event: {full_event_url}"
-                            ),
+                            message=message,
+                            action_url=event_url,
+                            notification_metadata={"event_id": str(event.id)},
+                            delivered=True,
                         )
-                        if sent_count > 0:
-                            org_emails += 1
+                        db.add(in_app_log)
+                        org_notifications += 1
                     except Exception as e:
                         logger.error(
-                            "Failed to send post-event validation email to {}: {}",
-                            _redact_email(creator.email),
-                            e,
+                            f"Failed to create post-event validation notification "
+                            f"for user {recipient.id}, event {event.id}: {e}"
                         )
+
+                    # Email notification (if user has email prefs enabled)
+                    if recipient.email and member_receives_email(
+                        recipient.notification_preferences,
+                        EmailKind.EVENT_DUTIES,
+                        required_kinds,
+                    ):
+                        try:
+                            from app.services.email_service import wrap_email_body
+
+                            full_event_url = (
+                                f"{settings.FRONTEND_URL}/events/{event.id}"
+                            )
+                            e_first = _html.escape(
+                                recipient.preferred_name or recipient.first_name or ""
+                            )
+                            e_title = _html.escape(event.title or "")
+                            email_service = EmailService(organization=org)
+                            sent_count, _ = await email_service.send_email(
+                                to_emails=[recipient.email],
+                                subject=subject,
+                                html_body=wrap_email_body(
+                                    org,
+                                    "Please Validate Attendance",
+                                    f"<p>Hello {e_first},</p>"
+                                    f'<p>Your event "<strong>{e_title}</strong>" has ended. '
+                                    f"{checked_in_count} of {rsvp_count} attendees checked in.</p>"
+                                    f"<p>Please review and confirm the attendance records and "
+                                    f"event timing before finalizing.</p>"
+                                    f'<p style="text-align: center;">'
+                                    f'<a href="{_html.escape(full_event_url)}" class="button" role="link">'
+                                    f"Review Event</a></p>",
+                                ),
+                                text_body=(
+                                    f"Hi {recipient.preferred_name or recipient.first_name},\n\n"
+                                    f'Your event "{event.title}" has ended. '
+                                    f"{checked_in_count} of {rsvp_count} attendees checked in.\n\n"
+                                    f"Please review and confirm the attendance records and "
+                                    f"event timing before finalizing.\n\n"
+                                    f"Review Event: {full_event_url}"
+                                ),
+                            )
+                            if sent_count > 0:
+                                org_emails += 1
+                        except Exception as e:
+                            logger.error(
+                                "Failed to send post-event validation email to {}: {}",
+                                _redact_email(recipient.email),
+                                e,
+                            )
 
                 # Mark as sent
                 event.custom_fields = {**custom, "validation_notification_sent": True}
@@ -1772,9 +1826,9 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"Post-event validation failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "Post-event validation", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"Post-event validation failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Post-event validation", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -1789,7 +1843,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
         if org_notifications > 0 or org_emails > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "notifications": org_notifications,
                     "emails_sent": org_emails,
                 }
@@ -1849,11 +1903,14 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_notifications = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             sr_cfg = (org.settings or {}).get("shift_reports", {})
             psv_cfg = sr_cfg.get("post_shift_validation", {})
             if not psv_cfg.get("enabled", True):
@@ -2188,9 +2245,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"Post-shift validation failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "Post-shift validation", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"Post-shift validation failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Post-shift validation", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -2205,7 +2262,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
         if org_notifications > 0 or org_emails > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "notifications": org_notifications,
                     "emails_sent": org_emails,
                 }
@@ -2265,11 +2322,14 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_notifications = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             reminder_cfg = (org.settings or {}).get("shift_reminders", {})
             if not reminder_cfg.get("enabled", True):
                 continue
@@ -2656,9 +2716,9 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"Shift reminders failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "Shift reminders", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"Shift reminders failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Shift reminders", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -2673,7 +2733,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
         if org_notifications > 0 or org_emails > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "notifications": org_notifications,
                     "emails_sent": org_emails,
                 }
@@ -2947,11 +3007,14 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_notifications = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             sr_cfg = (org.settings or {}).get("shift_reports", {})
             ms_cfg = sr_cfg.get("member_summary", {})
             if not ms_cfg.get("enabled", True):
@@ -3376,9 +3439,9 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"End-of-shift summary failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "End-of-shift summary", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"End-of-shift summary failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "End-of-shift summary", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -3393,7 +3456,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
         if org_notifications > 0 or org_emails > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "notifications": org_notifications,
                     "emails_sent": org_emails,
                 }
@@ -3447,11 +3510,14 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_escalations = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             sr_cfg = (org.settings or {}).get("shift_reports", {})
             fu_cfg = sr_cfg.get("follow_up", {})
             if not fu_cfg.get("enabled", True):
@@ -3652,9 +3718,9 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"Trainee report escalation failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "Trainee report escalation", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"Trainee report escalation failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Trainee report escalation", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -3669,7 +3735,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
         if org_escalations > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "escalations": org_escalations,
                     "emails_sent": org_emails,
                 }
@@ -4805,13 +4871,22 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
         """Build the table body for one audience's rows."""
         items_html = ""
         any_from_lots = False
+        any_medical = False
         for item, on_hand, from_lots in rows:
             cat_name = item.category.name if item.category else "Uncategorized"
             any_from_lots = any_from_lots or from_lots
             # Name the ledger the figure came from. For a lot-stocked item it
             # will not match the item's own quantity column, and an unexplained
             # mismatch reads as a bug rather than as the count that matters.
-            source = "in-date lots" if from_lots else "on hand"
+            # A medical supply is counted across the stock room and the trucks
+            # (InventoryService.stock_breakdown), and says so.
+            medical = _row_domain(item) == DOMAIN_MEDICAL
+            any_medical = any_medical or medical
+            source = (
+                "shelf + apparatus"
+                if medical
+                else "in-date lots" if from_lots else "on hand"
+            )
             # The category rides under the item name rather than taking a
             # fourth column, which ran the table past a phone-width card.
             items_html += (
@@ -4837,7 +4912,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             "</tr></thead>"
             f"<tbody>{items_html}</tbody></table>"
         )
-        return table_html, any_from_lots
+        return table_html, any_from_lots, any_medical
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
         from app.services.email_service import wrap_email_body
@@ -4866,7 +4941,7 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
             if not rows or not emails:
                 continue
 
-            table_html, any_from_lots = _render(rows)
+            table_html, any_from_lots, any_medical = _render(rows)
             html_body = wrap_email_body(
                 org,
                 "Low Stock Alert",
@@ -4879,6 +4954,14 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
                     "cannot be issued or swapped onto an apparatus, so they do not "
                     "count as stock on hand.</p>"
                     if any_from_lots
+                    else ""
+                )
+                + (
+                    "<p style='color:#6b7280;font-size:13px;'>Medical supplies are "
+                    "counted across the stock room and the apparatus together, "
+                    "including truck positions not yet counted at their target "
+                    "quantity.</p>"
+                    if any_medical
                     else ""
                 )
                 + "<p>Please review and reorder as needed.</p>",
@@ -5550,13 +5633,21 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
         # (CRON2-31-13).
         .where(Organization.active.isnot(False))
     )
-    all_configs = list(configs.scalars().all())
+    # Plain values, not the loaded rows: the rollback after one org's failure
+    # expires every instance in the session, and reading an expired config
+    # outside an await raises MissingGreenlet — from inside the handler, which
+    # ended the whole run at the first failing department.
+    targets = [
+        (
+            str(config.organization_id),
+            config.auto_report_frequency,
+            config.report_day_of_month or 1,
+        )
+        for config in configs.scalars().all()
+    ]
 
-    for config in all_configs:
+    for org_id, freq, report_day in targets:
         try:
-            freq = config.auto_report_frequency
-            report_day = config.report_day_of_month or 1
-            org_id = str(config.organization_id)
             # The department's date, not UTC's. This runs at 06:30 UTC, which
             # on the 1st is still the last day of the previous month on the
             # West Coast: a UTC date would send, and label, a report for a
@@ -5624,19 +5715,15 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(
-                f"Compliance auto-report failed for org {config.organization_id}: {e}"
-            )
-            await persist_task_error_log(
-                str(config.organization_id), "Compliance auto-report", e
-            )
+            logger.error(f"Compliance auto-report failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Compliance auto-report", e)
             try:
                 await db.rollback()
             except Exception:
                 pass
             results.append(
                 {
-                    "org_id": str(config.organization_id),
+                    "org_id": org_id,
                     "error": str(e),
                 }
             )
@@ -5716,11 +5803,14 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
     total_emails = 0
     results: List[Dict[str, Any]] = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_reminders = 0
         org_emails = 0
 
         try:
+            await _refresh_if_expired(db, org)
             org_tz_name = org.timezone or "America/New_York"
             try:
                 org_tz = ZoneInfo(org_tz_name)
@@ -5759,7 +5849,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 # The organizer and alternate run the series now; whoever
                 # created it may have handed it over long ago.
-                recipients = await organizer_service.series_reminder_recipients(event)
+                recipients = await organizer_service.organizer_duty_recipients(event)
                 if not recipients:
                     continue
 
@@ -5892,9 +5982,9 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
 
         except Exception as e:
-            logger.error(f"Series end reminders failed for org {org.id}: {e}")
-            await persist_task_error_log(str(org.id), "Series end reminders", e)
-            results.append({"org_id": str(org.id), "error": str(e)})
+            logger.error(f"Series end reminders failed for org {org_id}: {e}")
+            await persist_task_error_log(org_id, "Series end reminders", e)
+            results.append({"org_id": org_id, "error": str(e)})
             # Orgs share one session: without this rollback a failed flush
             # leaves the session unusable and every *later* org in this run
             # fails too. Mirrors _for_each_org.
@@ -5909,7 +5999,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
         if org_reminders > 0 or org_emails > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "in_app_reminders": org_reminders,
                     "emails_sent": org_emails,
                 }
@@ -6195,11 +6285,14 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
     total_auto_checkouts = 0
     results = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_reminders = 0
         org_checkouts = 0
 
         try:
+            await _refresh_if_expired(db, org)
             shifts_result = await db.execute(
                 select(Shift)
                 .where(Shift.organization_id == str(org.id))
@@ -6313,7 +6406,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
         except Exception as e:
             logger.error(
                 "shift_auto_checkout error for org {}: {}",
-                org.id,
+                org_id,
                 e,
             )
             # Orgs share one session: without this rollback a failed flush
@@ -6327,7 +6420,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
         if org_reminders > 0 or org_checkouts > 0:
             results.append(
                 {
-                    "org_id": str(org.id),
+                    "org_id": org_id,
                     "reminders": org_reminders,
                     "auto_checkouts": org_checkouts,
                 }
@@ -6568,9 +6661,12 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
     total_sent = 0
     results = []
 
-    for org in organizations:
+    # Ids captured while the rows are loaded; see _refresh_if_expired.
+    targets = [(org, str(org.id)) for org in organizations]
+    for org, org_id in targets:
         org_sent = 0
         try:
+            await _refresh_if_expired(db, org)
             pipeline = get_pipeline_settings(org)
             trigger = (pipeline.get("email_triggers", {}) or {}).get(
                 "days_before_event", {}
@@ -6755,8 +6851,8 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
             if org_sent:
                 results.append({"organization": str(org.id), "reminders": org_sent})
         except Exception as e:
-            logger.warning("Event request reminders failed for org {}: {}", org.id, e)
-            await persist_task_error_log(str(org.id), "Event request reminders", e)
+            logger.warning("Event request reminders failed for org {}: {}", org_id, e)
+            await persist_task_error_log(org_id, "Event request reminders", e)
             try:
                 await db.rollback()
             except Exception:
@@ -6823,6 +6919,18 @@ async def run_budget_request_reminders(db: AsyncSession) -> Dict[str, Any]:
     )
 
     return await _for_each_org(db, "budget_request_reminders", send_deadline_reminders)
+
+
+async def run_grant_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Remind about grant compliance tasks and pledges coming due.
+
+    Email only (CLAUDE.md pitfall #18). Who is told, which reminder is due,
+    and the sent-log that makes a second run the same day send nothing are
+    in ``grant_reminder_notifications.send_grant_reminders``.
+    """
+    from app.services.grant_reminder_notifications import send_grant_reminders
+
+    return await _for_each_org(db, "grant_reminders", send_grant_reminders)
 
 
 async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
@@ -7183,17 +7291,31 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
             Organization.active.isnot(False),
         )
     )
-    integrations = list(result.scalars().all())
+    # Ids, not the loaded rows: a rollback after one integration fails
+    # expires every instance in the session, and reading an expired one
+    # outside an await raises MissingGreenlet — which skipped every
+    # integration after the first failure.
+    targets = [
+        (str(i.id), str(i.organization_id))
+        for i in result.scalars().all()
+        if (i.config or {}).get("auto_sync_enabled")
+    ]
 
     enabled = 0
     synced = 0
     failed = 0
-    for integration in integrations:
-        config = integration.config or {}
-        if not config.get("auto_sync_enabled"):
+    for integration_id, org_id in targets:
+        integration = (
+            await db.execute(
+                select(Integration).where(
+                    Integration.id == integration_id,
+                    Integration.organization_id == org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if integration is None:
             continue
         enabled += 1
-        org_id = str(integration.organization_id)
         started = time.monotonic()
         try:
             counts = await run_salesforce_sync(db, integration)
@@ -7215,7 +7337,7 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
             logger.opt(exception=True).warning(
                 "Salesforce auto-sync failed for org {}", org_id
             )
-            await persist_task_error_log(str(org_id), "Salesforce auto-sync", e)
+            await persist_task_error_log(org_id, "Salesforce auto-sync", e)
             # Recorded on the integration as well, so the failure shows on its
             # detail page and not only in the server's task error log.
             try:
@@ -7239,6 +7361,97 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
         "task": "salesforce_auto_sync",
         "integrations_enabled": enabled,
         "synced": synced,
+        "failed": failed,
+    }
+
+
+async def run_calendar_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Publish department events to connected Google Calendar / Outlook calendars.
+
+    Does nothing while CALENDAR_SYNC_ENABLED is off. Otherwise reconciles each
+    enabled, connected integration of the two calendar types in an active
+    organization (see app.services.calendar_sync_service). Each integration
+    is committed on its own, so one failure does not undo or abort another.
+    Runs every 5 minutes.
+    """
+    from app.core.config import settings
+    from app.models.integration import Integration
+    from app.services.calendar_sync_service import (
+        CALENDAR_INTEGRATION_TYPES,
+        SYNC_OPERATION,
+        reconcile_integration,
+    )
+    from app.services.integration_health import record_integration_run
+
+    if not settings.CALENDAR_SYNC_ENABLED:
+        return {"task": "calendar_sync", "skipped": "CALENDAR_SYNC_ENABLED is off"}
+
+    result = await db.execute(
+        select(Integration)
+        .join(Organization, Organization.id == Integration.organization_id)
+        .where(
+            Integration.integration_type.in_(CALENDAR_INTEGRATION_TYPES),
+            Integration.enabled.is_(True),
+            Integration.status == "connected",
+            Organization.active.isnot(False),
+        )
+    )
+    # Ids, not the loaded rows: a rollback after one integration fails
+    # expires every instance in the session, and touching an expired one
+    # outside an await raises MissingGreenlet.
+    targets = [(str(i.id), str(i.organization_id)) for i in result.scalars().all()]
+
+    reconciled = 0
+    skipped = 0
+    failed = 0
+    for integration_id, org_id in targets:
+        started = time.monotonic()
+        integration = (
+            await db.execute(
+                select(Integration).where(
+                    Integration.id == integration_id,
+                    Integration.organization_id == org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if integration is None:
+            continue
+        try:
+            counts = await reconcile_integration(db, integration)
+            await db.commit()
+            if counts.get("skipped") or counts.get("paused"):
+                skipped += 1
+            else:
+                reconciled += 1
+        except Exception as e:
+            await db.rollback()
+            logger.opt(exception=True).warning(
+                "Calendar sync failed for org {}", org_id
+            )
+            await persist_task_error_log(org_id, "Calendar sync", e)
+            try:
+                await db.refresh(integration)
+                await record_integration_run(
+                    db,
+                    integration,
+                    operation=SYNC_OPERATION,
+                    trigger="scheduled",
+                    success=False,
+                    error=e,
+                    started_monotonic=started,
+                )
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.warning(
+                    "Could not record calendar sync failure for org {}", org_id
+                )
+            failed += 1
+
+    return {
+        "task": "calendar_sync",
+        "reconciled": reconciled,
+        "skipped": skipped,
         "failed": failed,
     }
 
@@ -7313,6 +7526,7 @@ TASK_RUNNERS = {
     "shift_auto_checkout": run_shift_auto_checkout,
     "external_training_auto_sync": run_external_training_auto_sync,
     "salesforce_auto_sync": run_salesforce_auto_sync,
+    "calendar_sync": run_calendar_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
     "google_workspace_suspension_sync": run_google_workspace_suspension_sync,
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
@@ -7329,6 +7543,7 @@ TASK_RUNNERS = {
     "event_request_reminders": run_event_request_reminders,
     "prospect_attendance_advance": run_prospect_attendance_advance,
     "budget_request_reminders": run_budget_request_reminders,
+    "grant_reminders": run_grant_reminders,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -7348,6 +7563,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Every 5 minutes: the first retry of a failed message delivery is due 5
     # minutes after it (MSG-12).
     "retry_message_deliveries": 300,
+    # Every 5 minutes: the first retry of a failed calendar push is due 5
+    # minutes after it (calendar_sync_service.RETRY_DELAYS).
+    "calendar_sync": 300,
     # Every 15 minutes
     "inventory_notifications": 900,
     "election_lifecycle": 900,
@@ -7410,6 +7628,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "prospect_attendance_advance": 86400,
     # Daily; idempotent per (year, deadline, member, offset) through a sent-log.
     "budget_request_reminders": 86400,
+    # Daily; idempotent per (item, due date, reminder, member) through a sent-log.
+    "grant_reminders": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,

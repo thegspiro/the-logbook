@@ -6,7 +6,7 @@ import { renderWithRouter } from '../../../test/utils';
 const mockGetSummary = vi.fn();
 const mockGetItems = vi.fn();
 const mockGetCategories = vi.fn();
-const mockGetExpiringLots = vi.fn();
+const mockGetExpiringStock = vi.fn();
 const mockRetireItem = vi.fn();
 const mockBulkRetireItems = vi.fn();
 const mockGetItemLots = vi.fn();
@@ -19,7 +19,7 @@ vi.mock('../../../services/medicalSuppliesService', () => ({
     getSummary: (...args: unknown[]) => mockGetSummary(...args) as unknown,
     getItems: (...args: unknown[]) => mockGetItems(...args) as unknown,
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
-    getExpiringLots: (...args: unknown[]) => mockGetExpiringLots(...args) as unknown,
+    getExpiringStock: (...args: unknown[]) => mockGetExpiringStock(...args) as unknown,
     retireItem: (...args: unknown[]) => mockRetireItem(...args) as unknown,
     bulkRetireItems: (...args: unknown[]) => mockBulkRetireItems(...args) as unknown,
     getItemLots: (...args: unknown[]) => mockGetItemLots(...args) as unknown,
@@ -57,8 +57,12 @@ const summary = {
   expiring_within_days: 30,
 };
 
+/** One row of the Expiring tab: a shelf lot unless told otherwise. */
 const expiringLot = (overrides: Record<string, unknown> = {}) => ({
-  id: 'lot-1',
+  key: 'lot:lot-1',
+  location: 'shelf',
+  lot_id: 'lot-1',
+  where: 'Supply Room › Cabinet B',
   organization_id: 'org-1',
   inventory_item_id: 'item-1',
   item_name: '4x4 Gauze',
@@ -119,7 +123,7 @@ describe('MedicalSuppliesPage', () => {
       mockGetSummary,
       mockGetItems,
       mockGetCategories,
-      mockGetExpiringLots,
+      mockGetExpiringStock,
       mockRetireItem,
       mockBulkRetireItems,
       mockGetItemLots,
@@ -130,7 +134,7 @@ describe('MedicalSuppliesPage', () => {
     mockGetSummary.mockResolvedValue(summary);
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
     mockGetCategories.mockResolvedValue([]);
-    mockGetExpiringLots.mockResolvedValue([expiringLot()]);
+    mockGetExpiringStock.mockResolvedValue([expiringLot()]);
     mockRetireItem.mockResolvedValue(undefined);
     mockBulkRetireItems.mockResolvedValue({ retired: [], failed: [] });
     mockGetItemLots.mockResolvedValue([]);
@@ -161,7 +165,7 @@ describe('MedicalSuppliesPage', () => {
     });
 
     it('names the size on an expiring lot', async () => {
-      mockGetExpiringLots.mockResolvedValue([
+      mockGetExpiringStock.mockResolvedValue([
         expiringLot({ item_name: 'Oxygen Mask, Non-Rebreather', item_size: 'Pediatric' }),
       ]);
       renderWithRouter(<MedicalSuppliesPage />);
@@ -331,6 +335,119 @@ describe('MedicalSuppliesPage', () => {
       expect(screen.queryByRole('combobox', { name: 'Filter by storage location' })).not.toBeInTheDocument();
     });
 
+    it('lists truck stock in the expiring list, named as the checklist names it', async () => {
+      mockGetExpiringStock.mockResolvedValue([
+        expiringLot(),
+        expiringLot({
+          key: 'deployed:d-1',
+          location: 'apparatus',
+          lot_id: null,
+          template_item_id: 'ti-1',
+          where: 'Medic 1 › Main Compartment › Jump Bag',
+          lot_number: 'TRK-9',
+          quantity: 3,
+          days_until_expiration: -2,
+        }),
+      ]);
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      const truckRow = await screen.findByRole('row', { name: /TRK-9/ });
+      expect(truckRow).toHaveTextContent('Medic 1 › Main Compartment › Jump Bag');
+      expect(within(truckRow).getByLabelText('On an apparatus')).toBeInTheDocument();
+      expect(truckRow).toHaveTextContent('Expired 2d ago');
+      const shelfRow = screen.getByRole('row', { name: /LOT-77/ });
+      expect(shelfRow).toHaveTextContent('Supply Room › Cabinet B');
+      expect(within(shelfRow).getByLabelText('In storage')).toBeInTheDocument();
+    });
+
+    it('counts truck stock in the expiry tiles and says how they split', async () => {
+      mockGetSummary.mockResolvedValue({
+        ...summary,
+        expiring_soon: 1,
+        expired: 0,
+        expiring_soon_on_apparatus: 2,
+        expired_on_apparatus: 1,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      const expiring = await screen.findByRole('button', { name: 'Show 3 lots expiring within 30 days' });
+      expect(expiring).toHaveTextContent('1 shelf · 2 on trucks');
+      const expired = screen.getByRole('button', { name: 'Show 1 expired lots' });
+      expect(expired).toHaveTextContent('0 shelf · 1 on trucks');
+    });
+
+    it('shows truck stock under the shelf count and takes Low from the server', async () => {
+      mockGetItems.mockResolvedValue({
+        items: [
+          {
+            id: 'item-1',
+            name: 'Gauze Pads',
+            quantity: 2,
+            reorder_point: 15,
+            apparatus_stock: 12,
+            apparatus_uncounted: 1,
+            is_low_stock: true,
+          },
+          {
+            // 1 on the shelf against a floor of 5, but the trucks carry 8:
+            // on the department-wide total it is not low.
+            id: 'item-2',
+            name: 'Cannula',
+            quantity: 1,
+            reorder_point: 5,
+            apparatus_stock: 8,
+            apparatus_uncounted: 0,
+            is_low_stock: false,
+          },
+        ],
+        total: 2,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      const gauze = await screen.findByRole('row', { name: /Gauze Pads/ });
+      expect(gauze).toHaveTextContent('+12 on trucks (1 uncounted position)');
+      expect(gauze).toHaveTextContent('Low');
+      const cannula = screen.getByRole('row', { name: /Cannula/ });
+      expect(cannula).toHaveTextContent('+8 on trucks');
+      expect(cannula).not.toHaveTextContent('Low');
+    });
+
+    it('counts a supply kept on apparatus only by what the trucks carry, with no shelf place', async () => {
+      mockGetItems.mockResolvedValue({
+        items: [
+          {
+            id: 'item-lucas',
+            name: 'LUCAS device',
+            // A stale shelf count from before it was marked: never shown.
+            quantity: 5,
+            reorder_point: 2,
+            apparatus_only: true,
+            apparatus_stock: 2,
+            apparatus_uncounted: 0,
+            apparatus_count: 2,
+            apparatus_places: ['Medic 1 › Rear Cabinet', 'Medic 2 › Rear Cabinet'],
+            storage_path: 'Supply Room › Cabinet B',
+            is_low_stock: true,
+          },
+        ],
+        total: 1,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      const row = await screen.findByRole('row', { name: /LUCAS device/ });
+      expect(within(row).getByRole('cell', { name: /on 2 apparatus/ })).toHaveTextContent(/^2\s*Low/);
+      expect(row).not.toHaveTextContent('on trucks');
+      expect(row).not.toHaveTextContent('Supply Room › Cabinet B');
+      expect(row).toHaveTextContent('Medic 1 › Rear Cabinet');
+      expect(within(row).getByRole('button', { name: 'Where LUCAS device is carried' })).toBeInTheDocument();
+    });
+
     it("offers a supply's lots to a member who can only view", async () => {
       mockGetItems.mockResolvedValue({
         items: [{ id: 'item-1', name: 'Oxygen Mask', size: 'Adult', quantity: 4 }],
@@ -430,7 +547,7 @@ describe('MedicalSuppliesPage', () => {
   });
 
   it('calls out an already-expired lot rather than showing a negative countdown', async () => {
-    mockGetExpiringLots.mockResolvedValue([expiringLot({ days_until_expiration: -4 })]);
+    mockGetExpiringStock.mockResolvedValue([expiringLot({ days_until_expiration: -4 })]);
 
     renderWithRouter(<MedicalSuppliesPage />);
 
@@ -500,7 +617,7 @@ describe('MedicalSuppliesPage', () => {
       mockGetItems.mockClear();
       mockGetSummary.mockClear();
       mockGetCategories.mockClear();
-      mockGetExpiringLots.mockClear();
+      mockGetExpiringStock.mockClear();
 
       fireEvent.click(screen.getByRole('tab', { name: /All supplies/i }));
       const input = screen.getByRole('searchbox', { name: /Search medical supplies/i });
@@ -519,7 +636,7 @@ describe('MedicalSuppliesPage', () => {
       );
       expect(mockGetSummary).not.toHaveBeenCalled();
       expect(mockGetCategories).not.toHaveBeenCalled();
-      expect(mockGetExpiringLots).not.toHaveBeenCalled();
+      expect(mockGetExpiringStock).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
@@ -811,7 +928,7 @@ describe('MedicalSuppliesPage', () => {
 
   it('reports the expiry window it actually queried', async () => {
     renderWithRouter(<MedicalSuppliesPage />);
-    await waitFor(() => expect(mockGetExpiringLots).toHaveBeenCalledWith(30, undefined));
+    await waitFor(() => expect(mockGetExpiringStock).toHaveBeenCalledWith(30, undefined));
 
     expect(await screen.findByText(/Expiring within 30 days/i)).toBeInTheDocument();
   });
@@ -1019,7 +1136,7 @@ describe('MedicalSuppliesPage', () => {
   it('does not call an empty catalog "Nothing expiring"', async () => {
     mockGetSummary.mockResolvedValue({ ...summary, total_items: 0, expiring_soon: 0, expired: 0, low_stock: 0 });
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
-    mockGetExpiringLots.mockResolvedValue([]);
+    mockGetExpiringStock.mockResolvedValue([]);
 
     renderWithRouter(<MedicalSuppliesPage />);
 
@@ -1215,7 +1332,7 @@ describe('MedicalSuppliesPage', () => {
       // otherwise both commit, and whichever lands last wins regardless of
       // which was asked for last.
       let failOlder: ((reason: Error) => void) | undefined;
-      mockGetExpiringLots
+      mockGetExpiringStock
         .mockRejectedValueOnce(new Error('Lots unavailable'))
         .mockImplementationOnce(() => new Promise((_resolve, reject) => (failOlder = reject)))
         .mockResolvedValue([expiringLot({ id: 'lot-2', item_name: 'Trauma Shears' })]);
@@ -1269,7 +1386,7 @@ describe('MedicalSuppliesPage', () => {
     it('marks a section that loaded empty as stale when a later load fails', async () => {
       // A row count cannot tell "loaded, and there is nothing" from "never
       // loaded", so an empty-but-loaded section lost its stale marker.
-      mockGetExpiringLots.mockResolvedValueOnce([]).mockRejectedValue(new Error('Lots unavailable'));
+      mockGetExpiringStock.mockResolvedValueOnce([]).mockRejectedValue(new Error('Lots unavailable'));
 
       const user = userEvent.setup();
       renderWithRouter(<MedicalSuppliesPage />);
@@ -1283,7 +1400,7 @@ describe('MedicalSuppliesPage', () => {
     it('does not claim a section is empty before it has ever loaded', async () => {
       // "Nothing expiring" is an assertion about the department's stock. A
       // section whose only request failed knows nothing and must not make it.
-      mockGetExpiringLots.mockRejectedValue(new Error('Lots unavailable'));
+      mockGetExpiringStock.mockRejectedValue(new Error('Lots unavailable'));
 
       renderWithRouter(<MedicalSuppliesPage />);
       await screen.findByRole('alert');
@@ -1296,7 +1413,7 @@ describe('MedicalSuppliesPage', () => {
       // those rows while a slow retry runs breaks that promise at exactly the
       // moment the data is being relied on. A retry asks the same question the
       // rows already answer, unlike a filter change, which does not.
-      mockGetExpiringLots
+      mockGetExpiringStock
         .mockResolvedValueOnce([expiringLot()])
         .mockRejectedValueOnce(new Error('Lots unavailable'))
         .mockImplementation(() => new Promise(() => {}));
@@ -1310,7 +1427,7 @@ describe('MedicalSuppliesPage', () => {
 
       // The retry hangs. The rows it is retrying stay put.
       await user.click(screen.getByRole('button', { name: 'Retry expiring stock' }));
-      await waitFor(() => expect(mockGetExpiringLots).toHaveBeenCalledTimes(3));
+      await waitFor(() => expect(mockGetExpiringStock).toHaveBeenCalledTimes(3));
       expect(screen.getByText('4x4 Gauze')).toBeInTheDocument();
     });
 
@@ -1374,7 +1491,7 @@ describe('MedicalSuppliesPage', () => {
       await waitFor(() => expect(mockGetSummary).toHaveBeenCalledTimes(1));
       const summaryCalls = mockGetSummary.mock.calls.length;
       const categoryCalls = mockGetCategories.mock.calls.length;
-      const expiringCalls = mockGetExpiringLots.mock.calls.length;
+      const expiringCalls = mockGetExpiringStock.mock.calls.length;
       const itemCalls = mockGetItems.mock.calls.length;
 
       fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
@@ -1384,7 +1501,7 @@ describe('MedicalSuppliesPage', () => {
       await waitFor(() => expect(mockGetItems.mock.calls.length).toBeGreaterThan(itemCalls));
       expect(mockGetSummary.mock.calls.length).toBe(summaryCalls);
       expect(mockGetCategories.mock.calls.length).toBe(categoryCalls);
-      expect(mockGetExpiringLots.mock.calls.length).toBe(expiringCalls);
+      expect(mockGetExpiringStock.mock.calls.length).toBe(expiringCalls);
     });
 
     it('does not call a supply uncategorized while the category list is loading', async () => {

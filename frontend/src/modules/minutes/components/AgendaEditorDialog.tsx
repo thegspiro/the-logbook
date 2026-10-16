@@ -72,7 +72,8 @@ export const AgendaEditorDialog: React.FC<AgendaEditorDialogProps> = ({ meeting,
       <p className="text-theme-text-secondary mb-3 text-sm">
         Each item becomes a section of the minutes drafted from this meeting, in this order.
         {hasMinutes &&
-          ' Minutes already drafted are not changed; use “Sync from agenda” on them to review the changes.'}
+          ' Minutes already drafted are not changed; use “Sync from agenda” on them to review the changes.'}{' '}
+        Linked documents you cannot open are not shown here, and are kept when you save.
       </p>
       <AgendaItemsEditor idPrefix="agenda" items={items} onChange={setItems} disabled={saving} />
       {!valid && (

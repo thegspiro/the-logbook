@@ -52,6 +52,7 @@ from app.schemas.minute import (
     TemplateSectionEntry,
     TemplateUpdate,
 )
+from app.services.agenda_document_access import narrow_documents
 from app.services.document_service import DocumentService
 from app.services.minute_service import MinuteService
 from app.services.template_service import TemplateService
@@ -290,7 +291,7 @@ async def get_minutes(
         "Meeting minutes",
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("", response_model=MinutesResponse, status_code=status.HTTP_201_CREATED)
@@ -328,7 +329,7 @@ async def create_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.put("/{minutes_id}", response_model=MinutesResponse)
@@ -363,7 +364,7 @@ async def update_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.delete("/{minutes_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -437,7 +438,7 @@ async def submit_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("/{minutes_id}/approve", response_model=MinutesResponse)
@@ -481,7 +482,7 @@ async def approve_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("/{minutes_id}/reject", response_model=MinutesResponse)
@@ -522,7 +523,7 @@ async def reject_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("/{minutes_id}/reopen", response_model=MinutesResponse)
@@ -573,7 +574,7 @@ async def reopen_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 # ============================================
@@ -1091,6 +1092,17 @@ def _build_response(minutes) -> MinutesResponse:
             _build_action_item_response(a) for a in (minutes.action_items or [])
         ],
     )
+
+
+async def _respond(db: AsyncSession, user: User, minutes) -> MinutesResponse:
+    """The response, with linked documents narrowed to what *user* could open.
+
+    A section's linked-document names were copied from the library by someone
+    who could open them; this viewer may not be able to.
+    """
+    response = _build_response(minutes)
+    await narrow_documents(db, user.organization_id, user, response.sections)
+    return response
 
 
 def _loaded(obj, relationship: str, attribute: str):

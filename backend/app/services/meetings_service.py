@@ -23,6 +23,7 @@ from app.models.meeting import (
     MeetingType,
 )
 from app.models.user import User
+from app.services.agenda_document_access import openable_document_ids
 from app.utils.agenda_items import normalize_agenda_items
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
@@ -52,14 +53,21 @@ class MeetingsService:
         items: Optional[List[Dict[str, Any]]],
         organization_id: UUID | str,
         user: User,
+        existing: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[List[Dict[str, Any]]]:
         """The agenda items to store, with every linked document verified.
 
         A document link is a client-supplied id (XC-1): it must be in the
         caller's organization, and in a folder the caller could open
-        themselves, since its name is copied into minutes that every minutes
-        viewer can read. The stored name comes from the document, never from
-        the request.
+        themselves. The stored name comes from the document, never from the
+        request. Reads narrow the links again per viewer
+        (``agenda_document_access``), because the name is returned to everyone
+        who can read the meeting or the minutes.
+
+        On an update, *existing* is the agenda as stored. A viewer is shown only
+        the linked documents they could open themselves, so the editor they
+        save from may be missing some; those are kept, not silently unlinked.
+        Only a document the editor could see and chose to remove is removed.
         """
         if items is None:
             return None
@@ -87,7 +95,30 @@ class MeetingsService:
                     )
                 linked.append({"id": row.id, "name": row.name})
             item["documents"] = linked
+        if existing:
+            await self._keep_hidden_documents(settled, existing, organization_id, user)
         return settled
+
+    async def _keep_hidden_documents(
+        self,
+        settled: List[Dict[str, Any]],
+        existing: List[Dict[str, Any]],
+        organization_id: UUID | str,
+        user: User,
+    ) -> None:
+        """Re-attach stored links the editor could not have seen to their items."""
+        before = {
+            item["key"]: item["documents"] for item in normalize_agenda_items(existing)
+        }
+        stored_ids = {ref["id"] for refs in before.values() for ref in refs}
+        visible = await openable_document_ids(
+            self.db, organization_id, user, stored_ids
+        )
+        for item in settled:
+            have = {ref["id"] for ref in item["documents"]}
+            for ref in before.get(item["key"], []):
+                if ref["id"] not in visible and ref["id"] not in have:
+                    item["documents"].append(dict(ref))
 
     async def create_meeting(
         self,

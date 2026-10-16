@@ -55,6 +55,11 @@ describe('AgendaEditorDialog', () => {
     expect(screen.getByText(/Sync from agenda/)).toBeInTheDocument();
   });
 
+  it('says documents the editor cannot open are kept, not dropped', () => {
+    open();
+    expect(screen.getByText(/Linked documents you cannot open are not shown here, and are kept/)).toBeInTheDocument();
+  });
+
   it('saves the items on the meeting', async () => {
     const user = userEvent.setup();
     open();
