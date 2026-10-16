@@ -49,6 +49,30 @@ class LeaveWidgetResponse(BaseModel):
     queue_url: str = "/members?leave=active"
 
 
+async def _audit_leave_read(
+    db: AsyncSession,
+    current_user: User,
+    event_type: str,
+    event_data: dict,
+    record_count: int,
+) -> None:
+    """Record that an officer read leave records that may state a medical reason.
+
+    A leave's free-text reason can describe a member's health, so reading
+    someone else's is access the audit trail has to answer for (HIPAA
+    §164.312(b)). One event per request, never the reason text itself.
+    """
+    await log_audit_event(
+        db=db,
+        event_type=event_type,
+        event_category="user_management",
+        severity="info",
+        event_data={**event_data, "record_count": record_count},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 @router.get("/leaves-of-absence/widget-summary", response_model=LeaveWidgetResponse)
 async def leave_widget_summary(
     db: AsyncSession = Depends(get_db),
@@ -252,6 +276,13 @@ async def list_leaves_of_absence(
         active_only=active_only,
     )
     paginated = leaves[pagination.skip : pagination.skip + pagination.limit]
+    await _audit_leave_read(
+        db,
+        current_user,
+        "member_leaves_listed",
+        {"user_id": user_id, "active_only": active_only},
+        len(paginated),
+    )
     return [_to_response(leave) for leave in paginated]
 
 
@@ -293,6 +324,14 @@ async def get_member_leaves(
         active_only=active_only,
     )
     paginated = leaves[pagination.skip : pagination.skip + pagination.limit]
+    if not is_own:
+        await _audit_leave_read(
+            db,
+            current_user,
+            "member_leaves_viewed",
+            {"target_user_id": user_id, "active_only": active_only},
+            len(paginated),
+        )
     return [_to_response(leave) for leave in paginated]
 
 
