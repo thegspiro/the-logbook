@@ -6,6 +6,7 @@ its password reaches the member's personal address) and the officer retry.
 Google itself is never called: ``directory_for`` is replaced by a fake.
 """
 
+import asyncio
 import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -465,12 +466,14 @@ class TestConversion:
         assert row.status == GoogleAccountStatus.FAILED.value
         assert row.google_user_id is None
         assert "alias" in (row.last_error or "")
-        assert (
-            await GoogleWorkspaceProvisioningService(db_session).stage_suspension(
-                row.user_id, row.organization_id, suspended=True
-            )
-            is False
-        )
+        # Nothing of the chief's is ever touched: the member's departure
+        # stages no suspension on a record with no account of its own.
+        member = await db_session.get(User, row.user_id)
+        member.status = UserStatus.DROPPED_VOLUNTARY
+        await db_session.commit()
+        await db_session.refresh(row)
+        assert row.suspension_settled is True
+        assert row.suspension_wanted is False
 
     async def test_an_address_held_by_a_group_is_never_linked(self, db_session):
         from app.services.integration_services.google_workspace_service import (
@@ -879,6 +882,14 @@ async def _backdate_service(db_session, user_id):
     await db_session.flush()
 
 
+async def _settle(db_session):
+    """Run what the departure hook staged. The test session's commits only
+    release savepoints, so the after-commit task deliberately does not run."""
+    from app.models.google_workspace_departure import run_staged_now
+
+    await run_staged_now(db_session)
+
+
 async def _change_status(db_session, user_id, caller, new_status):
     from fastapi import BackgroundTasks
 
@@ -888,13 +899,15 @@ async def _change_status(db_session, user_id, caller, new_status):
     )
 
     await _backdate_service(db_session, user_id)
-    return await change_member_status(
+    response = await change_member_status(
         uuid.UUID(user_id),
         MemberStatusChangeRequest(new_status=new_status, reason="test"),
         BackgroundTasks(),
         db=db_session,
         current_user=caller,
     )
+    await _settle(db_session)
+    return response
 
 
 @pytest.mark.integration
@@ -923,6 +936,7 @@ class TestSuspension:
                 db=db_session,
                 current_user=caller,
             )
+            await _settle(db_session)
         row = await _row(db_session, user_id)
         assert fake.suspend_calls == [True, False]
         assert row.suspended_by_logbook is False
@@ -965,6 +979,7 @@ class TestSuspension:
                 organization_id=org.id,
                 reactivated_by=caller.id,
             )
+            await _settle(db_session)
         assert fake.suspend_calls == [True, False]
 
     async def test_a_soft_delete_suspends(self, db_session):
@@ -979,6 +994,7 @@ class TestSuspension:
             await delete_user(
                 uuid.UUID(user_id), hard=False, db=db_session, current_user=caller
             )
+            await _settle(db_session)
         assert fake.suspend_calls == [True]
         assert (await _row(db_session, user_id)).suspended_by_logbook is True
 
@@ -999,6 +1015,7 @@ class TestSuspension:
             await delete_user(
                 uuid.UUID(user_id), hard=True, db=db_session, current_user=caller
             )
+            await _settle(db_session)
         assert fake.suspend_calls == [True]
         gone = (
             await db_session.execute(
@@ -1092,10 +1109,13 @@ class TestSuspension:
             )
         )
         await db_session.commit()
-        staged = await GoogleWorkspaceProvisioningService(db_session).stage_suspension(
-            str(result["user_id"]), org.id, suspended=True
-        )
-        assert staged is False
+        member = await db_session.get(User, str(result["user_id"]))
+        member.status = UserStatus.DROPPED_VOLUNTARY
+        await db_session.commit()
+        fake = FakeDirectory()
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _settle(db_session)
+        assert fake.keys == []
 
 
 @pytest.mark.integration
@@ -1197,3 +1217,142 @@ class TestDirectoryClientHygiene:
             directory._service()
             directory._service()
         make_credentials.assert_called_once()
+
+
+@pytest.mark.integration
+class TestCentralDepartureHook:
+    """Any path that changes a member's status or deleted_at is covered, with
+    no call at that path: the session hook stages the suspension."""
+
+    async def test_a_path_that_knows_nothing_of_google_still_suspends(self, db_session):
+        org, user_id, _ = await _member_with_account(db_session)
+        member = await db_session.get(User, user_id)
+        member.status = UserStatus.DROPPED_INVOLUNTARY
+        await db_session.commit()
+
+        row = await _row(db_session, user_id)
+        assert row.suspension_wanted is True
+        assert row.suspension_settled is False
+        fake = FakeDirectory()
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _settle(db_session)
+        assert fake.suspend_calls == [True]
+
+    async def test_a_departure_that_rolls_back_leaves_nothing(self, db_session):
+        from app.models.google_workspace_departure import _RECONCILE
+
+        org, user_id, _ = await _member_with_account(db_session)
+        member = await db_session.get(User, user_id)
+        member.status = UserStatus.DROPPED_VOLUNTARY
+        await db_session.flush()
+        await db_session.rollback()
+
+        assert not db_session.sync_session.info.get(_RECONCILE)
+        row = await _row(db_session, user_id)
+        assert row.suspension_settled is True
+        assert row.suspension_wanted is False
+
+    async def test_archiving_a_dropped_member_is_not_a_second_departure(
+        self, db_session
+    ):
+        org, user_id, _ = await _member_with_account(db_session)
+        member = await db_session.get(User, user_id)
+        member.status = UserStatus.DROPPED_VOLUNTARY
+        await db_session.commit()
+        fake = FakeDirectory()
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _settle(db_session)
+            member.status = UserStatus.ARCHIVED
+            await db_session.commit()
+            await _settle(db_session)
+        assert fake.suspend_calls == [True]
+
+    async def test_another_departments_record_is_never_staged(self, db_session):
+        org, user_id, _ = await _member_with_account(db_session)
+        other = await _org(db_session)
+        row = await _row(db_session, user_id)
+        row.organization_id = other.id
+        await db_session.commit()
+        member = await db_session.get(User, user_id)
+        member.status = UserStatus.DROPPED_VOLUNTARY
+        await db_session.commit()
+        await db_session.refresh(row)
+        assert row.suspension_settled is True
+
+
+@pytest.mark.integration
+class TestSuspensionSweep:
+    async def _unsettled(self, db_session, **fields):
+        org, user_id, _ = await _member_with_account(db_session)
+        row = await _row(db_session, user_id)
+        row.suspension_wanted = True
+        row.suspension_settled = False
+        for key, value in fields.items():
+            setattr(row, key, value)
+        await db_session.commit()
+        return user_id
+
+    async def test_a_staged_row_is_finished_and_a_recent_failure_waits(
+        self, db_session
+    ):
+        fresh = await self._unsettled(db_session)
+        waiting = await self._unsettled(
+            db_session,
+            suspension_error="Google is busy.",
+            last_attempt_at=datetime.now(timezone.utc) - timedelta(minutes=2),
+        )
+        due = await self._unsettled(
+            db_session,
+            suspension_error="Google is busy.",
+            last_attempt_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        )
+        with patch(f"{SERVICE}.directory_for", return_value=FakeDirectory()):
+            await GoogleWorkspaceProvisioningService(
+                db_session
+            ).sync_pending_suspensions()
+
+        assert (await _row(db_session, fresh)).suspension_settled is True
+        assert (await _row(db_session, due)).suspension_settled is True
+        assert (await _row(db_session, waiting)).suspension_settled is False
+
+    async def test_the_scheduled_task_is_registered_and_runs(self, db_session):
+        from app.services.scheduled_tasks import (
+            TASK_INTERVALS_SECONDS,
+            TASK_RUNNERS,
+            run_google_workspace_suspension_sync,
+        )
+
+        assert TASK_RUNNERS["google_workspace_suspension_sync"] is (
+            run_google_workspace_suspension_sync
+        )
+        assert TASK_INTERVALS_SECONDS["google_workspace_suspension_sync"] > 0
+        user_id = await self._unsettled(db_session)
+        with patch(f"{SERVICE}.directory_for", return_value=FakeDirectory()):
+            result = await run_google_workspace_suspension_sync(db_session)
+        assert result["attempted"] >= 1
+        assert (await _row(db_session, user_id)).suspension_settled is True
+
+
+@pytest.mark.unit
+class TestAfterCommit:
+    async def test_a_real_commit_starts_the_sync_in_the_background(self):
+        from app.models import google_workspace_departure as hook
+
+        session = SimpleNamespace(
+            bind=object(),
+            info={hook._RECONCILE: {("org-1", "u-1")}, hook._DETACHED: []},
+        )
+        with patch.object(hook, "_run_after_commit", AsyncMock()) as run:
+            hook._sync_after_commit(session)
+            assert hook._tasks
+            await asyncio.gather(*list(hook._tasks))
+        run.assert_awaited_once_with([("org-1", "u-1")], [])
+        assert hook._RECONCILE not in session.info
+
+    def test_nothing_staged_starts_nothing(self):
+        from app.models import google_workspace_departure as hook
+
+        session = SimpleNamespace(bind=object(), info={})
+        with patch.object(hook, "_run_after_commit", AsyncMock()) as run:
+            hook._sync_after_commit(session)
+        run.assert_not_called()

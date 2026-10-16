@@ -175,6 +175,7 @@ from app.models.google_workspace import (
     GoogleAccountProvision,
     GoogleAccountStatus,
 )
+from app.models.google_workspace_departure import DEPARTED_STATUSES
 from app.models.grant import (
     ApplicationStatus,
     BudgetItemCategory,
@@ -526,6 +527,7 @@ __all__ = [
     "MessagePriority",
     "MessageTargetType",
     # Integration models
+    "DEPARTED_STATUSES",
     "GoogleAccountProvision",
     "GoogleAccountStatus",
     "Integration",

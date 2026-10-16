@@ -77,11 +77,17 @@ suspended. If an account was already suspended in Google when the member left,
 The Logbook records that and never lifts it. Suspending keeps the mailbox and
 its license; deleting the account is left to an administrator.
 
-The change is made after the departure is saved, so a Google failure never
-blocks it; the member's profile shows "not suspended yet" with a **Retry**. A
-permanent delete removes the account record with the member, so its outcome is
-written to the audit log instead. No account is ever created for a member who
-has left.
+Every way a member leaves or returns is covered, including ones added later:
+the trigger is the member's status or deletion changing, not the screen that
+changed it. The intent is recorded in the same database transaction; Google is
+called just after it commits, so a Google failure never blocks the departure
+and a cancelled one never reaches Google. Anything left unfinished — a worker
+restart, Google being down — is picked up by the
+`google_workspace_suspension_sync` scheduled task every 15 minutes (a failed
+account is retried at most every 15 minutes), and the member's profile shows
+"not suspended yet" with a **Retry** meanwhile. A permanent delete removes the
+account record with the member, so its outcome is written to the audit log
+instead. No account is ever created for a member who has left.
 
 ---
 

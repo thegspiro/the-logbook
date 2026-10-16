@@ -2136,19 +2136,6 @@ async def delete_user(
                 ),
             )
 
-        # The account record is removed with the member (ON DELETE CASCADE),
-        # so the address is captured now and the Google account suspended
-        # once the delete has committed.
-        from app.services.google_workspace_provisioning_service import (
-            GoogleWorkspaceProvisioningService,
-            suspendable_address,
-        )
-
-        google = GoogleWorkspaceProvisioningService(db)
-        google_address = suspendable_address(
-            await google.get_for_user(str(user_id), str(current_user.organization_id))
-        )
-
         await release_user_references(db, str(user_id))
 
         # Deleting the User is also what removes its user_positions rows.
@@ -2189,28 +2176,12 @@ async def delete_user(
             user_id=str(current_user.id),
             username=current_user.username,
         )
-        # Last, after every read of the session's objects: a failure inside
-        # rolls the session back, which expires every loaded instance.
-        if google_address:
-            await google.suspend_detached(
-                str(current_user.organization_id),
-                google_address,
-                actor_id=str(current_user.id),
-            )
     else:
         # Preserve membership number so it can be restored on reactivation,
         # then clear it to free the unique index for new members.
         if user.membership_number:
             user.previous_membership_number = user.membership_number
             user.membership_number = None
-        from app.services.google_workspace_provisioning_service import (
-            GoogleWorkspaceProvisioningService,
-        )
-
-        google = GoogleWorkspaceProvisioningService(db)
-        sync_google = await google.stage_suspension(
-            str(user_id), str(current_user.organization_id), suspended=True
-        )
         user.deleted_at = datetime.now(timezone.utc)
         await db.commit()
 
@@ -2227,14 +2198,6 @@ async def delete_user(
             user_id=str(current_user.id),
             username=current_user.username,
         )
-        # Last, after every read of the session's objects: a failure inside
-        # rolls the session back, which expires every loaded instance.
-        if sync_google:
-            await google.reconcile_suspension(
-                str(user_id),
-                str(current_user.organization_id),
-                actor_id=str(current_user.id),
-            )
 
 
 @router.post(

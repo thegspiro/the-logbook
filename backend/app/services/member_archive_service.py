@@ -289,17 +289,6 @@ async def reactivate_member(
         today=today,
     )
 
-    # An archived member was dropped first, which suspended their Google
-    # Workspace account; coming back lifts it once this commits.
-    from app.services.google_workspace_provisioning_service import (
-        GoogleWorkspaceProvisioningService,
-    )
-
-    google = GoogleWorkspaceProvisioningService(db)
-    sync_google = await google.stage_suspension(
-        user_id, organization_id, suspended=False
-    )
-
     now = datetime.now(timezone.utc)
     previous_status = member.status.value
     member.status = UserStatus.ACTIVE
@@ -359,7 +348,7 @@ async def reactivate_member(
     except Exception as e:
         logger.error(f"Failed to log reactivation audit event: {e}")
 
-    reactivated = {
+    return {
         "user_id": user_id,
         "member_name": member.display_name,
         "previous_status": previous_status,
@@ -368,10 +357,3 @@ async def reactivate_member(
         "reason": reason or "Reactivated by leadership",
         "service_credit": service_credit.value,
     }
-    # Last, after every read of the member: a failure inside rolls the
-    # session back, which expires every loaded instance.
-    if sync_google:
-        await google.reconcile_suspension(
-            user_id, organization_id, actor_id=reactivated_by
-        )
-    return reactivated

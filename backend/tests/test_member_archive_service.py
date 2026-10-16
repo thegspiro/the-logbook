@@ -77,18 +77,6 @@ def _quiet_side_effects(monkeypatch):
         email_service, "wrap_email_body", lambda org, title, body, **_kwargs: body
     )
 
-    # The Google Workspace suspension hook reads its own row; these tests script
-    # every query the service makes, and none of them has a Google account.
-    from app.services.google_workspace_provisioning_service import (
-        GoogleWorkspaceProvisioningService,
-    )
-
-    monkeypatch.setattr(
-        GoogleWorkspaceProvisioningService,
-        "stage_suspension",
-        AsyncMock(return_value=False),
-    )
-
 
 class TestAutoArchiveGate:
     async def test_skips_unknown_member(self):

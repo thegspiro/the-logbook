@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import generate_temporary_password
@@ -29,8 +29,12 @@ from app.models.google_workspace import (
     GoogleAccountProvision,
     GoogleAccountStatus,
 )
+from app.models.google_workspace_departure import (
+    SUSPENDABLE_STATUSES,
+    has_departed,
+)
 from app.models.integration import Integration
-from app.models.user import Organization, User, UserStatus
+from app.models.user import Organization, User
 from app.services.email_theme import callout, fact, facts
 from app.services.integration_services.google_workspace_service import (
     GoogleAccountExistsError,
@@ -42,6 +46,9 @@ from app.services.integration_services.google_workspace_service import (
 # Two retries this close together are a double click, not a decision.
 RETRY_COOLDOWN = timedelta(seconds=60)
 
+# How long a failed suspension waits before the scheduled sync tries again.
+SUSPENSION_RETRY_AFTER = timedelta(minutes=15)
+
 GOOGLE_SIGN_IN_URL = "https://accounts.google.com/"
 
 LINKED_EXISTING_MESSAGE = (
@@ -51,19 +58,10 @@ LINKED_EXISTING_MESSAGE = (
 )
 
 
-# A member in one of these has left: their account is suspended, and none is
-# created for them. Retired is deliberately absent -- a department may let
-# retirees keep their address (owner decision, 2026-10-15).
-DEPARTED_STATUSES = frozenset(
-    {UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY, UserStatus.ARCHIVED}
-)
-
 # Accounts that exist in Google, and so can be suspended. A linked existing
 # account is suspended too (owner decision, 2026-10-15); only a suspension
 # The Logbook applied is ever lifted.
-_SUSPENDABLE = frozenset(
-    {GoogleAccountStatus.CREATED.value, GoogleAccountStatus.LINKED_EXISTING.value}
-)
+_SUSPENDABLE = frozenset(SUSPENDABLE_STATUSES)
 
 
 def suspendable_address(row: Optional[GoogleAccountProvision]) -> Optional[str]:
@@ -74,7 +72,7 @@ def suspendable_address(row: Optional[GoogleAccountProvision]) -> Optional[str]:
 
 
 def member_has_departed(user: User) -> bool:
-    return user.deleted_at is not None or user.status in DEPARTED_STATUSES
+    return has_departed(user.status, user.deleted_at)
 
 
 class ProvisionRetryError(Exception):
@@ -480,26 +478,6 @@ class GoogleWorkspaceProvisioningService:
         await self.db.commit()
         return sent_count > 0
 
-    async def stage_suspension(
-        self, user_id: str, organization_id: str, suspended: bool
-    ) -> bool:
-        """Record, in the caller's transaction, that the account should be
-        suspended (or no longer suspended).
-
-        Returns whether there is anything for :meth:`reconcile_suspension` to
-        do once the caller commits. Google is never called here: the
-        departure it follows has not committed yet.
-        """
-        row = await self._load(organization_id, user_id=user_id)
-        if row is None or row.status not in _SUSPENDABLE:
-            return False
-        if row.suspension_wanted == suspended and row.suspension_settled:
-            return False
-        row.suspension_wanted = suspended
-        row.suspension_settled = False
-        row.suspension_error = None
-        return True
-
     async def reconcile_suspension(
         self,
         user_id: str,
@@ -597,6 +575,35 @@ class GoogleWorkspaceProvisioningService:
         )
         await self.db.commit()
         logger.info(f"Google Workspace suspension for user {row.user_id}: {outcome}")
+
+    async def sync_pending_suspensions(self) -> int:
+        """Finish every suspension a departure or return left unsettled.
+
+        The backstop for the after-commit task (a worker that stopped before
+        it ran, Google failing at the time). A row never yet tried runs at
+        once; one that failed waits ``SUSPENSION_RETRY_AFTER`` before the next
+        attempt, so an outage is not hammered. Returns the rows attempted.
+        """
+        cutoff = datetime.now(timezone.utc) - SUSPENSION_RETRY_AFTER
+        rows = (
+            await self.db.execute(
+                select(
+                    GoogleAccountProvision.user_id,
+                    GoogleAccountProvision.organization_id,
+                ).where(
+                    GoogleAccountProvision.suspension_settled.is_(False),
+                    GoogleAccountProvision.status.in_(SUSPENDABLE_STATUSES),
+                    or_(
+                        GoogleAccountProvision.suspension_error.is_(None),
+                        GoogleAccountProvision.last_attempt_at.is_(None),
+                        GoogleAccountProvision.last_attempt_at < cutoff,
+                    ),
+                )
+            )
+        ).all()
+        for user_id, organization_id in rows:
+            await self.reconcile_suspension(user_id, organization_id)
+        return len(rows)
 
     async def suspend_detached(
         self,

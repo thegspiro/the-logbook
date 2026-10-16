@@ -424,20 +424,6 @@ async def change_member_status(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
             )
 
-    # A drop suspends the member's Google Workspace account and a return
-    # from one lifts it. Staged here, in this transaction; Google is called
-    # only once the status change has committed.
-    from app.services.google_workspace_provisioning_service import (
-        GoogleWorkspaceProvisioningService,
-    )
-
-    google = GoogleWorkspaceProvisioningService(db)
-    was_dropped = previous in DROPPED_STATUSES
-    now_dropped = new_status in DROPPED_STATUSES
-    sync_google = was_dropped != now_dropped and await google.stage_suspension(
-        str(member.id), str(current_user.organization_id), suspended=now_dropped
-    )
-
     # Update the status and record when it changed. status_changed_at stays
     # the moment of the change even when the separation is back-dated: the
     # undo-drop window and the property-return reminder schedule both count
@@ -592,14 +578,6 @@ async def change_member_status(
             )
             response.email_sent = True
 
-    # Last, after every read of the member: a failure inside rolls the
-    # session back, which expires every loaded instance.
-    if sync_google:
-        await google.reconcile_suspension(
-            str(user_id),
-            str(current_user.organization_id),
-            actor_id=str(current_user.id),
-        )
     return response
 
 
@@ -785,15 +763,6 @@ async def undo_member_drop(
     dropped_as = UserStatus(member.status)
     await MemberServiceHistoryService(db).undo_separation(member, dropped_as)
 
-    from app.services.google_workspace_provisioning_service import (
-        GoogleWorkspaceProvisioningService,
-    )
-
-    google = GoogleWorkspaceProvisioningService(db)
-    sync_google = await google.stage_suspension(
-        str(member.id), str(current_user.organization_id), suspended=False
-    )
-
     member.status = restore
     member.status_changed_at = datetime.now(timezone.utc)
     member.status_change_reason = request.reason or "Drop undone"
@@ -815,20 +784,11 @@ async def undo_member_drop(
         username=current_user.username,
     )
 
-    response = MemberStatusChangeResponse(
+    return MemberStatusChangeResponse(
         user_id=str(user_id),
         previous_status=dropped_as.value,
         new_status=restore.value,
     )
-    # Last, after every read of the member: a failure inside rolls the
-    # session back, which expires every loaded instance.
-    if sync_google:
-        await google.reconcile_suspension(
-            str(user_id),
-            str(current_user.organization_id),
-            actor_id=str(current_user.id),
-        )
-    return response
 
 
 # ==================== Property Return Reminders ====================
