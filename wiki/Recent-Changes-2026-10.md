@@ -5,6 +5,57 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 15 – 16, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-15--16-2026).
+Predecessor: [October 14 – 15](#recent-changes-october-14--15-2026).
+
+**The headline:** **Medical Supplies** now say where each supply is kept, on the
+shelf and on which apparatus, and can be sorted, filtered and retired in bulk.
+Catalog Links can link obvious matches for you. Google accounts of departed
+members are suspended more reliably.
+
+### Read this first
+
+**If you run the server:** the Unraid and minimal compose files now require your
+database, Redis and app secrets instead of falling back to placeholders; set them
+before upgrading. Error reports no longer include local variables. Three new
+migrations; `alembic heads` should report one head.
+
+**If you administer a department:**
+
+- **Medical Supplies.** File each supply under a room and storage area. Existing
+  supplies are filed automatically when exactly one active area matches their old
+  text. Use the location filter, sort the table, and retire several at once.
+- **Catalog Links.** **Link matches automatically** links exact and strong
+  matches and skips ties. Each name has an **Undo**.
+- **Google Workspace.** On the Google card, **Link existing members** covers
+  people who joined before the integration, so their accounts are suspended when
+  they leave.
+- **Documents.** Full administrators get a weekly email listing folders only
+  administrators can open. A department can make it required.
+
+**If you are a member:** My Checklists is a compact list by day on a phone. A
+position at its critical minimum is no longer flagged critical; only a count
+below it is.
+
+### What changed, by area
+
+| Area             | Change                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------- |
+| Medical Supplies | Storage room and area, apparatus places, location filter, Where it is dialog                            |
+| Medical Supplies | Sort, bulk retire, Lots dialog, clickable tiles, Size, Next expiry, unset reorder point shown as a dash |
+| Equipment checks | Automatic catalog linking with Undo; critical means strictly below the minimum; phone checklist layout  |
+| Google Workspace | Accounts tagged with the member; link existing members; suspension from one departure hook              |
+| Membership       | The undo window for a drop counts from its effective date                                               |
+| Documents        | Weekly administrator-only folder email                                                                  |
+| Security         | Reads of leave, service history and audit records are audited; incident-response policy added           |
+
+Screenshots to capture and video beats to redo are queued in the repository's
+`docs/training/SCREENSHOT_CURRENCY.md` and `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Recent changes: October 14 – 15, 2026
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering

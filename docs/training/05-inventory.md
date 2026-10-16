@@ -2902,6 +2902,20 @@ with catalog suggestions. Names with a likely match come first; the rest
 3. Select **Link _N_ positions**. Every position carrying that line is linked,
    all or nothing, and each affected checklist's change log records it.
 
+**Link matches automatically** links every unlinked line, on every checklist,
+whose best catalog match is exact or strong and clearly better than the
+runner-up. Strong matches include "also called" names. A tie is skipped:
+"Oxygen Mask" scores the same against the adult and the pediatric mask, so
+either link would be a guess. Weak and unmatched names stay on the report.
+
+- The confirmation asks first; it only adds links.
+- Afterwards the page lists each linked name with the checklists it landed on.
+  Strong matches are marked **check this**.
+- **Undo** on a name clears those links, but only where the line still points at
+  the item the pass chose. A link you made by hand since is kept.
+
+<!-- Screenshot needed: Catalog Links after an automatic pass, with the linked list, "check this" marker and Undo. -->
+
 If someone else linked a line after you opened the page, your choice does not
 overwrite theirs. The page lists those lines (line, checklist, compartment,
 their item and yours) with a link into each checklist. The list stays until you
@@ -3010,6 +3024,52 @@ Supplies categories page.
 - **A category with subcategories cannot be deleted.** Move or delete the
   subcategories first.
 - **The supplies' low-stock levels follow their new category.**
+
+### Finding and tidying supplies
+
+- **Summary tiles are buttons.** **Low stock** opens the list filtered to the
+  supplies the tile counted. **Expiring** and **Expired** open the expiring tab.
+  **Supply items** clears the filter.
+- **Sort** the table by item name, category, on-hand stock or reorder point.
+  Sorting covers every page, not only the one on screen. Blank categories and
+  reorder points sort last.
+- **Next expiry** shows the soonest stocked lot's date, in colour only when it
+  is inside the expiring window.
+- **Size** (for example adult or pediatric) is a field on the supply form and
+  shows beside the name, so two masks no longer look like duplicates.
+- **Reorder at** and the low flag treat an empty reorder point as unset, not as
+  zero: the page shows a dash.
+- **Retire several at once.** Officers who manage medical supplies tick supplies
+  (on a phone, **Select all on this page**) and retire them together. One that
+  is checked out or assigned is reported and left ticked; the rest are retired.
+- **Lots.** The **Lots** button on a supply row opens its dated lots. Everyone
+  who can view medical supplies can read them; managers can add, edit and delete.
+- **A category's supplies.** Open a category on the categories page to list its
+  supplies and their stock. Cards say how many active supplies they hold.
+- **Import / export** is the button that was labelled for import alone.
+
+<!-- Screenshot needed: Medical Supplies list with the summary tiles, Size beside names, Next expiry, and two rows ticked with the bulk Retire bar. -->
+
+### Where a supply is kept
+
+The supply form files a supply under a **room** and a **storage area** (from
+**Inventory → Storage Areas**). Picking an area sets its room; changing the room
+drops an area that belongs to another one. The old free text stays as a
+**storage note**. A supply in a retired area keeps it.
+
+- The **Where** column reads **Room > Cabinet > Shelf**, shows the note only when
+  it says something more, and shows the apparatus carrying the supply, read from
+  the checklists with their compartments (**Medic 1 > Main Compartment > Jump
+  Bag**). Two places show per row; **+N more** opens the supply's dialog.
+- **Location filter.** Choose a room (every area in it) or an area (every area
+  nested under it). The CSV export applies the same filter.
+- The supply dialog opens on **Where it is**: the storage path, and each
+  apparatus and compartment carrying it, with the count aboard against the
+  target and the soonest expiry.
+- On upgrade, each existing supply is filed under the one active storage area
+  whose name matches its old text. A supply with no single match is left alone.
+
+<!-- Screenshot needed: the supply dialog on "Where it is", and the form's Room and Storage area fields. -->
 
 ---
 

@@ -110,6 +110,28 @@ whose name or alternate names merely resemble the search; the checklist builder
 uses it so a rig's wording finds the catalog row instead of prompting a
 duplicate. It stays inside the medical domain like every other route here.
 
+**List, sort and bulk actions** _(2026-10-16)_. `GET /items` sorts server-side
+(`sort_by` accepts `name`, `category`, `on_hand`, `reorder_point`; blanks last,
+ties by name; `on_hand` orders by the number the list shows, the in-date lot
+total for a lot-stocked supply). A `low_stock` flag filters to what the Low
+stock tile counts; an unset (null) reorder point is never low.
+`POST /items/bulk-retire` retires each item through `retire_item` with the
+medical domain re-checked under its lock; failures are reported and the rest go
+through (audit `medical_items_bulk_retired`). The list route adds `size`,
+`next_expiry`, `storage_path`, `apparatus_count` and `apparatus_places`.
+The two export routes are in `SecurityMonitoringMiddleware.EXPORT_ENDPOINTS`.
+
+**Where a supply is kept** _(2026-10-16)_. Items carry a storage area
+(`storage_area_id`, which settles the room) beside the free-text
+`storage_location` note. New
+medical-scoped reads, so a medical-only officer needs no general inventory
+access: `GET /storage-options` and `GET /items/{id}/placements`
+(`ItemDeployment` adds `target_quantity`, `quantity_on_truck`,
+`compartment_path`). Paths come from one query per request over the templates
+involved, walking `parent_compartment_id` with a cycle guard. Migration
+`58522b08f6a7` files existing supplies under the one active area whose name
+matches their text; the downgrade unlinks rows still matching that rule.
+
 **Deleting a category moves its supplies first.** A category can be deleted
 permanently (`DELETE /categories/{id}`), and the page asks where its supplies
 should go. This is not left to the database: an item's foreign key to its
