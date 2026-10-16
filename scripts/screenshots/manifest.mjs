@@ -7328,6 +7328,59 @@ export const SHOTS = [
     },
   },
   {
+    id: "09-26-release-to-candidate",
+    doc: "09-skills-testing.md",
+    line: 1268,
+    anchor:
+      'The Officer actions card on an accepted result that is held for release, with the "Release to candidate" button',
+    alt: "The Officer actions card on an accepted result held for release, with the green Release to candidate button and the line saying what the candidate will see once it is released",
+    route: "/training/skills-testing",
+    // The held result is found by what makes it this fixture -- release on
+    // request, accepted, not yet released -- because the list rows carry none of
+    // that and the weighted sheet's tests hold other states.
+    prepare: async (page) => {
+      const testId = await page.evaluate(async () => {
+        const api = async (path) => {
+          const response = await fetch(`/api/v1${path}`, {
+            credentials: "include",
+          });
+          return response.ok ? response.json() : null;
+        };
+        const body = await api("/training/skills-testing/tests?limit=100");
+        const rows = Array.isArray(body)
+          ? body
+          : (body?.items ?? body?.tests ?? []);
+        for (const row of rows) {
+          if (!row.validated_at || row.voided_at || row.is_practice) continue;
+          const detail = await api(`/training/skills-testing/tests/${row.id}`);
+          if (
+            detail?.effective_result_release === "on_release" &&
+            !detail.released_at
+          ) {
+            return row.id;
+          }
+        }
+        return null;
+      });
+      if (!testId) {
+        throw new Error("no accepted result is held for release");
+      }
+      await page.goto(
+        new URL(
+          `/training/skills-testing/test/${testId}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      const button = page.getByRole("button", { name: "Release to candidate" });
+      await button.waitFor({ state: "visible", timeout: 15_000 });
+      await button.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    },
+    selector: "div.card:has(> p:text-is('Officer actions'))",
+    expect: "Release to candidate",
+  },
+  {
     id: "09-09-member-skills-testing",
     doc: "09-skills-testing.md",
     line: 187,
