@@ -794,8 +794,9 @@ responsible for an event (the organizer defaults to the creator).
 - **`POST /events/{id}/transfer`**, scope `this` or `future` (upcoming
   occurrences plus the series parent; past occurrences keep their organizer).
   Open requests are re-addressed, the new and relieved members are told, and
-  the change is audit-logged. The series-end reminder goes to the organizer
-  pair.
+  the change is audit-logged. The series-end reminder and the post-event
+  "validate attendance" prompt (`post_event_validation`) go to the organizer
+  pair, or to the creator when neither can be reached.
 - **UI:** Organizer / Alternate pickers on Create Event (`Me (default)`), an
   **Organized by** row with **Transfer event** on the detail page, and the
   **Transfer Event** dialog (**Apply to**: this and all future events in the

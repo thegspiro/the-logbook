@@ -953,8 +953,9 @@ Once an event has ended, the event page offers **Finalize Attendance**.
 **More → Record Times** lets you record the real start and end first;
 recording an end time also finalizes attendance.
 
-Soon after an event ends, the member who created it gets a notification
-asking them to check the attendance and close it out.
+Soon after an event ends, its organizer and alternate (or its creator, if
+neither can be reached) get a notification asking them to check the attendance
+and close it out.
 
 **Finalizing closes the event.** The roster is fixed and hours are credited.
 Members who checked in but never checked out are credited to the event's end.
