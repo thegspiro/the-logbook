@@ -13965,6 +13965,129 @@ class Seeder:
                 f"not {self.MEETING_STAGE_NAME!r}"
             )
 
+    # A third pipeline, holding one applicant who is on no stage, for
+    # `20-07-applicant-place-on-stage`. The Not on a stage panel renders only
+    # for an applicant with no current stage, and nothing in the default
+    # pipeline can produce one: an applicant's pipeline is fixed at creation
+    # and there is no "unplace" action. The one real cause, which the guide
+    # describes, is deleting a pipeline's only remaining stage, so that is what
+    # this does, on a pipeline nobody else's screenshot uses.
+    #
+    # Marcus Webb, a recruitment-event guest, rather than a new name: the step
+    # runs before the guest sign-in, which reuses an active applicant with the
+    # same email, so he is still linked to the open house. His sign-in used to
+    # leave him unplaced by accident, when it ran before any pipeline existed;
+    # moving that step after the pipeline is what took the shot's subject away.
+    UNPLACED_PIPELINE_NAME = "Lateral Transfer Pipeline"
+    UNPLACED_PIPELINE_STAGES = (
+        "Transfer Request",
+        "Certification Review",
+        "Chief's Interview",
+    )
+
+    def seed_unplaced_applicant(self) -> None:
+        pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
+        pipeline = next(
+            (p for p in pipelines if p.get("name") == self.UNPLACED_PIPELINE_NAME),
+            None,
+        )
+        if pipeline is None:
+            pipeline = self.api.post(
+                "/prospective-members/pipelines",
+                {
+                    "name": self.UNPLACED_PIPELINE_NAME,
+                    "description": (
+                        "Firefighters transferring in from another department: "
+                        "a request, a review of their certifications, then an "
+                        "interview with the Chief."
+                    ),
+                    "is_default": False,
+                    "is_active": True,
+                    # One stage to create him onto; the rest are added once
+                    # it has been deleted out from under him.
+                    "steps": [self._unplaced_stage(0)],
+                },
+            )
+        pipeline_id = str(pick(pipeline, "id"))
+        steps_path = f"/prospective-members/pipelines/{pipeline_id}/steps"
+
+        guest = self.RECRUITMENT_GUESTS[0]
+        email = guest["email"]
+        found = items(
+            self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+            "prospects",
+        )
+        prospect = next((p for p in found if p.get("email") == email), None)
+        if prospect is None:
+            if not items(self.api.get(steps_path), "steps"):
+                # An interrupted run left the pipeline bare, and an applicant
+                # created into it would start on no stage with nothing to
+                # place them on -- give it its first stage back.
+                self.api.post(steps_path, self._unplaced_stage(0))
+            prospect = self.api.post(
+                "/prospective-members/prospects",
+                {**guest, "pipeline_id": pipeline_id},
+            )
+        elif str(pick(prospect, "pipeline_id")) != pipeline_id:
+            # Signed in at the open house on a database seeded before this
+            # step existed, so he is in the default pipeline, and an
+            # applicant's pipeline cannot be changed afterwards.
+            self.blocked.append(
+                "unplaced applicant: Marcus Webb is already in another pipeline; "
+                "reseed onto an empty database for 20-07"
+            )
+            return
+
+        # Only ever strip a pipeline that holds this one applicant. Anybody
+        # else on it would be moved off their stage by the deletions below.
+        others = [
+            p
+            for p in items(
+                self.api.get(
+                    f"/prospective-members/prospects?pipeline_id={pipeline_id}&limit=10"
+                ),
+                "prospects",
+            )
+            if p.get("email") != email
+        ]
+        if others:
+            self.blocked.append(
+                f"unplaced applicant: {self.UNPLACED_PIPELINE_NAME} holds other "
+                "applicants, so its stages were left alone"
+            )
+            return
+
+        # Delete every stage while he is on one: each deletion moves him to a
+        # neighbouring stage, and the last leaves him on none. On a re-run
+        # this also undoes a capture that pressed Place.
+        if pick(prospect, "current_step_id"):
+            for step in items(self.api.get(steps_path), "steps"):
+                self.api.delete(f"{steps_path}/{pick(step, 'id')}")
+        # Then the full stage list, which is what his Place picker offers.
+        existing = {pick(s, "name") for s in items(self.api.get(steps_path), "steps")}
+        for order, name in enumerate(self.UNPLACED_PIPELINE_STAGES):
+            if name not in existing:
+                self.api.post(steps_path, self._unplaced_stage(order))
+
+        detail = self.api.get(f"/prospective-members/prospects/{pick(prospect, 'id')}")
+        if pick(detail, "current_step_id"):
+            self.blocked.append(
+                "unplaced applicant: Marcus Webb is still on a stage after "
+                "the pipeline's stages were deleted"
+            )
+
+    def _unplaced_stage(self, order: int) -> dict:
+        name = self.UNPLACED_PIPELINE_STAGES[order]
+        return {
+            "name": name,
+            "description": f"{name} stage.",
+            "step_type": "manual_approval",
+            "is_first_step": order == 0,
+            "is_final_step": order == len(self.UNPLACED_PIPELINE_STAGES) - 1,
+            "sort_order": order,
+            "required": True,
+        }
+
     # Consolidated reporting buckets, in pipeline order. Named by what the
     # stages have in common rather than by stage count, because the Pipeline
     # Overview report prints these names and "Group 1" tells a chief nothing.
@@ -16162,6 +16285,9 @@ class Seeder:
         # database this step used to run before any pipeline existed — the
         # guest prospect then had no stage, no kanban card, and the
         # guest-prospect screenshot had nothing to open.
+        # Before the recruitment guests sign in, so Marcus Webb's sign-in finds
+        # him already on file in his own pipeline. See seed_unplaced_applicant.
+        self.step("unplaced applicant", self.seed_unplaced_applicant)
         self.step(
             "guest check-in event",
             lambda: self.seed_guest_check_in_event(stations),

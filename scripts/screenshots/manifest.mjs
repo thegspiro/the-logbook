@@ -5454,14 +5454,28 @@ export const SHOTS = [
     expect: "Not on a stage",
     prepare: async (page) => {
       // The panel renders only for an applicant with no current stage
-      // (`canPlaceOnStage = !applicant.current_stage_id`). Every seeded
-      // applicant is placed on one, so the board alone can never show it --
-      // the demo database needs one applicant left unassigned.
+      // (`canPlaceOnStage = !applicant.current_stage_id`). The seeder leaves
+      // Marcus Webb on none by deleting the stages of his own pipeline out
+      // from under him (seed_unplaced_applicant), so he is in that pipeline's
+      // Unassigned column rather than on the default board.
+      await page
+        .locator("select", {
+          has: page.locator("option", { hasText: "Lateral Transfer Pipeline" }),
+        })
+        .first()
+        .selectOption({ label: "Lateral Transfer Pipeline" });
       const card = page.getByText("Marcus Webb", { exact: true }).first();
       await card.waitFor({ timeout: 30_000 });
       await card.click();
       await page.locator("select#place-on-stage").waitFor({ timeout: 30_000 });
       await page.waitForTimeout(800);
+    },
+    // The board remembers the selected pipeline, and every later board shot
+    // expects the default one.
+    cleanup: async (page) => {
+      await page.evaluate(() =>
+        localStorage.removeItem("prospective-members:pipeline-id"),
+      );
     },
     selector: 'div:has(> p:text-is("Not on a stage"))',
   },
