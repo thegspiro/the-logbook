@@ -9325,7 +9325,13 @@ class InventoryService:
             )
             .group_by(InventoryLot.inventory_item_id)
         )
-        return {str(item_id): soonest for item_id, soonest in result.all()}
+        # The WHERE excludes undated lots, so MIN is never NULL for a row
+        # returned; the guard is for the type checker's benefit only.
+        return {
+            str(item_id): soonest
+            for item_id, soonest in result.all()
+            if soonest is not None
+        }
 
     async def category_item_counts(
         self, organization_id: str, category_ids: Iterable[str]
