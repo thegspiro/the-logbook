@@ -746,10 +746,13 @@ async def _for_each_org(
         select(Organization).where(Organization.active.isnot(False))
     )
     organizations = list(orgs.scalars().all())
+    # Captured while the rows are loaded, so reporting a failed org never
+    # touches a row a rollback expired (see _refresh_if_expired).
+    org_ids = [str(org.id) for org in organizations]
     results = []
     total = 0
     rolled_back = False
-    for org in organizations:
+    for org, org_id in zip(organizations, org_ids):
         # A session rollback expires every loaded instance, these Organization
         # rows included, and an expired attribute cannot lazy-load outside the
         # async context (MissingGreenlet). Without the refresh, the first
@@ -762,7 +765,6 @@ async def _for_each_org(
                 await db.refresh(org)
             except Exception as e:
                 logger.warning(f"{task_name}: could not reload org after rollback: {e}")
-        org_id = str(org.id)
         try:
             count = await callback(db, org)
             total += count
