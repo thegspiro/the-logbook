@@ -5034,7 +5034,10 @@ export const SHOTS = [
       await card.click({ timeout: 15_000 });
       await page.waitForTimeout(1800);
     },
-    fullPage: true,
+    // The dialog panel, not the page: the applicant view is a centred modal,
+    // and a full-page capture runs the table on past the fixed overlay, so
+    // everything below the first 900px was pictured undimmed.
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
     // The board spreads seven applicants across six stages, so some columns
     // read "No applicants", and a drawer for an applicant who has uploaded
     // nothing reads "No documents yet". Both are honest; the populated
@@ -7780,6 +7783,22 @@ export const SHOTS = [
       "Screenshot of the Prospective Members main page showing the kanban board view",
     alt: "Prospective members kanban board with a column per pipeline stage",
     route: "/prospective-members",
+    // The board opens on whichever pipeline was selected last, kept in
+    // localStorage, and 15-15 before it selects the Associate pipeline: one
+    // applicant across mostly empty columns. Chosen explicitly so the shot
+    // does not depend on what ran before it.
+    prepare: async (page) => {
+      await page
+        .locator("select")
+        .filter({
+          has: page.locator("option", {
+            hasText: "Volunteer Membership Pipeline",
+          }),
+        })
+        .first()
+        .selectOption({ label: "Volunteer Membership Pipeline" });
+      await page.waitForTimeout(1500);
+    },
     // The board spreads seven applicants across six stages, so some columns
     // read "No applicants", and a drawer for an applicant who has uploaded
     // nothing reads "No documents yet". Both are honest; the populated
@@ -9402,7 +9421,13 @@ export const SHOTS = [
     alt: "Create applicant form with contact fields and membership type",
     route: "/prospective-members",
     prepare: clickByName(/add applicant/i),
-    fullPage: true,
+    // The viewport, as the other modal shots in this guide are: a full-page
+    // capture extends the board past the fixed overlay, so everything below
+    // the first 900px was pictured undimmed behind a modal it is not part of.
+    fullPage: false,
+    // "No specific role" is the Target Role select's default option, which
+    // the empty-state check reads as an empty page. The form is the subject.
+    allowEmptyState: true,
   },
   {
     id: "01-19-create-waiver",
@@ -11853,8 +11878,10 @@ export const SHOTS = [
       if (bars !== 1) {
         throw new Error(`expected one bulk bar, found ${bars}`);
       }
+      // "Hold Selected", the bar's own label: "Hold all" matched nothing once
+      // the bulk buttons were renamed, and the shot timed out.
       await page
-        .getByRole("button", { name: /hold all/i })
+        .getByRole("button", { name: /^hold selected$/i })
         .waitFor({ timeout: 10_000 });
     },
     fullPage: true,
@@ -11896,7 +11923,9 @@ export const SHOTS = [
     // matched by stage rather than by name so a re-spread cannot land it on
     // somebody at either end with half the action bar missing.
     prepare: openApplicantAtStage("Background & Medical"),
-    fullPage: true,
+    // The dialog panel, not the page: a full-page capture runs the table on
+    // past the fixed overlay, so everything below 900px was pictured undimmed.
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
     allowEmptyState: true,
   },
   {
@@ -11912,7 +11941,9 @@ export const SHOTS = [
     // than a name, so a different seeding spread cannot silently point this at
     // somebody who is not at the vote.
     prepare: openApplicantAtStage("Membership Vote"),
-    fullPage: true,
+    // The dialog panel, not the page: a full-page capture runs the table on
+    // past the fixed overlay, so everything below 900px was pictured undimmed.
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
     allowEmptyState: true,
   },
   {

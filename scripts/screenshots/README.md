@@ -39,10 +39,25 @@ until the stack answers. Two things it supplies when nothing else does:
   written under one key is unreadable under another. Delete that file only
   together with the database it seeded.
 - **Malware scanning.** Uploads fail closed when no ClamAV daemon answers, so
-  every seeded document and attachment would be refused with a 503. When
-  `CLAMAV_ENABLED` is not set and clamd is unreachable, the demo backend is
-  started with scanning off and a warning is printed. Export
-  `CLAMAV_ENABLED=true` (and run clamd) to keep it on.
+  every seeded document and attachment would be refused with a 503. If
+  `clamd` and its signatures are installed, the script starts it on
+  `127.0.0.1:3310` and points the backend at it. Otherwise, when
+  `CLAMAV_ENABLED` is not set, the demo backend runs with scanning off and a
+  warning is printed.
+
+  **Do not commit admin screenshots captured with scanning off.** The backend
+  then shows administrators a non-dismissible "Uploaded files are not being
+  scanned for malware" banner on every page, and it appears in every shot. To
+  get scanning on, install ClamAV and fetch its signatures once:
+
+  ```bash
+  sudo apt-get install clamav-daemon   # or your platform's package
+  sudo freshclam                       # downloads ~110 MB of signatures
+  ```
+
+  Behind an HTTPS proxy, `freshclam` needs `HTTPProxyServer` / `HTTPProxyPort`
+  in its config, and a CA bundle readable by the `clamav` user, which it drops
+  to before downloading.
 
 ```bash
 # Use a unique password for this disposable environment. It is consumed by all
