@@ -351,11 +351,18 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
               value={form.status}
               onChange={(e) => update('status', e.target.value as StoreProductStatus)}
               className="form-input"
+              aria-describedby="product-status-help"
             >
               <option value={StoreProductStatus.DRAFT}>Draft</option>
               <option value={StoreProductStatus.ACTIVE}>Active (for sale)</option>
               <option value={StoreProductStatus.ARCHIVED}>Archived</option>
             </select>
+            {/* A new item starts as a draft, and a draft is offered in no order
+                window — so an item saved with the defaults never reached the
+                store, and members saw "Nothing listed yet". */}
+            <p id="product-status-help" className="text-theme-text-muted mt-1 text-xs">
+              Draft items aren&apos;t shown to members. Choose Active to sell it.
+            </p>
           </div>
         </div>
 

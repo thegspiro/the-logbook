@@ -29,9 +29,12 @@ import { methodLabel } from '../utils/personalization';
 
 interface StoreWindowsTabProps {
   onChanged: () => void;
+  /** The store's own on/off switch; `undefined` while it has not loaded. */
+  storeIsLive?: boolean | undefined;
+  onOpenSettings?: (() => void) | undefined;
 }
 
-export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) => {
+export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged, storeIsLive, onOpenSettings }) => {
   const tz = useTimezone();
   const [windows, setWindows] = useState<StoreOrderWindow[]>([]);
   const [products, setProducts] = useState<StoreProduct[]>([]);
@@ -325,11 +328,27 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
         }
       >
         <div className="space-y-4">
-          <p className="text-theme-text-secondary text-sm">
-            {transition?.action === 'open'
-              ? 'Members can place orders as soon as you open it.'
-              : 'Members can no longer place orders in this window.'}
-          </p>
+          {transition?.action === 'open' && storeIsLive === false ? (
+            // Opening a window does not put the store online: ordering also
+            // needs "Store is live for members", and while it is off members
+            // are told the store is closed. Promising otherwise here is what
+            // left a window open that nobody could order from.
+            <p className="alert-warning text-sm">
+              The window will open, but members can&apos;t order until the store is switched on — they&apos;ll see
+              &ldquo;The store is closed&rdquo;.{' '}
+              {onOpenSettings && (
+                <button type="button" className="font-medium underline" onClick={onOpenSettings}>
+                  Turn it on in Settings
+                </button>
+              )}
+            </p>
+          ) : (
+            <p className="text-theme-text-secondary text-sm">
+              {transition?.action === 'open'
+                ? 'Members can place orders as soon as you open it.'
+                : 'Members can no longer place orders in this window.'}
+            </p>
+          )}
           <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
             <input
               type="checkbox"

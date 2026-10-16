@@ -211,9 +211,16 @@ const StoreAdminPage: React.FC = () => {
       headerAside={
         <div className="flex items-center gap-2">
           {dashboard && !dashboard.isEnabled && (
-            <span className="badge border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400">
-              Store is offline
-            </span>
+            // A button to the switch, not a bare label: "offline" named the
+            // state and left an administrator to find which of six tabs held
+            // the one setting that changes it.
+            <button
+              type="button"
+              onClick={() => setActiveTab('settings')}
+              className="badge border border-amber-500/30 bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 dark:text-amber-300"
+            >
+              Store is offline · turn on in Settings
+            </button>
           )}
           {/* The frame has no back-link prop, and this page sits one level
               inside Inventory Administration — so the way back rides here,
@@ -322,6 +329,23 @@ const StoreAdminPage: React.FC = () => {
                           {dashboard.activeWindow.description || 'Open for orders.'}
                         </p>
                       </div>
+                      {/* The window being open is not enough: ordering also
+                          needs the store switched on (create_order refuses
+                          otherwise), and until it is, members are shown "The
+                          store is closed" while this card says the opposite. */}
+                      {!dashboard.isEnabled && (
+                        <p className="alert-warning text-sm">
+                          Members can&apos;t order yet — the store is switched off, so they see &ldquo;The store is
+                          closed&rdquo;.{' '}
+                          <button
+                            type="button"
+                            className="font-medium underline"
+                            onClick={() => setActiveTab('settings')}
+                          >
+                            Turn it on in Settings
+                          </button>
+                        </p>
+                      )}
                       <dl className="grid grid-cols-2 gap-3 text-sm">
                         <div>
                           <dt className="text-theme-text-muted">Orders</dt>
@@ -482,7 +506,13 @@ const StoreAdminPage: React.FC = () => {
             </div>
           ) : null)}
 
-        {activeTab === 'windows' && <StoreWindowsTab onChanged={handleChanged} />}
+        {activeTab === 'windows' && (
+          <StoreWindowsTab
+            onChanged={handleChanged}
+            storeIsLive={dashboard?.isEnabled}
+            onOpenSettings={() => setActiveTab('settings')}
+          />
+        )}
         {activeTab === 'catalog' && <StoreCatalogTab />}
         {activeTab === 'orders' && (
           <StoreOrdersTab
