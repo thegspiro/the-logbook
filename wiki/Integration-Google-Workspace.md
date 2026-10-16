@@ -33,9 +33,9 @@ with a **Retry**.
    https://www.googleapis.com/auth/admin.directory.group.member
    https://www.googleapis.com/auth/admin.directory.orgunit.readonly
    ```
-   The third is read-only and used only by **Test**, to confirm the organizational unit exists. Account creation and suspension never request it, so an installation connected before it was added keeps working; only **Test** reports it missing, naming the scope to add.
+   The third is read-only and used only by **Test**, to confirm the organizational unit exists. Account creation and suspension never request it, so an installation connected before it was added keeps working. Without it, **Test** still passes and adds a note naming the scope to add; the org unit is simply not checked.
 4. In The Logbook, open **Integrations → Google Workspace → Connect**, choose the key file, and enter the admin to act as (a Workspace admin allowed to create users and manage groups), the domain, the organizational unit (for example `/Members`) and any groups.
-5. Click **Test**. It lists one user, confirms the organizational unit exists, and reads each group — nothing is created or changed. Each failure names what to fix: delegation, the missing scope, an org unit that does not exist, or an unreadable group.
+5. Click **Test**. It lists one user, confirms the organizational unit exists, and reads each group — nothing is created or changed. Each failure names what to fix: delegation, an org unit that does not exist, or an unreadable group. A missing read-only scope is a note, not a failure.
 
 Each account created uses a Workspace license. Workspace for Nonprofits is free for eligible departments.
 
@@ -148,7 +148,15 @@ are), most urgent first:
 | Account setup unfinished                     | The account exists but a group was not added, or its password never reached the member |
 
 A member who has left is listed only for their suspension: creating or
-finishing their account is not wanted.
+finishing their account is not wanted. One case is listed for a person to
+check rather than for a retry: a member who left while their account was being
+created and Google never answered. The account may exist, and with no record
+of it The Logbook cannot suspend it, so it is listed as not suspended with a
+note to check the Admin console.
+
+Waiting is measured from when the record was created (or, for a suspension,
+when the departure asked for it), never from the latest retry, so retrying
+something that keeps failing does not keep it out of the email.
 
 Anything waiting over a day is also emailed to every active member holding
 `admin.access`, once each morning while it lasts

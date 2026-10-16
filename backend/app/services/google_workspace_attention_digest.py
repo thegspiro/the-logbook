@@ -44,13 +44,6 @@ LAST_DIGEST_KEY = "attention_digest_last_sent"
 DIGEST_ROWS_SHOWN = 50
 RECIPIENT_PERMISSION = "admin.access"
 
-ISSUE_LABELS = {
-    AttentionIssue.NOT_SUSPENDED: "Left, but the account is not suspended",
-    AttentionIssue.NOT_UNSUSPENDED: "Returned, but the account is still suspended",
-    AttentionIssue.NOT_CREATED: "Account not created",
-    AttentionIssue.SETUP_UNFINISHED: "Account setup unfinished",
-}
-
 
 def _last_digest_day(organization: Organization) -> Optional[date]:
     stored = organization.settings if isinstance(organization.settings, dict) else {}
@@ -105,7 +98,7 @@ def _body(items: list[AttentionItem]) -> str:
         "<li>"
         f'<a href="{html.escape(f"{base}/members/{item.user_id}")}">'
         f"{html.escape(item.member_name)}</a> ({html.escape(item.primary_email)})"
-        f" &mdash; {html.escape(ISSUE_LABELS.get(item.issue, item.issue))}"
+        f" &mdash; {html.escape(item.label)}"
         + (f"<br><small>{html.escape(item.detail)}</small>" if item.detail else "")
         + "</li>"
         for item in shown
@@ -168,7 +161,8 @@ async def send_google_workspace_attention_digest(
     sent_total = 0
     for member in recipients:
         try:
-            sent, _failed = await EmailService().send_email(
+            # The department's own mail settings and sender, not the defaults.
+            sent, _failed = await EmailService(organization).send_email(
                 to_emails=[member.email],
                 subject=subject,
                 html_body=html_body,

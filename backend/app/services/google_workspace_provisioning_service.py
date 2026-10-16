@@ -68,12 +68,29 @@ class AttentionIssue:
     SETUP_UNFINISHED = "setup_unfinished"
 
 
+# The one wording of each issue: the list's response carries it, and the
+# email reads it from there, so the screen and the email cannot disagree.
+ATTENTION_LABELS = {
+    AttentionIssue.NOT_SUSPENDED: "Left, but the account is not suspended",
+    AttentionIssue.NOT_UNSUSPENDED: "Returned, but the account is still suspended",
+    AttentionIssue.NOT_CREATED: "Account not created",
+    AttentionIssue.SETUP_UNFINISHED: "Account setup unfinished",
+}
+
+UNANSWERED_CREATION_MESSAGE = (
+    "Left while the account was being created, and Google never answered. An "
+    "account may exist at this address: check the Google Admin console and "
+    "suspend it there."
+)
+
+
 @dataclass(frozen=True)
 class AttentionItem:
     user_id: str
     member_name: str
     primary_email: str
     issue: str
+    label: str
     detail: Optional[str]
     since: Optional[datetime]
     overdue: bool
@@ -792,6 +809,7 @@ class GoogleWorkspaceProvisioningService:
                     member_name=member.full_name,
                     primary_email=row.primary_email,
                     issue=issue,
+                    label=ATTENTION_LABELS[issue],
                     detail=detail,
                     since=since,
                     overdue=since is not None
@@ -999,19 +1017,25 @@ def _attention_issue(
             row.suspension_error,
             row.suspension_requested_at or row.updated_at,
         )
+    # Waiting is measured from the record's creation, never from the latest
+    # attempt: a Retry that fails again must not restart the clock.
+    if row.status == GoogleAccountStatus.PENDING.value:
+        attempted = _aware(row.last_attempt_at or row.created_at)
+        if attempted is None or now - attempted < STALE_PENDING_AFTER:
+            return None  # still in flight
+        if member_has_departed(member):
+            # The create call may have reached Google with its answer lost:
+            # the departure hook cannot suspend what it has no record of.
+            return (
+                AttentionIssue.NOT_SUSPENDED,
+                UNANSWERED_CREATION_MESSAGE,
+                row.created_at,
+            )
+        return AttentionIssue.NOT_CREATED, row.last_error, row.created_at
     if member_has_departed(member):
         return None
     if row.status == GoogleAccountStatus.FAILED.value:
-        return (
-            AttentionIssue.NOT_CREATED,
-            row.last_error,
-            row.last_attempt_at or row.created_at,
-        )
-    if row.status == GoogleAccountStatus.PENDING.value:
-        started = _aware(row.last_attempt_at or row.created_at)
-        if started is not None and now - started >= STALE_PENDING_AFTER:
-            return AttentionIssue.NOT_CREATED, row.last_error, started
-        return None
+        return AttentionIssue.NOT_CREATED, row.last_error, row.created_at
     if row.status == GoogleAccountStatus.CREATED.value and (
         row.pending_groups or not row.credentials_sent
     ):
@@ -1023,6 +1047,6 @@ def _attention_issue(
                 if not row.credentials_sent
                 else "The account is not yet in every group."
             ),
-            row.last_attempt_at or row.created_at,
+            row.created_at,
         )
     return None

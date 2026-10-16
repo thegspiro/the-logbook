@@ -153,6 +153,7 @@ async def list_attention(
                 member_name=i.member_name,
                 primary_email=i.primary_email,
                 issue=i.issue,
+                label=i.label,
                 detail=i.detail,
                 since=i.since,
                 overdue=i.overdue,

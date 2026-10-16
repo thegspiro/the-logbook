@@ -95,14 +95,17 @@ class TestOrgUnitCheck:
             with pytest.raises(GoogleWorkspaceError, match="/Members does not exist"):
                 await directory.test_connection(DOMAIN, [], "/Members")
 
-    async def test_an_unauthorized_scope_names_the_scope_to_add(self):
+    async def test_an_unauthorized_scope_passes_and_names_the_scope_to_add(self):
+        # Creation and suspension work without the scope; a failed Test would
+        # mark a working integration unhealthy, so it passes with a note.
         from google.auth.exceptions import RefreshError
 
         directory, _, _, make = self._directory(RefreshError("unauthorized_client"))
         with patch.object(directory, "_service", side_effect=make):
-            with pytest.raises(GoogleWorkspaceError) as refused:
-                await directory.test_connection(DOMAIN, [], "/Members")
-        assert ORG_UNIT_SCOPE in str(refused.value)
+            message = await directory.test_connection(DOMAIN, [], "/Members")
+        assert message.startswith(f"Connected to Google Workspace for {DOMAIN}")
+        assert ORG_UNIT_SCOPE in message
+        assert "not checked" in message
 
     def test_operating_calls_never_ask_for_the_extra_scope(self):
         # Google refuses a delegated token outright when any requested scope
@@ -211,10 +214,16 @@ async def _department(db_session):
         status=GoogleAccountStatus.FAILED.value,
         last_error="No licenses left.",
         last_attempt_at=LONG_AGO,
+        created_at=LONG_AGO,
     )
     m["unsent"] = await _member(db_session, org, "Unsent")
     await _record(
-        db_session, org, m["unsent"], credentials_sent=False, last_attempt_at=LONG_AGO
+        db_session,
+        org,
+        m["unsent"],
+        credentials_sent=False,
+        last_attempt_at=LONG_AGO,
+        created_at=LONG_AGO,
     )
     # Fine: a settled, finished account.
     m["fine"] = await _member(db_session, org, "Fine")
@@ -230,6 +239,7 @@ async def _department(db_session):
         status=GoogleAccountStatus.FAILED.value,
         last_error="No licenses left.",
         last_attempt_at=LONG_AGO,
+        created_at=LONG_AGO,
     )
     # Still being created, but only for a few minutes.
     m["fresh"] = await _member(db_session, org, "Fresh")
@@ -260,6 +270,99 @@ class TestAttentionList:
         assert "password" in (by_member[m["unsent"].id].detail or "")
         for quiet in ("fine", "left_failed", "fresh"):
             assert m[quiet].id not in by_member
+
+    async def test_a_member_who_left_mid_creation_is_listed_for_suspension(
+        self, db_session
+    ):
+        # The create call may have reached Google with its answer lost; the
+        # departure hook has no account to suspend, so a person must look.
+        org = await _org(db_session)
+        member = await _member(
+            db_session, org, "Midway", status=UserStatus.DROPPED_VOLUNTARY
+        )
+        await _record(
+            db_session,
+            org,
+            member,
+            status=GoogleAccountStatus.PENDING.value,
+            last_attempt_at=NOW - timedelta(hours=2),
+        )
+        await db_session.commit()
+        items = await GoogleWorkspaceProvisioningService(db_session).attention_items(
+            org.id
+        )
+        assert [i.issue for i in items] == [AttentionIssue.NOT_SUSPENDED]
+        assert items[0].label == "Left, but the account is not suspended"
+        assert "check the Google Admin console" in (items[0].detail or "")
+
+    async def test_a_retry_that_fails_again_does_not_restart_the_clock(
+        self, db_session
+    ):
+        org = await _org(db_session)
+        member = await _member(db_session, org, "Retried")
+        row = await _record(
+            db_session,
+            org,
+            member,
+            status=GoogleAccountStatus.FAILED.value,
+            last_attempt_at=NOW - timedelta(minutes=5),
+        )
+        await db_session.execute(
+            text(
+                "UPDATE google_account_provisions SET created_at = :at WHERE id = :id"
+            ),
+            {"at": LONG_AGO.replace(tzinfo=None), "id": row.id},
+        )
+        await db_session.commit()
+        await db_session.refresh(row)
+        items = await GoogleWorkspaceProvisioningService(db_session).attention_items(
+            org.id
+        )
+        assert [i.overdue for i in items] == [True]
+
+    async def test_a_suspension_waiting_at_upgrade_gets_a_start_time(self, db_session):
+        # Measured from updated_at, which every 15-minute retry moves, it
+        # would never become overdue; the migration stamps it instead.
+        import importlib.util
+        from pathlib import Path
+
+        path = (
+            Path(__file__).parent.parent
+            / "alembic"
+            / "versions"
+            / "20261016_1754_64bf75298e89_google_account_suspension_requested_at.py"
+        )
+        spec = importlib.util.spec_from_file_location("revision_64bf75298e89", path)
+        assert spec is not None
+        assert spec.loader is not None
+        migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(migration)
+        org = await _org(db_session)
+        waiting = await _member(
+            db_session, org, "Waiting", status=UserStatus.DROPPED_VOLUNTARY
+        )
+        settled = await _member(db_session, org, "Settled")
+        await _record(
+            db_session, org, waiting, suspension_wanted=True, suspension_settled=False
+        )
+        await _record(db_session, org, settled)
+        await db_session.commit()
+
+        await db_session.run_sync(lambda s: migration._backfill(s.connection()))
+
+        stamped = dict(
+            (
+                await db_session.execute(
+                    text(
+                        "SELECT user_id, suspension_requested_at "
+                        "FROM google_account_provisions WHERE organization_id = :org"
+                    ),
+                    {"org": org.id},
+                )
+            ).all()
+        )
+        assert stamped[waiting.id] is not None
+        assert stamped[settled.id] is None
 
     async def test_a_creation_that_never_answered_is_listed_after_an_hour(
         self, db_session
@@ -325,6 +428,7 @@ class TestAttentionList:
         )
         assert [i.user_id for i in response.items][0] == m["gone"].id
         assert response.items[0].member_name == "Gone Member"
+        assert response.items[0].label == "Left, but the account is not suspended"
 
     def test_the_endpoint_needs_integrations_manage(self):
         from app.api.v1.endpoints.google_workspace import router
@@ -480,6 +584,7 @@ class TestAttentionDigest:
             status=GoogleAccountStatus.FAILED.value,
             last_error="<script>x</script>",
             last_attempt_at=LONG_AGO,
+            created_at=LONG_AGO,
         )
         await _with_permissions(db_session, org, "admin.access")
         await db_session.commit()
@@ -489,6 +594,24 @@ class TestAttentionDigest:
         assert "<b>Evil</b>" not in body
         assert "&lt;b&gt;Evil&lt;/b&gt;" in body
         assert "<script>x</script>" not in body
+
+    async def test_it_sends_with_the_departments_own_mail_settings(
+        self, db_session, send_email
+    ):
+        org, _ = await _department(db_session)
+        await _with_permissions(db_session, org, "admin.access")
+        await db_session.commit()
+        built_for = []
+        real_init = EmailService.__init__
+
+        def remember(self, organization=None):
+            built_for.append(organization)
+            real_init(self, organization)
+
+        with patch.object(EmailService, "__init__", remember):
+            assert await send_google_workspace_attention_digest(db_session, org) == 1
+        assert built_for
+        assert all(o is org for o in built_for)
 
     async def test_the_scheduled_task_runs_it_for_each_department(
         self, db_session, send_email

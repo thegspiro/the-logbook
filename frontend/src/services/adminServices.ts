@@ -1418,7 +1418,9 @@ export interface GoogleWorkspaceAttentionItem {
   user_id: string;
   member_name: string;
   primary_email: string;
-  issue: 'not_suspended' | 'not_unsuspended' | 'not_created' | 'setup_unfinished';
+  issue: string;
+  /** The backend's wording of the issue, the same as the email uses. */
+  label: string;
   detail: string | null;
   since: string | null;
   /** Waiting long enough that the daily alert email reports it. */

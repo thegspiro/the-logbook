@@ -345,13 +345,6 @@ const labelClass = 'form-label';
 const webhookCallbackUrl = (provider: 'documenso' | 'calcom' | 'paypal', integrationId: string): string =>
   `${window.location.origin}/api/public/v1/webhooks/${provider}/${integrationId}`;
 
-const GOOGLE_ATTENTION_LABELS: Record<GoogleWorkspaceAttentionItem['issue'], string> = {
-  not_suspended: 'Left, but the account is not suspended',
-  not_unsuspended: 'Returned, but the account is still suspended',
-  not_created: 'Account not created',
-  setup_unfinished: 'Account setup unfinished',
-};
-
 // The members a link run leaves alone, and why, in one sentence each.
 const describeGoogleLinkSkips = (result: GoogleWorkspaceLinkResult): string => {
   const parts = [
@@ -2113,7 +2106,7 @@ const IntegrationsPage: React.FC = () => {
                         {item.member_name}
                       </RouterLink>
                       <p className="text-theme-text-secondary text-xs">
-                        {GOOGLE_ATTENTION_LABELS[item.issue]} · {item.primary_email}
+                        {item.label} · {item.primary_email}
                       </p>
                       {item.detail && <p className="text-theme-text-muted text-xs">{item.detail}</p>}
                     </div>

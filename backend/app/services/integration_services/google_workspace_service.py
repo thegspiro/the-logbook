@@ -299,7 +299,7 @@ class GoogleWorkspaceDirectory:
             return self._service().users().list(domain=domain, maxResults=1).execute()
 
         await self._run("connection test", list_users)
-        await self._check_org_unit(domain, org_unit_path)
+        unchecked = await self._check_org_unit(domain, org_unit_path)
         for group in group_emails:
 
             def list_members(group_key: str = group) -> Any:
@@ -319,12 +319,17 @@ class GoogleWorkspaceDirectory:
                 )
         groups = f" and {len(group_emails)} group(s)" if group_emails else ""
         unit = org_unit_path if org_unit_path not in ("", "/") else "the top level"
-        return f"Connected to Google Workspace for {domain}: org unit {unit}{groups}"
+        message = f"Connected to Google Workspace for {domain}: org unit {unit}{groups}"
+        return f"{message}. {unchecked}" if unchecked else message
 
-    async def _check_org_unit(self, domain: str, org_unit_path: str) -> None:
+    async def _check_org_unit(self, domain: str, org_unit_path: str) -> Optional[str]:
+        """Raise if the org unit does not exist. Returns a note, rather than
+        failing, when only the optional read-only scope is missing: account
+        creation and suspension work without it, and a red Test would mark a
+        working integration unhealthy."""
         path = (org_unit_path or "/").strip("/")
         if not path:
-            return  # the top level always exists
+            return None  # the top level always exists
 
         def get_org_unit() -> Any:
             return (
@@ -344,11 +349,12 @@ class GoogleWorkspaceDirectory:
             # a refused token here means only the read-only one is missing.
             if isinstance(exc, RefreshError):
                 logger.warning("Google Workspace org unit check: scope refused")
-                raise GoogleWorkspaceError(
-                    f"Connected to {domain}, but the org unit could not be "
-                    "checked: add the scope " + ORG_UNIT_SCOPE + " to the "
-                    "service account's domain-wide delegation."
-                ) from exc
+                return (
+                    "The org unit was not checked: add the read-only scope "
+                    + ORG_UNIT_SCOPE
+                    + " to the service account's domain-wide delegation to "
+                    "have Test confirm it exists."
+                )
             status = int(getattr(getattr(exc, "resp", None), "status", 0) or 0)
             if isinstance(exc, HttpError) and status in (400, 404):
                 logger.warning("Google Workspace org unit check: not found")
@@ -357,6 +363,7 @@ class GoogleWorkspaceDirectory:
                     "exist. Check the path in the Google Admin console."
                 ) from exc
             raise _translate(exc, "org unit check") from exc
+        return None
 
 
 def directory_for(integration: "Integration") -> GoogleWorkspaceDirectory:

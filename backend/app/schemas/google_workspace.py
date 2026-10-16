@@ -63,6 +63,8 @@ class AttentionItemResponse(UTCResponseBase):
     primary_email: str
     # not_suspended / not_unsuspended / not_created / setup_unfinished
     issue: str
+    # How the screen and the email word the issue.
+    label: str
     detail: Optional[str] = None
     since: Optional[datetime] = None
     # Waiting long enough that the daily alert reports it.
