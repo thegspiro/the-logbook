@@ -16,10 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3307 (Feature 19, Skills testing, pass 8) merged clean. 0 new
-findings beyond what pass 8's own note already recorded (see the superseded
-entry below) — nothing further to add here. Rotation row 19 confirmed ✅.
-Next: Feature 20 (Compliance), picked up in this iteration.
+**PR [#3330](https://github.com/thegspiro/the-logbook/pull/3330)** (branch
+`claude/security-review-compliance-p8`): Feature 20 (Compliance), pass 8.
+Routine pickup. **0 new findings.** The one substantive item in the real
+delta since pass 7 (CMP2-1, the two notification settings that had been
+write-only for seven passes) was already fixed before this pass started —
+verified org-scoped, HTML-escaped, idempotent, and graded through the same
+shared evaluator every other compliance screen uses. Also corrected a
+stale documentation claim carried forward unchanged across six passes: the
+attestation-history over-fetch had actually been fixed on 2026-07-30,
+before this rotation's own pass 1. Route surface re-enumerated (20/20,
+unchanged) and every standing finding re-verified by direct code read. See
+`CMP-20-compliance.md`'s **Pass 8** section. Row 20 → ✅ (pending this PR's
+merge); next is Feature 21 (Admin hours).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 8, PR #3307, merged), preserved for history</summary>

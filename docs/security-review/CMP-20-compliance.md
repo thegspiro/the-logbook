@@ -9,7 +9,8 @@
 (pass 4, merged), [#2583](https://github.com/thegspiro/the-logbook/pull/2583)
 (pass 5, merged), [#2869](https://github.com/thegspiro/the-logbook/pull/2869)
 (pass 6, merged), [#2977](https://github.com/thegspiro/the-logbook/pull/2977)
-(pass 7, merged), pass 8 (this PR)
+(pass 7, merged), [#3330](https://github.com/thegspiro/the-logbook/pull/3330)
+(pass 8, this PR)
 
 ## Pass 8 (2026-10-16)
 
