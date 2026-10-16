@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Branch `claude/security-review-grants-fundraising`** (PR not yet opened):
-Feature 22 (Grants & fundraising), pass 8. Watchdog pickup: PR #3336
+**PR [#3339](https://github.com/thegspiro/the-logbook/pull/3339)** (branch
+`claude/security-review-grants-fundraising`): Feature 22 (Grants &
+fundraising), pass 8. Watchdog pickup: PR #3336
 (Feature 21, Admin hours, pass 8) merged (`6e90eec5`) with nothing started
 for the next feature since; this pass is that pickup. **0 new findings.**
 Five standing findings open since pass 7 — GF-7 (lifecycle/overspend), GF-8
