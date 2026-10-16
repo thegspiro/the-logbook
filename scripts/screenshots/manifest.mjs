@@ -5753,6 +5753,9 @@ export const SHOTS = [
       "users",
     ),
     fullPage: true,
+    // The whole profile, panel by panel, as an ordinary member's reads: most
+    // have no ID card issued yet, and 19-37 pictures the panel with cards.
+    allowEmptyState: true,
   },
   {
     id: "01-05-add-member-form",
@@ -5767,7 +5770,10 @@ export const SHOTS = [
   },
   {
     id: "01-06-import-members",
-    expect: "Import Members",
+    // Not "Import Members": the first match is now the tab's screen-reader-only
+    // heading ("Import Members from CSV"), which is never visible. The
+    // instructions card's title is the tab's own visible wording.
+    expect: "How to Import Members",
     doc: "01-membership.md",
     line: 152,
     anchor:
@@ -5804,6 +5810,10 @@ export const SHOTS = [
     anchor: "The Members Admin hub — Member Management, Add Member",
     alt: "The Members Admin hub — Member Management, Add Member and Import Members tabs",
     route: "/members/admin",
+    // The hub's "Former members still holding property" card reads "No
+    // dropped member has property outstanding" -- the normal state, and not
+    // this shot's subject, which is the hub's tabs.
+    allowEmptyState: true,
   },
   {
     id: "01-23-print-member-badges",
@@ -6095,6 +6105,9 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     selector: "div[role='dialog'], div.fixed.inset-0 > div",
+    // "No specific role" is the Target Role select's default option, showing
+    // behind the warning -- as 15-03 allows for the same form.
+    allowEmptyState: true,
   },
   {
     id: "01-31-applicant-documents",
@@ -6105,11 +6118,32 @@ export const SHOTS = [
     route: "/prospective-members",
     prepare: async (page) => {
       await page.waitForTimeout(2500);
-      // The applicant whose paperwork the seeder files — the one furthest
-      // along the pipeline, since an applicant at the first stage with their
-      // ID already on file would say the wrong thing about the process.
+      // Whoever has documents on file, asked of the API rather than named.
+      // The seeder files them for the applicant furthest along the pipeline
+      // at the time, which depends on the spread; this was hard-coded to
+      // Riley Bishop and photographed an empty section once the spread moved
+      // the paperwork to someone else (openApplicantAtStage's lesson again).
+      const name = await page.evaluate(async () => {
+        const get = async (path) => {
+          const response = await fetch(`/api/v1${path}`, {
+            credentials: "include",
+          });
+          return response.ok ? response.json() : {};
+        };
+        const list = await get("/prospective-members/prospects?limit=100");
+        for (const prospect of list.prospects ?? list.items ?? []) {
+          const docs = await get(
+            `/prospective-members/prospects/${prospect.id}/documents`,
+          );
+          if ((docs.documents ?? docs ?? []).length) {
+            return `${prospect.first_name} ${prospect.last_name}`;
+          }
+        }
+        return null;
+      });
+      if (!name) throw new Error("01-31: no applicant has documents on file");
       await page
-        .locator("[role='button'][aria-label*='Bishop']")
+        .locator(`[role='button'][aria-label^='${name}']`)
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(2000);
@@ -10596,14 +10630,32 @@ export const SHOTS = [
     // The badge reads `elected` only after `seed_membership_vote_outcome` has
     // walked the August membership vote to a close — package assigned to the
     // ballot, paper tally recorded and attested, election closed, statuses
-    // synced back. Matched on the stage rather than a name, like 15-08, so a
-    // different seeding spread cannot point this at somebody else.
+    // synced back.
+    //
+    // By name, not by stage. Three applicants sit on Membership Vote -- the
+    // spread's, plus Sam Okafor and Devon Marsh, whom SCENARIO_STAGES pins
+    // there -- and only Sam's package reads `elected`: the seeder walks his
+    // vote to a win and Devon's to a loss (20-13). Matching the stage opened
+    // whichever row came first, which pictured a draft package, or before
+    // that an applicant with none, under a caption about the Elected badge.
     //
     // The tally is NOT in this frame and the caption no longer promises it:
     // vote counts live on the election results screen guide 14 pictures, and
     // nothing joins the two on one screen.
-    prepare: openApplicantAtStage("Membership Vote"),
-    fullPage: true,
+    prepare: async (page) => {
+      const card = page.locator("[role='button'][aria-label^='Sam Okafor']");
+      await card.first().waitFor({ timeout: 30_000 });
+      await card.first().click();
+      await page
+        .locator("div[aria-label='Applicant details']")
+        .getByText(/^elected$/)
+        .first()
+        .waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(600);
+    },
+    // The panel, not the page: the dialog is centred, so a full-page capture
+    // framed the page behind it, undimmed past the first 900px.
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
     // Sibling sections of the same drawer legitimately read "No documents
     // yet" / "No checklist data recorded yet" for an applicant with no
     // uploads; the section this pictures is populated.
@@ -10697,6 +10749,10 @@ export const SHOTS = [
       }
       await link.waitFor({ timeout: 15_000 });
       await link.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      // Park the pointer outside the clipped sidebar. The group click leaves
+      // it where the scroll then slides another item under it, and that item
+      // was captured in its hover highlight.
+      await page.mouse.move(1400, 750);
       await page.waitForTimeout(400);
     },
     // The taller viewport for the same reason 00-15 needs one: with the
@@ -10733,10 +10789,16 @@ export const SHOTS = [
     // so the picture illustrated the wrong thing entirely.
     route: "/members",
     prepare: async (page) => {
+      // A member the seeder promoted through the profile endpoint, so the
+      // Profile Updates filter has an entry to show. The first member on the
+      // roster has never had a profile update recorded, and this shot
+      // pictured "No audit history found" under a caption describing the
+      // changes it lists.
       await openFirstFromApi(
-        "/users?limit=1",
+        "/users?limit=100",
         (id) => `/members/admin/history/${id}`,
         "users",
+        (user) => user.username === "cfrazier",
       )(page);
       await page.waitForTimeout(1200);
       await page
