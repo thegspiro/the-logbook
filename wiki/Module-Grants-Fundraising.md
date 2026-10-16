@@ -237,8 +237,26 @@ guarded by the application's `compliance_tasks_generated` flag):
 - a **Grant-Funded Equipment Inventory** task when the linked opportunity's
   category is `equipment` or `vehicles`.
 
-Each task stores `reminder_days_before`; no scheduled job currently sends
-reminders from it.
+### Reminders
+
+The daily `grant_reminders` scheduled task
+(`app/services/grant_reminder_notifications.py`) sends two email-only
+reminders, under the optional `fundraising_duties` email kind:
+
+- **Compliance tasks** that are not completed or waived: once from
+  `reminder_days_before` days before the due date, and once on the due date
+  (or, if missed, up to 7 days after). It goes to the task's `assigned_to`
+  when that member is active in the department and holds `fundraising.view` or
+  `fundraising.manage`, otherwise to the active `fundraising.manage` holders.
+- **Pledges** with `reminder_enabled`, a due date, a status of pending,
+  partial or overdue, and a balance still owed: 14 days and 1 day before the
+  due date, to the active `fundraising.manage` holders. The donor is never
+  emailed.
+
+Each send is recorded in `notification_logs`, keyed on the task or pledge,
+its due date and the reminder, so a restart or second run sends nothing and a
+moved due date starts afresh. `last_reminder_sent` is stamped on the row.
+Departments with the module switched off are skipped.
 
 ---
 

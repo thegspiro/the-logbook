@@ -1431,9 +1431,10 @@ What remains, deliberately:
   moves a pledge's received amount or status when a donation arrives, so the
   edit form asks for both. Linking a donation to a pledge would be a backend
   change.
-- **Not on the forms:** a pledge's reminder switch and payment schedule
-  (nothing sends pledge reminders or reads the schedule), and an event's
-  sponsors and calendar-event link. All stay API-only.
+- **Not on the forms:** a pledge's payment schedule (nothing reads it), and
+  an event's sponsors and calendar-event link. All stay API-only. The
+  pledge's **Send reminders** switch is on the form, read by the daily
+  `grant_reminders` task.
 
 The original findings, for the record:
 
@@ -1888,32 +1889,49 @@ branch, and a date-stamped sequence collides the moment two people work on the
 same day. Before merging a migration, re-check `revision` against the current
 main rather than against your merge-base.
 
-## Integrations — No Calendar-Feed Configuration Screen (2026-08-09)
+## Integrations — One Department Feed, No Filtered Feeds (2026-08-09)
 
-`docs/training/16-integrations.md` pictures an **iCalendar configuration**
-listing "generated feed URLs for different filters (All Events, Training Only,
-My Shifts) with copy buttons", and again later as "three generated feed URLs
-with Copy buttons".
+Older notes for guide 16 picture an **iCalendar configuration** listing
+"generated feed URLs for different filters (All Events, Training Only, My
+Shifts) with copy buttons".
 
-What exists is one feed and one place to get it: `CalendarSubscribeCard` on the
-My Shifts tab, which reveals a single personal shifts URL. The `ical` entry in
-the integrations catalogue is a card with a description and no configuration
-screen behind it — searching `frontend/src` for a feed URL turns up only that
-one card. The backend serves exactly one feed route,
-`/api/public/v1/calendar/{token}.ics`, scoped to the member's own shifts.
+What exists is two feeds. Each member's shifts come from `CalendarSubscribeCard`
+on the My Shifts tab (`/api/public/v1/calendar/{token}.ics`). The department's
+published events come from the **iCalendar (ICS)** integration card, which
+shows one URL with a copy button and a **Reset link** control
+(`/api/public/v1/calendar/org/{token}.ics`). The integration's stored
+`included_event_types` narrows that feed by event type, but no screen sets it,
+so in practice the card's link carries every published event. There is no
+training-only feed and no per-filter list of URLs. `ICalConfig.include_shifts`
+is accepted and stored but read by nothing; no screen offers it.
 
-So the filtered feeds the guide describes — all events, training only — do not
-exist on either side. Both placeholders are left open. **Accepted by the owner
-(2026-10-05):** leave as is — one personal shifts feed, and no all-events or
-training-only feed is built; guide 16 now says the iCalendar card advertises
-the per-member feed and has no configuration screen. The guide-03 subscribe
-card is also deliberately not captured because expanding it exposes the
-calendar feed's bearer credential.
+The guide-03 subscribe card is deliberately not captured because expanding it
+exposes the calendar feed's bearer credential; the same applies to a connected
+iCalendar card.
 
 Most of the rest of guide 16 needs a live third-party account (a Salesforce
 sync status, a connected Cal.com bookings panel, a warning state carrying a
 real provider error) and is not capturable from a demo database at all. The
 connect _dialogs_ are ordinary forms and have been captured.
+
+## Integrations — Google Calendar and Outlook Read "Coming Soon" Behind a Server Setting (2026-10-16)
+
+One-way publishing of department events to a Google or Outlook calendar is
+partly built: the connectors and the `calendar_sync` scheduled task that
+publishes are in place, but no screen can complete the Google or Microsoft
+sign-in yet, so no integration ever holds the tokens the task needs. The two
+catalog cards report **Coming Soon** while the server setting
+`CALENDAR_SYNC_ENABLED` is off, which is its default; connect, update and test
+are refused with `400`, and the scheduled task does nothing.
+
+An older release let both cards be connected with an empty configuration.
+Those rows were left as they are in the database — no data migration — and
+the API reports them as `coming_soon` and not enabled while the setting is
+off, on the integration list, the detail and the `/integrations/connected`
+projection. They never held a Google or Microsoft sign-in, so nothing was ever
+published through them. Turning the setting on brings back each row's stored
+status, but nothing publishes until the sign-in screens ship, so it should
+stay off until then.
 
 ## Integrations — Weather Alerts and Generic Webhooks Do Nothing After Their Test (2026-10-08)
 

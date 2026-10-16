@@ -18,13 +18,14 @@ X-API-Key: your-api-key-here
 
 The other endpoints in this document do **not** use an API key, and sending one has no effect:
 
-| Endpoint                                          | What protects it instead                                                 |
-| ------------------------------------------------- | ------------------------------------------------------------------------ |
-| Health Check (`GET /health`)                      | Nothing — it reveals only that the service is running                    |
-| Public forms (`/forms/{slug}`)                    | The form must be published as public; per-IP rate limits                 |
-| Personal shift calendar (`/calendar/{token}.ics`) | The unguessable token in the URL                                         |
-| Guest event check-in                              | The room display's code; the event must allow guest sign-in; rate limits |
-| Location kiosk display (`/display/{code}`)        | The display code assigned to the location                                |
+| Endpoint                                             | What protects it instead                                                 |
+| ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| Health Check (`GET /health`)                         | Nothing — it reveals only that the service is running                    |
+| Public forms (`/forms/{slug}`)                       | The form must be published as public; per-IP rate limits                 |
+| Personal shift calendar (`/calendar/{token}.ics`)    | The unguessable token in the URL                                         |
+| Department events feed (`/calendar/org/{token}.ics`) | The unguessable token in the URL                                         |
+| Guest event check-in                                 | The room display's code; the event must allow guest sign-in; rate limits |
+| Location kiosk display (`/display/{code}`)           | The display code assigned to the location                                |
 
 ### Getting an API Key
 
@@ -486,6 +487,29 @@ END:VCALENDAR
 - The token is a 64-character URL-safe string. Treat the feed URL as private;
   rotating the token immediately invalidates the previous URL.
 - Returns 404 for an unknown or malformed token.
+
+#### Department events feed
+
+**Endpoint:** `GET /calendar/org/{token}.ics`
+
+The department's published events, behind the **iCalendar (ICS)** integration.
+Connecting that integration issues the token; an integrations manager reads the
+URL with `GET /api/v1/integrations/{integration_id}/ical-feed` and replaces it
+with `POST /api/v1/integrations/{integration_id}/ical-feed/rotate` (both need
+`integrations.manage`; a rotation is audited). Disconnecting the integration
+invalidates the token.
+
+- Covers events from 30 days ago through the next 365 days that are neither
+  drafts nor cancelled, optionally narrowed by the integration's
+  `included_event_types`.
+- Each event carries only its title, start and end, location name, event type
+  (`CATEGORIES`) and a link back to the event (`URL`). Descriptions, attendees,
+  RSVP answers, custom fields, attachments, cancellation reasons and the
+  organizer are never included.
+- The token has the same shape as the personal feed's. The server keeps it
+  encrypted and looks it up by a SHA-256 digest compared in constant time.
+- Returns 404 for an unknown, rotated or malformed token, and shares the
+  personal feed's rate limit of 60 requests a minute per IP.
 
 ---
 

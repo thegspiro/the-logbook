@@ -2417,8 +2417,9 @@ app.include_router(
     responses={**public_responses.TOKEN_ADDRESSED, **public_responses.BAD_REQUEST},
 )
 
-# Include public calendar ICS feed (no auth — token-protected per-user feed at
-# /api/public/v1/calendar/{token}.ics)
+# Include public calendar ICS feeds (no auth — token-protected: the per-member
+# shifts feed at /api/public/v1/calendar/{token}.ics and the department events
+# feed at /api/public/v1/calendar/org/{token}.ics)
 app.include_router(
     public_calendar_router, prefix="/api", responses=public_responses.TOKEN_ADDRESSED
 )
