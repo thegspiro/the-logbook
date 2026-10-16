@@ -95,10 +95,23 @@ describe('NfpaComplianceTab', () => {
     await screen.findByText('Annual Pump Test');
     expect(screen.queryByRole('button', { name: /Add Item/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit NFPA 1911 6.1' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove NFPA 1911 6.1' })).not.toBeInTheDocument();
   });
 
-  it('offers add, edit and remove to an apparatus editor', async () => {
+  it('offers add and edit, but not remove, to an apparatus editor', async () => {
+    // The backend accepts apparatus.edit for create and update and refuses it
+    // for delete, which needs apparatus.manage.
     granted = new Set(['apparatus.edit']);
+    render(<NfpaComplianceTab apparatusId="app-1" timezone="UTC" onOpenMaintenance={vi.fn()} />);
+
+    await screen.findByText('Annual Pump Test');
+    expect(screen.getByRole('button', { name: /Add Item/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit NFPA 1911 6.1' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove NFPA 1911 6.1' })).not.toBeInTheDocument();
+  });
+
+  it('offers add, edit and remove to an apparatus manager', async () => {
+    granted = new Set(['apparatus.manage']);
     render(<NfpaComplianceTab apparatusId="app-1" timezone="UTC" onOpenMaintenance={vi.fn()} />);
 
     await screen.findByText('Annual Pump Test');
