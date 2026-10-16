@@ -184,7 +184,7 @@ async def update_meeting(
     result, error = await service.update_meeting(
         meeting_id, current_user.organization_id, update_data
     )
-    if error:
+    if error or result is None:
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
