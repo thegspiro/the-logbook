@@ -76,8 +76,59 @@ export interface MedicalItemUpdate {
   quantity?: number | null;
   unit_of_measure?: string | null;
   reorder_point?: number | null;
+  /** Free text kept beside the structured location, shown as a note. */
   storage_location?: string | null;
+  /** The room, and the storage area within it (Inventory › Storage Areas). */
+  location_id?: string | null;
+  storage_area_id?: string | null;
   vendor?: string | null;
+}
+
+/** A room or place a supply can be filed under. */
+export interface MedicalStorageRoom {
+  id: string;
+  name: string;
+}
+
+/** An active storage area, with its room resolved from the top of its tree. */
+export interface MedicalStorageArea {
+  id: string;
+  name: string;
+  label?: string | null;
+  storage_type?: string | null;
+  parent_id?: string | null;
+  location_id?: string | null;
+  location_name?: string | null;
+  /** "Cabinet B › Shelf 2", the area's own name last. */
+  path: string;
+}
+
+export interface MedicalStorageOptions {
+  rooms: MedicalStorageRoom[];
+  areas: MedicalStorageArea[];
+}
+
+/**
+ * An apparatus checklist position this supply fills. camelCase: it is the
+ * equipment-check `ItemDeployment` schema, read through the medical route.
+ */
+export interface MedicalSupplyPlacement {
+  templateItemId: string;
+  itemName: string;
+  compartmentName?: string | null;
+  templateId?: string | null;
+  templateName?: string | null;
+  apparatusId?: string | null;
+  apparatusName?: string | null;
+  apparatusType?: string | null;
+  lotNumber?: string | null;
+  expirationDate?: string | null;
+  daysUntilExpiration?: number | null;
+  isExpired: boolean;
+  /** What the position should hold. */
+  targetQuantity?: number | null;
+  /** Last counted aboard; null when nobody has counted since it was set up. */
+  quantityOnTruck?: number | null;
 }
 
 /** Same rationale as MedicalItemUpdate: a cleared field must send null. */
@@ -227,6 +278,18 @@ export const medicalSuppliesService = {
       item_ids: itemIds,
       ...(notes ? { notes } : {}),
     });
+    return response.data;
+  },
+
+  /** Rooms and active storage areas a supply can be filed under. */
+  async getStorageOptions(): Promise<MedicalStorageOptions> {
+    const response = await api.get<MedicalStorageOptions>('/medical-supplies/storage-options');
+    return response.data;
+  },
+
+  /** The apparatus checklist positions that carry this supply. */
+  async getItemPlacements(itemId: string): Promise<MedicalSupplyPlacement[]> {
+    const response = await api.get<MedicalSupplyPlacement[]>(`/medical-supplies/items/${itemId}/placements`);
     return response.data;
   },
 

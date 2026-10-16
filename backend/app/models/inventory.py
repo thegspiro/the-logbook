@@ -772,9 +772,12 @@ class InventoryItem(Base):
         lot_stock: Optional[int]
         pin_position: Optional[int]
         group_key: Optional[str]
-        # Stamped by the medical supply list (next_lot_expirations).
+        # Stamped by the medical supply list (next_lot_expirations,
+        # storage_path, apparatus_counts_for_items).
         next_expiration_date: Optional[date]
         days_until_next_expiration: Optional[int]
+        storage_path: Optional[str]
+        apparatus_count: Optional[int]
 
     __table_args__ = (
         Index("idx_inventory_items_org_category", "organization_id", "category_id"),

@@ -10,6 +10,8 @@ const mockGetExpiringLots = vi.fn();
 const mockRetireItem = vi.fn();
 const mockBulkRetireItems = vi.fn();
 const mockGetItemLots = vi.fn();
+const mockGetStorageOptions = vi.fn();
+const mockGetItemPlacements = vi.fn();
 const mockCheckPermission = vi.fn();
 
 vi.mock('../../../services/medicalSuppliesService', () => ({
@@ -21,6 +23,8 @@ vi.mock('../../../services/medicalSuppliesService', () => ({
     retireItem: (...args: unknown[]) => mockRetireItem(...args) as unknown,
     bulkRetireItems: (...args: unknown[]) => mockBulkRetireItems(...args) as unknown,
     getItemLots: (...args: unknown[]) => mockGetItemLots(...args) as unknown,
+    getStorageOptions: (...args: unknown[]) => mockGetStorageOptions(...args) as unknown,
+    getItemPlacements: (...args: unknown[]) => mockGetItemPlacements(...args) as unknown,
   },
 }));
 
@@ -119,6 +123,8 @@ describe('MedicalSuppliesPage', () => {
       mockRetireItem,
       mockBulkRetireItems,
       mockGetItemLots,
+      mockGetStorageOptions,
+      mockGetItemPlacements,
     ].forEach((mock) => mock.mockReset());
     mockCheckPermission.mockReturnValue(false);
     mockGetSummary.mockResolvedValue(summary);
@@ -128,6 +134,8 @@ describe('MedicalSuppliesPage', () => {
     mockRetireItem.mockResolvedValue(undefined);
     mockBulkRetireItems.mockResolvedValue({ retired: [], failed: [] });
     mockGetItemLots.mockResolvedValue([]);
+    mockGetStorageOptions.mockResolvedValue({ rooms: [], areas: [] });
+    mockGetItemPlacements.mockResolvedValue([]);
   });
 
   describe('usability fixes', () => {
@@ -246,6 +254,74 @@ describe('MedicalSuppliesPage', () => {
       await userEvent.keyboard('{Home}');
       expect(expiringTab).toHaveAttribute('aria-selected', 'true');
       expect(expiringTab).toHaveFocus();
+    });
+
+    it('shows where each supply is kept and how many apparatus carry it', async () => {
+      mockGetItems.mockResolvedValue({
+        items: [
+          {
+            id: 'item-1',
+            name: 'Gauze Pads',
+            quantity: 3,
+            storage_path: 'Supply Room › Medical Cabinet',
+            // Filed automatically from this same text: not repeated as a note.
+            storage_location: 'medical  cabinet',
+            apparatus_count: 2,
+          },
+          {
+            id: 'item-2',
+            name: 'Shears',
+            quantity: 1,
+            storage_path: null,
+            storage_location: 'Top drawer',
+            apparatus_count: 0,
+          },
+        ],
+        total: 2,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      const gauze = await screen.findByRole('row', { name: /Gauze Pads/ });
+      expect(gauze).toHaveTextContent('Supply Room › Medical Cabinet');
+      expect(gauze).not.toHaveTextContent(/medical {2}cabinet/i);
+      const shears = screen.getByRole('row', { name: /Shears/ });
+      expect(shears).toHaveTextContent('Top drawer');
+      expect(within(shears).queryByRole('button', { name: /apparatus/ })).not.toBeInTheDocument();
+
+      await userEvent.click(within(gauze).getByRole('button', { name: /On 2 apparatus/ }));
+      expect(await screen.findByRole('dialog', { name: 'Lots — Gauze Pads' })).toBeInTheDocument();
+      expect(mockGetItemPlacements).toHaveBeenCalledWith('item-1');
+    });
+
+    it('filters by a room or a storage area', async () => {
+      mockGetStorageOptions.mockResolvedValue({
+        rooms: [{ id: 'room-1', name: 'Supply Room' }],
+        areas: [
+          { id: 'area-1', name: 'Cabinet B', location_id: 'room-1', location_name: 'Supply Room', path: 'Cabinet B' },
+        ],
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      const filter = await screen.findByRole('combobox', { name: 'Filter by storage location' });
+      await userEvent.selectOptions(filter, 'area:area-1');
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ storage_area_id: 'area-1', skip: 0 }));
+      expect(lastItemsQuery()['location_id']).toBeUndefined();
+
+      await userEvent.selectOptions(filter, 'room:room-1');
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ location_id: 'room-1' }));
+      expect(lastItemsQuery()['storage_area_id']).toBeUndefined();
+    });
+
+    it('hides the location filter when no storage is set up', async () => {
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+      await screen.findByRole('combobox', { name: 'Filter by category' });
+
+      expect(screen.queryByRole('combobox', { name: 'Filter by storage location' })).not.toBeInTheDocument();
     });
 
     it("offers a supply's lots to a member who can only view", async () => {

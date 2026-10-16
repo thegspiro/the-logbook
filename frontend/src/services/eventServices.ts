@@ -1020,6 +1020,10 @@ export interface InventoryItem {
    */
   next_expiration_date?: string | null;
   days_until_next_expiration?: number | null;
+  /** "Station 1 › Supply Room › Shelf 2". Sent by the medical supply list only. */
+  storage_path?: string | null;
+  /** How many apparatus checklists carry it. Sent by the medical supply list only. */
+  apparatus_count?: number | null;
   last_inspection_date?: string;
   next_inspection_due?: string;
   inspection_interval_days?: number;

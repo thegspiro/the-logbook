@@ -8,7 +8,7 @@
  * Receive delivery.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
@@ -18,6 +18,7 @@ import { blankToNull, formatNameList, numberOrNull, parseNameList } from '../../
 import { formatNumber } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import { MEDICAL_UNITS } from '../types';
+import type { MedicalStorageOptions } from '../types';
 
 interface MedicalItemFormModalProps {
   categories: InventoryCategory[];
@@ -46,6 +47,9 @@ interface FormState {
   quantity: string;
   unit_of_measure: string;
   reorder_point: string;
+  /** The room and the storage area within it; the free text is a note beside them. */
+  location_id: string;
+  storage_area_id: string;
   storage_location: string;
   vendor: string;
 }
@@ -63,6 +67,8 @@ function initialState(item?: InventoryItem): FormState {
     // `!= null`, not `!== undefined`: the API sends an unset value as null,
     // which the strict check turned into the text "null" in the box.
     reorder_point: item?.reorder_point != null ? String(item.reorder_point) : '',
+    location_id: item?.location_id ?? '',
+    storage_area_id: item?.storage_area_id ?? '',
     storage_location: item?.storage_location ?? '',
     vendor: item?.vendor ?? '',
   };
@@ -84,6 +90,57 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
+
+  // The rooms and areas come from Inventory › Storage Areas. Read through the
+  // medical route so a medical-only officer can file a supply too.
+  const [storage, setStorage] = useState<MedicalStorageOptions | null>(null);
+  const [storageError, setStorageError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    medicalSuppliesService
+      .getStorageOptions()
+      .then((options) => {
+        if (cancelled) return;
+        setStorage(options);
+        // A supply filed on an area without a room (the automatic filing of
+        // old free text sets only the area) shows the area's room, so the
+        // room select does not read "No room" for a supply that has one.
+        setForm((f) => {
+          if (f.location_id || !f.storage_area_id) return f;
+          const room = options.areas.find((a) => a.id === f.storage_area_id)?.location_id;
+          return room ? { ...f, location_id: room } : f;
+        });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setStorageError(getErrorMessage(err, 'Failed to load storage areas'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const areaChoices = useMemo(() => {
+    const areas = storage?.areas ?? [];
+    return form.location_id ? areas.filter((a) => a.location_id === form.location_id) : areas;
+  }, [storage, form.location_id]);
+  // An item filed in an area since retired keeps it, and the select has to be
+  // able to show it or it would read as unfiled.
+  const currentAreaMissing =
+    Boolean(form.storage_area_id) && storage != null && !storage.areas.some((a) => a.id === form.storage_area_id);
+
+  const chooseRoom = (roomId: string) =>
+    setForm((f) => {
+      const area = storage?.areas.find((a) => a.id === f.storage_area_id);
+      // An area in another room cannot stay chosen once the room changes.
+      const keepArea = !roomId || !area || area.location_id === roomId;
+      return { ...f, location_id: roomId, storage_area_id: keepArea ? f.storage_area_id : '' };
+    });
+  const chooseArea = (areaId: string) =>
+    setForm((f) => {
+      const area = storage?.areas.find((a) => a.id === areaId);
+      // An area sits in one room; picking it settles the room as well.
+      return { ...f, storage_area_id: areaId, location_id: area?.location_id ?? f.location_id };
+    });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,6 +171,8 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           ...(isLotStocked ? {} : { quantity: numberOrNull(form.quantity) }),
           unit_of_measure: blankToNull(form.unit_of_measure),
           reorder_point: numberOrNull(form.reorder_point),
+          location_id: blankToNull(form.location_id),
+          storage_area_id: blankToNull(form.storage_area_id),
           storage_location: blankToNull(form.storage_location),
           vendor: blankToNull(form.vendor),
         });
@@ -134,6 +193,8 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           quantity: form.quantity === '' ? 0 : Number(form.quantity),
           unit_of_measure: form.unit_of_measure.trim() || undefined,
           reorder_point: form.reorder_point === '' ? undefined : Number(form.reorder_point),
+          location_id: form.location_id || undefined,
+          storage_area_id: form.storage_area_id || undefined,
           storage_location: form.storage_location.trim() || undefined,
           vendor: form.vendor.trim() || undefined,
           // Medical stock is counted, not issued one-to-one to a member.
@@ -348,18 +409,74 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           </div>
         </div>
 
-        <div>
-          <label htmlFor="ms-storage" className="form-label">
-            Storage location
-          </label>
-          <input
-            id="ms-storage"
-            className="form-input w-full"
-            value={form.storage_location}
-            onChange={(e) => set('storage_location', e.target.value)}
-            placeholder="e.g. EMS Room, Shelf B-3"
-          />
-        </div>
+        <fieldset className="space-y-3">
+          <legend className="form-label">Where it is kept</legend>
+          {storageError && (
+            <p role="alert" className="alert-warning text-sm">
+              The storage areas could not be loaded: {storageError} The note below still saves.
+            </p>
+          )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor="ms-room" className="form-label">
+                Room
+              </label>
+              <select
+                id="ms-room"
+                className="form-input w-full"
+                value={form.location_id}
+                onChange={(e) => chooseRoom(e.target.value)}
+                disabled={!storage}
+              >
+                <option value="">No room</option>
+                {storage?.rooms.map((room) => (
+                  <option key={room.id} value={room.id}>
+                    {room.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="ms-area" className="form-label">
+                Storage area
+              </label>
+              <select
+                id="ms-area"
+                className="form-input w-full"
+                value={form.storage_area_id}
+                onChange={(e) => chooseArea(e.target.value)}
+                disabled={!storage}
+              >
+                <option value="">No storage area</option>
+                {currentAreaMissing && (
+                  <option value={form.storage_area_id}>{item?.storage_path ?? 'Current area'} (retired)</option>
+                )}
+                {areaChoices.map((area) => (
+                  <option key={area.id} value={area.id}>
+                    {form.location_id || !area.location_name ? area.path : `${area.location_name} › ${area.path}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {storage && storage.areas.length === 0 && (
+            <p className="text-theme-text-muted text-xs">
+              No storage areas are set up yet. They are added under Inventory › Storage Areas.
+            </p>
+          )}
+          <div>
+            <label htmlFor="ms-storage" className="form-label">
+              Storage note
+            </label>
+            <input
+              id="ms-storage"
+              className="form-input w-full"
+              value={form.storage_location}
+              onChange={(e) => set('storage_location', e.target.value)}
+              placeholder="e.g. top drawer, left side"
+            />
+          </div>
+        </fieldset>
 
         <div>
           <label htmlFor="ms-description" className="form-label">

@@ -7,6 +7,10 @@
  * module's StockLotsPanel does this job for gear, but it calls the general
  * /inventory routes, which a medical-only supply officer is refused; this
  * talks to the medical-domain lot routes instead.
+ *
+ * It opens on where the supply is — its shelf and the apparatus carrying it —
+ * because that is the other question asked of a supply's lots: an expiring lot
+ * has to be found before it can be pulled.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -20,6 +24,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { Modal } from '../../../components/Modal';
 import { supplyLabel } from '../types';
+import { SupplyWhereSection } from './SupplyWhereSection';
 
 interface MedicalItemLotsModalProps {
   item: InventoryItem;
@@ -184,6 +189,10 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
       }
     >
       <div className="space-y-4">
+        <SupplyWhereSection item={item} />
+        <h3 className="text-theme-text-primary border-theme-surface-border border-t pt-4 text-sm font-semibold">
+          Stock lots
+        </h3>
         {loadError && (
           <p role="alert" className="alert-danger text-sm">
             {loadError}

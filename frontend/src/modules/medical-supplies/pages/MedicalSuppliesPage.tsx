@@ -9,7 +9,7 @@
  * know what is about to lapse before they want an inventory count.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router';
 import {
   AlertTriangle,
@@ -26,6 +26,7 @@ import {
   Stethoscope,
   Tag,
   TrendingDown,
+  Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
@@ -45,7 +46,8 @@ import { MedicalItemFormModal } from '../components/MedicalItemFormModal';
 import { ReceiveDeliveryModal } from '../components/ReceiveDeliveryModal';
 import { MedicalItemLotsModal } from '../components/MedicalItemLotsModal';
 import { MedicalImportExportModal } from '../components/MedicalImportExportModal';
-import { EXPIRY_WINDOW_DAYS, supplyLabel } from '../types';
+import { EXPIRY_WINDOW_DAYS, storageNote, supplyLabel } from '../types';
+import type { MedicalStorageOptions } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 
 type Tab = 'expiring' | 'stock';
@@ -82,6 +84,46 @@ function nextExpiryTone(item: InventoryItem): string {
   if (days > EXPIRY_WINDOW_DAYS) return 'text-theme-text-secondary';
   return expiryTone(days);
 }
+
+/**
+ * The list request's storage filter, from the select's "room:<id>" or
+ * "area:<id>" value. The server widens either one: a room includes every area
+ * inside it, an area every area nested under it.
+ */
+function storageParams(filter: string): { location_id?: string; storage_area_id?: string } {
+  const [kind, id] = filter.split(':');
+  if (!id) return {};
+  if (kind === 'room') return { location_id: id };
+  if (kind === 'area') return { storage_area_id: id };
+  return {};
+}
+
+/**
+ * Where a supply is kept: its storage path, a note that adds to it, and how
+ * many apparatus carry it — the badge opens the supply's dialog, which lists
+ * them.
+ */
+const SupplyWhere: React.FC<{ item: InventoryItem; onOpen: () => void }> = ({ item, onOpen }) => {
+  const note = storageNote(item);
+  const carriers = item.apparatus_count ?? 0;
+  return (
+    <div className="space-y-1">
+      {item.storage_path ? <div className="text-theme-text-primary">{item.storage_path}</div> : !note && <div>—</div>}
+      {note && <div className="text-xs">{note}</div>}
+      {carriers > 0 && (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="badge touch-target-phone inline-flex items-center gap-1 bg-sky-500/10 text-sky-800 dark:text-sky-300"
+          aria-label={`On ${carriers} apparatus — show where ${supplyLabel(item)} is`}
+        >
+          <Truck className="h-3 w-3" aria-hidden="true" />
+          On {carriers} apparatus
+        </button>
+      )}
+    </div>
+  );
+};
 
 /**
  * Identity of an item query: what the rendered rows are an answer to.
@@ -207,9 +249,13 @@ const MedicalSuppliesPage: React.FC = () => {
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const [lowStockOnly, setLowStockOnly] = useState(false);
-  // Part of the query key, so turning the filter on or off is a new query:
+  // "room:<id>" or "area:<id>"; empty for everywhere.
+  const [storageFilter, setStorageFilter] = useState('');
+  const storageQuery = useMemo(() => storageParams(storageFilter), [storageFilter]);
+  const [storageOptions, setStorageOptions] = useState<MedicalStorageOptions | null>(null);
+  // Part of the query key, so turning a filter on or off is a new query:
   // it resets the page and the selection like any other filter.
-  const sortKey = `${sortField && sortDirection ? `${sortField}:${sortDirection}` : ''}${lowStockOnly ? '\u0000low' : ''}`;
+  const sortKey = `${sortField && sortDirection ? `${sortField}:${sortDirection}` : ''}${lowStockOnly ? '\u0000low' : ''}${storageFilter ? `\u0000${storageFilter}` : ''}`;
   const [lotsItem, setLotsItem] = useState<InventoryItem | null>(null);
   // Ids, not rows: a refreshed page hands back new objects for the same items.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -312,6 +358,7 @@ const MedicalSuppliesPage: React.FC = () => {
               sort_by: (sortDirection && sortField) || undefined,
               sort_order: (sortField && sortDirection) || undefined,
               low_stock: lowStockOnly || undefined,
+              ...storageQuery,
               skip: page * PAGE_SIZE,
               limit: PAGE_SIZE,
             },
@@ -429,7 +476,7 @@ const MedicalSuppliesPage: React.FC = () => {
         })
       );
     },
-    [debouncedSearch, categoryFilter, sortField, sortDirection, sortKey, lowStockOnly, page]
+    [debouncedSearch, categoryFilter, sortField, sortDirection, sortKey, lowStockOnly, storageQuery, page]
   );
 
   const loadSectionsRef = useRef(loadSections);
@@ -446,6 +493,23 @@ const MedicalSuppliesPage: React.FC = () => {
   // since each section's newest request wins, those filter-driven requests
   // superseded an explicit refresh's four, letting cached summary, category
   // and expiring responses land while the refresh's fresh data was discarded.
+  // Only the filter needs these, and a page that cannot load them still lists
+  // every supply, so a failure hides the filter rather than raising an alert.
+  useEffect(() => {
+    let cancelled = false;
+    medicalSuppliesService
+      .getStorageOptions()
+      .then((options) => {
+        if (!cancelled) setStorageOptions(options);
+      })
+      .catch(() => {
+        if (!cancelled) setStorageOptions(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     void loadSectionsRef.current(ALL_SECTIONS);
     return () => itemsAbortController.current?.abort();
@@ -914,6 +978,42 @@ const MedicalSuppliesPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+              {storageOptions && (storageOptions.rooms.length > 0 || storageOptions.areas.length > 0) && (
+                <select
+                  value={storageFilter}
+                  onChange={(e) => {
+                    setStorageFilter(e.target.value);
+                    setPage(0);
+                  }}
+                  aria-label="Filter by storage location"
+                  className="form-input w-auto"
+                >
+                  <option value="">All locations</option>
+                  {storageOptions.rooms.map((room) => (
+                    <optgroup key={room.id} label={room.name}>
+                      <option value={`room:${room.id}`}>All of {room.name}</option>
+                      {storageOptions.areas
+                        .filter((a) => a.location_id === room.id)
+                        .map((area) => (
+                          <option key={area.id} value={`area:${area.id}`}>
+                            {area.path}
+                          </option>
+                        ))}
+                    </optgroup>
+                  ))}
+                  {storageOptions.areas.some((a) => !a.location_id) && (
+                    <optgroup label="No room">
+                      {storageOptions.areas
+                        .filter((a) => !a.location_id)
+                        .map((area) => (
+                          <option key={area.id} value={`area:${area.id}`}>
+                            {area.path}
+                          </option>
+                        ))}
+                    </optgroup>
+                  )}
+                </select>
+              )}
             </div>
 
             {lowStockOnly && (
@@ -948,17 +1048,17 @@ const MedicalSuppliesPage: React.FC = () => {
                 <SkeletonCard />
               ) : null
             ) : loaded.items && items.length === 0 ? (
-              lowStockOnly && !debouncedSearch && !categoryFilter ? (
+              lowStockOnly && !debouncedSearch && !categoryFilter && !storageFilter ? (
                 <EmptyState
                   icon={TrendingDown}
                   title="Nothing is low"
                   description="No supply is at or below its reorder point."
                 />
-              ) : debouncedSearch || categoryFilter || lowStockOnly ? (
+              ) : debouncedSearch || categoryFilter || lowStockOnly || storageFilter ? (
                 <EmptyState
                   icon={Search}
                   title="No matching supplies"
-                  description="Try a different search or category."
+                  description="Try a different search, category or location."
                 />
               ) : (
                 <EmptyState icon={Stethoscope} title="No medical supplies yet" description={emptyCatalogHint} />
@@ -1058,7 +1158,7 @@ const MedicalSuppliesPage: React.FC = () => {
                           Next expiry
                         </th>
                         <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                          Storage
+                          Where
                         </th>
                         <th className="px-4 py-3 text-right">
                           <span className="sr-only">Actions</span>
@@ -1128,8 +1228,8 @@ const MedicalSuppliesPage: React.FC = () => {
                                 '—'
                               )}
                             </td>
-                            <td data-label="Storage" className="text-theme-text-muted px-4 py-3">
-                              {item.storage_location || '—'}
+                            <td data-label="Where" className="text-theme-text-muted px-4 py-3">
+                              <SupplyWhere item={item} onOpen={() => setLotsItem(item)} />
                             </td>
                             <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap">
                               {/* Lots for everyone who can see the list: a crew
@@ -1263,6 +1363,7 @@ const MedicalSuppliesPage: React.FC = () => {
             sort_by: (sortDirection && sortField) || undefined,
             sort_order: (sortField && sortDirection) || undefined,
             low_stock: lowStockOnly || undefined,
+            ...storageQuery,
           }}
         />
       )}

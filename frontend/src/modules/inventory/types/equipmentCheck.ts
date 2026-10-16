@@ -1015,6 +1015,9 @@ export interface ItemDeployment {
   expirationDate?: string;
   daysUntilExpiration?: number;
   isExpired: boolean;
+  /** What the position should hold, and the last count aboard (null: never counted). */
+  targetQuantity?: number | null;
+  quantityOnTruck?: number | null;
 }
 
 /**

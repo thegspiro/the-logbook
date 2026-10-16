@@ -3976,12 +3976,65 @@ class EquipmentCheckService:
                     "apparatus_type": tmpl.apparatus_type,
                     "lot_number": self._soonest_lot_number(item),
                     "serial_number": item.serial_number,
+                    # What the position should hold and what was last counted
+                    # aboard. A null count means nobody has counted since the
+                    # position was defined; the reader shows the target then.
+                    "target_quantity": self._target_quantity(item),
+                    "quantity_on_truck": item.quantity_on_truck,
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,
                     "is_expired": bool(exp and exp < today),
                 }
             )
         return deployments
+
+    async def apparatus_counts_for_items(
+        self, organization_id: str, inventory_item_ids: List[str]
+    ) -> Dict[str, int]:
+        """``{inventory_item_id: how many apparatus carry it}``, in one query.
+
+        Counted over active templates, as ``get_item_deployments`` lists them,
+        so the badge on a supply and the list it opens agree. A template made
+        for an apparatus *type* rather than one vehicle counts once per type:
+        it is one place the supply is carried, even without a named truck.
+        """
+        ids = list({str(i) for i in inventory_item_ids})
+        if not ids:
+            return {}
+        rows = await self.db.execute(
+            select(
+                CheckTemplateItem.inventory_item_id,
+                EquipmentCheckTemplate.apparatus_id,
+                EquipmentCheckTemplate.apparatus_type,
+                EquipmentCheckTemplate.id,
+            )
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                CheckTemplateItem.inventory_item_id.in_(ids),
+                EquipmentCheckTemplate.organization_id == organization_id,
+                EquipmentCheckTemplate.is_active.is_(True),
+            )
+        )
+        carriers: Dict[str, set] = {}
+        for item_id, apparatus_id, apparatus_type, template_id in rows.all():
+            key = (
+                f"apparatus:{apparatus_id}"
+                if apparatus_id
+                else (
+                    f"type:{apparatus_type}"
+                    if apparatus_type
+                    else f"tmpl:{template_id}"
+                )
+            )
+            carriers.setdefault(str(item_id), set()).add(key)
+        return {item_id: len(keys) for item_id, keys in carriers.items()}
 
     async def swap_item_lot(
         self,

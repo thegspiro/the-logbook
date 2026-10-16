@@ -967,6 +967,10 @@ class ItemDeployment(BaseModel):
     expiration_date: Optional[date] = None
     days_until_expiration: Optional[int] = None
     is_expired: bool = False
+    # What the position should hold, and the running count aboard (null when
+    # nobody has counted since the position was defined).
+    target_quantity: Optional[int] = None
+    quantity_on_truck: Optional[int] = None
 
 
 class ExpiredStockDisposition(str, Enum):

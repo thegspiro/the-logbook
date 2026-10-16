@@ -9,6 +9,7 @@ const mockAddItemLot = vi.fn();
 const mockUpdateLot = vi.fn();
 const mockDeleteLot = vi.fn();
 const mockToastError = vi.fn();
+const mockGetItemPlacements = vi.fn();
 
 vi.mock('../../../services/medicalSuppliesService', () => ({
   medicalSuppliesService: {
@@ -16,6 +17,7 @@ vi.mock('../../../services/medicalSuppliesService', () => ({
     addItemLot: (...a: unknown[]) => mockAddItemLot(...a) as unknown,
     updateLot: (...a: unknown[]) => mockUpdateLot(...a) as unknown,
     deleteLot: (...a: unknown[]) => mockDeleteLot(...a) as unknown,
+    getItemPlacements: (...a: unknown[]) => mockGetItemPlacements(...a) as unknown,
   },
 }));
 
@@ -52,9 +54,16 @@ describe('MedicalItemLotsModal', () => {
   const onChanged = vi.fn();
 
   beforeEach(() => {
-    [mockGetItemLots, mockAddItemLot, mockUpdateLot, mockDeleteLot, mockToastError, onClose, onChanged].forEach((m) =>
-      m.mockReset()
-    );
+    [
+      mockGetItemLots,
+      mockAddItemLot,
+      mockUpdateLot,
+      mockDeleteLot,
+      mockToastError,
+      mockGetItemPlacements,
+      onClose,
+      onChanged,
+    ].forEach((m) => m.mockReset());
     mockGetItemLots.mockResolvedValue([
       lot(),
       lot({ id: 'lot-2', lot_number: 'GZ-09', expiration_date: '2000-01-01', quantity: 4 }),
@@ -62,6 +71,7 @@ describe('MedicalItemLotsModal', () => {
     mockAddItemLot.mockResolvedValue(lot({ id: 'lot-3' }));
     mockUpdateLot.mockResolvedValue(lot());
     mockDeleteLot.mockResolvedValue(undefined);
+    mockGetItemPlacements.mockResolvedValue([]);
   });
 
   const renderModal = (canManage = true) =>

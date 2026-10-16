@@ -53,6 +53,7 @@ from app.models.inventory import (
     ItemStatus,
 )
 from app.models.user import User
+from app.schemas.equipment_check import ItemDeployment
 from app.schemas.inventory import (
     ExpiringLotResponse,
     InventoryCategoryCreate,
@@ -72,7 +73,11 @@ from app.schemas.inventory import (
     ItemBulkRetireResult,
     ItemRetireRequest,
     ItemsListResponse,
+    MedicalStorageAreaOption,
+    MedicalStorageOptionsResponse,
+    MedicalStorageRoom,
 )
+from app.services.equipment_check_service import EquipmentCheckService
 from app.services.inventory_service import (
     CategoryHasItemsError,
     InventoryService,
@@ -406,14 +411,21 @@ async def list_medical_items(
             service, str(category_id), str(current_user.organization_id)
         )
 
+    org_id = str(current_user.organization_id)
+    item_ids = await _medical_filter_ids(
+        service,
+        org_id,
+        low_stock=low_stock,
+        location_id=location_id,
+        storage_area_id=storage_area_id,
+    )
+
     items, total = await service.get_items(
         organization_id=current_user.organization_id,
         category_id=category_id,
         status=status_enum,
         condition=condition_enum,
         item_types=MEDICAL_ITEM_TYPES,
-        location_id=location_id,
-        storage_area_id=storage_area_id,
         search=search,
         active_only=active_only,
         sort_by=sort_by,
@@ -421,25 +433,67 @@ async def list_medical_items(
         skip=skip,
         limit=limit,
         fuzzy=fuzzy,
-        item_ids=(
-            await _low_stock_ids(service, current_user.organization_id)
-            if low_stock
-            else None
-        ),
+        item_ids=item_ids,
     )
-    soonest = await service.next_lot_expirations(
-        str(current_user.organization_id), [i.id for i in items]
-    )
-    if soonest:
-        today = await resolve_org_today(db, current_user.organization_id)
-        # Transient, like lot_stock: read by the response schema only.
-        for item in items:
-            expires = soonest.get(str(item.id))
-            item.next_expiration_date = expires
-            item.days_until_next_expiration = (
-                (expires - today).days if expires else None
-            )
+    await _attach_medical_list_extras(db, service, org_id, items)
     return ItemsListResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+async def _medical_filter_ids(
+    service: InventoryService,
+    organization_id: str,
+    *,
+    low_stock: bool,
+    location_id: Any,
+    storage_area_id: Any,
+) -> Optional[List[str]]:
+    """The id set the list and its export narrow to, or None for no narrowing.
+
+    A storage filter reaches nested areas and an area's room (see
+    ``item_ids_stored_in``), which the exact-match item columns cannot, so it
+    becomes an id set intersected with the low-stock set. Shared by the list
+    and the export so a filtered export holds exactly the rows on screen.
+    """
+    ids: Optional[set] = None
+    if low_stock:
+        ids = set(await _low_stock_ids(service, organization_id))
+    if location_id or storage_area_id:
+        stored = set(
+            await service.item_ids_stored_in(
+                organization_id,
+                MEDICAL_ITEM_TYPES,
+                location_id=str(location_id) if location_id else None,
+                storage_area_id=str(storage_area_id) if storage_area_id else None,
+            )
+        )
+        ids = stored if ids is None else ids & stored
+    return sorted(ids) if ids is not None else None
+
+
+async def _attach_medical_list_extras(
+    db: AsyncSession, service: InventoryService, org_id: str, items: List[Any]
+) -> None:
+    """Next expiry, storage path and apparatus count for each listed supply.
+
+    Transient attributes, like lot_stock: read by the response schema and
+    never persisted. Each is one query for the whole page.
+    """
+    if not items:
+        return
+    ids = [str(i.id) for i in items]
+    soonest = await service.next_lot_expirations(org_id, ids)
+    today = await resolve_org_today(db, org_id) if soonest else None
+    areas = await service.storage_area_index(org_id)
+    rooms = await service.location_names(org_id)
+    carriers = await EquipmentCheckService(db).apparatus_counts_for_items(org_id, ids)
+    for item in items:
+        expires = soonest.get(str(item.id))
+        item.next_expiration_date = expires
+        item.days_until_next_expiration = (
+            (expires - today).days if expires and today else None
+        )
+        item.storage_path = service.storage_path(item, areas, rooms)
+        item.apparatus_count = carriers.get(str(item.id), 0)
 
 
 async def _low_stock_ids(service: InventoryService, organization_id: Any) -> List[str]:
@@ -722,10 +776,12 @@ async def export_medical_items_csv(
         )
     # Resolved before streaming starts, on the request session, like the
     # category check above.
-    low_stock_ids = (
-        await _low_stock_ids(InventoryService(db), organization_id)
-        if low_stock
-        else None
+    filter_ids = await _medical_filter_ids(
+        InventoryService(db),
+        organization_id,
+        low_stock=low_stock,
+        location_id=location_id,
+        storage_area_id=storage_area_id,
     )
 
     async def _rows() -> AsyncGenerator[str, None]:
@@ -753,15 +809,13 @@ async def export_medical_items_csv(
                     status=status_enum,
                     condition=condition_enum,
                     item_types=MEDICAL_ITEM_TYPES,
-                    location_id=location_id,
-                    storage_area_id=storage_area_id,
                     search=search,
                     active_only=active_only,
                     sort_by=sort_by,
                     sort_order=sort_order,
                     skip=skip,
                     limit=_EXPORT_PAGE_SIZE,
-                    item_ids=low_stock_ids,
+                    item_ids=filter_ids,
                 )
                 if not items:
                     return
@@ -1595,6 +1649,82 @@ async def bulk_retire_medical_items(
 # ============================================
 # Stock lots
 # ============================================
+
+
+@router.get("/storage-options", response_model=MedicalStorageOptionsResponse)
+async def list_medical_storage_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.view_medical", "inventory.view")
+    ),
+):
+    """
+    Rooms and active storage areas a medical supply can be filed under
+
+    The same rooms and areas Inventory › Storage Areas manages, read here so a
+    medical-only officer can file and find supplies without being granted
+    general inventory access. Read-only; areas are still created and edited
+    under Inventory.
+
+    **Authentication required**
+    **Requires permission: inventory.view_medical or inventory.view**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    areas = await service.storage_area_index(org_id)
+    rooms = await service.location_names(org_id)
+    options = sorted(
+        (a for a in areas.values() if a["is_active"]),
+        key=lambda a: (
+            (a["location_name"] or "").lower(),
+            [p.lower() for p in a["path"]],
+        ),
+    )
+    return MedicalStorageOptionsResponse(
+        rooms=[
+            MedicalStorageRoom(id=room_id, name=name)
+            for room_id, name in sorted(rooms.items(), key=lambda r: r[1].lower())
+        ],
+        areas=[
+            MedicalStorageAreaOption(
+                id=a["id"],
+                name=a["name"],
+                label=a["label"],
+                storage_type=a["storage_type"],
+                parent_id=a["parent_id"],
+                location_id=a["location_id"],
+                location_name=a["location_name"],
+                path=" › ".join(a["path"]),
+            )
+            for a in options
+        ],
+    )
+
+
+@router.get("/items/{item_id}/placements", response_model=list[ItemDeployment])
+async def list_medical_item_placements(
+    item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.view_medical", "inventory.view")
+    ),
+):
+    """
+    Which apparatus checklists carry this medical supply, and what is aboard
+
+    The medical-domain read of ``/equipment-checks/supply/item-deployments``,
+    which needs inventory or checklist access a medical-only officer may not
+    hold.
+
+    **Authentication required**
+    **Requires permission: inventory.view_medical or inventory.view**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    await _require_medical_item(service, item_id, org_id)
+    return await EquipmentCheckService(db).get_item_deployments(
+        inventory_item_id=item_id, organization_id=org_id
+    )
 
 
 @router.get("/items/{item_id}/lots", response_model=list[InventoryLotResponse])

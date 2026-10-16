@@ -9300,6 +9300,171 @@ class InventoryService:
         )
         return {str(item_id): size for item_id, size in result.all()}
 
+    async def storage_area_index(
+        self, organization_id: str
+    ) -> Dict[str, Dict[str, Any]]:
+        """Every storage area in the organization, with its room and path.
+
+        A storage area names its room only at the top of its tree — a shelf
+        inherits the room of the rack it sits in (see ``StorageArea``) — so
+        both the room and the readable path ("Cabinet B › Shelf 2") are
+        resolved here by walking parents, once, rather than per row. Inactive
+        areas are included so an item still filed in one keeps its label; the
+        caller decides whether to offer them.
+        """
+        org = str(organization_id)
+        rows = (
+            await self.db.execute(
+                select(
+                    StorageArea.id,
+                    StorageArea.name,
+                    StorageArea.label,
+                    StorageArea.storage_type,
+                    StorageArea.parent_id,
+                    StorageArea.location_id,
+                    StorageArea.is_active,
+                    StorageArea.sort_order,
+                ).where(StorageArea.organization_id == org)
+            )
+        ).all()
+        rooms = await self.location_names(org)
+        raw = {str(r.id): r for r in rows}
+
+        index: Dict[str, Dict[str, Any]] = {}
+
+        def resolve(area_id: str) -> Dict[str, Any]:
+            if area_id in index:
+                return index[area_id]
+            # Walk to the top, guarding against a parent cycle a bad edit
+            # could leave behind: a repeated id ends the walk.
+            chain: List[Any] = []
+            seen: set = set()
+            current: Optional[str] = area_id
+            while current and current in raw and current not in seen:
+                seen.add(current)
+                chain.append(raw[current])
+                current = (
+                    str(raw[current].parent_id) if raw[current].parent_id else None
+                )
+            chain.reverse()
+            location_id = next(
+                (str(a.location_id) for a in chain if a.location_id), None
+            )
+            row = raw[area_id]
+            entry = {
+                "id": area_id,
+                "name": row.name,
+                "label": row.label,
+                "storage_type": getattr(row.storage_type, "value", row.storage_type),
+                "parent_id": str(row.parent_id) if row.parent_id else None,
+                "location_id": location_id,
+                "location_name": rooms.get(location_id) if location_id else None,
+                "is_active": bool(row.is_active),
+                "sort_order": row.sort_order or 0,
+                "path": [a.name for a in chain],
+            }
+            index[area_id] = entry
+            return entry
+
+        for area_id in raw:
+            resolve(area_id)
+        return index
+
+    async def location_names(self, organization_id: str) -> Dict[str, str]:
+        """``{location_id: name}`` for the organization's rooms and places."""
+        rows = await self.db.execute(
+            select(Location.id, Location.name).where(
+                Location.organization_id == str(organization_id)
+            )
+        )
+        return {str(loc_id): name for loc_id, name in rows.all()}
+
+    @staticmethod
+    def storage_path(
+        item: Any,
+        areas: Dict[str, Dict[str, Any]],
+        rooms: Dict[str, str],
+    ) -> Optional[str]:
+        """ "Station 1 › Supply Room › Shelf 2" for an item, or None.
+
+        The room comes from the item, falling back to its area's room, so an
+        item filed on a shelf by a form that did not also set the room still
+        says which building it is in.
+        """
+        area = areas.get(str(item.storage_area_id)) if item.storage_area_id else None
+        room_id = str(item.location_id) if item.location_id else None
+        if room_id is None and area is not None:
+            room_id = area["location_id"]
+        parts: List[str] = []
+        if room_id and rooms.get(room_id):
+            parts.append(rooms[room_id])
+        if area is not None:
+            parts.extend(area["path"])
+        return " › ".join(parts) or None
+
+    @staticmethod
+    def area_and_descendants(
+        areas: Dict[str, Dict[str, Any]], area_id: str
+    ) -> List[str]:
+        """This area and every area nested under it, at any depth."""
+        children: Dict[str, List[str]] = {}
+        for a in areas.values():
+            if a["parent_id"]:
+                children.setdefault(a["parent_id"], []).append(a["id"])
+        found: List[str] = []
+        stack = [str(area_id)]
+        while stack:
+            current = stack.pop()
+            if current in found:
+                continue
+            found.append(current)
+            stack.extend(children.get(current, []))
+        return found
+
+    async def item_ids_stored_in(
+        self,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+        *,
+        location_id: Optional[str] = None,
+        storage_area_id: Optional[str] = None,
+    ) -> List[str]:
+        """Items filed in a room or a storage area, nested areas included.
+
+        A room matches an item filed under it directly, or on any area inside
+        it — the area forms do not always set the room as well. An area
+        matches itself and everything nested beneath it, so asking for
+        "Cabinet B" finds the gauze on Shelf 2 of it.
+        """
+        org = str(organization_id)
+        areas = await self.storage_area_index(org)
+        area_ids: List[str] = []
+        if storage_area_id:
+            if str(storage_area_id) not in areas:
+                return []
+            area_ids = self.area_and_descendants(areas, str(storage_area_id))
+        elif location_id:
+            area_ids = [
+                a["id"] for a in areas.values() if a["location_id"] == str(location_id)
+            ]
+        conditions: List[Any] = []
+        if area_ids:
+            conditions.append(InventoryItem.storage_area_id.in_(area_ids))
+        if location_id and not storage_area_id:
+            conditions.append(InventoryItem.location_id == str(location_id))
+        if not conditions:
+            return []
+        rows = await self.db.execute(
+            select(InventoryItem.id)
+            .join(InventoryCategory, InventoryCategory.id == InventoryItem.category_id)
+            .where(
+                InventoryItem.organization_id == org,
+                InventoryCategory.item_type.in_(list(item_types)),
+                or_(*conditions),
+            )
+        )
+        return [str(i) for i in rows.scalars().all()]
+
     async def next_lot_expirations(
         self, organization_id: str, item_ids: Iterable[str]
     ) -> Dict[str, date]:
