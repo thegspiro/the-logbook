@@ -156,6 +156,37 @@ condition the intake refuses on, so the two cannot disagree
 Turning a form public after it is published, or switching the toggle off later,
 does not warn — publishing is the one moment the owner chose.
 
+## Google Workspace — What Account Provisioning Leaves Out (2026-10-15)
+
+The Google Workspace integration creates an account for each applicant
+converted to a member and suspends it when the member is dropped or deleted
+(`wiki/Integration-Google-Workspace.md`). Each of these is a deliberate
+choice an owner may want to revisit:
+
+- **Retirement keeps the account.** Only a drop or a delete suspends it; a
+  department may let retirees keep their address. Retired, on-leave, inactive
+  and Logbook-suspended members keep a working Google account.
+- **Suspended, never deleted.** A departed member's account keeps its mailbox
+  and its Workspace license until an administrator deletes it in Google.
+- **A permanent delete cannot be retried.** The account record goes with the
+  member, so a Google failure while suspending is recorded only in the audit
+  log; an administrator suspends the account by hand.
+- **No rename.** A member's name change in The Logbook does not reach Google.
+- **Members added any other way get no account.** Only conversion from the
+  prospective-members pipeline creates one; Add Member and roster import do
+  not.
+- **Linking existing members is by exact address, and on demand.** **Link
+  existing members** matches a member's Logbook email to an account's primary
+  address only — not an alias, not a personal address — and skips members who
+  have already left. A member added later by Add Member or import is not linked
+  until it is run again.
+- **A delegated key is domain-wide.** The service account can manage every
+  user in the domain, not only members The Logbook created. That is why
+  changing the integration needs `admin.access`, and why the requested scopes
+  are limited to users and group membership.
+
+---
+
 ## Claude (MCP) — Member Sign-In (OAuth) Residuals (2026-10-06)
 
 **The original limitation is resolved.** "claude.ai custom connectors need an

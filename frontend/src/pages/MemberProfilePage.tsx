@@ -58,6 +58,9 @@ import { VisibilityControl } from '../components/member-profile/VisibilityContro
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
 import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
+import { GoogleAccountPanel } from '../modules/membership/components/GoogleAccountPanel';
+import { GOOGLE_WORKSPACE_INTEGRATION } from '../modules/membership/constants/googleAccount';
+import { useMemberGoogleAccount } from '../modules/membership/hooks/useMemberGoogleAccount';
 import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
 import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
 import { RejoinServiceFields } from '../components/RejoinServiceFields';
@@ -361,6 +364,8 @@ export const MemberProfilePage: React.FC = () => {
   // on that basis alone.
   const { isConnected: isIntegrationConnected, loading: integrationsLoading } = useConnectedIntegrations();
   const idCardsEnabled = !integrationsLoading && isIntegrationConnected(NFC_ID_CARDS_INTEGRATION);
+  const googleWorkspaceEnabled = !integrationsLoading && isIntegrationConnected(GOOGLE_WORKSPACE_INTEGRATION);
+  const googleAccount = useMemberGoogleAccount(userId, canManageMembers && googleWorkspaceEnabled);
 
   const handleOpenStatusModal = () => {
     if (!user) return;
@@ -707,10 +712,12 @@ export const MemberProfilePage: React.FC = () => {
   // still reserve two-thirds of the page for nothing.
   const showAdminHours = Boolean(adminHoursSummary && adminHoursSummary.totalEntries > 0) || adminHoursLoading;
   const showIdCards = Boolean(canManageIdCards && userId && idCardsEnabled);
+  const showGoogleAccount = Boolean(googleAccount.account && userId);
   const hasLeftColumn =
     (trainingEnabled && canViewTargetTraining) ||
     showAdminHours ||
     showIdCards ||
+    showGoogleAccount ||
     (inventoryModuleEnabled && canViewTargetInventory);
   const hasQuickStats =
     (trainingEnabled && canViewTargetTraining) ||
@@ -945,6 +952,17 @@ export const MemberProfilePage: React.FC = () => {
                 hides itself when the organization has cards turned off. */}
               {showIdCards && userId && (
                 <MemberIdCardsPanel userId={userId} memberName={user ? displayNameOf(user) : undefined} />
+              )}
+
+              {/* Google Workspace account created at conversion. Officers
+                only, and only for a member The Logbook made one for. */}
+              {showGoogleAccount && userId && googleAccount.account && (
+                <GoogleAccountPanel
+                  userId={userId}
+                  account={googleAccount.account}
+                  onChange={googleAccount.setAccount}
+                  onReload={googleAccount.reload}
+                />
               )}
 
               {/* Assigned Inventory - the member's own kit, or a quartermaster's

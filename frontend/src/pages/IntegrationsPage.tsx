@@ -45,6 +45,7 @@ import {
   CreditCard,
   KeyRound,
   Bot,
+  Mail,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
@@ -54,6 +55,7 @@ import {
   type SalesforceReadiness,
   type SalesforcePreviewResult,
   type CalcomBooking,
+  type GoogleWorkspaceLinkResult,
 } from '../services/api';
 import type { McpStatus } from '../services/adminServices';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -165,6 +167,12 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     color: 'text-indigo-700 dark:text-indigo-400',
     bgColor: 'bg-indigo-500/10',
     features: ['Store payment matching', 'Auto-settles orders', 'Business account'],
+  },
+  'google-workspace': {
+    icon: <Mail className="h-6 w-6" />,
+    color: 'text-emerald-700 dark:text-emerald-400',
+    bgColor: 'bg-emerald-500/10',
+    features: ['Account per new member', 'Org unit & groups', 'Administrator only'],
   },
   'claude-mcp': {
     icon: <Bot className="h-6 w-6" />,
@@ -304,7 +312,13 @@ const CONFIG_TYPES = new Set([
   'calcom',
   'paypal',
   'claude-mcp',
+  'google-workspace',
 ]);
+
+// Its service-account key can create accounts anywhere in the department's
+// Google domain, so the backend requires admin.access on top of
+// integrations.manage to connect, change or disconnect it.
+const ADMIN_ONLY_TYPES = new Set(['google-workspace']);
 
 /**
  * Entries that are features of The Logbook itself rather than links to an
@@ -329,12 +343,26 @@ const labelClass = 'form-label';
 const webhookCallbackUrl = (provider: 'documenso' | 'calcom' | 'paypal', integrationId: string): string =>
   `${window.location.origin}/api/public/v1/webhooks/${provider}/${integrationId}`;
 
+// The members a link run leaves alone, and why, in one sentence each.
+const describeGoogleLinkSkips = (result: GoogleWorkspaceLinkResult): string => {
+  const parts = [
+    result.already_linked > 0 && `${result.already_linked} already linked`,
+    result.not_in_google > 0 && `${result.not_in_google} with no account at their address`,
+    result.off_domain > 0 && `${result.off_domain} with an email outside the domain`,
+    result.departed > 0 && `${result.departed} who have already left`,
+  ].filter((part): part is string => typeof part === 'string');
+  return parts.length > 0 ? `Skipped: ${parts.join(', ')}.` : '';
+};
+
 const IntegrationsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('integrations.manage');
   // A delegated key manager holds the key permission alongside the screen's
   // own gate, not necessarily integrations.manage; the key panel is theirs too.
   const canIssueKeys = checkPermission('integrations.mcp_keys');
+  const isOrgAdmin = checkPermission('admin.access');
+  const canChange = (integrationType: string): boolean =>
+    canManage && (!ADMIN_ONLY_TYPES.has(integrationType) || isOrgAdmin);
   const location = useLocation();
   const navigate = useNavigate();
   const tz = useTimezone();
@@ -395,6 +423,12 @@ const IntegrationsPage: React.FC = () => {
   const [mcpExposeFullSchedule, setMcpExposeFullSchedule] = useState(false);
   const [mcpExposeMedicalSupplies, setMcpExposeMedicalSupplies] = useState(false);
   const [mcpOauthEnabled, setMcpOauthEnabled] = useState(false);
+  const [gwsServiceAccountKey, setGwsServiceAccountKey] = useState('');
+  const [gwsKeyFileName, setGwsKeyFileName] = useState('');
+  const [gwsAdminEmail, setGwsAdminEmail] = useState('');
+  const [gwsDomain, setGwsDomain] = useState('');
+  const [gwsOrgUnitPath, setGwsOrgUnitPath] = useState('/');
+  const [gwsGroups, setGwsGroups] = useState('');
   // The connect form doubles as the settings form for a connected Claude
   // (MCP) integration. Reconnecting is not an option there: disconnect
   // revokes the service key and ends every member connection.
@@ -551,6 +585,17 @@ const IntegrationsPage: React.FC = () => {
     setMcpExposeFullSchedule(stored['expose_full_schedule'] === true);
     setMcpExposeMedicalSupplies(stored['expose_medical_supplies'] === true);
     setMcpOauthEnabled(stored['oauth_enabled'] === true);
+    // The key is never echoed back; a blank one on save means "keep it".
+    setGwsServiceAccountKey('');
+    setGwsKeyFileName('');
+    setGwsAdminEmail(typeof stored['admin_email'] === 'string' ? stored['admin_email'] : '');
+    setGwsDomain(typeof stored['domain'] === 'string' ? stored['domain'] : '');
+    setGwsOrgUnitPath(typeof stored['org_unit_path'] === 'string' ? stored['org_unit_path'] : '/');
+    setGwsGroups(
+      Array.isArray(stored['group_emails'])
+        ? stored['group_emails'].filter((g): g is string => typeof g === 'string').join('\n')
+        : ''
+    );
     setEditingSettings(false);
   };
 
@@ -590,6 +635,17 @@ const IntegrationsPage: React.FC = () => {
           client_secret: paypalClientSecret.trim() || undefined,
           webhook_id: paypalWebhookId.trim() || undefined,
           auto_apply_payments: paypalAutoApply,
+        };
+      case 'google-workspace':
+        return {
+          service_account_key: gwsServiceAccountKey || undefined,
+          admin_email: gwsAdminEmail.trim(),
+          domain: gwsDomain.trim(),
+          org_unit_path: gwsOrgUnitPath.trim() || '/',
+          group_emails: gwsGroups
+            .split(/[\s,]+/)
+            .map((g) => g.trim())
+            .filter(Boolean),
         };
       case 'claude-mcp':
         return {
@@ -744,6 +800,33 @@ const IntegrationsPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Connection test failed'));
     } finally {
       setTesting(false);
+    }
+  };
+
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+
+  const handleLinkExistingGoogle = async () => {
+    setLinkingGoogle(true);
+    try {
+      const preview = await integrationsService.linkExistingGoogleMembers(false);
+      if (preview.linked === 0) {
+        toast.success(`No members to link. ${describeGoogleLinkSkips(preview)}`);
+        return;
+      }
+      const confirmed = await confirm({
+        title: `Link ${preview.linked} existing ${preview.linked === 1 ? 'member' : 'members'} to Google?`,
+        message: `Each one's Logbook email is already an account in Google Workspace. Once linked, The Logbook suspends that account when the member leaves and lifts its own suspension if they return; it changes nothing else about the account. ${describeGoogleLinkSkips(preview)}`,
+        confirmLabel: 'Link accounts',
+        cancelLabel: 'Not now',
+        variant: 'warning',
+      });
+      if (!confirmed) return;
+      const result = await integrationsService.linkExistingGoogleMembers(true);
+      toast.success(`Linked ${result.linked} ${result.linked === 1 ? 'member' : 'members'} to Google Workspace`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not link existing members to Google Workspace'));
+    } finally {
+      setLinkingGoogle(false);
     }
   };
 
@@ -1204,6 +1287,107 @@ const IntegrationsPage: React.FC = () => {
                 &quot;refresh_token&quot; OAuth scopes, and add this app&apos;s callback URL to it.
               </p>
             </div>
+          </div>
+        );
+
+      case 'google-workspace':
+        return (
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="gws-key" className={labelClass}>
+                Service account key (JSON)
+              </label>
+              <input
+                id="gws-key"
+                type="file"
+                accept="application/json,.json"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  void file
+                    .text()
+                    .then((text) => {
+                      setGwsServiceAccountKey(text);
+                      setGwsKeyFileName(file.name);
+                    })
+                    .catch(() => toast.error('The key file could not be read'));
+                }}
+                className={inputClass}
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                {gwsKeyFileName
+                  ? `Loaded ${gwsKeyFileName}. It is stored encrypted and never shown again.`
+                  : editingSettings
+                    ? 'A key is stored. Choose a file only to replace it.'
+                    : 'Create a service account in Google Cloud, enable the Admin SDK API, and download a JSON key.'}
+              </p>
+            </div>
+            <div>
+              <label htmlFor="gws-admin" className={labelClass}>
+                Admin to act as
+              </label>
+              <input
+                id="gws-admin"
+                type="email"
+                value={gwsAdminEmail}
+                onChange={(e) => setGwsAdminEmail(e.target.value)}
+                placeholder="admin@firedept.org"
+                className={inputClass}
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                A Workspace admin allowed to create users and manage groups.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="gws-domain" className={labelClass}>
+                Domain
+              </label>
+              <input
+                id="gws-domain"
+                type="text"
+                value={gwsDomain}
+                onChange={(e) => setGwsDomain(e.target.value)}
+                placeholder="firedept.org"
+                className={inputClass}
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Must match the department email domain in Organization Settings. Accounts are created at those
+                addresses.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="gws-ou" className={labelClass}>
+                Organizational unit
+              </label>
+              <input
+                id="gws-ou"
+                type="text"
+                value={gwsOrgUnitPath}
+                onChange={(e) => setGwsOrgUnitPath(e.target.value)}
+                placeholder="/Members"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="gws-groups" className={labelClass}>
+                Add new members to these groups (optional)
+              </label>
+              <textarea
+                id="gws-groups"
+                rows={3}
+                value={gwsGroups}
+                onChange={(e) => setGwsGroups(e.target.value)}
+                placeholder={'members@firedept.org\nannouncements@firedept.org'}
+                className={inputClass}
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">One address per line, up to 20.</p>
+            </div>
+            <p className="text-theme-text-muted text-xs">
+              In the Google Admin console, open Security &rarr; API controls &rarr; Domain-wide delegation and authorize
+              the service account&apos;s client ID for <code>https://www.googleapis.com/auth/admin.directory.user</code>{' '}
+              and <code>https://www.googleapis.com/auth/admin.directory.group.member</code>. Each account created uses a
+              Workspace license.
+            </p>
           </div>
         );
 
@@ -1719,7 +1903,9 @@ const IntegrationsPage: React.FC = () => {
                     )}
                   {integration.status === ConnectionStatus.CONNECTED && canManage && (
                     <>
-                      {integration.integration_type === 'claude-mcp' && (
+                      {(integration.integration_type === 'claude-mcp' ||
+                        (integration.integration_type === 'google-workspace' &&
+                          canChange(integration.integration_type))) && (
                         <button
                           onClick={() => {
                             resetFormState(integration);
@@ -1733,6 +1919,23 @@ const IntegrationsPage: React.FC = () => {
                           <span>Settings</span>
                         </button>
                       )}
+                      {integration.integration_type === 'google-workspace' &&
+                        canChange(integration.integration_type) && (
+                          <button
+                            onClick={() => {
+                              void handleLinkExistingGoogle();
+                            }}
+                            disabled={linkingGoogle}
+                            className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {linkingGoogle ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <Link className="h-3.5 w-3.5" aria-hidden="true" />
+                            )}
+                            <span>Link existing members</span>
+                          </button>
+                        )}
                       {integration.integration_type === 'salesforce' && (
                         <button
                           onClick={() => setShowSyncPanel(!showSyncPanel)}
@@ -1765,26 +1968,31 @@ const IntegrationsPage: React.FC = () => {
                           <span>Test</span>
                         </button>
                       )}
-                      <button
-                        onClick={() => {
-                          void handleDisconnect(integration.id);
-                        }}
-                        // Disconnecting the Claude integration unmounts the key
-                        // panel; mid-issue that would lose the one-time plaintext.
-                        disabled={mcpBusy && integration.integration_type === 'claude-mcp'}
-                        title={
-                          mcpBusy && integration.integration_type === 'claude-mcp'
-                            ? 'Wait for the current key request to finish'
-                            : undefined
-                        }
-                        className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
-                      >
-                        <Settings className="h-3.5 w-3.5" />
-                        <span>{activation ? 'Deactivate' : 'Disconnect'}</span>
-                      </button>
+                      {canChange(integration.integration_type) && (
+                        <button
+                          onClick={() => {
+                            void handleDisconnect(integration.id);
+                          }}
+                          // Disconnecting the Claude integration unmounts the key
+                          // panel; mid-issue that would lose the one-time plaintext.
+                          disabled={mcpBusy && integration.integration_type === 'claude-mcp'}
+                          title={
+                            mcpBusy && integration.integration_type === 'claude-mcp'
+                              ? 'Wait for the current key request to finish'
+                              : undefined
+                          }
+                          className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                          <span>{activation ? 'Deactivate' : 'Disconnect'}</span>
+                        </button>
+                      )}
                     </>
                   )}
-                  {integration.status === 'available' && canManage && (
+                  {integration.status === 'available' && canManage && !canChange(integration.integration_type) && (
+                    <span className="text-theme-text-muted text-xs">An organization administrator connects this</span>
+                  )}
+                  {integration.status === 'available' && canChange(integration.integration_type) && (
                     <button
                       type="button"
                       data-integration-connect={integration.id}
@@ -2225,7 +2433,9 @@ const IntegrationsPage: React.FC = () => {
                           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-indigo-700" />
                           <p className="text-sm text-indigo-700">
                             {editingSettings
-                              ? "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
+                              ? selectedIntegration.integration_type === 'google-workspace'
+                                ? 'Saved settings apply to the next member converted. Accounts already created are not changed.'
+                                : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
                               : activation
                                 ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
                                 : 'Connecting turns this integration on for your organization. You can disconnect it at any time.'}

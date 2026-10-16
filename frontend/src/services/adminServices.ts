@@ -1408,6 +1408,16 @@ export interface McpKeyCreateResult {
   endpoint_path: string;
 }
 
+/** What linking the existing roster to Google did, or (previewed) would do. */
+export interface GoogleWorkspaceLinkResult {
+  applied: boolean;
+  linked: number;
+  already_linked: number;
+  departed: number;
+  not_in_google: number;
+  off_domain: number;
+}
+
 export const integrationsService = {
   async getIntegrations(): Promise<IntegrationConfig[]> {
     const response = await api.get<IntegrationConfig[]>('/integrations');
@@ -1516,6 +1526,15 @@ export const integrationsService = {
   async revokeMcpKey(keyId: string): Promise<McpServiceKey> {
     const response = await api.delete<{ key: McpServiceKey }>(`/integrations/claude-mcp/keys/${keyId}`);
     return response.data.key;
+  },
+
+  // Google is only read. apply=false previews the counts; apply=true records
+  // the links, after which those members' accounts are suspended when they leave.
+  async linkExistingGoogleMembers(apply: boolean): Promise<GoogleWorkspaceLinkResult> {
+    const response = await api.post<GoogleWorkspaceLinkResult>('/integrations/google-workspace/link-existing', null, {
+      params: { apply },
+    });
+    return response.data;
   },
 };
 

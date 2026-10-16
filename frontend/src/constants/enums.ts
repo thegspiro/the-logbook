@@ -131,6 +131,26 @@ export const NFC_CARD_STATUS_COLORS: Record<string, string> = {
   revoked: 'bg-theme-surface-secondary text-theme-text-secondary',
 };
 
+/**
+ * A member's Google Workspace account, created when they were converted from
+ * an applicant. `linked_existing`: the address already belonged to an account,
+ * which The Logbook recorded and never modified.
+ */
+export const GoogleAccountStatus = {
+  PENDING: 'pending',
+  CREATED: 'created',
+  LINKED_EXISTING: 'linked_existing',
+  FAILED: 'failed',
+} as const;
+export type GoogleAccountStatus = (typeof GoogleAccountStatus)[keyof typeof GoogleAccountStatus];
+
+export const GOOGLE_ACCOUNT_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  created: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  linked_existing: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  failed: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+};
+
 // ============================================
 // User / Member Status
 // ============================================

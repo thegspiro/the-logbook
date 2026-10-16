@@ -34,6 +34,7 @@ import type {
   BulkActionResult,
   ConvertApplicantRequest,
   ConvertApplicantResponse,
+  ConvertGoogleAccountOutcome,
   PendingSignOff,
   SignOffResult,
   ApplicantDocument,
@@ -1069,6 +1070,7 @@ export const applicantService = {
       message?: string;
       membership_number?: string | null;
       welcome_email_sent?: boolean;
+      google_account?: ConvertGoogleAccountOutcome | null;
     }>(`/prospective-members/prospects/${applicantId}/transfer`, payload);
     return {
       applicant_id: applicantId,
@@ -1077,6 +1079,7 @@ export const applicantService = {
       message: response.data.message ?? 'Transfer successful',
       membership_number: response.data.membership_number || undefined,
       welcome_email_sent: response.data.welcome_email_sent ?? false,
+      google_account: response.data.google_account ?? undefined,
     };
   },
 

@@ -14,7 +14,11 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.api.v1.endpoints.mcp_keys import require_audit_entry
 from app.core.audit import log_audit_event
 from app.core.database import get_db
@@ -23,6 +27,7 @@ from app.core.utils import sanitize_connector_error
 from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
 from app.mcp.keys import McpKeyService
 from app.mcp.oauth import McpOAuthService
+from app.models.google_workspace import GOOGLE_WORKSPACE_INTEGRATION
 from app.models.integration import Integration, IntegrationSyncLog
 from app.models.user import User
 from app.schemas.integration import (
@@ -194,6 +199,19 @@ INTEGRATION_CATALOG: list[_CatalogEntry] = [
             "reader. Cards are issued by an officer from the member's profile; "
             "members cannot register their own. Turn this off and no card can "
             "be issued or read."
+        ),
+        "category": "Access Control",
+        "status": "available",
+    },
+    {
+        "integration_type": "google-workspace",
+        "name": "Google Workspace",
+        "description": (
+            "Create a Google Workspace account for each applicant the "
+            "department converts to a member, at their department email "
+            "address, and add it to the groups you choose. Uses a service "
+            "account with domain-wide delegation. Only an organization "
+            "administrator can connect or change it."
         ),
         "category": "Access Control",
         "status": "available",
@@ -474,6 +492,59 @@ def _apply_type_specific_flags(integration: Integration) -> None:
         )
 
 
+def _require_google_workspace_admin(integration: Integration, user: User) -> None:
+    """Google Workspace changes need an organization administrator.
+
+    Its service-account key can create accounts anywhere in the department's
+    Google domain, so ``integrations.manage`` alone is not enough to connect,
+    change or disconnect it (owner decision, 2026-10-15). ``admin.access`` is
+    what the Fire Chief, President and IT Manager positions hold by default.
+    """
+    if integration.integration_type != GOOGLE_WORKSPACE_INTEGRATION:
+        return
+    if not user_has_permission(user, "admin.access"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only an organization administrator can change Google Workspace",
+        )
+
+
+async def _check_google_workspace_ready(
+    db: AsyncSession, integration: Integration, config: dict[str, Any]
+) -> None:
+    """Refuse a Google Workspace setup that could never create an account.
+
+    Accounts are created at the member's department email address, so the
+    department email setting has to be on and on the same domain; and a
+    first connection has to bring its key.
+    """
+    if integration.integration_type != GOOGLE_WORKSPACE_INTEGRATION:
+        return
+    if not config.get("service_account_key") and not integration.get_secret(
+        "service_account_key"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Upload the service account's JSON key file",
+        )
+    from app.services.organization_service import OrganizationService
+
+    org_settings = await OrganizationService(db).get_organization_settings(
+        integration.organization_id
+    )
+    dept = org_settings.department_email
+    domain = str(config.get("domain") or "").lower()
+    if not dept.enabled or (dept.domain or "").strip().lower() != domain:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                "Turn on department email addresses for the domain "
+                f"{domain} in Organization Settings first; Google accounts are "
+                "created at those addresses."
+            ),
+        )
+
+
 async def ensure_catalog(db: AsyncSession, organization_id: str) -> None:
     """Ensure all catalog integrations exist for this org."""
     result = await db.execute(
@@ -606,6 +677,7 @@ async def connect_integration(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This integration is not yet available",
         )
+    _require_google_workspace_admin(integration, current_user)
 
     config = body.config
     clear_salesforce_refresh_token = (
@@ -616,6 +688,7 @@ async def connect_integration(
     secrets_to_clear = _secrets_to_clear_for_base_url_change(integration, config)
     # Validate config schema
     config = _validate_config(integration.integration_type, config)
+    await _check_google_workspace_ready(db, integration, config)
     # Validate URLs for SSRF
     _validate_urls_in_config(config)
     # Split secrets from public config
@@ -683,6 +756,8 @@ async def disconnect_integration(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
         )
+
+    _require_google_workspace_admin(integration, current_user)
 
     integration.status = "available"
     integration.enabled = False
@@ -790,8 +865,10 @@ async def update_integration(
     secrets_to_clear = _secrets_to_clear_for_base_url_change(integration, config)
     # PATCH validation includes stored public settings so callers can update or
     # clear one secret without resending unrelated required configuration.
+    _require_google_workspace_admin(integration, current_user)
     validation_config = {**(integration.config or {}), **config}
     config = _validate_config(integration.integration_type, validation_config)
+    await _check_google_workspace_ready(db, integration, config)
     # Validate URLs for SSRF
     _validate_urls_in_config(config)
     # Split secrets from public config

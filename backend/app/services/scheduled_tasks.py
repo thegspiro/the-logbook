@@ -522,6 +522,12 @@ SCHEDULE = {
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
     },
+    "google_workspace_suspension_sync": {
+        "description": "Finish Google Workspace suspensions (and their lifting) that a member's departure or return left unsettled, and retry failed ones",
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15 * * * *",
+        "cron": "*/15 * * * *",
+    },
     "admin_hours_auto_close": {
         "description": "Auto-close admin-hours sessions that exceeded their category's max-hours limit (caps a forgotten clock-in and flags it for review)",
         "frequency": "every 30 minutes",
@@ -6418,6 +6424,19 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
     }
 
 
+async def run_google_workspace_suspension_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Backstop for the departure hook's after-commit sync (see
+    app/models/google_workspace_departure.py). Each row is org-scoped and
+    locked while it is reconciled, so a run that overlaps the after-commit
+    task finds it settled and does nothing."""
+    from app.services.google_workspace_provisioning_service import (
+        GoogleWorkspaceProvisioningService,
+    )
+
+    attempted = await GoogleWorkspaceProvisioningService(db).sync_pending_suspensions()
+    return {"task": "google_workspace_suspension_sync", "attempted": attempted}
+
+
 async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
     """Mark fully-unpaid dues past their due date as OVERDUE.
 
@@ -7272,6 +7291,7 @@ TASK_RUNNERS = {
     "external_training_auto_sync": run_external_training_auto_sync,
     "salesforce_auto_sync": run_salesforce_auto_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
+    "google_workspace_suspension_sync": run_google_workspace_suspension_sync,
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
     "admin_hours_auto_close": run_admin_hours_auto_close,
     "expire_ip_exceptions": run_expire_ip_exceptions,
@@ -7345,6 +7365,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "rolling_recurrence_extend": 86400,
     "trainee_report_escalation": 86400,
     "mark_overdue_dues": 86400,
+    "google_workspace_suspension_sync": 900,
     "mark_overdue_maintenance": 86400,
     "admin_hours_auto_close": 1800,
     "expire_ip_exceptions": 86400,

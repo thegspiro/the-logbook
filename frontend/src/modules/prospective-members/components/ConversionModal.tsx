@@ -25,7 +25,13 @@ import {
   Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { Applicant, ConversionStatus, EmergencyContact, PipelineConversionConfig } from '../types';
+import type {
+  Applicant,
+  ConversionStatus,
+  ConvertGoogleAccountOutcome,
+  EmergencyContact,
+  PipelineConversionConfig,
+} from '../types';
 import { StepProgressStatus } from '../types';
 import { applicantService, pipelineService } from '../services/api';
 import { userService } from '../../../services/api';
@@ -35,7 +41,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ADMINISTRATIVE_RANK_HINT } from '../../../utils/membership';
-import { MemberClass } from '../../../constants/enums';
+import { GoogleAccountStatus, MemberClass } from '../../../constants/enums';
 
 type PasswordDelivery = 'email' | 'set' | 'later';
 
@@ -74,6 +80,34 @@ const PasswordOutcome: React.FC<{ delivery: PasswordDelivery; welcomeEmailSent: 
       <p>
         {delivery === 'email' ? 'The welcome email could not be sent, so ' : ''}
         {name} has no password they know yet. Set one with Reset Password in Member Management before they can sign in.
+      </p>
+    </div>
+  );
+};
+
+/** What happened to the member's Google Workspace account, when one applied. */
+const GoogleOutcome: React.FC<{ outcome: ConvertGoogleAccountOutcome }> = ({ outcome }) => {
+  if (outcome.status === GoogleAccountStatus.CREATED && outcome.credentials_sent) {
+    return (
+      <p className="text-theme-text-muted mb-4 text-center text-sm">
+        Google account {outcome.email} was created; its temporary password went to the member&apos;s personal email.
+      </p>
+    );
+  }
+  const reason =
+    outcome.status === GoogleAccountStatus.CREATED
+      ? `Google account ${outcome.email} was created, but its password has not reached the member yet.`
+      : outcome.status === GoogleAccountStatus.LINKED_EXISTING
+        ? `${outcome.email} already belongs to a Google account, so none was created; it was left unchanged.`
+        : `The Google account ${outcome.email} was not created.`;
+  return (
+    <div
+      role="alert"
+      className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400"
+    >
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <p>
+        {reason} {outcome.last_error ?? ''} Retry from the member&apos;s profile.
       </p>
     </div>
   );
@@ -133,6 +167,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
     membership_number?: string | undefined;
     delivery: PasswordDelivery;
     welcome_email_sent: boolean;
+    google_account?: ConvertGoogleAccountOutcome | undefined;
   } | null>(null);
 
   // Reset state when applicant changes or modal opens
@@ -320,6 +355,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
                 welcomeEmailSent={conversionResult.welcome_email_sent}
                 name={`${applicant.first_name} ${applicant.last_name}`}
               />
+              {conversionResult.google_account && <GoogleOutcome outcome={conversionResult.google_account} />}
               <div className="flex justify-end">
                 <button
                   onClick={onClose}
