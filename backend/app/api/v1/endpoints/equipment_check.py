@@ -1798,6 +1798,13 @@ async def export_pdf(
                     "check_type": i.check_type,
                     "status": i.status,
                     "notes": i.notes,
+                    "quantity_found": i.quantity_found,
+                    "expected_quantity": (
+                        i.expected_quantity
+                        if i.expected_quantity is not None
+                        else i.required_quantity
+                    ),
+                    "count_unit": i.count_unit,
                 }
                 for i in (check.items or [])
             ],

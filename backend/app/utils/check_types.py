@@ -111,3 +111,25 @@ def legacy_instruction_for(check_type: Optional[str]) -> Optional[str]:
     description and does not need one supplied.
     """
     return LEGACY_TYPE_INSTRUCTIONS.get((check_type or "").strip().lower())
+
+
+def describe_count(
+    found: Optional[int],
+    par: Optional[int],
+    unit: Optional[str] = None,
+) -> Optional[str]:
+    """A filed count as a crew reads it: ``"8 / 10 each, restock 2"``.
+
+    ``par`` is the result's snapshotted par, or for a result filed before par
+    was recorded its ``required_quantity`` — the single target it was then
+    judged by. A count below par names the restock, because that is what the
+    supply officer acts on; whether it also failed is the status column's job.
+    """
+    if found is None:
+        return None
+    label = str(found) if par is None else f"{found} / {par}"
+    if unit:
+        label = f"{label} {unit}"
+    if par is not None and found < par:
+        label = f"{label}, restock {par - found}"
+    return label

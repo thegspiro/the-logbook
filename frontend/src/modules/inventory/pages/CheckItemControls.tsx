@@ -55,7 +55,15 @@ export interface CheckItemSpec {
   lastLevelReading?: number | null | undefined;
 
   // Count
+  /** Par: what the position should hold. A shortfall is a restock line. */
   expectedQuantity?: number | null | undefined;
+  /**
+   * The count below which the line fails — Min to Pass, else Critical Min
+   * (`passFloor`). Absent means a count never fails on its number.
+   */
+  passFloor?: number | null | undefined;
+  /** What is counted: "each", "rolls", the catalog's unit. */
+  countUnit?: string | null | undefined;
   /**
    * What the last check recorded, or the truck's running count if that is
    * newer. The number the crew opens on — 12 found against a par of 10 stays

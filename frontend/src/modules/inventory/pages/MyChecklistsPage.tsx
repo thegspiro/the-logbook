@@ -24,7 +24,7 @@ import type {
   ShiftEquipmentCheckRecord,
   EquipmentCheckTemplate,
 } from '../../../modules/inventory/types/equipmentCheck';
-import { isChecklistSubmitted } from '../../../modules/inventory/types/equipmentCheck';
+import { describeCount, isChecklistSubmitted } from '../../../modules/inventory/types/equipmentCheck';
 import type { ActiveChecklistRecord } from '../services/equipmentCheckApi';
 import { calendarDaysFromToday, formatDate, formatTime, toLocalISODate } from '../../../utils/dateFormatting';
 import { dayHeading } from '../utils/dayHeading';
@@ -472,6 +472,17 @@ export const MyChecklistsPage: React.FC = () => {
                     <div className="min-w-0">
                       <span className="text-theme-text-primary font-medium">{item.itemName}</span>
                       <span className="text-theme-text-muted ml-2">{item.compartmentName}</span>
+                      {item.quantityFound != null && (
+                        <span className="text-theme-text-secondary block text-xs">
+                          {/* Results filed before par was snapshotted carry
+                              only the single target they were judged by. */}
+                          {describeCount(
+                            item.quantityFound,
+                            item.expectedQuantity ?? item.requiredQuantity,
+                            item.countUnit
+                          )}
+                        </span>
+                      )}
                     </div>
                     {statusBadge(item.status)}
                   </div>
