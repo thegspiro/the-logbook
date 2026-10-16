@@ -123,6 +123,20 @@ def _days(start: Optional[date], end: Optional[date], today: date) -> int:
     return max(0, ((end or today) - start).days)
 
 
+def _stint_closed_by(
+    periods: Sequence[MemberServicePeriod], separation_status: UserStatus
+) -> Optional[MemberServicePeriod]:
+    """The latest stint that ``separation_status`` closed, if it is the last word.
+
+    None while any stint is still open -- the history then says the member is
+    serving, whatever their status, and there is no separation to point at.
+    """
+    if any(p.end_date is None for p in periods):
+        return None
+    closed = [p for p in periods if p.separation_status == separation_status.value]
+    return closed[-1] if closed else None
+
+
 def implicit_separation_date(member: Any, today: date, tz: tzinfo) -> date:
     """Best available last day of service for a separated member with no stints.
 
@@ -353,6 +367,19 @@ class MemberServiceHistoryService:
         self.db.add(period)
         return period
 
+    async def separation_date(
+        self, member: User, separation_status: UserStatus
+    ) -> Optional[date]:
+        """The effective date of the drop or retirement the member is in now.
+
+        The end of the stint that :meth:`undo_separation` would reopen, so the
+        two always agree on which stint the separation closed. ``None`` when
+        there is no such stint.
+        """
+        periods = await self.list_periods(member.organization_id, member.id)
+        stint = _stint_closed_by(periods, separation_status)
+        return stint.end_date if stint else None
+
     async def undo_separation(
         self, member: User, separation_status: UserStatus
     ) -> Optional[MemberServicePeriod]:
@@ -371,12 +398,9 @@ class MemberServiceHistoryService:
         periods = await self.list_periods(
             member.organization_id, member.id, for_update=True
         )
-        if any(p.end_date is None for p in periods):
+        reopened = _stint_closed_by(periods, separation_status)
+        if reopened is None:
             return None
-        closed = [p for p in periods if p.separation_status == separation_status.value]
-        if not closed:
-            return None
-        reopened = closed[-1]
         reopened.end_date = None
         reopened.separation_status = None
         return reopened
