@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SkillsTestingTestRecordsTab from './SkillsTestingTestRecordsTab';
@@ -117,7 +117,15 @@ describe('SkillsTestingTestRecordsTab', () => {
       mockTests = [unfinishedTest];
       renderWithRouter(<SkillsTestingTestRecordsTab />);
 
-      expect(screen.getByText('Tap to resume')).toBeInTheDocument();
+      expect(screen.getByText('Resume')).toBeInTheDocument();
+    });
+
+    it('offers to start a draft that was never opened', () => {
+      mockTests = [{ ...unfinishedTest, status: 'draft' as const, started_at: undefined }];
+      renderWithRouter(<SkillsTestingTestRecordsTab />);
+
+      const row = screen.getByRole('button', { name: new RegExp(unfinishedTest.template_name) });
+      expect(within(row).getByText('Start')).toBeInTheDocument();
     });
 
     // A cancelled test is closed. It has no completion date, so gating the
@@ -127,8 +135,10 @@ describe('SkillsTestingTestRecordsTab', () => {
       mockTests = [cancelledTest];
       renderWithRouter(<SkillsTestingTestRecordsTab />);
 
-      expect(screen.queryByText('Tap to resume')).not.toBeInTheDocument();
-      expect(screen.queryByText('Tap to start')).not.toBeInTheDocument();
+      // Scoped to the row: the page's own "Start Test" button reads "Start" on a phone.
+      const row = screen.getByRole('button', { name: /Ladder Evolution/ });
+      expect(within(row).queryByText('Resume')).not.toBeInTheDocument();
+      expect(within(row).queryByText('Start')).not.toBeInTheDocument();
     });
 
     it('opens a cancelled test on its scorecard, not the scoring screen', async () => {
