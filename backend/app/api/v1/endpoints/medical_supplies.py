@@ -373,6 +373,7 @@ async def list_medical_items(
     limit: int = Query(100, ge=1, le=500),
     fuzzy: bool = False,
     low_stock: bool = False,
+    exclude_apparatus_only: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("inventory.view_medical", "inventory.view")
@@ -383,6 +384,8 @@ async def list_medical_items(
 
     ``low_stock=true`` narrows to the supplies at or below their reorder
     point — the set the summary's "Low stock" figure counts.
+    ``exclude_apparatus_only=true`` leaves out supplies kept on the apparatus
+    only, which have no shelf for a delivery to be received into.
 
     **Authentication required**
     **Requires permission: inventory.view_medical or inventory.view**
@@ -419,6 +422,7 @@ async def list_medical_items(
         low_stock=low_stock,
         location_id=location_id,
         storage_area_id=storage_area_id,
+        exclude_apparatus_only=exclude_apparatus_only,
     )
 
     items, total = await service.get_items(
@@ -447,6 +451,7 @@ async def _medical_filter_ids(
     low_stock: bool,
     location_id: Any,
     storage_area_id: Any,
+    exclude_apparatus_only: bool = False,
 ) -> Optional[List[str]]:
     """The id set the list and its export narrow to, or None for no narrowing.
 
@@ -468,6 +473,11 @@ async def _medical_filter_ids(
             )
         )
         ids = stored if ids is None else ids & stored
+    if exclude_apparatus_only:
+        stocked = set(
+            await service.item_ids_kept_in_stock(organization_id, MEDICAL_ITEM_TYPES)
+        )
+        ids = stocked if ids is None else ids & stocked
     return sorted(ids) if ids is not None else None
 
 

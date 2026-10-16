@@ -627,6 +627,8 @@ class InventoryItemBase(BaseModel):
     quantity: int = Field(default=1, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     reorder_point: Optional[int] = Field(None, ge=0)
+    # Kept on the apparatus only; see InventoryItem.apparatus_only.
+    apparatus_only: bool = False
     inspection_interval_days: Optional[int] = Field(None, ge=0)
     min_rank_order: Optional[int] = None
     restricted_to_positions: Optional[List[str]] = None
@@ -736,6 +738,7 @@ class InventoryItemUpdate(BaseModel):
     quantity: Optional[int] = Field(None, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     reorder_point: Optional[int] = Field(None, ge=0)
+    apparatus_only: Optional[bool] = None
     last_inspection_date: Optional[date] = None
     next_inspection_due: Optional[date] = None
     inspection_interval_days: Optional[int] = Field(None, ge=0)

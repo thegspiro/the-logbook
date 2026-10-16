@@ -109,12 +109,15 @@ const PLACES_SHOWN = 2;
  * supply's dialog, which lists them all with what is aboard.
  */
 const SupplyWhere: React.FC<{ item: InventoryItem; onOpen: () => void }> = ({ item, onOpen }) => {
-  const note = storageNote(item);
+  // A supply kept on the apparatus only has no shelf, so a room or note left
+  // over from before it was marked would point somewhere it is not.
+  const shelved = !item.apparatus_only;
+  const note = shelved ? storageNote(item) : null;
   const places = item.apparatus_places ?? [];
   const hidden = places.length - PLACES_SHOWN;
   return (
     <div className="space-y-1">
-      {item.storage_path ? (
+      {shelved && item.storage_path ? (
         <div className="text-theme-text-primary">{item.storage_path}</div>
       ) : (
         !note && places.length === 0 && <div>—</div>
@@ -1264,9 +1267,24 @@ const MedicalSuppliesPage: React.FC = () => {
                                 isLow ? 'font-semibold text-orange-800 dark:text-orange-300' : 'text-theme-text-primary'
                               }`}
                             >
-                              {formatNumber(onHandQuantity(item))}
-                              {isLow && <span className="ml-1 text-xs"> Low</span>}
-                              {aboard > 0 && (
+                              {item.apparatus_only ? (
+                                // No shelf: the count is what the trucks carry.
+                                <>
+                                  {formatNumber(aboard)}
+                                  {isLow && <span className="ml-1 text-xs"> Low</span>}
+                                  <span className="text-theme-text-secondary block text-xs font-normal">
+                                    on {formatNumber(item.apparatus_count ?? 0)} apparatus
+                                    {uncounted > 0 &&
+                                      ` (${formatNumber(uncounted)} uncounted position${uncounted === 1 ? '' : 's'})`}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  {formatNumber(onHandQuantity(item))}
+                                  {isLow && <span className="ml-1 text-xs"> Low</span>}
+                                </>
+                              )}
+                              {!item.apparatus_only && aboard > 0 && (
                                 <span className="text-theme-text-secondary block text-xs font-normal">
                                   +{formatNumber(aboard)} on trucks
                                   {uncounted > 0 &&
@@ -1303,8 +1321,12 @@ const MedicalSuppliesPage: React.FC = () => {
                                 type="button"
                                 onClick={() => setLotsItem(item)}
                                 className="btn-icon"
-                                aria-label={`Lots for ${supplyLabel(item)}`}
-                                title="Stock lots"
+                                aria-label={
+                                  item.apparatus_only
+                                    ? `Where ${supplyLabel(item)} is carried`
+                                    : `Lots for ${supplyLabel(item)}`
+                                }
+                                title={item.apparatus_only ? 'Where it is carried' : 'Stock lots'}
                               >
                                 <Layers className="h-4 w-4" />
                               </button>

@@ -415,6 +415,39 @@ describe('MedicalSuppliesPage', () => {
       expect(cannula).not.toHaveTextContent('Low');
     });
 
+    it('counts a supply kept on apparatus only by what the trucks carry, with no shelf place', async () => {
+      mockGetItems.mockResolvedValue({
+        items: [
+          {
+            id: 'item-lucas',
+            name: 'LUCAS device',
+            // A stale shelf count from before it was marked: never shown.
+            quantity: 5,
+            reorder_point: 2,
+            apparatus_only: true,
+            apparatus_stock: 2,
+            apparatus_uncounted: 0,
+            apparatus_count: 2,
+            apparatus_places: ['Medic 1 › Rear Cabinet', 'Medic 2 › Rear Cabinet'],
+            storage_path: 'Supply Room › Cabinet B',
+            is_low_stock: true,
+          },
+        ],
+        total: 1,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      const row = await screen.findByRole('row', { name: /LUCAS device/ });
+      expect(within(row).getByRole('cell', { name: /on 2 apparatus/ })).toHaveTextContent(/^2\s*Low/);
+      expect(row).not.toHaveTextContent('on trucks');
+      expect(row).not.toHaveTextContent('Supply Room › Cabinet B');
+      expect(row).toHaveTextContent('Medic 1 › Rear Cabinet');
+      expect(within(row).getByRole('button', { name: 'Where LUCAS device is carried' })).toBeInTheDocument();
+    });
+
     it("offers a supply's lots to a member who can only view", async () => {
       mockGetItems.mockResolvedValue({
         items: [{ id: 'item-1', name: 'Oxygen Mask', size: 'Adult', quantity: 4 }],

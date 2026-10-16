@@ -670,6 +670,12 @@ class InventoryItem(Base):
     reorder_point: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )  # Alert when quantity <= this value
+    # Carried on the apparatus only, with no stock-room supply behind it (a
+    # LUCAS device, a cardiac monitor). The Medical Supplies page then counts
+    # it by where it is carried rather than by a shelf it never sits on.
+    apparatus_only: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Maintenance
     last_inspection_date: Mapped[Optional[date]] = mapped_column(Date)

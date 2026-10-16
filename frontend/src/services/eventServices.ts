@@ -1003,6 +1003,12 @@ export interface InventoryItem {
   unit_of_measure?: string;
   reorder_point?: number;
   /**
+   * Carried on the apparatus only, with no stock-room supply behind it (a
+   * LUCAS device, a cardiac monitor). Its shelf counts as 0 and it is judged
+   * on the trucks alone.
+   */
+  apparatus_only?: boolean;
+  /**
    * Ready units across the item's in-date stock lots.
    *
    * Lots and `quantity` are separate ledgers — receiving a lot does not touch
@@ -1385,6 +1391,7 @@ export interface InventoryItemCreate {
   quantity?: number | undefined;
   unit_of_measure?: string | null | undefined;
   reorder_point?: number | null | undefined;
+  apparatus_only?: boolean | undefined;
   inspection_interval_days?: number | null | undefined;
   min_rank_order?: number | null | undefined;
   restricted_to_positions?: string[] | null | undefined;

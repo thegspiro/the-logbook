@@ -8571,6 +8571,12 @@ class InventoryService:
 
         ``ready_on_hand`` sums shelf and apparatus from here, so the low-stock
         list, its alert email and the automatic reorder all read one number.
+
+        A medical supply marked ``apparatus_only`` has no stock room, so its
+        shelf is 0 whatever ``quantity`` holds and it is judged on the trucks
+        alone. ``quantity`` is ignored rather than trusted because a supply
+        switched to apparatus-only keeps the count it had before, and that
+        stale shelf figure would otherwise hold it above its reorder point.
         """
         lot_totals = await self._in_date_lot_totals(
             organization_id, [i.id for i in items]
@@ -8581,6 +8587,8 @@ class InventoryService:
         for item in items:
             from_lots = item.id in lot_totals
             shelf = lot_totals[item.id] if from_lots else (item.quantity or 0)
+            if item.apparatus_only and str(item.id) in medical:
+                shelf = 0
             truck = aboard.get(str(item.id), {"quantity": 0, "uncounted": 0})
             result[item.id] = {
                 "shelf": shelf,
@@ -9638,6 +9646,25 @@ class InventoryService:
                 InventoryItem.organization_id == org,
                 InventoryCategory.item_type.in_(list(item_types)),
                 or_(*conditions),
+            )
+        )
+        return [str(i) for i in rows.scalars().all()]
+
+    async def item_ids_kept_in_stock(
+        self, organization_id: str, item_types: Iterable[ItemType]
+    ) -> List[str]:
+        """Items that have a stock room behind them (not ``apparatus_only``).
+
+        The population a delivery can be received into: a supply kept on the
+        apparatus only has no shelf for a delivery to land on.
+        """
+        rows = await self.db.execute(
+            select(InventoryItem.id)
+            .join(InventoryCategory, InventoryCategory.id == InventoryItem.category_id)
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryCategory.item_type.in_(list(item_types)),
+                InventoryItem.apparatus_only.is_(False),
             )
         )
         return [str(i) for i in rows.scalars().all()]

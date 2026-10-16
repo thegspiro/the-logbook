@@ -102,6 +102,7 @@ export interface MedicalItemUpdate {
   quantity?: number | null;
   unit_of_measure?: string | null;
   reorder_point?: number | null;
+  apparatus_only?: boolean;
   /** Free text kept beside the structured location, shown as a note. */
   storage_location?: string | null;
   /** The room, and the storage area within it (Inventory › Storage Areas). */
@@ -189,6 +190,8 @@ export interface MedicalItemFilters {
   fuzzy?: boolean | undefined;
   /** Only supplies at or below their reorder point — the set the summary's Low stock figure counts. */
   low_stock?: boolean | undefined;
+  /** Leave out supplies kept on the apparatus only — they have no shelf to receive a delivery into. */
+  exclude_apparatus_only?: boolean | undefined;
   active_only?: boolean | undefined;
   sort_by?: string | undefined;
   sort_order?: 'asc' | 'desc' | undefined;

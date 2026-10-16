@@ -36,6 +36,7 @@ from app.models.inventory import (
     TrackingType,
 )
 from app.models.user import Organization, User
+from app.schemas.inventory import InventoryItemCreate, InventoryItemUpdate
 from app.services.auto_reorder_service import AutoReorderService
 from app.services.equipment_check_service import EquipmentCheckService
 from app.services.inventory_service import InventoryService
@@ -392,3 +393,135 @@ class TestExpiringOnTheTrucks:
         )
 
         assert rows == []
+
+
+def _list_kwargs(dept, **overrides):
+    kwargs = dict(
+        category_id=None,
+        status_filter=None,
+        condition=None,
+        location_id=None,
+        storage_area_id=None,
+        search=None,
+        active_only=True,
+        sort_by="name",
+        sort_order="asc",
+        skip=0,
+        limit=100,
+        fuzzy=False,
+        low_stock=False,
+        exclude_apparatus_only=False,
+        db=None,
+        current_user=SimpleNamespace(id=dept.user_id, organization_id=dept.org_id),
+    )
+    kwargs.update(overrides)
+    return kwargs
+
+
+class TestKeptOnApparatusOnly:
+    """A supply with no stock room behind it (a LUCAS device): its shelf counts
+    as nothing, so it is judged on the trucks alone, and a delivery cannot be
+    received into it."""
+
+    async def _mark(self, db_session, *ids):
+        await db_session.execute(
+            InventoryItem.__table__.update()
+            .where(InventoryItem.id.in_(list(ids)))
+            .values(apparatus_only=True)
+        )
+        await db_session.commit()
+
+    async def test_defaults_to_kept_in_stock(self, db_session, dept):
+        items = await _items(db_session, dept.gauze, dept.rope)
+
+        assert {i.apparatus_only for i in items.values()} == {False}
+
+    async def test_its_shelf_counts_as_nothing(self, db_session, dept):
+        await self._mark(db_session, dept.gauze)
+        items = await _items(db_session, dept.gauze)
+
+        parts = await InventoryService(db_session).stock_breakdown(
+            dept.org_id, list(items.values())
+        )
+
+        # The 2 in-date shelf units are left over from before it was marked.
+        assert parts[dept.gauze]["shelf"] == 0
+        assert parts[dept.gauze]["apparatus"] == 12
+
+    async def test_is_judged_low_on_the_trucks_alone(self, db_session, dept):
+        await self._mark(db_session, dept.gauze)
+        await db_session.execute(
+            InventoryItem.__table__.update()
+            .where(InventoryItem.id == dept.gauze)
+            .values(reorder_point=12)
+        )
+        await db_session.commit()
+
+        rows = await InventoryService(db_session).get_low_stock_items_for_alerts(
+            dept.org_id, item_types=MEDICAL_ITEM_TYPES
+        )
+
+        # 12 aboard against a floor of 12; the stale shelf 2 would have hidden it.
+        assert [(str(i.id), on_hand) for i, on_hand, _ in rows] == [(dept.gauze, 12)]
+
+    async def test_gear_keeps_its_shelf(self, db_session, dept):
+        # Truck stock is a medical-supplies rule; the flag does not reach gear.
+        await self._mark(db_session, dept.rope)
+        items = await _items(db_session, dept.rope)
+
+        parts = await InventoryService(db_session).stock_breakdown(
+            dept.org_id, list(items.values())
+        )
+
+        assert parts[dept.rope]["shelf"] == 2
+
+    async def test_the_delivery_picker_leaves_it_out(self, db_session, dept):
+        await self._mark(db_session, dept.gauze)
+        other = InventoryItem(
+            id=_uid(),
+            organization_id=dept.org_id,
+            category_id=(await _items(db_session, dept.gauze))[dept.gauze].category_id,
+            name="Cannula",
+            tracking_type=TrackingType.POOL,
+            quantity=4,
+            active=True,
+        )
+        db_session.add(other)
+        await db_session.commit()
+
+        everything = await ms.list_medical_items(**_list_kwargs(dept, db=db_session))
+        stocked = await ms.list_medical_items(
+            **_list_kwargs(dept, db=db_session, exclude_apparatus_only=True)
+        )
+
+        assert {i.name for i in everything.items} == {"Cannula", "Gauze"}
+        assert [i.name for i in stocked.items] == ["Cannula"]
+        assert stocked.total == 1
+
+    async def test_an_edit_sets_and_clears_it(self, db_session, dept):
+        service = InventoryService(db_session)
+
+        item, err = await service.update_item(
+            dept.gauze, dept.org_id, {"apparatus_only": True}
+        )
+        assert err is None
+        assert item.apparatus_only is True
+
+        item, err = await service.update_item(
+            dept.gauze, dept.org_id, {"apparatus_only": False}
+        )
+        assert err is None
+        assert item.apparatus_only is False
+
+
+class TestApparatusOnlySchemas:
+    def test_create_defaults_to_false(self):
+        assert InventoryItemCreate(name="LUCAS").apparatus_only is False
+
+    def test_update_leaves_it_alone_unless_sent(self):
+        assert "apparatus_only" not in InventoryItemUpdate().model_dump(
+            exclude_unset=True
+        )
+        assert InventoryItemUpdate(apparatus_only=True).model_dump(
+            exclude_unset=True
+        ) == {"apparatus_only": True}
