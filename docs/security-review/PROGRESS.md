@@ -16,8 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (branch `claude/security-review-training-extended-p8`, to be opened)**:
-Feature 18 (Training extended), pass 8. Watchdog pickup. **0 new findings.**
+**PR (branch `claude/security-review-skills-testing-p8`, to be opened)**:
+Feature 19 (Skills testing), pass 8. Watchdog pickup. **0 new findings.**
+Real delta since pass 7 (PR #2976): cosmetic mypy-narrowing, a DRY fix
+unifying a duplicated "pending validation" predicate into one
+`pending_validation_criteria()` helper, and one genuine new feature (skill
+expiration tracking — `SkillTemplate.valid_for_months`, table-existence-guarded
+migration `a17a47c5a871`, `member_skill_expirations()`), all read in full
+against every CHECKLIST.md dimension and found to be org-scoped, self-scoped
+at its one caller, gated through this feature's existing disclosure
+machinery rather than a parallel reimplementation, and already shipped with
+20 guard tests. Branch suffixed `-p8` (not the bare
+`claude/security-review-skills-testing`, whose own history — PR #2976 — has
+already merged; CLAUDE.md Pitfall #24). Every standing fix from passes 1–7
+(SKT-1 through SKT5-1) re-verified intact; route surface re-enumerated
+(29/29, unchanged) and org-scoping re-swept (87/87 `select(` sites). See
+`SKT-19-skills-testing.md`'s **Pass 8** section. Row 19 → ✅ (pending this
+PR's merge); next is Feature 20 (Compliance).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 8, PR #3302, merged), preserved for history</summary>
+
+**PR [#3302](https://github.com/thegspiro/the-logbook/pull/3302)** (branch
+`claude/security-review-training-extended-p8`): Feature 18 (Training
+extended), pass 8. Watchdog pickup. **0 new findings.**
 Real delta since pass 7 (PR #2975): nine of twelve declared files changed,
 carrying two substantial new features (crew-recorded training; external
 course mappings + manual report upload + auto-crediting) and two
@@ -30,8 +52,10 @@ unchanged at its current citation. Route count 91 → 99 in this feature's six
 files (three new crew-training routes, three new course-mapping/upload
 routes), all carrying an auth dependency; total application routes unchanged
 in kind at 270/270 clean (no new top-level page). See
-`TRX-18-training-extended.md`'s **Pass 8** section. Row 18 → ✅ (pending this
-PR's merge); next is Feature 19 (Skills testing).
+`TRX-18-training-extended.md`'s **Pass 8** section. Row 18 → ✅ (merged);
+next is Feature 19 (Skills testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17 Training core pass 8, PR #3298, before it merged), preserved for history</summary>
@@ -19470,7 +19494,7 @@ here.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
@@ -32684,3 +32708,61 @@ Findings doc: [`TRX-18-training-extended.md`](./TRX-18-training-extended.md)'s
 **Pass 8** section. No `KNOWN_LIMITATIONS.md` change needed — nothing new
 was flagged, and no standing entry needed correction. Rotation row 18 → ✅
 (pending this PR's merge). Next: Feature 19 (Skills testing).
+
+**2026-10-16 — Feature 19 (Skills testing), pass 8.** Watchdog pickup — the
+dedicated `/loop 30m /security-review` session had no open PR or branch for
+this feature at pickup time (`gh api repos/.../pulls?state=open`, not the
+tracker — the "Open PR" row above still named PR #3302, Feature 18 pass 8,
+which had already merged); the merge was recorded here first, then this
+pass started.
+
+**Scope check**: diffed the current tree against `0066c60c9` (the pass-7
+merge commit for PR #2976, fetched directly by SHA — this checkout's
+default shallow clone did not reach it). Real delta since pass 7: cosmetic
+mypy-narrowing across the endpoint/model files, a DRY fix unifying the
+"pending validation" predicate `list_tests`/`get_testing_summary` each
+hand-wrote into one `pending_validation_criteria()` helper, and one genuine
+new feature — skill expiration tracking (`SkillTemplate.valid_for_months`,
+migration `a17a47c5a871`, table-existence-guarded; `member_skill_expirations()`
+in the service file). Read the new surface in full against all seven
+CHECKLIST.md dimensions: org-scoped on both sides of its join, self-scoped
+at its one caller (`training_module_config.py`'s `GET /my-training`, which
+passes the caller's own ids, never a path/query parameter), gated through
+the feature's existing `resolve_result_view()` disclosure machinery rather
+than a parallel reimplementation (Pitfall #29), bounded to one member's
+rows, and keyed off a server-resolved `today`. Already shipped with 20 guard
+tests (`tests/test_skill_test_expirations.py`) covering exactly this —
+org-scoping, disclosure/release withholding, and newest-pass-per-template
+selection. **0 findings.**
+
+**Re-verification**: all nineteen standing fixes from passes 1–7 (SKT-1
+through SKT5-1) re-confirmed intact by direct code read, not re-cited.
+Route surface re-enumerated with a fresh AST walk: **29/29 routes**,
+unchanged paths/methods/gates. Org-scoping re-swept: 87/87 `select(` call
+sites, unchanged from pass 7 (this pass's diff adds no new query). No
+standing finding remains open in this feature as of pass 7; none reopened
+here.
+
+**Environment note, not a finding**: this session's MariaDB had been
+initialized against an older migration head (`5372d41aaf3e`, missing
+`valid_for_months` and 29 other revisions) — `alembic upgrade head` +
+`scripts/repair_schema.py` brought it to the current single head
+(`361a40316340`) and every test that had errored on the missing column
+passed afterward with no code change.
+
+**Gate**: `flake8`/`black --check`/`isort --check-only` clean over `app/
+tests/ alembic/` (all three reinstalled to CI's pinned versions);
+`validate_migrations.py --strict` — single head `361a40316340`, 606
+revisions; `check_route_permissions.py --strict` — 270 routes, 0
+errors/warnings; `pytest tests/ -q -k "skill or skt"` — 565 passed, 1
+pre-existing skip, up from pass 7's 512; frontend `npm run typecheck`/`npm
+run lint` both clean (`npm ci` run first — this worktree had no
+`node_modules` at all).
+
+Findings doc: [`SKT-19-skills-testing.md`](./SKT-19-skills-testing.md)'s
+**Pass 8** section. No `KNOWN_LIMITATIONS.md` change needed — the one
+standing cross-feature entry this feature filed in pass 7
+("Online Knowledge Tests Have No Owning Feature") is unowned work for
+Feature 17/18 to pick up, re-confirmed still accurate and not touched here.
+Rotation row 19 → ✅ (pending this PR's merge). Next: Feature 20
+(Compliance).
