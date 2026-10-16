@@ -155,7 +155,8 @@ def _format_ics_datetime(dt: Any) -> str:
         # The trailing Z states UTC. Stored datetimes come back naive and are
         # UTC already; an aware one in another zone has to be converted, or
         # its wall-clock time would be published as if it were UTC.
-        if dt.tzinfo is not None:
-            dt = dt.astimezone(timezone.utc)
-        return dt.strftime("%Y%m%dT%H%M%SZ")
+        moment: datetime = dt
+        if moment.tzinfo is not None:
+            moment = moment.astimezone(timezone.utc)
+        return moment.strftime("%Y%m%dT%H%M%SZ")
     return str(dt)
