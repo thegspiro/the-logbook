@@ -13,6 +13,7 @@ import { formatDate } from '../../../utils/dateFormatting';
 import { apparatusOperatorService } from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
+import { useAuthStore } from '../../../stores/authStore';
 import { OperatorModal } from './OperatorModal';
 
 interface OperatorsTabProps {
@@ -30,6 +31,9 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
   apparatusId,
   onRefresh,
 }) => {
+  // Creating, editing and removing an operator all require apparatus.manage on
+  // the backend; apparatus.edit is not enough for any of them.
+  const canManage = useAuthStore((state) => state.checkPermission('apparatus.manage'));
   const [showModal, setShowModal] = useState(false);
   const [editOperator, setEditOperator] = useState<ApparatusOperator | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ApparatusOperator | null>(null);
@@ -64,9 +68,11 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
             <Users className="h-5 w-5" />
             Certified Operators
           </h2>
-          <button onClick={handleAdd} className="btn-primary text-sm">
-            Add Operator
-          </button>
+          {canManage && (
+            <button onClick={handleAdd} className="btn-primary text-sm">
+              Add Operator
+            </button>
+          )}
         </div>
         {loadingTab ? (
           <div className="py-8 text-center">
@@ -74,7 +80,8 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
           </div>
         ) : operators.length === 0 ? (
           <p className="text-theme-text-muted py-8 text-center">
-            No operators yet. Select Add Operator to record who drives this apparatus.
+            No operators yet.
+            {canManage && ' Select Add Operator to record who drives this apparatus.'}
           </p>
         ) : (
           <div className="space-y-3">
@@ -118,20 +125,24 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
                   >
                     {op.isActive ? 'Active' : 'Inactive'}
                   </span>
-                  <button
-                    onClick={() => handleEdit(op)}
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-md p-1.5 transition-colors"
-                    title="Edit operator"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(op)}
-                    className="text-theme-text-muted hover:bg-theme-surface-secondary rounded-md p-1.5 transition-colors hover:text-red-600"
-                    title="Remove operator"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {canManage && (
+                    <>
+                      <button
+                        onClick={() => handleEdit(op)}
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-md p-1.5 transition-colors"
+                        title="Edit operator"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(op)}
+                        className="text-theme-text-muted hover:bg-theme-surface-secondary rounded-md p-1.5 transition-colors hover:text-red-600"
+                        title="Remove operator"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
