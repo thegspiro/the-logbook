@@ -1584,8 +1584,11 @@
 
 @utility mobile-header-inset {
   /* Absolute offset matching `mobile-header-offset`, for elements pinned
-     below the fixed mobile header (e.g. the nav drawer's scrim). */
-  top: calc(4rem + env(safe-area-inset-top));
+     below the fixed mobile header (e.g. the nav drawer's scrim).
+     `--sticky-stack` is the height of anything an ancestor has already
+     pinned under that header — a tab bar — so a heading inside it sticks
+     below the bar instead of sliding under it. Unset, it is nothing. */
+  top: calc(4rem + env(safe-area-inset-top) + var(--sticky-stack, 0px));
 }
 
 @utility mobile-navigation-drawer {
