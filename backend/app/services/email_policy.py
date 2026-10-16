@@ -97,6 +97,7 @@ class EmailKind(str, enum.Enum):
     FINANCE_DUTIES = "finance_duties"
     MINUTES_DUTIES = "minutes_duties"
     DOCUMENT_DUTIES = "document_duties"
+    FUNDRAISING_DUTIES = "fundraising_duties"
 
 
 class EmailAudience(str, enum.Enum):
@@ -459,6 +460,19 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "A weekly list of document folders only full administrators can open",
         ),
         rationale="Documents lists the same folders to full administrators.",
+    ),
+    EmailKind.FUNDRAISING_DUTIES: EmailPolicy(
+        label="Grants and fundraising reminders",
+        required=False,
+        audience=_O,
+        includes=(
+            "A grant compliance task coming due, due today or overdue",
+            "A pledge coming due with money still outstanding",
+        ),
+        rationale=(
+            "Grants & Fundraising lists the same tasks and pledges with "
+            "their due dates."
+        ),
     ),
 }
 

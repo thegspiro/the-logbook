@@ -1431,9 +1431,10 @@ What remains, deliberately:
   moves a pledge's received amount or status when a donation arrives, so the
   edit form asks for both. Linking a donation to a pledge would be a backend
   change.
-- **Not on the forms:** a pledge's reminder switch and payment schedule
-  (nothing sends pledge reminders or reads the schedule), and an event's
-  sponsors and calendar-event link. All stay API-only.
+- **Not on the forms:** a pledge's payment schedule (nothing reads it), and
+  an event's sponsors and calendar-event link. All stay API-only. The
+  pledge's **Send reminders** switch is on the form, read by the daily
+  `grant_reminders` task.
 
 The original findings, for the record:
 

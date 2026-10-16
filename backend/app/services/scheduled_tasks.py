@@ -113,6 +113,9 @@ Recommended crontab (add to host or container cron):
 
 # Daily at 8:10 AM — remind budget-line owners before a draft year's request deadline
 10 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=budget_request_reminders
+
+# Daily at 8:20 AM — remind about grant compliance tasks and pledges coming due
+20 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=grant_reminders
 -----------------------------------------------------
 """
 
@@ -312,6 +315,19 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "08:10",
         "cron": "10 8 * * *",
+    },
+    "grant_reminders": {
+        "description": (
+            "Email grant compliance-task reminders (to the assignee, else the "
+            "fundraising.manage holders) from each task's reminder_days_before "
+            "and on its due date, and pledge reminders to the fundraising."
+            "manage holders 14 days and 1 day before the due date (once per "
+            "member, item, due date and reminder — safe to run more than once "
+            "a day)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "08:20",
+        "cron": "20 8 * * *",
     },
     "prospect_attendance_advance": {
         "description": (
@@ -6846,6 +6862,18 @@ async def run_budget_request_reminders(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "budget_request_reminders", send_deadline_reminders)
 
 
+async def run_grant_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Remind about grant compliance tasks and pledges coming due.
+
+    Email only (CLAUDE.md pitfall #18). Who is told, which reminder is due,
+    and the sent-log that makes a second run the same day send nothing are
+    in ``grant_reminder_notifications.send_grant_reminders``.
+    """
+    from app.services.grant_reminder_notifications import send_grant_reminders
+
+    return await _for_each_org(db, "grant_reminders", send_grant_reminders)
+
+
 async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
     """Advance applicants whose meeting attendance has settled without a finalize.
 
@@ -7350,6 +7378,7 @@ TASK_RUNNERS = {
     "event_request_reminders": run_event_request_reminders,
     "prospect_attendance_advance": run_prospect_attendance_advance,
     "budget_request_reminders": run_budget_request_reminders,
+    "grant_reminders": run_grant_reminders,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -7431,6 +7460,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "prospect_attendance_advance": 86400,
     # Daily; idempotent per (year, deadline, member, offset) through a sent-log.
     "budget_request_reminders": 86400,
+    # Daily; idempotent per (item, due date, reminder, member) through a sent-log.
+    "grant_reminders": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,
