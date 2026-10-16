@@ -47,6 +47,8 @@ from app.models.minute import MinutesStatus
 from app.models.user import Organization, User
 from app.schemas.minute import (
     ActionItemResponse,
+    AgendaSyncApply,
+    AgendaSyncPreview,
     ApplyOutline,
     AttendanceSuggestions,
     CarryForwardRequest,
@@ -1115,6 +1117,54 @@ async def apply_outline(
         event_category="meetings",
         severity="info",
         event_data={"minutes_id": minutes_id, "template_id": data.template_id},
+        user_id=str(current_user.id),
+    )
+    return _build_response(minutes)
+
+
+@router.get("/{minutes_id}/agenda-sync", response_model=AgendaSyncPreview)
+async def preview_agenda_sync(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    What the meeting's agenda now asks of these minutes' sections
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    async with handle_service_errors("Failed to compare the agenda"):
+        preview = await MinuteService(db).agenda_sync_preview(
+            minutes_id, current_user.organization_id
+        )
+    return ensure_found(preview, "Meeting minutes")
+
+
+@router.post("/{minutes_id}/agenda-sync", response_model=MinutesResponse)
+async def apply_agenda_sync(
+    minutes_id: str,
+    data: AgendaSyncApply,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Apply the chosen agenda changes to draft minutes
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    async with handle_service_errors("Failed to sync the agenda"):
+        minutes = await MinuteService(db).apply_agenda_sync(
+            minutes_id, current_user.organization_id, data.accept
+        )
+    minutes = ensure_found(minutes, "Meeting minutes")
+    await log_audit_event(
+        db=db,
+        event_type="minutes_agenda_synced",
+        event_category="meetings",
+        severity="info",
+        event_data={"minutes_id": minutes_id, "accepted": len(data.accept)},
         user_id=str(current_user.id),
     )
     return _build_response(minutes)

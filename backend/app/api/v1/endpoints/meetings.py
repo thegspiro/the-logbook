@@ -86,6 +86,13 @@ async def create_meeting(
     """Create a new meeting with optional attendees and action items"""
     service = MeetingsService(db)
     meeting_data = meeting.model_dump(exclude_none=True)
+    if "agenda_items" in meeting_data:
+        try:
+            meeting_data["agenda_items"] = await service.settle_agenda_items(
+                meeting_data["agenda_items"], current_user.organization_id, current_user
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
     result, error = await service.create_meeting(
         current_user.organization_id, meeting_data, current_user.id
     )
@@ -135,6 +142,13 @@ async def update_meeting(
     # service as "clear this field" rather than being stripped as "omitted"
     # — apply_updates is what tells the two apart.
     update_data = meeting.model_dump(exclude_unset=True)
+    if "agenda_items" in update_data:
+        try:
+            update_data["agenda_items"] = await service.settle_agenda_items(
+                update_data["agenda_items"], current_user.organization_id, current_user
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=safe_error_detail(e))
     result, error = await service.update_meeting(
         meeting_id, current_user.organization_id, update_data
     )

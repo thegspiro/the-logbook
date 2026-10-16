@@ -131,6 +131,24 @@ export const documentsService = {
 // Meetings (Minutes) Service
 // ============================================
 
+/** A Documents-library file linked from an agenda item. */
+export interface AgendaDocument {
+  id: string;
+  name: string;
+}
+
+/** One item of a meeting's agenda; it becomes a section of the meeting's minutes. */
+export interface AgendaItem {
+  /** Stable across edits; the minutes section made from this item is `agenda-<key>`. */
+  key: string;
+  title: string;
+  presenter: string;
+  notes: string;
+  needs_motion: boolean;
+  motion_text: string;
+  documents: AgendaDocument[];
+}
+
 export interface MeetingRecord {
   id: string;
   organization_id: string;
@@ -143,6 +161,7 @@ export interface MeetingRecord {
   called_by?: string;
   status: string;
   agenda?: string;
+  agenda_items?: AgendaItem[];
   notes?: string;
   motions?: string;
   approved_by?: string;

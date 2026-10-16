@@ -13,6 +13,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.document import Document
 from app.models.meeting import (
     ActionItemStatus,
     Meeting,
@@ -22,6 +23,7 @@ from app.models.meeting import (
     MeetingType,
 )
 from app.models.user import User
+from app.utils.agenda_items import normalize_agenda_items
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -44,6 +46,48 @@ class MeetingsService:
     # ============================================
     # Meeting Management
     # ============================================
+
+    async def settle_agenda_items(
+        self,
+        items: Optional[List[Dict[str, Any]]],
+        organization_id: UUID | str,
+        user: User,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """The agenda items to store, with every linked document verified.
+
+        A document link is a client-supplied id (XC-1): it must be in the
+        caller's organization, and in a folder the caller could open
+        themselves, since its name is copied into minutes that every minutes
+        viewer can read. The stored name comes from the document, never from
+        the request.
+        """
+        if items is None:
+            return None
+        from app.services.documents_service import DocumentsService
+
+        documents = DocumentsService(self.db)
+        settled = normalize_agenda_items(items)
+        for item in settled:
+            linked = []
+            for ref in item["documents"]:
+                row = (
+                    await self.db.execute(
+                        select(Document).where(
+                            Document.id == str(ref["id"]),
+                            Document.organization_id == str(organization_id),
+                        )
+                    )
+                ).scalar_one_or_none()
+                if row is None or not await documents.can_access_document(
+                    row, organization_id, user
+                ):
+                    raise ValueError(
+                        f"You can only link documents you can open "
+                        f"(agenda item '{item['title']}')"
+                    )
+                linked.append({"id": row.id, "name": row.name})
+            item["documents"] = linked
+        return settled
 
     async def create_meeting(
         self,

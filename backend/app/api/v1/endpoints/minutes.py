@@ -1024,6 +1024,10 @@ def _build_response(minutes) -> MinutesResponse:
             required=bool(s.get("required", False)),
             needs_motion=bool(s.get("needs_motion", False)),
             motion_text=s.get("motion_text") or "",
+            presenter=s.get("presenter") or "",
+            not_taken_up=bool(s.get("not_taken_up", False)),
+            agenda_key=s.get("agenda_key"),
+            documents=s.get("documents") or [],
         )
         for s in raw_sections
     ]
@@ -1046,6 +1050,7 @@ def _build_response(minutes) -> MinutesResponse:
         quorum_met=minutes.quorum_met,
         quorum_count=minutes.quorum_count,
         event_id=minutes.event_id,
+        meeting_id=minutes.meeting_id,
         template_id=minutes.template_id,
         sections=sections,
         header_config=(
