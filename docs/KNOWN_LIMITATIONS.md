@@ -1917,9 +1917,12 @@ connect _dialogs_ are ordinary forms and have been captured.
 ## Integrations — Google Calendar and Outlook Read "Coming Soon" Behind a Server Setting (2026-10-16)
 
 One-way publishing of department events to a Google or Outlook calendar is
-planned and not built. The two catalog cards describe that plan and report
-**Coming Soon** while the server setting `CALENDAR_SYNC_ENABLED` is off, which
-is its default; connect, update and test are refused with `400`.
+partly built: the connectors and the `calendar_sync` scheduled task that
+publishes are in place, but no screen can complete the Google or Microsoft
+sign-in yet, so no integration ever holds the tokens the task needs. The two
+catalog cards report **Coming Soon** while the server setting
+`CALENDAR_SYNC_ENABLED` is off, which is its default; connect, update and test
+are refused with `400`, and the scheduled task does nothing.
 
 An older release let both cards be connected with an empty configuration.
 Those rows were left as they are in the database — no data migration — and
@@ -1927,8 +1930,8 @@ the API reports them as `coming_soon` and not enabled while the setting is
 off, on the integration list, the detail and the `/integrations/connected`
 projection. They never held a Google or Microsoft sign-in, so nothing was ever
 published through them. Turning the setting on brings back each row's stored
-status, but nothing publishes yet, so it should stay off until the publishing
-work ships.
+status, but nothing publishes until the sign-in screens ship, so it should
+stay off until then.
 
 ## Integrations — Weather Alerts and Generic Webhooks Do Nothing After Their Test (2026-10-08)
 
@@ -3661,17 +3664,19 @@ connectors use, imported rather than restated:
   connect and TLS handshake, 10 s for every later socket operation.
 
 After a refused or timed-out response the pooled connections are closed, so a
-half-read body is never parsed as the next response. Every call site already
-catches `Exception` and fails closed (`None`/`False`, or `test_connection`'s
-generic message). Guarded by
+half-read body is never parsed as the next response. A refusal or timeout
+surfaces from the connector as the typed `CalendarTransient` error
+(`integration_services/calendar_common.py`), and `test_connection` still
+returns its generic message. Guarded by
 `backend/tests/test_google_calendar_http_bounds.py`, against a real loopback
 server: a normal response succeeds; chunked and declared-length streams four
 times the cap are refused without the server managing to send the whole
 stream; a gzip body that inflates past the cap is refused; a response that
 stalls before its headers or mid-body times out; the same `Http` object works
 again after a refusal; and the whole `googleapiclient` stack, pointed at the
-loopback server, succeeds, fails cleanly on an oversized body, and returns
-`None` from a push against a stalled API.
+loopback server, succeeds, fails cleanly on an oversized body, and raises
+`CalendarTransient` from `upsert_event` against a stalled API within five
+seconds.
 
 **Still open:**
 
@@ -3680,10 +3685,9 @@ loopback server, succeeds, fails cleanly on an oversized body, and returns
   in time. The `httpx` connectors have had a total deadline since 2026-10-04
   (`INTEGRATION_DEADLINE_SECONDS` in `create_integration_client()`), but it
   is an `asyncio.timeout()` around `send()`, and Google Calendar's calls are
-  synchronous `httplib2` calls inside `async def` methods, so it needs its
-  own mechanism.
-- **The synchronous calls block the event loop** for as long as a call runs
-  — now bounded by the timeouts above rather than unbounded.
+  synchronous `httplib2` calls run in a worker thread (`asyncio.to_thread`),
+  so it needs its own mechanism. Running them in a thread means they no longer
+  block the event loop, but a cancelled wait does not stop the thread.
 - **Redirects follow `httplib2`'s default** (followed for `GET`/`HEAD`, up to five). The
   destination is Google's own API and token endpoint, so there is no SSRF
   angle, but it is not the `httpx` factory's no-redirect policy.
@@ -3696,6 +3700,31 @@ loopback server, succeeds, fails cleanly on an oversized body, and returns
 
 (Security review INT-27, follow-up round 5, 2026-09-06:
 `docs/security-review/INT-27-integrations.md`.)
+
+## Calendar Publishing Has No Connect Flow (2026-10-16)
+
+The `calendar_sync` scheduled task publishes department events one way to a
+Google Calendar or Outlook integration's calendar
+(`app/services/calendar_sync_service.py`, mapping rows in
+`calendar_sync_mappings`). It does nothing unless `CALENDAR_SYNC_ENABLED` is
+on, and then only for an integration that is connected and holds a refresh or
+access token plus a `calendar_id` in its config.
+
+No screen gives an integration those yet. There is no Google or Microsoft
+sign-in for these cards and nothing creates the department calendar, so
+connecting either card from the Integrations page only marks it connected, as
+[guide 16](training/16-integrations.md#calendar-integrations) describes, and
+the task skips it. The connect API does accept a `refresh_token` and a
+`calendar_id` for both types; only a caller who obtained a refresh token
+outside The Logbook, for the same OAuth client, could make the task publish
+today.
+
+What a pass sends is the allowlist in `build_calendar_payload`: title, start
+and end in the department's timezone, location name, event type label, a link
+back, and the description only when the integration's `sync_descriptions` is
+true. It skips drafts, deletes cancelled events from the calendar, covers 30
+days back to `days_ahead` (default 180) ahead, and honours an
+`event_types_to_sync` list. No screen sets those three config keys either.
 
 ## Salesforce Integration — Clearing the Refresh Token Has No Reachable UI Control (INT-11, 2026-09-13)
 

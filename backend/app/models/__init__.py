@@ -208,7 +208,11 @@ from app.models.grant import (
     RecurringFrequency,
     ReportingFrequency,
 )
-from app.models.integration import Integration, IntegrationSyncLog
+from app.models.integration import (
+    CalendarSyncMapping,
+    Integration,
+    IntegrationSyncLog,
+)
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
@@ -532,6 +536,7 @@ __all__ = [
     "GoogleAccountStatus",
     "Integration",
     "IntegrationSyncLog",
+    "CalendarSyncMapping",
     "McpServiceKey",
     "McpOAuthClient",
     "McpOAuthGrant",

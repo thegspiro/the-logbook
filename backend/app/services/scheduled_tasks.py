@@ -105,6 +105,9 @@ Recommended crontab (add to host or container cron):
 # Every 30 minutes — auto-sync Salesforce for orgs with auto-sync enabled
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=salesforce_auto_sync
 
+# Every 5 minutes — publish events to connected Google Calendar / Outlook calendars (no-op unless CALENDAR_SYNC_ENABLED)
+*/5 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=calendar_sync
+
 # Every 15 minutes — election lifecycle: auto-open flagged drafts, auto-close overdue elections, pre-close non-voter reminders
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=election_lifecycle
 
@@ -537,6 +540,12 @@ SCHEDULE = {
         "frequency": "every 30 minutes",
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
+    },
+    "calendar_sync": {
+        "description": "Publish department events to each connected Google Calendar or Outlook integration's calendar: create, update and delete what changed, retrying failures with backoff (no-op unless CALENDAR_SYNC_ENABLED)",
+        "frequency": "every 5 minutes",
+        "recommended_time": "*/5 * * * *",
+        "cron": "*/5 * * * *",
     },
     "mark_overdue_dues": {
         "description": "Mark fully-unpaid member dues past their due date as overdue (nothing else sets this status)",
@@ -7356,6 +7365,97 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_calendar_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Publish department events to connected Google Calendar / Outlook calendars.
+
+    Does nothing while CALENDAR_SYNC_ENABLED is off. Otherwise reconciles each
+    enabled, connected integration of the two calendar types in an active
+    organization (see app.services.calendar_sync_service). Each integration
+    is committed on its own, so one failure does not undo or abort another.
+    Runs every 5 minutes.
+    """
+    from app.core.config import settings
+    from app.models.integration import Integration
+    from app.services.calendar_sync_service import (
+        CALENDAR_INTEGRATION_TYPES,
+        SYNC_OPERATION,
+        reconcile_integration,
+    )
+    from app.services.integration_health import record_integration_run
+
+    if not settings.CALENDAR_SYNC_ENABLED:
+        return {"task": "calendar_sync", "skipped": "CALENDAR_SYNC_ENABLED is off"}
+
+    result = await db.execute(
+        select(Integration)
+        .join(Organization, Organization.id == Integration.organization_id)
+        .where(
+            Integration.integration_type.in_(CALENDAR_INTEGRATION_TYPES),
+            Integration.enabled.is_(True),
+            Integration.status == "connected",
+            Organization.active.isnot(False),
+        )
+    )
+    # Ids, not the loaded rows: a rollback after one integration fails
+    # expires every instance in the session, and touching an expired one
+    # outside an await raises MissingGreenlet.
+    targets = [(str(i.id), str(i.organization_id)) for i in result.scalars().all()]
+
+    reconciled = 0
+    skipped = 0
+    failed = 0
+    for integration_id, org_id in targets:
+        started = time.monotonic()
+        integration = (
+            await db.execute(
+                select(Integration).where(
+                    Integration.id == integration_id,
+                    Integration.organization_id == org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if integration is None:
+            continue
+        try:
+            counts = await reconcile_integration(db, integration)
+            await db.commit()
+            if counts.get("skipped") or counts.get("paused"):
+                skipped += 1
+            else:
+                reconciled += 1
+        except Exception as e:
+            await db.rollback()
+            logger.opt(exception=True).warning(
+                "Calendar sync failed for org {}", org_id
+            )
+            await persist_task_error_log(org_id, "Calendar sync", e)
+            try:
+                await db.refresh(integration)
+                await record_integration_run(
+                    db,
+                    integration,
+                    operation=SYNC_OPERATION,
+                    trigger="scheduled",
+                    success=False,
+                    error=e,
+                    started_monotonic=started,
+                )
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.warning(
+                    "Could not record calendar sync failure for org {}", org_id
+                )
+            failed += 1
+
+    return {
+        "task": "calendar_sync",
+        "reconciled": reconciled,
+        "skipped": skipped,
+        "failed": failed,
+    }
+
+
 # Task runner map
 async def run_election_lifecycle(db: AsyncSession) -> Dict[str, Any]:
     """Run election lifecycle transitions for every organization.
@@ -7426,6 +7526,7 @@ TASK_RUNNERS = {
     "shift_auto_checkout": run_shift_auto_checkout,
     "external_training_auto_sync": run_external_training_auto_sync,
     "salesforce_auto_sync": run_salesforce_auto_sync,
+    "calendar_sync": run_calendar_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
     "google_workspace_suspension_sync": run_google_workspace_suspension_sync,
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
@@ -7462,6 +7563,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Every 5 minutes: the first retry of a failed message delivery is due 5
     # minutes after it (MSG-12).
     "retry_message_deliveries": 300,
+    # Every 5 minutes: the first retry of a failed calendar push is due 5
+    # minutes after it (calendar_sync_service.RETRY_DELAYS).
+    "calendar_sync": 300,
     # Every 15 minutes
     "inventory_notifications": 900,
     "election_lifecycle": 900,
