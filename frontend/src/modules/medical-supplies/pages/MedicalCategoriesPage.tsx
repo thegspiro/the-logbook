@@ -161,7 +161,7 @@ const MedicalCategoriesPage: React.FC = () => {
     setForm({
       name: category.name,
       description: category.description ?? '',
-      low_stock_threshold: category.low_stock_threshold !== undefined ? String(category.low_stock_threshold) : '',
+      low_stock_threshold: category.low_stock_threshold != null ? String(category.low_stock_threshold) : '',
     });
     setShowModal(true);
   };
@@ -325,7 +325,9 @@ const MedicalCategoriesPage: React.FC = () => {
                 <div className="min-w-0">
                   <p className="text-theme-text-primary font-medium">{category.name}</p>
                   {category.description && <p className="text-theme-text-muted mt-1 text-sm">{category.description}</p>}
-                  {category.low_stock_threshold !== undefined && (
+                  {/* `!= null`: an unset threshold arrives as null, and the
+                      strict check printed "Low stock at or below" with no number. */}
+                  {category.low_stock_threshold != null && (
                     <p className="text-theme-text-muted mt-1 text-xs">
                       Low stock at {category.low_stock_threshold} or below
                     </p>

@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   ArrowUpDown,
   CalendarClock,
+  Layers,
   PackagePlus,
   Pencil,
   Plus,
@@ -42,8 +43,9 @@ import type { SortDirection } from '../../../components/ux/SortableHeader';
 import { SkeletonCard } from '../../../components/ux/Skeleton';
 import { MedicalItemFormModal } from '../components/MedicalItemFormModal';
 import { ReceiveDeliveryModal } from '../components/ReceiveDeliveryModal';
+import { MedicalItemLotsModal } from '../components/MedicalItemLotsModal';
 import { MedicalImportExportModal } from '../components/MedicalImportExportModal';
-import { EXPIRY_WINDOW_DAYS } from '../types';
+import { EXPIRY_WINDOW_DAYS, supplyLabel } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 
 type Tab = 'expiring' | 'stock';
@@ -122,16 +124,28 @@ interface StatTileProps {
   label: string;
   value: number;
   tone: string;
+  /** What the tile shows when pressed: the list behind its number. */
+  onSelect: () => void;
+  /** Spoken name, since the number and its caption read as two fragments. */
+  actionLabel: string;
 }
 
-const StatTile: React.FC<StatTileProps> = ({ icon, label, value, tone }) => (
-  <div className="card flex items-center gap-3 p-4">
+// Buttons, not cards: a tile with a count on it reads as a way into the
+// things it counts, and one that ignored the tap left the officer scrolling
+// a full list to find the two low items it had just announced.
+const StatTile: React.FC<StatTileProps> = ({ icon, label, value, tone, onSelect, actionLabel }) => (
+  <button
+    type="button"
+    onClick={onSelect}
+    aria-label={actionLabel}
+    className="card hover:bg-theme-surface-secondary flex items-center gap-3 p-4 text-left transition-colors"
+  >
     <div className={`rounded-md p-2 ${tone}`}>{icon}</div>
     <div className="min-w-0">
       <p className="text-theme-text-primary text-xl font-semibold tabular-nums">{formatNumber(value)}</p>
       <p className="text-theme-text-muted truncate text-xs">{label}</p>
     </div>
-  </div>
+  </button>
 );
 
 const MedicalSuppliesPage: React.FC = () => {
@@ -175,7 +189,11 @@ const MedicalSuppliesPage: React.FC = () => {
   // one page would only reorder whichever rows happened to be fetched.
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
-  const sortKey = sortField && sortDirection ? `${sortField}:${sortDirection}` : '';
+  const [lowStockOnly, setLowStockOnly] = useState(false);
+  // Part of the query key, so turning the filter on or off is a new query:
+  // it resets the page and the selection like any other filter.
+  const sortKey = `${sortField && sortDirection ? `${sortField}:${sortDirection}` : ''}${lowStockOnly ? '\u0000low' : ''}`;
+  const [lotsItem, setLotsItem] = useState<InventoryItem | null>(null);
   // Ids, not rows: a refreshed page hands back new objects for the same items.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [isBulkRetiring, setIsBulkRetiring] = useState(false);
@@ -276,6 +294,7 @@ const MedicalSuppliesPage: React.FC = () => {
               category_id: categoryFilter || undefined,
               sort_by: (sortDirection && sortField) || undefined,
               sort_order: (sortField && sortDirection) || undefined,
+              low_stock: lowStockOnly || undefined,
               skip: page * PAGE_SIZE,
               limit: PAGE_SIZE,
             },
@@ -393,7 +412,7 @@ const MedicalSuppliesPage: React.FC = () => {
         })
       );
     },
-    [debouncedSearch, categoryFilter, sortField, sortDirection, sortKey, page]
+    [debouncedSearch, categoryFilter, sortField, sortDirection, sortKey, lowStockOnly, page]
   );
 
   const loadSectionsRef = useRef(loadSections);
@@ -606,11 +625,10 @@ const MedicalSuppliesPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowImportExport(true)}
-                  className="btn-icon"
-                  aria-label="Import or export medical supplies"
-                  title="Import / export"
+                  className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium whitespace-nowrap"
                 >
-                  <ArrowUpDown className="h-4 w-4" />
+                  <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+                  Import / export
                 </button>
                 <button
                   type="button"
@@ -664,24 +682,40 @@ const MedicalSuppliesPage: React.FC = () => {
             label="Supply items"
             value={summary.total_items}
             tone="bg-sky-500/10"
+            actionLabel={`Show all ${summary.total_items} supplies`}
+            onSelect={() => {
+              setLowStockOnly(false);
+              setPage(0);
+              setTab('stock');
+            }}
           />
           <StatTile
             icon={<CalendarClock className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
             label={`Expiring within ${summary.expiring_within_days} days`}
             value={summary.expiring_soon}
             tone="bg-amber-500/10"
+            actionLabel={`Show ${summary.expiring_soon} lots expiring within ${summary.expiring_within_days} days`}
+            onSelect={() => setTab('expiring')}
           />
           <StatTile
             icon={<AlertTriangle className="h-4 w-4 text-red-700 dark:text-red-400" />}
             label="Already expired"
             value={summary.expired}
             tone="bg-red-500/10"
+            actionLabel={`Show ${summary.expired} expired lots`}
+            onSelect={() => setTab('expiring')}
           />
           <StatTile
             icon={<TrendingDown className="h-4 w-4 text-orange-700 dark:text-orange-400" />}
             label="Low stock"
             value={summary.low_stock}
             tone="bg-orange-500/10"
+            actionLabel={`Show ${summary.low_stock} supplies at or below their reorder point`}
+            onSelect={() => {
+              setLowStockOnly(true);
+              setPage(0);
+              setTab('stock');
+            }}
           />
         </div>
       )}
@@ -780,7 +814,7 @@ const MedicalSuppliesPage: React.FC = () => {
                   {expiring.map((lot) => (
                     <tr key={lot.id} className="border-theme-surface-border border-b last:border-0">
                       <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
-                        {lot.item_name ?? '—'}
+                        {lot.item_name ? supplyLabel({ name: lot.item_name, size: lot.item_size }) : '—'}
                       </td>
                       <td data-label="Lot" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
                         {lot.lot_number || '—'}
@@ -845,6 +879,22 @@ const MedicalSuppliesPage: React.FC = () => {
             </select>
           </div>
 
+          {lowStockOnly && (
+            <div className="alert-warning mb-3 flex flex-wrap items-center justify-between gap-2 text-sm" role="status">
+              <span>Showing only supplies at or below their reorder point.</span>
+              <button
+                type="button"
+                className="touch-target-phone font-medium underline"
+                onClick={() => {
+                  setLowStockOnly(false);
+                  setPage(0);
+                }}
+              >
+                Show all supplies
+              </button>
+            </div>
+          )}
+
           {/*
            * Rows are shown only when they answer the query that is on screen.
            * Anything else is a pending request (skeleton) or a failed one -- and
@@ -858,7 +908,13 @@ const MedicalSuppliesPage: React.FC = () => {
               <SkeletonCard />
             ) : null
           ) : loaded.items && items.length === 0 ? (
-            debouncedSearch || categoryFilter ? (
+            lowStockOnly && !debouncedSearch && !categoryFilter ? (
+              <EmptyState
+                icon={TrendingDown}
+                title="Nothing is low"
+                description="No supply is at or below its reorder point."
+              />
+            ) : debouncedSearch || categoryFilter || lowStockOnly ? (
               <EmptyState
                 icon={Search}
                 title="No matching supplies"
@@ -948,17 +1004,17 @@ const MedicalSuppliesPage: React.FC = () => {
                       <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
                         Storage
                       </th>
-                      {canManage && (
-                        <th className="px-4 py-3 text-right">
-                          <span className="sr-only">Actions</span>
-                        </th>
-                      )}
+                      <th className="px-4 py-3 text-right">
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((item) => {
                       const isLow =
-                        item.reorder_point !== undefined && onHandQuantity(item) <= (item.reorder_point ?? 0);
+                        // `!= null`: an unset reorder point arrives as null, and
+                        // the strict check flagged every empty supply as Low.
+                        item.reorder_point != null && onHandQuantity(item) <= item.reorder_point;
                       return (
                         <tr key={item.id} className="border-theme-surface-border border-b last:border-0">
                           {canManage && (
@@ -997,31 +1053,45 @@ const MedicalSuppliesPage: React.FC = () => {
                             data-label="Reorder at"
                             className="text-theme-text-muted px-4 py-3 text-right tabular-nums"
                           >
-                            {item.reorder_point === undefined ? '—' : formatNumber(item.reorder_point)}
+                            {item.reorder_point == null ? '—' : formatNumber(item.reorder_point)}
                           </td>
                           <td data-label="Storage" className="text-theme-text-muted px-4 py-3">
                             {item.storage_location || '—'}
                           </td>
-                          {canManage && (
-                            <td data-label="Actions" className="px-4 py-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => setEditingItem(item)}
-                                className="btn-icon"
-                                aria-label={`Edit ${item.name}`}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void handleRetire(item)}
-                                className="btn-icon"
-                                aria-label={`Retire ${item.name}`}
-                              >
-                                <Archive className="h-4 w-4" />
-                              </button>
-                            </td>
-                          )}
+                          <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap">
+                            {/* Lots for everyone who can see the list: a crew
+                                member checking what is in date needs them as
+                                much as the officer who maintains them. */}
+                            <button
+                              type="button"
+                              onClick={() => setLotsItem(item)}
+                              className="btn-icon"
+                              aria-label={`Lots for ${supplyLabel(item)}`}
+                              title="Stock lots"
+                            >
+                              <Layers className="h-4 w-4" />
+                            </button>
+                            {canManage && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingItem(item)}
+                                  className="btn-icon"
+                                  aria-label={`Edit ${item.name}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleRetire(item)}
+                                  className="btn-icon"
+                                  aria-label={`Retire ${item.name}`}
+                                >
+                                  <Archive className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
@@ -1099,6 +1169,14 @@ const MedicalSuppliesPage: React.FC = () => {
       )}
 
       {showDeliveryModal && <ReceiveDeliveryModal onClose={() => setShowDeliveryModal(false)} onSaved={handleSaved} />}
+      {lotsItem && (
+        <MedicalItemLotsModal
+          item={lotsItem}
+          canManage={canManage}
+          onClose={() => setLotsItem(null)}
+          onChanged={() => void refresh()}
+        />
+      )}
       {showImportExport && (
         <MedicalImportExportModal
           onClose={() => setShowImportExport(false)}
@@ -1108,6 +1186,7 @@ const MedicalSuppliesPage: React.FC = () => {
             category_id: categoryFilter || undefined,
             sort_by: (sortDirection && sortField) || undefined,
             sort_order: (sortField && sortDirection) || undefined,
+            low_stock: lowStockOnly || undefined,
           }}
         />
       )}

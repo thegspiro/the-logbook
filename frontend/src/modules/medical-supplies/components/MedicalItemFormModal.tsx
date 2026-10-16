@@ -58,9 +58,11 @@ function initialState(item?: InventoryItem): FormState {
     size: item?.size ?? '',
     description: item?.description ?? '',
     manufacturer: item?.manufacturer ?? '',
-    quantity: item?.quantity !== undefined ? String(item.quantity) : '',
+    quantity: item?.quantity != null ? String(item.quantity) : '',
     unit_of_measure: item?.unit_of_measure ?? 'each',
-    reorder_point: item?.reorder_point !== undefined ? String(item.reorder_point) : '',
+    // `!= null`, not `!== undefined`: the API sends an unset value as null,
+    // which the strict check turned into the text "null" in the box.
+    reorder_point: item?.reorder_point != null ? String(item.reorder_point) : '',
     storage_location: item?.storage_location ?? '',
     vendor: item?.vendor ?? '',
   };
@@ -274,8 +276,8 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
               // visible behind a success toast, so the field states where the
               // real number comes from instead of pretending to own it.
               <p className="text-theme-text-muted border-theme-surface-border rounded-md border border-dashed px-3 py-2 text-sm">
-                {formatNumber(item?.lot_stock ?? 0)} from stock lots — adjust by receiving a delivery or editing the
-                item&apos;s lots.
+                {formatNumber(item?.lot_stock ?? 0)} from stock lots — adjust by receiving a delivery, or with the Lots
+                button on this supply&apos;s row.
               </p>
             ) : (
               <input

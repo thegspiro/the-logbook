@@ -108,6 +108,8 @@ export interface MedicalItemFilters {
   search?: string | undefined;
   /** With `search`, also return supplies whose name or "also called" names merely resemble it, below the exact matches. */
   fuzzy?: boolean | undefined;
+  /** Only supplies at or below their reorder point — the set the summary's Low stock figure counts. */
+  low_stock?: boolean | undefined;
   active_only?: boolean | undefined;
   sort_by?: string | undefined;
   sort_order?: 'asc' | 'desc' | undefined;

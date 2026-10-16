@@ -2188,6 +2188,7 @@ class InventoryService:
         style: Optional[str] = None,
         active_only: bool = True,
         label_printed: Optional[bool] = None,
+        item_ids: Optional[Iterable[str]] = None,
     ) -> "Select":
         """The filtered item select, with no ordering, joins or pagination.
 
@@ -2207,6 +2208,11 @@ class InventoryService:
 
         if category_id:
             query = query.where(InventoryItem.category_id == str(category_id))
+
+        # An explicit set from a caller that has already decided which rows it
+        # wants (the medical page's low-stock view). Empty means none, not all.
+        if item_ids is not None:
+            query = query.where(InventoryItem.id.in_([str(i) for i in item_ids]))
 
         if status:
             query = query.where(InventoryItem.status == status)
@@ -2358,6 +2364,7 @@ class InventoryService:
         skip: int = 0,
         limit: int = 100,
         fuzzy: bool = False,
+        item_ids: Optional[Iterable[str]] = None,
     ) -> Tuple[List[InventoryItem], int]:
         """Get items with filtering, sorting, and pagination.
 
@@ -2415,6 +2422,7 @@ class InventoryService:
                 style=style,
                 active_only=active_only,
                 label_printed=label_printed,
+                item_ids=item_ids,
             )
 
         query = self._joined_items_query(
@@ -2438,6 +2446,7 @@ class InventoryService:
             style=style,
             active_only=active_only,
             label_printed=label_printed,
+            item_ids=item_ids,
         )
 
         # Get total count
@@ -9275,6 +9284,21 @@ class InventoryService:
             query.order_by(InventoryLot.expiration_date.asc())
         )
         return [(row[0], row[1]) for row in result.all()]
+
+    async def item_sizes(
+        self, organization_id: str, item_ids: Iterable[str]
+    ) -> Dict[str, Optional[str]]:
+        """``{item_id: size}`` for these items, org-scoped, in one query."""
+        ids = {str(i) for i in item_ids}
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.size).where(
+                InventoryItem.id.in_(ids),
+                InventoryItem.organization_id == str(organization_id),
+            )
+        )
+        return {str(item_id): size for item_id, size in result.all()}
 
     async def pool_item_ids_by_name(
         self,

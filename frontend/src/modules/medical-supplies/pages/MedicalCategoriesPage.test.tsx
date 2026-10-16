@@ -252,3 +252,23 @@ describe('MedicalCategoriesPage supplies per category', () => {
     expect(screen.queryByText('No supplies in this category yet.')).not.toBeInTheDocument();
   });
 });
+
+describe('MedicalCategoriesPage low stock threshold', () => {
+  beforeEach(() => {
+    mockGetCategories.mockReset();
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(false);
+  });
+
+  it('prints the threshold when set and nothing when the API sends null', async () => {
+    mockGetCategories.mockResolvedValue([
+      { ...AIRWAY, low_stock_threshold: null },
+      { ...TRAUMA, low_stock_threshold: 4 },
+    ]);
+    renderWithRouter(<MedicalCategoriesPage />);
+    await screen.findByText('Airway');
+
+    expect(screen.getByText('Low stock at 4 or below')).toBeInTheDocument();
+    expect(screen.getAllByText(/Low stock at/)).toHaveLength(1);
+  });
+});

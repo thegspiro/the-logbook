@@ -182,7 +182,11 @@ class TestListSorting:
         for item_key, quantity, expires in (
             ("mask", 20, today + timedelta(days=90)),
             ("mask", 10, None),
-            ("cannula", 40, today - timedelta(days=1)),
+            # Well clear of today: the app counts from the department's date
+            # (America/New_York by default), and a lot "expired yesterday" by
+            # the server's UTC date is still in date there for a few hours
+            # after UTC midnight, which made this test fail every night.
+            ("cannula", 40, today - timedelta(days=10)),
         ):
             db_session.add(
                 InventoryLot(

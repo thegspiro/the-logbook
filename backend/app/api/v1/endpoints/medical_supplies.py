@@ -358,6 +358,7 @@ async def list_medical_items(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     fuzzy: bool = False,
+    low_stock: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("inventory.view_medical", "inventory.view")
@@ -365,6 +366,9 @@ async def list_medical_items(
 ):
     """
     List medical supply items
+
+    ``low_stock=true`` narrows to the supplies at or below their reorder
+    point — the set the summary's "Low stock" figure counts.
 
     **Authentication required**
     **Requires permission: inventory.view_medical or inventory.view**
@@ -409,8 +413,26 @@ async def list_medical_items(
         skip=skip,
         limit=limit,
         fuzzy=fuzzy,
+        item_ids=(
+            await _low_stock_ids(service, current_user.organization_id)
+            if low_stock
+            else None
+        ),
     )
     return ItemsListResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+async def _low_stock_ids(service: InventoryService, organization_id: Any) -> List[str]:
+    """Ids of the medical supplies at or below their reorder point.
+
+    The same scan the summary counts with, so the list a "Low stock 2" tile
+    opens holds exactly those two — a second definition of "low" here would
+    let the two disagree.
+    """
+    rows = await service.get_low_stock_items_for_alerts(
+        organization_id, item_types=MEDICAL_ITEM_TYPES
+    )
+    return [str(item.id) for item, _on_hand, _from_lots in rows]
 
 
 # ============================================
@@ -641,6 +663,7 @@ async def export_medical_items_csv(
     active_only: bool = True,
     sort_by: str | None = None,
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
+    low_stock: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("inventory.manage_medical", "inventory.manage")
@@ -677,6 +700,13 @@ async def export_medical_items_csv(
         await _require_medical_category(
             InventoryService(db), str(category_id), organization_id
         )
+    # Resolved before streaming starts, on the request session, like the
+    # category check above.
+    low_stock_ids = (
+        await _low_stock_ids(InventoryService(db), organization_id)
+        if low_stock
+        else None
+    )
 
     async def _rows() -> AsyncGenerator[str, None]:
         # Its own session, for the reason the general export gives: the
@@ -711,6 +741,7 @@ async def export_medical_items_csv(
                     sort_order=sort_order,
                     skip=skip,
                     limit=_EXPORT_PAGE_SIZE,
+                    item_ids=low_stock_ids,
                 )
                 if not items:
                     return
@@ -1726,12 +1757,23 @@ async def list_expiring_medical_lots(
         item_types=MEDICAL_ITEM_TYPES,
         today=today,
     )
+    # Sizes looked up separately rather than widening get_expiring_lots, whose
+    # other callers (the gear endpoint, the daily digest) have no use for them.
+    # Here they are what tells the adult mask's lot from the pediatric one's.
+    sizes = await service.item_sizes(
+        str(current_user.organization_id),
+        {str(lot.inventory_item_id) for lot, _ in rows},
+    )
     result: List[ExpiringLotResponse] = []
     for lot, item_name in rows:
         days_until = (lot.expiration_date - today).days if lot.expiration_date else None
         result.append(
             ExpiringLotResponse.model_validate(lot, from_attributes=True).model_copy(
-                update={"item_name": item_name, "days_until_expiration": days_until}
+                update={
+                    "item_name": item_name,
+                    "item_size": sizes.get(str(lot.inventory_item_id)),
+                    "days_until_expiration": days_until,
+                }
             )
         )
     return result

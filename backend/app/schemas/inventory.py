@@ -865,6 +865,8 @@ class ExpiringLotResponse(InventoryLotResponse):
     """A stock lot nearing expiration, with its item name for display."""
 
     item_name: Optional[str] = None
+    # Set by the medical route only; gear lots leave it empty.
+    item_size: Optional[str] = None
     days_until_expiration: Optional[int] = None
 
 

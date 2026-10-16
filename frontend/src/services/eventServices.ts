@@ -2340,8 +2340,9 @@ export interface InventoryLotBulkEntry extends InventoryLotCreate {
 }
 
 export interface InventoryLotUpdate {
-  lot_number?: string | undefined;
-  expiration_date?: string | undefined;
+  /** null clears it; the backend dumps updates with exclude_unset, so omitting keeps the old value. */
+  lot_number?: string | null | undefined;
+  expiration_date?: string | null | undefined;
   quantity?: number | undefined;
   received_date?: string | undefined;
   notes?: string | undefined;
@@ -2349,6 +2350,8 @@ export interface InventoryLotUpdate {
 
 export interface ExpiringLot extends InventoryLot {
   item_name?: string;
+  /** Set on medical lots only, so the adult and pediatric versions of a supply can be told apart. */
+  item_size?: string | null;
   days_until_expiration?: number;
 }
 
