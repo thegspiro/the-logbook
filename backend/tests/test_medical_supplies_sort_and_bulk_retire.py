@@ -30,7 +30,7 @@ from app.models.inventory import (
 from app.models.user import Organization
 from app.schemas.inventory import ItemBulkRetireRequest
 from app.services.inventory_service import InventoryService
-from app.utils.org_timezone import resolve_org_today
+from app.utils.org_timezone import org_today
 
 ORG = "org-1"
 A = "11111111-1111-1111-1111-111111111111"
@@ -179,11 +179,10 @@ class TestListSorting:
             "cannula": item("Cannula", airway, 99, reorder_point=5),
         }
         await db_session.flush()
-        # The department's date, not the runner's: the service decides which
-        # lots are in date on the department's calendar, so a UTC "yesterday"
-        # is still "today" there between midnight UTC and local midnight, and
-        # the expired lot would count as stock.
-        today = await resolve_org_today(db_session, org.id)
+        # The department's date, not the runner's: the service decides a lot is
+        # expired against org_today, and for the first hours of each UTC day the
+        # two disagree -- the "expired yesterday" lot would still be in date.
+        today = org_today(org)
         for item_key, quantity, expires in (
             ("mask", 20, today + timedelta(days=90)),
             ("mask", 10, None),
