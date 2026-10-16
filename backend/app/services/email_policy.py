@@ -95,6 +95,7 @@ class EmailKind(str, enum.Enum):
     MEMBERSHIP_ADMIN = "membership_admin"
     FINANCE_DUTIES = "finance_duties"
     MINUTES_DUTIES = "minutes_duties"
+    DOCUMENT_DUTIES = "document_duties"
 
 
 class EmailAudience(str, enum.Enum):
@@ -423,6 +424,15 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         audience=_O,
         includes=("A budget request submitted for your review",),
         rationale="Finance > Budget requests lists every request waiting.",
+    ),
+    EmailKind.DOCUMENT_DUTIES: EmailPolicy(
+        label="Document folder access",
+        required=False,
+        audience=_O,
+        includes=(
+            "A weekly list of document folders only full administrators can open",
+        ),
+        rationale="Documents lists the same folders to full administrators.",
     ),
 }
 

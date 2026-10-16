@@ -893,8 +893,13 @@ module folder on that module's rights.
     again lists the folder once more. It lapses when a full administrator
     next opens Documents, not at the moment of the change: a folder that
     regains and loses its member between two visits keeps its confirmation.
-  - Nobody is told until a full administrator opens Documents. Nothing
-    emails them.
+  - **Resolved 2026-10-16: full administrators are emailed the list once a
+    week** while any folder is on it (the `admin_only_folder_digest` task).
+    Each email repeats every folder still listed, not only new ones. A
+    folder shut on a Tuesday can wait up to a week for the next email,
+    unless someone opens Documents first. An administrator can turn the
+    email off ("Document folder access"), and a department can make it
+    required.
 - **Resolved 2026-10-13: positions are stored by id** (decision 28). Deleting
   a position takes it out of every folder, and is refused while it alone opens
   a folder. A position created later with the same name inherits nothing.
