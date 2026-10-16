@@ -121,7 +121,9 @@ describe('SkillsTestingTestRecordsTab', () => {
     });
 
     it('offers to start a draft that was never opened', () => {
-      mockTests = [{ ...unfinishedTest, status: 'draft' as const, started_at: undefined }];
+      // Never opened, so it carries no start time at all.
+      const { started_at: _neverStarted, ...draft } = unfinishedTest;
+      mockTests = [{ ...draft, status: 'draft' as const }];
       renderWithRouter(<SkillsTestingTestRecordsTab />);
 
       const row = screen.getByRole('button', { name: new RegExp(unfinishedTest.template_name) });
