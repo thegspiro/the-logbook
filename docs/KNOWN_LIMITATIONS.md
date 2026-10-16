@@ -3642,17 +3642,19 @@ connectors use, imported rather than restated:
   connect and TLS handshake, 10 s for every later socket operation.
 
 After a refused or timed-out response the pooled connections are closed, so a
-half-read body is never parsed as the next response. Every call site already
-catches `Exception` and fails closed (`None`/`False`, or `test_connection`'s
-generic message). Guarded by
+half-read body is never parsed as the next response. A refusal or timeout
+surfaces from the connector as the typed `CalendarTransient` error
+(`integration_services/calendar_common.py`), and `test_connection` still
+returns its generic message. Guarded by
 `backend/tests/test_google_calendar_http_bounds.py`, against a real loopback
 server: a normal response succeeds; chunked and declared-length streams four
 times the cap are refused without the server managing to send the whole
 stream; a gzip body that inflates past the cap is refused; a response that
 stalls before its headers or mid-body times out; the same `Http` object works
 again after a refusal; and the whole `googleapiclient` stack, pointed at the
-loopback server, succeeds, fails cleanly on an oversized body, and returns
-`None` from a push against a stalled API.
+loopback server, succeeds, fails cleanly on an oversized body, and raises
+`CalendarTransient` from `upsert_event` against a stalled API within five
+seconds.
 
 **Still open:**
 
@@ -3661,10 +3663,9 @@ loopback server, succeeds, fails cleanly on an oversized body, and returns
   in time. The `httpx` connectors have had a total deadline since 2026-10-04
   (`INTEGRATION_DEADLINE_SECONDS` in `create_integration_client()`), but it
   is an `asyncio.timeout()` around `send()`, and Google Calendar's calls are
-  synchronous `httplib2` calls inside `async def` methods, so it needs its
-  own mechanism.
-- **The synchronous calls block the event loop** for as long as a call runs
-  — now bounded by the timeouts above rather than unbounded.
+  synchronous `httplib2` calls run in a worker thread (`asyncio.to_thread`),
+  so it needs its own mechanism. Running them in a thread means they no longer
+  block the event loop, but a cancelled wait does not stop the thread.
 - **Redirects follow `httplib2`'s default** (followed for `GET`/`HEAD`, up to five). The
   destination is Google's own API and token endpoint, so there is no SSRF
   angle, but it is not the `httpx` factory's no-redirect policy.
