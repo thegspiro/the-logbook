@@ -1413,9 +1413,11 @@ export interface GoogleWorkspaceLinkResult {
   applied: boolean;
   linked: number;
   already_linked: number;
+  unfinished: number;
   departed: number;
   not_in_google: number;
   off_domain: number;
+  account_in_use: number;
 }
 
 export const integrationsService = {
@@ -1528,11 +1530,13 @@ export const integrationsService = {
     return response.data.key;
   },
 
-  // Google is only read. apply=false previews the counts; apply=true records
-  // the links, after which those members' accounts are suspended when they leave.
-  async linkExistingGoogleMembers(apply: boolean): Promise<GoogleWorkspaceLinkResult> {
+  // Google is only read. Called without `expected` it previews the counts;
+  // with the previewed count it links exactly those members, and refuses if
+  // the roster changed since. A linked account is suspended when its member leaves.
+  async linkExistingGoogleMembers(expected?: number): Promise<GoogleWorkspaceLinkResult> {
+    const params = expected === undefined ? { apply: false } : { apply: true, expected };
     const response = await api.post<GoogleWorkspaceLinkResult>('/integrations/google-workspace/link-existing', null, {
-      params: { apply },
+      params,
     });
     return response.data;
   },

@@ -347,9 +347,11 @@ const webhookCallbackUrl = (provider: 'documenso' | 'calcom' | 'paypal', integra
 const describeGoogleLinkSkips = (result: GoogleWorkspaceLinkResult): string => {
   const parts = [
     result.already_linked > 0 && `${result.already_linked} already linked`,
+    result.unfinished > 0 && `${result.unfinished} whose account setup is unfinished (retry from their profile)`,
     result.not_in_google > 0 && `${result.not_in_google} with no account at their address`,
     result.off_domain > 0 && `${result.off_domain} with an email outside the domain`,
     result.departed > 0 && `${result.departed} who have already left`,
+    result.account_in_use > 0 && `${result.account_in_use} whose account is still recorded for another member`,
   ].filter((part): part is string => typeof part === 'string');
   return parts.length > 0 ? `Skipped: ${parts.join(', ')}.` : '';
 };
@@ -808,7 +810,7 @@ const IntegrationsPage: React.FC = () => {
   const handleLinkExistingGoogle = async () => {
     setLinkingGoogle(true);
     try {
-      const preview = await integrationsService.linkExistingGoogleMembers(false);
+      const preview = await integrationsService.linkExistingGoogleMembers();
       if (preview.linked === 0) {
         toast.success(`No members to link. ${describeGoogleLinkSkips(preview)}`);
         return;
@@ -821,7 +823,7 @@ const IntegrationsPage: React.FC = () => {
         variant: 'warning',
       });
       if (!confirmed) return;
-      const result = await integrationsService.linkExistingGoogleMembers(true);
+      const result = await integrationsService.linkExistingGoogleMembers(preview.linked);
       toast.success(`Linked ${result.linked} ${result.linked === 1 ? 'member' : 'members'} to Google Workspace`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not link existing members to Google Workspace'));

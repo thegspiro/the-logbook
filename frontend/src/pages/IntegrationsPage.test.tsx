@@ -1045,15 +1045,22 @@ describe('IntegrationsPage', () => {
     });
 
     describe('Link existing members', () => {
-      const counts = { already_linked: 2, departed: 1, not_in_google: 3, off_domain: 0 };
+      const counts = {
+        already_linked: 2,
+        unfinished: 1,
+        departed: 1,
+        not_in_google: 3,
+        off_domain: 0,
+        account_in_use: 1,
+      };
 
       beforeEach(() => {
         mockGetIntegrations.mockResolvedValue([workspaceConnected]);
         vi.mocked(toast.success).mockClear();
         vi.mocked(toast.error).mockClear();
         mockLinkExistingGoogleMembers.mockReset();
-        mockLinkExistingGoogleMembers.mockImplementation((apply: boolean) =>
-          Promise.resolve({ applied: apply, linked: 4, ...counts })
+        mockLinkExistingGoogleMembers.mockImplementation((expected?: number) =>
+          Promise.resolve({ applied: expected !== undefined, linked: 4, ...counts })
         );
       });
 
@@ -1066,14 +1073,16 @@ describe('IntegrationsPage', () => {
 
         expect(await screen.findByText('Link 4 existing members to Google?')).toBeInTheDocument();
         expect(
-          screen.getByText(/Skipped: 2 already linked, 3 with no account at their address, 1 who have already left\./)
+          screen.getByText(
+            /Skipped: 2 already linked, 1 whose account setup is unfinished \(retry from their profile\), 3 with no account at their address, 1 who have already left, 1 whose account is still recorded for another member\./
+          )
         ).toBeInTheDocument();
         expect(mockLinkExistingGoogleMembers).toHaveBeenCalledTimes(1);
-        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledWith(false);
+        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledWith();
 
         await user.click(screen.getByRole('button', { name: 'Link accounts' }));
 
-        await waitFor(() => expect(mockLinkExistingGoogleMembers).toHaveBeenCalledWith(true));
+        await waitFor(() => expect(mockLinkExistingGoogleMembers).toHaveBeenCalledWith(4));
         expect(toast.success).toHaveBeenCalledWith('Linked 4 members to Google Workspace');
       });
 
@@ -1085,7 +1094,7 @@ describe('IntegrationsPage', () => {
         await user.click(await screen.findByRole('button', { name: 'Not now' }));
 
         expect(mockLinkExistingGoogleMembers).toHaveBeenCalledTimes(1);
-        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledWith(false);
+        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledWith();
       });
 
       it('asks nothing when there is no one to link', async () => {
@@ -1097,7 +1106,7 @@ describe('IntegrationsPage', () => {
 
         await waitFor(() =>
           expect(toast.success).toHaveBeenCalledWith(
-            'No members to link. Skipped: 2 already linked, 3 with no account at their address, 1 who have already left.'
+            'No members to link. Skipped: 2 already linked, 1 whose account setup is unfinished (retry from their profile), 3 with no account at their address, 1 who have already left, 1 whose account is still recorded for another member.'
           )
         );
         expect(screen.queryByRole('button', { name: 'Link accounts' })).not.toBeInTheDocument();

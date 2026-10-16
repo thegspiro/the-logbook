@@ -113,6 +113,13 @@ def google_credentials_text(primary_email: str, password: str) -> str:
     )
 
 
+ACCOUNT_IN_USE_MESSAGE = (
+    "The Google account at that address is still recorded for another member "
+    "(a former member whose address was reused, for example). The Logbook will "
+    "not let two members govern one account; resolve it in the Google Admin "
+    "console or change the member's department email, then retry."
+)
+
 ADDRESS_TAKEN_MESSAGE = (
     "That address belongs to a Google group, or is an alias on another "
     "person's account, so The Logbook will not take it over. Free the address "
@@ -352,6 +359,14 @@ class GoogleWorkspaceProvisioningService:
             row.last_error = ADDRESS_TAKEN_MESSAGE
             return False
 
+        # One account, one member: a second record would let either member's
+        # departure or return suspend or unsuspend the other's account.
+        if await self._account_recorded_for_another(row, google_id):
+            row.status = GoogleAccountStatus.FAILED.value
+            row.pending_groups = None
+            row.last_error = ACCOUNT_IN_USE_MESSAGE
+            return False
+
         row.google_user_id = google_id
         if logbook_member_id(account) == row.user_id:
             # Ours, from an attempt whose answer never arrived. Nobody holds
@@ -371,6 +386,18 @@ class GoogleWorkspaceProvisioningService:
         row.pending_groups = None
         row.last_error = LINKED_EXISTING_MESSAGE
         return False
+
+    async def _account_recorded_for_another(
+        self, row: GoogleAccountProvision, google_id: str
+    ) -> bool:
+        other = await self.db.execute(
+            select(GoogleAccountProvision.id).where(
+                GoogleAccountProvision.organization_id == row.organization_id,
+                GoogleAccountProvision.google_user_id == google_id,
+                GoogleAccountProvision.user_id != row.user_id,
+            )
+        )
+        return other.first() is not None
 
     async def _add_pending_groups(
         self, row: GoogleAccountProvision, integration: Integration
@@ -568,7 +595,12 @@ class GoogleWorkspaceProvisioningService:
         logger.info(f"Google Workspace suspension for user {row.user_id}: {outcome}")
 
     async def link_existing_members(
-        self, organization_id: str, *, apply: bool, actor_id: Optional[str]
+        self,
+        organization_id: str,
+        *,
+        apply: bool,
+        actor_id: Optional[str],
+        expected: Optional[int] = None,
     ) -> dict[str, int]:
         """Bring members who joined before the integration under it.
 
@@ -580,7 +612,11 @@ class GoogleWorkspaceProvisioningService:
         their accounts now, which is a decision this does not make.
 
         With ``apply`` False nothing is written; the counts preview the run.
-        Raises ProvisionRetryError with a safe message when it cannot run.
+        With ``expected`` (the count an officer confirmed), an applied run that
+        would link a different number writes nothing: every linked account is
+        one The Logbook will later suspend, so the confirmation must cover
+        exactly what is linked. Raises ProvisionRetryError with a safe message
+        when it cannot run.
         """
         integration = await self._active_integration(organization_id)
         if integration is None:
@@ -597,36 +633,46 @@ class GoogleWorkspaceProvisioningService:
             if address and isinstance(google_id, str) and google_id:
                 by_address[address] = google_id
 
-        recorded = set(
-            (
-                await self.db.execute(
-                    select(GoogleAccountProvision.user_id).where(
-                        GoogleAccountProvision.organization_id == str(organization_id)
-                    )
-                )
+        records = (
+            await self.db.execute(
+                select(
+                    GoogleAccountProvision.user_id,
+                    GoogleAccountProvision.status,
+                    GoogleAccountProvision.google_user_id,
+                ).where(GoogleAccountProvision.organization_id == str(organization_id))
             )
-            .scalars()
-            .all()
-        )
-        members = (
-            (
-                await self.db.execute(
-                    select(User).where(User.organization_id == str(organization_id))
-                )
-            )
-            .scalars()
-            .all()
-        )
+        ).all()
+        status_by_member = {r.user_id: r.status for r in records}
+        claimed = {r.google_user_id for r in records if r.google_user_id}
+        member_query = select(User).where(User.organization_id == str(organization_id))
+        if apply:
+            # A locking read, so a member dropped while this runs is either
+            # seen as departed here or waits for this commit -- and then finds
+            # the new record for the departure hook to stage. A plain read
+            # would answer from the snapshot and link a member who had left.
+            member_query = member_query.with_for_update()
+        members = (await self.db.execute(member_query)).scalars().all()
         counts = {
             "linked": 0,
             "already_linked": 0,
+            "unfinished": 0,
             "departed": 0,
             "not_in_google": 0,
             "off_domain": 0,
+            "account_in_use": 0,
         }
+        to_link: list[tuple[User, str, str]] = []
         for member in members:
-            if str(member.id) in recorded:
-                counts["already_linked"] += 1
+            recorded_status = status_by_member.get(str(member.id))
+            if recorded_status is not None:
+                # A record that is not an account in Google (being created,
+                # or failed) is finished from the member's profile, not here.
+                key = (
+                    "already_linked"
+                    if recorded_status in _SUSPENDABLE
+                    else "unfinished"
+                )
+                counts[key] += 1
                 continue
             address = (member.email or "").strip().lower()
             if not address or _domain_of(address) != domain:
@@ -639,31 +685,42 @@ class GoogleWorkspaceProvisioningService:
             if member_has_departed(member):
                 counts["departed"] += 1
                 continue
+            if google_id in claimed:
+                counts["account_in_use"] += 1
+                continue
             counts["linked"] += 1
-            if apply:
-                self.db.add(
-                    GoogleAccountProvision(
-                        organization_id=str(organization_id),
-                        user_id=str(member.id),
-                        primary_email=address,
-                        status=GoogleAccountStatus.LINKED_EXISTING.value,
-                        google_user_id=google_id,
-                        created_by=actor_id,
-                    )
+            claimed.add(google_id)
+            to_link.append((member, address, google_id))
+        if not apply:
+            return counts
+        if expected is not None and counts["linked"] != expected:
+            raise ProvisionRetryError(
+                f"The roster changed since the preview: {counts['linked']} "
+                f"members would be linked, not {expected}. Review it again."
+            )
+        for member, address, google_id in to_link:
+            self.db.add(
+                GoogleAccountProvision(
+                    organization_id=str(organization_id),
+                    user_id=str(member.id),
+                    primary_email=address,
+                    status=GoogleAccountStatus.LINKED_EXISTING.value,
+                    google_user_id=google_id,
+                    created_by=actor_id,
                 )
-        if apply:
-            try:
-                await self.db.commit()
-            except IntegrityError as exc:
-                await self.db.rollback()
-                # A conversion recorded one of these members meanwhile, and
-                # the unique index on user_id refused the second record.
-                # Anything else is not that, and is raised.
-                if not _is_duplicate_key(exc):
-                    raise
-                raise ProvisionRetryError(
-                    "A member was given an account while this ran. Run it again."
-                )
+            )
+        try:
+            await self.db.commit()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            # A conversion recorded one of these members meanwhile, and
+            # the unique index on user_id refused the second record.
+            # Anything else is not that, and is raised.
+            if not _is_duplicate_key(exc):
+                raise
+            raise ProvisionRetryError(
+                "A member was given an account while this ran. Run it again."
+            )
         return counts
 
     async def sync_pending_suspensions(self) -> int:
