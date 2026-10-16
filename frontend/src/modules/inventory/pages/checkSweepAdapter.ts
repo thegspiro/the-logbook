@@ -33,6 +33,7 @@
 import {
   CheckType,
   normalizeCheckType,
+  passFloor,
   soonestExpiration,
   targetQuantity,
   type CheckTemplateCompartment,
@@ -58,11 +59,10 @@ export interface SweepSource {
 /**
  * Par: what the truck is supposed to hold.
  *
- * `requiredQuantity` wins where both are set — `expectedQuantity` is the older
- * column and some templates carry both. Through `targetQuantity`, so a
- * `requiredQuantity` of 0 falls through to the expected count the way
- * `_target_quantity` does: this par is what the sweep's swap gate measures a
- * shortfall against, and a zero par there refuses a top-up the server allows.
+ * Through `targetQuantity`, so it resolves exactly as `_target_quantity` does
+ * — the larger of the two columns, with a 0 falling through: this par is what
+ * the sweep's restock lines and swap gate measure a shortfall against, and a
+ * different par here would refuse a top-up the server allows.
  */
 function par(item: CheckTemplateItem): number | undefined {
   return targetQuantity(item) ?? undefined;
@@ -84,6 +84,7 @@ function toItemSpec(item: CheckTemplateItem, source: SweepSource): CheckItemSpec
   const last = source.lastResults?.[item.id];
   const isCount = normalizeCheckType(item.checkType) === CheckType.COUNT;
   const parValue = par(item);
+  const floorValue = passFloor(item.requiredQuantity, item.criticalMinimumQuantity);
   const carriedValue = isCount ? carried(item, source.lastResults) : undefined;
   // The soonest date *aboard*, not the position's column: a position holding
   // three boxes holds three dates and the truck is exposed by its oldest.
@@ -98,6 +99,8 @@ function toItemSpec(item: CheckTemplateItem, source: SweepSource): CheckItemSpec
     ...(item.levelUnit !== undefined ? { levelUnit: item.levelUnit } : {}),
     ...(last?.level_reading !== undefined ? { lastLevelReading: last.level_reading } : {}),
     ...(parValue !== undefined ? { expectedQuantity: parValue } : {}),
+    ...(isCount && floorValue !== null ? { passFloor: floorValue } : {}),
+    ...(isCount && item.unitOfMeasure ? { countUnit: item.unitOfMeasure } : {}),
     ...(carriedValue !== undefined ? { carriedQuantity: carriedValue } : {}),
     ...(expiry !== undefined ? { expirationDate: expiry } : {}),
     ...(item.inventoryItemId !== undefined ? { inventoryItemId: item.inventoryItemId } : {}),

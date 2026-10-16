@@ -19,6 +19,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.models.user import Organization
+from app.utils.check_types import describe_count
 from app.utils.org_timezone import format_in_org_timezone
 
 _styles = getSampleStyleSheet()
@@ -256,6 +257,17 @@ def generate_compliance_pdf(
     return buf.getvalue()
 
 
+def _item_with_count(record: Dict[str, Any]) -> str:
+    """The item name, followed by its count when the failure was a count."""
+    name = str(record.get("item_name", ""))
+    count = describe_count(
+        record.get("quantity_found"),
+        record.get("target_quantity"),
+        record.get("count_unit"),
+    )
+    return f"{name} ({count})" if count else name
+
+
 def generate_failure_log_pdf(
     data: Dict[str, Any],
     date_from: Optional[str] = None,
@@ -315,7 +327,7 @@ def generate_failure_log_pdf(
                     str(dt or "-"),
                     str(f.get("apparatus_name", "-")),
                     str(f.get("compartment_name", "")),
-                    str(f.get("item_name", "")),
+                    _item_with_count(f),
                     str(f.get("checked_by_name", "-")),
                     notes,
                 ]
@@ -390,26 +402,33 @@ def generate_check_detail_pdf(
 
     for comp_name, comp_items in compartments.items():
         elements.append(Paragraph(_esc(comp_name), SECTION_STYLE))
-        header = ["Item", "Type", "Status", "Notes"]
+        header = ["Item", "Type", "Status", "Count", "Notes"]
         rows = [header]
         for it in comp_items:
             status = it.get("status", "")
             notes = str(it.get("notes", "") or "")
-            if len(notes) > 50:
-                notes = notes[:47] + "..."
+            if len(notes) > 40:
+                notes = notes[:37] + "..."
+            count = describe_count(
+                it.get("quantity_found"),
+                it.get("expected_quantity"),
+                it.get("count_unit"),
+            )
             rows.append(
                 [
                     str(it.get("item_name", "")),
                     str(it.get("check_type", "")),
                     status.upper() if status else "-",
+                    count or "-",
                     notes,
                 ]
             )
         col_widths = [
-            2.5 * inch,
-            1.2 * inch,
-            1 * inch,
-            2 * inch,
+            2.0 * inch,
+            0.9 * inch,
+            0.9 * inch,
+            1.4 * inch,
+            1.5 * inch,
         ]
         t = Table(rows, colWidths=col_widths)
         style = TableStyle(list(_BASE_TABLE_STYLE.getCommands()))

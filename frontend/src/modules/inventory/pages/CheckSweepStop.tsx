@@ -151,6 +151,8 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
           const found =
             (notOnTruck ? answer?.quantityFound : (answer?.quantityFound ?? item.carriedQuantity)) ?? undefined;
           const short = par !== null && found !== undefined && found < par;
+          // Below the pass floor the line fails; short of par alone is a restock.
+          const failing = item.passFloor != null && found !== undefined && found < item.passFloor;
           const carried = found !== undefined && !confirmed;
           const set = (next: number) => onAnswer(item.id, countAnswer(item, next));
           return (
@@ -163,10 +165,18 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
               // colour-only distinction between "at par" and "short" disappears
               // exactly where legibility matters most.
               className={`border-theme-surface-border flex items-center gap-2 border-b px-3 py-2 last:border-b-0 ${
-                short && !carried ? 'bg-theme-alert-warning-bg' : ''
+                failing && !carried ? 'bg-theme-alert-danger-bg' : short && !carried ? 'bg-theme-alert-warning-bg' : ''
               }`}
             >
-              <p className="text-theme-text-primary min-w-0 flex-1 text-[16px] font-semibold">{item.name}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-theme-text-primary text-[16px] font-semibold">{item.name}</p>
+                {item.countUnit && <p className="text-theme-text-muted text-[12px]">counted in {item.countUnit}</p>}
+                {failing && !carried && (
+                  <p className="text-theme-alert-danger-title text-[12px] font-semibold">
+                    Below minimum ({item.passFloor}) — fails
+                  </p>
+                )}
+              </div>
               <span className="text-theme-text-secondary w-10 text-center font-mono text-[16px] tabular-nums">
                 {par ?? '—'}
               </span>
@@ -185,9 +195,11 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
                   className={`w-10 text-center font-mono text-[19px] font-bold tabular-nums ${
                     found === undefined || carried
                       ? 'text-theme-text-muted'
-                      : short
-                        ? 'text-theme-alert-warning-text'
-                        : 'text-theme-alert-success-text'
+                      : failing
+                        ? 'text-theme-alert-danger-title'
+                        : short
+                          ? 'text-theme-alert-warning-text'
+                          : 'text-theme-alert-success-text'
                   }`}
                 >
                   {found ?? '—'}

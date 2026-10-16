@@ -2,10 +2,188 @@
 
 **Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
-(pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7) · **PR:**
-[#1904](https://github.com/thegspiro/the-logbook/pull/1904) (pass 1), pass 7
-(this PR; pass 6 merged as PR
-[#2875](https://github.com/thegspiro/the-logbook/pull/2875))
+(pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8) ·
+**PR:** [#1904](https://github.com/thegspiro/the-logbook/pull/1904) (pass 1),
+pass 7 merged as commit `9da13118` (no PR — pushed directly), pass 6 merged
+as PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875), pass 8
+(this PR)
+
+---
+
+## Pass 8 (2026-10-16) — watchdog pickup, 0 fixed, 5 standing findings closed since pass 7 by non-rotation commits (verified), 0 new findings
+
+**Watchdog pickup.** PR #3336 (Feature 21, Admin hours, pass 8) merged
+(`6e90eec5`, 2026-10-16T20:43:56Z) with no branch or PR started for
+Feature 22 in the following hour — a watchdog check at 2026-10-16T21:46Z
+confirmed `search_pull_requests`/`list_pull_requests`
+(`is:open head:claude/security-review-`) returned 0 results, so this
+iteration took the next `⬜` row from outside the dedicated
+`/loop 30m /security-review` session.
+
+**Backend:** `app/api/v1/endpoints/grants.py` (1,994 L, 45 endpoints, up
+from 1,916 L at pass 7), `app/services/grant_service.py` (1,446 L, up from
+1,319 L), `app/services/fundraising_service.py` (838 L, up from 818 L),
+`app/models/grant.py` (1,446 L, up from 1,191 L), `app/schemas/grant.py`
+(1,081 L, up from 1,032 L), `app/services/dashboard_widget_service.py`
+(its `fundraising()` method only). **Frontend:**
+`frontend/src/modules/grants-fundraising/` (all pages, services, store,
+routes, types — now 14 test files, up from the prior pass's count).
+
+### Diff-scoping methodology
+
+GitHub's `list_commits` (path-filtered on this file, then widened by
+commit-message search for `GF-7`/`GF-8`) found four non-rotation commits
+since pass 7's `9da13118` (2026-10-07), all dated 2026-10-11/12, all from
+feature-development session `012hTGV736KSEFSuh8pgFn72` (not this
+rotation): `5006f2a7b` (GF-7), `06e97bb3e` (GF-8), `a4a79323f` (GF-24a),
+`77799048` (GF-27a/GF-33, one commit for both since they rebuild the same
+list endpoint). Each read in full against the current code, not trusted
+from its own commit message or from `KNOWN_LIMITATIONS.md`'s "Resolved"
+banner.
+
+1. **GF-7 — ✅ FIXED.** `APPLICATION_STATUS_TRANSITIONS`
+   (`app/models/grant.py:83-130`) is the grant lifecycle: drafting stages
+   move among themselves and to Submitted; Submitted/Under Review advance
+   to a decision; Denied may reopen to Researching; Awarded → Active ↔
+   Reporting → Closed, Awarded may close directly; Closed may reopen to
+   Reporting only. `update_application` (`grant_service.py:475-532`) calls
+   `assert_status_transition(old_status, data["application_status"])` at
+   line 497, **before** `apply_updates` runs — a disallowed transition
+   raises `ValueError` (→ 400 at the endpoint) with nothing written.
+   Overspend is a warning, never a block: `app/utils/grant_spending.py`
+   computes `overspent_by`/`total_expended` once; the expenditure
+   create/update responses carry `warnings` when a write leaves the grant
+   or its budget line over, and the write still succeeds, audited as
+   `grant_overspend_recorded` (severity `warning`). `_generate_compliance_tasks`
+   is still guarded by the `compliance_tasks_generated` flag (not
+   `task_type`), so the lifecycle change doesn't reopen the duplicate-task
+   gap GF-14 already closed.
+2. **GF-8 — ✅ FIXED.** `app/services/donor_privacy.py`'s `present_donation`/
+   `present_donor` clear `donor_name`/`donor_email`/`donor_id` on an
+   anonymous donation, and clear email/phone/address/company/notes/
+   `user_id` (replacing first/last name with the "Anonymous"/"donor"
+   placeholder) on an anonymous donor, for any caller who does not hold
+   `fundraising.manage`. `is_anonymous` itself stays `true` beside the
+   placeholder, so a client can tell it from a real anonymous-looking
+   name. `fundraising.manage` sees everything unmasked. Applied at
+   `GET /grants/donations` (list) and the dashboard's `recent_donations`,
+   and at `GET /grants/donors`/`GET /grants/donors/{id}`; a view-only
+   donor search also excludes anonymous donors
+   (`list_donors(search_anonymous=False)`) so the hidden name can't be
+   confirmed by searching for it.
+3. **GF-24a — ✅ FIXED.** `grant_service.py:1341` and
+   `fundraising_service.py:272,786` (the grant report, the fundraising
+   report, and `list_donations`) all resolve their date range via
+   `app/utils/org_timezone.resolve_local_range_utc` — local midnight
+   inclusive to the next local midnight exclusive, UTC when the org has no
+   timezone — instead of the prior bare-UTC `datetime.combine(...,
+tzinfo=timezone.utc)` bound. Matches the same fix applied across every
+   other report in the codebase (admin hours, the prospect pipeline,
+   event attendance).
+4. **GF-27a — ✅ FIXED.** `APPLICATION_STATUS_GROUPS`
+   (`app/models/grant.py:164-175`) — `active` (active, reporting),
+   `pending` (researching…under_review), `funded` (awarded, active,
+   reporting, closed) — is now the one definition `get_dashboard_data()`
+   counts from (`grant_service.py:1229,1241,1257`) and that a new
+   `status_group` query parameter on `GET /grants/applications` filters
+   by (`_application_filters`, `grant_service.py:218-227`; an unrecognized
+   group raises `ValueError` → 400). The dashboard's Active Grants,
+   Pending Applications and Total Grant Funding cards link to
+   `?group=active|pending|funded`; the applications page's Status filter
+   offers the three groups beside single statuses. Plain `?status=<value>`
+   links still work unchanged.
+5. **GF-33 — ✅ FIXED (same commit as GF-27a).** `GET /grants/applications`
+   reports `X-Total-Count` and takes `search` (program name or agency,
+   `like_pattern`-escaped with `escape=LIKE_ESCAPE_CHAR`, confirmed at
+   `grant_service.py:236-245`), `sort` (a whitelisted camelCase field) and
+   `order`; `count_applications` (`grant_service.py:310-328`) shares the
+   same `_application_filters` builder so the total always matches what
+   the page is showing. The table view pages through the server
+   (`skip`/`limit` now threaded all the way to a SQL `LIMIT`, per GF-35's
+   existing pattern) and each pipeline column loads 25 at a time with Show
+   more. Search no longer matches `assigned_to` (a user id) — a
+   deliberate, documented behavior change, not a regression.
+
+**GF-9 stays split, exactly as pass 7 recorded it.** The float-money third
+is unchanged-fixed. The other two thirds, re-verified directly against
+current code rather than carried forward from pass 7's wording:
+
+- **Zero/unbounded amounts — still open.** Every money field in
+  `app/schemas/grant.py` — `amount`, `amount_requested`, `amount_awarded`,
+  `amount_budgeted`, `goal_amount`, `pledged_amount`, `match_amount`, … —
+  is still `Field(..., ge=0)` or `Field(None, ge=0)`: rejects negative,
+  accepts `0`, no upper bound anywhere. Confirmed via a full grep of every
+  `Field(...)` declaration carrying an amount in this schema module.
+- **Donor-PII gate breadth — still open.** `DonorResponse`
+  (`schemas/grant.py:787-801`) still carries full contact fields,
+  `total_donated`, and donation dates, and GF-8's masking (above) only
+  fires when `is_anonymous=True`. A non-anonymous donor's full PII is
+  still visible to any `fundraising.view` holder, with no narrower
+  read-only projection. Unchanged by GF-8's own fix, which this pass
+  confirmed addresses a different, narrower gap (the anonymity flag, not
+  view-vs-manage breadth).
+
+### Re-confirmed unchanged (not re-derived)
+
+- **GF-1 through GF-6** (cross-org FK validation on donation/expenditure/
+  pledge/event/application writes) — `_validate_application_fks`,
+  `_opportunity_in_org`, and the module's `_entity_in_org` helper all
+  still called on every write path that stores a client-supplied FK;
+  spot-checked `update_application` (`grant_service.py:486-489`) and
+  `create_pledge`/`create_fundraising_event` (unchanged since pass 4).
+- **GF-35** (SQL-side pagination for all 11 `list_*` methods) — unchanged;
+  GF-33's new pagination for applications follows the identical
+  `skip`/`limit`-as-SQL-`LIMIT` pattern rather than introducing a second
+  one.
+- **GF-36** (`get_application`'s `populate_existing=True` reload fix) —
+  still present, still required for `update_application`'s "reload with
+  fresh relationships" call to see the note/tasks the same request just
+  created.
+- **GF-5/GF-25 class** (LIKE-pattern escaping) — every `ilike` call across
+  `grant_service.py`/`fundraising_service.py` (opportunity search, donor
+  search, and the new application search) carries
+  `escape=LIKE_ESCAPE_CHAR` via `like_pattern()`.
+- **Route surface** — re-enumerated from scratch: 45/45 `@router.`
+  decorators and 45/45 `require_permission("fundraising.view"|"fundraising.manage")`
+  dependencies, byte-for-byte the same count as pass 7. GF-27a/33 added
+  query parameters to three existing routes; no route was added, removed,
+  or regated.
+
+**No new findings.**
+
+### Schema & migration notes
+
+No migration written or needed this pass — none of the four non-rotation
+commits altered a `grants`/`fundraising`-prefixed table. Chain
+re-validated: 609 revisions, single head `12e20092c1a8`, no duplicate ids.
+
+### Guard tests (already in place, re-run this pass)
+
+`tests/test_grant_lifecycle.py` (GF-7, 27 unit + 1 integration),
+`tests/test_anonymous_donations.py` (GF-8, 12 unit),
+`tests/test_report_range_timezone.py` (GF-24a, 8 unit + 4 integration),
+`tests/test_grant_applications_paging.py` (GF-27a/33, 12 unit + 1
+integration) — all added by their respective fix commits before this pass
+began; this pass added no new guard tests, since it fixed nothing itself.
+
+### Completion gate (pass 8)
+
+| Check                                                 | Result                                                                                                                                     |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                                                                                                            |
+| `black --check app/ tests/ alembic/`                  | ✅ 2376 files unchanged                                                                                                                    |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned) | ✅ clean                                                                                                                                   |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ 609 revisions, single head                                                                                                              |
+| `pytest tests/ -q -k "grant or fundraising"`          | ✅ 827 passed, 1 pre-existing skip (up from 718)                                                                                           |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 270 routes, 0 errors, 0 warnings                                                                                                        |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors (`npm ci` from repo root first — sandbox `node_modules` predated a `@tiptap/*` dependency; environment gap, not a code defect) |
+| `cd frontend && npm run lint`                         | ✅ 0 errors, 0 warnings                                                                                                                    |
+| `npx vitest run src/modules/grants-fundraising`       | ✅ 61/61 passed (14 files)                                                                                                                 |
+
+No source file is modified by this pass — the five fixable items (GF-7,
+GF-8, GF-24a, GF-27a, GF-33) had all already landed via non-rotation
+commits before this pass began, and this pass's own diff is
+documentation-only (this file + `PROGRESS.md`).
 
 ---
 

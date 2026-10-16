@@ -16,6 +16,64 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3339](https://github.com/thegspiro/the-logbook/pull/3339)** (branch
+`claude/security-review-grants-fundraising`): Feature 22 (Grants &
+fundraising), pass 8. Watchdog pickup: PR #3336
+(Feature 21, Admin hours, pass 8) merged (`6e90eec5`) with nothing started
+for the next feature since; this pass is that pickup. **0 new findings.**
+Five standing findings open since pass 7 — GF-7 (lifecycle/overspend), GF-8
+(`is_anonymous` not enforced), GF-24a (report ranges in UTC not org
+timezone), GF-27a (KPI/filter status-set mismatch), GF-33 (no real
+pagination) — are all now resolved by four non-rotation commits landed
+since pass 7, verified end to end rather than taken from
+`KNOWN_LIMITATIONS.md`'s own say-so. GF-9's other two thirds (unbounded
+money fields, donor-PII gate breadth) remain open, unchanged. Route surface
+re-enumerated (45/45, unchanged). See `GF-22-grants-fundraising.md`'s
+**Pass 8** section. Row 22 → ✅ (pending this PR's merge); next is Feature
+23 (Medical supplies).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 8, PR #3336, merged), preserved for history</summary>
+
+**PR [#3336](https://github.com/thegspiro/the-logbook/pull/3336)** (branch
+`claude/security-review-admin-hours`): Feature 21 (Admin hours), pass 8.
+Watchdog pickup: PR #3330 (Feature 20, Compliance, pass 8) merged
+(`5fabde43`) with nothing started for the next feature since; this pass is
+that pickup. **0 new findings.** AH-16, the feature's one standing
+bug-class finding since pass 2 (`export_entries_csv` unbounded/
+non-streaming), and CRON2-31-13 (a Feature-31 scheduled-task gap that also
+touches `admin_hours_service.py`) are both now resolved by two
+non-rotation commits landed since pass 7, verified end to end rather than
+taken from `KNOWN_LIMITATIONS.md`'s own say-so — the feature carries zero
+open or flagged findings as of this pass. Route surface re-enumerated
+(30/30, unchanged). See `AH-21-admin-hours.md`'s **Pass 8** section. Row
+21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
+fundraising).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 8, PR #3330, merged), preserved for history</summary>
+
+**PR [#3330](https://github.com/thegspiro/the-logbook/pull/3330)** (branch
+`claude/security-review-compliance-p8`): Feature 20 (Compliance), pass 8.
+Routine pickup. **0 new findings.** The one substantive item in the real
+delta since pass 7 (CMP2-1, the two notification settings that had been
+write-only for seven passes) was already fixed before this pass started —
+verified org-scoped, HTML-escaped, idempotent, and graded through the same
+shared evaluator every other compliance screen uses. Also corrected a
+stale documentation claim carried forward unchanged across six passes: the
+attestation-history over-fetch had actually been fixed on 2026-07-30,
+before this rotation's own pass 1. Route surface re-enumerated (20/20,
+unchanged) and every standing finding re-verified by direct code read. See
+`CMP-20-compliance.md`'s **Pass 8** section. Row 20 → ✅ (merged); next was
+Feature 21 (Admin hours).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 8, PR #3307, merged), preserved for history</summary>
+
 **PR [#3307](https://github.com/thegspiro/the-logbook/pull/3307)** (branch
 `claude/security-review-skills-testing-p8`):
 Feature 19 (Skills testing), pass 8. Watchdog pickup. **0 new findings.**
@@ -34,6 +92,8 @@ already merged; CLAUDE.md Pitfall #24). Every standing fix from passes 1–7
 (29/29, unchanged) and org-scoping re-swept (87/87 `select(` sites). See
 `SKT-19-skills-testing.md`'s **Pass 8** section. Row 19 → ✅ (pending this
 PR's merge); next is Feature 20 (Compliance).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 8, PR #3302, merged), preserved for history</summary>
@@ -19496,9 +19556,9 @@ here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
@@ -19518,6 +19578,199 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-16 — Feature 22 (Grants & fundraising, pass 8) — watchdog pickup, 5 standing findings closed by non-rotation commits (verified), 0 new findings
+
+**Step 0.** `search_pull_requests`/`list_pull_requests` (`is:open
+head:claude/security-review-`) returned 0 results — PR #3336 (Feature 21,
+Admin hours, pass 8) had just merged (`6e90eec5`, 2026-10-16T20:43:56Z)
+with nothing started for the next feature in the following hour (first
+observed by a watchdog check at 2026-10-16T21:46Z). Row 21 was already ✅;
+row 22 (Grants & fundraising) was the first `⬜`.
+
+**Baseline.** Pass 7 landed as `9da13118` (2026-10-07, docs-only, 0
+fixed/0 new). Since then, four non-rotation commits touch this feature's
+six declared backend files (`grants.py`, `grant_service.py`,
+`fundraising_service.py`, `models/grant.py`, `schemas/grant.py`) and its
+frontend module, all already shipped with their own tests and
+`KNOWN_LIMITATIONS.md` updates before this pass started — every one
+re-verified end to end against the current code, not trusted from the
+commit messages or `KNOWN_LIMITATIONS.md`'s own "Resolved" banner:
+
+- **GF-7 — ✅ FIXED (`5006f2a7b`, 2026-10-11).** `APPLICATION_STATUS_TRANSITIONS`
+  (`app/models/grant.py`) is now the grant lifecycle; `update_application`
+  calls `assert_status_transition` before any write, confirmed wired at
+  `grant_service.py:497`. Overspend warns via `app/utils/grant_spending.py`
+  and audits `grant_overspend_recorded`; never blocks a write.
+- **GF-8 — ✅ FIXED (`06e97bb3e`, 2026-10-11).** `app/services/donor_privacy.py`
+  masks donor/donation identity fields for an anonymous record when the
+  caller holds only `fundraising.view`; `fundraising.manage` is unaffected.
+  Confirmed applied at `GET /grants/donations`, `/donors`, `/donors/{id}`,
+  and the dashboard's `recent_donations`.
+- **GF-24a — ✅ FIXED (`a4a79323f`, 2026-10-11).** The grant and fundraising
+  report methods now resolve their date range via
+  `resolve_local_range_utc` (org timezone, UTC fallback) instead of a bare
+  UTC bound — confirmed at `grant_service.py:1341`,
+  `fundraising_service.py:272,786`.
+- **GF-27a — ✅ FIXED (`77799048`, 2026-10-11).** `APPLICATION_STATUS_GROUPS`
+  (`app/models/grant.py`) is the one definition shared by
+  `get_dashboard_data()`'s KPI counts and a new `status_group` filter on
+  `GET /grants/applications` (unknown group → 400); the dashboard cards
+  link to the matching group.
+- **GF-33 — ✅ FIXED (same commit).** `GET /grants/applications` now reports
+  `X-Total-Count` and takes `search`/`sort`/`order`, paginating server-side
+  via `count_applications`/`list_applications`; pipeline columns load 25
+  at a time with Show more. `search` is `like_pattern`-escaped
+  (`escape=LIKE_ESCAPE_CHAR`), confirmed at `grant_service.py:236-245`.
+
+**GF-9 stays split, as pass 7 recorded it.** The float-money third stays
+fixed (unchanged since pass 7). The other two thirds are still open,
+unchanged: every money field in `app/schemas/grant.py` is still
+`Field(..., ge=0)`/`Field(None, ge=0)` with no upper bound (zero/unbounded
+amounts), and `list_donors`/`get_donor` still return the full
+`DonorResponse` — name, email, lifetime total, dates — to any
+`fundraising.view` holder for a non-anonymous donor, with no narrower
+read-only projection (donor-PII gate breadth). Both re-confirmed by direct
+code read, not carried forward from a prior pass's wording.
+
+**Result: 0 new findings.** Route surface re-enumerated from scratch:
+45/45 routes (and 45/45 `require_permission` dependencies, all
+`fundraising.view`/`fundraising.manage`) byte-identical in count to pass
+7 — GF-27a/33 added query parameters to existing routes, not new ones.
+`check_route_permissions.py --strict`: 270 application routes, 0
+errors/warnings. Org-scoping re-verified on every by-id/list query
+(`_application_filters` always starts with `organization_id ==`;
+`get_application`/`count_applications` both take and filter on it), LIKE
+escaping present on every `ilike` call including the new application
+search, GF-35's SQL-side pagination and GF-36's
+`populate_existing=True` reload fix both unchanged, GF-1–6's cross-org FK
+validation (`_validate_application_fks`, `_opportunity_in_org`)
+unchanged. Full write-up:
+[`GF-22-grants-fundraising.md`](./GF-22-grants-fundraising.md) → **Pass
+8**.
+
+Completion gate green: flake8/black/isort clean (CI-pinned versions),
+migrations single head (609 revisions), 827 scoped backend tests passed
+(up from 718 at pass 7) plus 1 pre-existing skip, `check_route_permissions
+--strict` clean (270 routes), frontend typecheck clean (`npm ci` from the
+repo root first — sandbox's `node_modules` predated a `@tiptap/*`
+dependency, the same environment gap AH-21's pass 8 hit; not a code
+defect), frontend lint clean, 61/61 grants-fundraising module frontend
+tests (14 files). No application source file is modified by this
+PR — documentation only (`GF-22-grants-fundraising.md`'s new **Pass 8**
+section, this rotation-table/Open-PR/Log update). Rotation row 22 → ✅
+(pending this PR's merge); next is Feature 23 (Medical supplies).
+
+### 2026-10-16 — Feature 21 (Admin hours, pass 8) — watchdog pickup, 2 fixes already landed verified, 0 new findings, feature now at zero open findings
+
+**Step 0.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 results — PR #3330 (Feature 20, Compliance, pass 8) had just
+merged (`5fabde43`) with nothing started for the next feature since. Row
+20 was already ✅; row 21 (Admin hours) was the first `⬜`.
+
+**Baseline.** Pass 7 merged as `727a13e9a` (PR #2978, 2026-10-07). Since
+then: 6 non-merge commits touch this feature's five declared files
+(`admin_hours.py`, `admin_hours_service.py`, `models/admin_hours.py`,
+`schemas/admin_hours.py`, `utils/admin_hours_settings.py`). Two are
+substantive and already shipped with their own fixes before this pass
+started — `e3f236d8b` (AH-16, the CSV export streamed through a bounded
+server-side cursor, replacing the unbounded in-memory build standing open
+since pass 2) and `12a430ce5` (CRON2-31-13, a per-session audit event for
+every auto-closed stale clock-in, a Feature 31 finding that also touches
+this feature's service file). Both verified end to end against the
+current code, not trusted from `KNOWN_LIMITATIONS.md`'s own "Resolved"
+banner — org-scoping, the formula-injection guard, and the audit event's
+actor/organization fields all re-derived from the call chain. The other
+four are mechanical mypy-remediation commits; one (`265a26be3`) changes
+behavior only in a null-safety direction (`SUM`/`COUNT` over zero rows now
+reads `0` instead of raising), re-verified non-security. Full write-up:
+[`AH-21-admin-hours.md`](./AH-21-admin-hours.md) → **Pass 8**.
+
+**Result: this feature now carries zero open or flagged findings** — the
+first time since pass 2. Both of this doc's standing "Confirmed still
+open" product-decision items were already closed by pass 7's own subject
+commit; AH-16 was the last bug-class finding, and this pass confirms it
+fixed. Route surface re-enumerated (30/30, unchanged); 270 application
+routes, 0 permission errors/warnings. Completion gate green: flake8/
+black/isort clean (CI-pinned versions), migrations single head (608
+revisions), 144 scoped backend tests passed (up from 139) plus 36 across
+the four named guard-test files, frontend typecheck/lint clean (after
+`npm ci` from the repo root to pick up a `@tiptap/*` dependency the
+sandbox's `node_modules` predated), 115/115 admin-hours module frontend
+tests. No application source file is modified by this PR — documentation
+only (`AH-21-admin-hours.md`'s new **Pass 8** section, this rotation-table/
+Open-PR/Log update). Rotation row 21 → ✅ (pending this PR's merge); next
+is Feature 22 (Grants & fundraising).
+
+### 2026-10-16 — Feature 20 (Compliance, pass 8) — routine pickup, 1 fix already landed verified, 1 stale finding corrected, 0 new findings
+
+**Step 0.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 results. `PROGRESS.md`'s own Open PR row still named PR #3307
+(Feature 19, Skills testing, pass 8), confirmed merged via `git log` on
+`main` (merge commit `4aa3496c`). Row 19 was already ✅; row 20 (Compliance)
+was the first `⬜`.
+
+**Baseline.** Pass 7 merged as `db6716d37` (PR #2977, 2026-10-07). Since
+then: 10 non-merge commits touch this feature's declared surface
+(`compliance_config.py`, `compliance_officer.py`,
+`compliance_config_service.py`, `compliance_officer_service.py`,
+`training_compliance.py`, `models/compliance_config.py`, the new
+`compliance_member_notices.py`). Full write-up:
+[`CMP-20-compliance.md`](./CMP-20-compliance.md) → **Pass 8**.
+
+**Findings: 0 new.** The real delta's one substantive item — CMP2-1
+(`notify_days_before_deadline`/`notify_non_compliant_members`, write-only
+for seven straight passes) — was already fixed before this pass started
+(`afd687449`, 2026-10-11, owner decision: build the daily
+`compliance_member_notices` sender). Verified end to end rather than
+trusted from the commit message: org-scoped at every query (the sent-log
+dedup, the member grading, the shared `grade_org_members` evaluator), graded
+through the same `ComplianceGrading`/`tally_standing` path every other
+compliance screen uses (Pitfall #29), HTML-escaped email body, idempotent
+via `NotificationLog` keyed by `(requirement, deadline, offset)` /
+`(requirement, window)`, no new table or migration. `grace_period_days`'s
+separate, still-unwired "Not yet active" notice on the same screen was not
+touched by this commit and remains correctly labeled, still guarded by
+`test_compliance_grace_period_is_unwired.py`. Six further commits
+(rolling-hours calendar windows, a My Training split, four mypy-ratchet
+typing batches) touch the shared `training_compliance.py`/
+`models/compliance_config.py` but carry no query or permission change —
+read in full, no finding.
+
+**One stale finding corrected — not a code defect.** Passes 1 through 7 each
+carried forward "attestation history over-fetches globally, blocked on the
+deferred `audit_logs.organization_id` column" as open. Reading
+`compliance_officer_service.py` directly shows the query has filtered
+`AuditLog.organization_id == str(organization_id)` since **2026-07-30**
+(`d07a51821`) — before this rotation's own pass 1 (2026-08-26).
+`docs/module-audit/compliance-skills.md` already had this right; this file
+and the `KNOWN_LIMITATIONS.md` row it mirrors did not. Both corrected in
+place this pass, naming the commit that actually fixed it, per this
+rotation's "re-verify by direct code read, not by trusting prior prose"
+discipline.
+
+**Route re-enumeration:** 12 + 8 = 20/20, byte-for-byte unchanged from pass
+7; every route still gated by `require_permission(...)`, no broadened
+grant, every by-id operation still org-scoped at the service call.
+
+**Gate**, run against CI's pinned tool versions: `flake8`/`black --check`/
+`isort --check-only` clean over `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — single head `f236c56b1b49`, 607
+revisions; `check_route_permissions.py --strict` — 270 routes, 0 errors;
+`pytest tests/ -q -k "compliance or attestation"` — 546 passed, 1
+pre-existing skip; the four delta-touched test files — 146 passed; the 8
+compliance-scoped frontend test files — 131 passed; frontend
+`npm run typecheck`/`npm run lint` both clean (after `npm ci` from the repo
+root to fill in this sandbox's incomplete `node_modules/` —
+`@tiptap/react`/`@tiptap/starter-kit`/`@tiptap/pm` were declared but not
+installed, affecting one unrelated rich-text-editor file; no
+`package-lock.json` change).
+
+Findings doc: [`CMP-20-compliance.md`](./CMP-20-compliance.md)'s **Pass 8**
+section. `KNOWN_LIMITATIONS.md` updated (CS-9 row's attestation-history cell
+corrected; CMP2-1 row already correctly said ✅ Resolved from the owning
+commit). Rotation row 20 → ✅ (pending PR merge). Next: Feature 21 (Admin
+hours).
 
 ### 2026-10-16 — Feature 17 (Training core, pass 8) — watchdog pickup, 0 fixes needed, TR7-1 re-verified and widened
 

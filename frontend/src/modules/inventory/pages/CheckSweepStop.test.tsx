@@ -36,12 +36,29 @@ describe('the count tally', () => {
     expect(onAnswer).toHaveBeenCalledWith('gauze', expect.objectContaining({ quantityFound: 9 }));
   });
 
-  it('reports short of par as a restock, whatever it stores', async () => {
+  it('stores short of par as a pass with a restock line', async () => {
     const user = userEvent.setup();
     const onAnswer = setup([gauze]);
     await user.click(screen.getByRole('button', { name: 'One fewer 4×4 gauze' }));
-    // Stored as a failure, because that is what the record holds either way.
+    expect(onAnswer).toHaveBeenCalledWith('gauze', { quantityFound: 9, status: 'pass', restockNeeded: true });
+  });
+
+  it('stores below the minimum as a failure', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([{ ...gauze, passFloor: 10 }]);
+    await user.click(screen.getByRole('button', { name: 'One fewer 4×4 gauze' }));
     expect(onAnswer).toHaveBeenCalledWith('gauze', { quantityFound: 9, status: 'fail', restockNeeded: true });
+  });
+
+  it('marks a row below its minimum as failing, and names the unit', () => {
+    setup([{ ...gauze, passFloor: 6, countUnit: 'each' }], { gauze: { status: 'fail', quantityFound: 5 } });
+    expect(screen.getByText('Below minimum (6) — fails')).toBeInTheDocument();
+    expect(screen.getByText('counted in each')).toBeInTheDocument();
+  });
+
+  it('does not mark a row short of par only as failing', () => {
+    setup([{ ...gauze, passFloor: 6 }], { gauze: { status: 'pass', quantityFound: 8 } });
+    expect(screen.queryByText(/Below minimum/)).not.toBeInTheDocument();
   });
 
   it('never counts below zero', async () => {

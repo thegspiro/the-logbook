@@ -5687,7 +5687,16 @@ class ShiftEquipmentCheckItem(Base):
         String(30), nullable=False
     )  # pass, fail, not_checked
     quantity_found: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Min to Pass at the time of the check; with critical_minimum_quantity it
+    # is what the verdict was judged by. Rows filed before par was snapshotted
+    # stored the single target (min, else par) here instead, and are read
+    # that way.
     required_quantity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Par at the time of the check — what the shortfall is measured against.
+    # NULL on rows filed before it was recorded; readers fall back to
+    # required_quantity, which was then the only target.
+    expected_quantity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    count_unit: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     critical_minimum_quantity: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )

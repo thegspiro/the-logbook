@@ -16,7 +16,7 @@ is switched on and managed from one page.
 | **Owner**           | Your department's IT officer                                                                      |
 
 Most members never open this page. The parts a member may meet are the
-[shift calendar feed](#icalendar-ics-feed),
+[calendar feeds](#icalendar-ics-feed),
 [ID cards](#nfc-id-cards--tap-in-attendance) and
 [connecting Claude to their own account](#walkthrough-connecting-the-claudeai-connector).
 
@@ -81,9 +81,7 @@ The page shows:
 
 | Category           | Integration        | What it does today                                                                             |
 | ------------------ | ------------------ | ---------------------------------------------------------------------------------------------- |
-| **Calendar**       | Google Calendar    | Can be switched on, but copies nothing — see [below](#google-calendar)                         |
-| **Calendar**       | Microsoft Outlook  | Can be switched on, but copies nothing — see [below](#microsoft-outlook)                       |
-| **Calendar**       | iCalendar (ICS)    | Points to each member's private shift feed; nothing to set up here                             |
+| **Calendar**       | iCalendar (ICS)    | A subscribe link to the department's published events — see [below](#icalendar-ics-feed)       |
 | **Messaging**      | Slack              | Posts new events, shifts and training records to a channel                                     |
 | **Messaging**      | Discord            | The same, to a Discord channel                                                                 |
 | **Messaging**      | Microsoft Teams    | The same, to a Teams channel                                                                   |
@@ -109,8 +107,10 @@ Nothing can be set up for them yet.
 | ESO Solutions                 | ePCR data exchange                |
 | FirstWatch                    | Dispatch analytics                |
 | Generic ePCR Import           | CSV or NEMSIS XML from any vendor |
+| Google Calendar               | One-way event publishing          |
 | Google Maps                   | Hydrant mapping and pre-plans     |
 | ImageTrend                    | ePCR sync and run reports         |
+| Microsoft Outlook             | One-way event publishing          |
 | NEMSIS Response Module Export | NEMSIS 3.5 for state EMS          |
 | NFIRS Export                  | NFIRS 5.0 for state fire marshal  |
 | NREMT Verification            | Certification status verification |
@@ -549,35 +549,55 @@ See [Google Workspace Integration](../../wiki/Integration-Google-Workspace.md) f
 
 ### Google Calendar
 
-The Google Calendar card can be connected, but **nothing is copied to or from
-Google Calendar**. The card's list mentions event sync and two-way sync; neither
-runs.
+The Google Calendar card reads **Coming Soon** and has no **Connect** button.
+What it describes is planned: The Logbook will create one calendar for the
+department in a Google account an administrator connects, and publish the
+department's events to it, **one way**. Members subscribe to that calendar.
+Nothing is read back from Google, and no contacts or emails are exchanged.
 
-What happens today:
+Until then, use the [department events feed](#icalendar-ics-feed).
 
-- **Connect** asks for no Google account and no calendar. It only marks the
-  card connected.
-- **Test** checks for a stored Google sign-in. There is no screen to enter
-  one, so the test reports "Google Calendar connection failed — check the
-  stored credentials".
-- Events you create in The Logbook do not appear in Google Calendar, and
-  changes in Google do not come back.
-
-To see shifts in Google Calendar, each member subscribes to their own
-[shift feed](#icalendar-ics-feed) instead.
+A server operator controls whether the card can be connected with the
+`CALENDAR_SYNC_ENABLED` setting, which is off by default. Leave it off: the
+publishing itself is not built yet, so turning it on only makes the card
+connectable. A card connected under an older release also reads **Coming
+Soon** while the setting is off. It never held a Google sign-in, so nothing
+was ever published through it.
 
 ### Microsoft Outlook
 
-The same is true of Microsoft Outlook. Connecting asks for nothing, **Test**
-reports "Outlook Calendar connection failed — check the stored credentials",
-and no events, contacts or emails pass between The Logbook and Outlook. Members
-can add their shift feed to Outlook.
+The same applies to Microsoft Outlook: **Coming Soon**, behind the same
+setting, and planned as one-way publishing to a calendar The Logbook creates in
+the department's Microsoft 365 account.
 
 ### iCalendar (ICS) Feed
 
-The feed is **private to each member**, and it is not set up on the
-Integrations page. Each member opens **Subscribe to my shifts** at the top of
-**Scheduling > My Shifts**:
+There are two kinds of calendar feed. Both are read-only links that any
+calendar app (Google, Apple or Outlook) can subscribe to.
+
+**The department events feed** is set up here, on the **iCalendar (ICS)**
+card:
+
+1. Select **Connect** on the card. Connecting creates the feed's link.
+2. The card shows the link. Select the copy button, or select the box and copy
+   it by hand.
+3. Share it with members, for example in a members-only message.
+4. **Reset link** makes a new link and stops the old one at once. Use it if
+   the link was posted somewhere public. Every calendar subscribed to the old
+   link stops updating until it is given the new one.
+
+The feed carries the department's **published** events from 30 days ago to a
+year ahead: each event's title, start and end, location, event type and a link
+back to the event in The Logbook. It leaves out drafts and cancelled events,
+and never carries an event's description, who is going, RSVP answers or custom
+fields. **Disconnect** stops the link; connecting again makes a new one.
+
+Only people who can manage integrations see the link or can reset it. Each
+reset is recorded in the audit log.
+
+**A member's shift feed** is private to each member, and it is not set up on
+the Integrations page. Each member opens **Subscribe to my shifts** at the top
+of **Scheduling > My Shifts**:
 
 1. Opening the card creates the member's own link the first time.
 2. Copy the link, or select the box and copy it by hand.
@@ -587,12 +607,12 @@ Integrations page. Each member opens **Subscribe to my shifts** at the top of
 5. **Reset link** makes a new link and stops the old one at once. Use it if a
    link was shared or leaked.
 
-There is one feed per member, and it carries that member's shifts. No one,
-including an officer, can see another member's link.
+There is one shift feed per member, and it carries that member's shifts. No
+one, including an officer, can see another member's link.
 
-> **Important.** Anyone with the link can see the shifts in it, without signing
-> in. Treat it like a password. The card says so, and **Reset link** is there
-> for when it gets out.
+> **Important.** Anyone with either link can see what is in it, without
+> signing in. Treat it like a password. **Reset link** is there for when it
+> gets out.
 
 ![The Subscribe to my shifts card expanded — the member's private feed URL, its copy button and the reset control](./images/16-07-calendar-subscribe.png)
 
@@ -1362,11 +1382,11 @@ key or email address.
 | Problem                                                    | What to do                                                                                                                                                              |
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Test** reports a failure                                 | Check the details you entered have not expired or changed, then select **Test** again. Open **Details** for the last error                                              |
-| Google Calendar or Outlook test fails                      | Expected: these integrations copy nothing yet. See [Calendar Integrations](#calendar-integrations)                                                                      |
+| Google Calendar or Outlook reads Coming Soon               | Expected: publishing to them is not built yet. Use the department events feed. See [Calendar Integrations](#calendar-integrations)                                      |
 | Salesforce sync reports missing fields                     | Run **Check readiness**. Create the missing fields in Salesforce, or tick **Skip custom fields my Salesforce org hasn't created yet**                                   |
 | Webhook test never arrives                                 | Check the address is public and starts with `https://`. Ask whoever runs the receiving system to check it answers                                                       |
 | Weather alerts not showing                                 | Expected: alerts are not shown anywhere yet. **Test** only checks the zone code                                                                                         |
-| Shift feed not updating                                    | Calendar apps check every so often, up to about an hour. Check the link is the current one, not one from before a **Reset link**                                        |
+| Shift feed or department feed not updating                 | Calendar apps check every so often, up to about an hour. Check the link is the current one, not one from before a **Reset link**                                        |
 | Slack, Discord or Teams posts not appearing                | Check the webhook address is still valid in the chat app. Open **Details** to see whether deliveries failed                                                             |
 | Documenso test fails                                       | Check the API token under **Settings > API** in Documenso, and the base URL if you run your own Documenso                                                               |
 | Cal.com test fails                                         | Check the API key under **Settings > Developer > API keys** in Cal.com                                                                                                  |
@@ -1403,8 +1423,9 @@ location.
 
 ### Part 2: Telling Members About the Shift Feed
 
-Steve first looks at the Google Calendar card. Its list says "Two-way sync",
-but connecting it copies nothing. So he leaves it alone.
+Steve first looks at the Google Calendar card. It reads **Coming Soon**, so he
+connects the **iCalendar (ICS)** card instead, copies the department events
+link it shows, and posts it in the members' channel.
 
 Each member's shift feed is made the first time they open **Subscribe to my
 shifts** on **My Shifts**. So Steve sends round an instruction, not a link:
@@ -1451,16 +1472,17 @@ If you are following older notes, an older recording or an SOP, these things
 work differently from what they describe.
 
 - **Google Calendar and Outlook do not sync.** Older notes describe signing in
-  with Google, choosing a calendar and two-way sync. None of that exists.
-  Members use the shift feed instead.
+  with Google, choosing a calendar and two-way sync. None of that exists; both
+  cards read **Coming Soon**, and what is planned is one-way publishing. Use
+  the department events feed and the shift feed instead.
 - **There are no event choices for Slack, Discord or Teams.** Older notes
   describe ticking New Member, Training Completed, Event Scheduled or Shift
   Change. A chat integration takes only a webhook address, and posts new
   events, shifts and training records.
-- **There is no shared calendar feed.** Older notes describe enabling the
-  iCalendar integration and copying "All Events", "Training Only" and "My
-  Shifts" links. Each member has one private shift feed, from **Scheduling >
-  My Shifts**.
+- **There is one department feed, not three.** Older notes describe copying
+  "All Events", "Training Only" and "My Shifts" links from the iCalendar
+  integration. The card gives one link, to the department's published events.
+  Each member's shift feed comes from **Scheduling > My Shifts**.
 - **Generic ePCR Import, NEMSIS Response Module Export, NFIRS Export and CSV
   Import/Export are Coming Soon**, not available. FirstWatch is also in the
   Coming Soon list. The NREMT and ImageTrend cards read **NREMT Verification**

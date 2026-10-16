@@ -42,13 +42,20 @@ export const CHECK_TYPE_HELP: Record<string, string> = {
 export const CHECK_TYPE_SUMMARY: Record<string, string> = {
   level: 'A reading; under the threshold fails and opens a swap.',
   function: 'Switched on and watched; a fail takes a note and a photo.',
-  count: 'A par level to match; short of par becomes a restock line.',
+  count: 'A par level to match; short of par is a restock, below Min to Pass fails.',
   expiry: 'A date on record, confirmed at a glance.',
   text: 'A read-only statement; nothing to answer.',
   header: 'A section divider; not a checkable item.',
 };
 
 export const LEVEL_UNIT_PRESETS = ['psi', '%', 'gallons', 'liters', 'inches', 'feet', 'bar', 'mmHg', 'quarts'] as const;
+
+/**
+ * What a count position counts in. A partial pack is counted in the smaller
+ * unit (12 each rather than half a box), which keeps every quantity whole;
+ * a department may type its own label instead.
+ */
+export const COUNT_UNIT_PRESETS = ['each', 'rolls', 'boxes', 'pairs', 'packs', 'bottles'] as const;
 
 // ============================================================================
 // Positions & apparatus types

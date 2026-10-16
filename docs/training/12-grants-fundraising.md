@@ -358,9 +358,29 @@ the grant dates **before** you move the application to Awarded.
 3. Change a task's status as the work moves along, and select **Mark Complete**
    when it is done.
 
-> **No reminders are sent.** The Logbook does not email anyone before a task is
-> due, or when it is past due. Use **Compliance Tasks Due** on the dashboard
-> (the next 30 days) and **Upcoming Deadlines** to keep track.
+### Task Reminders
+
+The Logbook emails a reminder about each task that is not Completed or
+Waived:
+
+- **Before it is due** — 14 days before the due date. The **Grant Closeout
+  Report** and **Grant-Funded Equipment Inventory** tasks created at the award
+  start 30 days before. The **Add Task** form does not change this.
+- **On the due date.** If that day's reminder could not go out, it is sent on
+  a later day, up to a week after the due date.
+
+Each reminder is sent once. If you change a task's due date, its reminders
+start again for the new date.
+
+The reminder goes to the member the task is assigned to, if they are active
+and can open Grants & Fundraising. The **Add Task** form does not assign a
+task, so most reminders go to every active member with **Manage
+fundraising**. Reminders are email only. Each member can turn them off under
+their email preferences (_Grants and fundraising reminders_), unless your
+department has made them required.
+
+Use **Compliance Tasks Due** on the dashboard (the next 30 days) and
+**Upcoming Deadlines** to see everything coming up.
 
 ![Grant application compliance tasks tab with due dates and status badges](./images/12-07-application-compliance-tab.png)
 
@@ -540,7 +560,9 @@ status.
 1. Select **Record Pledge**.
 2. Choose the **Donor** and **Campaign** (both optional). Enter the **Amount
    pledged** and **Pledge date** (required) and a **Due date** (optional).
-3. Select **Record pledge**. A new pledge starts as Pending.
+3. Leave **Send reminders** ticked to have the pledge's due date reminded (see
+   below).
+4. Select **Record pledge**. A new pledge starts as Pending.
 
 ### Recording What Came In
 
@@ -549,8 +571,19 @@ and set the **Status** yourself. Recording a donation does not update a pledge,
 so you keep the two in step by hand. Clearing the due date or notes and saving
 removes them.
 
-> **No pledge reminders are sent.** Nothing emails a donor or an officer when a
-> pledge comes due. Check the Pledges list, filtered by status.
+### Pledge Reminders
+
+When a pledge has a due date, **Send reminders** ticked and money still to
+come in, The Logbook emails every active member with **Manage fundraising**
+14 days and 1 day before the due date. A Fulfilled or Cancelled pledge gets no
+reminder, and nothing is sent after the due date. Each reminder is sent once;
+changing the due date starts them again.
+
+**The donor is never emailed.** The reminder tells your fundraising officers
+to follow up; how to contact the donor is up to them. Each member can turn the
+emails off under their email preferences (_Grants and fundraising reminders_),
+unless your department has made them required. To stop reminders for one
+pledge, edit it and untick **Send reminders**.
 
 ### Pledge Statuses
 
@@ -739,7 +772,7 @@ Lt. Walsh files the final closeout report:
 | A pledge's status is wrong                            | Pledge statuses are set by hand. Edit the pledge, enter the amount received, and set the status.                                                              |
 | A report shows $0 for a period                        | Check the start and end dates include the donations or applications you expect.                                                                               |
 | **Total Awarded** or **Total Grant Funding** reads $0 | Edit each awarded grant and fill in **Amount Awarded**. Only grants in Awarded, Active, Reporting or Closed count. See [Expenditures](#expenditures).         |
-| Nobody was reminded about a deadline                  | The Logbook does not send grant, compliance or pledge reminders. Check the dashboard's **Upcoming Deadlines** and **Compliance Tasks Due**.                   |
+| Nobody was reminded about a deadline                  | Only tasks and pledges are reminded. See [Task Reminders](#task-reminders) and [Pledge Reminders](#pledge-reminders) for who gets them.                       |
 
 ---
 
@@ -758,8 +791,10 @@ work differently from what they may say.
   report whose range ended today left out everything recorded later that day,
   and the payment-method breakdown showed 0.0% for every method. If you still
   rely on such a report, run it again.
-- **Grant reminders were never sent.** Older material may promise grant
-  deadline, compliance or pledge reminders. The Logbook does not send them.
+- **Only compliance tasks and pledges are reminded.** Older material may
+  promise reminders about opportunity or application deadlines. The Logbook
+  does not send them. See [Task Reminders](#task-reminders) and
+  [Pledge Reminders](#pledge-reminders) for what is sent.
 
 ---
 

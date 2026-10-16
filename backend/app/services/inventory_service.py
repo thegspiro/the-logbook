@@ -8706,8 +8706,8 @@ class InventoryService:
             if on_truck is not None:
                 entry["quantity"] += int(on_truck)
                 continue
-            # `required or expected`, as _target_quantity resolves it.
-            target = required or expected
+            # Par, as _target_quantity resolves it: the larger of the two.
+            target = max(required or 0, expected or 0)
             if target:
                 entry["quantity"] += int(target)
                 entry["uncounted"] += 1

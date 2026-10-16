@@ -21,6 +21,7 @@ from app.api.dependencies import (
 )
 from app.api.v1.endpoints.mcp_keys import require_audit_entry
 from app.core.audit import log_audit_event
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import sanitize_connector_error
@@ -43,6 +44,15 @@ from app.services.integration_health import (
     sanitize_integration_error,
     start_integration_run,
     sync_log_to_dict,
+)
+from app.services.integration_services.ical_service import (
+    ICAL_INTEGRATION_TYPE,
+    ORG_FEED_TOKEN_HASH_KEY,
+    ORG_FEED_TOKEN_SECRET,
+    generate_feed_token,
+    hash_feed_token,
+    org_feed_path,
+    org_feed_token_matches,
 )
 from app.utils.url_validator import validate_integration_url
 
@@ -78,15 +88,29 @@ INTEGRATION_CATALOG: list[_CatalogEntry] = [
     {
         "integration_type": "google-calendar",
         "name": "Google Calendar",
-        "description": "Sync department events with Google Calendar for easy access on any device.",
+        "description": (
+            "Publish department events one way to a dedicated calendar that "
+            "The Logbook creates in the department's Google account; members "
+            "subscribe to that calendar. Edits made in Google are not copied "
+            "back."
+        ),
         "category": "Calendar",
+        # Reported as coming_soon while CALENDAR_SYNC_ENABLED is off; see
+        # _effective_status.
         "status": "available",
     },
     {
         "integration_type": "outlook",
         "name": "Microsoft Outlook",
-        "description": "Connect with Outlook for calendar and email integration.",
+        "description": (
+            "Publish department events one way to a dedicated calendar that "
+            "The Logbook creates in the department's Microsoft 365 account; "
+            "members subscribe to that calendar. Edits made in Outlook are not "
+            "copied back."
+        ),
         "category": "Calendar",
+        # Reported as coming_soon while CALENDAR_SYNC_ENABLED is off; see
+        # _effective_status.
         "status": "available",
     },
     {
@@ -119,7 +143,12 @@ INTEGRATION_CATALOG: list[_CatalogEntry] = [
     {
         "integration_type": "ical",
         "name": "iCalendar (ICS)",
-        "description": "Subscribe to department events via standard iCal feed URL. Works with Apple Calendar, Google Calendar, Outlook, and more.",
+        "description": (
+            "A read-only subscribe link to the department's published events "
+            "— title, time, location and type, no descriptions or attendee "
+            "details. Works with Apple Calendar, Google Calendar, Outlook and "
+            "any app that subscribes to an iCal URL."
+        ),
         "category": "Calendar",
         "status": "available",
     },
@@ -326,9 +355,83 @@ INTEGRATION_CATALOG: list[_CatalogEntry] = [
 ]
 
 
+_CATALOG_BY_TYPE: dict[str, _CatalogEntry] = {
+    item["integration_type"]: item for item in INTEGRATION_CATALOG
+}
+
+# One-way publishing to Google/Outlook is not built. Until it is, these two are
+# reported as coming soon whatever their stored row says: an older release let
+# them be "connected" with an empty config, and such a row holds no tokens and
+# never published anything.
+CALENDAR_PUBLISH_TYPES = frozenset({"google-calendar", "outlook"})
+
+# Config keys only the server writes. A client-supplied value is refused by
+# the type's schema (extra="forbid"); the stored value is left out of the
+# PATCH validation merge so it does not trip that same check.
+_SERVER_MANAGED_CONFIG_KEYS: dict[str, frozenset[str]] = {
+    ICAL_INTEGRATION_TYPE: frozenset({ORG_FEED_TOKEN_HASH_KEY}),
+}
+
+
 # ============================================================
 # Helpers
 # ============================================================
+
+
+def _calendar_publish_unavailable(integration: Integration) -> bool:
+    return (
+        integration.integration_type in CALENDAR_PUBLISH_TYPES
+        and not settings.CALENDAR_SYNC_ENABLED
+    )
+
+
+def _effective_status(integration: Integration) -> str:
+    if _calendar_publish_unavailable(integration):
+        return "coming_soon"
+    return str(integration.status)
+
+
+def _effective_enabled(integration: Integration) -> bool:
+    if _calendar_publish_unavailable(integration):
+        return False
+    return bool(integration.enabled)
+
+
+def _require_available(integration: Integration) -> None:
+    if _effective_status(integration) == "coming_soon":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This integration is not yet available",
+        )
+
+
+def _has_ical_feed_token(integration: Integration) -> bool:
+    return bool((integration.config or {}).get(ORG_FEED_TOKEN_HASH_KEY))
+
+
+def _issue_ical_feed_token(integration: Integration) -> str:
+    """Give the department feed a new token, invalidating the previous URL."""
+    # Same shape and length as the personal shifts feed token, so the public
+    # route's length check applies to both.
+    token = generate_feed_token()[:64]
+    integration.set_secret(ORG_FEED_TOKEN_SECRET, token)
+    integration.config = {
+        **(integration.config or {}),
+        ORG_FEED_TOKEN_HASH_KEY: hash_feed_token(token),
+    }
+    return token
+
+
+def _clear_ical_feed_token(integration: Integration) -> None:
+    integration.clear_secret(ORG_FEED_TOKEN_SECRET)
+    config = dict(integration.config or {})
+    config.pop(ORG_FEED_TOKEN_HASH_KEY, None)
+    integration.config = config
+
+
+def _stored_config_for_validation(integration: Integration) -> dict[str, Any]:
+    managed = _SERVER_MANAGED_CONFIG_KEYS.get(integration.integration_type, ())
+    return {k: v for k, v in (integration.config or {}).items() if k not in managed}
 
 
 def _sanitize_config(config: dict[str, Any] | None) -> dict[str, Any]:
@@ -355,16 +458,19 @@ def _integration_to_dict(
     config = integration.config or {}
     if sanitize_secrets:
         config = _sanitize_config(config)
+    # The row's description is a copy taken when the catalog was seeded for
+    # the org; the catalog is what describes the integration as it is today.
+    catalog = _CATALOG_BY_TYPE.get(integration.integration_type)
     return {
         "id": integration.id,
         "organization_id": integration.organization_id,
         "integration_type": integration.integration_type,
         "name": integration.name,
-        "description": integration.description,
+        "description": catalog["description"] if catalog else integration.description,
         "category": integration.category,
-        "status": integration.status,
+        "status": _effective_status(integration),
         "config": config,
-        "enabled": integration.enabled,
+        "enabled": _effective_enabled(integration),
         "contains_phi": integration.contains_phi,
         "last_sync_at": (
             integration.last_sync_at.isoformat() if integration.last_sync_at else None
@@ -463,6 +569,45 @@ def _secrets_to_clear_for_base_url_change(
             ),
         )
     return {secret_key} if config[secret_key] == "" else set()
+
+
+# The one setting without which these integrations have nothing to send to.
+_DESTINATION_KEYS = {
+    "slack": "webhook_url",
+    "discord": "webhook_url",
+    "microsoft-teams": "webhook_url",
+    "generic-webhook": "url",
+}
+
+
+def _require_destination(integration: Integration, config: dict[str, Any]) -> None:
+    """Refuse to leave a chat or webhook integration connected with nowhere to post.
+
+    The config schemas type the URL as a plain ``str``, so ``""`` satisfies
+    them. A blank secret means "keep the stored one", but on a first connect
+    there is none, which produced a green "connected" badge on an integration
+    whose every send fails with "No webhook URL configured". A reconnect after
+    a disconnect still works with a blank secret, because disconnecting keeps
+    it. The generic webhook's ``url`` is public config, so a blank there is the
+    value, not a request to keep: it overwrites the stored one in the merge.
+    """
+    key = _DESTINATION_KEYS.get(integration.integration_type)
+    if key is None:
+        return
+    supplied = config.get(key)
+    if key in SECRET_CONFIG_KEYS:
+        effective = (supplied.strip() if isinstance(supplied, str) else "") or (
+            integration.get_secret(key) or ""
+        )
+    elif key in config:
+        effective = supplied.strip() if isinstance(supplied, str) else ""
+    else:
+        effective = (integration.config or {}).get(key) or ""
+    if not effective:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Enter the webhook URL for {integration.name}",
+        )
 
 
 def _validate_urls_in_config(config: dict[str, Any]) -> None:
@@ -615,19 +760,17 @@ async def list_connected_integration_status(
     """
     await ensure_catalog(db, current_user.organization_id)
     result = await db.execute(
-        select(
-            Integration.integration_type,
-            Integration.status,
-            Integration.enabled,
-        ).where(Integration.organization_id == str(current_user.organization_id))
+        select(Integration).where(
+            Integration.organization_id == str(current_user.organization_id)
+        )
     )
     return [
         {
-            "integration_type": integration_type,
-            "status": row_status,
-            "enabled": enabled,
+            "integration_type": integration.integration_type,
+            "status": _effective_status(integration),
+            "enabled": _effective_enabled(integration),
         }
-        for integration_type, row_status, enabled in result.all()
+        for integration in result.scalars().all()
     ]
 
 
@@ -672,12 +815,9 @@ async def connect_integration(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
         )
-    if integration.status == "coming_soon":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This integration is not yet available",
-        )
+    _require_available(integration)
     _require_google_workspace_admin(integration, current_user)
+    was_connected = integration.status == "connected" and bool(integration.enabled)
 
     config = body.config
     clear_salesforce_refresh_token = (
@@ -688,6 +828,7 @@ async def connect_integration(
     secrets_to_clear = _secrets_to_clear_for_base_url_change(integration, config)
     # Validate config schema
     config = _validate_config(integration.integration_type, config)
+    _require_destination(integration, config)
     await _check_google_workspace_ready(db, integration, config)
     # Validate URLs for SSRF
     _validate_urls_in_config(config)
@@ -698,6 +839,12 @@ async def connect_integration(
     integration.enabled = True
     integration.config = {**(integration.config or {}), **public_config}
     _apply_type_specific_flags(integration)
+    if integration.integration_type == ICAL_INTEGRATION_TYPE and (
+        not was_connected or not _has_ical_feed_token(integration)
+    ):
+        # A fresh connection gets a fresh URL: one handed out before a
+        # disconnect must not start working again on reconnect.
+        _issue_ical_feed_token(integration)
     # Store secrets encrypted
     for key, value in secrets.items():
         integration.set_secret(key, value)
@@ -757,10 +904,22 @@ async def disconnect_integration(
             status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
         )
 
+    # Disconnecting writes status="available", which is exactly what the
+    # connect endpoint's coming_soon gate checks for. Letting it through would
+    # promote an unreleased integration to connectable with one extra call.
+    if integration.status == "coming_soon":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This integration is not yet available",
+        )
     _require_google_workspace_admin(integration, current_user)
 
     integration.status = "available"
     integration.enabled = False
+    if integration.integration_type == ICAL_INTEGRATION_TYPE:
+        # Every calendar app subscribed to the feed stops receiving it now,
+        # not merely while the row reads disconnected.
+        _clear_ical_feed_token(integration)
     # A service key must not outlive the connection it was issued for: left
     # in place it would work again the moment the integration was
     # reconnected, before anybody chose to issue a key.
@@ -865,9 +1024,12 @@ async def update_integration(
     secrets_to_clear = _secrets_to_clear_for_base_url_change(integration, config)
     # PATCH validation includes stored public settings so callers can update or
     # clear one secret without resending unrelated required configuration.
+    _require_available(integration)
     _require_google_workspace_admin(integration, current_user)
-    validation_config = {**(integration.config or {}), **config}
+    validation_config = {**_stored_config_for_validation(integration), **config}
     config = _validate_config(integration.integration_type, validation_config)
+    if integration.status == "connected":
+        _require_destination(integration, config)
     await _check_google_workspace_ready(db, integration, config)
     # Validate URLs for SSRF
     _validate_urls_in_config(config)
@@ -964,6 +1126,7 @@ async def test_connection(
             status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
         )
 
+    _require_available(integration)
     if integration.integration_type == MCP_INTEGRATION_TYPE:
         return await _test_mcp_connection(db, integration)
 
@@ -1011,6 +1174,92 @@ async def test_connection(
             "success": False,
             "message": sanitize_connector_error(e, trusted_types=(PayPalError,)),
         }
+
+
+# ============================================================
+# Department iCalendar (ICS) feed
+# ============================================================
+
+
+async def _get_connected_ical(
+    db: AsyncSession, integration_id: str, organization_id: str
+) -> Integration:
+    integration = await _get_org_integration(
+        db, integration_id, organization_id, lock=True
+    )
+    if integration.integration_type != ICAL_INTEGRATION_TYPE:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
+        )
+    if not integration.enabled or integration.status != "connected":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Connect the iCalendar integration first.",
+        )
+    return integration
+
+
+@router.get("/{integration_id}/ical-feed")
+async def get_ical_feed(
+    integration_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.manage")),
+):
+    """The department events feed's subscribe path. Requires `integrations.manage`.
+
+    The path carries the feed's bearer token, so it is only ever returned
+    here. A connection made before the feed had a token is given one on
+    first read.
+    """
+    integration = await _get_connected_ical(
+        db, integration_id, current_user.organization_id
+    )
+    token = integration.get_secret(ORG_FEED_TOKEN_SECRET)
+    if not token or not org_feed_token_matches(integration.config, token):
+        token = _issue_ical_feed_token(integration)
+        await log_audit_event(
+            db,
+            "integration.ical_feed_issued",
+            "integrations",
+            "info",
+            {"integration_id": integration.id, "integration_type": "ical"},
+            user_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
+            ip_address=get_client_ip(request),
+        )
+        await db.commit()
+    return {"token": token, "feed_path": org_feed_path(token)}
+
+
+@router.post("/{integration_id}/ical-feed/rotate")
+async def rotate_ical_feed(
+    integration_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.manage")),
+):
+    """Replace the department feed's token. Requires `integrations.manage`.
+
+    The previous subscribe URL stops working at once; every calendar
+    subscribed to it has to be given the new one.
+    """
+    integration = await _get_connected_ical(
+        db, integration_id, current_user.organization_id
+    )
+    token = _issue_ical_feed_token(integration)
+    await log_audit_event(
+        db,
+        "integration.ical_feed_rotated",
+        "integrations",
+        "warning",
+        {"integration_id": integration.id, "integration_type": "ical"},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+    )
+    await db.commit()
+    return {"token": token, "feed_path": org_feed_path(token)}
 
 
 # ============================================================
@@ -1120,7 +1369,10 @@ async def retry_integration_sync(
     integration = await _get_org_integration(
         db, integration_id, current_user.organization_id, lock=True
     )
-    if not integration.enabled or integration.status != "connected":
+    if (
+        not _effective_enabled(integration)
+        or _effective_status(integration) != "connected"
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Connect the integration before retrying it.",

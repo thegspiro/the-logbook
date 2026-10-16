@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**313 tables · 5174 columns · 1057 foreign keys**
+**314 tables · 5191 columns · 1059 foreign keys**
 
 ---
 
@@ -96,7 +96,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`apparatus_types`](#apparatus_types) | `ApparatusType` | 14 | Apparatus Type model for categorizing vehicles |
 | [`check_item_deployed_lots`](#check_item_deployed_lots) | `CheckItemDeployedLot` | 11 | A lot physically on the apparatus for one checklist position. |
 | [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 12 | A named section/area within a checklist template. |
-| [`check_template_items`](#check_template_items) | `CheckTemplateItem` | 27 | An individual item to check within a compartment. |
+| [`check_template_items`](#check_template_items) | `CheckTemplateItem` | 28 | An individual item to check within a compartment. |
 | [`driver_exceptions`](#driver_exceptions) | `DriverException` | 17 | A chief-approved, time-boxed exception to the EVOC driving requirement. |
 | [`equipment_check_bulk_delete_requests`](#equipment_check_bulk_delete_requests) | `EquipmentCheckBulkDeleteRequest` | 7 | Durable result ledger for retry-safe atomic template-item deletion. |
 | [`equipment_check_bulk_requests`](#equipment_check_bulk_requests) | `EquipmentCheckBulkRequest` | 7 | Durable idempotency ledger for atomic template-item batches. |
@@ -325,6 +325,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`calendar_sync_mappings`](#calendar_sync_mappings) | `CalendarSyncMapping` | 14 | One department event as published to an external calendar. |
 | [`integration_sync_logs`](#integration_sync_logs) | `IntegrationSyncLog` | 12 | One run of an integration: a sync, a connection check, a chat delivery. |
 | [`integrations`](#integrations) | `Integration` | 18 | Stores integration configurations per organization |
 
@@ -671,7 +672,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_attendance`](#shift_attendance) | `ShiftAttendance` | 8 | Shift Attendance model (Framework) |
 | [`shift_calls`](#shift_calls) | `ShiftCall` | 13 | Shift Call model (Framework) |
 | [`shift_completion_reports`](#shift_completion_reports) | `ShiftCompletionReport` | 28 | Shift Completion Report model |
-| [`shift_equipment_check_items`](#shift_equipment_check_items) | `ShiftEquipmentCheckItem` | 23 | Individual item result within a completed equipment check. |
+| [`shift_equipment_check_items`](#shift_equipment_check_items) | `ShiftEquipmentCheckItem` | 25 | Individual item result within a completed equipment check. |
 | [`shift_equipment_check_seals`](#shift_equipment_check_seals) | `ShiftEquipmentCheckSeal` | 9 | The tamper seal a crew read on one sealed container during a check. |
 | [`shift_equipment_checks`](#shift_equipment_checks) | `ShiftEquipmentCheck` | 18 | A completed equipment checklist submission for a shift. |
 | [`shift_patterns`](#shift_patterns) | `ShiftPattern` | 17 | Recurring shift pattern for automatic schedule generation. |
@@ -1659,6 +1660,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `expected_quantity` | INTEGER | yes |  |  |  |
 | `critical_minimum_quantity` | INTEGER | yes |  |  |  |
 | `quantity_on_truck` | INTEGER | yes |  |  |  |
+| `count_unit` | VARCHAR(50) | yes |  |  |  |
 | `min_level` | FLOAT | yes |  |  |  |
 | `level_unit` | VARCHAR(50) | yes |  |  |  |
 | `serial_number` | VARCHAR(100) | yes |  |  |  |
@@ -4992,6 +4994,38 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_ip_exception_valid_until` (`valid_until`)
 
 ## Integrations
+
+### `calendar_sync_mappings`
+
+**CalendarSyncMapping** · `app/models/integration.py`
+
+> One department event as published to an external calendar. Written only by app.services.calendar_sync_service. ``content_hash`` is the digest of the payload the reconciler last meant the calendar to hold (empty once the event is due for deletion); with ``status`` "synced" the calendar is known to hold exactly that. ``last_error`` is sanitized.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `integration_id` | VARCHAR(36) | no | FK |  | → `integrations.id` ON DELETE CASCADE |
+| `event_id` | VARCHAR(36) | no |  |  |  |
+| `external_event_id` | VARCHAR(512) | yes |  |  |  |
+| `external_calendar_id` | VARCHAR(512) | yes |  |  |  |
+| `content_hash` | VARCHAR(64) | yes |  |  |  |
+| `last_synced_at` | DATETIME | yes |  |  |  |
+| `status` | VARCHAR(20) | no | IDX | `'synced'` |  |
+| `attempt_count` | INTEGER | no |  | `0` |  |
+| `next_attempt_at` | DATETIME | yes |  |  |  |
+| `last_error` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_calendar_sync_mappings_organization_id` (`organization_id`)
+- `ix_calendar_sync_mappings_status_next_attempt` (`status`, `next_attempt_at`)
+
+**Constraints**
+
+- UNIQUE `uq_calendar_sync_mappings_integration_event` (`integration_id`, `event_id`)
 
 ### `integration_sync_logs`
 
@@ -9677,6 +9711,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | VARCHAR(30) | no |  |  |  |
 | `quantity_found` | INTEGER | yes |  |  |  |
 | `required_quantity` | INTEGER | yes |  |  |  |
+| `expected_quantity` | INTEGER | yes |  |  |  |
+| `count_unit` | VARCHAR(50) | yes |  |  |  |
 | `critical_minimum_quantity` | INTEGER | yes |  |  |  |
 | `level_reading` | FLOAT | yes |  |  |  |
 | `level_unit` | VARCHAR(50) | yes |  |  |  |
@@ -11303,7 +11339,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (256 references)
+### → `organizations` (257 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11336,6 +11372,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `budget_category_charge_positions` | `organization_id` | CASCADE | no |
 | `budget_requests` | `organization_id` | CASCADE | no |
 | `budgets` | `organization_id` | CASCADE | no |
+| `calendar_sync_mappings` | `organization_id` | CASCADE | no |
 | `check_item_deployed_lots` | `organization_id` | CASCADE | no |
 | `check_requests` | `organization_id` | CASCADE | no |
 | `checkout_records` | `organization_id` | CASCADE | no |
@@ -12211,6 +12248,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_requests` | `form_submission_id` | SET NULL | yes |
 | `prospective_members` | `form_submission_id` | SET NULL | yes |
 
+### → `integrations` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `calendar_sync_mappings` | `integration_id` | CASCADE | no |
+| `integration_sync_logs` | `integration_id` | CASCADE | no |
+
 ### → `inventory_lots` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -12408,12 +12452,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `grant_applications` | `opportunity_id` | SET NULL | yes |
-
-### → `integrations` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `integration_sync_logs` | `integration_id` | CASCADE | no |
 
 ### → `inventory_nfc_audits` (1 references)
 
