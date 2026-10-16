@@ -1728,7 +1728,10 @@ _[As an administrator (members.manage) at /members/:userId for a Dropped (Volunt
 ### Undoing a Drop Made by Mistake
 
 For 7 days after a member is dropped, their profile shows _"Dropped by
-mistake? You can undo this drop until …"_ under Status.
+mistake? You can undo this drop until …"_ under Status. The 7 days count from
+the drop's **Effective date** — the day the member left — not the day you
+recorded it. A drop entered with an effective date more than 7 days back
+cannot be undone.
 
 1. Under **Restore as**, choose Active, Probationary, Inactive or On Leave.
 2. Optionally enter a reason.

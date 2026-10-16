@@ -36,7 +36,11 @@ from app.services.member_service_history_service import (
     is_separated,
 )
 from app.utils.membership import LEGACY_MEMBERSHIP_TYPES, is_administrative
-from app.utils.org_timezone import resolve_org_today
+from app.utils.org_timezone import (
+    local_date,
+    resolve_org_today,
+    resolve_scheduling_timezone,
+)
 
 router = APIRouter()
 
@@ -426,10 +430,9 @@ async def change_member_status(
 
     # Update the status and record when it changed. status_changed_at stays
     # the moment of the change even when the separation is back-dated: the
-    # undo-drop window and the property-return reminder schedule both count
-    # from it, and both are about when the department acted -- a back-dated
-    # drop must still be undoable, and must not open its return deadline
-    # already overdue.
+    # property-return reminder schedule counts from it, and must not open a
+    # return deadline already overdue. The undo-drop window is the exception
+    # -- it counts from the effective date (see _undo_drop_availability).
     member.status = new_status
     member.status_changed_at = datetime.now(timezone.utc)
     member.status_change_reason = request.reason
@@ -660,7 +663,9 @@ class UndoDropRequest(BaseModel):
     reason: str | None = Field(None, max_length=500)
 
 
-def _undo_drop_availability(member: User) -> UndoDropAvailability:
+async def _undo_drop_availability(
+    db: AsyncSession, member: User
+) -> UndoDropAvailability:
     if member.status not in DROPPED_STATUSES:
         return UndoDropAvailability(
             available=False, detail="Only a dropped member's drop can be undone."
@@ -674,7 +679,24 @@ def _undo_drop_availability(member: User) -> UndoDropAvailability:
         )
     if changed.tzinfo is None:
         changed = changed.replace(tzinfo=timezone.utc)
-    until = changed + timedelta(days=UNDO_DROP_WINDOW_DAYS)
+
+    # The window counts from the drop's effective date, the day the member
+    # actually left, not the day an officer recorded it: a drop entered three
+    # weeks late is three weeks old. It keeps the time of day of the recording,
+    # so a drop that was not back-dated keeps exactly the window it always had.
+    # It is never later than the recording, though -- the stint's end can be
+    # edited in the service history afterwards, and that must not stretch the
+    # undo into the backdating tool the week was chosen to prevent.
+    effective = await MemberServiceHistoryService(db).separation_date(
+        member, UserStatus(member.status)
+    )
+    anchor = changed
+    if effective is not None:
+        tz = await resolve_scheduling_timezone(db, member.organization_id)
+        backdated_days = (local_date(changed, tz) - effective).days
+        if backdated_days > 0:
+            anchor = changed - timedelta(days=backdated_days)
+    until = anchor + timedelta(days=UNDO_DROP_WINDOW_DAYS)
     if datetime.now(timezone.utc) > until:
         return UndoDropAvailability(
             available=False,
@@ -716,7 +738,7 @@ async def get_undo_drop_availability(
     member = await _load_member(
         db, user_id, current_user.organization_id, for_update=False
     )
-    return _undo_drop_availability(member)
+    return await _undo_drop_availability(db, member)
 
 
 @router.post("/{user_id}/undo-drop", response_model=MemberStatusChangeResponse)
@@ -729,7 +751,7 @@ async def undo_member_drop(
     """
     Undo a drop made by mistake (W15-3).
 
-    Within a week of the drop, puts the member back in the status they should
+    Within a week of the drop's effective date, puts the member back in the status they should
     have (Active unless told otherwise) and reopens the service stint the drop
     closed, so their length of service runs on as if the drop had not
     happened. Unlike a rejoin, no gap and no new stint are recorded. The
@@ -754,7 +776,7 @@ async def undo_member_drop(
     member = await _load_member(
         db, user_id, current_user.organization_id, for_update=True
     )
-    availability = _undo_drop_availability(member)
+    availability = await _undo_drop_availability(db, member)
     if not availability.available:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=availability.detail
