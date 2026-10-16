@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (branch `claude/security-review-skills-testing-p8`, to be opened)**:
+**PR [#3307](https://github.com/thegspiro/the-logbook/pull/3307)** (branch
+`claude/security-review-skills-testing-p8`):
 Feature 19 (Skills testing), pass 8. Watchdog pickup. **0 new findings.**
 Real delta since pass 7 (PR #2976): cosmetic mypy-narrowing, a DRY fix
 unifying a duplicated "pending validation" predicate into one
