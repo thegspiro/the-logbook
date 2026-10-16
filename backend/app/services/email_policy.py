@@ -71,6 +71,7 @@ class EmailKind(str, enum.Enum):
     SKILLS_TEST_RESULTS = "skills_test_results"
     OVERDUE_EQUIPMENT = "overdue_equipment"
     TRAINING_RECORD_CHANGES = "training_record_changes"
+    SECURITY_REPORT = "security_report"
 
     # Optional, about the member's own activity
     EVENT_REMINDERS = "event_reminders"
@@ -133,6 +134,20 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "Security alerts (two-factor changes, recovery codes)",
         ),
         rationale="A member cannot sign in or secure their account without these.",
+    ),
+    EmailKind.SECURITY_REPORT: EmailPolicy(
+        label="Weekly security report",
+        required=True,
+        audience=_O,
+        includes=(
+            "A weekly count of security alerts, application errors and audit "
+            "log health, sent to the IT Manager",
+        ),
+        rationale=(
+            "Regular review of system activity is a HIPAA Security Rule "
+            "requirement (164.308(a)(1)(ii)(D)); a report that can be switched "
+            "off by its recipient is not a review the department can show."
+        ),
     ),
     EmailKind.ELECTION_BALLOTS: EmailPolicy(
         label="Election ballots",
