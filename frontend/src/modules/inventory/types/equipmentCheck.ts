@@ -136,6 +136,28 @@ export function targetQuantity(item: CheckTemplateItem): number | null {
 }
 
 /**
+ * Whether a counted position is short enough to be critical.
+ *
+ * Strictly below the critical minimum: the minimum is the lowest acceptable
+ * count, so a truck holding exactly that many is at it, not below it. And
+ * never once the count meets the position's target — 2 of an expected 2 is a
+ * full position whatever the template's minimum says, and calling it critical
+ * contradicts the pass the same count earns.
+ *
+ * The server applies the same rule to the failure email
+ * (`EquipmentCheckService._is_below_critical_minimum`); keep the two in step.
+ */
+export function isBelowCriticalMinimum(
+  found: number,
+  criticalMinimum: number | null | undefined,
+  target: number | null
+): boolean {
+  if (criticalMinimum == null) return false;
+  if (target != null && found >= target) return false;
+  return found < criticalMinimum;
+}
+
+/**
  * Whether a member below manage may draw stock for this position.
  *
  * `EquipmentCheckService.swap_item_lot` sets `enforce_submitter_limits` for

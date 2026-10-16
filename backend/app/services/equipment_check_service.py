@@ -2273,7 +2273,7 @@ class EquipmentCheckService:
             if found is not None and expected is not None:
                 detail["expected"] = expected
                 detail["found"] = found
-            if crit is not None and found is not None and found <= crit:
+            if self._is_below_critical_minimum(found, crit, expected):
                 detail["critical_minimum"] = crit
                 critical_items.append(detail)
             else:
@@ -3296,6 +3296,27 @@ class EquipmentCheckService:
         """
         count: Optional[int] = item.required_quantity or item.expected_quantity
         return count
+
+    @staticmethod
+    def _is_below_critical_minimum(
+        found: Optional[int], critical_minimum: Optional[int], target: Optional[int]
+    ) -> bool:
+        """Whether a counted position is short enough to be critical.
+
+        Strictly below the critical minimum: the minimum is the lowest
+        acceptable count, so holding exactly that many is at it, not below it.
+        And never once the count meets the target, so a full position is never
+        reported as critical whatever the template's minimum says.
+
+        The check form applies the same rule on screen
+        (``isBelowCriticalMinimum`` in ``types/equipmentCheck.ts``); keep the
+        two in step.
+        """
+        if critical_minimum is None or found is None:
+            return False
+        if target is not None and found >= target:
+            return False
+        return found < critical_minimum
 
     @staticmethod
     def _deployed_lots(item: CheckTemplateItem) -> List[CheckItemDeployedLot]:

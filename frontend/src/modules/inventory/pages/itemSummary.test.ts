@@ -65,9 +65,13 @@ describe('formatItemSummary', () => {
     expect(texts({ checkType: 'level' })).toEqual(['Needs minimum']);
     expect(texts({ checkType: 'expiry' })).toEqual(['Needs serial or lot']);
     expect(texts({ hasExpiration: true })).toEqual(['Needs expiration date']);
-    expect(texts({ checkType: 'count', expectedQuantity: '4', criticalMinimumQuantity: '4' })).toEqual([
+    expect(texts({ checkType: 'count', expectedQuantity: '4', criticalMinimumQuantity: '5' })).toEqual([
       'Fix critical minimum',
     ]);
+    // Equal means any shortfall is critical — a real setting, not a mistake.
+    expect(texts({ checkType: 'count', expectedQuantity: '4', criticalMinimumQuantity: '4' })).not.toContain(
+      'Fix critical minimum'
+    );
   });
 
   it('shows both validation problems while preserving the two-label limit', () => {
