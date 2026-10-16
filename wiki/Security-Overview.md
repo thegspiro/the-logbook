@@ -527,7 +527,7 @@ The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling 
 
 - Sign-in (success and failure), including OAuth
 - Sign-out
-- Password resets (a self-service password change is not audited)
+- Password resets, and self-service password changes (success and failure)
 - MFA enable/disable
 - Account lockouts and unlocks
 
