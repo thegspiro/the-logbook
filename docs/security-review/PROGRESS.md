@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3336](https://github.com/thegspiro/the-logbook/pull/3336)** (branch
+`claude/security-review-admin-hours`): Feature 21 (Admin hours), pass 8.
+Watchdog pickup: PR #3330 (Feature 20, Compliance, pass 8) merged
+(`5fabde43`) with nothing started for the next feature since; this pass is
+that pickup. **0 new findings.** AH-16, the feature's one standing
+bug-class finding since pass 2 (`export_entries_csv` unbounded/
+non-streaming), and CRON2-31-13 (a Feature-31 scheduled-task gap that also
+touches `admin_hours_service.py`) are both now resolved by two
+non-rotation commits landed since pass 7, verified end to end rather than
+taken from `KNOWN_LIMITATIONS.md`'s own say-so — the feature carries zero
+open or flagged findings as of this pass. Route surface re-enumerated
+(30/30, unchanged). See `AH-21-admin-hours.md`'s **Pass 8** section. Row
+21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
+fundraising).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 8, PR #3330, merged), preserved for history</summary>
+
 **PR [#3330](https://github.com/thegspiro/the-logbook/pull/3330)** (branch
 `claude/security-review-compliance-p8`): Feature 20 (Compliance), pass 8.
 Routine pickup. **0 new findings.** The one substantive item in the real
@@ -27,8 +45,10 @@ stale documentation claim carried forward unchanged across six passes: the
 attestation-history over-fetch had actually been fixed on 2026-07-30,
 before this rotation's own pass 1. Route surface re-enumerated (20/20,
 unchanged) and every standing finding re-verified by direct code read. See
-`CMP-20-compliance.md`'s **Pass 8** section. Row 20 → ✅ (pending this PR's
-merge); next is Feature 21 (Admin hours).
+`CMP-20-compliance.md`'s **Pass 8** section. Row 20 → ✅ (merged); next was
+Feature 21 (Admin hours).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 8, PR #3307, merged), preserved for history</summary>
@@ -19516,7 +19536,7 @@ here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
@@ -19537,6 +19557,47 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-16 — Feature 21 (Admin hours, pass 8) — watchdog pickup, 2 fixes already landed verified, 0 new findings, feature now at zero open findings
+
+**Step 0.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 results — PR #3330 (Feature 20, Compliance, pass 8) had just
+merged (`5fabde43`) with nothing started for the next feature since. Row
+20 was already ✅; row 21 (Admin hours) was the first `⬜`.
+
+**Baseline.** Pass 7 merged as `727a13e9a` (PR #2978, 2026-10-07). Since
+then: 6 non-merge commits touch this feature's five declared files
+(`admin_hours.py`, `admin_hours_service.py`, `models/admin_hours.py`,
+`schemas/admin_hours.py`, `utils/admin_hours_settings.py`). Two are
+substantive and already shipped with their own fixes before this pass
+started — `e3f236d8b` (AH-16, the CSV export streamed through a bounded
+server-side cursor, replacing the unbounded in-memory build standing open
+since pass 2) and `12a430ce5` (CRON2-31-13, a per-session audit event for
+every auto-closed stale clock-in, a Feature 31 finding that also touches
+this feature's service file). Both verified end to end against the
+current code, not trusted from `KNOWN_LIMITATIONS.md`'s own "Resolved"
+banner — org-scoping, the formula-injection guard, and the audit event's
+actor/organization fields all re-derived from the call chain. The other
+four are mechanical mypy-remediation commits; one (`265a26be3`) changes
+behavior only in a null-safety direction (`SUM`/`COUNT` over zero rows now
+reads `0` instead of raising), re-verified non-security. Full write-up:
+[`AH-21-admin-hours.md`](./AH-21-admin-hours.md) → **Pass 8**.
+
+**Result: this feature now carries zero open or flagged findings** — the
+first time since pass 2. Both of this doc's standing "Confirmed still
+open" product-decision items were already closed by pass 7's own subject
+commit; AH-16 was the last bug-class finding, and this pass confirms it
+fixed. Route surface re-enumerated (30/30, unchanged); 270 application
+routes, 0 permission errors/warnings. Completion gate green: flake8/
+black/isort clean (CI-pinned versions), migrations single head (608
+revisions), 144 scoped backend tests passed (up from 139) plus 36 across
+the four named guard-test files, frontend typecheck/lint clean (after
+`npm ci` from the repo root to pick up a `@tiptap/*` dependency the
+sandbox's `node_modules` predated), 115/115 admin-hours module frontend
+tests. No application source file is modified by this PR — documentation
+only (`AH-21-admin-hours.md`'s new **Pass 8** section, this rotation-table/
+Open-PR/Log update). Rotation row 21 → ✅ (pending this PR's merge); next
+is Feature 22 (Grants & fundraising).
 
 ### 2026-10-16 — Feature 20 (Compliance, pass 8) — routine pickup, 1 fix already landed verified, 1 stale finding corrected, 0 new findings
 
