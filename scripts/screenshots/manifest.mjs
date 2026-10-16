@@ -5312,7 +5312,9 @@ export const SHOTS = [
     // event, so it cannot be satisfied by any other stage or drawer state.
     expect: "attendance must be finalized, before they can advance",
     viewport: { width: 1280, height: 1600 },
-    selector: '[aria-label="Applicant details"]',
+    // The panel, not the labelled element: that is the full-screen overlay
+    // around the centred dialog, so clipping to it framed the dimmed page.
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
     // A new applicant has uploaded nothing, so the drawer honestly reads "No
     // documents yet" -- as 15-14 allows for the same reason. The subject is
     // the hint, which `expect` already proves is in frame.
