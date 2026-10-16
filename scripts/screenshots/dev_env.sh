@@ -120,6 +120,37 @@ socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=2).close()' \
     "$1" "$2" >/dev/null 2>&1
 }
 
+# A locally installed ClamAV is started on loopback rather than falling back
+# to scanning off: with scanning off the backend shows administrators a
+# critical banner on every page, and it ends up in every screenshot taken as
+# one. Needs the clamav-daemon package and its signatures (run `freshclam`
+# once); clamd refuses to start without them. Runs as the invoking user, so no
+# root is needed as long as the signature directory is readable.
+CLAMD_DB_DIR="${CLAMD_DB_DIR:-/var/lib/clamav}"
+
+start_local_clamd() {
+  local clamd
+  clamd="$(command -v clamd || ([[ -x /usr/sbin/clamd ]] && echo /usr/sbin/clamd))"
+  [[ -n "$clamd" ]] || return 1
+  compgen -G "$CLAMD_DB_DIR/*.c[lv]d" >/dev/null || return 1
+  if ! clamd_reachable 127.0.0.1 3310; then
+    echo "starting clamd (loading signatures takes a minute)..."
+    printf '%s\n' "TCPSocket 3310" "TCPAddr 127.0.0.1" \
+      "DatabaseDirectory $CLAMD_DB_DIR" "Foreground yes" >"$LOG_DIR/clamd.conf"
+    setsid nohup "$clamd" --config-file="$LOG_DIR/clamd.conf" \
+      >"$LOG_DIR/clamd.log" 2>&1 </dev/null &
+    local deadline=$((SECONDS + 180))
+    until clamd_reachable 127.0.0.1 3310; do
+      if ((SECONDS > deadline)); then
+        echo "clamd did not come up; see $LOG_DIR/clamd.log" >&2
+        return 1
+      fi
+      sleep 3
+    done
+  fi
+  export CLAMAV_HOST=127.0.0.1 CLAMAV_PORT=3310
+}
+
 # setsid detaches these from the calling shell so they survive it exiting.
 if ! backend_up; then
   echo "starting backend..."
@@ -151,15 +182,19 @@ print(int(bool(s.ENCRYPTION_KEY and s.ENCRYPTION_SALT)), int(s.CLAMAV_ENABLED), 
     load_demo_keys || exit 1
   fi
   # Uploads fail closed without a reachable clamd, so on a host that does not
-  # run one every seeded document and attachment is refused with a 503. This
-  # stack is loopback-only and stores only the seeder's own fixture files, so
-  # scanning is turned off for it — but only when nobody chose otherwise: an
-  # explicit CLAMAV_ENABLED in the environment is always respected.
+  # run one every seeded document and attachment is refused with a 503. A
+  # local ClamAV is started if one is installed; failing that, this stack —
+  # loopback-only, storing only the seeder's own fixture files — runs with
+  # scanning off. Only when nobody chose otherwise: an explicit CLAMAV_ENABLED
+  # or CLAMAV_HOST in the environment is always respected.
   if [[ "$SCAN_ON" == "1" && -z "${CLAMAV_ENABLED+x}" ]] &&
-    ! clamd_reachable "$SCAN_HOST" "$SCAN_PORT"; then
+    ! clamd_reachable "$SCAN_HOST" "$SCAN_PORT" &&
+    ! { [[ -z "${CLAMAV_HOST+x}" ]] && start_local_clamd; }; then
     echo "WARNING: no ClamAV daemon at $SCAN_HOST:$SCAN_PORT; starting the demo backend with" \
       "CLAMAV_ENABLED=false, so uploads are accepted unscanned." >&2
-    echo "         Run clamd, or export CLAMAV_ENABLED=true to keep scanning on." >&2
+    echo "         Every page then shows administrators a malware-scanning banner, so admin" \
+      "screenshots from this stack are not fit to commit." >&2
+    echo "         Install clamav-daemon and run freshclam, or export CLAMAV_ENABLED=true." >&2
     export CLAMAV_ENABLED=false
   fi
   setsid nohup "$PYTHON" -m uvicorn main:app --host 127.0.0.1 --port 3001 \

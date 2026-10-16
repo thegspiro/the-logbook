@@ -5034,7 +5034,10 @@ export const SHOTS = [
       await card.click({ timeout: 15_000 });
       await page.waitForTimeout(1800);
     },
-    fullPage: true,
+    // The dialog panel, not the page: the applicant view is a centred modal,
+    // and a full-page capture runs the table on past the fixed overlay, so
+    // everything below the first 900px was pictured undimmed.
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
     // The board spreads seven applicants across six stages, so some columns
     // read "No applicants", and a drawer for an applicant who has uploaded
     // nothing reads "No documents yet". Both are honest; the populated
@@ -5309,7 +5312,9 @@ export const SHOTS = [
     // event, so it cannot be satisfied by any other stage or drawer state.
     expect: "attendance must be finalized, before they can advance",
     viewport: { width: 1280, height: 1600 },
-    selector: '[aria-label="Applicant details"]',
+    // The panel, not the labelled element: that is the full-screen overlay
+    // around the centred dialog, so clipping to it framed the dimmed page.
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
     // A new applicant has uploaded nothing, so the drawer honestly reads "No
     // documents yet" -- as 15-14 allows for the same reason. The subject is
     // the hint, which `expect` already proves is in frame.
@@ -5449,14 +5454,28 @@ export const SHOTS = [
     expect: "Not on a stage",
     prepare: async (page) => {
       // The panel renders only for an applicant with no current stage
-      // (`canPlaceOnStage = !applicant.current_stage_id`). Every seeded
-      // applicant is placed on one, so the board alone can never show it --
-      // the demo database needs one applicant left unassigned.
+      // (`canPlaceOnStage = !applicant.current_stage_id`). The seeder leaves
+      // Marcus Webb on none by deleting the stages of his own pipeline out
+      // from under him (seed_unplaced_applicant), so he is in that pipeline's
+      // Unassigned column rather than on the default board.
+      await page
+        .locator("select", {
+          has: page.locator("option", { hasText: "Lateral Transfer Pipeline" }),
+        })
+        .first()
+        .selectOption({ label: "Lateral Transfer Pipeline" });
       const card = page.getByText("Marcus Webb", { exact: true }).first();
       await card.waitFor({ timeout: 30_000 });
       await card.click();
       await page.locator("select#place-on-stage").waitFor({ timeout: 30_000 });
       await page.waitForTimeout(800);
+    },
+    // The board remembers the selected pipeline, and every later board shot
+    // expects the default one.
+    cleanup: async (page) => {
+      await page.evaluate(() =>
+        localStorage.removeItem("prospective-members:pipeline-id"),
+      );
     },
     selector: 'div:has(> p:text-is("Not on a stage"))',
   },
@@ -7780,6 +7799,22 @@ export const SHOTS = [
       "Screenshot of the Prospective Members main page showing the kanban board view",
     alt: "Prospective members kanban board with a column per pipeline stage",
     route: "/prospective-members",
+    // The board opens on whichever pipeline was selected last, kept in
+    // localStorage, and 15-15 before it selects the Associate pipeline: one
+    // applicant across mostly empty columns. Chosen explicitly so the shot
+    // does not depend on what ran before it.
+    prepare: async (page) => {
+      await page
+        .locator("select")
+        .filter({
+          has: page.locator("option", {
+            hasText: "Volunteer Membership Pipeline",
+          }),
+        })
+        .first()
+        .selectOption({ label: "Volunteer Membership Pipeline" });
+      await page.waitForTimeout(1500);
+    },
     // The board spreads seven applicants across six stages, so some columns
     // read "No applicants", and a drawer for an applicant who has uploaded
     // nothing reads "No documents yet". Both are honest; the populated
@@ -9402,7 +9437,13 @@ export const SHOTS = [
     alt: "Create applicant form with contact fields and membership type",
     route: "/prospective-members",
     prepare: clickByName(/add applicant/i),
-    fullPage: true,
+    // The viewport, as the other modal shots in this guide are: a full-page
+    // capture extends the board past the fixed overlay, so everything below
+    // the first 900px was pictured undimmed behind a modal it is not part of.
+    fullPage: false,
+    // "No specific role" is the Target Role select's default option, which
+    // the empty-state check reads as an empty page. The form is the subject.
+    allowEmptyState: true,
   },
   {
     id: "01-19-create-waiver",
@@ -11853,8 +11894,10 @@ export const SHOTS = [
       if (bars !== 1) {
         throw new Error(`expected one bulk bar, found ${bars}`);
       }
+      // "Hold Selected", the bar's own label: "Hold all" matched nothing once
+      // the bulk buttons were renamed, and the shot timed out.
       await page
-        .getByRole("button", { name: /hold all/i })
+        .getByRole("button", { name: /^hold selected$/i })
         .waitFor({ timeout: 10_000 });
     },
     fullPage: true,
@@ -11896,7 +11939,9 @@ export const SHOTS = [
     // matched by stage rather than by name so a re-spread cannot land it on
     // somebody at either end with half the action bar missing.
     prepare: openApplicantAtStage("Background & Medical"),
-    fullPage: true,
+    // The dialog panel, not the page: a full-page capture runs the table on
+    // past the fixed overlay, so everything below 900px was pictured undimmed.
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
     allowEmptyState: true,
   },
   {
@@ -11912,7 +11957,9 @@ export const SHOTS = [
     // than a name, so a different seeding spread cannot silently point this at
     // somebody who is not at the vote.
     prepare: openApplicantAtStage("Membership Vote"),
-    fullPage: true,
+    // The dialog panel, not the page: a full-page capture runs the table on
+    // past the fixed overlay, so everything below 900px was pictured undimmed.
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
     allowEmptyState: true,
   },
   {
