@@ -52,7 +52,7 @@ from its open list.
 | B11 | notifications              | NOTIF2 | ✅     |
 | B12 | integrations               | INT2   | ✅     |
 | B13 | forms                      | FORM2  | ⬜     |
-| B14 | grants & fundraising       | GF2    | ⬜     |
+| B14 | grants & fundraising       | GF2    | ✅     |
 | B15 | admin-hours                | AH2    | ⬜     |
 | B16 | reports & analytics        | RPT2   | ⬜     |
 | B17 | events                     | EV2    | ⬜     |
@@ -3223,3 +3223,28 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   suites **247 passed** · new file 22 pass, 11 fail without the fix, 0 under the unit job's
   marker expression · route-permission check 0 errors · no frontend change. See
   integrations.md → Pass 5. Next: B13 forms.
+- **B14 grants & fundraising ✅ (pass 5) — eight of ten update endpoints answered 500 and
+  lost the change (GF2-1).** The 149-case null probe over the ten `*Update` schemas was
+  clean (NOT NULL columns come back 400, nullable ones are accepted), so the pass drove a
+  **real change** through each `PUT` with a `get_db` that commits on success and rolls back
+  on an exception, as `get_session` does. Opportunity, budget item, compliance task,
+  campaign, donor, donation, pledge and fundraising event returned 500 and the table kept the
+  old value; only application and expenditure worked. Cause: `updated_at` is
+  `onupdate=func.now()`, MySQL / MariaDB cannot return it from an UPDATE, so SQLAlchemy
+  expires it after the flush, and the response model's read lazy-loads in an async session
+  (MissingGreenlet); the rollback then discards the write. The create paths carry the fix and
+  an explanatory comment; the update paths never got it. The frontend calls four of them
+  (pledge, event, campaign restriction, compliance task). **Fixed** with a shared
+  `reload_updated_at` helper (one primary-key SELECT) called after the flush in the eight
+  services; two mocked service tests now provide an awaitable `refresh`. Reproduced on
+  MariaDB 10.11, not MySQL 8, and not in a browser. **Flagged (GF2-2):** a scan found seven
+  more flush-and-return `update_*` services outside this module (finance chain step,
+  inventory reorder request, label printer, legal draft, medical screening requirement and
+  record, org chart node) — candidates, not driven; mirrored to KNOWN_LIMITATIONS for their
+  own rotation passes. **Verified good:** AST scan found nothing unreferenced; GF-7 / GF-8
+  fixed in code, GF-9's open half unchanged; all 45 routes gated. **Not read:** report
+  builders, reminder notifications, application lifecycle internals (their suites pass), most
+  of the frontend module. Gate: flake8 / black / isort / mypy clean · 17 related suites **449
+  passed** · new file 159 pass, 9 fail without the fix, 0 under the unit job's marker
+  expression · route-permission check 0 errors · no frontend change. See
+  grants-fundraising.md → Pass 5. Next: B15 admin-hours.

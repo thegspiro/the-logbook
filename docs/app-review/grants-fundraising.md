@@ -1,7 +1,8 @@
 # Application Review — Grants & Fundraising (Tier B)
 
 **Prefix:** `GF2` · **Iteration:** B14 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-16 (pass 5)
 
 **Backend:** `endpoints/grants.py` (1,842 L, 45 endpoints), `services/grant_service.py`
 (1,000 L), `services/fundraising_service.py` (540 L), model `models/grant.py`
@@ -9,6 +10,115 @@
 **Prior audit:** `docs/module-audit/grants-fundraising.md` (iteration 14) — GF-1
 (CRITICAL), GF-2/3 (HIGH), GF-4/5 fixed; GF-6 (remaining unvalidated FKs), GF-7
 (state machine), GF-8 (anonymity), GF-9 (float/PII) left open.
+
+---
+
+## Pass 5 (2026-10-16) — eight of ten update endpoints answered 500 and lost the change (8 fixed, 7 candidates flagged elsewhere)
+
+Lens for this pass: the update-payload discipline of B4–B13 driven through the real
+handlers, extended to the ten `PUT` routes of this module. The null half came back clean —
+the finding is a different one, found because the null probe had to _change_ a row to mean
+anything.
+
+**Null-to-column probe (clean).** 149 cases, every field of the ten `*Update` schemas sent
+as `null` against a committed row: each NOT NULL column answers 400 (all ten handlers catch
+the `ValueError` `apply_updates` raises), and each nullable one is accepted. No
+nullable-behind-plain-response column exists in these schemas (the NOTIF2-5 / FORM2-2
+shape), and the money fields are `Decimal` columns with `ge=0` request bounds.
+
+### GF2-1 — HIGH — `PUT` on an opportunity, budget item, compliance task, campaign, donor, donation, pledge or fundraising event answered 500 and discarded the change — ✅ FIXED
+
+Reproduced, not inferred: with a `get_db` that commits after the handler and rolls back on an
+exception (as `DatabaseManager.get_session` does), a `PUT` carrying a real change to each of
+the ten entities returned **500 for eight and left the old value in the table**; only
+applications and expenditures answered 200. The traceback is
+`ResponseValidationError` on `updated_at`: _MissingGreenlet — greenlet_spawn has not been
+called_.
+
+Cause: every one of these tables has `updated_at … onupdate=func.now()`, a server-side
+expression. MySQL and MariaDB cannot return a value from an `UPDATE`, so SQLAlchemy (2.1.4
+here, `eager_defaults="auto"`) expires the attribute after the flush, and the first read
+lazy-loads — which an async session cannot do outside a greenlet. Eight service methods
+returned the instance straight after `flush()`, the endpoint handed it to the response model,
+the model read `updated_at`, and the request failed. The session's rollback then discarded
+the `UPDATE`, so the user saw neither the change nor an error they could act on. The two
+that worked (`update_application`, `update_expenditure`) did so by reloading the row (the
+application handler re-fetches with `populate_existing`) or by touching the row again in a
+recompute. The create paths already carry the fix and the comment explaining it
+(`create_donor`: _"every unloaded one raises MissingGreenlet when the response model reads
+it"_); the update paths never got it.
+
+What this does to the app: the frontend calls four of the eight —
+`updatePledge`, `updateFundraisingEvent`, `updateCampaign` (the restricted-fund control),
+`updateComplianceTask` (marking a task done or in progress on the grant detail page). I
+could not run the browser flow here, and I reproduced against MariaDB 10.11 (the sandbox
+database), not MySQL 8; neither can return from an `UPDATE`, so I expect the same, but the
+claim is "reproduced on MariaDB", not "observed in production". No test caught it because
+every existing service test uses a mocked session, which evaluates neither the `onupdate`
+expression nor the response model.
+
+**Fixed** with one shared helper, `reload_updated_at(db, instance)` in
+`app/utils/model_updates.py` (next to `apply_updates`), called after the flush in the eight
+methods: one `refresh(instance, ["updated_at"])`, a single primary-key SELECT. I chose the
+targeted refresh over a full `refresh()` (which the create paths use) because `updated_at`
+is the only `onupdate` column on these models, and over `eager_defaults=True` on the mapper
+because that changes every write to every one of those tables for a read the handlers do
+not all need. Two mocked service tests stood in for a session without an awaitable
+`refresh`; they now provide one.
+
+Tests: `tests/test_grants_update_endpoints_integration.py` (159). One test per entity makes a
+real change and asserts **200 and that the value is in the table afterwards** — the second
+half is what shows the lost write, which a plain status check would not. 9 fail with the
+service change stashed (the eight entities, plus `donor.country`, which is the one null case
+that happens to change a row because of its `server_default`); the other 150 pass either way,
+and 0 are selected under the unit job's marker expression.
+
+### GF2-2 — MEDIUM — the same flush-and-return shape exists in seven services outside this module — 🚩 FLAGGED (for the owning rotation items)
+
+A static scan of `app/services` for `update_*` methods that write through `apply_updates` /
+`setattr`, flush, and neither refresh nor commit found 17; ten are the ones fixed above (or
+`update_application` / `update_expenditure`, which work), leaving: `finance_service.
+update_chain_step`, `inventory_service.update_reorder_request`, `label_printer_service.
+update_printer`, `legal_service.update_draft`, `medical_screening_service.update_requirement`
+and `update_record`, `org_chart_service.update_node`. **These are candidates, not findings**:
+I did not drive them. Whether each fails depends on its model carrying `onupdate`, and on
+whether its endpoint re-fetches or refreshes before responding. They belong to B3, B20, B1,
+B21 and the unrotated services; the check is the one in
+`test_grants_update_endpoints_integration.py` — a real change over HTTP with a rolling-back
+`get_db`. Recorded in `docs/KNOWN_LIMITATIONS.md` so the owning pass picks it up.
+
+### Verified good ✅ (this pass)
+
+- **Nothing unreferenced.** The AST scan (counting `tests/`, `scripts/`, `alembic/`) over
+  the endpoint, both services, model, schema, `donor_privacy` and the reminder module found
+  no unused module-level name or class method, and no `noqa` / `TODO`.
+- **Earlier flags re-read.** GF-7 (lifecycle and overspend warnings) and GF-8 (anonymous
+  donors masked for `fundraising.view`) are both fixed in code (`donor_privacy.py`,
+  `present_donor` / `present_donation`); GF-9's float math is `Decimal` and its remaining
+  half (zero / unbounded amounts, donor PII to `fundraising.view`) is the open owner
+  decision already in `docs/KNOWN_LIMITATIONS.md`. Nothing new to add.
+- **Permissions.** All 45 routes carry `fundraising.manage` or `fundraising.view`; the
+  route-permission check passes strict.
+
+### Not read (scope, stated plainly)
+
+The 1,446-line grant service and 838-line fundraising service were read at their update,
+delete and recompute paths and scanned for dead names; the report builders, the reminder
+notifications and the application lifecycle (GF-7) were left to their own suites, which
+pass. The 16,000-line frontend module was read only at its update calls.
+
+### Completion gate (pass 5)
+
+| Check                                                           | Result                                                              |
+| --------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `flake8 app/ tests/`                                            | ✅ exit 0, no output                                                |
+| `black --check app/ tests/`                                     | ✅ 1772 files unchanged                                             |
+| `isort --check` (changed files)                                 | ✅                                                                  |
+| `mypy` (helper + both services)                                 | ✅ no issues                                                        |
+| Related backend suites (17 files incl. the org-scoping ratchet) | ✅ 449 passed                                                       |
+| New file                                                        | ✅ 159 pass; 9 fail without the fix; 0 under the unit job's markers |
+| `check_route_permissions.py --strict`                           | ✅ 0 errors, 0 warnings                                             |
+| Frontend                                                        | n/a — no frontend change                                            |
 
 ---
 
