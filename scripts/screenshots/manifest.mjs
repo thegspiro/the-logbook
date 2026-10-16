@@ -5753,6 +5753,9 @@ export const SHOTS = [
       "users",
     ),
     fullPage: true,
+    // The whole profile, panel by panel, as an ordinary member's reads: most
+    // have no ID card issued yet, and 19-37 pictures the panel with cards.
+    allowEmptyState: true,
   },
   {
     id: "01-05-add-member-form",
@@ -5767,7 +5770,10 @@ export const SHOTS = [
   },
   {
     id: "01-06-import-members",
-    expect: "Import Members",
+    // Not "Import Members": the first match is now the tab's screen-reader-only
+    // heading ("Import Members from CSV"), which is never visible. The
+    // instructions card's title is the tab's own visible wording.
+    expect: "How to Import Members",
     doc: "01-membership.md",
     line: 152,
     anchor:
@@ -5804,6 +5810,10 @@ export const SHOTS = [
     anchor: "The Members Admin hub — Member Management, Add Member",
     alt: "The Members Admin hub — Member Management, Add Member and Import Members tabs",
     route: "/members/admin",
+    // The hub's "Former members still holding property" card reads "No
+    // dropped member has property outstanding" -- the normal state, and not
+    // this shot's subject, which is the hub's tabs.
+    allowEmptyState: true,
   },
   {
     id: "01-23-print-member-badges",
@@ -6095,6 +6105,9 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     selector: "div[role='dialog'], div.fixed.inset-0 > div",
+    // "No specific role" is the Target Role select's default option, showing
+    // behind the warning -- as 15-03 allows for the same form.
+    allowEmptyState: true,
   },
   {
     id: "01-31-applicant-documents",
@@ -6105,11 +6118,32 @@ export const SHOTS = [
     route: "/prospective-members",
     prepare: async (page) => {
       await page.waitForTimeout(2500);
-      // The applicant whose paperwork the seeder files — the one furthest
-      // along the pipeline, since an applicant at the first stage with their
-      // ID already on file would say the wrong thing about the process.
+      // Whoever has documents on file, asked of the API rather than named.
+      // The seeder files them for the applicant furthest along the pipeline
+      // at the time, which depends on the spread; this was hard-coded to
+      // Riley Bishop and photographed an empty section once the spread moved
+      // the paperwork to someone else (openApplicantAtStage's lesson again).
+      const name = await page.evaluate(async () => {
+        const get = async (path) => {
+          const response = await fetch(`/api/v1${path}`, {
+            credentials: "include",
+          });
+          return response.ok ? response.json() : {};
+        };
+        const list = await get("/prospective-members/prospects?limit=100");
+        for (const prospect of list.prospects ?? list.items ?? []) {
+          const docs = await get(
+            `/prospective-members/prospects/${prospect.id}/documents`,
+          );
+          if ((docs.documents ?? docs ?? []).length) {
+            return `${prospect.first_name} ${prospect.last_name}`;
+          }
+        }
+        return null;
+      });
+      if (!name) throw new Error("01-31: no applicant has documents on file");
       await page
-        .locator("[role='button'][aria-label*='Bishop']")
+        .locator(`[role='button'][aria-label^='${name}']`)
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(2000);
@@ -10680,10 +10714,16 @@ export const SHOTS = [
     // so the picture illustrated the wrong thing entirely.
     route: "/members",
     prepare: async (page) => {
+      // A member the seeder promoted through the profile endpoint, so the
+      // Profile Updates filter has an entry to show. The first member on the
+      // roster has never had a profile update recorded, and this shot
+      // pictured "No audit history found" under a caption describing the
+      // changes it lists.
       await openFirstFromApi(
-        "/users?limit=1",
+        "/users?limit=100",
         (id) => `/members/admin/history/${id}`,
         "users",
+        (user) => user.username === "cfrazier",
       )(page);
       await page.waitForTimeout(1200);
       await page

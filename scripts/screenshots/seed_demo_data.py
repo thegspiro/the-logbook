@@ -783,6 +783,20 @@ RECRUIT_USERNAMES = {"vbrennan", "snolan", "eadeyemi"}
 # captured images state outright.
 ADMINISTRATIVE_USERNAMES = {"jwhitfield", "bhollis"}
 
+# Members `seed_member_changes` promotes after creation, by username. Rank
+# codes, matching MEMBERS -- a promotion to a display name would re-introduce
+# the unrecognised-rank warning one member at a time. MEMBERS holds the rank
+# they start on. The roster's rank repair reads
+# this too: comparing a promoted member against MEMBERS alone called the
+# promotion drift, put the old rank back, and the promotion then re-applied it
+# -- two profile updates per member on every run, which piled up as repeated
+# "rank" entries in the audit history the guide pictures.
+MEMBER_PROMOTIONS = {
+    "vbrennan": "firefighter",
+    "snolan": "firefighter",
+    "cfrazier": "lieutenant",
+}
+
 # What "administrative" is written as. The pair, always: a member on a
 # membership tier has no class or status on file, so sending one without the
 # other is refused rather than guessed. Moving to this class also clears the
@@ -1235,15 +1249,17 @@ class Seeder:
                 # a blank rank, called it drift, and patched it back onto a
                 # member the API refuses to give one ("Administrative members
                 # do not hold an operational rank"), failing the whole step.
+                expected_rank = MEMBER_PROMOTIONS.get(username, rank)
                 if (
                     username not in ADMINISTRATIVE_USERNAMES
-                    and pick(current, "rank") != rank
+                    and pick(current, "rank") != expected_rank
                     and pick(current, "id")
                 ):
                     self.api.patch(
-                        f"/users/{pick(current, 'id')}/profile", {"rank": rank}
+                        f"/users/{pick(current, 'id')}/profile",
+                        {"rank": expected_rank},
                     )
-                    current["rank"] = rank
+                    current["rank"] = expected_rank
                 # Same reason as the rank repair above: a member created before
                 # ADMINISTRATIVE_USERNAMES existed keeps `active`, and the
                 # seeder never revisits a user it did not create.
@@ -1459,15 +1475,8 @@ class Seeder:
         generates on every capture run — and the guide's example of "Rank changed
         from X to Y" has nothing behind it.
         """
-        # Rank codes, matching MEMBERS — a promotion to a display name would
-        # re-introduce the unrecognised-rank warning one member at a time.
-        promotions = [
-            ("vbrennan", "firefighter"),
-            ("snolan", "firefighter"),
-            ("cfrazier", "lieutenant"),
-        ]
         by_username = {m.get("username"): m for m in members}
-        for username, new_rank in promotions:
+        for username, new_rank in MEMBER_PROMOTIONS.items():
             member = by_username.get(username)
             user_id = pick(member or {}, "id")
             if not user_id or (member or {}).get("rank") == new_rank:
@@ -13228,7 +13237,8 @@ class Seeder:
         # Stage name -> position, for the scenario overrides below.
         position_by_name = {pick(step, "name"): slot for slot, step in enumerate(steps)}
 
-        for index, prospect in enumerate(prospects):
+        spread = 0
+        for prospect in prospects:
             prospect_id = pick(prospect, "id")
             if not prospect_id:
                 continue
@@ -13237,8 +13247,18 @@ class Seeder:
             # their scenario visible, and the wrap would move them off it.
             # An override naming a stage this pipeline does not have falls
             # back to the spread rather than silently pinning to stage zero.
+            #
+            # Overridden applicants do not take a turn in the wrap. When they
+            # did, which stage went empty depended on where they fell in the
+            # list: with eleven applicants the turn for the final stage landed
+            # on one of them, nobody reached Onboarding, and
+            # `01-35-applicant-drawer-final-stage` had no one to open.
             scenario = self.SCENARIO_STAGES.get(pick(prospect, "email"))
-            target = position_by_name.get(scenario, index % len(order))
+            if scenario in position_by_name:
+                target = position_by_name[scenario]
+            else:
+                target = spread % len(order)
+                spread += 1
             try:
                 current = order.index(pick(prospect, "current_step_id"))
             except ValueError:
