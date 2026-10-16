@@ -142,12 +142,26 @@ async def test_integration_connection(integration: Integration) -> str:
 
 
 def _get_calendar_credentials(integration: Integration) -> dict[str, Any]:
-    """Extract calendar credentials from encrypted storage."""
+    """Extract calendar credentials from encrypted storage.
+
+    The access token's expiry is not a secret and lives in public config, so
+    the service can refresh a lapsed token before using it.
+    """
     creds: dict[str, Any] = {}
-    for key in ("refresh_token", "client_id", "client_secret", "tenant_id", "token"):
+    for key in (
+        "refresh_token",
+        "client_id",
+        "client_secret",
+        "tenant_id",
+        "token",
+        "access_token",
+    ):
         val = integration.get_secret(key)
         if val:
             creds[key] = val
+    expires_at = (integration.config or {}).get("token_expires_at")
+    if expires_at:
+        creds["token_expires_at"] = expires_at
     return creds
 
 
