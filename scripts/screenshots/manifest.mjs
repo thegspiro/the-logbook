@@ -10577,14 +10577,32 @@ export const SHOTS = [
     // The badge reads `elected` only after `seed_membership_vote_outcome` has
     // walked the August membership vote to a close — package assigned to the
     // ballot, paper tally recorded and attested, election closed, statuses
-    // synced back. Matched on the stage rather than a name, like 15-08, so a
-    // different seeding spread cannot point this at somebody else.
+    // synced back.
+    //
+    // By name, not by stage. Three applicants sit on Membership Vote -- the
+    // spread's, plus Sam Okafor and Devon Marsh, whom SCENARIO_STAGES pins
+    // there -- and only Sam's package reads `elected`: the seeder walks his
+    // vote to a win and Devon's to a loss (20-13). Matching the stage opened
+    // whichever row came first, which pictured a draft package, or before
+    // that an applicant with none, under a caption about the Elected badge.
     //
     // The tally is NOT in this frame and the caption no longer promises it:
     // vote counts live on the election results screen guide 14 pictures, and
     // nothing joins the two on one screen.
-    prepare: openApplicantAtStage("Membership Vote"),
-    fullPage: true,
+    prepare: async (page) => {
+      const card = page.locator("[role='button'][aria-label^='Sam Okafor']");
+      await card.first().waitFor({ timeout: 30_000 });
+      await card.first().click();
+      await page
+        .locator("div[aria-label='Applicant details']")
+        .getByText(/^elected$/)
+        .first()
+        .waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(600);
+    },
+    // The panel, not the page: the dialog is centred, so a full-page capture
+    // framed the page behind it, undimmed past the first 900px.
+    selector: "div[aria-label='Applicant details'] div.modal-panel",
     // Sibling sections of the same drawer legitimately read "No documents
     // yet" / "No checklist data recorded yet" for an applicant with no
     // uploads; the section this pictures is populated.
@@ -10678,6 +10696,10 @@ export const SHOTS = [
       }
       await link.waitFor({ timeout: 15_000 });
       await link.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      // Park the pointer outside the clipped sidebar. The group click leaves
+      // it where the scroll then slides another item under it, and that item
+      // was captured in its hover highlight.
+      await page.mouse.move(1400, 750);
       await page.waitForTimeout(400);
     },
     // The taller viewport for the same reason 00-15 needs one: with the
