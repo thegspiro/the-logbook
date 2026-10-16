@@ -611,6 +611,7 @@ describe('IntegrationsPage', () => {
         expose_finance: true,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
       },
     };
 
@@ -623,6 +624,7 @@ describe('IntegrationsPage', () => {
         expose_finance: true,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
         active_key: null,
       });
     });
@@ -644,6 +646,7 @@ describe('IntegrationsPage', () => {
         expose_finance: false,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
         oauth_enabled: false,
       });
     });
@@ -665,6 +668,7 @@ describe('IntegrationsPage', () => {
         expose_finance: true,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
         oauth_enabled: false,
       });
     });
@@ -685,8 +689,43 @@ describe('IntegrationsPage', () => {
         expose_finance: false,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
         oauth_enabled: true,
       });
+    });
+
+    it('sends the medical supply switch when it is turned on', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpAvailable]);
+      mockConnectIntegration.mockResolvedValue(mcpConnected);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      await user.click(within(screen.getByTestId('integration-card-claude-mcp')).getByText('Connect'));
+      expect(screen.getByLabelText(/Share medical supply inventory/)).not.toBeChecked();
+      await user.click(screen.getByLabelText(/Share medical supply inventory/));
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('mcp-1', {
+        access_mode: 'read_only',
+        expose_finance: false,
+        expose_medical_screening: false,
+        expose_full_schedule: false,
+        expose_medical_supplies: true,
+        oauth_enabled: false,
+      });
+    });
+
+    it('shows the stored medical supply switch in the settings form', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([
+        { ...mcpConnected, config: { ...mcpConnected.config, expose_medical_supplies: true } },
+      ]);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      await user.click(screen.getByRole('button', { name: 'Claude (MCP) settings' }));
+      expect(screen.getByLabelText(/Share medical supply inventory/)).toBeChecked();
     });
 
     it('shows the service key button to a delegated key manager without integrations.manage', async () => {
@@ -739,6 +778,7 @@ describe('IntegrationsPage', () => {
         expose_finance: false,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
         active_key: null,
       });
 
@@ -825,6 +865,7 @@ describe('IntegrationsPage', () => {
         expose_finance: true,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
         oauth_enabled: true,
       });
       expect(mockConnectIntegration).not.toHaveBeenCalled();

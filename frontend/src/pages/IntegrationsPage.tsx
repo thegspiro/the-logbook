@@ -393,6 +393,7 @@ const IntegrationsPage: React.FC = () => {
   const [mcpExposeFinance, setMcpExposeFinance] = useState(false);
   const [mcpExposeMedical, setMcpExposeMedical] = useState(false);
   const [mcpExposeFullSchedule, setMcpExposeFullSchedule] = useState(false);
+  const [mcpExposeMedicalSupplies, setMcpExposeMedicalSupplies] = useState(false);
   const [mcpOauthEnabled, setMcpOauthEnabled] = useState(false);
   // The connect form doubles as the settings form for a connected Claude
   // (MCP) integration. Reconnecting is not an option there: disconnect
@@ -548,6 +549,7 @@ const IntegrationsPage: React.FC = () => {
     setMcpExposeFinance(stored['expose_finance'] === true);
     setMcpExposeMedical(stored['expose_medical_screening'] === true);
     setMcpExposeFullSchedule(stored['expose_full_schedule'] === true);
+    setMcpExposeMedicalSupplies(stored['expose_medical_supplies'] === true);
     setMcpOauthEnabled(stored['oauth_enabled'] === true);
     setEditingSettings(false);
   };
@@ -595,6 +597,7 @@ const IntegrationsPage: React.FC = () => {
           expose_finance: mcpExposeFinance,
           expose_medical_screening: mcpExposeMedical,
           expose_full_schedule: mcpExposeFullSchedule,
+          expose_medical_supplies: mcpExposeMedicalSupplies,
           oauth_enabled: mcpOauthEnabled,
         };
       case 'salesforce':
@@ -1389,6 +1392,22 @@ const IntegrationsPage: React.FC = () => {
                 <span className="text-theme-text-muted block text-xs">
                   Every shift and its assignments, as a scheduling manager sees them. Off by default: Claude then sees
                   only shifts open to all members, which is what any eligible member can see.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={mcpExposeMedicalSupplies}
+                onChange={(e) => setMcpExposeMedicalSupplies(e.target.checked)}
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm">Share medical supply inventory</span>
+                <span className="text-theme-text-muted block text-xs">
+                  Medical stock counts, items below their reorder point and lots that are expiring or expired.
+                  Read-only: Claude cannot request a reorder of a medical item. A member&apos;s own connection also
+                  needs medical inventory access. Off by default.
                 </span>
               </span>
             </label>

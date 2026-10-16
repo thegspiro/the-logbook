@@ -251,6 +251,11 @@ class ClaudeMcpConfig(BaseModel):
     # for, so without this the shift tools show only shifts open to all
     # members.
     expose_full_schedule: bool = False
+    # Medical supply stock: item counts, low stock and expiring lots. Off by
+    # default: the module has its own officer, and the department decides
+    # whether Claude sees it. Read-only either way — a reorder request for
+    # a medical item is refused whatever this says.
+    expose_medical_supplies: bool = False
     # Whether members may connect an MCP client with their own account
     # through the OAuth authorization server, in addition to the service
     # key. Off by default, and inert unless the deployment also sets

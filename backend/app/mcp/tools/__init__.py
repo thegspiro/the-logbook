@@ -16,6 +16,7 @@ from app.mcp.tools import (
     finance,
     inventory,
     medical,
+    medical_supplies,
     meetings,
     members,
     organization,
@@ -38,6 +39,7 @@ TOOL_MODULES = (
     elections,
     finance,
     medical,
+    medical_supplies,
     writes,
 )
 

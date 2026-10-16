@@ -14726,11 +14726,11 @@ export const SHOTS = [
     doc: "16-integrations.md",
     line: 792,
     anchor: "Integrations → Claude (MCP): the connect form",
-    alt: "Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening, full duty schedule and member sign-in switches all off, as shipped",
+    alt: "Integrations → Claude (MCP) connect form: access mode Read-only, and the finance, medical screening, full duty schedule, medical supply inventory and member sign-in switches all off, as shipped",
     route: "/integrations",
     // Tall enough to hold the whole form, down to the Connect button that is
     // never pressed.
-    viewport: { width: 1440, height: 1500 },
+    viewport: { width: 1440, height: 1600 },
     selector: '.modal-panel:has-text("Connect Claude (MCP)")',
     expect: "Share the full duty schedule",
     // Opened and never saved: Connect is not pressed, so the integration stays
@@ -14800,7 +14800,7 @@ export const SHOTS = [
     anchor: "The Claude (MCP) settings form opened from a connected card",
     alt: "The Claude (MCP) settings form opened from the connected card: the stored access mode and switches with Let members connect with their own account ticked, a note that saving keeps the service key and members' connections, and a Save settings button",
     route: "/integrations",
-    viewport: { width: 1440, height: 1500 },
+    viewport: { width: 1440, height: 1600 },
     selector: '.modal-panel:has-text("Claude (MCP) settings")',
     expect: "Save settings",
     // Connected with the switch off, as a department that connected before
