@@ -7183,17 +7183,31 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
             Organization.active.isnot(False),
         )
     )
-    integrations = list(result.scalars().all())
+    # Ids, not the loaded rows: a rollback after one integration fails
+    # expires every instance in the session, and reading an expired one
+    # outside an await raises MissingGreenlet — which skipped every
+    # integration after the first failure.
+    targets = [
+        (str(i.id), str(i.organization_id))
+        for i in result.scalars().all()
+        if (i.config or {}).get("auto_sync_enabled")
+    ]
 
     enabled = 0
     synced = 0
     failed = 0
-    for integration in integrations:
-        config = integration.config or {}
-        if not config.get("auto_sync_enabled"):
+    for integration_id, org_id in targets:
+        integration = (
+            await db.execute(
+                select(Integration).where(
+                    Integration.id == integration_id,
+                    Integration.organization_id == org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if integration is None:
             continue
         enabled += 1
-        org_id = str(integration.organization_id)
         started = time.monotonic()
         try:
             counts = await run_salesforce_sync(db, integration)
@@ -7215,7 +7229,7 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
             logger.opt(exception=True).warning(
                 "Salesforce auto-sync failed for org {}", org_id
             )
-            await persist_task_error_log(str(org_id), "Salesforce auto-sync", e)
+            await persist_task_error_log(org_id, "Salesforce auto-sync", e)
             # Recorded on the integration as well, so the failure shows on its
             # detail page and not only in the server's task error log.
             try:
