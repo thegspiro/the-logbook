@@ -3679,6 +3679,31 @@ seconds.
 (Security review INT-27, follow-up round 5, 2026-09-06:
 `docs/security-review/INT-27-integrations.md`.)
 
+## Calendar Publishing Has No Connect Flow (2026-10-16)
+
+The `calendar_sync` scheduled task publishes department events one way to a
+Google Calendar or Outlook integration's calendar
+(`app/services/calendar_sync_service.py`, mapping rows in
+`calendar_sync_mappings`). It does nothing unless `CALENDAR_SYNC_ENABLED` is
+on, and then only for an integration that is connected and holds a refresh or
+access token plus a `calendar_id` in its config.
+
+No screen gives an integration those yet. There is no Google or Microsoft
+sign-in for these cards and nothing creates the department calendar, so
+connecting either card from the Integrations page only marks it connected, as
+[guide 16](training/16-integrations.md#calendar-integrations) describes, and
+the task skips it. The connect API does accept a `refresh_token` and a
+`calendar_id` for both types; only a caller who obtained a refresh token
+outside The Logbook, for the same OAuth client, could make the task publish
+today.
+
+What a pass sends is the allowlist in `build_calendar_payload`: title, start
+and end in the department's timezone, location name, event type label, a link
+back, and the description only when the integration's `sync_descriptions` is
+true. It skips drafts, deletes cancelled events from the calendar, covers 30
+days back to `days_ahead` (default 180) ahead, and honours an
+`event_types_to_sync` list. No screen sets those three config keys either.
+
 ## Salesforce Integration — Clearing the Refresh Token Has No Reachable UI Control (INT-11, 2026-09-13)
 
 ✅ **Resolved 2026-10-11 (owner decision: a dedicated "Switch to Client
