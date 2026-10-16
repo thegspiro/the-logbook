@@ -130,6 +130,7 @@ const MyEntryEditForm: React.FC<MyEntryEditFormProps> = ({ entry, categories, ti
           </label>
           <DateTimeQuarterHour
             id={`${idPrefix}-start`}
+            timeLabel="Start time"
             value={clockIn}
             onChange={handleStartChange}
             required
@@ -143,6 +144,7 @@ const MyEntryEditForm: React.FC<MyEntryEditFormProps> = ({ entry, categories, ti
           </label>
           <DateTimeQuarterHour
             id={`${idPrefix}-end`}
+            timeLabel="End time"
             value={clockOut}
             onChange={(val) => {
               setClockOut(val);

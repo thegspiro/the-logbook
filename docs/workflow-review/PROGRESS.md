@@ -133,7 +133,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 
 | #   | Activity                                                                  | Acts as          | Starts at                                  | Status |
 | --- | ------------------------------------------------------------------------- | ---------------- | ------------------------------------------ | ------ |
-| W70 | Administrative hours: clock in and out by QR, manage categories and hours | member → admin   | `/admin-hours`, `/admin-hours/manage`      | ⬜     |
+| W70 | Administrative hours: clock in and out by QR, manage categories and hours | member → admin   | `/admin-hours`, `/admin-hours/manage`      | ✅     |
 | W71 | Medical screening                                                         | admin            | `/medical-screening`                       | ⬜     |
 | W72 | Reports                                                                   | admin, chief     | `/reports`                                 | ⬜     |
 | W73 | Integrations                                                              | admin            | `/integrations`                            | ⬜     |
@@ -215,8 +215,50 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Grants, a later pass** — budget lines and expenditures have update and
   delete endpoints but no control on the detail page, and a compliance task
   cannot be given an assignee when it is created (W68).
+- **Admin hours, a later pass** — scanning a second category's QR code while
+  clocked in is refused, but the page neither names the running session nor
+  offers its Clock Out (W70-5).
 
 ## Log
+
+### W70 — Administrative hours: clock in and out by QR, manage categories and hours — 2026-10-16
+
+Driven as:
+
+- `admin` adding categories, opening a QR page, reviewing (approve, reject
+  with a reason), the summary, All Entries, the export, and ending a running
+  session at 390×844;
+- `member` at 390×844 clocking in and out through the QR URL, trying a second
+  category while clocked in, logging hours manually, and resubmitting a
+  rejected entry.
+
+Held:
+
+- double-clicks record once;
+- Chicago times stored as UTC and shown back correctly;
+- a second session, a future end and an empty reason are refused with
+  reasons;
+- review outcomes reach the member;
+- summary, list and CSV agree;
+- member refused on page and API.
+
+Fixed:
+
+- W70-1 (MED — two active categories could share a name, case-insensitively,
+  beside the seeded defaults).
+- W70-2 (LOW — category form fields and colour swatches unnamed; identical row
+  buttons).
+- W70-3 (LOW — Pending Review controls did not say whose entry).
+- W70-4 (LOW — raw status codes, unnamed manual-form fields and time pickers,
+  retired categories unmarked in the filter, "1 entries", touch targets).
+
+Open, as a lead: W70-5 (LOW — no way out from a second category's clock-in
+page).
+
+Gate: typecheck and lint are clean; 121 admin-hours frontend tests and 152
+admin-hours backend tests pass.
+
+Next: W71.
 
 ### W69 — Fundraising: campaigns, donors, donations, reports — 2026-10-15
 
