@@ -16,19 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending** — Feature 21 (Admin hours), pass 8. Watchdog pickup: PR
-#3330 (Feature 20, Compliance, pass 8) merged (`5fabde43`) with nothing
-started for the next feature since; this pass is that pickup. **0 new
-findings.** AH-16, the feature's one standing bug-class finding since pass
-2 (`export_entries_csv` unbounded/non-streaming), and CRON2-31-13 (a
-Feature-31 scheduled-task gap that also touches `admin_hours_service.py`)
-are both now resolved by two non-rotation commits landed since pass 7,
-verified end to end rather than taken from `KNOWN_LIMITATIONS.md`'s own
-say-so — the feature carries zero open or flagged findings as of this
-pass. Route surface re-enumerated (30/30, unchanged). See
-`AH-21-admin-hours.md`'s **Pass 8** section. Row 21 → ✅ (pending this PR's
-merge); next is Feature 22 (Grants & fundraising). _(PR number and branch
-to be recorded here once opened.)_
+**PR [#3336](https://github.com/thegspiro/the-logbook/pull/3336)** (branch
+`claude/security-review-admin-hours`): Feature 21 (Admin hours), pass 8.
+Watchdog pickup: PR #3330 (Feature 20, Compliance, pass 8) merged
+(`5fabde43`) with nothing started for the next feature since; this pass is
+that pickup. **0 new findings.** AH-16, the feature's one standing
+bug-class finding since pass 2 (`export_entries_csv` unbounded/
+non-streaming), and CRON2-31-13 (a Feature-31 scheduled-task gap that also
+touches `admin_hours_service.py`) are both now resolved by two
+non-rotation commits landed since pass 7, verified end to end rather than
+taken from `KNOWN_LIMITATIONS.md`'s own say-so — the feature carries zero
+open or flagged findings as of this pass. Route surface re-enumerated
+(30/30, unchanged). See `AH-21-admin-hours.md`'s **Pass 8** section. Row
+21 → ✅ (pending this PR's merge); next is Feature 22 (Grants &
+fundraising).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 8, PR #3330, merged), preserved for history</summary>
