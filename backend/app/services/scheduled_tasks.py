@@ -37,6 +37,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:25 AM — the weekly list of document folders only full administrators can open
 25 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=admin_only_folder_digest
 
+# Daily at 7:35 AM — Google Workspace accounts waiting over a day for an administrator
+35 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=google_workspace_attention_digest
+
 # Every 15 minutes — process delayed inventory change notifications
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_notifications
 
@@ -533,6 +536,17 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
+    },
+    "google_workspace_attention_digest": {
+        "description": (
+            "Email administrators (admin.access) the Google Workspace accounts "
+            "waiting over a day: a departed member not yet suspended, an "
+            "account never created or left unfinished. At most once a day per "
+            "department, and only while one is overdue"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:35",
+        "cron": "35 7 * * *",
     },
     "google_workspace_suspension_sync": {
         "description": "Finish Google Workspace suspensions (and their lifting) that a member's departure or return left unsettled, and retry failed ones",
@@ -6446,6 +6460,18 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
     }
 
 
+async def run_google_workspace_attention_digest(db: AsyncSession) -> Dict[str, Any]:
+    """Email administrators the Google Workspace accounts waiting over a day."""
+    from app.services.google_workspace_attention_digest import (
+        send_google_workspace_attention_digest,
+    )
+
+    async def _process(db_session: AsyncSession, org: Organization) -> int:
+        return await send_google_workspace_attention_digest(db_session, org)
+
+    return await _for_each_org(db, "google_workspace_attention_digest", _process)
+
+
 async def run_google_workspace_suspension_sync(db: AsyncSession) -> Dict[str, Any]:
     """Backstop for the departure hook's after-commit sync (see
     app/models/google_workspace_departure.py). Each row is org-scoped and
@@ -7314,6 +7340,7 @@ TASK_RUNNERS = {
     "external_training_auto_sync": run_external_training_auto_sync,
     "salesforce_auto_sync": run_salesforce_auto_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
+    "google_workspace_attention_digest": run_google_workspace_attention_digest,
     "google_workspace_suspension_sync": run_google_workspace_suspension_sync,
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
     "admin_hours_auto_close": run_admin_hours_auto_close,
@@ -7390,6 +7417,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "rolling_recurrence_extend": 86400,
     "trainee_report_escalation": 86400,
     "mark_overdue_dues": 86400,
+    # Checked daily; sends at most once a day per org, only while overdue.
+    "google_workspace_attention_digest": 86400,
     "google_workspace_suspension_sync": 900,
     "mark_overdue_maintenance": 86400,
     "admin_hours_auto_close": 1800,

@@ -28,6 +28,7 @@ const mockGetMcpStatus = vi.fn();
 const mockCreateMcpKey = vi.fn();
 const mockRevokeMcpKey = vi.fn();
 const mockLinkExistingGoogleMembers = vi.fn();
+const mockGetGoogleWorkspaceAttention = vi.fn().mockResolvedValue([]);
 
 vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
@@ -48,6 +49,7 @@ vi.mock('../services/api', () => ({
     createMcpKey: (...args: unknown[]) => mockCreateMcpKey(...args) as unknown,
     revokeMcpKey: (...args: unknown[]) => mockRevokeMcpKey(...args) as unknown,
     linkExistingGoogleMembers: (...args: unknown[]) => mockLinkExistingGoogleMembers(...args) as unknown,
+    getGoogleWorkspaceAttention: (...args: unknown[]) => mockGetGoogleWorkspaceAttention(...args) as unknown,
   },
 }));
 
@@ -1042,6 +1044,76 @@ describe('IntegrationsPage', () => {
       expect(within(card).queryByRole('button', { name: 'Google Workspace settings' })).not.toBeInTheDocument();
       expect(within(card).getByText('Test')).toBeInTheDocument();
       expect(within(card).queryByText('Link existing members')).not.toBeInTheDocument();
+    });
+
+    describe('Accounts needing attention', () => {
+      const items = [
+        {
+          user_id: 'u-gone',
+          member_name: 'Gone Member',
+          primary_email: 'gone@firedept.org',
+          issue: 'not_suspended',
+          detail: 'Google Workspace is busy or unavailable.',
+          since: '2026-10-14T08:00:00Z',
+          overdue: true,
+        },
+        {
+          user_id: 'u-new',
+          member_name: 'New Member',
+          primary_email: 'new@firedept.org',
+          issue: 'setup_unfinished',
+          detail: null,
+          since: null,
+          overdue: false,
+        },
+      ];
+
+      beforeEach(() => {
+        vi.mocked(toast.error).mockClear();
+        mockGetGoogleWorkspaceAttention.mockReset();
+        mockGetGoogleWorkspaceAttention.mockResolvedValue(items);
+      });
+
+      it('lists each account with its reason and a link to the member', async () => {
+        const user = userEvent.setup();
+        mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+        renderPage();
+        const card = await screen.findByTestId('integration-card-google-workspace');
+        await user.click(await within(card).findByRole('button', { name: '2 need attention' }));
+
+        const list = screen.getByRole('list', { name: 'Google Workspace accounts needing attention' });
+        const [gone, fresh] = within(list).getAllByRole('listitem');
+        expect(within(list).getByRole('link', { name: 'Gone Member' })).toHaveAttribute('href', '/members/u-gone');
+        expect(gone).toHaveTextContent('Left, but the account is not suspended');
+        expect(gone).toHaveTextContent('Google Workspace is busy or unavailable.');
+        expect(gone).toHaveTextContent('Over a day');
+        expect(fresh).toHaveTextContent('Account setup unfinished');
+        expect(fresh).not.toHaveTextContent('Over a day');
+      });
+
+      it('shows nothing when every account is in order', async () => {
+        mockGetGoogleWorkspaceAttention.mockResolvedValue([]);
+        mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+        renderPage();
+        await screen.findByText('Google Workspace');
+        await waitFor(() => expect(mockGetGoogleWorkspaceAttention).toHaveBeenCalledTimes(1));
+        expect(screen.queryByRole('button', { name: /need attention/ })).not.toBeInTheDocument();
+      });
+
+      it('does not ask before the integration is connected', async () => {
+        renderPage();
+        await screen.findByText('Google Workspace');
+        expect(mockGetGoogleWorkspaceAttention).not.toHaveBeenCalled();
+      });
+
+      it('reports a list that could not be loaded', async () => {
+        mockGetGoogleWorkspaceAttention.mockRejectedValue(new Error('boom'));
+        mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+        renderPage();
+        await waitFor(() =>
+          expect(toast.error).toHaveBeenCalledWith('Could not load Google Workspace accounts needing attention')
+        );
+      });
     });
 
     describe('Link existing members', () => {

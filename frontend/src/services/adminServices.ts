@@ -1408,6 +1408,18 @@ export interface McpKeyCreateResult {
   endpoint_path: string;
 }
 
+/** A member's Google Workspace account that needs a person to act. */
+export interface GoogleWorkspaceAttentionItem {
+  user_id: string;
+  member_name: string;
+  primary_email: string;
+  issue: 'not_suspended' | 'not_unsuspended' | 'not_created' | 'setup_unfinished';
+  detail: string | null;
+  since: string | null;
+  /** Waiting long enough that the daily alert email reports it. */
+  overdue: boolean;
+}
+
 /** What linking the existing roster to Google did, or (previewed) would do. */
 export interface GoogleWorkspaceLinkResult {
   applied: boolean;
@@ -1528,6 +1540,13 @@ export const integrationsService = {
   async revokeMcpKey(keyId: string): Promise<McpServiceKey> {
     const response = await api.delete<{ key: McpServiceKey }>(`/integrations/claude-mcp/keys/${keyId}`);
     return response.data.key;
+  },
+
+  async getGoogleWorkspaceAttention(): Promise<GoogleWorkspaceAttentionItem[]> {
+    const response = await api.get<{ items: GoogleWorkspaceAttentionItem[] }>(
+      '/integrations/google-workspace/attention'
+    );
+    return asArray(response.data.items);
   },
 
   // Google is only read. Called without `expected` it previews the counts;

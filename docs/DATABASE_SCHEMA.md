@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**313 tables · 5172 columns · 1057 foreign keys**
+**313 tables · 5173 columns · 1057 foreign keys**
 
 ---
 
@@ -288,7 +288,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`google_account_provisions`](#google_account_provisions) | `GoogleAccountProvision` | 19 | A member's Google Workspace account, as The Logbook created or found it |
+| [`google_account_provisions`](#google_account_provisions) | `GoogleAccountProvision` | 20 | A member's Google Workspace account, as The Logbook created or found it |
 
 ### Grants & Fundraising
 
@@ -4447,6 +4447,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `suspended_by_logbook` | BOOL | no |  | `0` |  |
 | `suspended_at` | DATETIME | yes |  |  |  |
 | `suspension_error` | TEXT | yes |  |  |  |
+| `suspension_requested_at` | DATETIME | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |

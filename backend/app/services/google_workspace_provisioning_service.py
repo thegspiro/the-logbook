@@ -16,6 +16,7 @@ Google user, holding a license, behind any conversion that then failed.
 """
 
 import html
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -50,6 +51,33 @@ RETRY_COOLDOWN = timedelta(seconds=60)
 
 # How long a failed suspension waits before the scheduled sync tries again.
 SUSPENSION_RETRY_AFTER = timedelta(minutes=15)
+
+# A record still being created after this long never got its answer from
+# Google (a worker stopped, or the call is wedged); the same length of time
+# that marks every other item as overdue for the daily alert is longer.
+STALE_PENDING_AFTER = timedelta(hours=1)
+# How long an item may wait before the daily alert reports it. The sweep has
+# retried a failed suspension dozens of times by then.
+ATTENTION_OVERDUE_AFTER = timedelta(hours=24)
+
+
+class AttentionIssue:
+    NOT_SUSPENDED = "not_suspended"
+    NOT_UNSUSPENDED = "not_unsuspended"
+    NOT_CREATED = "not_created"
+    SETUP_UNFINISHED = "setup_unfinished"
+
+
+@dataclass(frozen=True)
+class AttentionItem:
+    user_id: str
+    member_name: str
+    primary_email: str
+    issue: str
+    detail: Optional[str]
+    since: Optional[datetime]
+    overdue: bool
+
 
 GOOGLE_SIGN_IN_URL = "https://accounts.google.com/"
 
@@ -149,6 +177,9 @@ def _account_key(row: GoogleAccountProvision) -> str:
 class GoogleWorkspaceProvisioningService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def is_connected(self, organization_id: str) -> bool:
+        return await self._active_integration(organization_id) is not None
 
     async def _active_integration(self, organization_id: str) -> Optional[Integration]:
         integration: Optional[Integration] = (
@@ -723,6 +754,60 @@ class GoogleWorkspaceProvisioningService:
             )
         return counts
 
+    async def attention_items(
+        self, organization_id: str, now: Optional[datetime] = None
+    ) -> list[AttentionItem]:
+        """Every account in this department that needs a person to act.
+
+        A suspension or unsuspension Google has not taken yet, an account
+        never created, and one created but left unfinished (groups, or a
+        password the member never received). A member who has left is listed
+        only for their suspension: creating or finishing their account is not
+        wanted. Overdue items -- waiting longer than ATTENTION_OVERDUE_AFTER --
+        are the ones the daily alert reports. Departures come first, oldest
+        first within each issue, because a departed member's working account
+        is the risk this list exists to surface.
+        """
+        now = now or datetime.now(timezone.utc)
+        rows = (
+            await self.db.execute(
+                select(GoogleAccountProvision, User)
+                .join(User, User.id == GoogleAccountProvision.user_id)
+                .where(
+                    GoogleAccountProvision.organization_id == str(organization_id),
+                    User.organization_id == str(organization_id),
+                )
+            )
+        ).all()
+        items: list[AttentionItem] = []
+        for row, member in rows:
+            found = _attention_issue(row, member, now)
+            if found is None:
+                continue
+            issue, detail, since = found
+            since = _aware(since)
+            items.append(
+                AttentionItem(
+                    user_id=str(member.id),
+                    member_name=member.full_name,
+                    primary_email=row.primary_email,
+                    issue=issue,
+                    detail=detail,
+                    since=since,
+                    overdue=since is not None
+                    and now - since >= ATTENTION_OVERDUE_AFTER,
+                )
+            )
+        order = [
+            AttentionIssue.NOT_SUSPENDED,
+            AttentionIssue.NOT_UNSUSPENDED,
+            AttentionIssue.NOT_CREATED,
+            AttentionIssue.SETUP_UNFINISHED,
+        ]
+        oldest = datetime.min.replace(tzinfo=timezone.utc)
+        items.sort(key=lambda i: (order.index(i.issue), i.since or oldest))
+        return items
+
     async def sync_pending_suspensions(self) -> int:
         """Finish every suspension a departure or return left unsettled.
 
@@ -890,3 +975,54 @@ class GoogleWorkspaceProvisioningService:
             raise LookupError("No Google Workspace account record for this member")
         await self.db.refresh(refreshed)
         return refreshed
+
+
+def _aware(moment: Optional[datetime]) -> Optional[datetime]:
+    # MySQL hands DATETIME back naive; every value here was written in UTC.
+    if moment is not None and moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment
+
+
+def _attention_issue(
+    row: GoogleAccountProvision, member: User, now: datetime
+) -> Optional[tuple[str, Optional[str], Optional[datetime]]]:
+    """(issue, detail, waiting since) for one record, or None if it is fine."""
+    if not row.suspension_settled and row.status in _SUSPENDABLE:
+        issue = (
+            AttentionIssue.NOT_SUSPENDED
+            if row.suspension_wanted
+            else AttentionIssue.NOT_UNSUSPENDED
+        )
+        return (
+            issue,
+            row.suspension_error,
+            row.suspension_requested_at or row.updated_at,
+        )
+    if member_has_departed(member):
+        return None
+    if row.status == GoogleAccountStatus.FAILED.value:
+        return (
+            AttentionIssue.NOT_CREATED,
+            row.last_error,
+            row.last_attempt_at or row.created_at,
+        )
+    if row.status == GoogleAccountStatus.PENDING.value:
+        started = _aware(row.last_attempt_at or row.created_at)
+        if started is not None and now - started >= STALE_PENDING_AFTER:
+            return AttentionIssue.NOT_CREATED, row.last_error, started
+        return None
+    if row.status == GoogleAccountStatus.CREATED.value and (
+        row.pending_groups or not row.credentials_sent
+    ):
+        return (
+            AttentionIssue.SETUP_UNFINISHED,
+            row.last_error
+            or (
+                "The member has not been sent the account's password."
+                if not row.credentials_sent
+                else "The account is not yet in every group."
+            ),
+            row.last_attempt_at or row.created_at,
+        )
+    return None
