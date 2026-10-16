@@ -124,6 +124,35 @@ class TestEventReminder:
         assert await real_record_context(db_session, "event_reminder", org, NOW) == {}
 
 
+class TestEventCancellation:
+    async def test_uses_the_next_event_dated_as_the_real_sender_dates_it(
+        self, db_session
+    ):
+        org = await _org(db_session)
+        # 02:00 UTC on the 1st is still the 30th in California.
+        soonest = _event(org, datetime(2026, 10, 1, 2, 0, tzinfo=timezone.utc))
+        db_session.add(soonest)
+        await db_session.flush()
+
+        context = await real_record_context(db_session, "event_cancellation", org, NOW)
+
+        # As EmailService.send_event_cancellation_email; the reason stays sample.
+        assert context == {
+            "event_title": "Pump Ops Drill",
+            "event_date": "September 30, 2026",
+        }
+
+    async def test_never_uses_another_departments_event(self, db_session):
+        org = await _org(db_session)
+        other = await _org(db_session, name="Another Department")
+        db_session.add(_event(other, NOW + timedelta(days=1), title="Not ours"))
+        await db_session.flush()
+
+        assert (
+            await real_record_context(db_session, "event_cancellation", org, NOW) == {}
+        )
+
+
 class TestSeriesEndReminder:
     async def test_uses_the_next_series_to_end_and_counts_what_is_left(
         self, db_session

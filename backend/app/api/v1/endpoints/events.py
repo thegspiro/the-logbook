@@ -1379,6 +1379,19 @@ async def update_event(
                         )
                 except Exception as notif_err:
                     logger.error(f"Failed to send update notifications: {notif_err}")
+                # And by email, the channel of record (CLAUDE.md pitfall 18),
+                # gated by the member's "Event changes and cancellations"
+                # switch. Non-fatal for the same reason as the bell: the
+                # update is already saved.
+                try:
+                    await service.email_event_change(
+                        event,
+                        [str(rsvp.user_id) for rsvp in rsvps_to_notify],
+                        current_user.organization_id,
+                        changes_desc,
+                    )
+                except Exception as email_err:
+                    logger.error(f"Failed to email update notifications: {email_err}")
 
         return _build_event_response(event)
     except ValueError as e:

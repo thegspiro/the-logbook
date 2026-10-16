@@ -343,7 +343,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_categories`](#inventory_categories) | `InventoryCategory` | 18 | Inventory Category model |
 | [`inventory_impact_plans`](#inventory_impact_plans) | `InventoryImpactPlan` | 8 | A saved, named impact-planner scenario. |
 | [`inventory_item_pins`](#inventory_item_pins) | `InventoryItemPin` | 7 | A member's own shortlist of items, hoisted to the top of the items list. |
-| [`inventory_items`](#inventory_items) | `InventoryItem` | 55 | Inventory Item model |
+| [`inventory_items`](#inventory_items) | `InventoryItem` | 56 | Inventory Item model |
 | [`inventory_label_prints`](#inventory_label_prints) | `InventoryLabelPrint` | 6 | One confirmed label print for an item: who confirmed it, and when. |
 | [`inventory_lots`](#inventory_lots) | `InventoryLot` | 13 | A batch/lot of a consumable inventory item held as ready stock. |
 | [`inventory_nfc_audit_digests`](#inventory_nfc_audit_digests) | `InventoryNfcAuditDigest` | 5 | One "shelf audits overdue" digest sent to an organization. |
@@ -5361,6 +5361,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `quantity_issued` | INTEGER | yes |  | `0` |  |
 | `unit_of_measure` | VARCHAR(50) | yes |  |  |  |
 | `reorder_point` | INTEGER | yes |  |  |  |
+| `apparatus_only` | BOOL | no |  | `0` |  |
 | `last_inspection_date` | DATE | yes |  |  |  |
 | `next_inspection_due` | DATE | yes | IDX |  |  |
 | `inspection_interval_days` | INTEGER | yes |  |  |  |

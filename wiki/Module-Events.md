@@ -794,8 +794,9 @@ responsible for an event (the organizer defaults to the creator).
 - **`POST /events/{id}/transfer`**, scope `this` or `future` (upcoming
   occurrences plus the series parent; past occurrences keep their organizer).
   Open requests are re-addressed, the new and relieved members are told, and
-  the change is audit-logged. The series-end reminder goes to the organizer
-  pair.
+  the change is audit-logged. The series-end reminder and the post-event
+  "validate attendance" prompt (`post_event_validation`) go to the organizer
+  pair, or to the creator when neither can be reached.
 - **UI:** Organizer / Alternate pickers on Create Event (`Me (default)`), an
   **Organized by** row with **Transfer event** on the detail page, and the
   **Transfer Event** dialog (**Apply to**: this and all future events in the
@@ -831,7 +832,20 @@ email.
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `announcement`, `reminder`, `follow_up`, `missed_event`, `check_in_confirmation` | `all`, `going` (RSVP'd yes), `not_responded`, `checked_in`, `not_checked_in` (RSVP'd but absent) |
 
-Cancelling an event offers "Notify members who RSVP'd Going or Maybe".
+Which member email switch governs the email (`NOTIFICATION_EMAIL_KINDS` in
+`event_service.py`): an `announcement` is a department message and is always
+sent; `reminder`, `missed_event` and `check_in_confirmation` follow **Event
+reminders**; `follow_up` follows **Event changes and cancellations**. All the
+recipients' emails go out in one send.
+
+Cancelling an event offers "Notify members who RSVP'd Going or Maybe". With it
+ticked, those members get a bell entry linking to the event and the **Event
+Cancelled** email template (`event_cancellation`). Changing an event's title,
+start or end time, or location tells members who answered Going or Maybe in
+the bell and by an "Event Updated" email showing the new time and place. Both
+emails follow the member's **Event changes and cancellations** switch
+(`event_changes`, on by default), which a department can make required. A
+failed email never undoes the cancellation or the edit.
 
 ### Dashboard feed
 

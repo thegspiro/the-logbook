@@ -27,8 +27,8 @@ Guide to developing the React/TypeScript frontend for The Logbook.
 
 ### Prerequisites
 
-- Node.js 22.x+
-- npm 11+ (the `engines` floor in `frontend/package.json`)
+- Node.js 22.22.1+
+- npm 10+ (the `engines` floor in `package.json` and `frontend/package.json`)
 
 ### Setup
 

@@ -6,15 +6,16 @@ recipient and dates real. What it cannot make real is the thing the notice is
 *about* — the event, the shift — so a test reminder named "Monthly Business
 Meeting" and linked to an event that does not exist. Here, when the
 department has a suitable record, the test uses it: its next upcoming event
-for an event reminder, its next scheduled shift for a shift notice. With
-none, the sample stays, so a new department still gets a complete test.
+for an event reminder or cancellation, its next scheduled shift for a shift
+notice. With none, the sample stays, so a new department still gets a
+complete test.
 
 Each builder mirrors the sender that sends that notice for real, field for
 field and format for format, and names it; when a sender changes how it
 formats a value, change the builder beside it, or the test email stops
 telling the truth about the real one. Only notices with a template-based
-sender are covered: ``event_cancellation``, ``post_event_validation`` and
-``post_shift_validation`` have no sender that renders their template.
+sender are covered: ``post_event_validation`` and ``post_shift_validation``
+have no sender that renders their template.
 
 The values here override the samples but not what an admin typed into the
 preview's own fields, and nothing here is ever sent anywhere but to the
@@ -84,6 +85,22 @@ async def _event_reminder(
         "location_name": location or "",
         "location_details": event.location_details or "",
         "event_url": f"{settings.FRONTEND_URL}/events/{event.id}",
+    }
+
+
+async def _event_cancellation(
+    db: AsyncSession, organization: Any, now: datetime
+) -> Dict[str, str]:
+    """As ``EmailService.send_event_cancellation_email``. The reason stays
+    sample: an upcoming event has none."""
+    event = await _next_event(db, organization.id, now)
+    if event is None:
+        return {}
+    return {
+        "event_title": event.title,
+        "event_date": format_in_org_timezone(
+            event.start_datetime, organization, "%B %d, %Y"
+        ),
     }
 
 
@@ -239,6 +256,7 @@ _BUILDERS: Dict[
     str, Callable[[AsyncSession, Any, datetime], Awaitable[Dict[str, str]]]
 ] = {
     "event_reminder": _event_reminder,
+    "event_cancellation": _event_cancellation,
     "series_end_reminder": _series_end_reminder,
     "shift_reminder": _shift_reminder,
     "shift_assignment": _shift_assignment,

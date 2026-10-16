@@ -794,7 +794,8 @@ Members choose how they are reached under **Settings → Notifications**:
   off. Off stops all of them at once.
 - **Emails you can turn off** — one switch for each optional email: **Event
   reminders**, **Off the waitlist** (a place opened on an event you were
-  waitlisted for), **Training and certification reminders**, **Shift
+  waitlisted for), **Event changes and cancellations** (an event you said
+  Going or Maybe to was cancelled or moved), **Training and certification reminders**, **Shift
   notices**, **Equipment and inventory updates**, **Store announcements**,
   **Volunteer calls**, **Election notices** and **Suggestion box**. Members
   with an officer role also see the emails for their duties (events,

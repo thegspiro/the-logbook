@@ -9126,7 +9126,7 @@ Worth internalising, because the shape is identical every time: **two revision i
 
 ### Problem: `npm ci` fails with "Missing: vite@... from lock file"
 
-**Status (Fixed):** Lockfile drift on `main`; regenerated. **Node >= 22** is the real floor — the root install builds the frontend workspace, so the frontend's floor governs.
+**Status (Fixed):** Lockfile drift on `main`; regenerated. **Node >= 22.22.1** is the real floor — the root install builds the frontend workspace, so the frontend's floor governs.
 
 ---
 
