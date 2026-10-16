@@ -340,8 +340,6 @@ class GrantApplicationBase(BaseModel):
     grant_end_date: Optional[date] = None
     project_description: Optional[str] = None
     narrative_summary: Optional[str] = None
-    budget_summary: Optional[GrantBudgetSummary] = None
-    key_contacts: Optional[List[GrantKeyContact]] = Field(None, max_length=50)
     federal_award_id: Optional[str] = Field(None, max_length=100)
     nfirs_compliant: Optional[bool] = None
     performance_period_months: Optional[int] = Field(None, ge=0)
@@ -356,6 +354,10 @@ class GrantApplicationCreate(GrantApplicationBase):
     """Schema for creating a new grant application"""
 
     opportunity_id: Optional[UUID] = None
+    # Declared on the request schemas, not the shared base, because the
+    # response reads both columns back in a looser shape (see below).
+    budget_summary: Optional[GrantBudgetSummary] = None
+    key_contacts: Optional[List[GrantKeyContact]] = Field(None, max_length=50)
 
 
 class GrantApplicationUpdate(BaseModel):
