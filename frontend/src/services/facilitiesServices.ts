@@ -939,6 +939,19 @@ export const facilitiesService = {
     const response = await api.post<FacilityPhoto>('/facilities/photos', data);
     return response.data;
   },
+  /**
+   * Upload a photo in one step, filed in the facility's Photos folder. Needs a
+   * facilities grant only, not documents.manage.
+   */
+  async uploadPhoto(facilityId: string, file: File, caption?: string): Promise<FacilityPhoto> {
+    const form = new FormData();
+    form.append('file', file);
+    if (caption) form.append('caption', caption);
+    const response = await api.post<FacilityPhoto>(`/facilities/${facilityId}/photos/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
   async updatePhoto(
     photoId: string,
     data: Partial<Omit<FacilityPhotoCreate, 'caption'>> & { caption?: string | null }
@@ -961,6 +974,19 @@ export const facilitiesService = {
   },
   async createFacilityDocument(data: FacilityDocumentCreate): Promise<FacilityDocument> {
     const response = await api.post<FacilityDocument>('/facilities/documents', data);
+    return response.data;
+  },
+  /**
+   * Upload a document in one step, filed in the facility's restricted Facility
+   * Documents folder. Needs a facilities grant only, not documents.manage.
+   */
+  async uploadFacilityDocument(facilityId: string, file: File, documentType?: string): Promise<FacilityDocument> {
+    const form = new FormData();
+    form.append('file', file);
+    if (documentType) form.append('document_type', documentType);
+    const response = await api.post<FacilityDocument>(`/facilities/${facilityId}/documents/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data;
   },
   async updateFacilityDocument(

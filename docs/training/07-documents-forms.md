@@ -178,6 +178,13 @@ folder**, with **Go back and change it** and **Save for administrators only**.
 A department made up only of administrators, such as a new installation, is
 not asked.
 
+**Full administrators are emailed a weekly list.** A folder can become
+administrator-only without anyone choosing it (auto-archive, a tier change).
+Once a week, while any such folder exists, each active full administrator gets
+an email listing every one, the same list the Documents page shows. If sending
+fails it retries the next day. The email is the optional **Document folder
+access** kind; a department can make it required under notification settings.
+
 _[Screenshot needed: the confirmation shown after choosing Specific roles with a position nobody holds, in Manage folder.]_
 
 ---
@@ -787,7 +794,8 @@ Members choose how they are reached under **Settings → Notifications**:
   off. Off stops all of them at once.
 - **Emails you can turn off** — one switch for each optional email: **Event
   reminders**, **Off the waitlist** (a place opened on an event you were
-  waitlisted for), **Training and certification reminders**, **Shift
+  waitlisted for), **Event changes and cancellations** (an event you said
+  Going or Maybe to was cancelled or moved), **Training and certification reminders**, **Shift
   notices**, **Equipment and inventory updates**, **Store announcements**,
   **Volunteer calls**, **Election notices** and **Suggestion box**. Members
   with an officer role also see the emails for their duties (events,
@@ -799,7 +807,7 @@ Members choose how they are reached under **Settings → Notifications**:
   optional email the department has made required is listed here too.
 - **Urgent Text Messages** — get a text for urgent messages. It needs a mobile
   number on file, text messaging set up by the department, **and** your express
-  consent under **My Account → Security → Privacy Choices**. Turning texts off,
+  consent under **My Account → Privacy → Privacy Choices**. Turning texts off,
   or never consenting, never stops the email.
 
 The in-app notification always arrives, whatever these settings say.

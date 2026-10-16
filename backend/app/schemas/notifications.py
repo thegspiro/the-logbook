@@ -91,6 +91,21 @@ class NotificationRuleUpdate(BaseModel):
         _rule_enum_validator(_CHANNELS, "channel")
     )
 
+    @field_validator("enabled")
+    @classmethod
+    def _enabled_cannot_be_cleared(cls, value: Optional[bool]) -> Optional[bool]:
+        # The column is nullable but the response model's `enabled` is a plain
+        # bool, so apply_updates would store the NULL and then fail to serialize
+        # the response (a 500 after the write), and every later listing that
+        # includes the row would fail the same way. The resolver also reads a
+        # NULL as off. Only runs when the key is sent; an omitted key is left
+        # alone.
+        if value is None:
+            raise ValueError(
+                "enabled cannot be null; leave the field out to keep its current value"
+            )
+        return value
+
 
 class NotificationRuleResponse(UTCResponseBase):
     """Schema for notification rule response"""

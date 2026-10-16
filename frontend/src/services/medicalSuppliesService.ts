@@ -56,6 +56,32 @@ export interface MedicalSupplySummary {
   expired: number;
   low_stock: number;
   expiring_within_days: number;
+  /**
+   * Truck stock in the same window, counted apart from `expiring_soon` /
+   * `expired` (which are shelf lots). The page shows the sum, and the split.
+   */
+  expiring_soon_on_apparatus?: number;
+  expired_on_apparatus?: number;
+}
+
+/**
+ * A medical supply expiring soon, on a shelf or aboard an apparatus. `where`
+ * is the storage path for a shelf lot and the checklist's naming ("Medic 1 ›
+ * Main Compartment › Jump Bag") for truck stock.
+ */
+export interface MedicalExpiringStockRow {
+  key: string;
+  location: 'shelf' | 'apparatus';
+  inventory_item_id: string;
+  item_name?: string | null;
+  item_size?: string | null;
+  lot_id?: string | null;
+  template_item_id?: string | null;
+  lot_number?: string | null;
+  expiration_date?: string | null;
+  days_until_expiration?: number | null;
+  quantity: number;
+  where?: string | null;
 }
 
 /**
@@ -76,6 +102,7 @@ export interface MedicalItemUpdate {
   quantity?: number | null;
   unit_of_measure?: string | null;
   reorder_point?: number | null;
+  apparatus_only?: boolean;
   /** Free text kept beside the structured location, shown as a note. */
   storage_location?: string | null;
   /** The room, and the storage area within it (Inventory › Storage Areas). */
@@ -163,6 +190,8 @@ export interface MedicalItemFilters {
   fuzzy?: boolean | undefined;
   /** Only supplies at or below their reorder point — the set the summary's Low stock figure counts. */
   low_stock?: boolean | undefined;
+  /** Leave out supplies kept on the apparatus only — they have no shelf to receive a delivery into. */
+  exclude_apparatus_only?: boolean | undefined;
   active_only?: boolean | undefined;
   sort_by?: string | undefined;
   sort_order?: 'asc' | 'desc' | undefined;
@@ -354,6 +383,15 @@ export const medicalSuppliesService = {
     formData.append('file', file);
     const response = await api.post<MedicalImportResult>('/medical-supplies/items/import', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  /** Expiring stock on the shelves and aboard the apparatus, soonest first. */
+  async getExpiringStock(daysAhead = 30, options?: MedicalReadOptions): Promise<MedicalExpiringStockRow[]> {
+    const response = await api.get<MedicalExpiringStockRow[]>('/medical-supplies/expiring-stock', {
+      params: { days_ahead: daysAhead },
+      ...readConfig(options),
     });
     return response.data;
   },

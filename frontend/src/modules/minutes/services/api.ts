@@ -16,6 +16,8 @@ import type {
   ActionItemCreate,
   MinutesStats,
   MinutesReminderSettings,
+  MinutesSignature,
+  SignatureStatus,
   MinutesSearchResult,
   MinutesListItem,
   AttendanceSuggestions,
@@ -154,6 +156,23 @@ export const minutesService = {
       null,
       templateId ? { params: { template_id: templateId } } : {}
     );
+    return response.data;
+  },
+
+  // ── Signatures ──
+
+  async getSignatureStatus(minutesId: string): Promise<SignatureStatus> {
+    const response = await api.get<SignatureStatus>(`/minutes-records/${minutesId}/signatures`);
+    return response.data;
+  },
+
+  /** Sign a slot: the name as typed and the signer's password, which is checked and never kept. */
+  async sign(minutesId: string, slotKey: string, signedName: string, password: string): Promise<MinutesSignature> {
+    const response = await api.post<MinutesSignature>(`/minutes-records/${minutesId}/signatures`, {
+      slot_key: slotKey,
+      signed_name: signedName,
+      password,
+    });
     return response.data;
   },
 

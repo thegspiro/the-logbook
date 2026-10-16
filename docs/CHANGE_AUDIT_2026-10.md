@@ -5,6 +5,94 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 15 – 16, 2026
+
+Net changes merged to `main` from the close of the
+[October 14 – 15 pass](#change-audit-october-14--15-2026) (2026-10-15 ~11:00 UTC)
+to 2026-10-16 ~13:00 UTC, written against `cef8a679`. About 30 non-merge commits
+outside the security-review ledgers. Themes: **Medical Supplies** usability and
+storage, **Catalog Links** auto-linking, **Google Workspace** account safety,
+checklist fixes, and a **security hardening** commit. `CHANGELOG.md` is closed;
+this section and its wiki handoff are the record.
+
+Wiki handoff:
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-15--16-2026).
+
+**Migration route.** `58522b08f6a7` (files medical supplies under a matching
+storage area; additive, downgrade unlinks), `dc3c105464c1` and `361a40316340`
+(merge revisions only, no schema change). `alembic heads` should report one head.
+
+### Read this first
+
+1. **Unraid and minimal compose files now require secrets.** MySQL, Redis and app
+   secrets are required variables instead of placeholder defaults; a stack that
+   relied on the defaults will not start until they are set. Recorded in
+   `UPGRADING.md` by the commit.
+2. **Sentry no longer sends local variables** (`include_local_variables=False`),
+   so decrypted values in stack frames stay out of error reports.
+3. **Reads of leave records, service history and the audit log are now audited**
+   (HIPAA 164.312(b)); events carry ids and counts, never reason text.
+4. **Departed members' Google accounts are suspended from one hook** that watches
+   every status change, replacing five hand-wired call sites; a 15-minute task
+   retries failures. See wiki `Integration-Google-Workspace`.
+5. **A weekly email now reaches full administrators** while administrator-only
+   document folders exist (see Documents below). Recorded in `UPGRADING.md`.
+
+### User-visible changes, by area
+
+| Area             | Change                                                                                                                      | Where documented                                 |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Medical Supplies | Where a supply is kept (room, storage area, apparatus and compartment path), location filter, "Where it is" dialog          | training 05; `MEDICAL_SUPPLIES_MODULE.md`        |
+| Medical Supplies | Sort, bulk retire, Lots dialog, clickable summary tiles, Size, Next expiry, unset reorder point is a dash, phone Select all | training 05; `MEDICAL_SUPPLIES_MODULE.md`        |
+| Equipment checks | Catalog Links **Link matches automatically** with Undo; ties skipped                                                        | training 05                                      |
+| Equipment checks | Critical means strictly below the minimum, never at par; builder warns only when the minimum is above par                   | training 03                                      |
+| Equipment checks | My Checklists phone layout: rows by day, overdue marker, ⋯ menu, filter removed                                             | training 03                                      |
+| Google Workspace | Created accounts tagged with the member id; **Link existing members**; central suspension hook                              | training 16; wiki `Integration-Google-Workspace` |
+| Membership       | Undo-drop window counts from the drop's effective date, not the day it was entered                                          | training 01; `KNOWN_LIMITATIONS.md`              |
+| Documents        | Weekly administrator-only folder email (`DOCUMENT_DUTIES`)                                                                  | training 07                                      |
+| Security         | PHI read auditing, Sentry locals, compose secrets, incident-response policy, medical exports under export monitoring        | `SECURITY.md`; `docs/policies/`                  |
+
+Security-review passes (equipment check pass 9, scheduling pass 8 with SCH-17
+fixed and SCH-18 flagged, events-requests, training core and extended, apparatus
+NFC) are recorded in `docs/security-review/PROGRESS.md`.
+
+### Documentation changes in this pass
+
+| File                                                                              | Change                                                                        |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `docs/training/03-scheduling.md`                                                  | Critical minimum rule; My Checklists on a phone                               |
+| `docs/training/05-inventory.md`                                                   | Medical supply finding, tidying and storage; Catalog Links auto-link and Undo |
+| `docs/training/07-documents-forms.md`                                             | Weekly administrator-only folder email                                        |
+| `docs/training/21-october-2026-release-changes.md`                                | Index for this window                                                         |
+| `docs/MEDICAL_SUPPLIES_MODULE.md`                                                 | List, sort, bulk and storage routes                                           |
+| `docs/training/SCREENSHOT_CURRENCY.md`, `docs/youtube-scripts/SCRIPT_CURRENCY.md` | Queues                                                                        |
+| `wiki/Recent-Changes-2026-10.md`, `wiki/Home.md`                                  | Wiki handoff                                                                  |
+
+Already updated by the feature commits and checked: training 01 and 16,
+`KNOWN_LIMITATIONS.md`, `UPGRADING.md`, `FILE_STORAGE_HARDENING.md`, wiki
+`Integration-Google-Workspace`.
+
+### Screenshots
+
+Re-captured by the feature commits: the prospective-members guide (`15-01` to
+`15-15`, `15-02-board-truncated`, `15-09-bulk-action-result`, `20-07`, `20-12` to
+`20-14`). The rest is queued in
+[`training/SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md#queued-by-the-october-15--16-documentation-pass).
+Nothing was captured by this pass.
+
+### Scripts
+
+Flagged in [`youtube-scripts/SCRIPT_CURRENCY.md`](./youtube-scripts/SCRIPT_CURRENCY.md).
+Nothing was re-recorded.
+
+### Open items found while writing this pass
+
+- `docs/training/SCREENSHOT_STATUS.md` is generated and was not regenerated.
+- The wiki `Module-Medical-Supplies` page does not yet describe storage or bulk
+  retire; it points to the module doc.
+- SCH-18 (unbounded `member_call_counts`) awaits an owner-picked cap
+  (`KNOWN_LIMITATIONS.md`).
+
 ## Change audit: October 14 – 15, 2026
 
 Net changes merged to `main` from the close of the

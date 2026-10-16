@@ -142,6 +142,7 @@ describe('ReceiveDeliveryModal', () => {
     expect(mockGetItems).toHaveBeenCalledWith({
       search: 'Record 250 supply',
       active_only: true,
+      exclude_apparatus_only: true,
       skip: 0,
       limit: 20,
     });

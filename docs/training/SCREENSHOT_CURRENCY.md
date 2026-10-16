@@ -1,5 +1,24 @@
 # Screenshot currency
 
+## Queued by the October 15 – 16 documentation pass
+
+Nothing was captured by this pass. The prospective-members set (`15-*`,
+`20-07`, `20-12` to `20-14`) was re-captured by the feature commits and is
+current.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| Medical Supplies list (existing capture in 05) | **REPLACE** | Summary tiles are buttons; Size beside names, Next expiry, Where column, Import / export label, bulk Retire bar. _Demo data:_ two supplies ticked, one in a room and area, one on two apparatus |
+| Medical supply dialog, **Where it is** | **NEW** | Storage path and apparatus compartment paths with counts |
+| Medical supply form | **REPLACE** | New Room, Storage area and Size fields |
+| Medical Supplies **Lots** dialog | **NEW** | Lots per supply; manager add and edit |
+| Medical categories page | **REPLACE** | Cards read "Show N supplies"; a category opens to its supplies |
+| Catalog Links, after **Link matches automatically** | **NEW** | Linked list, "check this" marker, Undo; the confirm dialog is neutral, not red |
+| My Checklists on a phone | **NEW** and replace `03-*` phone captures | Day headings, overdue marker, ⋯ menu, no filter |
+| Check form with a count at its minimum | **CHECK** | No CRITICAL warning at or above the minimum |
+| Google Workspace card (16) | **REPLACE** | **Link existing members** action and its preview |
+| Documents admin-only folder confirmation (07) | unchanged placeholder | Still needed |
+
 ## Medical supply inventory switch, re-shot 2026-10-15
 
 The Claude (MCP) connect and settings forms gained a fifth switch, **Share
@@ -770,7 +789,7 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | 08-admin-reports.md | IP Security _(2026-09-29)_ | _[Administrator holding security.manage at `/ip-security`: the Pending Requests tab with its count badge and one pending request showing IP, use case, duration and the Approve / Reject actions. Seed the request with a documentation-range address (203.0.113.x); never capture a real client IP, and do not capture the Blocked Attempts tab with live addresses.]_ |
 | 10-mobile-pwa.md | Getting Around on a Phone _(2026-08-07)_ | _[Administrator (long menu) at /dashboard in a 390×844 phone viewport: bottom-bar More tapped so the navigation drawer is open and not yet scrolled, with the bottom fade and the More pill with its arrow visible above the drawer footer.]_ |
 | 11-finance.md | Adding Steps to a Chain _(built 2026-09-29)_ | _[Treasurer or admin holding finance.configure_approvals and positions.view, /finance/settings/approval-chains. The Add step dialog over an expanded purchase-request chain: Step type Approval, Approver type Position, the position picker set to Treasurer, Auto-approve under ($) = 250. The finance.approve help text under Approver type must be visible.]_ |
-| 11-finance.md | Adding Steps to a Chain _(built 2026-09-29)_ | _[Treasurer or admin holding finance.configure_approvals, /finance/settings/approval-chains. The Delete step confirmation over a chain with three steps, showing the history-removal and waiting-request warnings and the Delete step / Keep it buttons. Never confirm.]_ |
+| 11-finance.md | Adding Steps to a Chain _(built 2026-09-29)_ | _[Treasurer or admin holding finance.configure_approvals, /finance/settings/approval-chains. The Delete step confirmation over a chain with three steps, showing that only a step no request has used can be deleted, and the Delete step / Keep it buttons. Never confirm.]_ |
 | 13-medical-screening.md | Editing and Deleting Requirements | _[Admin with medical_screening.manage, /medical-screening, Requirements tab. Click the delete button on a seeded requirement that has records filed under it and capture the Delete Requirement confirmation, reading "Screening records filed under it are kept, but will no longer be linked to a requirement.", with both buttons visible. Never confirm. No member names or results in frame.]_ |
 | 15-prospective-members.md | Pipeline Settings | _[Membership Coordinator (prospective_members.manage) at /prospective-members/settings with a pipeline selected, clipped to the "When an Applicant Becomes a Member" card: Operational applicants → Operational / Probationary, Administrative applicants → Administrative / Regular, and the Save Conversion Settings button. Demo pipeline only.]_ |
 | 15-prospective-members.md | Holding, Rejecting, or Withdrawing | _[Membership Coordinator (prospective_members.manage) at /prospective-members, Withdrawn tab, with at least two rows showing the Withdrawn Date and Reason columns filled — one of them withdrawn by the applicant from the status page. Crop to the tab strip and table; fictitious demo applicants only.]_ |

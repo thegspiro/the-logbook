@@ -783,6 +783,20 @@ RECRUIT_USERNAMES = {"vbrennan", "snolan", "eadeyemi"}
 # captured images state outright.
 ADMINISTRATIVE_USERNAMES = {"jwhitfield", "bhollis"}
 
+# Members `seed_member_changes` promotes after creation, by username. Rank
+# codes, matching MEMBERS -- a promotion to a display name would re-introduce
+# the unrecognised-rank warning one member at a time. MEMBERS holds the rank
+# they start on. The roster's rank repair reads
+# this too: comparing a promoted member against MEMBERS alone called the
+# promotion drift, put the old rank back, and the promotion then re-applied it
+# -- two profile updates per member on every run, which piled up as repeated
+# "rank" entries in the audit history the guide pictures.
+MEMBER_PROMOTIONS = {
+    "vbrennan": "firefighter",
+    "snolan": "firefighter",
+    "cfrazier": "lieutenant",
+}
+
 # What "administrative" is written as. The pair, always: a member on a
 # membership tier has no class or status on file, so sending one without the
 # other is refused rather than guessed. Moving to this class also clears the
@@ -1235,15 +1249,17 @@ class Seeder:
                 # a blank rank, called it drift, and patched it back onto a
                 # member the API refuses to give one ("Administrative members
                 # do not hold an operational rank"), failing the whole step.
+                expected_rank = MEMBER_PROMOTIONS.get(username, rank)
                 if (
                     username not in ADMINISTRATIVE_USERNAMES
-                    and pick(current, "rank") != rank
+                    and pick(current, "rank") != expected_rank
                     and pick(current, "id")
                 ):
                     self.api.patch(
-                        f"/users/{pick(current, 'id')}/profile", {"rank": rank}
+                        f"/users/{pick(current, 'id')}/profile",
+                        {"rank": expected_rank},
                     )
-                    current["rank"] = rank
+                    current["rank"] = expected_rank
                 # Same reason as the rank repair above: a member created before
                 # ADMINISTRATIVE_USERNAMES existed keeps `active`, and the
                 # seeder never revisits a user it did not create.
@@ -1459,15 +1475,8 @@ class Seeder:
         generates on every capture run — and the guide's example of "Rank changed
         from X to Y" has nothing behind it.
         """
-        # Rank codes, matching MEMBERS — a promotion to a display name would
-        # re-introduce the unrecognised-rank warning one member at a time.
-        promotions = [
-            ("vbrennan", "firefighter"),
-            ("snolan", "firefighter"),
-            ("cfrazier", "lieutenant"),
-        ]
         by_username = {m.get("username"): m for m in members}
-        for username, new_rank in promotions:
+        for username, new_rank in MEMBER_PROMOTIONS.items():
             member = by_username.get(username)
             user_id = pick(member or {}, "id")
             if not user_id or (member or {}).get("rank") == new_rank:
@@ -11251,6 +11260,115 @@ class Seeder:
         )
         return peer.post(f"/training/skills-testing/tests/{test_id}/complete")
 
+    def seed_held_result_test(self, members: list[dict]) -> dict | None:
+        """An accepted result that is held back until an officer releases it.
+
+        **Release to candidate** only exists on a result that the member is
+        allowed to see but has not been shown yet, so it needs an accepted,
+        unreleased test under a release-on-request setting. Nothing else the
+        seeder builds is in that state: the sheets inherit the department's
+        release-on-completion default.
+
+        The setting is applied to this one test rather than to a sheet, so
+        every other test on that sheet keeps its behaviour. The candidate is
+        neither the demo member nor the peer examiner, so this result does not
+        add a row to the My Training lists those accounts' pictures show.
+        """
+        # Listed rather than taken from the seeding step's own return value:
+        # on a fresh database that holds the create responses, which predate the
+        # publish call and still read as drafts.
+        published = [
+            t
+            for t in items(
+                self.api.get("/training/skills-testing/templates"), "templates"
+            )
+            if pick(t, "status") == "published"
+        ]
+        excluded = {
+            DEMO_ADMIN_USERNAME,
+            DEMO_MEMBER_USERNAME,
+            DEMO_PEER_EXAMINER_USERNAME,
+        }
+        pool = sorted(
+            (
+                m
+                for m in members
+                if pick(m, "id") and pick(m, "username") not in excluded
+            ),
+            key=lambda m: str(pick(m, "username")),
+        )
+        if not published or not pool:
+            return None
+        template_id = pick(published[0], "id")
+        candidate_id = pick(pool[0], "id")
+
+        for row in items(
+            self.api.get("/training/skills-testing/tests?limit=200"), "tests"
+        ):
+            if (
+                pick(row, "template_id", "templateId") != template_id
+                or pick(row, "candidate_id", "candidateId") != candidate_id
+                or not pick(row, "validated_at", "validatedAt")
+                or pick(row, "voided_at", "voidedAt")
+            ):
+                continue
+            held = self.api.get(f"/training/skills-testing/tests/{pick(row, 'id')}")
+            if pick(
+                held, "effective_result_release", "effectiveResultRelease"
+            ) == "on_release" and not pick(held, "released_at", "releasedAt"):
+                return row
+
+        test = self.api.post(
+            "/training/skills-testing/tests",
+            {
+                "template_id": template_id,
+                "candidate_id": candidate_id,
+                "notes": "Annual proficiency check; results held for chief review.",
+                "result_release": "on_release",
+            },
+        )
+        test_id = pick(test, "id")
+        if not test_id:
+            return None
+
+        detail = self.api.get(f"/training/skills-testing/tests/{test_id}")
+        section_results = []
+        for si, section in enumerate(detail.get("template_sections") or []):
+            if not isinstance(section, dict):
+                continue
+            criteria_results = []
+            for ci, criterion in enumerate(section.get("criteria") or []):
+                if (
+                    not isinstance(criterion, dict)
+                    or criterion.get("type") == "statement"
+                ):
+                    continue
+                criteria_results.append(
+                    {
+                        "criterion_id": f"criterion-{si}-{ci}",
+                        "criterion_label": criterion.get("label", ""),
+                        "passed": True,
+                        "score": criterion.get("max_score", 1),
+                        "notes": None,
+                    }
+                )
+            section_results.append(
+                {
+                    "section_id": f"section-{si}",
+                    "section_name": section.get("name", f"Section {si + 1}"),
+                    "criteria_results": criteria_results,
+                }
+            )
+        self.api.put(
+            f"/training/skills-testing/tests/{test_id}",
+            {
+                "status": "in_progress",
+                "section_results": section_results,
+                "elapsed_seconds": 288,
+            },
+        )
+        return self.api.post(f"/training/skills-testing/tests/{test_id}/complete")
+
     def seed_skill_test_result_mix(
         self,
         base_url: str,
@@ -13228,7 +13346,8 @@ class Seeder:
         # Stage name -> position, for the scenario overrides below.
         position_by_name = {pick(step, "name"): slot for slot, step in enumerate(steps)}
 
-        for index, prospect in enumerate(prospects):
+        spread = 0
+        for prospect in prospects:
             prospect_id = pick(prospect, "id")
             if not prospect_id:
                 continue
@@ -13237,8 +13356,18 @@ class Seeder:
             # their scenario visible, and the wrap would move them off it.
             # An override naming a stage this pipeline does not have falls
             # back to the spread rather than silently pinning to stage zero.
+            #
+            # Overridden applicants do not take a turn in the wrap. When they
+            # did, which stage went empty depended on where they fell in the
+            # list: with eleven applicants the turn for the final stage landed
+            # on one of them, nobody reached Onboarding, and
+            # `01-35-applicant-drawer-final-stage` had no one to open.
             scenario = self.SCENARIO_STAGES.get(pick(prospect, "email"))
-            target = position_by_name.get(scenario, index % len(order))
+            if scenario in position_by_name:
+                target = position_by_name[scenario]
+            else:
+                target = spread % len(order)
+                spread += 1
             try:
                 current = order.index(pick(prospect, "current_step_id"))
             except ValueError:
@@ -16228,6 +16357,10 @@ class Seeder:
             lambda: self.seed_pending_validation_test(
                 self.base_url, templates, members
             ),
+        )
+        self.step(
+            "skills test held for release",
+            lambda: self.seed_held_result_test(members),
         )
         self.step("skills test viewer", lambda: self.seed_test_viewer(members))
         self.step(

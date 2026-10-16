@@ -759,6 +759,40 @@ A motion's vote is recorded as **totals** or as a **roll call**, and carries the
 - It is recorded from the **Add Motion** form and from a section's **Motion**
   card, which share one set of fields.
 
+### Signatures _(2026-10-16)_
+
+Once minutes are adopted, the people the department names sign them, in the app.
+
+- **Slots**: the `minutes` organization setting `signature_slots` lists them in
+  order as `{key, title, position_slug}`. A slot with a `position_slug` is signed
+  by a member holding that position; one without is signed by anyone who holds
+  `minutes.manage`. Unset, it reads as a **Recording Secretary** and a
+  **Presiding Officer**, both open to anyone who manages minutes, so an upgrade
+  changes nothing. Up to six; an entry that is malformed or repeats a key is
+  dropped rather than failing the rest. **Minutes → Signers** shows the server's
+  reading to anyone who manages minutes and lets a settings administrator
+  change it.
+- **Signing** (`POST /{id}/signatures {slot_key, signed_name, password}`): the
+  signer types their name **as it stands on their account** (legal name or the
+  name they go by, ignoring case and spacing) and **confirms their password**, so
+  the act is tied to a person at the keyboard and not to a session someone left
+  open. The password is checked and never stored or echoed; an account with no
+  password (single sign-on only) cannot sign. The endpoint has its own rate
+  limit (10 a minute, five minutes' lockout) since it is a place a password can
+  be guessed from a signed-in session.
+- **Who may sign**: anyone the slot allows, including the person who circulated
+  or adopted the minutes, since signing is a separate attestation from adopting.
+  A slot is signed once; a person may sign more than one slot.
+- **What a signature is tied to**: the adopted version current when it was given.
+  It records that revision's SHA-256 and the panel flags a signature whose hash
+  no longer matches (`intact`). **Reopening the minutes supersedes the revision
+  and leaves its signatures on file against the text they were given for; the
+  corrected version starts unsigned** and must be signed again.
+- **Printed**: the PDF's approval block lists each signature with the name and
+  the time. The published copy does not carry them yet.
+- Signatures can only be added; there is no way to withdraw one except reopening
+  the minutes.
+
 ### Start and end times _(2026-10-15)_
 
 `called_to_order_at` and `adjourned_at` are recorded from the **Call to Order**
@@ -855,6 +889,7 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 | `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`            | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them) |
 | `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py`      | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)      |
 | `20261015_0910_48f403b2631f_minutes_suggestions_tracked_changes.py` | `48f403b2631f`        | Tracked-change columns on `minutes_suggestions` (idempotent; the downgrade drops them)                                                |
+| `20261016_1101_f236c56b1b49_minutes_signatures.py`                  | `f236c56b1b49`        | `minutes_signatures` table (idempotent; the downgrade drops it)                                                                       |
 | `20261015_1652_9ce470b513ae_minutes_motions_vote_detail.py`         | `9ce470b513ae`        | `meeting_motions.votes_recused` / `threshold` / `roll_call` (idempotent; the downgrade drops them)                                    |
 | `20261015_1441_b90813f63e25_minutes_action_items_last_reminded.py`  | `b90813f63e25`        | `minutes_action_items.last_reminded_at` (idempotent; the downgrade drops it)                                                          |
 | `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`    | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)    |

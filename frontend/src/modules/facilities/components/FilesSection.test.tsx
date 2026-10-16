@@ -1,16 +1,15 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import FilesSection from './FilesSection';
 import { facilitiesService } from '@/services/facilitiesServices';
 
 vi.mock('@/contexts/ConfirmContext', () => ({ useConfirm: () => ({ confirm: vi.fn() }) }));
-vi.mock('@/services/documentsService', () => ({ documentsService: { uploadDocument: vi.fn() } }));
 vi.mock('@/services/facilitiesServices', () => ({
   facilitiesService: {
     getPhotos: vi.fn(),
     getFacilityDocuments: vi.fn(),
-    createPhoto: vi.fn(),
-    createFacilityDocument: vi.fn(),
+    uploadPhoto: vi.fn(),
+    uploadFacilityDocument: vi.fn(),
     updatePhoto: vi.fn(),
     updateFacilityDocument: vi.fn(),
     deletePhoto: vi.fn(),
@@ -51,5 +50,47 @@ describe('FilesSection permissions', () => {
     expect(screen.getByRole('button', { name: 'Delete station.jpg' })).toBeInTheDocument();
     await waitFor(() => expect(facilitiesService.getFacilityDocuments).toHaveBeenCalledWith({ facility_id: 'f1' }));
     expect(screen.getByText(/Documents \(0\)/)).toBeInTheDocument();
+  });
+});
+
+describe('FilesSection upload', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(facilitiesService.getPhotos).mockReset();
+    vi.mocked(facilitiesService.getPhotos).mockResolvedValue([]);
+    vi.mocked(facilitiesService.getFacilityDocuments).mockReset();
+    vi.mocked(facilitiesService.getFacilityDocuments).mockResolvedValue([]);
+    vi.mocked(facilitiesService.uploadPhoto).mockReset();
+    vi.mocked(facilitiesService.uploadPhoto).mockResolvedValue(photo);
+    vi.mocked(facilitiesService.uploadFacilityDocument).mockReset();
+    vi.mocked(facilitiesService.uploadFacilityDocument).mockResolvedValue({
+      id: 'd1',
+      facilityId: 'f1',
+      fileName: 'lease.pdf',
+      filePath: '',
+      uploadedAt: '2026-01-01',
+    });
+  });
+
+  const choose = async (file: File) => {
+    render(<FilesSection facilityId="f1" canCreate canEdit canDelete canViewSensitive />);
+    const zone = await screen.findByRole('button', { name: 'Upload a photo or document' });
+    fireEvent.drop(zone, { dataTransfer: { files: [file] } });
+  };
+
+  it('uploads an image through the facility photo endpoint', async () => {
+    const file = new File(['png'], 'front.png', { type: 'image/png' });
+    await choose(file);
+    await waitFor(() => expect(facilitiesService.uploadPhoto).toHaveBeenCalledWith('f1', file));
+    expect(facilitiesService.uploadFacilityDocument).not.toHaveBeenCalled();
+  });
+
+  it('uploads anything else through the facility document endpoint', async () => {
+    const file = new File(['%PDF'], 'lease.pdf', { type: 'application/pdf' });
+    await choose(file);
+    await waitFor(() =>
+      expect(facilitiesService.uploadFacilityDocument).toHaveBeenCalledWith('f1', file, 'facility_record')
+    );
+    expect(facilitiesService.uploadPhoto).not.toHaveBeenCalled();
   });
 });

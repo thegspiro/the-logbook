@@ -405,8 +405,8 @@ _[Admin at /notifications?tab=inbox, with everything unpinned first: at least tw
 ## Account Settings
 
 To change your own settings, select **My Account** in the menu. The page has
-six tabs: **Account**, **Password**, **Security**, **Emergency Contacts**,
-**Appearance** and **Notifications**. Here you can:
+eight tabs: **Account**, **Password**, **Security**, **Privacy**, **Emergency
+Contacts**, **Appearance**, **Notifications** and **App**. Here you can:
 
 - update your **email** and **phone numbers**;
 - choose which **notifications** you get by email and text message;
@@ -442,7 +442,7 @@ _[A throwaway demo member created for the capture (never a real member) at /acco
 -->
 
 > **Your privacy choices.** Privacy choices and the data download are on the
-> **Security** tab. None of them is required to be a member. If you have never
+> **Privacy** tab. None of them is required to be a member. If you have never
 > answered a question, The Logbook treats it as "no". It never takes silence
 > as permission. More detail: [Privacy & Your Data](./17-privacy-data-rights.md).
 

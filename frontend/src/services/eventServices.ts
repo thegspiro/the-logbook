@@ -1003,6 +1003,12 @@ export interface InventoryItem {
   unit_of_measure?: string;
   reorder_point?: number;
   /**
+   * Carried on the apparatus only, with no stock-room supply behind it (a
+   * LUCAS device, a cardiac monitor). Its shelf counts as 0 and it is judged
+   * on the trucks alone.
+   */
+  apparatus_only?: boolean;
+  /**
    * Ready units across the item's in-date stock lots.
    *
    * Lots and `quantity` are separate ledgers — receiving a lot does not touch
@@ -1026,6 +1032,11 @@ export interface InventoryItem {
   apparatus_count?: number | null;
   /** Each position carrying it, as the checklist names it: "Medic 1 › Main Compartment › Jump Bag". Medical list only. */
   apparatus_places?: string[] | null;
+  /** In-date units on the trucks, and how many positions entered it uncounted (at their target). Medical list only. */
+  apparatus_stock?: number | null;
+  apparatus_uncounted?: number | null;
+  /** At or below the reorder point on shelf plus trucks — the server's call. Medical list only. */
+  is_low_stock?: boolean | null;
   last_inspection_date?: string;
   next_inspection_due?: string;
   inspection_interval_days?: number;
@@ -1380,6 +1391,7 @@ export interface InventoryItemCreate {
   quantity?: number | undefined;
   unit_of_measure?: string | null | undefined;
   reorder_point?: number | null | undefined;
+  apparatus_only?: boolean | undefined;
   inspection_interval_days?: number | null | undefined;
   min_rank_order?: number | null | undefined;
   restricted_to_positions?: string[] | null | undefined;

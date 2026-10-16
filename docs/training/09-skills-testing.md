@@ -1267,6 +1267,8 @@ actions** only where it is a real step: the result is held for release, and the
 member is allowed to see it. Until the result is accepted, the button is
 greyed out — there is no decided outcome to release yet.
 
+![The Officer actions card on an accepted result held for release, with the green Release to candidate button and the line saying what the candidate will see once it is released](./images/09-26-release-to-candidate.png)
+
 ### The member is told when a result becomes theirs to read
 
 When a result becomes visible to the candidate, they get an in-app

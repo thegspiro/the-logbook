@@ -154,6 +154,7 @@ schedule.
    - **Grant Program Name** — or choose a program under **Grant Opportunity**
    - **Grant Agency** — the funding organization
    - **Amount Requested** — what you are asking for
+   - **Amount Awarded** — what the funder granted, once you know it
    - **Match Amount** / **Match Source** — the local match
    - **Application Deadline** — when it must be submitted
    - **Project Description** — what the grant will pay for
@@ -279,11 +280,12 @@ bank. Instead:
   the amount awarded;
 - each overspend is written to the audit log.
 
-> **The amount awarded cannot be entered on the application form.** The form
-> has no field for it. Until an awarded amount is on record, the application
-> shows none, the over-award warning cannot appear, and the dashboard's **Total
-> Grant Funding** and the report's **Total Awarded** leave that grant out. The
-> budget-line warning still works.
+> **Enter the award on the application form.** Edit the application and fill
+> in **Amount Awarded** under **Funding Details**. Until an awarded amount is on
+> record, the application shows none, the over-award warning cannot appear, and
+> the dashboard's **Total Grant Funding** and the report's **Total Awarded**
+> leave that grant out. Both totals count only grants in Awarded, Active,
+> Reporting or Closed. The budget-line warning works either way.
 
 ### Edge Cases
 
@@ -769,7 +771,7 @@ Lt. Walsh files the final closeout report:
 | A donor appears twice                                 | The Logbook does not catch duplicates and cannot merge them. Search before adding a donor.                                                                    |
 | A pledge's status is wrong                            | Pledge statuses are set by hand. Edit the pledge, enter the amount received, and set the status.                                                              |
 | A report shows $0 for a period                        | Check the start and end dates include the donations or applications you expect.                                                                               |
-| **Total Awarded** or **Total Grant Funding** reads $0 | The application form cannot record an awarded amount. See the note under [Expenditures](#expenditures).                                                       |
+| **Total Awarded** or **Total Grant Funding** reads $0 | Edit each awarded grant and fill in **Amount Awarded**. Only grants in Awarded, Active, Reporting or Closed count. See [Expenditures](#expenditures).         |
 | Nobody was reminded about a deadline                  | Only tasks and pledges are reminded. See [Task Reminders](#task-reminders) and [Pledge Reminders](#pledge-reminders) for who gets them.                       |
 
 ---

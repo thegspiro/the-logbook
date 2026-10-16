@@ -396,7 +396,9 @@ class TestSettingsEndpoint:
             resp = await c.get("/minutes/settings")
 
         assert resp.status_code == 200, resp.text
-        assert resp.json() == {
+        body = resp.json()
+        assert body.pop("signature_slots")
+        assert body == {
             "action_item_reminders": True,
             "reminder_days_before_due": 3,
             "overdue_repeat_days": 7,
@@ -418,6 +420,7 @@ class TestSettingsEndpoint:
         async with _client(world.db, world.secretary) as c:
             body = (await c.get("/minutes/settings")).json()
 
+        body.pop("signature_slots")
         assert body == {
             "action_item_reminders": False,
             "reminder_days_before_due": 0,

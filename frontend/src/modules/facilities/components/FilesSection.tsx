@@ -4,7 +4,6 @@ import toast from 'react-hot-toast';
 import { FileDropzone } from '@/components/ux/FileDropzone';
 import { PromptDialog } from '@/components/ux/PromptDialog';
 import { useConfirm } from '@/contexts/ConfirmContext';
-import { documentsService } from '@/services/documentsService';
 import { facilitiesService, type FacilityDocument, type FacilityPhoto } from '@/services/facilitiesServices';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { blankToNull } from '@/utils/formValues';
@@ -59,20 +58,11 @@ export default function FilesSection({
     if (!file) return;
     setUploading(true);
     try {
-      // The Documents module owns bytes, retention and downloads. Facility
-      // records only classify that shared document for the facility.
-      const form = new FormData();
-      form.append('file', file);
-      form.append('name', file.name);
-      const stored = await documentsService.uploadDocument(form);
-      const common = {
-        facility_id: facilityId,
-        file_path: `document:${stored.id}`,
-        file_name: file.name,
-        ...(file.type ? { mime_type: file.type } : {}),
-      };
-      if (file.type.startsWith('image/')) await facilitiesService.createPhoto(common);
-      else await facilitiesService.createFacilityDocument({ ...common, document_type: 'facility_record' });
+      // One step through the facility's own endpoint: the file is stored as a
+      // document in the facility's folder behind facilities rights, so a
+      // facilities manager without documents.manage can upload too.
+      if (file.type.startsWith('image/')) await facilitiesService.uploadPhoto(facilityId, file);
+      else await facilitiesService.uploadFacilityDocument(facilityId, file, 'facility_record');
       toast.success(`${file.name} uploaded`);
       await load();
     } catch (error) {

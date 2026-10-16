@@ -1851,11 +1851,27 @@ async def update_approval_chain(
 ):
     service = FinanceService(db)
     try:
-        return await service.update_approval_chain(
+        updates = data.model_dump(exclude_unset=True)
+        chain = await service.update_approval_chain(
             chain_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_unset=True),
+            **updates,
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_updated",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "chain_id": chain_id,
+                "name": chain.name,
+                "fields": sorted(updates),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
+        return chain
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1872,7 +1888,19 @@ async def delete_approval_chain(
 ):
     service = FinanceService(db)
     try:
-        await service.delete_approval_chain(chain_id, str(current_user.organization_id))
+        name = await service.delete_approval_chain(
+            chain_id, str(current_user.organization_id)
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_deleted",
+            event_category="finance",
+            severity="info",
+            event_data={"chain_id": chain_id, "name": name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1894,11 +1922,26 @@ async def add_chain_step(
 ):
     service = FinanceService(db)
     try:
-        return await service.add_chain_step(
+        step = await service.add_chain_step(
             chain_id,
             str(current_user.organization_id),
             **data.model_dump(),
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_step_added",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "chain_id": chain_id,
+                "step_id": str(step.id),
+                "name": step.name,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
+        return step
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1920,12 +1963,29 @@ async def update_chain_step(
 ):
     service = FinanceService(db)
     try:
-        return await service.update_chain_step(
+        updates = data.model_dump(exclude_unset=True)
+        step = await service.update_chain_step(
             step_id,
             chain_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_unset=True),
+            **updates,
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_step_updated",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "chain_id": chain_id,
+                "step_id": step_id,
+                "name": step.name,
+                "fields": sorted(updates),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
+        return step
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1943,8 +2003,18 @@ async def delete_chain_step(
 ):
     service = FinanceService(db)
     try:
-        await service.delete_chain_step(
+        name = await service.delete_chain_step(
             step_id, chain_id, str(current_user.organization_id)
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_step_deleted",
+            event_category="finance",
+            severity="info",
+            event_data={"chain_id": chain_id, "step_id": step_id, "name": name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
         )
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))

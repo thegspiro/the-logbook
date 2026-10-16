@@ -70,6 +70,9 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
 
   const today = getTodayLocalDate(tz);
   const label = supplyLabel(item);
+  // No stock room behind it, so no shelf lots to list or add: what it carries
+  // is counted, and dated, on the apparatus checklists.
+  const apparatusOnly = Boolean(item.apparatus_only);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -81,8 +84,8 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
   }, [item.id]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!apparatusOnly) void load();
+  }, [load, apparatusOnly]);
 
   const close = () => {
     if (changed) onChanged();
@@ -180,7 +183,7 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
     <Modal
       isOpen
       onClose={close}
-      title={`Lots — ${label}`}
+      title={apparatusOnly ? `Where it is carried — ${label}` : `Lots — ${label}`}
       size="xl"
       footer={
         <button type="button" onClick={close} className={smallButton}>
@@ -190,9 +193,16 @@ export const MedicalItemLotsModal: React.FC<MedicalItemLotsModalProps> = ({ item
     >
       <div className="space-y-4">
         <SupplyWhereSection item={item} />
-        <h3 className="text-theme-text-primary border-theme-surface-border border-t pt-4 text-sm font-semibold">
-          Stock lots
-        </h3>
+        {apparatusOnly ? (
+          <p className="text-theme-text-muted border-theme-surface-border border-t pt-4 text-sm">
+            Kept on apparatus only, so there are no stock-room lots. Counts and expiry dates are recorded on the
+            apparatus checklists.
+          </p>
+        ) : (
+          <h3 className="text-theme-text-primary border-theme-surface-border border-t pt-4 text-sm font-semibold">
+            Stock lots
+          </h3>
+        )}
         {loadError && (
           <p role="alert" className="alert-danger text-sm">
             {loadError}

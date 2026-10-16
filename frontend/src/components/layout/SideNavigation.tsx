@@ -199,7 +199,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   // Administration section). The shared helper's list mirrors the
   // section items' gates — extend it there, never inline, so Side/Top
   // navigation cannot drift apart.
-  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
+  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission, { checkInStationOn: isNfcCardsOn });
   const canReviewLegalDocuments = LEGAL_DOCUMENTS_PERMISSIONS.some((p) => checkPermission(p));
 
   const navItems: NavItem[] = [
@@ -502,8 +502,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             path: '#',
             icon: Users,
             // users.view holders (e.g. the quartermaster) get this group for
-            // the ID scanner; the manage-only entries below stay gated.
-            anyPermission: ['users.view', 'members.manage'],
+            // the ID scanner, and members.check_in holders for the Check-In
+            // Station; the manage-only entries below stay gated, and the group
+            // still hides when none of its rows is visible.
+            anyPermission: ['users.view', 'members.manage', 'members.check_in'],
             subItems: [
               ...(isModuleOn('prospective_members')
                 ? [

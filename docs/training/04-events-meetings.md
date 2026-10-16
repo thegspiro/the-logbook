@@ -953,8 +953,9 @@ Once an event has ended, the event page offers **Finalize Attendance**.
 **More → Record Times** lets you record the real start and end first;
 recording an end time also finalizes attendance.
 
-Soon after an event ends, the member who created it gets a notification
-asking them to check the attendance and close it out.
+Soon after an event ends, its organizer and alternate (or its creator, if
+neither can be reached) get a notification asking them to check the attendance
+and close it out.
 
 **Finalizing closes the event.** The roster is fixed and hours are credited.
 Members who checked in but never checked out are credited to the event's end.
@@ -1264,7 +1265,18 @@ the **Period** you choose:
 
 On an event's page, the **Notifications** panel sends a message about that
 event. Choose a **Notification Type**, the audience, and an optional message,
-then send. It arrives in each member's Notifications inbox in The Logbook.
+then send. It arrives in each member's Notifications inbox in The Logbook and
+by email.
+
+Whether a member gets the email depends on the type:
+
+- **Announcement** is always emailed, like a department message.
+- **Pre-Event Reminder**, **Missed Event Notice** and **Check-In
+  Confirmation** follow the member's **Event reminders** email switch.
+- **Post-Event Follow-Up** follows their **Event changes and cancellations**
+  email switch.
+
+The inbox entry arrives either way.
 
 | Notification Type         | Purpose                                         |
 | ------------------------- | ----------------------------------------------- |
@@ -1331,9 +1343,22 @@ selecting.
 **More → Cancel Event** asks for a reason (at least 10 characters) and offers
 **Notify members who RSVP'd Going or Maybe**. **Keep Event** backs out.
 
-On a recurring event, **More → Cancel Entire Series** does the same for the
+With **Notify** ticked, those members are told in the app and by email, with
+the reason. The email's wording is the **Event Cancelled** template under
+**Communications → Email Templates**. A member can turn the email off under
+**Settings → Notifications → Event changes and cancellations**; the in-app
+notice stays either way, and a department can make the email required.
+
+On a recurring event, **More → Cancel Entire Series** cancels the whole
 series, with **Only cancel future events (keep past events)**. Its buttons are
-**Cancel Series** and **Keep Series**.
+**Cancel Series** and **Keep Series**. It shows the same **Notify** box, but
+notifies no one even when it is ticked. **Cancel Selected** notifies no one
+either.
+
+**Changing an event.** When you change an event's title, start or end time, or
+location, members who answered **Going** or **Maybe** are told in the app and
+by an "Event Updated" email showing the new time and place. The email follows
+the same **Event changes and cancellations** switch.
 
 A cancelled event stays on the calendar with its attendance intact, and reads
 "This event has been cancelled. Reason: …". A finalized event cannot be
