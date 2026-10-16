@@ -2284,6 +2284,54 @@ class EmailService:
 
         return success_count > 0
 
+    async def send_event_cancellation_email(
+        self,
+        to_email: str,
+        recipient_name: str,
+        event_title: str,
+        event_start: datetime,
+        reason: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell a member who was going, or might have gone, that an event is
+        cancelled."""
+        from app.services.email_template_service import (
+            DEFAULT_EVENT_CANCELLATION_HTML,
+            DEFAULT_EVENT_CANCELLATION_SUBJECT,
+            DEFAULT_EVENT_CANCELLATION_TEXT,
+        )
+
+        context = {
+            "recipient_name": recipient_name,
+            "event_title": event_title,
+            # Date only, matching the template's "Original date" and the
+            # sample a test email shows.
+            "event_date": self._format_local_dt(event_start, "%B %d, %Y"),
+            "reason": reason,
+        }
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.EVENT_CANCELLATION,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_EVENT_CANCELLATION_SUBJECT,
+            default_html=DEFAULT_EVENT_CANCELLATION_HTML,
+            default_text=DEFAULT_EVENT_CANCELLATION_TEXT,
+        )
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.EVENT_CANCELLATION.value,
+        )
+
+        return success_count > 0
+
     async def send_application_withdrawn_email(
         self,
         to_email: str,
