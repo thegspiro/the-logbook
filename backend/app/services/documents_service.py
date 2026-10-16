@@ -840,6 +840,28 @@ class DocumentsService:
         await self.db.refresh(folder)
         return folder
 
+    async def active_full_administrators(
+        self, organization_id: UUID | str
+    ) -> List[User]:
+        """The department's active members who are full administrators: the
+        people the admin-only folder list is for (decision 30)."""
+        members = (
+            (
+                await self.db.execute(
+                    select(User)
+                    .options(selectinload(User.positions))
+                    .where(
+                        User.organization_id == str(organization_id),
+                        User.is_active,
+                    )
+                    .order_by(User.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return [m for m in members if _is_full_admin(_get_user_permissions(m))]
+
     async def _members_besides_admins(self, organization_id: UUID | str) -> List[User]:
         """The department's active members who are not full administrators.
 

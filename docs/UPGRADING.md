@@ -793,6 +793,23 @@ folder unless somebody has filed it elsewhere since.
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
 
+### Full administrators get a weekly email of admin-only folders (2026-10-16)
+
+Nothing here stops the stack from starting, and there is no migration. A new
+scheduled task, `admin_only_folder_digest`, checks daily and emails each
+department's active full administrators at most once a week, while any folder
+is on the Documents page's list of folders only they can open. Each email
+lists every such folder.
+
+- **External cron:** if you run scheduled tasks from cron rather than the
+  backend's own loop, add
+  `25 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=admin_only_folder_digest`.
+- **Opting out:** it is the optional "Document folder access" email. A full
+  administrator can turn it off under their email settings, and a department
+  can make it required on the Member Emails & Texts page.
+- When it was last sent is stored in the organization's settings, under
+  `documents.admin_only_digest_last_sent`.
+
 ### Folders that lose everyone but administrators are listed (2026-10-15)
 
 Nothing here stops the stack from starting. Migration `c903fc771081` adds two

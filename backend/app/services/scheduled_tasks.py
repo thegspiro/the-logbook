@@ -34,6 +34,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:20 AM — email reminders about open action items from adopted minutes, and the weekly open-items list to minutes managers
 20 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=minutes_action_item_reminders
 
+# Daily at 7:25 AM — the weekly list of document folders only full administrators can open
+25 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=admin_only_folder_digest
+
 # Every 15 minutes — process delayed inventory change notifications
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_notifications
 
@@ -273,6 +276,15 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:20",
         "cron": "20 7 * * *",
+    },
+    "admin_only_folder_digest": {
+        "description": (
+            "Email full administrators the document folders only they can "
+            "open, at most once a week per department while any is listed"
+        ),
+        "frequency": "daily check, weekly send",
+        "recommended_time": "07:25",
+        "cron": "25 7 * * *",
     },
     "inventory_notifications": {
         "description": "Process delayed inventory change notifications — consolidate and send one email per member for changes older than 1 hour",
@@ -1030,6 +1042,16 @@ async def run_minutes_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
         return reminders + digests
 
     return await _for_each_org(db, "minutes_action_item_reminders", _process)
+
+
+async def run_admin_only_folder_digest(db: AsyncSession) -> Dict[str, Any]:
+    """Email full administrators the folders only they can open (decision 30)."""
+    from app.services.admin_only_folder_digest import send_admin_only_folder_digest
+
+    async def _process(db_session, org):
+        return await send_admin_only_folder_digest(db_session, org)
+
+    return await _for_each_org(db, "admin_only_folder_digest", _process)
 
 
 async def run_membership_inactivity_warnings(db: AsyncSession) -> Dict[str, Any]:
@@ -7256,6 +7278,7 @@ TASK_RUNNERS = {
     "property_return_reminders": run_property_return_reminders,
     "action_item_reminders": run_action_item_reminders,
     "minutes_action_item_reminders": run_minutes_action_item_reminders,
+    "admin_only_folder_digest": run_admin_only_folder_digest,
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
@@ -7346,6 +7369,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "action_item_reminders": 86400,
     # Checked daily; the weekly list keeps its own last-sent day per org.
     "minutes_action_item_reminders": 86400,
+    # Checked daily; sends at most weekly per org (see admin_only_folder_digest).
+    "admin_only_folder_digest": 86400,
     "inventory_low_stock_alerts": 86400,
     "inventory_overdue_alerts": 86400,
     # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).
