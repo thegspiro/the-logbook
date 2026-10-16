@@ -438,6 +438,22 @@ class TestConversion:
         """Convert a member whose address Google already holds."""
         org = await _org(db_session)
         await _connect(db_session, org)
+        if lookup.get("former_account"):
+            former = await _member(
+                db_session,
+                org,
+                f"anon-{_hex()}@anonymized.invalid",
+                status=UserStatus.DROPPED_VOLUNTARY,
+            )
+            db_session.add(
+                GoogleAccountProvision(
+                    organization_id=org.id,
+                    user_id=former.id,
+                    primary_email=f"reused-{_hex()}@{DOMAIN}",
+                    status=GoogleAccountStatus.CREATED.value,
+                    google_user_id=lookup["former_account"],
+                )
+            )
         svc, prospect = await _prospect(db_session, org)
         result = await svc._do_transfer(prospect, None)
         await db_session.commit()
@@ -551,6 +567,26 @@ class TestConversion:
             },
         )
         assert row.status == GoogleAccountStatus.LINKED_EXISTING.value
+        assert fake.resets == []
+
+    async def test_an_account_a_former_member_still_holds_is_not_linked_again(
+        self, db_session
+    ):
+        # Anonymizing a departed member frees their address for a new one,
+        # but the former member's record still governs the account. A second
+        # record would let either member's departure or return move it.
+        row, fake, _ = await self._provision_into_existing(
+            db_session,
+            former_account="g-reused",
+            existing=lambda email, _member: {
+                "id": "g-reused",
+                "primaryEmail": email,
+                "suspended": True,
+            },
+        )
+        assert row.status == GoogleAccountStatus.FAILED.value
+        assert row.google_user_id is None
+        assert "still recorded for another member" in (row.last_error or "")
         assert fake.resets == []
 
     async def test_a_google_failure_never_undoes_the_conversion(self, db_session):
@@ -1504,9 +1540,11 @@ class TestLinkExistingMembers:
         assert counts == {
             "linked": 1,
             "already_linked": 0,
+            "unfinished": 0,
             "departed": 1,
             "not_in_google": 2,
             "off_domain": 1,
+            "account_in_use": 0,
         }
         rows = (
             await db_session.execute(
@@ -1533,6 +1571,107 @@ class TestLinkExistingMembers:
         assert again["already_linked"] == 1
         for key in ("missing", "alias", "personal", "dropped"):
             assert (await service.get_for_user(str(members[key].id), org.id)) is None
+
+    async def test_a_record_with_no_account_is_unfinished_not_linked(self, db_session):
+        # A failed conversion is no account to suspend; reporting it as
+        # linked would tell an administrator a departure is covered.
+        org, members, fake = await self._roster(db_session)
+        db_session.add(
+            GoogleAccountProvision(
+                organization_id=org.id,
+                user_id=members["match"].id,
+                primary_email=members["match"].email,
+                status=GoogleAccountStatus.FAILED.value,
+            )
+        )
+        await db_session.commit()
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            counts = await GoogleWorkspaceProvisioningService(
+                db_session
+            ).link_existing_members(org.id, apply=False, actor_id=None)
+        assert counts["unfinished"] == 1
+        assert counts["already_linked"] == 0
+        assert counts["linked"] == 0
+
+    async def test_an_account_recorded_for_a_former_member_is_left_alone(
+        self, db_session
+    ):
+        org, members, fake = await self._roster(db_session)
+        former = await _member(
+            db_session,
+            org,
+            f"anon-{_hex()}@anonymized.invalid",
+            status=UserStatus.DROPPED_VOLUNTARY,
+        )
+        db_session.add(
+            GoogleAccountProvision(
+                organization_id=org.id,
+                user_id=former.id,
+                primary_email=members["match"].email,
+                status=GoogleAccountStatus.CREATED.value,
+                google_user_id="g-match",
+                suspended_by_logbook=True,
+            )
+        )
+        await db_session.commit()
+        service = GoogleWorkspaceProvisioningService(db_session)
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            counts = await service.link_existing_members(
+                org.id, apply=True, actor_id=None
+            )
+        assert counts["account_in_use"] == 1
+        assert counts["linked"] == 0
+        assert (await service.get_for_user(str(members["match"].id), org.id)) is None
+
+    async def test_a_roster_that_changed_since_the_preview_is_not_linked(
+        self, db_session
+    ):
+        org, members, fake = await self._roster(db_session)
+        service = GoogleWorkspaceProvisioningService(db_session)
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            with pytest.raises(ProvisionRetryError, match="roster changed"):
+                await service.link_existing_members(
+                    org.id, apply=True, actor_id=None, expected=3
+                )
+            assert (
+                await service.get_for_user(str(members["match"].id), org.id)
+            ) is None
+            counts = await service.link_existing_members(
+                org.id, apply=True, actor_id=None, expected=1
+            )
+        assert counts["linked"] == 1
+        assert (
+            await service.get_for_user(str(members["match"].id), org.id)
+        ) is not None
+
+    async def test_applying_reads_the_roster_with_a_lock(self, db_session):
+        # A plain read answers from the transaction's snapshot, so a member
+        # dropped meanwhile would be linked as current and never suspended.
+        from sqlalchemy import event
+
+        org, members, fake = await self._roster(db_session)
+        statements: list[str] = []
+        engine = db_session.bind.engine if hasattr(db_session.bind, "engine") else None
+        target = engine.sync_engine if hasattr(engine, "sync_engine") else engine
+
+        def record(conn, cursor, statement, params, context, executemany):
+            statements.append(statement)
+
+        event.listen(target, "before_cursor_execute", record)
+        try:
+            with patch(f"{SERVICE}.directory_for", return_value=fake):
+                await GoogleWorkspaceProvisioningService(
+                    db_session
+                ).link_existing_members(org.id, apply=True, actor_id=None)
+        finally:
+            event.remove(target, "before_cursor_execute", record)
+        roster_reads = [
+            s
+            for s in statements
+            if s.lstrip().upper().startswith("SELECT") and "FROM users" in s
+        ]
+        assert roster_reads
+        assert all("FOR UPDATE" in s for s in roster_reads)
 
     async def test_a_linked_member_who_leaves_is_suspended_by_id(self, db_session):
         org, members, fake = await self._roster(db_session)
@@ -1578,11 +1717,19 @@ class TestLinkExistingMembers:
             ) as audit,
         ):
             preview = await link_existing_members(
-                MagicMock(), apply=False, db=db_session, current_user=caller
+                MagicMock(),
+                apply=False,
+                expected=None,
+                db=db_session,
+                current_user=caller,
             )
             audit.assert_not_called()
             applied = await link_existing_members(
-                MagicMock(), apply=True, db=db_session, current_user=caller
+                MagicMock(),
+                apply=True,
+                expected=preview.linked,
+                db=db_session,
+                current_user=caller,
             )
         assert preview.applied is False
         assert preview.linked == 1
@@ -1602,6 +1749,7 @@ class TestLinkExistingMembers:
                 await link_existing_members(
                     MagicMock(),
                     apply=False,
+                    expected=None,
                     db=db_session,
                     current_user=SimpleNamespace(id=None, organization_id=org.id),
                 )

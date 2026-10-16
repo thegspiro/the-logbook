@@ -134,6 +134,12 @@ async def retry_member_google_account(
 async def link_existing_members(
     request: Request,
     apply: bool = Query(False, description="False previews the counts only"),
+    expected: Optional[int] = Query(
+        None,
+        ge=0,
+        description="The linked count the officer confirmed; an applied run "
+        "that would link a different number writes nothing",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_all_permissions("integrations.manage", "admin.access")
@@ -143,15 +149,20 @@ async def link_existing_members(
 
     A member whose Logbook email is exactly an account's primary address gets
     an "existing account" record, so leaving suspends it. Google is only read.
-    Members who have already left are counted, not linked. Organization
+    Members who have already left are counted, not linked. Pass the previewed
+    count as ``expected`` when applying, so a roster that changed in between
+    is refused rather than linked unseen. Organization
     administrators only, like connecting the integration, since a linked
     account is one The Logbook will later suspend.
 
     **Requires permissions: integrations.manage and admin.access**
     """
+    # Each run from the screen is two calls (preview, then apply), and an
+    # officer may preview, decline and look again; this bounds directory
+    # listings without locking an administrator out of a second look.
     await check_rate_limit(
         request,
-        max_requests=5,
+        max_requests=20,
         window_seconds=60,
         lockout_seconds=300,
         scope="google_workspace_link_existing",
@@ -159,7 +170,10 @@ async def link_existing_members(
     organization_id = str(current_user.organization_id)
     try:
         counts = await GoogleWorkspaceProvisioningService(db).link_existing_members(
-            organization_id, apply=apply, actor_id=str(current_user.id)
+            organization_id,
+            apply=apply,
+            actor_id=str(current_user.id),
+            expected=expected,
         )
     except ProvisionRetryError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))

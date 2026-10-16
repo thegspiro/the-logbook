@@ -48,6 +48,8 @@ class LinkExistingResponse(UTCResponseBase):
     applied: bool
     linked: int
     already_linked: int
+    unfinished: int
     departed: int
     not_in_google: int
     off_domain: int
+    account_in_use: int

@@ -71,10 +71,16 @@ when confirmed.
 
 A member is linked when their **Logbook email** is exactly an account's
 **primary** address in the integration's domain (an alias does not count).
-Skipped: members already linked, members with no account at their address,
-members whose email is outside the domain, and members who have already left —
-linking a departed member would suspend an account somebody may still be
-using, so that stays a decision for the Google Admin console. Linking changes
+Skipped: members already linked, members whose account is still being set up
+or failed (finish those with **Retry** on their profile), members with no
+account at their address, members whose email is outside the domain, members
+who have already left — linking a departed member would suspend an account
+somebody may still be using, so that stays a decision for the Google Admin
+console — and accounts still recorded for another member, such as a former
+member whose address was reused after anonymization (one account is only ever
+governed by one member). If the roster changes between the preview and the
+confirmation, nothing is linked and the administrator is asked to review it
+again. Linking changes
 nothing in Google; it only means the account is suspended when the member
 leaves. It is safe to run again, and is recorded in the audit log.
 
@@ -85,7 +91,7 @@ leaves. It is safe to run again, and is recorded in the audit log.
 ```
 GET    /api/v1/integrations/google-workspace/members/{user_id}         # The member's account record, or account: null
 POST   /api/v1/integrations/google-workspace/members/{user_id}/retry   # Finish whatever is incomplete
-POST   /api/v1/integrations/google-workspace/link-existing?apply=false  # Preview (false) or link (true) existing members
+POST   /api/v1/integrations/google-workspace/link-existing?apply=false  # Preview; apply=true&expected=N links exactly N
 ```
 
 The two member routes require `members.manage`; `link-existing` requires
