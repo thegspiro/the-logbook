@@ -13991,6 +13991,27 @@ class Seeder:
             (p for p in pipelines if p.get("name") == self.UNPLACED_PIPELINE_NAME),
             None,
         )
+        guest = self.RECRUITMENT_GUESTS[0]
+        email = guest["email"]
+        found = items(
+            self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+            "prospects",
+        )
+        prospect = next((p for p in found if p.get("email") == email), None)
+        if prospect is not None and (
+            pipeline is None
+            or str(pick(prospect, "pipeline_id")) != str(pick(pipeline, "id"))
+        ):
+            # Signed in at the open house on a database seeded before this
+            # step existed, so he is in the default pipeline, and an
+            # applicant's pipeline cannot be changed afterwards. Checked before
+            # the pipeline is created, so such a database does not gain an
+            # empty one in the board's pipeline picker.
+            self.blocked.append(
+                "unplaced applicant: Marcus Webb is already in another pipeline; "
+                "reseed onto an empty database for 20-07"
+            )
+            return
         if pipeline is None:
             pipeline = self.api.post(
                 "/prospective-members/pipelines",
@@ -14011,13 +14032,6 @@ class Seeder:
         pipeline_id = str(pick(pipeline, "id"))
         steps_path = f"/prospective-members/pipelines/{pipeline_id}/steps"
 
-        guest = self.RECRUITMENT_GUESTS[0]
-        email = guest["email"]
-        found = items(
-            self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
-            "prospects",
-        )
-        prospect = next((p for p in found if p.get("email") == email), None)
         if prospect is None:
             if not items(self.api.get(steps_path), "steps"):
                 # An interrupted run left the pipeline bare, and an applicant
@@ -14028,15 +14042,6 @@ class Seeder:
                 "/prospective-members/prospects",
                 {**guest, "pipeline_id": pipeline_id},
             )
-        elif str(pick(prospect, "pipeline_id")) != pipeline_id:
-            # Signed in at the open house on a database seeded before this
-            # step existed, so he is in the default pipeline, and an
-            # applicant's pipeline cannot be changed afterwards.
-            self.blocked.append(
-                "unplaced applicant: Marcus Webb is already in another pipeline; "
-                "reseed onto an empty database for 20-07"
-            )
-            return
 
         # Only ever strip a pipeline that holds this one applicant. Anybody
         # else on it would be moved off their stage by the deletions below.
