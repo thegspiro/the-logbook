@@ -14,7 +14,7 @@ The downgrade drops the table; recorded signatures are lost with it, and the
 minutes and their revisions are untouched.
 
 Revision ID: f236c56b1b49
-Revises: 9ce470b513ae
+Revises: 9ce470b513ae, dc3c105464c1
 Create Date: 2026-10-16 11:01:00.000000
 
 """
@@ -26,7 +26,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "f236c56b1b49"
-down_revision: Union[str, None] = "9ce470b513ae"
+down_revision: Union[str, Sequence[str], None] = ("9ce470b513ae", "dc3c105464c1")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
