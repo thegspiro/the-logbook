@@ -6064,6 +6064,21 @@ duplicate route outright — is a product decision, not a drive-by patch.
 Exposure today is narrow: nothing in the frontend calls this route, so it
 reaches only a direct API client holding `training.manage`.
 
+**Still open as of security review TR-17 pass 8 (2026-10-16), and the gap
+widened in the interim.** `training_program_service.py`'s `enroll_member` (the
+fixed path) gained prerequisite-program enforcement on 2026-10-14
+(`e3aee773`, "enforce prerequisites on single-member enrollment") — a member
+missing a prerequisite now gets a clean 400 through that path. `training.py`'s
+duplicate was not touched, so `POST /training/enrollments` now also silently
+enrolls a member who has not met a program's prerequisites, in addition to the
+race and the missing `RequirementProgress`/phase/recert/notification behavior
+already recorded above. Every one of this duplicate's defects traces to the
+same root cause — a second, hand-maintained copy of enrollment logic that
+nothing keeps in sync with the one the rest of the codebase fixes — so each
+new fix to the real path is now also a new way for the duplicate to fall
+further behind it. Confirmed the frontend still calls only
+`/training/programs/enrollments`; no owner decision has been recorded yet.
+
 ## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06)
 
 Found by security review SKT-19 pass 7
