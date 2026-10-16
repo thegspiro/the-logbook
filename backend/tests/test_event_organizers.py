@@ -723,7 +723,7 @@ class TestCreation:
         assert (await _get_event(db_session, event.id)).organizer_id == dept["newbie"]
 
 
-class TestSeriesReminderRecipients:
+class TestOrganizerDutyRecipients:
     async def test_the_organizer_pair_not_the_creator(self, db_session, dept):
         event_id = await _event(
             db_session,
@@ -734,7 +734,7 @@ class TestSeriesReminderRecipients:
         )
         event = await _get_event(db_session, event_id)
 
-        recipients = await EventOrganizerService(db_session).series_reminder_recipients(
+        recipients = await EventOrganizerService(db_session).organizer_duty_recipients(
             event
         )
 
@@ -744,7 +744,7 @@ class TestSeriesReminderRecipients:
         event_id = await _event(db_session, dept["org"], created_by=dept["manager"])
         event = await _get_event(db_session, event_id)
 
-        recipients = await EventOrganizerService(db_session).series_reminder_recipients(
+        recipients = await EventOrganizerService(db_session).organizer_duty_recipients(
             event
         )
 
@@ -863,6 +863,101 @@ class TestScheduledTasksFollowTheOrganizer:
         for recipient in (dept["organizer"], dept["alternate"]):
             assert await _notices(db_session, recipient, "series_end_reminder")
         assert not await _notices(db_session, dept["manager"], "series_end_reminder")
+
+
+class TestPostEventValidationFollowsTheOrganizer:
+    """The "validate attendance" prompt belongs to whoever runs the event."""
+
+    @staticmethod
+    async def _run(db):
+        from app.services.scheduled_tasks import run_post_event_validation
+
+        with patch(
+            "app.services.email_service.EmailService.send_email",
+            new=AsyncMock(return_value=(1, 0)),
+        ) as send:
+            await run_post_event_validation(db)
+        return [call.kwargs["to_emails"] for call in send.await_args_list]
+
+    @staticmethod
+    async def _ended(db, dept, **kwargs) -> str:
+        # Ended an hour ago: inside the task's two-hour look-back.
+        return await _event(db, dept["org"], starts_in=-timedelta(hours=3), **kwargs)
+
+    async def test_the_organizer_and_alternate_are_asked_not_the_creator(
+        self, db_session, dept
+    ):
+        await self._ended(
+            db_session,
+            dept,
+            created_by=dept["manager"],
+            organizer=dept["organizer"],
+            alternate=dept["alternate"],
+        )
+        await db_session.execute(
+            text("UPDATE users SET notification_preferences = :p WHERE id = :id"),
+            {
+                "id": dept["alternate"],
+                "p": json.dumps({"email_kinds": {"event_duties": False}}),
+            },
+        )
+
+        emailed = await self._run(db_session)
+
+        for recipient in (dept["organizer"], dept["alternate"]):
+            assert len(await _notices(db_session, recipient, "event_validation")) == 1
+        assert not await _notices(db_session, dept["manager"], "event_validation")
+        # The bell reaches both; the email follows each member's own setting.
+        organizer = await _load(db_session, dept["organizer"])
+        assert emailed == [[organizer.email]]
+
+    async def test_an_unreachable_organizer_falls_back_to_the_creator(
+        self, db_session, dept
+    ):
+        gone = await _user(db_session, dept["org"], "Gwen", status="inactive")
+        await self._ended(db_session, dept, created_by=dept["manager"], organizer=gone)
+
+        await self._run(db_session)
+
+        assert await _notices(db_session, dept["manager"], "event_validation")
+        assert not await _notices(db_session, gone, "event_validation")
+
+    async def test_an_event_with_no_creator_still_reaches_its_organizer(
+        self, db_session, dept
+    ):
+        await self._ended(db_session, dept, organizer=dept["organizer"])
+
+        await self._run(db_session)
+
+        assert await _notices(db_session, dept["organizer"], "event_validation")
+
+    async def test_each_event_is_prompted_once(self, db_session, dept):
+        event_id = await self._ended(
+            db_session,
+            dept,
+            created_by=dept["manager"],
+            organizer=dept["organizer"],
+            alternate=dept["alternate"],
+        )
+
+        await self._run(db_session)
+        emailed_again = await self._run(db_session)
+
+        assert emailed_again == []
+        for recipient in (dept["organizer"], dept["alternate"]):
+            assert len(await _notices(db_session, recipient, "event_validation")) == 1
+        event = await _get_event(db_session, event_id)
+        assert event.custom_fields["validation_notification_sent"] is True
+
+    async def test_nobody_to_ask_is_marked_and_not_retried(self, db_session, dept):
+        gone = await _user(db_session, dept["org"], "Gwen", status="retired")
+        event_id = await self._ended(db_session, dept, organizer=gone)
+
+        await self._run(db_session)
+
+        event = await _get_event(db_session, event_id)
+        assert event.custom_fields["validation_notification_sent"] is True
+        assert not await _notices(db_session, gone, "event_validation")
 
 
 class TestPositionOptions:
