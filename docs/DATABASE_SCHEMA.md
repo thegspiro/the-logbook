@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**313 tables · 5176 columns · 1057 foreign keys**
+**314 tables · 5190 columns · 1059 foreign keys**
 
 ---
 
@@ -325,6 +325,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`calendar_sync_mappings`](#calendar_sync_mappings) | `CalendarSyncMapping` | 14 | One department event as published to an external calendar. |
 | [`integration_sync_logs`](#integration_sync_logs) | `IntegrationSyncLog` | 12 | One run of an integration: a sync, a connection check, a chat delivery. |
 | [`integrations`](#integrations) | `Integration` | 18 | Stores integration configurations per organization |
 
@@ -4992,6 +4993,38 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_ip_exception_valid_until` (`valid_until`)
 
 ## Integrations
+
+### `calendar_sync_mappings`
+
+**CalendarSyncMapping** · `app/models/integration.py`
+
+> One department event as published to an external calendar. Written only by app.services.calendar_sync_service. ``content_hash`` is the digest of the payload the reconciler last meant the calendar to hold (empty once the event is due for deletion); with ``status`` "synced" the calendar is known to hold exactly that. ``last_error`` is sanitized.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `integration_id` | VARCHAR(36) | no | FK |  | → `integrations.id` ON DELETE CASCADE |
+| `event_id` | VARCHAR(36) | no |  |  |  |
+| `external_event_id` | VARCHAR(512) | yes |  |  |  |
+| `external_calendar_id` | VARCHAR(512) | yes |  |  |  |
+| `content_hash` | VARCHAR(64) | yes |  |  |  |
+| `last_synced_at` | DATETIME | yes |  |  |  |
+| `status` | VARCHAR(20) | no | IDX | `'synced'` |  |
+| `attempt_count` | INTEGER | no |  | `0` |  |
+| `next_attempt_at` | DATETIME | yes |  |  |  |
+| `last_error` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_calendar_sync_mappings_organization_id` (`organization_id`)
+- `ix_calendar_sync_mappings_status_next_attempt` (`status`, `next_attempt_at`)
+
+**Constraints**
+
+- UNIQUE `uq_calendar_sync_mappings_integration_event` (`integration_id`, `event_id`)
 
 ### `integration_sync_logs`
 
@@ -11305,7 +11338,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (256 references)
+### → `organizations` (257 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11338,6 +11371,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `budget_category_charge_positions` | `organization_id` | CASCADE | no |
 | `budget_requests` | `organization_id` | CASCADE | no |
 | `budgets` | `organization_id` | CASCADE | no |
+| `calendar_sync_mappings` | `organization_id` | CASCADE | no |
 | `check_item_deployed_lots` | `organization_id` | CASCADE | no |
 | `check_requests` | `organization_id` | CASCADE | no |
 | `checkout_records` | `organization_id` | CASCADE | no |
@@ -12213,6 +12247,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_requests` | `form_submission_id` | SET NULL | yes |
 | `prospective_members` | `form_submission_id` | SET NULL | yes |
 
+### → `integrations` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `calendar_sync_mappings` | `integration_id` | CASCADE | no |
+| `integration_sync_logs` | `integration_id` | CASCADE | no |
+
 ### → `inventory_lots` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -12410,12 +12451,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `grant_applications` | `opportunity_id` | SET NULL | yes |
-
-### → `integrations` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `integration_sync_logs` | `integration_id` | CASCADE | no |
 
 ### → `inventory_nfc_audits` (1 references)
 

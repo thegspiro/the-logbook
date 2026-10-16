@@ -1324,6 +1324,7 @@ Owner-decision items from the feature-by-feature review under
 | **Grants: `is_anonymous` donations showed donor identity to staff**                                                                  | ✅ Resolved 2026-10-11 (owner decision: hide from `.view`, show to `.manage`)                            | **Resolved per the owner's decision.** `app/services/donor_privacy.py` presents gifts and donors for the caller: to a caller without `fundraising.manage`, an anonymous donation comes back with `donor_name`, `donor_email` and `donor_id` cleared (`GET /grants/donations`, and the dashboard's `recent_donations`), and an anonymous donor comes back as first/last name "Anonymous" / "donor" with email, phone, address, company, notes and `user_id` cleared (`GET /grants/donors`, `GET /grants/donors/{id}`), `is_anonymous` still true beside the placeholder. A view-only donor search no longer matches anonymous donors, so the hidden name cannot be confirmed by searching for it. `fundraising.manage` sees everything, for receipting. Amount, date, campaign and payment fields stay visible — totals are built from them. **Accepted:** the donation flag and the donor flag are applied separately (a named gift from an anonymous donor shows the name typed on the gift), the donors list is still ordered by the real name, and a donor's id remains visible as the record's own id. Tests: `tests/test_anonymous_donations.py`. (GF-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Grants: dashboard KPI status links don't match the multi-status aggregate the KPI counts**                                         | ✅ Resolved 2026-10-11 (owner decision: grouped filter option — links match counts)                      | **Resolved per the owner's decision.** The status sets the dashboard counts are now one definition, `APPLICATION_STATUS_GROUPS` in `app/models/grant.py` — `active` (active, reporting), `pending` (researching through under_review) and `funded` (awarded, active, reporting, closed) — used by both `get_dashboard_data()` and a new `status_group` filter on `GET /grants/applications` (unknown group → 400). The **Active Grants**, **Pending Applications** and **Total Grant Funding** cards link to `/grants/applications?group=active                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | pending | funded`, and the applications page's Status filter offers the three groups beside the single statuses. In the pipeline each column asks for its own status *within* the group, so the server decides membership and the page does not re-derive it. `?status=<one value>`links still work. Tests:`tests/test_grant_applications_paging.py`, `GrantsDashboardPage.kpiLinks.test.tsx`, `GrantApplicationsPage.paging.test.tsx`. (GF-27a) |
 | **Grants: the applications page loads at most 1,000 applications, in either view**                                                   | ✅ Resolved 2026-10-11 (owner decision: build pagination — no truncation)                                | **Resolved per the owner's decision.** `GET /grants/applications` now reports the number of matching applications in `X-Total-Count` and takes `search` (program name or agency, `like_pattern`-escaped), `sort` (a whitelisted camelCase field; priority sorts by urgency; missing dates/amounts last) and `order` — all additive; the response body is unchanged. The table view pages through the server with the shared pager (25 a page by default, sizes 10–100) and sorts server-side, so a sort covers every application rather than the loaded page. Each pipeline column fetches its own status 25 cards at a time with **Show more**, and its header shows the server's total for the column. **Behaviour change:** search no longer matches the assignee — the field holds a user id, so the old client-side match was against a UUID. Tests: `tests/test_grant_applications_paging.py` (unit + integration), `GrantApplicationsPage.paging.test.tsx`. (GF-33)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Grants/fundraising: money fields accept any non-negative amount; full donor PII goes to `fundraising.view`**                       | ⬜ Open (needs an owner decision)                                                                        | **Two of GF-9's three original gaps, not yet decided; the third (float-money math in the two report methods) was fixed 2026-10-07 and is not part of this row.** (1) Every money field in `app/schemas/grant.py` — grant amounts, pledge/donation amounts, campaign goals — is `Field(..., ge=0)`/`Field(None, ge=0)`: rejects negative, accepts $0, has no upper bound. A $0 or absurdly large award/donation is accepted and flows into every total and report unflagged. (2) `app/services/donor_privacy.py` (GF-8, resolved 2026-10-11) only masks a donor's identity when is_anonymous=True; for every other donor, list_donors/get_donor still return the full DonorResponse — email, phone, address, company, lifetime total, dates — to any fundraising.view holder, with no narrower read-only projection for non-managers. Re-confirmed open at security-review pass 8 (2026-10-16), by direct code read, not carried forward from pass 7's wording. See docs/security-review/GF-22-grants-fundraising.md's "GF-9 split" section (introduced pass 7) and its Pass 8 re-verification. (GF-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Medical supplies: expiring-lot list has no row cap**                                                                               | ✅ Accepted by the owner (2026-10-05: leave as is; LOW)                                                  | `InventoryService.get_expiring_lots` (backs `GET /medical-supplies/lots/expiring`, the equivalent gear-side route, and the low-stock/expiring alert email) has no `limit`/pagination — a department that never clears old zero-or-positive-quantity expired lots gets every matching row back to the start of the `days_ahead` window, unbounded. Not a mechanical medical-supplies patch: the method is shared with the main inventory router and `scheduled_tasks.py`'s alert email, so a cap changes those callers' contracts too (would the alert silently omit rows past the cap?) — needs a decision on page size per caller, not a drive-by limit. Found by Codex review, security-review PR #2075 (MSUP-23 pass 2); see `docs/security-review/MSUP-23-medical-supplies.md` MSUP-4. (MSUP-4) **Owner decision (2026-10-05): leave as is.** No cap is added to `get_expiring_lots` for any caller; the alert email keeps listing every matching lot.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Medical/gear supplies: a single item's stock-lot list has no row cap**                                                             | ✅ Accepted by the owner (2026-10-05: leave as is; LOW)                                                  | `InventoryService.list_lots` (backs `GET /medical-supplies/items/{id}/lots` and the equivalent gear-side route) returns every lot ever recorded against one item with no `limit`/pagination, and neither frontend screen pages through the result — both treat it as the item's complete lot history. An item restocked frequently over years without its depleted lots ever being deleted accumulates an unbounded row count. Not a mechanical patch: a cap changes what "the item's lots" means to both callers, with no pagination UI on either screen to receive a later page — needs the same kind of per-caller page-size decision MSUP-4 needed, not a drive-by limit. Found by Codex review, security-review PR #2301 (MSUP-23 pass 3); see `docs/security-review/MSUP-23-medical-supplies.md` MSUP-11 (this row was mislabeled MSUP-10 until security review pass 11, 2026-09-11 — MSUP-10 is a different, already-fixed finding in that same pass, the `add_lot` opening-balance race). (MSUP-11) **Owner decision (2026-10-05): leave as is.** An item's lot list stays its complete history, unpaginated, with depleted lots included.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Medical/gear supplies: the general item edit form has no lot-stocked awareness**                                                   | ✅ Resolved (2026-10-11, owner decision, docket MSUP-15: hide with a read-only lot note)                 | **Resolved 2026-10-11:** `ItemFormModal.tsx` now reads `is_lot_stocked` off the item being edited (the list and detail endpoints already attach it via `_attach_lot_stock`); for a lot-stocked item it replaces the Quantity input with the same read-only "N from stock lots — adjust by receiving a delivery or editing the item's lots" note `MedicalItemFormModal` shows, and leaves `quantity` out of the update payload. Items with no lots, and creation, are unchanged; `PATCH /inventory/items/{id}` itself still accepts `quantity` for an API caller. Pinned by `ItemFormModal.test.tsx` ("a lot-stocked pool item"). Original finding: `modules/inventory/components/ItemFormModal.tsx`'s "Quantity" input always reads from and writes to `InventoryItem.quantity` directly, with no indication that for a lot-stocked item that column is a best-effort mirror, not the authoritative on-hand count (the sum of the item's in-date stock lots). An admin who opens this form for a lot-stocked item, sees the stale mirror value, and "corrects" it to match the detail page's lot-derived number writes into a column no lot backs, until the next delivery's carry-forward silently overwrites it again. No data corruption occurs today from this alone — nothing treats the edited mirror value as authoritative over the lots — so it is not gated as a security finding, but it is a live trap for exactly the workflow this module exists to support. `modules/medical-supplies/components/MedicalItemFormModal.tsx` (the medical-domain-specific form `MedicalSuppliesPage.tsx` actually uses) already has this awareness — it hides the Quantity input behind a read-only "N from stock lots" note for a lot-stocked item and omits `quantity` from the update payload entirely — so this is reachable today only through the general Inventory page's edit flow on a medical item (a broad `inventory.manage` holder can reach any item's detail page and its edit modal, by design), not through the medical supplies module's own screens. Closing it needs a decision — hide/disable/relabel the field for a lot-stocked item, or route an edit through a lot adjustment instead of the raw column — which is a UX/product call, not a mechanical patch. Found by Codex review, security-review PR #2301 (MSUP-23 pass 4); see `docs/security-review/MSUP-23-medical-supplies.md` MSUP-15. (MSUP-15) |
@@ -1917,9 +1918,12 @@ connect _dialogs_ are ordinary forms and have been captured.
 ## Integrations — Google Calendar and Outlook Read "Coming Soon" Behind a Server Setting (2026-10-16)
 
 One-way publishing of department events to a Google or Outlook calendar is
-planned and not built. The two catalog cards describe that plan and report
-**Coming Soon** while the server setting `CALENDAR_SYNC_ENABLED` is off, which
-is its default; connect, update and test are refused with `400`.
+partly built: the connectors and the `calendar_sync` scheduled task that
+publishes are in place, but no screen can complete the Google or Microsoft
+sign-in yet, so no integration ever holds the tokens the task needs. The two
+catalog cards report **Coming Soon** while the server setting
+`CALENDAR_SYNC_ENABLED` is off, which is its default; connect, update and test
+are refused with `400`, and the scheduled task does nothing.
 
 An older release let both cards be connected with an empty configuration.
 Those rows were left as they are in the database — no data migration — and
@@ -1927,8 +1931,8 @@ the API reports them as `coming_soon` and not enabled while the setting is
 off, on the integration list, the detail and the `/integrations/connected`
 projection. They never held a Google or Microsoft sign-in, so nothing was ever
 published through them. Turning the setting on brings back each row's stored
-status, but nothing publishes yet, so it should stay off until the publishing
-work ships.
+status, but nothing publishes until the sign-in screens ship, so it should
+stay off until then.
 
 ## Integrations — Weather Alerts and Generic Webhooks Do Nothing After Their Test (2026-10-08)
 
@@ -3661,17 +3665,19 @@ connectors use, imported rather than restated:
   connect and TLS handshake, 10 s for every later socket operation.
 
 After a refused or timed-out response the pooled connections are closed, so a
-half-read body is never parsed as the next response. Every call site already
-catches `Exception` and fails closed (`None`/`False`, or `test_connection`'s
-generic message). Guarded by
+half-read body is never parsed as the next response. A refusal or timeout
+surfaces from the connector as the typed `CalendarTransient` error
+(`integration_services/calendar_common.py`), and `test_connection` still
+returns its generic message. Guarded by
 `backend/tests/test_google_calendar_http_bounds.py`, against a real loopback
 server: a normal response succeeds; chunked and declared-length streams four
 times the cap are refused without the server managing to send the whole
 stream; a gzip body that inflates past the cap is refused; a response that
 stalls before its headers or mid-body times out; the same `Http` object works
 again after a refusal; and the whole `googleapiclient` stack, pointed at the
-loopback server, succeeds, fails cleanly on an oversized body, and returns
-`None` from a push against a stalled API.
+loopback server, succeeds, fails cleanly on an oversized body, and raises
+`CalendarTransient` from `upsert_event` against a stalled API within five
+seconds.
 
 **Still open:**
 
@@ -3680,10 +3686,9 @@ loopback server, succeeds, fails cleanly on an oversized body, and returns
   in time. The `httpx` connectors have had a total deadline since 2026-10-04
   (`INTEGRATION_DEADLINE_SECONDS` in `create_integration_client()`), but it
   is an `asyncio.timeout()` around `send()`, and Google Calendar's calls are
-  synchronous `httplib2` calls inside `async def` methods, so it needs its
-  own mechanism.
-- **The synchronous calls block the event loop** for as long as a call runs
-  — now bounded by the timeouts above rather than unbounded.
+  synchronous `httplib2` calls run in a worker thread (`asyncio.to_thread`),
+  so it needs its own mechanism. Running them in a thread means they no longer
+  block the event loop, but a cancelled wait does not stop the thread.
 - **Redirects follow `httplib2`'s default** (followed for `GET`/`HEAD`, up to five). The
   destination is Google's own API and token endpoint, so there is no SSRF
   angle, but it is not the `httpx` factory's no-redirect policy.
@@ -3696,6 +3701,31 @@ loopback server, succeeds, fails cleanly on an oversized body, and returns
 
 (Security review INT-27, follow-up round 5, 2026-09-06:
 `docs/security-review/INT-27-integrations.md`.)
+
+## Calendar Publishing Has No Connect Flow (2026-10-16)
+
+The `calendar_sync` scheduled task publishes department events one way to a
+Google Calendar or Outlook integration's calendar
+(`app/services/calendar_sync_service.py`, mapping rows in
+`calendar_sync_mappings`). It does nothing unless `CALENDAR_SYNC_ENABLED` is
+on, and then only for an integration that is connected and holds a refresh or
+access token plus a `calendar_id` in its config.
+
+No screen gives an integration those yet. There is no Google or Microsoft
+sign-in for these cards and nothing creates the department calendar, so
+connecting either card from the Integrations page only marks it connected, as
+[guide 16](training/16-integrations.md#calendar-integrations) describes, and
+the task skips it. The connect API does accept a `refresh_token` and a
+`calendar_id` for both types; only a caller who obtained a refresh token
+outside The Logbook, for the same OAuth client, could make the task publish
+today.
+
+What a pass sends is the allowlist in `build_calendar_payload`: title, start
+and end in the department's timezone, location name, event type label, a link
+back, and the description only when the integration's `sync_descriptions` is
+true. It skips drafts, deletes cancelled events from the calendar, covers 30
+days back to `days_ahead` (default 180) ahead, and honours an
+`event_types_to_sync` list. No screen sets those three config keys either.
 
 ## Salesforce Integration — Clearing the Refresh Token Has No Reachable UI Control (INT-11, 2026-09-13)
 
@@ -5698,6 +5728,30 @@ design call. **Owner decision:**
    as reserved.
 
 See `docs/app-review/notifications.md` → Pass 5.
+
+## INT2-3 / INT2-4 — Integrations Connect Without Credentials, And The Catalog Never Updates Existing Rows (2026-10-16)
+
+**INT2-3.** Chat and webhook integrations now refuse to connect without a destination
+URL, but PayPal, Documenso, Cal.com and Salesforce still accept `POST /{id}/connect`
+with an empty config and show _connected_ and _enabled_; `test-connection` then fails
+with "PayPal client ID and secret are required" and its siblings. A two-step "connect,
+then test" is arguable for these because everything but the credential has a default.
+**Owner decision:**
+
+1. **Require the credentials at connect** — a 422 naming the missing field, as the
+   chat integrations now do. Simplest and matches what the badge claims.
+2. **Show an in-between state** — connect succeeds but the health state reads
+   "needs credentials" until a test passes.
+3. **Leave as is** — the failing test result is the signal.
+
+**INT2-4.** `ensure_catalog` only inserts rows an organization lacks. A catalog entry
+promoted from `coming_soon` to `available`, demoted, or reworded keeps its seeded values
+for every existing department, and no migration reconciles them. **Owner decision:**
+decide which columns the catalog owns (status, description, category), then reconcile
+them in a migration — noting that a status reconcile can change what a department sees as
+connected — or accept that catalog changes reach new organizations only.
+
+See `docs/app-review/integrations.md` → Pass 5.
 
 ## Process
 
