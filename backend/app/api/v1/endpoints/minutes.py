@@ -45,6 +45,7 @@ from app.schemas.minute import (
     MotionResponse,
     MotionUpdate,
     SectionEntry,
+    SignatureSlotResponse,
     TemplateCreate,
     TemplateListItem,
     TemplateResponse,
@@ -54,7 +55,10 @@ from app.schemas.minute import (
 from app.services.document_service import DocumentService
 from app.services.minute_service import MinuteService
 from app.services.template_service import TemplateService
-from app.utils.minutes_settings import load_minutes_reminder_settings
+from app.utils.minutes_settings import (
+    load_minutes_reminder_settings,
+    load_signature_slots,
+)
 from app.utils.motion_votes import members_present, suggested_status
 from app.utils.rich_text import normalize_format
 
@@ -169,6 +173,14 @@ async def get_minutes_settings(
         reminder_days_before_due=resolved.days_before_due,
         overdue_repeat_days=resolved.overdue_repeat_days,
         open_items_digest=resolved.digest_enabled,
+        signature_slots=[
+            SignatureSlotResponse(
+                key=slot.key, title=slot.title, position_slug=slot.position_slug
+            )
+            for slot in await load_signature_slots(
+                db, str(current_user.organization_id)
+            )
+        ],
     )
 
 

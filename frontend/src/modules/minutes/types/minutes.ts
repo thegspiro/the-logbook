@@ -551,4 +551,34 @@ export interface MinutesReminderSettings {
   reminder_days_before_due: number;
   overdue_repeat_days: number;
   open_items_digest: boolean;
+  signature_slots: SignatureSlot[];
+}
+
+/** A place on adopted minutes for a signature. */
+export interface SignatureSlot {
+  key: string;
+  title: string;
+  /** The position whose holders may sign; anyone who manages minutes may when absent. */
+  position_slug?: string | null;
+}
+
+export interface MinutesSignature {
+  id: string;
+  slot_key: string;
+  slot_title: string;
+  signed_name: string;
+  signed_at: string;
+  /** The signature was given on the version now on file. */
+  intact: boolean;
+}
+
+export interface SignatureStatusSlot extends SignatureSlot {
+  can_sign: boolean;
+  signature: MinutesSignature | null;
+}
+
+export interface SignatureStatus {
+  /** The adopted version being signed; null before adoption. */
+  version: number | null;
+  slots: SignatureStatusSlot[];
 }

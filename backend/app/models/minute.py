@@ -1141,6 +1141,49 @@ class MinutesRevision(Base):
     )
 
 
+class MinutesSignature(Base):
+    """A signature on adopted minutes: who attested to which version, and when.
+
+    Tied to the revision it was given on, and carrying that revision's content
+    hash, so the signature is evidence of one exact version. Reopening the
+    minutes supersedes the revision and the signatures stay with it, on file
+    against the text they were given for; the corrected version starts with
+    none.
+    """
+
+    __tablename__ = "minutes_signatures"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    minutes_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("meeting_minutes.id", ondelete="CASCADE"), nullable=False
+    )
+    revision_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("minutes_revisions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    # The department's slot at the time ("recording_secretary"); the title is
+    # kept so a later rename of the slot does not rewrite what was signed.
+    slot_key: Mapped[str] = mapped_column(String(50), nullable=False)
+    slot_title: Mapped[str] = mapped_column(String(100), nullable=False)
+    signer_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    signed_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("revision_id", "slot_key", name="uq_minutes_signatures_slot"),
+        Index("ix_minutes_signatures_minutes_id", "minutes_id"),
+        Index("ix_minutes_signatures_revision_id", "revision_id"),
+        Index("ix_minutes_signatures_organization_id", "organization_id"),
+    )
+
+
 class MinutesClosedSession(Base):
     """A closed (executive) session held during a meeting.
 

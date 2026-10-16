@@ -1288,6 +1288,19 @@ class ApparatusSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class SignatureSlotSetting(BaseModel):
+    """One place on adopted minutes for a signature."""
+
+    key: str = Field(..., pattern=r"^[a-z][a-z0-9_]{0,49}$")
+    title: str = Field(..., min_length=1, max_length=100)
+    position_slug: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="The position whose holders may sign; anyone who manages "
+        "minutes may when unset",
+    )
+
+
 class MinutesSettingsUpdate(BaseModel):
     """Meeting minutes settings; read by app/utils/minutes_settings.py."""
 
@@ -1321,6 +1334,14 @@ class MinutesSettingsUpdate(BaseModel):
         description=(
             "Send members who manage minutes a weekly list of open action "
             "items. Absent reads as on."
+        ),
+    )
+    signature_slots: Optional[List[SignatureSlotSetting]] = Field(
+        None,
+        max_length=6,
+        description=(
+            "Who signs adopted minutes, in order. Unset reads as a recording "
+            "secretary and a presiding officer."
         ),
     )
 
