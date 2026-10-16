@@ -27,13 +27,22 @@ these defaults.
     Whether members who hold ``minutes.manage`` get a weekly list of every open
     action item and who owns it. On unless set to a literal ``False``.
 
+``signature_slots``
+    Who signs adopted minutes: a list of ``{key, title, position_slug}``. A
+    slot with a ``position_slug`` is signed by a member holding that position;
+    one without is signed by anyone who holds ``minutes.manage``. Absent or
+    unusable reads as the two slots every department started with, a recording
+    secretary and a presiding officer, so an upgrade changes nothing a
+    department had set up.
+
 Every value is read defensively. The JSON is unvalidated and an exception here
 would take out the daily task for the whole organization over one mistyped
 setting, so anything malformed reads as its default.
 """
 
+import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,6 +59,10 @@ DIGEST_FLAG = "open_items_digest"
 # week is measured from what was sent rather than from a process that forgets
 # its last run on every restart.
 LAST_DIGEST_KEY = "last_open_items_digest_on"
+
+SIGNATURE_SLOTS_KEY = "signature_slots"
+MAX_SIGNATURE_SLOTS = 6
+_SLOT_KEY = re.compile(r"^[a-z][a-z0-9_]{0,49}$")
 
 DEFAULT_DAYS_BEFORE_DUE = 3
 MAX_DAYS_BEFORE_DUE = 30
@@ -99,3 +112,60 @@ async def load_minutes_reminder_settings(
         select(Organization.settings).where(Organization.id == str(organization_id))
     )
     return minutes_reminder_settings_in(result.scalar_one_or_none())
+
+
+@dataclass(frozen=True)
+class SignatureSlot:
+    key: str
+    title: str
+    position_slug: Optional[str] = None
+
+
+DEFAULT_SIGNATURE_SLOTS = (
+    SignatureSlot("recording_secretary", "Recording Secretary"),
+    SignatureSlot("presiding_officer", "Presiding Officer"),
+)
+
+
+def signature_slots_in(settings: Any) -> List[SignatureSlot]:
+    """The slots adopted minutes are signed in, in order.
+
+    Anything that is not a usable list reads as the defaults. Within a list, an
+    entry that is malformed or repeats an earlier key is dropped rather than
+    failing the rest: this is read when someone signs, and one mistyped entry
+    must not stop the others from being signed.
+    """
+    section = settings.get(MINUTES_SETTINGS_KEY) if isinstance(settings, dict) else None
+    raw = section.get(SIGNATURE_SLOTS_KEY) if isinstance(section, dict) else None
+    if not isinstance(raw, list):
+        return list(DEFAULT_SIGNATURE_SLOTS)
+
+    slots: List[SignatureSlot] = []
+    seen: set[str] = set()
+    for entry in raw[:MAX_SIGNATURE_SLOTS]:
+        if not isinstance(entry, dict):
+            continue
+        key, title = entry.get("key"), entry.get("title")
+        if not isinstance(key, str) or not _SLOT_KEY.match(key) or key in seen:
+            continue
+        if not isinstance(title, str) or not title.strip() or len(title) > 100:
+            continue
+        position = entry.get("position_slug")
+        slots.append(
+            SignatureSlot(
+                key,
+                title.strip(),
+                position if isinstance(position, str) and position else None,
+            )
+        )
+        seen.add(key)
+    return slots or list(DEFAULT_SIGNATURE_SLOTS)
+
+
+async def load_signature_slots(
+    db: AsyncSession, organization_id: str
+) -> List[SignatureSlot]:
+    result = await db.execute(
+        select(Organization.settings).where(Organization.id == str(organization_id))
+    )
+    return signature_slots_in(result.scalar_one_or_none())

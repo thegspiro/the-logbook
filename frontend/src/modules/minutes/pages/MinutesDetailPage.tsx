@@ -52,6 +52,7 @@ import { MeetingTimeCapture } from '../components/MeetingTimeCapture';
 import { PersonPicker } from '../components/PersonPicker';
 import { SectionMotion } from '../components/SectionMotion';
 import { RevisionsPanel } from '../components/RevisionsPanel';
+import { SignaturesPanel } from '../components/SignaturesPanel';
 import { SuggestChangeForm } from '../components/SuggestChangeForm';
 import { SuggestionsPanel } from '../components/SuggestionsPanel';
 import { useMinutesSuggestions } from '../hooks/useMinutesSuggestions';
@@ -1629,6 +1630,14 @@ export const MinutesDetailPage: React.FC = () => {
         </PanelDisclosure>
 
         <AttachmentsPanel minutesId={minutes.id} status={minutes.status} canManage={canManage} defaultOpen={false} />
+
+        <SignaturesPanel
+          minutesId={minutes.id}
+          minutesTitle={minutes.title}
+          status={minutes.status}
+          version={minutes.updated_at}
+          defaultOpen={false}
+        />
 
         <RevisionsPanel
           minutesId={minutes.id}

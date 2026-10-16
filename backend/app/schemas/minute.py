@@ -715,6 +715,14 @@ class ApplyOutline(BaseModel):
     template_id: str = Field(..., min_length=1, max_length=36)
 
 
+class SignatureSlotResponse(BaseModel):
+    """A place on the adopted minutes for a signature."""
+
+    key: str
+    title: str
+    position_slug: Optional[str] = None
+
+
 class MinutesReminderSettingsResponse(BaseModel):
     """The department's action item reminder settings, as the server resolves them.
 
@@ -725,6 +733,41 @@ class MinutesReminderSettingsResponse(BaseModel):
     reminder_days_before_due: int
     overdue_repeat_days: int
     open_items_digest: bool
+    signature_slots: List[SignatureSlotResponse] = []
+
+
+class SignatureResponse(BaseModel):
+    id: str
+    slot_key: str
+    slot_title: str
+    signed_name: str
+    signed_at: datetime
+    intact: bool = Field(
+        True,
+        description="The signature was given on the version now on file",
+    )
+
+    model_config = _response_config
+
+
+class SignatureStatusSlot(SignatureSlotResponse):
+    can_sign: bool = False
+    signature: Optional[SignatureResponse] = None
+
+
+class SignatureStatusResponse(BaseModel):
+    """Each slot and who has signed it, for the current adopted version."""
+
+    version: Optional[int] = None
+    slots: List[SignatureStatusSlot] = []
+
+
+class SignRequest(BaseModel):
+    """A signature: the slot, the signer's name as typed, and their password."""
+
+    slot_key: str = Field(..., min_length=1, max_length=50)
+    signed_name: str = Field(..., min_length=1, max_length=200)
+    password: str = Field(..., min_length=1, max_length=1000, repr=False)
 
 
 class MinutesReject(BaseModel):
