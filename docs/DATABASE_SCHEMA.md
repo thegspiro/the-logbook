@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**314 tables · 5184 columns · 1059 foreign keys**
+**314 tables · 5186 columns · 1059 foreign keys**
 
 ---
 
@@ -325,7 +325,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`calendar_sync_mappings`](#calendar_sync_mappings) | `CalendarSyncMapping` | 12 | One department event as published to an external calendar. |
+| [`calendar_sync_mappings`](#calendar_sync_mappings) | `CalendarSyncMapping` | 14 | One department event as published to an external calendar. |
 | [`integration_sync_logs`](#integration_sync_logs) | `IntegrationSyncLog` | 12 | One run of an integration: a sync, a connection check, a chat delivery. |
 | [`integrations`](#integrations) | `Integration` | 18 | Stores integration configurations per organization |
 
@@ -5002,7 +5002,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `integration_id` | VARCHAR(36) | no | FK |  | → `integrations.id` ON DELETE CASCADE |
 | `event_id` | VARCHAR(36) | no |  |  |  |
 | `external_event_id` | VARCHAR(512) | yes |  |  |  |
@@ -5013,9 +5013,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `attempt_count` | INTEGER | no |  | `0` |  |
 | `next_attempt_at` | DATETIME | yes |  |  |  |
 | `last_error` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
 
 **Indexes**
 
+- `ix_calendar_sync_mappings_organization_id` (`organization_id`)
 - `ix_calendar_sync_mappings_status_next_attempt` (`status`, `next_attempt_at`)
 
 **Constraints**

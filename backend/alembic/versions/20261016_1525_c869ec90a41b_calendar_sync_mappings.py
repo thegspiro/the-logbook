@@ -40,6 +40,7 @@ _INTEGRATIONS = "integrations"
 _TABLE = "calendar_sync_mappings"
 _UNIQUE = "uq_calendar_sync_mappings_integration_event"
 _RETRY_INDEX = "ix_calendar_sync_mappings_status_next_attempt"
+_ORG_INDEX = "ix_calendar_sync_mappings_organization_id"
 
 
 def _tables() -> set:
@@ -71,6 +72,18 @@ def upgrade() -> None:
             ),
             sa.Column("next_attempt_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("last_error", sa.Text(), nullable=True),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("CURRENT_TIMESTAMP"),
+                nullable=True,
+            ),
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("CURRENT_TIMESTAMP"),
+                nullable=True,
+            ),
             sa.ForeignKeyConstraint(
                 ["organization_id"], ["organizations.id"], ondelete="CASCADE"
             ),
@@ -84,6 +97,8 @@ def upgrade() -> None:
     indexes = {ix["name"] for ix in sa.inspect(op.get_bind()).get_indexes(_TABLE)}
     if _RETRY_INDEX not in indexes:
         op.create_index(_RETRY_INDEX, _TABLE, ["status", "next_attempt_at"])
+    if _ORG_INDEX not in indexes:
+        op.create_index(_ORG_INDEX, _TABLE, ["organization_id"])
 
 
 def downgrade() -> None:

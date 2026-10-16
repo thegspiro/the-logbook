@@ -229,8 +229,15 @@ class CalendarSyncMapping(Base):
         DateTime(timezone=True), nullable=True
     )
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     __table_args__ = (
+        Index("ix_calendar_sync_mappings_organization_id", "organization_id"),
         UniqueConstraint(
             "integration_id",
             "event_id",
