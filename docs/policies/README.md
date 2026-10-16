@@ -27,6 +27,7 @@ Files:
 - [cryptography-and-key-management-policy.md](./cryptography-and-key-management-policy.md)
 - [logging-and-monitoring-policy.md](./logging-and-monitoring-policy.md)
 - [backup-and-continuity-policy.md](./backup-and-continuity-policy.md)
+- [incident-response-and-breach-notification-policy.md](./incident-response-and-breach-notification-policy.md)
 
 Not included (department-only, no software component): physical security,
 HR/screening, supplier management, and the risk assessment itself.

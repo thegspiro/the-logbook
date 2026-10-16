@@ -29,10 +29,10 @@ services:
     restart: on-failure
     stop_grace_period: 10s
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_strong_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set in .env}
       MYSQL_DATABASE: ${DB_NAME:-the_logbook}
       MYSQL_USER: ${DB_USER:-logbook_user}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-change_me_strong_password}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
       TZ: ${TZ:-America/New_York}
     command: >
       --character-set-server=utf8mb4
@@ -53,8 +53,8 @@ services:
       test:
         - "CMD-SHELL"
         - |
-          mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD:-change_me_strong_password} &&
-          mysql -uroot -p$${MYSQL_ROOT_PASSWORD:-change_me_strong_password} -e 'SELECT 1' $${MYSQL_DATABASE:-the_logbook}
+          mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} &&
+          mysql -uroot -p$${MYSQL_ROOT_PASSWORD} -e 'SELECT 1' $${MYSQL_DATABASE:-the_logbook}
       interval: 10s
       timeout: 5s
       retries: 10
@@ -72,9 +72,9 @@ services:
     container_name: logbook-redis
     restart: on-failure
     stop_grace_period: 10s
-    command: redis-server --requirepass ${REDIS_PASSWORD:-change_me_strong_password} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env} --maxmemory 256mb --maxmemory-policy allkeys-lru
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-change_me_strong_password}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
       TZ: ${TZ:-America/New_York}
     volumes:
       - /mnt/user/appdata/the-logbook/redis:/data
@@ -88,7 +88,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "redis-cli -a $${REDIS_PASSWORD:-change_me_strong_password} --no-auth-warning ping | grep PONG",
+          "redis-cli -a $${REDIS_PASSWORD} --no-auth-warning ping | grep PONG",
         ]
       interval: 10s
       timeout: 5s
@@ -124,17 +124,17 @@ services:
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-the_logbook}
       DB_USER: ${DB_USER:-logbook_user}
-      DB_PASSWORD: ${DB_PASSWORD:-change_me_strong_password}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
 
       # Redis (connects to redis container)
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-change_me_strong_password}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
 
       # Security - REQUIRED: Generate unique keys!
-      SECRET_KEY: ${SECRET_KEY:-GENERATE_WITH_openssl_rand_hex_32}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-GENERATE_WITH_openssl_rand_hex_32}
-      ENCRYPTION_SALT: ${ENCRYPTION_SALT:-GENERATE_WITH_openssl_rand_hex_16}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set in .env}
+      ENCRYPTION_SALT: ${ENCRYPTION_SALT:?ENCRYPTION_SALT must be set in .env}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 480
       # Audit-chain legacy boundary: pre-HMAC rows up to this ID are exempt from
@@ -534,10 +534,10 @@ services:
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-the_logbook}
       DB_USER: ${DB_USER:-logbook_user}
-      DB_PASSWORD: ${DB_PASSWORD:-change_me_strong_password}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
       # Restore drills load the dump into a throwaway schema, which needs
       # CREATE/DROP DATABASE — hence root, scoped to this internal network.
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_strong_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set in .env}
       BACKUP_TIME: ${BACKUP_TIME:-02:00}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
       VERIFY_EVERY_N_BACKUPS: ${VERIFY_EVERY_N_BACKUPS:-7}

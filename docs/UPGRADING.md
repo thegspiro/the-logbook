@@ -134,6 +134,29 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### The Unraid compose files no longer ship placeholder secrets (2026-10-16)
+
+`unraid/docker-compose-unraid.yml` and `unraid/docker-compose-build-from-source.yml`
+used to fall back to `change_me_strong_password` for `MYSQL_ROOT_PASSWORD`,
+`DB_PASSWORD` and `REDIS_PASSWORD`, and (Unraid file only) to
+`GENERATE_WITH_openssl_rand_hex_32` for `SECRET_KEY`, `ENCRYPTION_KEY` and
+`ENCRYPTION_SALT`. A missing `.env` value therefore started a database
+protected by a password printed in the repository. `docker-compose.minimal.yml`
+had the same fallback for `REDIS_PASSWORD`. Each is now a required variable,
+and `docker compose up` stops with `<NAME> must be set in .env`.
+
+- **Installs made with `unraid-setup.sh`:** nothing to do. It writes all six
+  values to `.env`.
+- **Compose Manager or hand-written `.env` that relied on the placeholder:**
+  the database was initialised with that password, so do not just set a new
+  `DB_PASSWORD` — the stored one will no longer match. Either put the password
+  you are actually running with into `.env`, or change it inside MySQL/Redis
+  first (`ALTER USER`, `CONFIG SET requirepass`) and then update `.env`.
+- Elasticsearch and MinIO keep an empty default: both refuse to start without
+  a password, and the variables only matter when their profile is enabled.
+
+No migration and no data change.
+
 ### The backend needs the `nh3` package for rich-text minutes (2026-10-14)
 
 Meeting-minutes sections can now be written with a rich-text editor. The
