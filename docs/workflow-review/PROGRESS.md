@@ -134,7 +134,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | #   | Activity                                                                  | Acts as          | Starts at                                  | Status |
 | --- | ------------------------------------------------------------------------- | ---------------- | ------------------------------------------ | ------ |
 | W70 | Administrative hours: clock in and out by QR, manage categories and hours | member → admin   | `/admin-hours`, `/admin-hours/manage`      | ✅     |
-| W71 | Medical screening                                                         | admin            | `/medical-screening`                       | ⬜     |
+| W71 | Medical screening                                                         | admin            | `/medical-screening`                       | ✅     |
 | W72 | Reports                                                                   | admin, chief     | `/reports`                                 | ⬜     |
 | W73 | Integrations                                                              | admin            | `/integrations`                            | ⬜     |
 | W74 | IP security, and a member's access request                                | member → admin   | `/ip-security/my-requests`, `/ip-security` | ⬜     |
@@ -220,6 +220,39 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   offers its Clock Out (W70-5).
 
 ## Log
+
+### W71 — Medical screening — 2026-10-16
+
+Driven as:
+
+- `admin` adding a recurring and a one-time requirement, recording passed
+  physicals, reading the Compliance tab, and editing a record at 390×844;
+- `member`, `chief`, `membership_coordinator`, `training_officer` and
+  `secretary` for access, and `member`'s own dashboard standing.
+
+Held:
+
+- labelled forms, with the inert settings marked "Not enforced yet";
+- double-clicks record once;
+- the roster grades against every requirement;
+- only `admin` can see screenings; five other roles are refused on page and
+  API.
+
+Fixed:
+
+- W71-1 (MED — a recurring screening recorded without an expiration never
+  fell due; the record form now fills it in from the frequency).
+- W71-2 (MED — a record or requirement edit saved, then answered 500).
+- W71-3 (LOW — ISO dates and a missing completed date in the lists; record
+  buttons not naming the member; 16px Edit / Delete).
+
+Flagged: W71-1's grading half (MED — no-expiration records stay compliant
+forever, and records match requirements by type).
+
+Gate: typecheck and lint are clean; 166 medical-screening and date-utility
+frontend tests and 88 medical-screening backend tests pass.
+
+Next: W72.
 
 ### W70 — Administrative hours: clock in and out by QR, manage categories and hours — 2026-10-16
 

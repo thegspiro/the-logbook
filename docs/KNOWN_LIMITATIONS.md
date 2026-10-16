@@ -5800,6 +5800,28 @@ Found driving W69 (`docs/workflow-review/W69-fundraising.md`, W69-6).
   optional for those types (a schema change, and the list and receipts would
   need to name such a donor by `company_name`).
 
+## Medical Screening — A Screening With No Expiration Date Never Falls Due (2026-10-16)
+
+Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
+
+- **What happens:** `_grade` in `medical_screening_service.py` counts a
+  passed, completed or waived record with no `expiration_date` as compliant
+  indefinitely, and nothing reads a requirement's `frequency_months`. An
+  annual physical recorded without an expiration therefore never lapses,
+  never appears under "Expiring within 30 days", and the requirement card's
+  "Every 12 months" describes nothing.
+- **Since W71:** the record form fills in completed date + frequency, so new
+  records linked to a recurring requirement carry an expiration. Records
+  already saved without one, and records not linked to a requirement, are
+  unchanged.
+- **Also:** records are matched to a requirement by screening _type_, not by
+  `requirement_id`, so two requirements of the same type are satisfied by
+  one record.
+- **Decision:** whether grading should fall back to completed date +
+  `frequency_months` when a record has no expiration (which changes the
+  standing of existing records on upgrade), and whether a record should
+  satisfy only the requirement it is linked to.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

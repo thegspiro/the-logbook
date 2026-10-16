@@ -135,9 +135,11 @@ the **Requirements** tab to see them. Each row shows the name, **Active** or
 ### One-Time vs Recurring Requirements
 
 - **Repeating:** with a frequency such as 12 months, members need a new
-  screening regularly. The **Expiration Date** you enter on each record decides
-  when it runs out. The Logbook does not work out the expiry from the
-  frequency, so always enter the expiration date.
+  screening regularly. The **Expiration Date** on each record decides when it
+  runs out. When you link a record to a repeating requirement and enter the
+  completed date, the form fills in the expiration date from the frequency;
+  change it if the provider gave a different date. A record saved with no
+  expiration date counts as met for good, so do not clear it.
 - **One-time:** a single qualifying record with no expiration date satisfies
   it for good.
 

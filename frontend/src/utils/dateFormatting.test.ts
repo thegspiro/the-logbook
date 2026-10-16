@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
+  addCalendarMonths,
   formatDate,
   formatDateTime,
   formatShortDateTime,
@@ -503,6 +504,28 @@ describe('hoursBetweenTimesOfDay', () => {
     expect(hoursBetweenTimesOfDay('08:00', '')).toBeNull();
     expect(hoursBetweenTimesOfDay(null, '20:00')).toBeNull();
     expect(hoursBetweenTimesOfDay('08:00', '24:00')).toBeNull();
+  });
+});
+
+describe('addCalendarMonths', () => {
+  it('adds whole months in calendar space', () => {
+    expect(addCalendarMonths('2025-10-20', 12)).toBe('2026-10-20');
+    expect(addCalendarMonths('2025-11-30', 3)).toBe('2026-02-28');
+  });
+
+  it('clamps to the last day of a shorter month, leap years included', () => {
+    expect(addCalendarMonths('2026-01-31', 1)).toBe('2026-02-28');
+    expect(addCalendarMonths('2028-01-31', 1)).toBe('2028-02-29');
+  });
+
+  it('moves back with a negative count', () => {
+    expect(addCalendarMonths('2026-03-31', -1)).toBe('2026-02-28');
+    expect(addCalendarMonths('2026-01-15', -13)).toBe('2024-12-15');
+  });
+
+  it('returns anything that is not a calendar date unchanged', () => {
+    expect(addCalendarMonths('', 12)).toBe('');
+    expect(addCalendarMonths(null, 12)).toBe('');
   });
 });
 
