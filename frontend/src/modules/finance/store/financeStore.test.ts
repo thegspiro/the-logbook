@@ -442,17 +442,18 @@ describe('financeStore', () => {
       expect(state.isLoading).toBe(false);
     });
 
-    it('should set the error and rethrow so the page does not report success', async () => {
-      mockApprovalChainDelete.mockRejectedValue(new Error('Forbidden'));
+    it('rethrows a refusal for the page to show, leaving the page-level error and the list alone', async () => {
+      mockApprovalChainDelete.mockRejectedValue(new Error('This approval chain can’t be deleted'));
 
       useFinanceStore.setState({
         approvalChains: [{ id: 'ac1', name: 'Chain' }] as never[],
+        error: null,
       });
 
-      await expect(getState().deleteApprovalChain('ac1')).rejects.toThrow('Forbidden');
+      await expect(getState().deleteApprovalChain('ac1')).rejects.toThrow('This approval chain can’t be deleted');
 
       expect(getState().isLoading).toBe(false);
-      expect(getState().error).toBe('Forbidden');
+      expect(getState().error).toBeNull();
       expect(getState().approvalChains).toHaveLength(1);
     });
   });
