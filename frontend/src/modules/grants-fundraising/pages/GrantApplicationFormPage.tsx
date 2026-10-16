@@ -13,6 +13,7 @@ import { grantsService } from '../services/api';
 import type { GrantApplication, GrantOpportunity } from '../types';
 import { ApplicationStatus, GrantPriority } from '../types';
 import { toAppError } from '@/utils/errorHandling';
+import { formCoercions } from '@/utils/formValues';
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
@@ -52,6 +53,7 @@ interface FormData {
   opportunityId: string;
   applicationStatus: string;
   amountRequested: string;
+  amountAwarded: string;
   matchAmount: string;
   matchSource: string;
   applicationDeadline: string;
@@ -75,6 +77,7 @@ const EMPTY_FORM: FormData = {
   opportunityId: '',
   applicationStatus: ApplicationStatus.RESEARCHING,
   amountRequested: '',
+  amountAwarded: '',
   matchAmount: '',
   matchSource: '',
   applicationDeadline: '',
@@ -176,6 +179,7 @@ export const GrantApplicationFormPage: React.FC = () => {
             opportunityId: app.opportunityId ?? '',
             applicationStatus: app.applicationStatus,
             amountRequested: app.amountRequested != null ? String(app.amountRequested) : '',
+            amountAwarded: app.amountAwarded != null ? String(app.amountAwarded) : '',
             matchAmount: app.matchAmount != null ? String(app.matchAmount) : '',
             matchSource: app.matchSource ?? '',
             applicationDeadline: app.applicationDeadline?.split('T')[0] ?? '',
@@ -234,12 +238,17 @@ export const GrantApplicationFormPage: React.FC = () => {
     }
     setIsSubmitting(true);
 
+    // A blank Amount Awarded is omitted on create but sent as null on edit,
+    // so clearing a recorded award actually clears it (the update endpoint
+    // treats an omitted key as "leave unchanged").
+    const amountAwarded = formCoercions(isEditing).num(formData.amountAwarded);
     const payload: Partial<GrantApplication> = {
       grantProgramName: formData.grantProgramName,
       grantAgency: formData.grantAgency,
       opportunityId: formData.opportunityId || null,
       applicationStatus: formData.applicationStatus as GrantApplication['applicationStatus'],
       amountRequested: formData.amountRequested ? Number(formData.amountRequested) : null,
+      ...(amountAwarded !== undefined && { amountAwarded }),
       matchAmount: formData.matchAmount ? Number(formData.matchAmount) : null,
       matchSource: formData.matchSource || null,
       applicationDeadline: formData.applicationDeadline || null,
@@ -436,6 +445,22 @@ export const GrantApplicationFormPage: React.FC = () => {
                 min="0"
                 step="0.01"
                 value={formData.amountRequested}
+                onChange={handleChange}
+                className={inputClass}
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label htmlFor="amountAwarded" className={labelClass}>
+                Amount Awarded
+              </label>
+              <input
+                id="amountAwarded"
+                name="amountAwarded"
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.amountAwarded}
                 onChange={handleChange}
                 className={inputClass}
                 placeholder="0.00"
