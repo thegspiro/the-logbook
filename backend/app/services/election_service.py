@@ -7993,6 +7993,16 @@ class ElectionService:
             )
             return 0, 0, 0, [], []
 
+        # A link to a ballot with nothing on it is a dead end: the page has
+        # no race to show and the submit endpoint answers "no ballot items
+        # configured" (W50-91). Stored items and plain positions both count.
+        if not effective_ballot_items(election)[0]:
+            raise ValueError(
+                "This election has no ballot items or positions, so there is "
+                "nothing to vote on. Add the races in the Ballot Builder "
+                "before sending ballot emails."
+            )
+
         # Load organization separately to avoid INNER JOIN masking the election
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
