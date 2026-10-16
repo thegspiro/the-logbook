@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**314 tables · 5187 columns · 1059 foreign keys**
+**314 tables · 5190 columns · 1059 foreign keys**
 
 ---
 
@@ -96,7 +96,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`apparatus_types`](#apparatus_types) | `ApparatusType` | 14 | Apparatus Type model for categorizing vehicles |
 | [`check_item_deployed_lots`](#check_item_deployed_lots) | `CheckItemDeployedLot` | 11 | A lot physically on the apparatus for one checklist position. |
 | [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 12 | A named section/area within a checklist template. |
-| [`check_template_items`](#check_template_items) | `CheckTemplateItem` | 27 | An individual item to check within a compartment. |
+| [`check_template_items`](#check_template_items) | `CheckTemplateItem` | 28 | An individual item to check within a compartment. |
 | [`driver_exceptions`](#driver_exceptions) | `DriverException` | 17 | A chief-approved, time-boxed exception to the EVOC driving requirement. |
 | [`equipment_check_bulk_delete_requests`](#equipment_check_bulk_delete_requests) | `EquipmentCheckBulkDeleteRequest` | 7 | Durable result ledger for retry-safe atomic template-item deletion. |
 | [`equipment_check_bulk_requests`](#equipment_check_bulk_requests) | `EquipmentCheckBulkRequest` | 7 | Durable idempotency ledger for atomic template-item batches. |
@@ -672,7 +672,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_attendance`](#shift_attendance) | `ShiftAttendance` | 8 | Shift Attendance model (Framework) |
 | [`shift_calls`](#shift_calls) | `ShiftCall` | 13 | Shift Call model (Framework) |
 | [`shift_completion_reports`](#shift_completion_reports) | `ShiftCompletionReport` | 28 | Shift Completion Report model |
-| [`shift_equipment_check_items`](#shift_equipment_check_items) | `ShiftEquipmentCheckItem` | 23 | Individual item result within a completed equipment check. |
+| [`shift_equipment_check_items`](#shift_equipment_check_items) | `ShiftEquipmentCheckItem` | 25 | Individual item result within a completed equipment check. |
 | [`shift_equipment_check_seals`](#shift_equipment_check_seals) | `ShiftEquipmentCheckSeal` | 9 | The tamper seal a crew read on one sealed container during a check. |
 | [`shift_equipment_checks`](#shift_equipment_checks) | `ShiftEquipmentCheck` | 18 | A completed equipment checklist submission for a shift. |
 | [`shift_patterns`](#shift_patterns) | `ShiftPattern` | 17 | Recurring shift pattern for automatic schedule generation. |
@@ -1660,6 +1660,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `expected_quantity` | INTEGER | yes |  |  |  |
 | `critical_minimum_quantity` | INTEGER | yes |  |  |  |
 | `quantity_on_truck` | INTEGER | yes |  |  |  |
+| `count_unit` | VARCHAR(50) | yes |  |  |  |
 | `min_level` | FLOAT | yes |  |  |  |
 | `level_unit` | VARCHAR(50) | yes |  |  |  |
 | `serial_number` | VARCHAR(100) | yes |  |  |  |
@@ -9709,6 +9710,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | VARCHAR(30) | no |  |  |  |
 | `quantity_found` | INTEGER | yes |  |  |  |
 | `required_quantity` | INTEGER | yes |  |  |  |
+| `expected_quantity` | INTEGER | yes |  |  |  |
+| `count_unit` | VARCHAR(50) | yes |  |  |  |
 | `critical_minimum_quantity` | INTEGER | yes |  |  |  |
 | `level_reading` | FLOAT | yes |  |  |  |
 | `level_unit` | VARCHAR(50) | yes |  |  |  |

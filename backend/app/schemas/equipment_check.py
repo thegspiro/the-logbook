@@ -70,6 +70,19 @@ def _validate_check_type(value: Optional[str]) -> Optional[str]:
     return normalize_check_type(value)
 
 
+def _normalize_count_unit(value: Optional[str]) -> Optional[str]:
+    """Trim a count unit, and read a blank one as "no unit".
+
+    Free text rather than a fixed list: the builder offers presets (each,
+    rolls, boxes, ...) but a department counts in its own terms. A blank is
+    an admin clearing the field, which must store NULL rather than "".
+    """
+    if value is None:
+        return None
+    trimmed = value.strip()
+    return trimmed or None
+
+
 class CheckTemplateItemCreate(BaseModel):
     """Schema for creating a check template item."""
 
@@ -81,6 +94,7 @@ class CheckTemplateItemCreate(BaseModel):
     required_quantity: Optional[int] = None
     expected_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
+    count_unit: Optional[str] = Field(None, max_length=50)
     min_level: Optional[float] = None
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
@@ -96,6 +110,11 @@ class CheckTemplateItemCreate(BaseModel):
     @classmethod
     def check_type_is_supported(cls, value: str) -> str:
         return _validate_check_type(value) or value
+
+    @field_validator("count_unit")
+    @classmethod
+    def count_unit_is_label(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_count_unit(value)
 
 
 class CheckTemplateItemBulkCreate(BaseModel):
@@ -143,6 +162,7 @@ class CheckTemplateItemUpdate(BaseModel):
     required_quantity: Optional[int] = None
     expected_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
+    count_unit: Optional[str] = Field(None, max_length=50)
     min_level: Optional[float] = None
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
@@ -158,6 +178,11 @@ class CheckTemplateItemUpdate(BaseModel):
     @classmethod
     def check_type_is_supported(cls, value: Optional[str]) -> Optional[str]:
         return _validate_check_type(value)
+
+    @field_validator("count_unit")
+    @classmethod
+    def count_unit_is_label(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_count_unit(value)
 
 
 class CheckTemplateItemResponse(UTCResponseBase):
@@ -179,6 +204,9 @@ class CheckTemplateItemResponse(UTCResponseBase):
     required_quantity: Optional[int] = None
     expected_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
+    # The position's own unit, as typed in the builder. What a crew sees is
+    # unit_of_measure below, which prefers the linked catalog's unit.
+    count_unit: Optional[str] = None
     min_level: Optional[float] = None
     level_unit: Optional[str] = None
     serial_number: Optional[str] = None
@@ -187,8 +215,8 @@ class CheckTemplateItemResponse(UTCResponseBase):
     equipment_id: Optional[str] = None
     inventory_item_id: Optional[str] = None
     quantity_on_truck: Optional[int] = None
-    # Projected from the linked catalog item: "2/4" alone does not say whether
-    # a crew is looking for two boxes or two gloves.
+    # Projected from the linked catalog item, else count_unit: "2/4" alone
+    # does not say whether a crew is looking for two boxes or two gloves.
     unit_of_measure: Optional[str] = None
     # The lots physically aboard, soonest first. A crew checking a drug bag is
     # reading dates off boxes; without these the form can only show one date
@@ -477,6 +505,9 @@ class ShiftEquipmentCheckItemResponse(UTCResponseBase):
     status: str
     quantity_found: Optional[int] = None
     required_quantity: Optional[int] = None
+    # Par at check time; NULL on results filed before it was recorded.
+    expected_quantity: Optional[int] = None
+    count_unit: Optional[str] = None
     critical_minimum_quantity: Optional[int] = None
     level_reading: Optional[float] = None
     level_unit: Optional[str] = None
@@ -664,6 +695,9 @@ class FailureLogRecord(BaseModel):
     check_type: Optional[str] = None
     status: str
     notes: Optional[str] = None
+    quantity_found: Optional[int] = None
+    target_quantity: Optional[int] = None
+    count_unit: Optional[str] = None
     checked_by_name: Optional[str] = None
 
 

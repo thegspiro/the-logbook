@@ -43,14 +43,8 @@ import {
   formatRate,
 } from '../../../modules/inventory/utils/checkOutcome';
 import CheckStrip from '../../../modules/inventory/components/CheckStrip';
-import {
-  calendarDaysFromToday,
-  formatDateTime,
-  formatShortDateTime,
-  formatTime,
-  getTodayLocalDate,
-  toLocalISODate,
-} from '../../../utils/dateFormatting';
+import { calendarDaysFromToday, formatDateTime } from '../../../utils/dateFormatting';
+import { lastCheckLabel } from '../utils/lastCheckLabel';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useAuthStore } from '../../../stores/authStore';
@@ -346,8 +340,6 @@ const CHIP_TONES = {
 };
 
 /** "7:10 AM" for a check made today, "Oct 13, 7:10 AM" otherwise. */
-const lastCheckLabel = (at: string, tz: string): string =>
-  toLocalISODate(at, tz) === getTodayLocalDate(tz) ? formatTime(at, tz) : formatShortDateTime(at, tz);
 
 /**
  * One apparatus. Compact on purpose: at a quarter of a phone screen each, a

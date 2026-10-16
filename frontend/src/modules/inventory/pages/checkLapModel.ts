@@ -233,13 +233,11 @@ export function stopFailures(stop: LapStop, answers: AnswerMap): CheckItemSpec[]
   return answerableItems(stop).filter((item) => {
     const answer = answers[item.id];
     if (answer?.status !== 'fail' && answer?.status !== 'out_of_service') return false;
-    // A count short of par is *stored* as a failure — the server rewrites it
-    // to one anyway, and the truck's out-of-service verdict is built on that —
-    // but it is *reported* as a restock line, which is a different queue with
-    // a different urgency. `stopRestocks` derives the same rows from the
-    // number and the par, so counting them here too would show one shortfall
-    // twice: once as a fault the crew has to act on now, once as a supply
-    // order.
+    // A count fails only below its pass floor (Min to Pass, else Critical
+    // Min), and that is a real fault. A `fail` on a count that clears its
+    // floor is a shortfall a draft from before the 2026-10-16 rule stored as
+    // a failure; it is reported as the restock line `stopRestocks` already
+    // derives from the number and the par, not shown a second time as a fault.
     //
     // Only `fail` though. `out_of_service` is a verdict the crew typed on the
     // item itself — the thing is broken, not merely thin on the shelf — and
@@ -248,7 +246,9 @@ export function stopFailures(stop: LapStop, answers: AnswerMap): CheckItemSpec[]
     if (answer.status === 'fail' && normalizeCheckType(item.checkType) === CheckType.COUNT) {
       const found = answer.quantityFound;
       const par = item.expectedQuantity;
-      if (typeof par === 'number' && found !== undefined && found < par) return false;
+      const floor = item.passFloor ?? null;
+      const belowFloor = floor !== null && found !== undefined && found < floor;
+      if (!belowFloor && typeof par === 'number' && found !== undefined && found < par) return false;
     }
     return true;
   });
