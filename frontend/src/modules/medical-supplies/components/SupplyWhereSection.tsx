@@ -25,6 +25,12 @@ function carrierName(p: MedicalSupplyPlacement): string {
   return p.apparatusName || (p.apparatusType ? `Any ${p.apparatusType}` : p.templateName || 'Unnamed checklist');
 }
 
+/** "Main Compartment › Jump Bag", from the checklist's nesting. */
+function compartmentLabel(p: MedicalSupplyPlacement): string {
+  const path = p.compartmentPath?.length ? p.compartmentPath : p.compartmentName ? [p.compartmentName] : [];
+  return path.join(' › ');
+}
+
 export const SupplyWhereSection: React.FC<SupplyWhereSectionProps> = ({ item }) => {
   const [placements, setPlacements] = useState<MedicalSupplyPlacement[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +88,7 @@ export const SupplyWhereSection: React.FC<SupplyWhereSectionProps> = ({ item }) 
                   <li key={p.templateItemId} className="flex flex-wrap items-baseline justify-between gap-x-4 py-1.5">
                     <span className="text-theme-text-primary min-w-0">
                       <span className="font-medium">{carrierName(p)}</span>
-                      {p.compartmentName && <span className="text-theme-text-muted"> · {p.compartmentName}</span>}
+                      {compartmentLabel(p) && <span className="text-theme-text-muted"> · {compartmentLabel(p)}</span>}
                     </span>
                     <span className="text-theme-text-secondary text-xs tabular-nums">
                       {aboard != null && (

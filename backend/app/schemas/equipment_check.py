@@ -957,6 +957,8 @@ class ItemDeployment(BaseModel):
     template_item_id: str
     item_name: str
     compartment_name: Optional[str] = None
+    # The checklist's nesting, outermost first and ending in compartment_name.
+    compartment_path: List[str] = Field(default_factory=list)
     template_id: Optional[str] = None
     template_name: Optional[str] = None
     apparatus_id: Optional[str] = None

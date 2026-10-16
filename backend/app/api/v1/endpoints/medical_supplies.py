@@ -473,7 +473,7 @@ async def _medical_filter_ids(
 async def _attach_medical_list_extras(
     db: AsyncSession, service: InventoryService, org_id: str, items: List[Any]
 ) -> None:
-    """Next expiry, storage path and apparatus count for each listed supply.
+    """Next expiry, storage path and apparatus places for each listed supply.
 
     Transient attributes, like lot_stock: read by the response schema and
     never persisted. Each is one query for the whole page.
@@ -485,7 +485,7 @@ async def _attach_medical_list_extras(
     today = await resolve_org_today(db, org_id) if soonest else None
     areas = await service.storage_area_index(org_id)
     rooms = await service.location_names(org_id)
-    carriers = await EquipmentCheckService(db).apparatus_counts_for_items(org_id, ids)
+    carriers = await EquipmentCheckService(db).apparatus_places_for_items(org_id, ids)
     for item in items:
         expires = soonest.get(str(item.id))
         item.next_expiration_date = expires
@@ -493,7 +493,9 @@ async def _attach_medical_list_extras(
             (expires - today).days if expires and today else None
         )
         item.storage_path = service.storage_path(item, areas, rooms)
-        item.apparatus_count = carriers.get(str(item.id), 0)
+        carried = carriers.get(str(item.id))
+        item.apparatus_count = carried["count"] if carried else 0
+        item.apparatus_places = carried["places"] if carried else []
 
 
 async def _low_stock_ids(service: InventoryService, organization_id: Any) -> List[str]:

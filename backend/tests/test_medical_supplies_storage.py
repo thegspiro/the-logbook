@@ -166,7 +166,9 @@ async def _apparatus(db_session, org, unit):
     return rig
 
 
-async def _carry(db_session, org, rig, inventory_item, *, active=True, **kw):
+async def _carry(
+    db_session, org, rig, inventory_item, *, active=True, nested=False, **kw
+):
     template = EquipmentCheckTemplate(
         id=_uid(),
         organization_id=org.id,
@@ -178,8 +180,18 @@ async def _carry(db_session, org, rig, inventory_item, *, active=True, **kw):
     )
     db_session.add(template)
     await db_session.flush()
+    parent = None
+    if nested:
+        parent = CheckTemplateCompartment(
+            id=_uid(), template_id=template.id, name="Main Compartment"
+        )
+        db_session.add(parent)
+        await db_session.flush()
     compartment = CheckTemplateCompartment(
-        id=_uid(), template_id=template.id, name="Jump Bag"
+        id=_uid(),
+        template_id=template.id,
+        name="Jump Bag",
+        parent_compartment_id=parent.id if parent else None,
     )
     db_session.add(compartment)
     await db_session.flush()
@@ -257,6 +269,24 @@ class TestListShowsWhereItIs:
         counts = {i.name: i.apparatus_count for i in result.items}
         assert counts == {"Gauze": 2, "Cannula": 1, "Mask": 0, "Shears": 0}
 
+    async def test_names_each_place_as_the_checklist_does(self, db_session, dept):
+        medic1 = await _apparatus(db_session, dept.org, "Medic 1")
+        medic2 = await _apparatus(db_session, dept.org, "Medic 2")
+        gauze = dept.items["gauze"]
+        await _carry(db_session, dept.org, medic2, gauze)
+        await _carry(db_session, dept.org, medic1, gauze, nested=True)
+        await _carry(db_session, dept.org, None, dept.items["cannula"])
+
+        result = await _list(db_session, dept.org)
+
+        places = {i.name: i.apparatus_places for i in result.items}
+        assert places["Gauze"] == [
+            "Medic 1 › Main Compartment › Jump Bag",
+            "Medic 2 › Jump Bag",
+        ]
+        assert places["Cannula"] == ["Any ambulance › Jump Bag"]
+        assert places["Shears"] == []
+
 
 class TestStorageFilter:
     async def test_a_room_finds_supplies_on_any_area_inside_it(self, db_session, dept):
@@ -304,6 +334,7 @@ class TestPlacements:
             dept.org,
             medic1,
             dept.items["gauze"],
+            nested=True,
             expected_quantity=4,
             quantity_on_truck=3,
         )
@@ -317,6 +348,7 @@ class TestPlacements:
         (row,) = rows
         assert row["apparatus_name"] == "Medic 1"
         assert row["compartment_name"] == "Jump Bag"
+        assert row["compartment_path"] == ["Main Compartment", "Jump Bag"]
         assert row["target_quantity"] == 4
         assert row["quantity_on_truck"] == 3
 

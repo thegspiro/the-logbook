@@ -1005,6 +1005,8 @@ export interface ItemDeployment {
   templateItemId: string;
   itemName: string;
   compartmentName?: string;
+  /** The checklist's nesting, outermost first. */
+  compartmentPath?: string[];
   templateId?: string;
   templateName?: string;
   apparatusId?: string;

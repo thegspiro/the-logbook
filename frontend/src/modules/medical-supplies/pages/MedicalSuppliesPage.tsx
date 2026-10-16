@@ -98,28 +98,48 @@ function storageParams(filter: string): { location_id?: string; storage_area_id?
   return {};
 }
 
+/** Apparatus places shown on a row before the rest collapse into "+N more". */
+const PLACES_SHOWN = 2;
+
 /**
- * Where a supply is kept: its storage path, a note that adds to it, and how
- * many apparatus carry it — the badge opens the supply's dialog, which lists
- * them.
+ * Where a supply is kept: its storage path, a note that adds to it, and each
+ * apparatus position carrying it, named as the checklist names it ("Medic 1 ›
+ * Main Compartment › Jump Bag"). Past the first few, the rest open the
+ * supply's dialog, which lists them all with what is aboard.
  */
 const SupplyWhere: React.FC<{ item: InventoryItem; onOpen: () => void }> = ({ item, onOpen }) => {
   const note = storageNote(item);
-  const carriers = item.apparatus_count ?? 0;
+  const places = item.apparatus_places ?? [];
+  const hidden = places.length - PLACES_SHOWN;
   return (
     <div className="space-y-1">
-      {item.storage_path ? <div className="text-theme-text-primary">{item.storage_path}</div> : !note && <div>—</div>}
+      {item.storage_path ? (
+        <div className="text-theme-text-primary">{item.storage_path}</div>
+      ) : (
+        !note && places.length === 0 && <div>—</div>
+      )}
       {note && <div className="text-xs">{note}</div>}
-      {carriers > 0 && (
-        <button
-          type="button"
-          onClick={onOpen}
-          className="badge touch-target-phone inline-flex items-center gap-1 bg-sky-500/10 text-sky-800 dark:text-sky-300"
-          aria-label={`On ${carriers} apparatus — show where ${supplyLabel(item)} is`}
-        >
-          <Truck className="h-3 w-3" aria-hidden="true" />
-          On {carriers} apparatus
-        </button>
+      {places.length > 0 && (
+        <ul className="space-y-0.5 text-xs" aria-label={`Apparatus carrying ${supplyLabel(item)}`}>
+          {places.slice(0, PLACES_SHOWN).map((place) => (
+            <li key={place} className="text-theme-text-secondary flex items-start gap-1">
+              <Truck className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+              <span>{place}</span>
+            </li>
+          ))}
+          {hidden > 0 && (
+            <li>
+              <button
+                type="button"
+                onClick={onOpen}
+                className="touch-target-phone font-medium underline"
+                aria-label={`${hidden} more apparatus places for ${supplyLabel(item)}`}
+              >
+                +{hidden} more
+              </button>
+            </li>
+          )}
+        </ul>
       )}
     </div>
   );

@@ -3941,6 +3941,7 @@ class EquipmentCheckService:
         if not rows:
             return []
 
+        paths = await self._compartment_paths({str(t.id) for (_, _, t) in rows})
         apparatus_ids = {t.apparatus_id for (_, _, t) in rows if t.apparatus_id}
         apparatus_names: Dict[str, str] = {}
         if apparatus_ids:
@@ -3962,6 +3963,12 @@ class EquipmentCheckService:
                     "template_item_id": item.id,
                     "item_name": item.name,
                     "compartment_name": compartment_name,
+                    # Outermost first, as the checklist nests them: "Main
+                    # Compartment › Jump Bag" rather than just the bag.
+                    "compartment_path": paths.get(
+                        str(item.compartment_id),
+                        [compartment_name] if compartment_name else [],
+                    ),
                     "template_id": tmpl.id,
                     "template_name": tmpl.name,
                     "apparatus_id": tmpl.apparatus_id,
@@ -3988,53 +3995,120 @@ class EquipmentCheckService:
             )
         return deployments
 
-    async def apparatus_counts_for_items(
-        self, organization_id: str, inventory_item_ids: List[str]
-    ) -> Dict[str, int]:
-        """``{inventory_item_id: how many apparatus carry it}``, in one query.
+    async def _compartment_paths(self, template_ids: set) -> Dict[str, List[str]]:
+        """``{compartment_id: [outermost name, ..., its own name]}`` for these
+        templates, read from the checklist's own nesting.
 
-        Counted over active templates, as ``get_item_deployments`` lists them,
-        so the badge on a supply and the list it opens agree. A template made
-        for an apparatus *type* rather than one vehicle counts once per type:
+        One query for every compartment of the templates involved, then a walk
+        up ``parent_compartment_id`` in memory. A repeated id ends the walk, so
+        a parent cycle a bad edit left behind cannot loop.
+        """
+        if not template_ids:
+            return {}
+        rows = await self.db.execute(
+            select(
+                CheckTemplateCompartment.id,
+                CheckTemplateCompartment.name,
+                CheckTemplateCompartment.parent_compartment_id,
+            ).where(CheckTemplateCompartment.template_id.in_(list(template_ids)))
+        )
+        nodes = {
+            str(cid): (name, str(pid) if pid else None) for cid, name, pid in rows.all()
+        }
+        paths: Dict[str, List[str]] = {}
+        for cid in nodes:
+            chain: List[str] = []
+            seen: set = set()
+            current: Optional[str] = cid
+            while current and current in nodes and current not in seen:
+                seen.add(current)
+                name, parent = nodes[current]
+                if name:
+                    chain.append(name)
+                current = parent
+            paths[cid] = list(reversed(chain))
+        return paths
+
+    async def apparatus_places_for_items(
+        self, organization_id: str, inventory_item_ids: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """For each inventory item: how many apparatus carry it, and where.
+
+        ``{item_id: {"count": int, "places": ["Medic 1 › Main › Jump Bag", ...]}}``
+        — the apparatus (or the type a template was written for) followed by
+        the checklist's compartment path, one entry per position, in apparatus
+        then compartment order. Counted over active templates, as
+        ``get_item_deployments`` lists them, so the row and the dialog it
+        opens agree. A template for an apparatus *type* counts once per type:
         it is one place the supply is carried, even without a named truck.
         """
         ids = list({str(i) for i in inventory_item_ids})
         if not ids:
             return {}
-        rows = await self.db.execute(
-            select(
-                CheckTemplateItem.inventory_item_id,
-                EquipmentCheckTemplate.apparatus_id,
-                EquipmentCheckTemplate.apparatus_type,
-                EquipmentCheckTemplate.id,
-            )
-            .join(
-                CheckTemplateCompartment,
-                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
-            )
-            .join(
-                EquipmentCheckTemplate,
-                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
-            )
-            .where(
-                CheckTemplateItem.inventory_item_id.in_(ids),
-                EquipmentCheckTemplate.organization_id == organization_id,
-                EquipmentCheckTemplate.is_active.is_(True),
-            )
-        )
-        carriers: Dict[str, set] = {}
-        for item_id, apparatus_id, apparatus_type, template_id in rows.all():
-            key = (
-                f"apparatus:{apparatus_id}"
-                if apparatus_id
-                else (
-                    f"type:{apparatus_type}"
-                    if apparatus_type
-                    else f"tmpl:{template_id}"
+        rows = (
+            await self.db.execute(
+                select(
+                    CheckTemplateItem.inventory_item_id,
+                    CheckTemplateItem.compartment_id,
+                    EquipmentCheckTemplate.id,
+                    EquipmentCheckTemplate.name,
+                    EquipmentCheckTemplate.apparatus_id,
+                    EquipmentCheckTemplate.apparatus_type,
+                )
+                .join(
+                    CheckTemplateCompartment,
+                    CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+                )
+                .join(
+                    EquipmentCheckTemplate,
+                    EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+                )
+                .where(
+                    CheckTemplateItem.inventory_item_id.in_(ids),
+                    EquipmentCheckTemplate.organization_id == organization_id,
+                    EquipmentCheckTemplate.is_active.is_(True),
                 )
             )
-            carriers.setdefault(str(item_id), set()).add(key)
-        return {item_id: len(keys) for item_id, keys in carriers.items()}
+        ).all()
+        if not rows:
+            return {}
+        paths = await self._compartment_paths({str(r[2]) for r in rows})
+        apparatus_ids = {r[4] for r in rows if r[4]}
+        names: Dict[str, str] = {}
+        if apparatus_ids:
+            named = await self.db.execute(
+                select(Apparatus.id, Apparatus.name).where(
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == organization_id,
+                )
+            )
+            names = {str(aid): n for aid, n in named.all() if n}
+
+        found: Dict[str, Dict[str, Any]] = {}
+        for item_id, compartment_id, tmpl_id, tmpl_name, app_id, app_type in rows:
+            if app_id:
+                key, carrier = (
+                    f"apparatus:{app_id}",
+                    names.get(str(app_id)) or tmpl_name,
+                )
+            elif app_type:
+                key, carrier = f"type:{app_type}", f"Any {app_type}"
+            else:
+                key, carrier = f"tmpl:{tmpl_id}", tmpl_name
+            entry = found.setdefault(str(item_id), {"carriers": set(), "places": []})
+            entry["carriers"].add(key)
+            entry["places"].append(
+                " › ".join(
+                    [carrier or "Checklist", *paths.get(str(compartment_id), [])]
+                )
+            )
+        return {
+            item_id: {
+                "count": len(entry["carriers"]),
+                "places": sorted(set(entry["places"]), key=str.lower),
+            }
+            for item_id, entry in found.items()
+        }
 
     async def swap_item_lot(
         self,
