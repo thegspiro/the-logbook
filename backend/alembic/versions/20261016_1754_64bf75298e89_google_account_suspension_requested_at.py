@@ -1,7 +1,7 @@
 """google account suspension requested at
 
 Revision ID: 64bf75298e89
-Revises: f236c56b1b49
+Revises: 0bbf263a5ff0
 Create Date: 2026-10-16 17:54:03.184834
 
 Adds ``google_account_provisions.suspension_requested_at``: when a member's
@@ -29,7 +29,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "64bf75298e89"
-down_revision: Union[str, None] = "f236c56b1b49"
+down_revision: Union[str, None] = "0bbf263a5ff0"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
