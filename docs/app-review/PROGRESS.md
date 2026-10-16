@@ -51,7 +51,7 @@ from its open list.
 | B10 | messaging & communications | MSG2   | ✅     |
 | B11 | notifications              | NOTIF2 | ✅     |
 | B12 | integrations               | INT2   | ⬜     |
-| B13 | forms                      | FORM2  | ⬜     |
+| B13 | forms                      | FORM2  | ✅     |
 | B14 | grants & fundraising       | GF2    | ⬜     |
 | B15 | admin-hours                | AH2    | ⬜     |
 | B16 | reports & analytics        | RPT2   | ⬜     |
@@ -3196,3 +3196,29 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   file 9 pass, 2 fail without the fix, 0 under the unit job's marker expression ·
   route-permission check 0 errors · no frontend change. See notifications.md →
   Pass 5. Next: B12 integrations.
+- **B13 forms ✅ (pass 5) — seven flags could be nulled into a row that broke the
+  form's own screen (FORM2-2).** The three PATCH routes already write through
+  `apply_updates` and the service turns its `ValueError` into a 400, so a null against a
+  NOT NULL column was verified clean; the open shape was the DOC-20 / NOTIF2-5 one — a
+  **nullable column behind a plain `bool` / `str` response field**. Sent `null` for every
+  field of the three update schemas against a fresh form each time and read the row back:
+  `allow_multiple_submissions`, `require_authentication`, `notify_on_submission`,
+  `is_public` (form), `required`, `width` (field) and `is_active` (integration) stored
+  NULL, answered 500, and left `GET /forms/{id}` at 500 too. Two read falsy afterwards:
+  `if form.require_authentication and not submitted_by` means a NULL **opens an
+  authenticated form to public submission**, and `allow_multiple_submissions` NULL reads
+  as one-per-person. **Fixed** in the request schemas with a shared `_reject_null`
+  validator (422; an omitted key is untouched). The frontend types never allow null for
+  these, so it needs a direct client with `forms.manage`. The new test file derives its
+  cases from schema ∩ model ∩ response model (NOT NULL → refused; nullable-but-plain →
+  422 and the form still loads; other nullable → still clears) and pins the flag set, so
+  a new column is a new case. **Observed, not changed:** one redundant `# noqa: E712` at
+  `forms_service.py:2076` (part of the repo-wide sweep already recorded). **Verified
+  good:** AST scan found nothing unreferenced; every by-id read resolves the form
+  org-scoped first; enum validation (FORM2-1) holds; all 22 routes carry the expected
+  gate. **Not read:** the submission pipeline, integration processors, email
+  notification and stage-advance guards (their suites pass), most of `modules/forms`.
+  Gate: flake8 / black / isort / mypy clean · 16 related suites **270 passed** · new
+  file 39 pass, 7 fail without the fix, 0 under the unit job's marker expression ·
+  route-permission check 0 errors · no frontend change. See forms.md → Pass 5. Next: B14
+  grants & fundraising.
