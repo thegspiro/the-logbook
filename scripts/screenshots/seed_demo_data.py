@@ -11251,6 +11251,115 @@ class Seeder:
         )
         return peer.post(f"/training/skills-testing/tests/{test_id}/complete")
 
+    def seed_held_result_test(self, members: list[dict]) -> dict | None:
+        """An accepted result that is held back until an officer releases it.
+
+        **Release to candidate** only exists on a result that the member is
+        allowed to see but has not been shown yet, so it needs an accepted,
+        unreleased test under a release-on-request setting. Nothing else the
+        seeder builds is in that state: the sheets inherit the department's
+        release-on-completion default.
+
+        The setting is applied to this one test rather than to a sheet, so
+        every other test on that sheet keeps its behaviour. The candidate is
+        neither the demo member nor the peer examiner, so this result does not
+        add a row to the My Training lists those accounts' pictures show.
+        """
+        # Listed rather than taken from the seeding step's own return value:
+        # on a fresh database that holds the create responses, which predate the
+        # publish call and still read as drafts.
+        published = [
+            t
+            for t in items(
+                self.api.get("/training/skills-testing/templates"), "templates"
+            )
+            if pick(t, "status") == "published"
+        ]
+        excluded = {
+            DEMO_ADMIN_USERNAME,
+            DEMO_MEMBER_USERNAME,
+            DEMO_PEER_EXAMINER_USERNAME,
+        }
+        pool = sorted(
+            (
+                m
+                for m in members
+                if pick(m, "id") and pick(m, "username") not in excluded
+            ),
+            key=lambda m: str(pick(m, "username")),
+        )
+        if not published or not pool:
+            return None
+        template_id = pick(published[0], "id")
+        candidate_id = pick(pool[0], "id")
+
+        for row in items(
+            self.api.get("/training/skills-testing/tests?limit=200"), "tests"
+        ):
+            if (
+                pick(row, "template_id", "templateId") != template_id
+                or pick(row, "candidate_id", "candidateId") != candidate_id
+                or not pick(row, "validated_at", "validatedAt")
+                or pick(row, "voided_at", "voidedAt")
+            ):
+                continue
+            held = self.api.get(f"/training/skills-testing/tests/{pick(row, 'id')}")
+            if pick(
+                held, "effective_result_release", "effectiveResultRelease"
+            ) == "on_release" and not pick(held, "released_at", "releasedAt"):
+                return row
+
+        test = self.api.post(
+            "/training/skills-testing/tests",
+            {
+                "template_id": template_id,
+                "candidate_id": candidate_id,
+                "notes": "Annual proficiency check; results held for chief review.",
+                "result_release": "on_release",
+            },
+        )
+        test_id = pick(test, "id")
+        if not test_id:
+            return None
+
+        detail = self.api.get(f"/training/skills-testing/tests/{test_id}")
+        section_results = []
+        for si, section in enumerate(detail.get("template_sections") or []):
+            if not isinstance(section, dict):
+                continue
+            criteria_results = []
+            for ci, criterion in enumerate(section.get("criteria") or []):
+                if (
+                    not isinstance(criterion, dict)
+                    or criterion.get("type") == "statement"
+                ):
+                    continue
+                criteria_results.append(
+                    {
+                        "criterion_id": f"criterion-{si}-{ci}",
+                        "criterion_label": criterion.get("label", ""),
+                        "passed": True,
+                        "score": criterion.get("max_score", 1),
+                        "notes": None,
+                    }
+                )
+            section_results.append(
+                {
+                    "section_id": f"section-{si}",
+                    "section_name": section.get("name", f"Section {si + 1}"),
+                    "criteria_results": criteria_results,
+                }
+            )
+        self.api.put(
+            f"/training/skills-testing/tests/{test_id}",
+            {
+                "status": "in_progress",
+                "section_results": section_results,
+                "elapsed_seconds": 288,
+            },
+        )
+        return self.api.post(f"/training/skills-testing/tests/{test_id}/complete")
+
     def seed_skill_test_result_mix(
         self,
         base_url: str,
@@ -16228,6 +16337,10 @@ class Seeder:
             lambda: self.seed_pending_validation_test(
                 self.base_url, templates, members
             ),
+        )
+        self.step(
+            "skills test held for release",
+            lambda: self.seed_held_result_test(members),
         )
         self.step("skills test viewer", lambda: self.seed_test_viewer(members))
         self.step(
