@@ -1,8 +1,11 @@
 """
 Google Calendar Integration Service
 
-Two-way sync between The Logbook events and Google Calendar
-via the Google Calendar API v3.
+Client for publishing The Logbook events one way to a department calendar in
+Google Calendar, via the Google Calendar API v3. Nothing is read back from the provider.
+
+No sync calls this yet: only its connection test is reachable, and the
+integration card reads "coming soon" while CALENDAR_SYNC_ENABLED is off.
 
 Requires: google-api-python-client, google-auth, google-auth-oauthlib
 (already in requirements.txt).

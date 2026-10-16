@@ -1301,6 +1301,11 @@ export interface TestConnectionResult {
   message: string;
 }
 
+export interface IcalFeedLink {
+  token: string;
+  feed_path: string;
+}
+
 export interface CalcomBooking {
   external_id: string;
   title: string;
@@ -1456,6 +1461,18 @@ export const integrationsService = {
 
   async testConnection(integrationId: string): Promise<TestConnectionResult> {
     const response = await api.post<TestConnectionResult>(`/integrations/${integrationId}/test-connection`);
+    return response.data;
+  },
+
+  // The department events feed behind the iCalendar card. The path embeds the
+  // feed's bearer token; prepend window.location.origin to subscribe.
+  async getIcalFeed(integrationId: string): Promise<IcalFeedLink> {
+    const response = await api.get<IcalFeedLink>(`/integrations/${integrationId}/ical-feed`);
+    return response.data;
+  },
+
+  async rotateIcalFeed(integrationId: string): Promise<IcalFeedLink> {
+    const response = await api.post<IcalFeedLink>(`/integrations/${integrationId}/ical-feed/rotate`);
     return response.data;
   },
 

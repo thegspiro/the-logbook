@@ -1,8 +1,11 @@
 """
 Microsoft Outlook/365 Calendar Integration Service
 
-Two-way sync between The Logbook events and Outlook Calendar
-via Microsoft Graph API.
+Client for publishing The Logbook events one way to a department calendar in
+Outlook Calendar, via Microsoft Graph API. Nothing is read back from the provider.
+
+No sync calls this yet: only its connection test is reachable, and the
+integration card reads "coming soon" while CALENDAR_SYNC_ENABLED is off.
 
 Requires: msal (already in requirements.txt).
 """

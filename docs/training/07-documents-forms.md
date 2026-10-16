@@ -1201,15 +1201,14 @@ another part of The Logbook (see
 
 Integrations you can connect today include:
 
-| Integration                                                       | What it does                                         |
-| ----------------------------------------------------------------- | ---------------------------------------------------- |
-| **Google Calendar**, **Microsoft Outlook**                        | Calendar connections                                 |
-| **iCalendar (ICS)**                                               | Points members to their personal shift calendar feed |
-| **Slack**, **Discord**, **Microsoft Teams**                       | Post the department's notifications to a channel     |
-| **Salesforce**, **Documenso**, **Cal.com**, **PayPal** and others | See guide 16                                         |
+| Integration                                                       | What it does                                          |
+| ----------------------------------------------------------------- | ----------------------------------------------------- |
+| **iCalendar (ICS)**                                               | A subscribe link to the department's published events |
+| **Slack**, **Discord**, **Microsoft Teams**                       | Post the department's notifications to a channel      |
+| **Salesforce**, **Documenso**, **Cal.com**, **PayPal** and others | See guide 16                                          |
 
-Integrations marked **Coming Soon** — among them **CSV Import/Export** — cannot
-be connected yet. They have no **Connect** button.
+Integrations marked **Coming Soon** — among them **CSV Import/Export**,
+**Google Calendar** and **Microsoft Outlook** — cannot be connected yet. They have no **Connect** button.
 
 The full list, with what each one does, is in
 [Integrations → Integration Catalog](./16-integrations.md#integration-catalog).
