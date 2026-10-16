@@ -144,6 +144,25 @@ Screenshots to create or replace are in
 | Claude (MCP) member sign-in tool calls fixed                                                                | [16 — Integrations](./16-integrations.md)                                                               |
 | Plain-language rewrites of guides 02, 06–09, 11–15, 17                                                      | The guides themselves; moved screenshot notes are in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) |
 
+# October 15–16, 2026 workflow updates
+
+Index for the eighth window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-15--16-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); the prospective-members set
+was re-captured in this window.
+
+| Topic                                                                                          | Now in                                                           |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Medical Supplies: where a supply is kept, sort, bulk retire, lots dialog, size, next expiry    | [05 — Inventory](./05-inventory.md#finding-and-tidying-supplies) |
+| Catalog Links: link matches automatically, with Undo                                           | [05 — Inventory](./05-inventory.md#catalog-links)                |
+| Critical minimum means strictly below; My Checklists phone layout                              | [03 — Scheduling](./03-scheduling.md)                            |
+| Weekly email of administrator-only folders                                                     | [07 — Documents](./07-documents-forms.md)                        |
+| Google accounts: tagged on creation, Link existing members, suspension from one departure hook | [16 — Integrations](./16-integrations.md)                        |
+| Undo-drop window counts from the drop's effective date                                         | [01 — Membership](./01-membership.md)                            |
+
+---
+
 # October 12–13, 2026 workflow updates
 
 Index for the sixth window. Audit:

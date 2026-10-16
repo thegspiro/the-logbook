@@ -1,5 +1,24 @@
 # Screenshot currency
 
+## Queued by the October 15 – 16 documentation pass
+
+Nothing was captured by this pass. The prospective-members set (`15-*`,
+`20-07`, `20-12` to `20-14`) was re-captured by the feature commits and is
+current.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| Medical Supplies list (existing capture in 05) | **REPLACE** | Summary tiles are buttons; Size beside names, Next expiry, Where column, Import / export label, bulk Retire bar. _Demo data:_ two supplies ticked, one in a room and area, one on two apparatus |
+| Medical supply dialog, **Where it is** | **NEW** | Storage path and apparatus compartment paths with counts |
+| Medical supply form | **REPLACE** | New Room, Storage area and Size fields |
+| Medical Supplies **Lots** dialog | **NEW** | Lots per supply; manager add and edit |
+| Medical categories page | **REPLACE** | Cards read "Show N supplies"; a category opens to its supplies |
+| Catalog Links, after **Link matches automatically** | **NEW** | Linked list, "check this" marker, Undo; the confirm dialog is neutral, not red |
+| My Checklists on a phone | **NEW** and replace `03-*` phone captures | Day headings, overdue marker, ⋯ menu, no filter |
+| Check form with a count at its minimum | **CHECK** | No CRITICAL warning at or above the minimum |
+| Google Workspace card (16) | **REPLACE** | **Link existing members** action and its preview |
+| Documents admin-only folder confirmation (07) | unchanged placeholder | Still needed |
+
 ## Medical supply inventory switch, re-shot 2026-10-15
 
 The Claude (MCP) connect and settings forms gained a fifth switch, **Share

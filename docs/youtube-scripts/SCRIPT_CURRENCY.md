@@ -1,5 +1,22 @@
 # Script currency
 
+## Flagged by the 2026-10-15 → 10-16 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-15--16-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 03 / 05 (Medical Supplies), 06 (My Checklists on a phone).
+
+| Script                           | Beat                  | Was                                 | Now                                                                                     |
+| -------------------------------- | --------------------- | ----------------------------------- | --------------------------------------------------------------------------------------- |
+| **03 / 05** (if inventory shown) | Medical Supplies      | Flat list, free-text location       | Room and storage area, **Where it is** dialog, sort, bulk retire, Lots, clickable tiles |
+| **05 / 07** (if shown)           | Catalog Links         | Link by hand                        | **Link matches automatically**, then **Undo**                                           |
+| **06** (member)                  | My Checklists         | Cards with All / Start / End filter | Compact rows by day on a phone; filter removed                                          |
+| **06 / 05**                      | Equipment check count | CRITICAL at the minimum             | CRITICAL only below the minimum                                                         |
+| **03** (IT, if Google shown)     | Google Workspace      | Accounts suspended at five places   | **Link existing members**; one departure hook                                           |
+| **03**                           | Upgrading             | —                                   | Unraid and minimal compose need explicit secrets                                        |
+| **07** (if documents shown)      | Admin-only folders    | Page list only                      | Weekly email to full administrators                                                     |
+
 ## Flagged by the 2026-10-14 → 10-15 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-14--15-2026).

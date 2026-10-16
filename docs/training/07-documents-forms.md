@@ -178,6 +178,13 @@ folder**, with **Go back and change it** and **Save for administrators only**.
 A department made up only of administrators, such as a new installation, is
 not asked.
 
+**Full administrators are emailed a weekly list.** A folder can become
+administrator-only without anyone choosing it (auto-archive, a tier change).
+Once a week, while any such folder exists, each active full administrator gets
+an email listing every one, the same list the Documents page shows. If sending
+fails it retries the next day. The email is the optional **Document folder
+access** kind; a department can make it required under notification settings.
+
 _[Screenshot needed: the confirmation shown after choosing Specific roles with a position nobody holds, in Manage folder.]_
 
 ---
