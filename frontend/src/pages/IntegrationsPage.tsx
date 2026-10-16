@@ -3,6 +3,7 @@ import { DialogPanel } from '../components/ux/DialogPanel';
 import { McpServiceKeyPanel } from '../components/integrations/McpServiceKeyPanel';
 import { McpOAuthPanel } from '../components/integrations/McpOAuthPanel';
 import { IcalFeedPanel } from '../components/integrations/IcalFeedPanel';
+import { GoogleCalendarPanel } from '../components/integrations/GoogleCalendarPanel';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import {
   Plug,
@@ -316,6 +317,27 @@ const CONFIG_TYPES = new Set([
   'google-workspace',
 ]);
 
+// Connected by a provider sign-in rather than a form: the card body
+// (GoogleCalendarPanel) carries its own Connect and Disconnect buttons.
+const GOOGLE_CALENDAR_TYPE = 'google-calendar';
+const OAUTH_PANEL_TYPES = new Set([GOOGLE_CALENDAR_TYPE]);
+
+// What each Google Calendar connect failure code means to the person who
+// just came back from Google's consent screen.
+const GOOGLE_CALENDAR_ERRORS: Record<string, string> = {
+  access_denied: 'Google sign-in was cancelled.',
+  invalid_state: 'The sign-in link was already used or came from another browser. Start again.',
+  expired_state: 'The sign-in took longer than ten minutes. Start again.',
+  integration_not_found: 'Google Calendar is not set up for this department.',
+  unavailable: 'Calendar publishing is turned off on this server.',
+  not_authorized: 'You no longer have permission to manage integrations.',
+  missing_client_credentials: 'No Google OAuth client is configured.',
+  token_exchange_failed: 'Google did not accept the sign-in. Check the OAuth client and try again.',
+  no_refresh_token: 'Google did not grant offline access. Try connecting again.',
+  calendar_scope_not_granted: 'The calendar permission was not granted on the consent screen.',
+  calendar_create_failed: 'Signed in, but the department calendar could not be created.',
+};
+
 // Its service-account key can create accounts anywhere in the department's
 // Google domain, so the backend requires admin.access on top of
 // integrations.manage to connect, change or disconnect it.
@@ -524,6 +546,24 @@ const IntegrationsPage: React.FC = () => {
       void navigate('/integrations', { replace: true });
     }
   }, [location.search, navigate, loadIntegrations]);
+
+  // The same return leg for Google Calendar: ?google_calendar=connected or
+  // ?google_calendar_error=<code>. The list loads on mount, so it already
+  // shows the new connection.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const connected = params.get('google_calendar');
+    const gcalError = params.get('google_calendar_error');
+    if (connected === 'connected') {
+      toast.success('Google Calendar connected. Events will appear in the new calendar within a few minutes.');
+      void navigate('/integrations', { replace: true });
+    } else if (gcalError) {
+      toast.error(
+        `Google Calendar was not connected. ${GOOGLE_CALENDAR_ERRORS[gcalError] ?? 'Something went wrong; try again.'}`
+      );
+      void navigate('/integrations', { replace: true });
+    }
+  }, [location.search, navigate]);
 
   const getUI = (type: string) => INTEGRATION_UI[type] ?? DEFAULT_UI;
 
@@ -1883,6 +1923,19 @@ const IntegrationsPage: React.FC = () => {
                 {integration.integration_type === 'ical' &&
                   integration.status === ConnectionStatus.CONNECTED &&
                   canManage && <IcalFeedPanel integrationId={integration.id} />}
+                {integration.integration_type === GOOGLE_CALENDAR_TYPE &&
+                  integration.status !== 'coming_soon' &&
+                  canManage && (
+                    <GoogleCalendarPanel
+                      integration={integration}
+                      onUpdated={(updated) =>
+                        setIntegrations((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+                      }
+                      onDisconnected={() => {
+                        void loadIntegrations();
+                      }}
+                    />
+                  )}
                 <div className="flex flex-wrap justify-end gap-2">
                   {integration.status !== 'coming_soon' && canManage && (
                     <RouterLink
@@ -1974,44 +2027,47 @@ const IntegrationsPage: React.FC = () => {
                           <span>Test</span>
                         </button>
                       )}
-                      {canChange(integration.integration_type) && (
-                        <button
-                          onClick={() => {
-                            void handleDisconnect(integration.id);
-                          }}
-                          // Disconnecting the Claude integration unmounts the key
-                          // panel; mid-issue that would lose the one-time plaintext.
-                          disabled={mcpBusy && integration.integration_type === 'claude-mcp'}
-                          title={
-                            mcpBusy && integration.integration_type === 'claude-mcp'
-                              ? 'Wait for the current key request to finish'
-                              : undefined
-                          }
-                          className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
-                        >
-                          <Settings className="h-3.5 w-3.5" />
-                          <span>{activation ? 'Deactivate' : 'Disconnect'}</span>
-                        </button>
-                      )}
+                      {canChange(integration.integration_type) &&
+                        !OAUTH_PANEL_TYPES.has(integration.integration_type) && (
+                          <button
+                            onClick={() => {
+                              void handleDisconnect(integration.id);
+                            }}
+                            // Disconnecting the Claude integration unmounts the key
+                            // panel; mid-issue that would lose the one-time plaintext.
+                            disabled={mcpBusy && integration.integration_type === 'claude-mcp'}
+                            title={
+                              mcpBusy && integration.integration_type === 'claude-mcp'
+                                ? 'Wait for the current key request to finish'
+                                : undefined
+                            }
+                            className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                          >
+                            <Settings className="h-3.5 w-3.5" />
+                            <span>{activation ? 'Deactivate' : 'Disconnect'}</span>
+                          </button>
+                        )}
                     </>
                   )}
                   {integration.status === 'available' && canManage && !canChange(integration.integration_type) && (
                     <span className="text-theme-text-muted text-xs">An organization administrator connects this</span>
                   )}
-                  {integration.status === 'available' && canChange(integration.integration_type) && (
-                    <button
-                      type="button"
-                      data-integration-connect={integration.id}
-                      onClick={() => {
-                        resetFormState(integration);
-                        setShowConnectModal(integration.id);
-                      }}
-                      className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-indigo-600/20 px-4 py-1.5 text-sm text-indigo-700 transition-colors hover:bg-indigo-600/30"
-                    >
-                      {activation ? <Check className="h-3.5 w-3.5" /> : <Plug className="h-3.5 w-3.5" />}
-                      <span>{activation ? 'Activate' : 'Connect'}</span>
-                    </button>
-                  )}
+                  {integration.status === 'available' &&
+                    canChange(integration.integration_type) &&
+                    !OAUTH_PANEL_TYPES.has(integration.integration_type) && (
+                      <button
+                        type="button"
+                        data-integration-connect={integration.id}
+                        onClick={() => {
+                          resetFormState(integration);
+                          setShowConnectModal(integration.id);
+                        }}
+                        className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-indigo-600/20 px-4 py-1.5 text-sm text-indigo-700 transition-colors hover:bg-indigo-600/30"
+                      >
+                        {activation ? <Check className="h-3.5 w-3.5" /> : <Plug className="h-3.5 w-3.5" />}
+                        <span>{activation ? 'Activate' : 'Connect'}</span>
+                      </button>
+                    )}
                 </div>
               </div>
             );
