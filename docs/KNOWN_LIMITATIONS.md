@@ -5659,6 +5659,27 @@ public API or add a feature:
 
 Until one is chosen, the fields are harmless to set and useless.
 
+## NOTIF2-6 — Notification Rules Can Be Created And Toggled But Not Edited Or Deleted In The UI (2026-10-15)
+
+The Notifications → Rules screen calls `getRules`, `createRule` and `toggleRule` and
+nothing else. `PATCH /notifications/rules/{id}` and `DELETE /notifications/rules/{id}`
+work, and `updateRule` / `deleteRule` / `getRule` exist in
+`frontend/src/services/communicationsServices.ts`, but no screen calls them. A rule
+created with the wrong trigger, or a duplicate, can therefore only be switched off,
+never removed or corrected — and because the resolver keeps a notification on if
+**any** rule for its trigger is enabled, every stray rule has to be remembered and
+switched off one by one.
+
+**Why not fixed.** It is a missing screen, not a defect in what ships, and it needs a
+design call. **Owner decision:**
+
+1. **Add edit and delete to the rules list** — the endpoints and client wrappers
+   are already there; the work is a row menu and a confirm dialog (`useConfirm`).
+2. **Leave as is** — rules stay append-and-toggle, and the wrappers are documented
+   as reserved.
+
+See `docs/app-review/notifications.md` → Pass 5.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

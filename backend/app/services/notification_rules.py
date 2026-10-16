@@ -19,7 +19,7 @@ silently lose their reminders because a table they never populated is empty —
 a missed drill notice is a real operational cost, and nobody would connect it
 to an upgrade.
 
-**Only enforced triggers claim to work.** :data:`ENFORCED_TRIGGERS` is the set
+**Only enforced triggers claim to work.** ``ENFORCED_TRIGGERS`` (in ``app.models.notification``) is the set
 a sender actually consults. The others remain in the enum because rules may
 already exist for them, but the API marks them so the admin screen can show
 them as not enforced rather than repeating the original bug at a smaller
@@ -34,12 +34,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.notification import (  # noqa: F401  (re-exported for callers)
-    ENFORCED_TRIGGERS,
-    NotificationRule,
-    NotificationTrigger,
-    is_enforced,
-)
+from app.models.notification import NotificationRule, NotificationTrigger
 
 # What a trigger does for an organization that has no rule for it. These must
 # keep matching what the sender did before it consulted the resolver.
