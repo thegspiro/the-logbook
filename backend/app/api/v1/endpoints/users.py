@@ -2175,13 +2175,6 @@ async def delete_user(
                 ),
             )
 
-        if google_address:
-            await google.suspend_detached(
-                str(current_user.organization_id),
-                google_address,
-                actor_id=str(current_user.id),
-            )
-
         await log_audit_event(
             db=db,
             event_type="user_hard_deleted",
@@ -2196,6 +2189,14 @@ async def delete_user(
             user_id=str(current_user.id),
             username=current_user.username,
         )
+        # Last, after every read of the session's objects: a failure inside
+        # rolls the session back, which expires every loaded instance.
+        if google_address:
+            await google.suspend_detached(
+                str(current_user.organization_id),
+                google_address,
+                actor_id=str(current_user.id),
+            )
     else:
         # Preserve membership number so it can be restored on reactivation,
         # then clear it to free the unique index for new members.
@@ -2212,12 +2213,6 @@ async def delete_user(
         )
         user.deleted_at = datetime.now(timezone.utc)
         await db.commit()
-        if sync_google:
-            await google.reconcile_suspension(
-                str(user_id),
-                str(current_user.organization_id),
-                actor_id=str(current_user.id),
-            )
 
         await log_audit_event(
             db=db,
@@ -2232,6 +2227,14 @@ async def delete_user(
             user_id=str(current_user.id),
             username=current_user.username,
         )
+        # Last, after every read of the session's objects: a failure inside
+        # rolls the session back, which expires every loaded instance.
+        if sync_google:
+            await google.reconcile_suspension(
+                str(user_id),
+                str(current_user.organization_id),
+                actor_id=str(current_user.id),
+            )
 
 
 @router.post(

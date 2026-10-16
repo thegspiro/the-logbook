@@ -51,7 +51,14 @@ def _translate(
     from google.auth.exceptions import RefreshError
     from googleapiclient.errors import HttpError
 
-    logger.warning("Google Workspace {} failed: {!r}", action, exc)
+    # Only the type and HTTP status are logged: Google's error carries the
+    # request URL (with the member's address as userKey) and its raw body.
+    logger.warning(
+        "Google Workspace {} failed: {} (HTTP {})",
+        action,
+        type(exc).__name__,
+        getattr(getattr(exc, "resp", None), "status", "-"),
+    )
     if isinstance(exc, GoogleWorkspaceError):
         return exc
     if isinstance(exc, RefreshError):
@@ -103,17 +110,23 @@ class GoogleWorkspaceDirectory:
     def __init__(self, service_account_info: dict[str, Any], admin_email: str):
         self._info = service_account_info
         self._admin_email = admin_email
+        self._credentials: Any = None
 
     def _service(self) -> Any:
-        # Built per call: httplib2 connections are not thread-safe, and each
-        # call runs on whichever worker thread asyncio hands it.
+        # The HTTP transport is built per call -- httplib2 connections are not
+        # thread-safe, and each call runs on whichever worker thread asyncio
+        # hands it -- but the credentials are kept, so one access token serves
+        # every call this client makes (a conversion with groups makes several,
+        # one after another, never concurrently).
         from google.oauth2 import service_account
         from google_auth_httplib2 import AuthorizedHttp
         from googleapiclient.discovery import build
 
-        creds = service_account.Credentials.from_service_account_info(
-            self._info, scopes=list(DIRECTORY_SCOPES), subject=self._admin_email
-        )
+        if self._credentials is None:
+            self._credentials = service_account.Credentials.from_service_account_info(
+                self._info, scopes=list(DIRECTORY_SCOPES), subject=self._admin_email
+            )
+        creds = self._credentials
         return build(
             "admin",
             "directory_v1",
@@ -151,28 +164,29 @@ class GoogleWorkspaceDirectory:
         google_id = created.get("id") if isinstance(created, dict) else None
         return google_id if isinstance(google_id, str) else None
 
-    async def is_suspended(self, primary_email: str) -> bool:
+    async def get_user(self, user_key: str) -> dict[str, Any]:
+        """The account *user_key* resolves to. An alias resolves to the account
+        that owns it, which is why callers compare ``primaryEmail``."""
+
         def call() -> Any:
             return (
                 self._service()
                 .users()
-                .get(userKey=primary_email, projection="basic")
+                .get(userKey=user_key, projection="basic")
                 .execute()
             )
 
         user = await self._run("account lookup", call, user_scoped=True)
-        return bool(user.get("suspended")) if isinstance(user, dict) else False
+        return user if isinstance(user, dict) else {}
 
-    async def set_suspended(self, primary_email: str, suspended: bool) -> None:
+    async def is_suspended(self, user_key: str) -> bool:
+        return bool((await self.get_user(user_key)).get("suspended"))
+
+    async def set_suspended(self, user_key: str, suspended: bool) -> None:
         body = {"suspended": suspended}
 
         def call() -> Any:
-            return (
-                self._service()
-                .users()
-                .update(userKey=primary_email, body=body)
-                .execute()
-            )
+            return self._service().users().update(userKey=user_key, body=body).execute()
 
         action = "account suspension" if suspended else "account unsuspension"
         await self._run(action, call, user_scoped=True)

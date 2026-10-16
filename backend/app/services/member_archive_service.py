@@ -328,10 +328,6 @@ async def reactivate_member(
         # would permanently lose the member's history with nothing restored.
 
     await db.commit()
-    if sync_google:
-        await google.reconcile_suspension(
-            user_id, organization_id, actor_id=reactivated_by
-        )
 
     # Audit log
     try:
@@ -363,7 +359,7 @@ async def reactivate_member(
     except Exception as e:
         logger.error(f"Failed to log reactivation audit event: {e}")
 
-    return {
+    reactivated = {
         "user_id": user_id,
         "member_name": member.display_name,
         "previous_status": previous_status,
@@ -372,3 +368,10 @@ async def reactivate_member(
         "reason": reason or "Reactivated by leadership",
         "service_credit": service_credit.value,
     }
+    # Last, after every read of the member: a failure inside rolls the
+    # session back, which expires every loaded instance.
+    if sync_google:
+        await google.reconcile_suspension(
+            user_id, organization_id, actor_id=reactivated_by
+        )
+    return reactivated

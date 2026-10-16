@@ -449,12 +449,6 @@ async def change_member_status(
     member.status_change_reason = request.reason
     await db.commit()
     await db.refresh(member)
-    if sync_google:
-        await google.reconcile_suspension(
-            str(member.id),
-            str(current_user.organization_id),
-            actor_id=str(current_user.id),
-        )
 
     # Audit log
     await log_audit_event(
@@ -598,6 +592,14 @@ async def change_member_status(
             )
             response.email_sent = True
 
+    # Last, after every read of the member: a failure inside rolls the
+    # session back, which expires every loaded instance.
+    if sync_google:
+        await google.reconcile_suspension(
+            str(user_id),
+            str(current_user.organization_id),
+            actor_id=str(current_user.id),
+        )
     return response
 
 
@@ -796,12 +798,6 @@ async def undo_member_drop(
     member.status_changed_at = datetime.now(timezone.utc)
     member.status_change_reason = request.reason or "Drop undone"
     await db.commit()
-    if sync_google:
-        await google.reconcile_suspension(
-            str(member.id),
-            str(current_user.organization_id),
-            actor_id=str(current_user.id),
-        )
 
     await log_audit_event(
         db=db,
@@ -819,11 +815,20 @@ async def undo_member_drop(
         username=current_user.username,
     )
 
-    return MemberStatusChangeResponse(
+    response = MemberStatusChangeResponse(
         user_id=str(user_id),
         previous_status=dropped_as.value,
         new_status=restore.value,
     )
+    # Last, after every read of the member: a failure inside rolls the
+    # session back, which expires every loaded instance.
+    if sync_google:
+        await google.reconcile_suspension(
+            str(user_id),
+            str(current_user.organization_id),
+            actor_id=str(current_user.id),
+        )
+    return response
 
 
 # ==================== Property Return Reminders ====================

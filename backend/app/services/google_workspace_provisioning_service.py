@@ -17,7 +17,7 @@ Google user, holding a license, behind any conversion that then failed.
 
 import html
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from loguru import logger
 from sqlalchemy import select
@@ -67,10 +67,10 @@ _SUSPENDABLE = frozenset(
 
 
 def suspendable_address(row: Optional[GoogleAccountProvision]) -> Optional[str]:
-    """The address to suspend for *row*, when it names an account in Google."""
+    """The key to suspend for *row*, when it names an account in Google."""
     if row is None or row.status not in _SUSPENDABLE:
         return None
-    return row.primary_email
+    return _account_key(row)
 
 
 def member_has_departed(user: User) -> bool:
@@ -111,6 +111,45 @@ def google_credentials_text(primary_email: str, password: str) -> str:
         "Google will ask you to choose a new password. A new account can take "
         "a few minutes before it accepts a sign-in.\n"
     )
+
+
+ADDRESS_TAKEN_MESSAGE = (
+    "That address belongs to a Google group, or is an alias on another "
+    "person's account, so The Logbook will not take it over. Free the address "
+    "or change the member's department email, then retry."
+)
+
+# An account Google says was created after The Logbook staged this record was
+# created by The Logbook: an earlier attempt that succeeded at Google but did
+# not get its answer back (a timeout, a crash before the commit). The margin
+# covers clock skew between this server and Google.
+_OWN_ACCOUNT_SKEW = timedelta(minutes=2)
+
+
+def _domain_mismatch(domain: str) -> str:
+    return (
+        f"The member's address is not on the Google Workspace domain {domain}. "
+        "Check the department email settings."
+    )
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def _google_time(value: object) -> Optional[datetime]:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return _as_utc(datetime.fromisoformat(value.replace("Z", "+00:00")))
+    except ValueError:
+        return None
+
+
+def _account_key(row: GoogleAccountProvision) -> str:
+    """Google's immutable user id when known. An address can be renamed or
+    re-pointed as an alias to someone else; the id cannot."""
+    return row.google_user_id or row.primary_email
 
 
 class GoogleWorkspaceProvisioningService:
@@ -166,10 +205,7 @@ class GoogleWorkspaceProvisioningService:
         if _domain_of(email) != domain:
             row.status = GoogleAccountStatus.FAILED.value
             row.pending_groups = None
-            row.last_error = (
-                f"The member's address is not on the Google Workspace domain "
-                f"{domain}. Check the department email settings."
-            )
+            row.last_error = _domain_mismatch(domain)
         self.db.add(row)
         return row
 
@@ -199,6 +235,17 @@ class GoogleWorkspaceProvisioningService:
         self, user_id: str, organization_id: str
     ) -> Optional[GoogleAccountProvision]:
         return await self._load(organization_id, user_id=user_id)
+
+    async def _load_member(self, user_id: str, organization_id: str) -> Optional[User]:
+        member: Optional[User] = (
+            await self.db.execute(
+                select(User).where(
+                    User.id == str(user_id),
+                    User.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        return member
 
     async def _begin_attempt(self, row: GoogleAccountProvision) -> None:
         """Stamp the attempt and commit, releasing the row lock before Google."""
@@ -232,21 +279,11 @@ class GoogleWorkspaceProvisioningService:
         domain = str((integration.config or {}).get("domain", "")).lower()
         if _domain_of(row.primary_email) != domain:
             row.status = GoogleAccountStatus.FAILED.value
-            row.last_error = (
-                f"The member's address is not on the Google Workspace domain "
-                f"{domain}. Check the department email settings."
-            )
+            row.last_error = _domain_mismatch(domain)
             await self.db.commit()
             return None
 
-        user = (
-            await self.db.execute(
-                select(User).where(
-                    User.id == row.user_id,
-                    User.organization_id == str(organization_id),
-                )
-            )
-        ).scalar_one_or_none()
+        user = await self._load_member(row.user_id, organization_id)
         if user is None:
             await self.db.commit()
             return None
@@ -260,6 +297,7 @@ class GoogleWorkspaceProvisioningService:
             await self.db.commit()
         password = generate_temporary_password()
         created = False
+        directory: Any = None
         try:
             directory = directory_for(integration)
             row.google_user_id = await directory.create_user(
@@ -269,9 +307,7 @@ class GoogleWorkspaceProvisioningService:
             row.last_error = None
             created = True
         except GoogleAccountExistsError:
-            row.status = GoogleAccountStatus.LINKED_EXISTING.value
-            row.pending_groups = None
-            row.last_error = LINKED_EXISTING_MESSAGE
+            created = await self._settle_existing_address(row, directory, password)
         except GoogleWorkspaceError as exc:
             row.status = GoogleAccountStatus.FAILED.value
             row.last_error = str(exc)
@@ -290,11 +326,72 @@ class GoogleWorkspaceProvisioningService:
         )
         return password if created else None
 
+    async def _settle_existing_address(
+        self, row: GoogleAccountProvision, directory: Any, password: str
+    ) -> bool:
+        """Decide what an address Google already holds means for this member.
+
+        Returns True when the account turns out to be The Logbook's own, whose
+        password has then been reset to *password* for delivery.
+
+        Google answers a lookup of an alias with the account that owns it, so
+        an address is only treated as the member's when it is that account's
+        primary address. Linking an alias would make the member's departure
+        suspend somebody else.
+        """
+        try:
+            account = await directory.get_user(row.primary_email)
+        except GoogleAccountNotFoundError:
+            account = {}  # a group holds the address; groups are not users
+        except GoogleWorkspaceError as exc:
+            row.status = GoogleAccountStatus.FAILED.value
+            row.last_error = str(exc)
+            return False
+
+        google_id = account.get("id")
+        if str(account.get("primaryEmail", "")).lower() != row.primary_email or not (
+            isinstance(google_id, str) and google_id
+        ):
+            row.status = GoogleAccountStatus.FAILED.value
+            row.pending_groups = None
+            row.last_error = ADDRESS_TAKEN_MESSAGE
+            return False
+
+        row.google_user_id = google_id
+        created_at = _google_time(account.get("creationTime"))
+        staged_at = _as_utc(row.created_at) if row.created_at else None
+        if (
+            created_at is not None
+            and staged_at is not None
+            and created_at >= staged_at - _OWN_ACCOUNT_SKEW
+        ):
+            # Ours, from an attempt whose answer never arrived. Nobody holds
+            # its password, so it is reset for this attempt to deliver.
+            try:
+                await directory.reset_password(google_id, password)
+            except GoogleWorkspaceError as exc:
+                row.status = GoogleAccountStatus.CREATED.value
+                row.credentials_sent = False
+                row.last_error = str(exc)
+                return False
+            row.status = GoogleAccountStatus.CREATED.value
+            row.last_error = None
+            return True
+
+        row.status = GoogleAccountStatus.LINKED_EXISTING.value
+        row.pending_groups = None
+        row.last_error = LINKED_EXISTING_MESSAGE
+        return False
+
     async def _add_pending_groups(
         self, row: GoogleAccountProvision, integration: Integration
     ) -> None:
         remaining: list[str] = []
-        directory = directory_for(integration)
+        try:
+            directory = directory_for(integration)
+        except GoogleWorkspaceError as exc:
+            row.last_error = str(exc)
+            return
         for group in list(row.pending_groups or []):
             try:
                 await directory.add_to_group(str(group), row.primary_email)
@@ -325,14 +422,7 @@ class GoogleWorkspaceProvisioningService:
         row = await self._load(organization_id, provision_id=provision_id)
         if row is None:
             return False
-        user = (
-            await self.db.execute(
-                select(User).where(
-                    User.id == row.user_id,
-                    User.organization_id == str(organization_id),
-                )
-            )
-        ).scalar_one_or_none()
+        user = await self._load_member(row.user_id, organization_id)
         organization = (
             await self.db.execute(
                 select(Organization).where(Organization.id == str(organization_id))
@@ -463,18 +553,19 @@ class GoogleWorkspaceProvisioningService:
         outcome = "unchanged"
         try:
             directory = directory_for(integration)
+            key = _account_key(row)
             if wanted and not row.suspended_by_logbook:
-                if await directory.is_suspended(row.primary_email):
+                if await directory.is_suspended(key):
                     # Someone suspended it in Google already. Not ours, so a
                     # return will not lift it.
                     outcome = "already_suspended"
                 else:
-                    await directory.set_suspended(row.primary_email, True)
+                    await directory.set_suspended(key, True)
                     row.suspended_by_logbook = True
                     row.suspended_at = datetime.now(timezone.utc)
                     outcome = "suspended"
             elif not wanted and row.suspended_by_logbook:
-                await directory.set_suspended(row.primary_email, False)
+                await directory.set_suspended(key, False)
                 row.suspended_by_logbook = False
                 row.suspended_at = None
                 outcome = "unsuspended"
@@ -510,7 +601,7 @@ class GoogleWorkspaceProvisioningService:
     async def suspend_detached(
         self,
         organization_id: str,
-        primary_email: str,
+        account_key: str,
         actor_id: Optional[str],
     ) -> bool:
         """Suspend an account whose record is already gone (a hard delete).
@@ -527,10 +618,10 @@ class GoogleWorkspaceProvisioningService:
                 outcome = "not_connected"
             else:
                 directory = directory_for(integration)
-                if await directory.is_suspended(primary_email):
+                if await directory.is_suspended(account_key):
                     outcome = "already_suspended"
                 else:
-                    await directory.set_suspended(primary_email, True)
+                    await directory.set_suspended(account_key, True)
                     outcome = "suspended"
         except GoogleAccountNotFoundError:
             outcome = "missing"
@@ -598,23 +689,15 @@ class GoogleWorkspaceProvisioningService:
         )
         if nothing_to_do:
             raise ProvisionRetryError("This Google account needs nothing further.")
-        if row.status in (
-            GoogleAccountStatus.PENDING.value,
-            GoogleAccountStatus.FAILED.value,
-        ):
-            member = (
-                await self.db.execute(
-                    select(User).where(
-                        User.id == row.user_id,
-                        User.organization_id == str(organization_id),
-                    )
-                )
-            ).scalar_one_or_none()
-            if member is None or member_has_departed(member):
-                raise ProvisionRetryError(
-                    "This member has left the department, so no Google account "
-                    "will be created for them."
-                )
+        # Creating an account, resetting its password and adding it to groups
+        # all hand something to the member; none of it is for someone who has
+        # left. Only the suspension, settled above, still applies to them.
+        member = await self._load_member(row.user_id, organization_id)
+        if member is None or member_has_departed(member):
+            raise ProvisionRetryError(
+                "This member has left the department, so their Google account "
+                "is not set up any further."
+            )
 
         await self._begin_attempt(row)
 
@@ -633,7 +716,7 @@ class GoogleWorkspaceProvisioningService:
                 password = generate_temporary_password()
                 try:
                     await directory_for(integration).reset_password(
-                        row.primary_email, password
+                        _account_key(row), password
                     )
                 except GoogleWorkspaceError as exc:
                     row.last_error = str(exc)

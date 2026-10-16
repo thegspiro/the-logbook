@@ -75,6 +75,7 @@ class FakeDirectory:
         self.groups: list[tuple[str, str]] = []
         self.resets: list[str] = []
         self.suspend_calls = []
+        self.keys = []
 
     async def create_user(self, email, given, family, password, org_unit):
         if self.create_error:
@@ -87,24 +88,39 @@ class FakeDirectory:
             raise self.group_error
         self.groups.append((group, email))
 
-    async def reset_password(self, email, password):
+    async def reset_password(self, key, password):
         if self.reset_error:
             raise self.reset_error
+        self.keys.append(key)
         self.resets.append(password)
 
-    # Suspension: ``suspended`` is Google's state for the one account.
+    # ``existing`` is what users.get answers for the address (an account
+    # created elsewhere); ``lookup_error`` replaces that answer. ``suspended``
+    # is Google's suspension state for the one account.
+    existing: Optional[dict] = None
+    lookup_error: Optional[Exception] = None
     suspended = False
     suspend_error: Optional[Exception] = None
     suspend_calls: list[bool]
+    keys: list[str]
 
-    async def is_suspended(self, email):
+    async def get_user(self, key):
+        self.keys.append(key)
         if self.suspend_error:
             raise self.suspend_error
-        return self.suspended
+        if self.lookup_error:
+            raise self.lookup_error
+        account = dict(self.existing or {"id": "google-id-1"})
+        account["suspended"] = self.suspended
+        return account
 
-    async def set_suspended(self, email, suspended):
+    async def is_suspended(self, key):
+        return bool((await self.get_user(key))["suspended"])
+
+    async def set_suspended(self, key, suspended):
         if self.suspend_error:
             raise self.suspend_error
+        self.keys.append(key)
         self.suspend_calls.append(suspended)
         self.suspended = suspended
 
@@ -398,21 +414,94 @@ class TestConversion:
         assert welcome.call_args.kwargs["google_account"] is None
         assert welcome.call_args.kwargs["prospect"].first_name == "Jordan"
 
-    async def test_an_existing_address_is_linked_and_left_alone(self, db_session):
+    async def _provision_into_existing(self, db_session, **lookup):
+        """Convert a member whose address Google already holds."""
         org = await _org(db_session)
         await _connect(db_session, org)
         svc, prospect = await _prospect(db_session, org)
-        fake = FakeDirectory(create_error=GoogleAccountExistsError("exists"))
-
         result = await svc._do_transfer(prospect, None)
         await db_session.commit()
-        with patch(f"{SERVICE}.directory_for", return_value=fake):
+        fake = FakeDirectory(create_error=GoogleAccountExistsError("exists"))
+        fake.existing = lookup.get("existing")
+        fake.lookup_error = lookup.get("lookup_error")
+        if callable(fake.existing):
+            fake.existing = fake.existing(result["email"])
+        with (
+            patch(f"{SERVICE}.directory_for", return_value=fake),
+            patch(
+                "app.services.email_service.EmailService.send_email",
+                AsyncMock(return_value=(1, 0)),
+            ) as send,
+        ):
             await result["_provision_google"]()
+        return await _row(db_session, result["user_id"]), fake, send
 
-        row = await _row(db_session, result["user_id"])
+    async def test_an_existing_account_is_linked_and_left_alone(self, db_session):
+        row, fake, _ = await self._provision_into_existing(
+            db_session,
+            existing=lambda email: {
+                "id": "g-other",
+                "primaryEmail": email,
+                "creationTime": "2019-03-01T12:00:00.000Z",
+            },
+        )
         assert row.status == GoogleAccountStatus.LINKED_EXISTING.value
+        assert row.google_user_id == "g-other"
         assert fake.groups == []
+        assert fake.resets == []
         assert row.credentials_sent is False
+
+    async def test_an_alias_on_someone_elses_account_is_never_linked(self, db_session):
+        # Google answers a lookup of an alias with the account that owns it.
+        # Linking it would make this member's departure suspend that person.
+        row, fake, _ = await self._provision_into_existing(
+            db_session,
+            existing={
+                "id": "g-chief",
+                "primaryEmail": "chief@firedept.org",
+                "creationTime": "2019-03-01T12:00:00.000Z",
+            },
+        )
+        assert row.status == GoogleAccountStatus.FAILED.value
+        assert row.google_user_id is None
+        assert "alias" in (row.last_error or "")
+        assert (
+            await GoogleWorkspaceProvisioningService(db_session).stage_suspension(
+                row.user_id, row.organization_id, suspended=True
+            )
+            is False
+        )
+
+    async def test_an_address_held_by_a_group_is_never_linked(self, db_session):
+        from app.services.integration_services.google_workspace_service import (
+            GoogleAccountNotFoundError,
+        )
+
+        row, _, _ = await self._provision_into_existing(
+            db_session, lookup_error=GoogleAccountNotFoundError("group")
+        )
+        assert row.status == GoogleAccountStatus.FAILED.value
+        assert "group" in (row.last_error or "")
+
+    async def test_an_account_an_earlier_attempt_created_is_recognised_as_ours(
+        self, db_session
+    ):
+        # users.insert succeeded at Google but its answer never arrived; the
+        # retry's 409 is The Logbook's own account, whose password nobody has.
+        row, fake, send = await self._provision_into_existing(
+            db_session,
+            existing=lambda email: {
+                "id": "g-ours",
+                "primaryEmail": email,
+                "creationTime": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        assert row.status == GoogleAccountStatus.CREATED.value
+        assert row.google_user_id == "g-ours"
+        assert fake.keys[-1] == "g-ours"
+        assert len(fake.resets) == 1
+        assert fake.resets[0] in send.call_args.kwargs["text_body"]
+        assert row.credentials_sent is True
 
     async def test_a_google_failure_never_undoes_the_conversion(self, db_session):
         org = await _org(db_session)
@@ -437,16 +526,21 @@ class TestConversion:
         org = await _org(db_session)
         await _connect(db_session, org, domain="other.org")
         svc, prospect = await _prospect(db_session, org)
-        fake = FakeDirectory()
 
-        result = await svc._do_transfer(prospect, None)
-        await db_session.commit()
-        with patch(f"{SERVICE}.directory_for", return_value=fake):
-            await result["_provision_google"]()
+        with patch.object(
+            svc, "_send_transfer_welcome_email", AsyncMock(return_value=True)
+        ) as welcome:
+            result = await svc._do_transfer(prospect, None, send_welcome_email=True)
 
         row = await _row(db_session, result["user_id"])
         assert row.status == GoogleAccountStatus.FAILED.value
-        assert fake.created == []
+        # No mailbox is being created, so nothing is deferred or rerouted: the
+        # welcome email goes now, to the department address, without a card.
+        assert "_provision_google" not in result
+        assert "_send_welcome_email" not in result
+        assert result["welcome_email_sent"] is True
+        assert welcome.call_args.kwargs["recipient_email"] == result["email"]
+        assert welcome.call_args.kwargs["google_account"] is None
 
     async def test_a_failed_group_is_kept_for_retry(self, db_session):
         org = await _org(db_session)
@@ -1002,3 +1096,104 @@ class TestSuspension:
             str(result["user_id"]), org.id, suspended=True
         )
         assert staged is False
+
+
+@pytest.mark.integration
+class TestReviewFixes:
+    async def test_no_password_is_reset_for_a_member_who_has_left(self, db_session):
+        # A created account whose password never arrived offers "Finish setup";
+        # after a drop it must not mail a fresh password to the departed member.
+        org, user_id, caller = await _member_with_account(db_session)
+        row = await _row(db_session, user_id)
+        row.credentials_sent = False
+        await db_session.commit()
+        fake = FakeDirectory()
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _change_status(db_session, user_id, caller, "dropped_voluntary")
+            row = await _row(db_session, user_id)
+            row.last_attempt_at = None
+            await db_session.commit()
+            with pytest.raises(ProvisionRetryError):
+                await GoogleWorkspaceProvisioningService(db_session).retry(
+                    user_id, org.id
+                )
+        assert fake.resets == []
+
+    async def test_an_unreadable_key_is_recorded_not_raised(self, db_session):
+        org, user_id, caller = await _member_with_account(db_session)
+        row = await _row(db_session, user_id)
+        row.pending_groups = [GROUP]
+        await db_session.commit()
+        with patch(
+            f"{SERVICE}.directory_for",
+            side_effect=GoogleWorkspaceError("The stored key is unreadable."),
+        ):
+            row = await GoogleWorkspaceProvisioningService(db_session).retry(
+                user_id, org.id
+            )
+        assert row.last_error == "The stored key is unreadable."
+        assert row.pending_groups == [GROUP]
+
+    async def test_a_crash_in_the_suspension_sync_never_fails_the_drop(
+        self, db_session
+    ):
+        org, user_id, caller = await _member_with_account(db_session)
+        with patch.object(
+            GoogleWorkspaceProvisioningService,
+            "_reconcile_suspension",
+            AsyncMock(side_effect=RuntimeError("boom")),
+        ):
+            response = await _change_status(
+                db_session, user_id, caller, "dropped_voluntary"
+            )
+        assert response.new_status == "dropped_voluntary"
+        member = await db_session.get(User, user_id)
+        await db_session.refresh(member)
+        assert member.status == UserStatus.DROPPED_VOLUNTARY
+
+    async def test_suspension_addresses_the_account_by_its_google_id(self, db_session):
+        org, user_id, caller = await _member_with_account(db_session)
+        row = await _row(db_session, user_id)
+        row.google_user_id = "g-123"
+        await db_session.commit()
+        fake = FakeDirectory()
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await _change_status(db_session, user_id, caller, "dropped_voluntary")
+        assert fake.keys
+        assert set(fake.keys) == {"g-123"}
+
+
+@pytest.mark.unit
+class TestDirectoryClientHygiene:
+    def test_failures_are_logged_without_the_request_or_body(self):
+        from loguru import logger
+
+        from app.services.integration_services.google_workspace_service import (
+            _translate,
+        )
+
+        lines: list[str] = []
+        handler = logger.add(lines.append, level="WARNING")
+        try:
+            error = _http_error(403)
+            error.uri = "https://admin.googleapis.com/users/jordan@firedept.org"
+            _translate(error, "account suspension")
+        finally:
+            logger.remove(handler)
+        assert lines
+        assert "HTTP 403" in lines[0]
+        assert "firedept.org" not in lines[0]
+        assert "raw" not in lines[0]
+
+    def test_one_set_of_credentials_serves_every_call(self):
+        directory = GoogleWorkspaceDirectory({"type": "service_account"}, "a@b.org")
+        with (
+            patch(
+                "google.oauth2.service_account.Credentials.from_service_account_info"
+            ) as make_credentials,
+            patch("googleapiclient.discovery.build"),
+            patch("google_auth_httplib2.AuthorizedHttp"),
+        ):
+            directory._service()
+            directory._service()
+        make_credentials.assert_called_once()

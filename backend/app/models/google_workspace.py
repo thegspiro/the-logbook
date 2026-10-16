@@ -30,7 +30,8 @@ class GoogleAccountStatus(str, Enum):
     PENDING = "pending"
     CREATED = "created"
     # The address already belonged to a Google account (a returning member, an
-    # alias, a group). The Logbook records the link and never modifies it.
+    # alias, a group). The Logbook records the link and changes nothing about
+    # the account except suspending it when the member leaves.
     LINKED_EXISTING = "linked_existing"
     FAILED = "failed"
 

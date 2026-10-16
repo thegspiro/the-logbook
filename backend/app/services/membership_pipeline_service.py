@@ -4528,6 +4528,7 @@ class MembershipPipelineService:
         # Staged in this transaction so the record outlives a crash between
         # the commit and the Google call; the call itself runs only after the
         # caller commits (see GoogleWorkspaceProvisioningService).
+        from app.models.google_workspace import GoogleAccountStatus
         from app.services.google_workspace_provisioning_service import (
             GoogleWorkspaceProvisioningService,
         )
@@ -4542,7 +4543,11 @@ class MembershipPipelineService:
         google_provision_id: Optional[str] = None
         if google_row is not None:
             await self.db.flush()
-            google_provision_id = google_row.id
+            # A row staged as already failed (an address off the Workspace
+            # domain) creates no mailbox, so nothing below changes for it: the
+            # welcome email still goes to the department address, immediately.
+            if google_row.status == GoogleAccountStatus.PENDING.value:
+                google_provision_id = google_row.id
 
         async def provision_google() -> Optional[str]:
             if google_provision_id is None:
