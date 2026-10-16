@@ -934,15 +934,18 @@ module folder on that module's rights.
 - **Resolved 2026-10-13: positions are stored by id** (decision 28). Deleting
   a position takes it out of every folder, and is refused while it alone opens
   a folder. A position created later with the same name inherits nothing.
-- **Facility files still need `documents.manage` to upload.** The facility
-  Files section uploads through `POST /documents/upload` and then links the
-  document, so a facilities manager holding `facilities.edit` but not
-  `documents.manage` is refused at the first step. Apparatus and finance
-  upload through their own module endpoints since this change; facilities
-  would need the same (`app/services/module_documents.py` is the shared path).
-  Since 2026-10-11 that upload lands in General Documents first (no document
-  is unfiled any more), and the link files the uploader's own document from
-  there into the facility folder.
+- **Resolved 2026-10-16: facility files no longer need `documents.manage` to
+  upload.** The facility Files section used to upload through
+  `POST /documents/upload` and then link the document, so a facilities
+  manager holding `facilities.edit` but not `documents.manage` was refused at
+  the first step. It now uploads through
+  `POST /facilities/{id}/photos/upload` and
+  `POST /facilities/{id}/documents/upload`. These take the same facilities
+  grants as the record they create, store the file straight into the
+  facility's Photos or Facility Documents folder through
+  `app/services/module_documents.py` (as apparatus and finance do), and never
+  pass through General Documents. The two-step path still works for API
+  callers.
 - **Files in the `documents` area were not stored per record** (found and
   resolved 2026-10-11). Library uploads and the apparatus and finance
   documents that `module_documents` creates were written flat under
