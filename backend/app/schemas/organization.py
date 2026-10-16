@@ -1288,6 +1288,66 @@ class ApparatusSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class SignatureSlotSetting(BaseModel):
+    """One place on adopted minutes for a signature."""
+
+    key: str = Field(..., pattern=r"^[a-z][a-z0-9_]{0,49}$")
+    title: str = Field(..., min_length=1, max_length=100)
+    position_slug: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="The position whose holders may sign; anyone who manages "
+        "minutes may when unset",
+    )
+
+
+class MinutesSettingsUpdate(BaseModel):
+    """Meeting minutes settings; read by app/utils/minutes_settings.py."""
+
+    action_item_reminders: Optional[bool] = Field(
+        None,
+        description=(
+            "Email an assignee before an action item is due and while it is "
+            "overdue. Absent reads as on."
+        ),
+    )
+    reminder_days_before_due: Optional[int] = Field(
+        None,
+        ge=0,
+        le=30,
+        description=(
+            "Days ahead of the due date the first reminder goes out; 0 "
+            "reminds on the day it is due. 3 when unset."
+        ),
+    )
+    overdue_repeat_days: Optional[int] = Field(
+        None,
+        ge=0,
+        le=90,
+        description=(
+            "Days between repeat reminders on an overdue item; 0 sends the "
+            "first overdue reminder only. 7 when unset."
+        ),
+    )
+    open_items_digest: Optional[bool] = Field(
+        None,
+        description=(
+            "Send members who manage minutes a weekly list of open action "
+            "items. Absent reads as on."
+        ),
+    )
+    signature_slots: Optional[List[SignatureSlotSetting]] = Field(
+        None,
+        max_length=6,
+        description=(
+            "Who signs adopted minutes, in order. Unset reads as a recording "
+            "secretary and a presiding officer."
+        ),
+    )
+
+    model_config = ConfigDict(extra="allow")
+
+
 class AdminHoursSettingsUpdate(BaseModel):
     """Administrative hours review rules; read by app/utils/admin_hours_settings.py."""
 
@@ -1375,6 +1435,7 @@ class OrganizationSettingsUpdate(BaseModel):
     inventory: Optional[InventorySettingsUpdate] = None
     apparatus: Optional[ApparatusSettingsUpdate] = None
     admin_hours: Optional[AdminHoursSettingsUpdate] = None
+    minutes: Optional[MinutesSettingsUpdate] = None
     finance: Optional[FinanceSettingsUpdate] = None
 
     # Allow additional settings

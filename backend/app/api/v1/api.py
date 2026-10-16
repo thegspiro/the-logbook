@@ -36,6 +36,7 @@ from app.api.v1.endpoints import (
     facilities,
     finance,
     forms,
+    google_workspace,
     grants,
     integrations,
     inventory,
@@ -475,6 +476,12 @@ api_router.include_router(
     mcp_oauth.router,
     prefix="/mcp-oauth",
     tags=["claude-mcp"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
+    google_workspace.router,
+    prefix="/integrations/google-workspace",
+    tags=["google-workspace"],
     dependencies=module_gate("integrations", "Integrations"),
 )
 api_router.include_router(

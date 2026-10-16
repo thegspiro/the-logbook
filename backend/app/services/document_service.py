@@ -30,6 +30,7 @@ from app.models.minute import (
 )
 from app.models.user import Organization
 from app.utils.minutes_attendance import derive_status
+from app.utils.motion_votes import vote_summary
 from app.utils.rich_text import (
     FORMAT_HTML,
     normalize_format,
@@ -632,15 +633,8 @@ class DocumentService:
                     detail_parts.append(f"Moved by: {escape(motion.moved_by)}")
                 if motion.seconded_by:
                     detail_parts.append(f"Seconded by: {escape(motion.seconded_by)}")
-                if motion.votes_for is not None:
-                    detail_parts.append(
-                        f"Vote: {motion.votes_for}-{motion.votes_against or 0}"
-                        + (
-                            f" ({motion.votes_abstain} abstain)"
-                            if motion.votes_abstain
-                            else ""
-                        )
-                    )
+                if vote_summary(motion):
+                    detail_parts.append(escape(vote_summary(motion)))
                 ballot = getattr(getattr(motion, "election", None), "title", None)
                 if ballot:
                     detail_parts.append(f"Decided by ballot: {escape(ballot)}")

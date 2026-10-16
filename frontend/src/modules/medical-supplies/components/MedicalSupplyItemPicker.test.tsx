@@ -219,4 +219,25 @@ describe('MedicalSupplyItemPicker', () => {
 
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' }));
   });
+
+  it('shows each supply with its size, and hands the sized label back', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [
+        { id: 'mask-adult', name: 'Oxygen Mask', size: 'Adult' },
+        { id: 'mask-peds', name: 'Oxygen Mask', size: 'Pediatric' },
+      ],
+      total: 2,
+      skip: 0,
+      limit: 20,
+    });
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    renderPicker({ onChange });
+    await user.type(screen.getByRole('combobox'), 'mask');
+
+    await user.click(await screen.findByRole('option', { name: 'Oxygen Mask — Pediatric' }));
+
+    expect(screen.queryByRole('option', { name: 'Oxygen Mask — Adult' })).not.toBeInTheDocument();
+    expect(onChange).toHaveBeenCalledWith('mask-peds', 'Oxygen Mask — Pediatric');
+  });
 });

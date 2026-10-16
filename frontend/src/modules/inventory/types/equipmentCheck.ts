@@ -136,6 +136,28 @@ export function targetQuantity(item: CheckTemplateItem): number | null {
 }
 
 /**
+ * Whether a counted position is short enough to be critical.
+ *
+ * Strictly below the critical minimum: the minimum is the lowest acceptable
+ * count, so a truck holding exactly that many is at it, not below it. And
+ * never once the count meets the position's target — 2 of an expected 2 is a
+ * full position whatever the template's minimum says, and calling it critical
+ * contradicts the pass the same count earns.
+ *
+ * The server applies the same rule to the failure email
+ * (`EquipmentCheckService._is_below_critical_minimum`); keep the two in step.
+ */
+export function isBelowCriticalMinimum(
+  found: number,
+  criticalMinimum: number | null | undefined,
+  target: number | null
+): boolean {
+  if (criticalMinimum == null) return false;
+  if (target != null && found >= target) return false;
+  return found < criticalMinimum;
+}
+
+/**
  * Whether a member below manage may draw stock for this position.
  *
  * `EquipmentCheckService.swap_item_lot` sets `enforce_submitter_limits` for
@@ -378,6 +400,31 @@ export interface CrossTemplateLinkResult {
   /** Positions somebody linked in the builder after the report loaded. */
   skipped: number;
   skippedPositions: SkippedLinkPosition[];
+}
+
+/** One checklist name the automatic pass linked, and what to. */
+export interface AutoLinkedGroup {
+  name: string;
+  inventoryItemId: string;
+  inventoryItemName: string;
+  confidence: 'exact' | 'strong';
+  /** The "also called" name that produced the match, when it was not the item's own name. */
+  matchedAlias?: string | null;
+  positionCount: number;
+  /** The positions this pass wrote; ones linked by hand meanwhile are left out. */
+  positions: LinkReportPosition[];
+}
+
+/** What an undo cleared, and how many positions had been re-linked since. */
+export interface CrossTemplateUnlinkResult {
+  unlinked: number;
+  skipped: number;
+}
+
+export interface AutoLinkResult extends CrossTemplateLinkResult {
+  /** Positions left on the report: ties, weak matches and names with no match. */
+  leftForReview: number;
+  groups: AutoLinkedGroup[];
 }
 
 export interface CheckTemplateItemCreate {
@@ -958,6 +1005,8 @@ export interface ItemDeployment {
   templateItemId: string;
   itemName: string;
   compartmentName?: string;
+  /** The checklist's nesting, outermost first. */
+  compartmentPath?: string[];
   templateId?: string;
   templateName?: string;
   apparatusId?: string;
@@ -968,6 +1017,9 @@ export interface ItemDeployment {
   expirationDate?: string;
   daysUntilExpiration?: number;
   isExpired: boolean;
+  /** What the position should hold, and the last count aboard (null: never counted). */
+  targetQuantity?: number | null;
+  quantityOnTruck?: number | null;
 }
 
 /**

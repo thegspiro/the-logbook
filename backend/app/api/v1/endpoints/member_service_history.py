@@ -105,7 +105,23 @@ async def get_service_history(
         )
 
     member = await _load_member(db, user_id, current_user.organization_id)
-    return await _history_response(MemberServiceHistoryService(db), member)
+    response = await _history_response(MemberServiceHistoryService(db), member)
+    if str(current_user.id) != str(user_id):
+        # A stint records how the member left (voluntary or involuntary drop),
+        # so an officer reading it is access the audit trail must answer for.
+        await log_audit_event(
+            db=db,
+            event_type="member_service_history_viewed",
+            event_category="user_management",
+            severity="info",
+            event_data={
+                "target_user_id": str(member.id),
+                "period_count": len(response.periods),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return response
 
 
 @router.put("/{user_id}/service-periods", response_model=ServiceHistoryResponse)

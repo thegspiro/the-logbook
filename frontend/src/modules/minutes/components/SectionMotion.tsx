@@ -14,7 +14,12 @@ import toast from 'react-hot-toast';
 import { Gavel } from 'lucide-react';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { minutesService } from '../services/api';
+import { MotionVoteFields } from './MotionVoteFields';
+import { MotionVoteSummary } from './MotionVoteSummary';
 import { PersonPicker } from './PersonPicker';
+import { motionMakers } from '../utils/motionMakers';
+import { emptyVoteDraft, voteDraftPayload } from '../utils/voteDraft';
+import type { VoteDraft } from '../utils/voteDraft';
 import type { AttendeeEntry, Motion, MotionStatus, SectionEntry } from '../types/minutes';
 
 const RESULTS: { value: MotionStatus; label: string }[] = [
@@ -55,6 +60,7 @@ export const SectionMotion: React.FC<SectionMotionProps> = ({
   const [movedBy, setMovedBy] = useState('');
   const [secondedBy, setSecondedBy] = useState('');
   const [result, setResult] = useState<MotionStatus>('passed');
+  const [voteDraft, setVoteDraft] = useState<VoteDraft>(emptyVoteDraft());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,6 +86,7 @@ export const SectionMotion: React.FC<SectionMotionProps> = ({
         status: result,
         section_key: section.key,
         order: motions.length,
+        ...voteDraftPayload(voteDraft, motionMakers(attendees)),
       });
       toast.success('Motion recorded');
       await onRecorded();
@@ -87,6 +94,16 @@ export const SectionMotion: React.FC<SectionMotionProps> = ({
       setError(getErrorMessage(err, 'Failed to record the motion'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const changeToSuggested = async (motionId: string, status: 'passed' | 'failed') => {
+    try {
+      await minutesService.updateMotion(minutesId, motionId, { status });
+      await onRecorded();
+      toast.success(`Result changed to ${status}`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to change the result'));
     }
   };
 
@@ -110,6 +127,16 @@ export const SectionMotion: React.FC<SectionMotionProps> = ({
             <span>Seconded by: {motion.seconded_by || 'not recorded'}</span>
             <span className={`rounded-sm px-2 py-0.5 font-medium ${RESULT_BADGE[motion.status]}`}>{motion.status}</span>
           </div>
+          <MotionVoteSummary
+            motion={motion}
+            onUseSuggested={
+              canRecord
+                ? (status) => {
+                    void changeToSuggested(motion.id, status);
+                  }
+                : undefined
+            }
+          />
         </div>
       ))}
 
@@ -171,6 +198,12 @@ export const SectionMotion: React.FC<SectionMotionProps> = ({
               </select>
             </div>
           </div>
+          <MotionVoteFields
+            idPrefix={`motion-${section.key}`}
+            attendees={attendees}
+            value={voteDraft}
+            onChange={setVoteDraft}
+          />
           <button
             type="button"
             onClick={() => {

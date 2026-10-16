@@ -426,6 +426,12 @@ class InventoryCategory(Base):
 
     __tablename__ = "inventory_categories"
 
+    if TYPE_CHECKING:
+        # Not a column. The medical category list stamps it on loaded rows for
+        # InventoryCategoryResponse (category_item_counts); declared only for
+        # the type checker, as on InventoryItem.
+        item_count: Optional[int]
+
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     organization_id: Mapped[str] = mapped_column(
         String(36),
@@ -766,6 +772,13 @@ class InventoryItem(Base):
         lot_stock: Optional[int]
         pin_position: Optional[int]
         group_key: Optional[str]
+        # Stamped by the medical supply list (next_lot_expirations,
+        # storage_path, apparatus_places_for_items).
+        next_expiration_date: Optional[date]
+        days_until_next_expiration: Optional[int]
+        storage_path: Optional[str]
+        apparatus_count: Optional[int]
+        apparatus_places: Optional[List[str]]
 
     __table_args__ = (
         Index("idx_inventory_items_org_category", "organization_id", "category_id"),

@@ -36,6 +36,7 @@ from app.models.inventory import (
     CheckOutRecord,
     InventoryCategory,
     InventoryItem,
+    InventoryLot,
     ItemType,
 )
 from app.models.medical_screening import (
@@ -4873,3 +4874,117 @@ class TestThirtySecondRoundFindings:
         owner = _principal(org_id, admin_id)
         owned = await _call(server, owner, "list_locations")
         assert owned["total"] == 1
+
+
+class TestMedicalSupplies:
+    """The opt-in medical supply tools: hidden and refused until the
+    department switches them on, and pinned to medical stock when it does."""
+
+    async def _stock(self, db_session, org_id):
+        today = date.today()
+        for kind, name in (
+            (ItemType.UNIFORM, "Class A coat"),
+            (ItemType.MEDICAL, "Epinephrine"),
+        ):
+            category = InventoryCategory(
+                organization_id=org_id, name=f"{kind.value} category", item_type=kind
+            )
+            db_session.add(category)
+            await db_session.flush()
+            item = InventoryItem(
+                organization_id=org_id,
+                category_id=category.id,
+                name=name,
+                quantity=1,
+                reorder_point=5,
+            )
+            db_session.add(item)
+            await db_session.flush()
+            for days, lot_number in ((10, f"{name}-soon"), (-3, f"{name}-old")):
+                db_session.add(
+                    InventoryLot(
+                        organization_id=org_id,
+                        inventory_item_id=item.id,
+                        lot_number=lot_number,
+                        expiration_date=today + timedelta(days=days),
+                        quantity=2,
+                        unit_cost=12.5,
+                        notes="Box 4, ask the supply officer",
+                    )
+                )
+        await db_session.flush()
+
+    # The refusal is audited through the tools' own session; pointing that
+    # at the rolled-back test session keeps its row out of the shared table,
+    # where it would surface as an extra row in another file's audit counts.
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_hidden_and_refused_while_the_switch_is_off(
+        self, server, org_with_members
+    ):
+        org_id, admin_id, _ = org_with_members
+        principal = _principal(org_id, admin_id)
+        with bind_principal(principal):
+            names = {t.name for t in await server.list_tools()}
+        assert "list_expiring_medical_lots" not in names
+        assert "get_medical_supply_summary" not in names
+        with pytest.raises(ToolError, match="Medical supply inventory is not shared"):
+            await _call(server, principal, "get_medical_supply_summary")
+
+    async def test_listed_when_the_department_shares_them(
+        self, server, org_with_members
+    ):
+        org_id, admin_id, _ = org_with_members
+        principal = _principal(org_id, admin_id, expose_medical_supplies=True)
+        with bind_principal(principal):
+            names = {t.name for t in await server.list_tools()}
+        assert {
+            "get_medical_supply_summary",
+            "list_medical_supply_items",
+            "list_low_stock_medical_supplies",
+            "list_expiring_medical_lots",
+        } <= names
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_tools_read_medical_stock_only(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        await self._stock(db_session, org_id)
+        principal = _principal(org_id, admin_id, expose_medical_supplies=True)
+
+        summary = await _call(server, principal, "get_medical_supply_summary")
+        assert summary["total_items"] == 1
+        assert summary["expiring_soon"] == 1
+        assert summary["expired"] == 1
+        assert summary["low_stock"] == 1
+
+        items = await _call(server, principal, "list_medical_supply_items")
+        assert [i["name"] for i in items["items"]] == ["Epinephrine"]
+        assert items["total"] == 1
+
+        low = await _call(server, principal, "list_low_stock_medical_supplies")
+        assert [i["name"] for i in low["items"]] == ["Epinephrine"]
+        # The expired lot does not count toward what is on hand.
+        assert low["items"][0]["on_hand"] == 2
+
+        lots = await _call(server, principal, "list_expiring_medical_lots")
+        assert {lot["item_name"] for lot in lots["items"]} == {"Epinephrine"}
+        assert sorted(lot["days_until_expiration"] for lot in lots["items"]) == [
+            -3,
+            10,
+        ]
+        for lot in lots["items"]:
+            assert "notes" not in lot
+            assert "unit_cost" not in lot
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_general_inventory_still_excludes_medical_stock(
+        self, server, org_with_members, db_session
+    ):
+        """Sharing medical supplies opens their own tools, not the gear
+        listing: the inventory tools keep the domains apart either way."""
+        org_id, admin_id, _ = org_with_members
+        await self._stock(db_session, org_id)
+        principal = _principal(org_id, admin_id, expose_medical_supplies=True)
+        listed = await _call(server, principal, "list_inventory_items")
+        assert [i["name"] for i in listed["items"]] == ["Class A coat"]

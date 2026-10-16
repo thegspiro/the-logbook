@@ -19,6 +19,7 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -40,6 +41,7 @@ from app.api.v1.endpoints.minutes import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.security_middleware import check_rate_limit
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.minute import MinutesStatus
 from app.models.user import Organization, User
@@ -61,6 +63,9 @@ from app.schemas.minute import (
     MinutesVerification,
     MyActionItem,
     OpenActionItem,
+    SignatureResponse,
+    SignatureStatusResponse,
+    SignRequest,
     SuggestionApply,
     SuggestionCreate,
     SuggestionResolve,
@@ -72,8 +77,10 @@ from app.services.minutes_record_service import (
     MinutesRecordService,
     SuggestionApplyConflict,
 )
+from app.services.minutes_signature_service import MinutesSignatureService
 from app.utils import download_names
 from app.utils.minutes_pdf import render_minutes_pdf
+from app.utils.motion_votes import vote_summary
 from app.utils.org_timezone import resolve_scheduling_timezone, scheduling_timezone
 
 router = APIRouter()
@@ -515,6 +522,101 @@ async def list_revisions(
         current_user.organization_id,
     )
     return [_revision_response(r, names) for r in rows]
+
+
+# ============================================
+# Signatures
+# ============================================
+
+
+async def _rate_limit_signing(request: Request) -> None:
+    # Signing re-asks for a password, so it is a place a password can be
+    # guessed from an already signed-in session. Its own scope keeps it from
+    # sharing a budget with login.
+    await check_rate_limit(
+        request,
+        max_requests=10,
+        window_seconds=60,
+        lockout_seconds=300,
+        scope="minutes_signing",
+    )
+
+
+@router.get("/{minutes_id}/signatures", response_model=SignatureStatusResponse)
+async def get_signature_status(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.view")),
+):
+    """
+    Each signature slot for the current adopted version, who has signed it, and
+    which the caller may sign
+
+    **Authentication required**
+    **Requires permission: minutes.view**
+    """
+    result = await MinutesSignatureService(db).status(
+        minutes_id,
+        current_user.organization_id,
+        current_user,
+        restricted=_restricted(current_user),
+    )
+    return ensure_found(result, "Meeting minutes")
+
+
+@router.post(
+    "/{minutes_id}/signatures",
+    response_model=SignatureResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(_rate_limit_signing)],
+)
+async def sign_minutes(
+    minutes_id: str,
+    data: SignRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.view")),
+):
+    """
+    Sign the adopted minutes in one of the department's signature slots
+
+    The signer types their name as it stands on their account and confirms
+    their password. Which slots a member may sign is the department's rule.
+
+    **Authentication required**
+    **Requires permission: minutes.view** (the slot's own rule is checked too)
+    """
+    async with handle_service_errors("Failed to sign the minutes"):
+        signature = await MinutesSignatureService(db).sign(
+            minutes_id,
+            current_user.organization_id,
+            current_user,
+            data.slot_key,
+            data.signed_name,
+            data.password,
+            restricted=_restricted(current_user),
+        )
+    signature = ensure_found(signature, "Meeting minutes")
+
+    await log_audit_event(
+        db=db,
+        event_type="minutes_signed",
+        event_category="meetings",
+        severity="info",
+        event_data={
+            "minutes_id": minutes_id,
+            "slot": signature.slot_key,
+            "content_hash": signature.content_hash,
+        },
+        user_id=str(current_user.id),
+    )
+    return SignatureResponse(
+        id=signature.id,
+        slot_key=signature.slot_key,
+        slot_title=signature.slot_title,
+        signed_name=signature.signed_name,
+        signed_at=signature.signed_at,
+        intact=True,
+    )
 
 
 @router.get("/{minutes_id}/verify", response_model=MinutesVerification)
@@ -1109,6 +1211,18 @@ async def download_minutes_pdf(
             "adopting_title": _adopting_title(minutes),
             "version": current_revision.version if current_revision else None,
             "content_hash": current_revision.content_hash if current_revision else None,
+            "signatures": [
+                {
+                    "title": row.slot_title,
+                    "name": row.signed_name,
+                    "signed_at_display": local(
+                        row.signed_at, "%B %d, %Y at %I:%M %p %Z"
+                    ),
+                }
+                for row in await MinutesSignatureService(db).for_revision(
+                    minutes.id, organization_id
+                )
+            ],
         }
 
     meeting_type = (
@@ -1155,12 +1269,7 @@ async def download_minutes_pdf(
                     if m.election_id
                     else None
                 ),
-                "vote_display": (
-                    f"Vote {m.votes_for}-{m.votes_against or 0}"
-                    + (f" ({m.votes_abstain} abstain)" if m.votes_abstain else "")
-                    if m.votes_for is not None
-                    else ""
-                ),
+                "vote_display": vote_summary(m),
             }
             for index, m in enumerate(minutes.motions or [], 1)
         ],

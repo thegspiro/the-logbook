@@ -6,6 +6,7 @@ import {
   isPresetContainerType,
   submitterMaySwap,
   targetQuantity,
+  isBelowCriticalMinimum,
 } from './equipmentCheck';
 
 describe('containerTypeLabel', () => {
@@ -168,5 +169,27 @@ describe('countedOnTruck', () => {
 
   it('reports null when nothing has been counted, leaving the fallback to the caller', () => {
     expect(countedOnTruck(item({}))).toBeNull();
+  });
+});
+
+describe('isBelowCriticalMinimum', () => {
+  it('is critical only strictly below the minimum', () => {
+    expect(isBelowCriticalMinimum(1, 2, 4)).toBe(true);
+    expect(isBelowCriticalMinimum(2, 2, 4)).toBe(false);
+    expect(isBelowCriticalMinimum(3, 2, 4)).toBe(false);
+  });
+
+  it('never calls a position that meets its target critical', () => {
+    // The reported case: 2 of an expected 2, with the minimum set to 2.
+    expect(isBelowCriticalMinimum(2, 2, 2)).toBe(false);
+    // A minimum above the target still cannot make a full position critical.
+    expect(isBelowCriticalMinimum(4, 5, 4)).toBe(false);
+    expect(isBelowCriticalMinimum(3, 5, 4)).toBe(true);
+  });
+
+  it('is never critical without a minimum, and uses the minimum alone without a target', () => {
+    expect(isBelowCriticalMinimum(0, null, 4)).toBe(false);
+    expect(isBelowCriticalMinimum(0, undefined, null)).toBe(false);
+    expect(isBelowCriticalMinimum(0, 1, null)).toBe(true);
   });
 });

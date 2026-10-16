@@ -8,6 +8,7 @@ when the row has no ``user_id`` at all.
 """
 
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select, text
@@ -98,6 +99,10 @@ async def audit_world(db_session: AsyncSession):
     }
 
 
+def _request():
+    return SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={})
+
+
 async def _list(db: AsyncSession, admin: User, **kwargs):
     params = dict(
         event_type=None,
@@ -111,7 +116,9 @@ async def _list(db: AsyncSession, admin: User, **kwargs):
         limit=50,
     )
     params.update(kwargs)
-    return await list_audit_logs(db=db, current_user=admin, **params)
+    return await list_audit_logs(
+        request=_request(), db=db, current_user=admin, **params
+    )
 
 
 async def test_list_resolves_actor_username_from_users(
@@ -154,6 +161,9 @@ async def test_detail_resolves_actor_username(db_session: AsyncSession, audit_wo
     log_id = body["logs"][0]["id"]
 
     entry = await get_audit_log_entry(
-        log_id=log_id, db=db_session, current_user=audit_world["admin"]
+        log_id=log_id,
+        request=_request(),
+        db=db_session,
+        current_user=audit_world["admin"],
     )
     assert entry["username"] == audit_world["voter_username"]

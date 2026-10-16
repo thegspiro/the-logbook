@@ -1694,3 +1694,29 @@ class TestSnapshottedTargetQuantity:
         assert item["status"] == "pass"
         assert failed == 0
         assert overall == "pass"
+
+
+@pytest.mark.unit
+class TestIsBelowCriticalMinimum:
+    """The failure email's critical rule, mirrored by the check form."""
+
+    @pytest.mark.parametrize(
+        ("found", "critical_minimum", "target", "expected"),
+        [
+            (1, 2, 4, True),  # below the minimum
+            (2, 2, 4, False),  # at the minimum is not below it
+            (2, 2, 2, False),  # the reported case: 2 of 2, minimum 2
+            (4, 5, 4, False),  # a full position is never critical
+            (3, 5, 4, True),  # short, and below a minimum above the target
+            (0, None, 4, False),  # no minimum, never critical
+            (None, 2, 4, False),  # nothing counted
+            (0, 1, None, True),  # no target: the minimum alone decides
+        ],
+    )
+    def test_rule(self, found, critical_minimum, target, expected):
+        assert (
+            EquipmentCheckService._is_below_critical_minimum(
+                found, critical_minimum, target
+            )
+            is expected
+        )

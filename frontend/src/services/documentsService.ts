@@ -69,6 +69,22 @@ export const documentsService = {
     return response.data;
   },
 
+  /**
+   * Folders nobody but full administrators can open now and nobody has
+   * confirmed are meant that way (decision 30). Empty for anyone but a full
+   * administrator.
+   */
+  async getAdminOnlyFolders(): Promise<DocumentFolder[]> {
+    const response = await api.get<DocumentFolder[]>('/documents/folders/admin-only');
+    return response.data;
+  },
+
+  /** Confirm a folder is meant for full administrators alone; it stops being listed. */
+  async confirmAdminOnlyFolder(folderId: string): Promise<DocumentFolder> {
+    const response = await api.post<DocumentFolder>(`/documents/folders/${folderId}/confirm-admin-only`);
+    return response.data;
+  },
+
   async deleteFolder(folderId: string): Promise<void> {
     await api.delete(`/documents/folders/${folderId}`);
   },

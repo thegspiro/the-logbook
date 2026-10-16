@@ -79,6 +79,7 @@ import {
   soonestExpiration,
   submitterMaySwap,
   targetQuantity,
+  isBelowCriticalMinimum,
 } from '../types/equipmentCheck';
 import { flattenCompartmentTree } from '../utils/compartmentTree';
 import CheckNfcTap from '../components/CheckNfcTap';
@@ -2163,7 +2164,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         const criticalMin = item.criticalMinimumQuantity;
         const currentQty = result?.quantityFound ?? 0;
         const isAtPar = required != null && currentQty >= required;
-        const isCritical = criticalMin != null && currentQty <= criticalMin;
+        const isCritical = isBelowCriticalMinimum(currentQty, criticalMin, required);
         const hasBeenSet = result?.quantityFound != null;
         // Seeded from the running count but not yet affirmed by this crew. The
         // number is shown so they only correct what changed; it is not a check.

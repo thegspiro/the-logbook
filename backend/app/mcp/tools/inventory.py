@@ -2,8 +2,9 @@
 
 Medical supplies are a separate domain with their own module, page and
 officer (``medical_supplies``); the inventory API carves them out of the
-gear-and-uniforms listing, and every tool here does the same. They are not
-exposed through this connection at all.
+gear-and-uniforms listing, and every tool here does the same. The
+department can share medical stock separately — read-only, behind its own
+switch — through ``medical_supplies``; nothing here returns it either way.
 """
 
 from typing import Any, Optional

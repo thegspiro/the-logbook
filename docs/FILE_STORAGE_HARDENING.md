@@ -112,6 +112,30 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
     count asks the access check itself, parent folders included. A department
     whose only active members are full administrators, such as a fresh
     install, is not asked.
+30. **A folder that loses everyone but full administrators later is listed,
+    not asked about** (2026-10-15). Members lose access through positions,
+    position permissions, status, archiving, deletion and rank, from many
+    screens and from unattended jobs (auto-archive, tier advancement). So
+    the change goes through, and full administrators see each such folder
+    on the Documents page, where they can change its access or keep it for
+    administrators.
+    - Keeping a folder records `admin_only_confirmed_at`/`_by`, and the
+      folder is no longer listed. Confirming at save time records the same
+      thing.
+    - The record is cleared whenever an access save leaves someone else
+      able to open the folder. It is also cleared when the list is read and
+      someone else can open the folder again, for example a new holder of
+      its position. A later loss then lists the folder again.
+    - Only the topmost shut folder is listed: a folder shut because its
+      parent is shut is settled with the parent.
+    - Personal folders are never listed, since they open to their owner
+      alone by design.
+    - Probationary members count, as sign-in counts them.
+    - Full administrators are also emailed the list, at most once a week per
+      department, while any folder is on it (2026-10-16). Each email repeats
+      every folder still listed. It is the optional "Document folder access"
+      email (`EmailKind.DOCUMENT_DUTIES`), which a department can make
+      required.
 
 ## Phases
 

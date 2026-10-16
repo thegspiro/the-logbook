@@ -523,6 +523,46 @@ can turn it off, and a department can make it required. An item added to
 already-approved minutes is emailed when it is added. A failed send is logged
 and never fails the approval.
 
+### Action item reminders _(2026-10-15)_
+
+Before this, an assignee was reminded only by a bell notification
+(`run_action_item_reminders`, 3, 1 and 0 days out and once overdue) and never by
+email, so a member who reads only their inbox heard nothing. The
+`minutes_action_item_reminders` task (daily, `07:20`) adds the email, in the
+same order of channels as everything else here: email first, bell as an
+addition. The bell task is unchanged.
+
+- **To the assignee**, one email per member per run, listing their items that
+  are due soon and overdue, only for items on **adopted** minutes that are open
+  (pending, in progress or overdue), have a due date and have not been carried
+  forward. The first reminder goes out _N_ days before the due date, the first
+  overdue one the day after, and later ones every _R_ days until the item is
+  completed or cancelled. An item more than 90 days overdue is no longer chased
+  by email, so the first run after an upgrade does not mail a member about
+  work from years ago; it still appears in the weekly list. `last_reminded_at`
+  on the item records the last reminder, and an item is marked only after the
+  email was accepted, so a refused or failed send is tried again next run.
+- **To the people who manage minutes**, a weekly list of every open item with
+  its owner and due date, overdue first, whether or not it has a due date. It
+  goes to active members holding `minutes.manage` who have not turned it off
+  (`EmailKind.MINUTES_DUTIES`, "Secretary duties"), at most once in seven days;
+  the day it last went out is kept in the `minutes` section of the organization
+  settings (`last_open_items_digest_on`). Nothing is sent when nothing is open.
+- Assignee reminders follow the member's existing choice under
+  `EmailKind.MINUTES_ACTION_ITEMS`, so turning off the assignment email turns
+  off the reminders with it.
+- **Settings** live in the organization settings' `minutes` section and are read
+  by `app/utils/minutes_settings.py`: `action_item_reminders` (on),
+  `reminder_days_before_due` (3; 0 to 30; 0 is the due date itself),
+  `overdue_repeat_days` (7; 0 to 90; 0 is one overdue reminder only) and
+  `open_items_digest` (on). Anything missing or malformed reads as its default.
+  **Minutes → Reminders** shows the server's reading to anyone who manages
+  minutes (`GET /minutes-records/settings`) and lets a settings administrator
+  change it (`PATCH /organization/settings`).
+- **Upgrading:** the reminders are on by default, so a department that has open
+  items on adopted minutes will start receiving these emails the day after the
+  upgrade. They can be switched off in **Minutes → Reminders** before or after.
+
 ### Printable minutes
 
 `GET /{id}/pdf` renders the minutes with attendance by status, quorum, sections,
@@ -686,6 +726,73 @@ is not changed, and the flag is set on the Outlines screen.
   PDF's approval block and included in the sealed snapshot **only when
   recorded**, so a snapshot sealed earlier verifies exactly as it did.
 
+### Votes on motions _(2026-10-15)_
+
+A motion's vote is recorded as **totals** or as a **roll call**, and carries the
+**threshold** it needed.
+
+- **Threshold** (`meeting_motions.threshold`, NULL reads as the first):
+  `majority_cast` — more for than against, with abstentions and recusals not
+  counted and a tie failing; `majority_present` — more than half of the members
+  recorded present vote for, so abstentions and recusals count against;
+  `two_thirds` — at least two thirds of the votes cast. The rules live in
+  `app/utils/motion_votes.py`.
+- **Totals**: for, against, abstain and, new, **recused** (`votes_recused`).
+- **Roll call** (`roll_call`, JSON): the members recorded **present, late or
+  left early** vote yes, no, abstain or recuse. The server settles it against
+  the minutes' own roll — only those present, each once, the member id taken
+  from the roll and not the request — and **counts the totals from it**, so any
+  totals sent with a roll call are ignored and the two cannot disagree. Clearing
+  a roll call leaves the totals it produced. Entering the roll call before the
+  roll is taken, or for someone not on it, is refused with a 400.
+- **Suggested result**: every motion response carries `suggested_status`
+  (`passed`/`failed`, or null with no for-count), from the threshold and the
+  counts. It is a suggestion only: the recorded status is still the
+  secretary's, because a motion carried by voice or consent has no count. The
+  screen shows the server's reading, says so when it differs from the recorded
+  result, and offers to change it (CLAUDE.md pitfall #29: one definition, not
+  one on the screen).
+- **Who sees names**: how each member voted is shown in the app and sealed in the
+  adopted record (included in the snapshot only when recorded, so earlier
+  records verify unchanged). The **PDF and the published copy show totals, the
+  threshold when it is not the usual one, and the result — never names.**
+- It is recorded from the **Add Motion** form and from a section's **Motion**
+  card, which share one set of fields.
+
+### Signatures _(2026-10-16)_
+
+Once minutes are adopted, the people the department names sign them, in the app.
+
+- **Slots**: the `minutes` organization setting `signature_slots` lists them in
+  order as `{key, title, position_slug}`. A slot with a `position_slug` is signed
+  by a member holding that position; one without is signed by anyone who holds
+  `minutes.manage`. Unset, it reads as a **Recording Secretary** and a
+  **Presiding Officer**, both open to anyone who manages minutes, so an upgrade
+  changes nothing. Up to six; an entry that is malformed or repeats a key is
+  dropped rather than failing the rest. **Minutes → Signers** shows the server's
+  reading to anyone who manages minutes and lets a settings administrator
+  change it.
+- **Signing** (`POST /{id}/signatures {slot_key, signed_name, password}`): the
+  signer types their name **as it stands on their account** (legal name or the
+  name they go by, ignoring case and spacing) and **confirms their password**, so
+  the act is tied to a person at the keyboard and not to a session someone left
+  open. The password is checked and never stored or echoed; an account with no
+  password (single sign-on only) cannot sign. The endpoint has its own rate
+  limit (10 a minute, five minutes' lockout) since it is a place a password can
+  be guessed from a signed-in session.
+- **Who may sign**: anyone the slot allows, including the person who circulated
+  or adopted the minutes, since signing is a separate attestation from adopting.
+  A slot is signed once; a person may sign more than one slot.
+- **What a signature is tied to**: the adopted version current when it was given.
+  It records that revision's SHA-256 and the panel flags a signature whose hash
+  no longer matches (`intact`). **Reopening the minutes supersedes the revision
+  and leaves its signatures on file against the text they were given for; the
+  corrected version starts unsigned** and must be signed again.
+- **Printed**: the PDF's approval block lists each signature with the name and
+  the time. The published copy does not carry them yet.
+- Signatures can only be added; there is no way to withdraw one except reopening
+  the minutes.
+
 ### Start and end times _(2026-10-15)_
 
 `called_to_order_at` and `adjourned_at` are recorded from the **Call to Order**
@@ -752,6 +859,7 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 
 | Method   | Path                                      | Permission       | Description                                                                            |
 | -------- | ----------------------------------------- | ---------------- | -------------------------------------------------------------------------------------- |
+| `GET`    | `/settings`                               | `minutes.manage` | The action item reminder settings the server applies                                   |
 | `POST`   | `/{id}/approve`                           | `minutes.manage` | Adopt; optional `{adopted_on, adopting_minutes_id, as_amended, moved_by, seconded_by}` |
 | `POST`   | `/{id}/suggestions/{suggestion_id}/apply` | `minutes.manage` | Apply the accepted tracked changes `{accepted: [...], note}`                           |
 | `POST`   | `/{id}/recall`                            | `minutes.manage` | Circulated → draft                                                                     |
@@ -781,6 +889,9 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 | `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`            | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them) |
 | `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py`      | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)      |
 | `20261015_0910_48f403b2631f_minutes_suggestions_tracked_changes.py` | `48f403b2631f`        | Tracked-change columns on `minutes_suggestions` (idempotent; the downgrade drops them)                                                |
+| `20261016_1101_f236c56b1b49_minutes_signatures.py`                  | `f236c56b1b49`        | `minutes_signatures` table (idempotent; the downgrade drops it)                                                                       |
+| `20261015_1652_9ce470b513ae_minutes_motions_vote_detail.py`         | `9ce470b513ae`        | `meeting_motions.votes_recused` / `threshold` / `roll_call` (idempotent; the downgrade drops them)                                    |
+| `20261015_1441_b90813f63e25_minutes_action_items_last_reminded.py`  | `b90813f63e25`        | `minutes_action_items.last_reminded_at` (idempotent; the downgrade drops it)                                                          |
 | `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`    | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)    |
 
 ### Migration Chain

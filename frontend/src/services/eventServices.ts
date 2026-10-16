@@ -956,6 +956,8 @@ export interface InventoryCategory {
   active: boolean;
   created_at: string;
   updated_at: string;
+  /** Active items filed here. Sent by the medical category list only. */
+  item_count?: number | null;
 }
 
 export interface InventoryItem {
@@ -1011,6 +1013,19 @@ export interface InventoryItem {
   lot_stock?: number | null;
   /** True when the item is stocked as lots, so `lot_stock` is the count to show. */
   is_lot_stocked?: boolean;
+  /**
+   * Soonest expiry among lots still holding stock, expired ones included, and
+   * its distance in days from the department's today. Sent by the medical
+   * supply list only.
+   */
+  next_expiration_date?: string | null;
+  days_until_next_expiration?: number | null;
+  /** "Station 1 › Supply Room › Shelf 2". Sent by the medical supply list only. */
+  storage_path?: string | null;
+  /** How many apparatus checklists carry it. Sent by the medical supply list only. */
+  apparatus_count?: number | null;
+  /** Each position carrying it, as the checklist names it: "Medic 1 › Main Compartment › Jump Bag". Medical list only. */
+  apparatus_places?: string[] | null;
   last_inspection_date?: string;
   next_inspection_due?: string;
   inspection_interval_days?: number;
@@ -2340,8 +2355,9 @@ export interface InventoryLotBulkEntry extends InventoryLotCreate {
 }
 
 export interface InventoryLotUpdate {
-  lot_number?: string | undefined;
-  expiration_date?: string | undefined;
+  /** null clears it; the backend dumps updates with exclude_unset, so omitting keeps the old value. */
+  lot_number?: string | null | undefined;
+  expiration_date?: string | null | undefined;
   quantity?: number | undefined;
   received_date?: string | undefined;
   notes?: string | undefined;
@@ -2349,6 +2365,8 @@ export interface InventoryLotUpdate {
 
 export interface ExpiringLot extends InventoryLot {
   item_name?: string;
+  /** Set on medical lots only, so the adult and pediatric versions of a supply can be told apart. */
+  item_size?: string | null;
   days_until_expiration?: number;
 }
 

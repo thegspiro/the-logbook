@@ -377,6 +377,9 @@ def setup_sentry(
                 _SafeLoguruIntegration(),
             ],
             send_default_pii=False,
+            # Frame locals hold decrypted ORM values (screening notes, emergency
+            # contacts); the scrubber only knows credential names, so keep them out.
+            include_local_variables=False,
             before_send=_sentry_before_send,
             before_breadcrumb=_sentry_before_breadcrumb,
             before_send_transaction=_sentry_before_send_transaction,

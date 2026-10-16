@@ -9,6 +9,7 @@ const mockGetDocuments = vi.fn();
 const mockGetSummary = vi.fn();
 const mockDownloadDocument = vi.fn();
 const mockCreateFolder = vi.fn();
+const mockGetAdminOnlyFolders = vi.fn();
 
 vi.mock('../services/api', () => ({
   documentsService: {
@@ -19,6 +20,7 @@ vi.mock('../services/api', () => ({
     uploadDocument: vi.fn(),
     deleteDocument: vi.fn(),
     createFolder: (...args: unknown[]) => mockCreateFolder(...args) as unknown,
+    getAdminOnlyFolders: (...args: unknown[]) => mockGetAdminOnlyFolders(...args) as unknown,
     // Read by the folder access fields when a folder dialog opens.
     getFolderRoleOptions: () => Promise.resolve([{ id: 'pos-qm', slug: 'quartermaster', name: 'Quartermaster' }]),
   },
@@ -71,6 +73,8 @@ beforeEach(() => {
   mockGetSummary.mockReset();
   mockDownloadDocument.mockReset();
   mockCreateFolder.mockReset();
+  mockGetAdminOnlyFolders.mockReset();
+  mockGetAdminOnlyFolders.mockResolvedValue([]);
   mockGetFolders.mockResolvedValue({
     folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }],
     total: 1,
@@ -627,5 +631,34 @@ describe('DocumentsPage minutes being corrected (MM-17)', () => {
 
     const table = screen.getByRole('table');
     expect(within(table).getAllByText(/reopened for correction on Oct 12, 2026/)).toHaveLength(1);
+  });
+});
+
+describe('DocumentsPage folders only administrators can open (decision 30)', () => {
+  it('lists them for a full administrator', async () => {
+    mockGetAdminOnlyFolders.mockResolvedValue([
+      {
+        id: 'f-qm',
+        organization_id: 'org-1',
+        name: 'Quartermaster files',
+        color: '#3B82F6',
+        icon: 'folder',
+        document_count: 0,
+        created_at: '2026-10-01T00:00:00Z',
+        updated_at: '2026-10-01T00:00:00Z',
+      },
+    ]);
+    renderWithRouter(<DocumentsPage />);
+
+    expect(await screen.findByText('A folder only full administrators can open')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Change who can open Quartermaster files' })).toBeInTheDocument();
+  });
+
+  it('does not ask for them for a documents manager who is not a full administrator', async () => {
+    mockAuthState.checkPermission = vi.fn((permission: string) => permission !== '*');
+    renderWithRouter(<DocumentsPage />);
+
+    await screen.findByRole('button', { name: /sops/i });
+    expect(mockGetAdminOnlyFolders).not.toHaveBeenCalled();
   });
 });

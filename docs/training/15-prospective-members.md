@@ -1067,7 +1067,7 @@ an open house. Officers who can view or manage prospective members can use it.
 Each badge carries a short code for the applicant, never their status-page
 link.
 
-See [Inventory > Cross-Module Barcode Label Printing](./05-inventory.md#cross-module-barcode-label-printing-2026-06-10)
+See [Inventory > Labels in other parts of The Logbook](./05-inventory.md#labels-in-other-parts-of-the-logbook)
 for label format options.
 
 ---

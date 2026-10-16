@@ -49,6 +49,20 @@ def test_sentry_log_sinks_disable_exception_variable_diagnostics(monkeypatch):
     assert all(options["diagnose"] is False for options in sink_options)
 
 
+def test_sentry_events_exclude_frame_local_variables(monkeypatch):
+    """Frame locals hold decrypted PHI; the scrubber only knows credential names."""
+    init_options = {}
+    monkeypatch.setattr(
+        sentry_sdk, "init", lambda **options: init_options.update(options)
+    )
+    monkeypatch.setattr(logging_config.logger, "info", lambda _message: None)
+
+    logging_config.setup_sentry("https://public@example.test/1")
+
+    assert init_options["include_local_variables"] is False
+    assert init_options["send_default_pii"] is False
+
+
 def test_transaction_hook_tolerates_a_trimmed_span_list():
     """Sentry replaces an over-long span list with an AnnotatedValue; the hook
     passes the event through untouched."""

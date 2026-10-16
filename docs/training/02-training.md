@@ -192,6 +192,22 @@ Amber means due within 90 days. Red means overdue or expired.
 Once a date passes, the row reads **Overdue N days ago** or **Expired N days
 ago**. When nothing is due, the list says so.
 
+### Your Skills Tests
+
+A skills test is not a training record, so it does not appear in the History
+tab. Your own results are in the **Skills Tests** section instead, which is
+closed until you select it. Each row shows the skill, the examiner and the
+date, with **Passed** or **Failed** on the right. A practice run carries a
+**Practice** badge. A test still waiting on an officer reads **Under review**
+until it is validated. Select a row to open the scorecard.
+
+![The member's own skill test results on My Training: official attempts badged Passed with their scores, and practice and awaiting-validation rows](./images/09-21-my-skill-test-results.png)
+
+If an officer gave the skill a validity period, a passing test also appears in
+the upcoming list above, with the date it expires. What you can see of each
+result is set by your department; see
+[Who Sees a Result](./09-skills-testing.md#who-sees-a-result--disclosure-settings).
+
 ### The History Tab
 
 Select **History** under the page title to see everything the department has on
@@ -1141,7 +1157,7 @@ such as _EMS_ or _Medical_ is not narrow enough.
    If the course is not in the library yet, add it first.
 4. If the course comes from a training provider, match the provider's course
    to that library course on the integration's **Courses** tab (see
-   [Training Integrations](./16-integrations.md#course-mappings-2026-10-07)).
+   [Training Integrations](./16-integrations.md#course-mappings)).
    Otherwise completions of it will not count.
 5. Open the compliance view for a few members. Confirm the requirement is met
    by the right course — and unmet for anyone who never took it.

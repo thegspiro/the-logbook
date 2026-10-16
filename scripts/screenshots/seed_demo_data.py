@@ -5381,24 +5381,28 @@ class Seeder:
     #: (entity, chain name, [(order, step name, approver position)]). Two steps
     #: on the money-spending documents so the approval timeline shows a chain
     #: rather than a single box.
+    # A position approver is matched on the position's slug, not its display
+    # name. "Captain" and "Treasurer" only ever worked because their slugs are
+    # their names lowercased; the Chief's slug is "fire_chief" (DEFAULT_POSITIONS
+    # in app/core/permissions.py), so "Chief" was refused outright.
     APPROVAL_CHAINS = [
         (
             "purchase_request",
             "Purchase Request Approval",
             [
-                (1, "Company officer review", "Captain"),
-                (2, "Chief approval", "Chief"),
+                (1, "Company officer review", "captain"),
+                (2, "Chief approval", "fire_chief"),
             ],
         ),
         (
             "expense_report",
             "Expense Reimbursement Approval",
-            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Chief")],
+            [(1, "Treasurer review", "treasurer"), (2, "Chief approval", "fire_chief")],
         ),
         (
             "check_request",
             "Check Request Approval",
-            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Chief")],
+            [(1, "Treasurer review", "treasurer"), (2, "Chief approval", "fire_chief")],
         ),
     ]
 
@@ -5445,11 +5449,25 @@ class Seeder:
             return []
         reports = items(self.api.get("/finance/expense-reports"), "expense_reports")
         if reports:
+            # A run against the older seeder left the first report a draft:
+            # its submit was refused for want of receipts. Finish it here, or
+            # the early return carries the draft forward on every re-seed.
+            first = next(
+                (
+                    r
+                    for r in reports
+                    if pick(r, "title") == self.EXPENSE_REPORT_SUBMITTED_TITLE
+                ),
+                None,
+            )
+            if first and str(pick(first, "status") or "") == "draft":
+                detail = self.api.get(f"/finance/expense-reports/{pick(first, 'id')}")
+                self._submit_expense_report_with_receipts(detail)
             return reports
 
         planned = [
             (
-                "FDIC Conference Expenses",
+                self.EXPENSE_REPORT_SUBMITTED_TITLE,
                 "Travel and registration for the annual conference.",
                 [
                     ("Conference registration", 425.00, "conference", "FDIC"),
@@ -5496,15 +5514,36 @@ class Seeder:
             # Submit the first so the detail page shows an approval chain
             # rather than a draft with nothing to approve.
             if index == 0:
-                try:
-                    self.api.post(
-                        f"/finance/expense-reports/{pick(report, 'id')}/submit"
-                    )
-                except ApiError as exc:
-                    if exc.code != 400:
-                        raise
-                    self.blocked.append(f"expense report submit: {exc}")
+                self._submit_expense_report_with_receipts(report)
         return reports
+
+    EXPENSE_REPORT_SUBMITTED_TITLE = "FDIC Conference Expenses"
+
+    def _submit_expense_report_with_receipts(self, report: dict) -> None:
+        """Attach a receipt to every line, then submit.
+
+        Submission refuses a report with any line lacking a receipt ("Attach a
+        receipt to every line before submitting"). Receipts are matched by MIME
+        type sniffed from the bytes, so each is a genuine one-page PDF.
+        """
+        report_id = pick(report, "id")
+        for line in pick(report, "lineItems", "line_items") or []:
+            if pick(line, "receiptDocumentId", "receipt_document_id"):
+                continue
+            description = str(pick(line, "description") or "Expense")
+            self.api.post_file(
+                f"/finance/expense-reports/{report_id}/items/{pick(line, 'id')}/receipt",
+                {},
+                "receipt.pdf",
+                _demo_pdf("Receipt", description),
+                "application/pdf",
+            )
+        try:
+            self.api.post(f"/finance/expense-reports/{report_id}/submit")
+        except ApiError as exc:
+            if exc.code != 400:
+                raise
+            self.blocked.append(f"expense report submit: {exc}")
 
     def seed_check_requests(self, finance: dict) -> list[dict]:
         """Direct-payment requests, which the check request detail pictures."""
@@ -5943,6 +5982,12 @@ class Seeder:
             if index == len(target_shifts) - 1:
                 rows[-1]["status"] = "fail"
                 rows[-1]["quantity_found"] = 0
+                # Required: a check refuses any Fail or Out-of-service item
+                # that does not say what is wrong with it.
+                rows[-1]["notes"] = (
+                    "Missing from the compartment at check; reported to the "
+                    "apparatus officer for replacement."
+                )
             return rows
 
         for shift_index, shift in enumerate(target_shifts):
@@ -7064,6 +7109,12 @@ class Seeder:
                 interleaved.append(past[tail])
             head, tail = head + 1, tail - 1
 
+        # The administrator files every report here, and a report about its
+        # own author is refused ("You can't write a shift report about
+        # yourself"). The admin is crewed on some shifts, so whether the walk
+        # tripped over it depended only on which crew member sorted first.
+        author_id = str(pick(self.api.get("/auth/me") or {}, "id") or "")
+
         for shift in interleaved[:30]:
             # Nine, not five. Approvals take two, the flagged queue takes two
             # and the draft one, so a five-report seed left the Review Queue
@@ -7080,6 +7131,7 @@ class Seeder:
                 for c in crew
                 if not c.get("has_existing_report")
                 and str(c.get("user_id")) not in seen_trainees
+                and str(c.get("user_id")) != author_id
                 # Never a recruit: the batch-report screenshots need a program
                 # trainee whose Evaluate control is still live on the ladder
                 # fixture shift, and a report filed about them anywhere on
@@ -8547,7 +8599,6 @@ class Seeder:
                     "end_date": str(date(TODAY.year, 12, 31)),
                 },
             )
-            self.api.post(f"/finance/fiscal-years/{pick(fiscal_year, 'id')}/activate")
 
         categories = items(self.api.get("/finance/budget-categories"), "categories")
         existing = {c.get("name") for c in categories}
@@ -8586,11 +8637,54 @@ class Seeder:
                     },
                 )
             )
+        fiscal_year = self._start_fiscal_year(fiscal_year) or fiscal_year
         return {
             "fiscal_year": fiscal_year,
             "categories": categories,
             "budgets": budgets,
         }
+
+    def _start_fiscal_year(self, fiscal_year: dict) -> dict | None:
+        """Take a draft year through board adoption and start it.
+
+        A draft year is started only once the board's adoption is recorded,
+        and adoption is recorded only from board review, which a year reaches
+        one planning stage at a time. The budget lines are added before any of
+        this on purpose: from board review on, a new line starts at zero and
+        its amount arrives only through an amendment a second officer
+        confirms, so lines added after adoption would all read $0.
+
+        Resumes from whatever stage an earlier, interrupted run left the year
+        in, and does nothing to a year that is already active or closed.
+        """
+        fy_id = pick(fiscal_year, "id")
+        if str(pick(fiscal_year, "status") or "") != "draft":
+            return None
+        stage = str(pick(fiscal_year, "planningStage", "planning_stage") or "")
+        for step in ("requests", "leadership_review"):
+            if stage == step:
+                following = (
+                    "leadership_review" if step == "requests" else "board_review"
+                )
+                fiscal_year = self.api.post(
+                    f"/finance/fiscal-years/{fy_id}/planning-stage",
+                    {"stage": following},
+                )
+                stage = following
+        if stage == "board_review":
+            # Adopted at the July business meeting the meetings step records,
+            # dated on or before today because the API refuses a future vote.
+            fiscal_year = self.api.post(
+                f"/finance/fiscal-years/{fy_id}/adopt",
+                {
+                    "adopted_on": str(TODAY - timedelta(days=32)),
+                    "adoption_reference": (
+                        f"July Business Meeting — motion to adopt the {pick(fiscal_year, 'name')} "
+                        "operating budget, carried"
+                    ),
+                },
+            )
+        return self.api.post(f"/finance/fiscal-years/{fy_id}/activate")
 
     # -- training programs (pipelines) -------------------------------
 
@@ -10069,21 +10163,32 @@ class Seeder:
         # than that and the shift reads as unstaffed rather than short-handed.
         if len(assignments) < 4:
             return
-        freed = assignments[-2:]
-        for row in freed:
-            self.api.delete(f"/scheduling/assignments/{pick(row, 'id')}")
-
-        booked_off = pick(freed[0], "user_id", "userId")
-        username = next(
+        # The one booked off raises their own leave request, so it has to be a
+        # member this seeder can sign in as with a password. Taking whoever sat
+        # second from the end landed on the two-factor account, whose sign-in
+        # stops at the code step — no session, and the request answered 401.
+        usernames = {
+            pick(u, "id"): pick(u, "username")
+            for u in password_login_members(
+                items(self.api.get("/users?limit=200"), "users")
+            )
+        }
+        on_leave = next(
             (
-                pick(u, "username")
-                for u in items(self.api.get("/users?limit=200"), "users")
-                if pick(u, "id") == booked_off
+                row
+                for row in reversed(assignments)
+                if usernames.get(pick(row, "user_id", "userId"))
             ),
             None,
         )
-        if not booked_off or not username:
+        if on_leave is None:
             return
+        other = next(row for row in reversed(assignments) if row is not on_leave)
+        for row in (on_leave, other):
+            self.api.delete(f"/scheduling/assignments/{pick(row, 'id')}")
+
+        booked_off = pick(on_leave, "user_id", "userId")
+        username = usernames[booked_off]
         shift_date = str(pick(shift, "shift_date", "shiftDate") or "")
         if not shift_date:
             return
@@ -11643,12 +11748,14 @@ class Seeder:
         # Guarded per title, not per collection: a run that dies between the
         # two creates must add the missing one on the next pass, not decide
         # the step is done because one row exists.
-        existing_titles = {
-            str(pick(m, "title"))
+        existing = {
+            str(pick(m, "title")): m
             for m in items(self.api.get("/meetings?limit=20"), "meetings")
         }
+        existing_titles = set(existing)
         member_ids = [str(pick(m, "id")) for m in members if pick(m, "id")]
-        if "July Business Meeting" not in existing_titles:
+        approved = existing.get("July Business Meeting")
+        if approved is None:
             approved = self.api.post(
                 "/meetings",
                 {
@@ -11700,7 +11807,18 @@ class Seeder:
                     ],
                 },
             )
-            self.api.post(f"/meetings/{pick(approved, 'id')}/approve")
+        # Approval only moves a meeting out of PENDING_APPROVAL (MM-9), and a
+        # draft reaches that state by an edit, not a dedicated endpoint.
+        # Checked on every run rather than only after the create, so a run
+        # that died between the two finishes the job instead of leaving a
+        # draft the title guard then skips forever.
+        approved_id = pick(approved, "id")
+        status = str(pick(approved, "status") or "draft")
+        if status == "draft":
+            self.api.patch(f"/meetings/{approved_id}", {"status": "pending_approval"})
+            status = "pending_approval"
+        if status == "pending_approval":
+            self.api.post(f"/meetings/{approved_id}/approve")
         if "Officer Meeting — Budget Review" not in existing_titles:
             self.api.post(
                 "/meetings",
@@ -11808,7 +11926,8 @@ class Seeder:
         # a re-run re-reads the detail rather than trusting the summary.
         existing = items(self.api.get("/minutes-records"), "minutes", "records")
         if existing:
-            return [self.api.get(f"/minutes-records/{pick(existing[0], 'id')}")]
+            record = self.api.get(f"/minutes-records/{pick(existing[0], 'id')}")
+            return [self._finish_minutes(record)]
 
         events = items(self.api.get("/events?limit=100"), "events")
         meeting = next(
@@ -11862,15 +11981,42 @@ class Seeder:
         if meeting:
             payload["event_id"] = pick(meeting, "id")
         minutes = self.api.post("/minutes-records", payload)
+        return [self._finish_minutes(minutes)]
+
+    # Approves the minutes the administrator submits. Separation of duties
+    # refuses an approval by the person who submitted them, so it has to be a
+    # second holder of minutes.manage — the Secretary, as in a real department.
+    MINUTES_APPROVER_USERNAME = "okittredge"
+    MINUTES_APPROVER_POSITION = "Secretary"
+
+    def _finish_minutes(self, minutes: dict) -> dict:
+        """Carry a minutes record through submit and approve, from any state.
+
+        Resumes a record an earlier run left in draft or submitted, which a
+        run against the older seeder always did: it approved as the same
+        administrator who submitted, and the approval was refused.
+        """
         minutes_id = pick(minutes, "id")
-        if minutes_id:
-            for step in ("submit", "approve"):
-                try:
-                    minutes = self.api.post(f"/minutes-records/{minutes_id}/{step}")
-                except ApiError as exc:
-                    self.blocked.append(f"minutes {step}: {exc}")
-                    break
-        return [minutes]
+        if not minutes_id:
+            return minutes
+        if str(pick(minutes, "status") or "") == "draft":
+            minutes = self.api.post(f"/minutes-records/{minutes_id}/submit")
+        if str(pick(minutes, "status") or "") != "submitted":
+            return minutes
+        if not self._ensure_role(
+            self.MINUTES_APPROVER_USERNAME, self.MINUTES_APPROVER_POSITION
+        ):
+            self.blocked.append(
+                f"minutes approve: could not give {self.MINUTES_APPROVER_USERNAME} "
+                f"the {self.MINUTES_APPROVER_POSITION} position"
+            )
+            return minutes
+        approver = self.member_session(
+            self.base_url,
+            self._user_id(self.MINUTES_APPROVER_USERNAME),
+            self.MINUTES_APPROVER_USERNAME,
+        )
+        return approver.post(f"/minutes-records/{minutes_id}/approve")
 
     BYLAW_ELECTION_TITLE = "Bylaw Amendment Vote"
 
@@ -13818,6 +13964,134 @@ class Seeder:
                 f"meeting-stage applicant: on {prospect.get('current_step_name')!r}, "
                 f"not {self.MEETING_STAGE_NAME!r}"
             )
+
+    # A third pipeline, holding one applicant who is on no stage, for
+    # `20-07-applicant-place-on-stage`. The Not on a stage panel renders only
+    # for an applicant with no current stage, and nothing in the default
+    # pipeline can produce one: an applicant's pipeline is fixed at creation
+    # and there is no "unplace" action. The one real cause, which the guide
+    # describes, is deleting a pipeline's only remaining stage, so that is what
+    # this does, on a pipeline nobody else's screenshot uses.
+    #
+    # Marcus Webb, a recruitment-event guest, rather than a new name: the step
+    # runs before the guest sign-in, which reuses an active applicant with the
+    # same email, so he is still linked to the open house. His sign-in used to
+    # leave him unplaced by accident, when it ran before any pipeline existed;
+    # moving that step after the pipeline is what took the shot's subject away.
+    UNPLACED_PIPELINE_NAME = "Lateral Transfer Pipeline"
+    UNPLACED_PIPELINE_STAGES = (
+        "Transfer Request",
+        "Certification Review",
+        "Chief's Interview",
+    )
+
+    def seed_unplaced_applicant(self) -> None:
+        pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
+        pipeline = next(
+            (p for p in pipelines if p.get("name") == self.UNPLACED_PIPELINE_NAME),
+            None,
+        )
+        guest = self.RECRUITMENT_GUESTS[0]
+        email = guest["email"]
+        found = items(
+            self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+            "prospects",
+        )
+        prospect = next((p for p in found if p.get("email") == email), None)
+        if prospect is not None and (
+            pipeline is None
+            or str(pick(prospect, "pipeline_id")) != str(pick(pipeline, "id"))
+        ):
+            # Signed in at the open house on a database seeded before this
+            # step existed, so he is in the default pipeline, and an
+            # applicant's pipeline cannot be changed afterwards. Checked before
+            # the pipeline is created, so such a database does not gain an
+            # empty one in the board's pipeline picker.
+            self.blocked.append(
+                "unplaced applicant: Marcus Webb is already in another pipeline; "
+                "reseed onto an empty database for 20-07"
+            )
+            return
+        if pipeline is None:
+            pipeline = self.api.post(
+                "/prospective-members/pipelines",
+                {
+                    "name": self.UNPLACED_PIPELINE_NAME,
+                    "description": (
+                        "Firefighters transferring in from another department: "
+                        "a request, a review of their certifications, then an "
+                        "interview with the Chief."
+                    ),
+                    "is_default": False,
+                    "is_active": True,
+                    # One stage to create him onto; the rest are added once
+                    # it has been deleted out from under him.
+                    "steps": [self._unplaced_stage(0)],
+                },
+            )
+        pipeline_id = str(pick(pipeline, "id"))
+        steps_path = f"/prospective-members/pipelines/{pipeline_id}/steps"
+
+        if prospect is None:
+            if not items(self.api.get(steps_path), "steps"):
+                # An interrupted run left the pipeline bare, and an applicant
+                # created into it would start on no stage with nothing to
+                # place them on -- give it its first stage back.
+                self.api.post(steps_path, self._unplaced_stage(0))
+            prospect = self.api.post(
+                "/prospective-members/prospects",
+                {**guest, "pipeline_id": pipeline_id},
+            )
+
+        # Only ever strip a pipeline that holds this one applicant. Anybody
+        # else on it would be moved off their stage by the deletions below.
+        others = [
+            p
+            for p in items(
+                self.api.get(
+                    f"/prospective-members/prospects?pipeline_id={pipeline_id}&limit=10"
+                ),
+                "prospects",
+            )
+            if p.get("email") != email
+        ]
+        if others:
+            self.blocked.append(
+                f"unplaced applicant: {self.UNPLACED_PIPELINE_NAME} holds other "
+                "applicants, so its stages were left alone"
+            )
+            return
+
+        # Delete every stage while he is on one: each deletion moves him to a
+        # neighbouring stage, and the last leaves him on none. On a re-run
+        # this also undoes a capture that pressed Place.
+        if pick(prospect, "current_step_id"):
+            for step in items(self.api.get(steps_path), "steps"):
+                self.api.delete(f"{steps_path}/{pick(step, 'id')}")
+        # Then the full stage list, which is what his Place picker offers.
+        existing = {pick(s, "name") for s in items(self.api.get(steps_path), "steps")}
+        for order, name in enumerate(self.UNPLACED_PIPELINE_STAGES):
+            if name not in existing:
+                self.api.post(steps_path, self._unplaced_stage(order))
+
+        detail = self.api.get(f"/prospective-members/prospects/{pick(prospect, 'id')}")
+        if pick(detail, "current_step_id"):
+            self.blocked.append(
+                "unplaced applicant: Marcus Webb is still on a stage after "
+                "the pipeline's stages were deleted"
+            )
+
+    def _unplaced_stage(self, order: int) -> dict:
+        name = self.UNPLACED_PIPELINE_STAGES[order]
+        return {
+            "name": name,
+            "description": f"{name} stage.",
+            "step_type": "manual_approval",
+            "is_first_step": order == 0,
+            "is_final_step": order == len(self.UNPLACED_PIPELINE_STAGES) - 1,
+            "sort_order": order,
+            "required": True,
+        }
 
     # Consolidated reporting buckets, in pipeline order. Named by what the
     # stages have in common rather than by stage count, because the Pipeline
@@ -16016,6 +16290,9 @@ class Seeder:
         # database this step used to run before any pipeline existed — the
         # guest prospect then had no stage, no kanban card, and the
         # guest-prospect screenshot had nothing to open.
+        # Before the recruitment guests sign in, so Marcus Webb's sign-in finds
+        # him already on file in his own pipeline. See seed_unplaced_applicant.
+        self.step("unplaced applicant", self.seed_unplaced_applicant)
         self.step(
             "guest check-in event",
             lambda: self.seed_guest_check_in_event(stations),

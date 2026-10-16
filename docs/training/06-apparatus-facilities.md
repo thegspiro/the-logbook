@@ -420,7 +420,7 @@ For the full workflow, including how to request and approve an exception, see
 Equipment checks are structured checklists that crews run on a vehicle, often
 at the start of a shift. They are part of Inventory. For building checklists,
 running checks and the reports, see
-[Inventory → Equipment Checklists](./05-inventory.md#equipment-checklists-moved-here-2026-08-31).
+[Inventory → Equipment Checklists](./05-inventory.md#equipment-checklists).
 
 What matters on the Apparatus side:
 
@@ -447,7 +447,7 @@ view of its tracked supplies, the lots and expiry dates aboard, and the stock
 on the shelf behind it. A crew can record what they used as they use it. See
 [Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step)
 and, for the shelf side,
-[Inventory → Dated Stock Lots and Receiving](./05-inventory.md#dated-stock-lots-and-receiving-2026-08-10).
+[Inventory → Dated Stock Lots and Receiving](./05-inventory.md#dated-stock-lots-and-receiving).
 
 | What if …?                                             | What happens                                                                                                                                    |
 | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |

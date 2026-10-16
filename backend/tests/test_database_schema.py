@@ -539,6 +539,9 @@ class TestColumnConstraints:
             # encryption_key_custody: the row is the confirmation, stamped
             # when it is given and never updated.
             "confirmed_at",
+            # minutes_signatures: the row is the signature, stamped when it is
+            # given and never updated.
+            "signed_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():

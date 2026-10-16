@@ -1,6 +1,231 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), pass 8 (this PR)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), pass 9 (this PR)
+
+---
+
+## Pass 9 (2026-10-15) — watchdog pickup, real delta (15 commits), 0 fixes, 0 new findings, INV-22 re-verified open/accepted
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session for
+this repo appeared stalled (its last PR, #3262, Feature 10/Documents & legal
+pass 9, merged 2026-10-15T12:20:31Z and no new `claude/security-review-*` PR
+had opened in the following ~2 hours). Confirmed via `list_pull_requests`
+(state=open) that no PR with a `claude/security-review-` head branch was open
+— the only candidates were PR #3262 and a duplicate, #3265 (same disposition,
+opened 6 minutes later), both already closed/merged by the time this pass
+started; the Open PR row's own "watchdog tend" note already recorded that
+fork being resolved. Per `PROGRESS.md`'s Rotation table, row 11 (Inventory)
+was the first `⬜`, so this pass continues that feature rather than starting a
+new one.
+
+**Backend:** same five endpoint files, plus the eleven services/
+utils/models/MCP-tool files pass 8 declared, unchanged in scope.
+**Frontend:** `modules/inventory/*` (unchanged scope). **Migrations:** one
+landed touching this feature — `1d65720bce34` (`inventory_item_also_called_names`),
+reviewed below; 599 revisions total (up from 585 at pass 8), single head, no
+other migration in range touches an inventory table.
+
+### Scope
+
+Baseline is pass 8's own merge commit, `6d177fea` (PR #3166) — confirmed an
+ancestor of `origin/main` via `git merge-base --is-ancestor`.
+`git log --no-merges 6d177fea..origin/main -- <every scope file>` returns
+**15** commits (335 non-merge commits landed repo-wide in the same range).
+All 15 were read via `git show` in full, not sampled. Route decorators were
+diffed directly (`git diff 6d177fea origin/main -- backend/app/api/v1/endpoints/inventory.py \| grep '^[+-]@router\.'`),
+which returned **nothing** — zero route lines added or removed in any of the
+five endpoint files since pass 8.
+
+**Doc correction, pass 8's own route count.** Pass 8 reported "`inventory.py`:
+**149** routes (unchanged from pass 7)". A direct AST walk and a plain
+`grep -cE '^@router\.(get\|post\|put\|patch\|delete)\('` both return **148** at
+pass 8's own merge commit (`6d177fea`) as well as at the current head — the
+file did not change between those two counts (confirmed by the empty decorator
+diff above), so pass 8's "149" was a one-off miscount, not a route that
+existed and was later removed. Noted here rather than silently carried
+forward; this pass's own count (148) is the one to compare against in pass 10.
+
+### Re-verified: INV-22, still OPEN, owner-accepted, unchanged
+
+`get_fulfillment_options` / `get_requestable_categories`
+(`inventory_service.py:9997`, `:10186` at pass 8; unchanged in this window —
+neither function appears in any of the 15 commits' diffs) are untouched.
+`docs/KNOWN_LIMITATIONS.md`'s entry recording the owner's 2026-10-05 decision
+to leave this as is (full catalog materialization is load-bearing for
+correctness, not a safe drive-by `LIMIT`) is unchanged; nothing new to add.
+
+### New real delta reviewed, all clean
+
+- **`bbe28745` — Fuzzy catalog matching for checklist items, plus an "Also
+  called" field.** The largest commit this window: a new nullable JSON column
+  (`inventory_items.also_called`), a new `app/utils/item_aliases.py`
+  (`normalize_aliases` — trims, de-duplicates against the item's own name,
+  caps at 10 entries of ≤100 chars, raises rather than truncating), extensions
+  to `app/utils/name_matching.py` (token-level fuzzy matching — plural
+  folding, digit-safe "4x4" equivalence, edit-distance word pairing — capped
+  below `EXACT` so nothing through an alias or a fuzzy pair is ever treated as
+  a safe auto-apply), and a new opt-in `fuzzy=true` on `GET /inventory/items`
+  and `GET /medical-supplies/items`.
+  - **Tenant isolation:** `search_items_fuzzy`'s own candidate scan
+    (`inventory_service.py`) builds its `WHERE` from the existing
+    `_build_items_query`'s `.whereclause` and **raises `RuntimeError`** if that
+    clause is ever `None` — i.e., it fails closed rather than silently
+    scanning every org's names if the query builder ever stopped org-scoping
+    by default. Read in full; `_build_items_query` does still always include
+    `InventoryItem.organization_id == str(organization_id)`.
+  - **Abuse resistance:** the candidate scan is capped at `_FUZZY_CANDIDATE_CAP
+= 5000` rows (a `.limit()` on the SELECT, with a logged warning if the cap
+    is hit) — opting into fuzzy search cannot be turned into an unbounded
+    full-table scan per request. The token-pairing algorithm itself is
+    bounded by the handful of words in a name/alias, not by catalog size.
+  - **Schema/migration integrity:** `1d65720bce34` follows the established
+    `_has_table`/`_has_column` guard (Pitfall #26 — the table is already
+    present on every install, but the pattern is kept for consistency) and is
+    additive/nullable; downgrade drops the column. No backfill needed (every
+    existing row reads as "no aliases").
+  - **Write-path validation:** `also_called` on `InventoryItemCreate` /
+    `InventoryItemUpdate` both route through `normalize_aliases` via a
+    `field_validator`, and the update path's endpoint builds `update_data` with
+    `model_dump(exclude_unset=True)` (confirmed at the existing call site), so
+    an explicit `also_called: null` clears the column and an omitted key
+    leaves it alone — the correct update-vs-create split (CLAUDE.md
+    Pitfall #1).
+  - **CSV import (`063db574`):** the companion "Also Called" import column
+    reuses the identical `normalize_aliases` validator (same caps, same
+    raise-not-truncate behavior) and a row over the limit is refused and
+    reported, not silently dropped.
+  - 1 new unit-test file plus additions to the existing CSV-import test file
+    cover the alias caps, the dedup-against-own-name rule, and the
+    fuzzy-search org-scope/cap; not independently re-run as a guard test this
+    pass since nothing needed fixing (see Completion gate below for the full
+    suite run).
+- **`2cd84756` — Permanent delete for medical supply categories.** New
+  `DELETE /medical-supplies/categories/{id}` behind
+  `inventory.manage_medical`/`inventory.manage`. Both the category being
+  deleted and an optional `move_items_to` destination are checked through
+  `_require_medical_category` → `InventoryService.category_in_domain`
+  (org-scoped **and** domain-scoped — a gear category can be neither deleted
+  through this path nor chosen as a destination) before the service method
+  runs. `InventoryService.delete_category_permanently` (read in full) locks
+  both category rows **in sorted id order** (so two concurrent deletes naming
+  each other as `move_items_to` cannot deadlock — the Pitfall #22/#27 pattern),
+  takes the subcategory count and the item count as locking reads
+  (`.with_for_update()`), and only then moves items (if any) and deletes the
+  source row — all org-filtered. `CategoryHasItemsError` → 409,
+  domain/not-found → 404, any other refusal → 400 via `safe_error_detail`.
+  Audit event `medical_category_deleted` logged after success. 1 new backend
+  test file (`test_medical_category_delete.py`, 374 lines) plus frontend
+  component tests; not independently re-run as a guard test this pass (see
+  Completion gate).
+- **`c57cc039` — Medical supplies added to the CSV import sample.** Sample
+  data and docs only, plus one validation-only change: `"medical"` is now an
+  accepted `Item Type` CSV value. Confirmed by reading `_coerce_csv_row`: a
+  recognized `item_type` cell is validated and then **discarded** —
+  `# item_type lives on the category, not the item` — so accepting the value
+  does not let a crafted CSV row set an item's actual domain; domain still
+  comes entirely from the row's resolved `category_id`, as before. Still uses
+  `SafeCsvWriter` for the template download (Pitfall #15 unaffected).
+- **`922cb6aa`, `c926b687`, `51c77a9c`, `7879398d`, `e7696e15` — mypy/typing
+  narrowing batches.** Each diffed in full against its own commit message's
+  claims. All are one of: a loop/branch that already excluded the `None` case
+  (a query filter, a prior guard) now stating that guarantee in the type
+  instead of relying on runtime truth; a local variable renamed to stop two
+  different row-tuple shapes sharing one name; or an explicit `Enum(...)`
+  conversion replacing a raw string assignment into an enum column (fails
+  loudly on an invalid value instead of persisting a non-enum string — the
+  same `ChargeStatus`-style hardening pass 8 described, applied here to
+  `RequestStatus` in `review_equipment_request`). The one `is not None`
+  addition in `create_equipment_request`'s rank check
+  (`inventory.py:4008-4013`) is provably redundant — it sits inside a branch
+  already gated on `has_rank_restriction` (`min_rank is not None`) two lines
+  above — so this is mypy satisfaction, not a behavior or fail-open/fail-closed
+  change. No tenancy, auth, or locking change in any of these five commits.
+- **Frontend-only commits** (`96f4f325`, `9743a817`, `0bb00a3c`, `755744f7`,
+  `d32dfee0`) — dark-mode dropdown contrast, icon/label button layout, phone
+  restacking of the apparatus and run-a-check screens, and a single
+  accessible-name fix on the checklist admin page's scroll region. None add
+  `dangerouslySetInnerHTML`, a direct `axios`/`fetch` call bypassing the
+  module's service layer, or a `window.confirm`/`alert`/`prompt`.
+
+### Route inventory (re-confirmed unchanged)
+
+`grep -cE '^@router\.(get\|post\|put\|patch\|delete)\('` this pass:
+`inventory.py` **148** (see the doc correction above — unchanged from pass 8's
+actual code, pass 8's written count of 149 was the error). `labels.py`: 12,
+`inventory_kiosk.py`: 4, `inventory_last_seen.py`: 2, `inventory_nfc.py`: 24 —
+all unchanged from pass 8, confirmed both by the route-decorator diff and by
+direct recount. `check_route_permissions.py --strict` (run from the repo
+root, per Pitfall #30a): **270** routes repo-wide (up from 268 at pass 8), 0
+errors, 0 warnings.
+
+**Every route in all five files enumerated, not spot-checked:** a script
+walked every `@router.` decorator in all five files (190 routes total) and
+confirmed each carries either a `require_permission(...)` or a bare
+`get_current_user` dependency. The 20 routes using `get_current_user` alone
+were read individually (not merely pattern-matched): all 14 in `inventory.py`
+are self-or-quartermaster patterns (`_require_self_or_quartermaster`, the
+INV-8/INV-9-fixed shape), org-scoped-by-construction creates
+(`create_equipment_request`, `create_return_request`), or caller-filtered
+lists/self-keyed routes (`/requests`, `/return-requests`, `/my/size-preferences`
+×2) whose authorization is inline rather than a decorator (`can_manage`
+checks gating whether `mine_only` is honored or forced); all 6 in `labels.py`
+gate through the module-scoped `_authorize_module(current_user, module)`
+helper. No route in any of the five files carries no authorization check at
+all.
+
+### Verified good ✅ (pass 9)
+
+- **No route added or removed anywhere in this feature's five endpoint files
+  since pass 8** — confirmed by diffing `@router.` decorator lines directly.
+- **The new fuzzy-search candidate scan fails closed** if the query builder's
+  org-scoping clause is ever absent (`RuntimeError`, not a silent unscoped
+  scan) and is capped at 5000 rows — no new abuse-resistance gap.
+- **The new category hard-delete locks both rows in sorted id order** and
+  takes its item/subcategory counts as locking reads, matching the
+  established Pitfall #27 shape; both the source and destination category ids
+  are org- and domain-validated before the service method runs.
+- **No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`** — grepped
+  every `ilike`/`.like(` call site in `inventory_service.py`: all carry
+  `escape=LIKE_ESCAPE_CHAR`. No new bare `csv.writer` (the one CSV path
+  touched, `download_import_template`, still uses `SafeCsvWriter`). No new
+  JSON-column shallow-copy mutation (the new `also_called` column is replaced
+  wholesale on write via the Pydantic validator, never mutated in place).
+- **The `also_called` field is bounded even before its own 10-entry cap
+  applies**, by the existing global `RequestSizeLimitMiddleware`
+  (`MAX_REQUEST_BODY_SIZE`, 60 MB) — a maliciously large array in a single
+  request is capped at the body-size layer before `normalize_aliases` ever
+  runs, the same backstop every other unbounded-until-validated list field in
+  this codebase relies on. Not a new gap specific to this feature.
+- **INV-22's "leave as is" owner decision is unchanged in code and in
+  `KNOWN_LIMITATIONS.md`**, re-confirmed by checking that neither function
+  appears in this window's 15-commit diff.
+
+### Completion gate {#completion-gate-pass-9}
+
+| Check                                                   | Result                                            |
+| ------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                           | ✅ 0 violations (repo-wide)                       |
+| `black --check app/ tests/ alembic/`                    | ✅ clean, 2325 files unchanged                    |
+| `isort --check-only app/ tests/ alembic/`               | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`       | ✅ single head (`bb60bd43bede`), 599 revisions    |
+| `python3 scripts/check_route_permissions.py --strict`   | ✅ 270 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -k "inventory or label or nfc or kiosk"` | ✅ 1728 passed, 1 pre-existing skip (`pywebpush`) |
+| `npm run typecheck` (`tsc-native.mjs --noEmit`)         | ✅ clean                                          |
+| `npm run lint` (`eslint --max-warnings 10`)             | ✅ clean                                          |
+| `npx vitest run src/modules/inventory`                  | ✅ clean                                          |
+
+No application-code fix was needed this pass — the full 15-commit real delta
+since pass 8 (the fuzzy-search/aliases feature, the medical-category hard
+delete, the CSV-import sample/validation addition, and five mypy-narrowing
+batches) was reviewed fresh against all seven checklist dimensions and found
+sound throughout: correct org-scoping (including the new fail-closed fuzzy
+scan), correct lock ordering on the new delete path, no new injection surface,
+no new data-exposure gap, and a sound additive migration. The only correction
+is the pass-8 route-count doc fix above (148, not 149) — not a security
+finding, a bookkeeping miscount.
+
+Rotation row 11 stays ✅ (pending this PR merge). Next: Feature 12
+(Facilities).
 
 ---
 

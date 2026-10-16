@@ -443,6 +443,15 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
             ]
             if movers:
                 sign.append(Paragraph(_esc(", ".join(movers)) + ".", body_style))
+        for signature in approval.get("signatures") or []:
+            sign.append(
+                Paragraph(
+                    f"<b>{_esc(signature.get('title'))}:</b> "
+                    f"{_esc(signature.get('name'))}, signed in the Logbook on "
+                    f"{_esc(signature.get('signed_at_display'))}.",
+                    body_style,
+                )
+            )
     else:
         sign.append(
             Paragraph(

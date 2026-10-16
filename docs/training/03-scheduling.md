@@ -2345,10 +2345,10 @@ This section is in three parts:
 
 The full list of checklist screens and who can open each one is in the
 Inventory guide, under
-[Equipment Checklists](./05-inventory.md#equipment-checklists-moved-here-2026-08-31).
+[Equipment Checklists](./05-inventory.md#equipment-checklists).
 The settings that decide when crews are prompted, and how early or late a
 member may check in, are under
-[Checklist Settings](./05-inventory.md#checklist-settings-moved-here-2026-08-31).
+[Checklist Settings](./05-inventory.md#checklist-settings).
 
 ---
 
@@ -2369,6 +2369,16 @@ You can also get there from your shift:
 
 Both take you to My Checklists with that shift's checks at the top.
 
+On a phone the list is compact: one row per checklist under a heading for each
+day (**Today**, **Tomorrow**, then the date). A day that has passed and still
+holds an unfiled check is marked overdue. **Unscheduled checklist** sits beside
+the title (shortened to **Unscheduled**), and **Apparatus Inventory** and
+**Manage Templates** fold into a **⋯** menu. Completed checklists are grouped
+by the day checked. The **All / Start / End** filter is gone; every row carries
+its own **Start** or **End** badge. On a laptop the cards below are unchanged.
+
+<!-- Screenshot needed: My Checklists on a phone, showing day headings, the overdue marker and the ⋯ menu. -->
+
 Each card shows:
 
 - the truck, and whether it is a **Start of shift** or **End of shift** check;
@@ -2385,9 +2395,7 @@ The button follows the status:
 | Part answered                | **Continue checklist**            |
 | Already filed for this shift | **Submitted for this shift** (no button) |
 
-If more than one check is listed, use **All**, **Start of shift** or **End of
-shift** to filter them. Your finished checks are under **Completed
-checklists** at the bottom.
+Your finished checks are under **Completed checklists** at the bottom.
 
 If nothing is due, the page says: _"Nothing to check right now. When one of
 your shifts has an equipment checklist, it will show up here. If you expected
@@ -2452,9 +2460,11 @@ check, or an officer who can edit checklists, can add photos to it.
 
 ![Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below](./images/03-72-check-item-controls.png)
 
-**Critical minimum.** A count item can have a critical minimum below its par.
-If your count is at or below it, the item shows a red **CRITICAL — below
-minimum** warning.
+**Critical minimum.** A count item can have a critical minimum. The item shows
+a red **CRITICAL — below minimum** warning only when your count is _below_ it.
+A count exactly at the minimum is not critical, and neither is any count that
+meets the item's par, so a full position never shows the warning. The failure
+email uses the same rule.
 
 #### Counts carried over from last time
 
@@ -2838,7 +2848,7 @@ officers who can open them.
 
 > **Important.** Editing a published checklist takes it **off every shift**
 > until you publish it again. A banner says so, with **Publish now**. See
-> [Inventory → What changed in the builder](./05-inventory.md#what-changed-in-the-builder-2026-09-30--2026-10-04)
+> [Inventory → Building a checklist](./05-inventory.md#building-a-checklist)
 > for the full behaviour.
 
 #### Which checklists a shift gets
@@ -2912,9 +2922,10 @@ and lot numbers, image, critical minimum and the inventory link. You never need
 to open it to finish an item. You can fill a whole truck's names and answer
 types without opening anything.
 
-> **What if the critical minimum is at or above par?** When you publish, The
+> **What if the critical minimum is above par?** When you publish, The
 > Logbook lists it in a **Save with warnings?** box. You can go back and fix it,
-> or save anyway.
+> or save anyway. A minimum equal to par is allowed: it means any shortfall is
+> critical.
 
 ![Equipment check template builder with the template header and sections](./images/03-22-equipment-check-builder.png)
 

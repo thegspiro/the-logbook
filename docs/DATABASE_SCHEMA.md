@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**311 tables · 5137 columns · 1049 foreign keys**
+**313 tables · 5172 columns · 1057 foreign keys**
 
 ---
 
@@ -148,7 +148,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`document_folders`](#document_folders) | `DocumentFolder` | 17 | Document Folder model |
+| [`document_folders`](#document_folders) | `DocumentFolder` | 19 | Document Folder model |
 | [`documents`](#documents) | `Document` | 20 | Document model |
 
 ### Elections
@@ -281,6 +281,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`form_integrations`](#form_integrations) | `FormIntegration` | 9 | Form Integration model |
 | [`form_submissions`](#form_submissions) | `FormSubmission` | 15 | Form Submission model |
 | [`forms`](#forms) | `Form` | 19 | Form model |
+
+### Google_Workspace
+
+<sub>`app/models/google_workspace.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`google_account_provisions`](#google_account_provisions) | `GoogleAccountProvision` | 19 | A member's Google Workspace account, as The Logbook created or found it |
 
 ### Grants & Fundraising
 
@@ -430,12 +438,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 45 | Meeting Minutes model |
-| [`meeting_motions`](#meeting_motions) | `Motion` | 16 | Motion model |
-| [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 14 | Action Item model |
+| [`meeting_motions`](#meeting_motions) | `Motion` | 19 | Motion model |
+| [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 15 | Action Item model |
 | [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 13 | A file kept with a set of minutes: reports, handouts, the signed copy. |
 | [`minutes_closed_sessions`](#minutes_closed_sessions) | `MinutesClosedSession` | 13 | A closed (executive) session held during a meeting. |
 | [`minutes_election_results`](#minutes_election_results) | `MinutesElectionResult` | 10 | An election's certified result, frozen into a set of minutes. |
 | [`minutes_revisions`](#minutes_revisions) | `MinutesRevision` | 13 | An approved version of a set of minutes, immutable once written. |
+| [`minutes_signatures`](#minutes_signatures) | `MinutesSignature` | 10 | A signature on adopted minutes: who attested to which version, and when. |
 | [`minutes_suggestions`](#minutes_suggestions) | `MinutesSuggestion` | 17 | A change a member proposes while the minutes are circulated for review. |
 | [`minutes_templates`](#minutes_templates) | `MinutesTemplate` | 12 | Meeting Minutes Template |
 
@@ -2112,6 +2121,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `owner_user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `allowed_roles` | JSON | yes |  |  |  |
 | `required_permissions` | JSON | yes |  |  |  |
+| `admin_only_confirmed_at` | DATETIME | yes |  |  |  |
+| `admin_only_confirmed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
@@ -4410,6 +4421,41 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - UNIQUE `ix_forms_public_slug` (`public_slug`)
 - `ix_forms_status` (`status`)
 
+## Google_Workspace
+
+### `google_account_provisions`
+
+**GoogleAccountProvision** · `app/models/google_workspace.py`
+
+> A member's Google Workspace account, as The Logbook created or found it
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `users.id` ON DELETE CASCADE |
+| `primary_email` | VARCHAR(255) | no |  |  |  |
+| `status` | VARCHAR(20) | no |  | `'pending'` |  |
+| `google_user_id` | VARCHAR(64) | yes |  |  |  |
+| `credentials_sent` | BOOL | no |  | `0` |  |
+| `pending_groups` | JSON | yes |  |  |  |
+| `last_error` | TEXT | yes |  |  |  |
+| `attempts` | INTEGER | no |  | `0` |  |
+| `last_attempt_at` | DATETIME | yes |  |  |  |
+| `suspension_wanted` | BOOL | no |  | `0` |  |
+| `suspension_settled` | BOOL | no |  | `1` |  |
+| `suspended_by_logbook` | BOOL | no |  | `0` |  |
+| `suspended_at` | DATETIME | yes |  |  |  |
+| `suspension_error` | TEXT | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_google_account_provisions_org` (`organization_id`)
+- UNIQUE `ix_google_account_provisions_user` (`user_id`)
+
 ## Grants & Fundraising
 
 ### `donations`
@@ -6577,6 +6623,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `votes_for` | INTEGER | yes |  |  |  |
 | `votes_against` | INTEGER | yes |  |  |  |
 | `votes_abstain` | INTEGER | yes |  |  |  |
+| `votes_recused` | INTEGER | yes |  |  |  |
+| `threshold` | VARCHAR(20) | yes |  |  |  |
+| `roll_call` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -6604,6 +6653,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `completion_notes` | TEXT | yes |  |  |  |
 | `carried_from_id` | VARCHAR(36) | yes | FK, IDX |  | → `minutes_action_items.id` ON DELETE SET NULL |
 | `carried_forward_at` | DATETIME | yes |  |  |  |
+| `last_reminded_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -6727,6 +6777,35 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_minutes_revisions_version` (`minutes_id`, `version`)
+
+### `minutes_signatures`
+
+**MinutesSignature** · `app/models/minute.py`
+
+> A signature on adopted minutes: who attested to which version, and when. Tied to the revision it was given on, and carrying that revision's content hash, so the signature is evidence of one exact version. Reopening the minutes supersedes the revision and the signatures stay with it, on file against the text they were given for; the corrected version starts with none.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `minutes_id` | VARCHAR(36) | no | FK, IDX |  | → `meeting_minutes.id` ON DELETE CASCADE |
+| `revision_id` | VARCHAR(36) | no | FK, IDX |  | → `minutes_revisions.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `slot_key` | VARCHAR(50) | no |  |  |  |
+| `slot_title` | VARCHAR(100) | no |  |  |  |
+| `signer_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `signed_name` | VARCHAR(200) | no |  |  |  |
+| `signed_at` | DATETIME | no |  |  |  |
+| `content_hash` | VARCHAR(64) | no |  |  |  |
+
+**Indexes**
+
+- `ix_minutes_signatures_minutes_id` (`minutes_id`)
+- `ix_minutes_signatures_organization_id` (`organization_id`)
+- `ix_minutes_signatures_revision_id` (`revision_id`)
+
+**Constraints**
+
+- UNIQUE `uq_minutes_signatures_slot` (`revision_id`, `slot_key`)
 
 ### `minutes_suggestions`
 
@@ -10829,7 +10908,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (384 references)
+### → `users` (388 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10905,6 +10984,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `departure_clearances` | `completed_by` | RESTRICT | yes |
 | `departure_clearances` | `initiated_by` | RESTRICT | yes |
 | `departure_clearances` | `user_id` | CASCADE | no |
+| `document_folders` | `admin_only_confirmed_by` | SET NULL | yes |
 | `document_folders` | `created_by` | RESTRICT | yes |
 | `document_folders` | `owner_user_id` | SET NULL | yes |
 | `documents` | `uploaded_by` | RESTRICT | yes |
@@ -10986,6 +11066,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `forms` | `created_by` | RESTRICT | yes |
 | `fundraising_campaigns` | `created_by` | RESTRICT | yes |
 | `fundraising_events` | `created_by` | RESTRICT | yes |
+| `google_account_provisions` | `created_by` | SET NULL | yes |
+| `google_account_provisions` | `user_id` | CASCADE | no |
 | `grant_applications` | `assigned_to` | SET NULL | yes |
 | `grant_applications` | `created_by` | RESTRICT | yes |
 | `grant_compliance_tasks` | `assigned_to` | SET NULL | yes |
@@ -11076,6 +11158,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_revisions` | `approved_by` | SET NULL | yes |
 | `minutes_revisions` | `submitted_by` | SET NULL | yes |
 | `minutes_revisions` | `superseded_by` | SET NULL | yes |
+| `minutes_signatures` | `signer_id` | SET NULL | yes |
 | `minutes_suggestions` | `created_by` | SET NULL | yes |
 | `minutes_suggestions` | `resolved_by` | SET NULL | yes |
 | `minutes_templates` | `created_by` | RESTRICT | yes |
@@ -11218,7 +11301,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (254 references)
+### → `organizations` (256 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11328,6 +11411,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `forms` | `organization_id` | CASCADE | no |
 | `fundraising_campaigns` | `organization_id` | CASCADE | no |
 | `fundraising_events` | `organization_id` | CASCADE | no |
+| `google_account_provisions` | `organization_id` | CASCADE | no |
 | `grant_applications` | `organization_id` | CASCADE | no |
 | `grant_opportunities` | `organization_id` | CASCADE | no |
 | `instructor_qualifications` | `organization_id` | CASCADE | no |
@@ -11381,6 +11465,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_closed_sessions` | `organization_id` | CASCADE | no |
 | `minutes_election_results` | `organization_id` | CASCADE | no |
 | `minutes_revisions` | `organization_id` | CASCADE | no |
+| `minutes_signatures` | `organization_id` | CASCADE | no |
 | `minutes_suggestions` | `organization_id` | CASCADE | no |
 | `minutes_templates` | `organization_id` | CASCADE | no |
 | `multi_agency_trainings` | `organization_id` | CASCADE | no |
@@ -11649,6 +11734,20 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_tests` | `requirement_id` | SET NULL | yes |
 | `training_sessions` | `requirement_id` | SET NULL | yes |
 
+### → `meeting_minutes` (9 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `meeting_minutes` | `adopting_minutes_id` | SET NULL | yes |
+| `meeting_motions` | `minutes_id` | CASCADE | no |
+| `minutes_action_items` | `minutes_id` | CASCADE | no |
+| `minutes_attachments` | `minutes_id` | CASCADE | no |
+| `minutes_closed_sessions` | `minutes_id` | CASCADE | no |
+| `minutes_election_results` | `minutes_id` | CASCADE | no |
+| `minutes_revisions` | `minutes_id` | CASCADE | no |
+| `minutes_signatures` | `minutes_id` | CASCADE | no |
+| `minutes_suggestions` | `minutes_id` | CASCADE | no |
+
 ### → `training_categories` (9 references)
 
 | From table | Column | On delete | Nullable |
@@ -11689,19 +11788,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_election_packages` | `election_id` | SET NULL | yes |
 | `votes` | `election_id` | CASCADE | no |
 | `voting_tokens` | `election_id` | CASCADE | no |
-
-### → `meeting_minutes` (8 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `meeting_minutes` | `adopting_minutes_id` | SET NULL | yes |
-| `meeting_motions` | `minutes_id` | CASCADE | no |
-| `minutes_action_items` | `minutes_id` | CASCADE | no |
-| `minutes_attachments` | `minutes_id` | CASCADE | no |
-| `minutes_closed_sessions` | `minutes_id` | CASCADE | no |
-| `minutes_election_results` | `minutes_id` | CASCADE | no |
-| `minutes_revisions` | `minutes_id` | CASCADE | no |
-| `minutes_suggestions` | `minutes_id` | CASCADE | no |
 
 ### → `prospective_members` (8 references)
 
@@ -12398,6 +12484,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `minutes_action_items` | `carried_from_id` | SET NULL | yes |
+
+### → `minutes_revisions` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `minutes_signatures` | `revision_id` | CASCADE | no |
 
 ### → `minutes_templates` (1 references)
 

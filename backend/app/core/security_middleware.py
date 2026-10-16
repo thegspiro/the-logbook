@@ -1703,6 +1703,8 @@ class SecurityMonitoringMiddleware:
         "/api/v1/finance/export/transactions",
         "/api/v1/inventory/items/export",
         "/api/v1/inventory/not-seen/export",
+        "/api/v1/medical-supplies/items/export",
+        "/api/v1/medical-supplies/lots/export",
         "/api/v1/organization/template/export",
         "/api/v1/security/audit-log/export",
         "/api/v1/store/orders/export",
