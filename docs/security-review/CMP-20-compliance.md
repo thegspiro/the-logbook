@@ -2,12 +2,199 @@
 
 **Prefix:** `CMP` · **Iteration:** 20 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
-(pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7) · **PR:** #1902 (pass 1, merged),
+(pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8) ·
+**PR:** #1902 (pass 1, merged),
 [#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2, merged),
 #2245 (pass 3, merged), [#2476](https://github.com/thegspiro/the-logbook/pull/2476)
 (pass 4, merged), [#2583](https://github.com/thegspiro/the-logbook/pull/2583)
 (pass 5, merged), [#2869](https://github.com/thegspiro/the-logbook/pull/2869)
-(pass 6, merged), pass 7 (this PR)
+(pass 6, merged), [#2977](https://github.com/thegspiro/the-logbook/pull/2977)
+(pass 7, merged), pass 8 (this PR)
+
+## Pass 8 (2026-10-16)
+
+**Routine pickup** — Feature 20 was the first `⬜` in the Rotation table after
+Feature 19 (Skills testing, pass 8, PR #3307) merged with nothing started
+since; confirmed via `list_pull_requests` (state=open) and a
+`head:claude/security-review-` search that no security-review PR or branch
+was open.
+
+**Not a zero-delta pass.** Ten real (non-merge) commits touched this
+feature's declared surface since pass 7's merge (`db6716d37`, PR #2977):
+
+- **`afd687449`, 2026-10-11 — CMP2-1 now FIXED.** Pass 1 through 7 each
+  re-confirmed `notify_days_before_deadline`/`notify_non_compliant_members`
+  as write-only (CLAUDE.md Pitfall #19), with the config screen honestly
+  labeled "Not yet active." The owner's decision (build the sender,
+  email-first) is now implemented: a new daily scheduled task,
+  `compliance_member_notices` (`app/services/compliance_member_notices.py`,
+  registered in `TASK_RUNNERS`/`TASK_INTERVALS_SECONDS`/`SCHEDULE`, run
+  per-org through the existing `_for_each_org` helper in
+  `scheduled_tasks.py`), reads both settings independently and sends email
+  only (`EmailKind.TRAINING_REMINDERS`, honouring a member's opt-out unless
+  the department requires it). Verified directly rather than trusted from
+  the commit message:
+  - **Org-scoped throughout.** `send_member_compliance_notices(db, org)` is
+    called once per `Organization` row from `_for_each_org` (already
+    filtered to active orgs); it loads that org's own `ComplianceConfig`
+    (`_load_config`, `ComplianceConfig.organization_id == org_id`) and grades
+    members through the new `training_compliance.grade_org_members(db,
+org_id, today, config)`, which queries `User`/`TrainingRequirement`
+    filtered on `organization_id == org_id` and passes that same
+    `org_id`/`member_ids` list into every downstream loader
+    (`load_graded_records`, `load_credited_shift_dates`,
+    `fetch_org_waivers`). The sent-log dedup query
+    (`_sent_logs`) filters `NotificationLog.organization_id == org_id`
+    **and** `recipient_id.in_(ids)` where `ids` come only from that org's own
+    graded members — no cross-tenant read is possible through this path.
+  - **Same evaluator as every other compliance screen** (CLAUDE.md Pitfall
+    #29): `grade_org_members` is a new entry point onto the existing
+    `ComplianceGrading.from_config`/`for_member`/`classify`,
+    `evaluate_member_requirement_detail` and `tally_standing` — the same
+    calls `compute_org_compliance_tally` and the matrix use — so a member's
+    "non_compliant" in this email is the same standing the dashboard and
+    matrix show, not a re-derived one.
+  - **HTML-escaped.** `_requirement_rows` passes every requirement name and
+    detail string through `html.escape()` before interpolating into the
+    email body; `_subject_safe` collapses whitespace (incl. newlines) out of
+    the subject line before it reaches the mail header.
+  - **Idempotent, not a spam vector.** A reminder is keyed by `(requirement,
+deadline, offset)` and a non-compliance notice by the unmet
+    `(requirement, window)` set, both read back from `NotificationLog` before
+    sending, so a second run the same day (or a scheduler restart) sends
+    nothing new; `reminder_offsets()` reads the free-form stored JSON
+    defensively (whole ints, 0–365 days, non-bool) rather than trusting it.
+  - **No new model/table, no migration** — `NotificationLog` (existing) is
+    the only table written. Frontend half (`ComplianceRequirementsConfigPage.tsx`)
+    replaces the "Not yet active" warning with a description of how the
+    emails go out; `grace_period_days`'s own separate "Not yet active" notice
+    (a sibling field this commit did not touch) is unchanged, still correctly
+    unwired, still guarded by `test_compliance_grace_period_is_unwired.py`.
+  - Mirrored into `docs/KNOWN_LIMITATIONS.md` already (by the owning commit,
+    row "Compliance: 'notify non-compliant members'..."), re-verified here
+    against current code rather than re-cited.
+
+- **A stale finding corrected, not a code fix — the attestation-history
+  over-fetch was already resolved two and a half months before pass 7 said
+  it was still open.** Pass 7's "Standing items still open, unchanged"
+  section (and the `KNOWN_LIMITATIONS.md` row it mirrors, "Compliance:
+  reporting correctness...") both stated that `get_attestation_history`
+  "over-fetches globally, blocked on the deferred `audit_logs.organization_id`
+  column." Reading `compliance_officer_service.py:502-508` directly shows the
+  query already has `.where(AuditLog.organization_id ==
+str(organization_id))` — not a global fetch filtered in Python. `git log
+-L` on that exact range identifies the fix as `d07a51821`, "Add
+  organization_id to the audit log with org-scoped reads," dated **2026-07-30
+  — before pass 1 of this very rotation (2026-08-26).** `docs/module-audit/
+compliance-skills.md` already had this right ("✅ Unblocked...
+  `audit_logs.organization_id` exists..., resolved 2026-07-30"); the
+  discrepancy was confined to this file and `KNOWN_LIMITATIONS.md`, which
+  both repeated the original finding's wording across six passes without
+  re-reading the code it described. **Fixed in this pass**: the
+  `KNOWN_LIMITATIONS.md` cell is corrected in place (not re-dated as a new
+  resolution — it names the 2026-07-30 commit that actually fixed it) and
+  this doc no longer carries the stale claim. No code change; this is a
+  documentation-accuracy fix caught by this pass's "re-verify by direct code
+  read, not by trusting prior prose" discipline.
+
+- **Six more commits reviewed, no new finding** — real feature work landed
+  in the shared `training_compliance.py` (consumed by Training
+  core/extended, Feature 17/18, already ✅ in this rotation, not by this
+  feature's own endpoints) and three mechanical mypy/typing commits touched
+  `compliance_officer_service.py`, `compliance_config_service.py`,
+  `models/compliance_config.py`:
+  - `52f05fad0` (rolling-hours calendar-month windows + `monthly_hours()`
+    breakdown) and `624f4566a` (`next_window_opens()` for a My Training
+    split) add pure functions to `training_compliance.py` — no DB query, no
+    org-scoping concern of their own; the records/window dates they operate
+    on are supplied by an already-scoped caller. Read in full; business-logic
+    only.
+  - `871ed7d0c` (RPT2-29-2, saved/scheduled reports) touches this feature's
+    file list only via a one-line mypy return-type annotation in
+    `compliance_member_notices._reminded` — confirmed no behavioral diff.
+  - `265a26be3`, `c1b61de67`, `17e289411`, `99a573420` (the mypy-ratchet
+    batches) convert `Column()`/`relationship()` to typed
+    `Mapped`/`mapped_column()` in `models/compliance_config.py` and narrow
+    `Optional[...]` return types in `compliance_config_service.py`/
+    `compliance_officer_service.py`/`training_compliance.py`. Every diff
+    hunk read directly: no query, no filter, no permission string changed —
+    annotation-only, consistent with this rotation's prior treatment of the
+    same batches in other features.
+  - New endpoint discovered while tracing the My Training split,
+    `GET /my-training/records` (`training_module_config.py`, Feature
+    17/18's file, not this feature's declared surface) — checked anyway
+    since it is new and carries a `search` parameter: self-scoped
+    (`TrainingRecord.user_id == current_user.id` **and**
+    `organization_id == current_user.organization_id`) and its `search`
+    filter already goes through `like_pattern()` +
+    `escape=LIKE_ESCAPE_CHAR` (Pitfall #25). No finding; noted for the
+    record since it was read, not because it is in scope.
+
+### Standing items re-verified, all still hold
+
+- **CMP2-1 — now ✅ FIXED** (see above; was "OPEN by design" every prior pass).
+- **CS-8 (attestation dual control, pass 1's original finding) — OPEN by
+  design, unchanged.** `create_attestation`/`get_attestation_history` remain
+  the only two routes (`POST`/`GET /attestations`); no update or delete
+  route exists, so a filed attestation is immutable except through the
+  audit log it is written as. This is pass 1's CS-8 and is **not** the same
+  as CS-8-b (pass 7), which closed the separate "officer could attest any
+  self-chosen percentage" gap by having the server compute the figure.
+- **CS-9 residual (monthly windowing, recipient allow-list,
+  `records_with_certification` mislabel) — unchanged from pass 7**: monthly
+  windowing and the recipient allow-list were both already fixed (pass 7 and
+  earlier); the mislabel is left as ambiguous-intent by design.
+- **`grace_period_days` still unwired, still correctly labeled** — zero
+  reader sites outside `schemas/`/`models/` (re-swept), UI notice and guard
+  test (`test_compliance_grace_period_is_unwired.py`) both present and
+  passing.
+
+### Route re-enumeration
+
+`compliance_config.py` (12 routes) + `compliance_officer.py` (8 routes) =
+20/20, byte-for-byte unchanged from pass 7 (confirmed by re-reading both
+files in full, not diffing). Every route carries
+`Depends(require_permission(...))` or (for the two attestation routes and
+`get_iso_readiness`/annual-report family, all `training.manage`-gated) an
+explicit permission string; no broadened grant anywhere; every by-id
+operation (`profile_id`, `report_id`) passes `organization_id =
+current_user.organization_id` into the service layer.
+
+### 1 fix verified end-to-end (CMP2-1, landed before this pass began), 1
+
+stale documentation claim corrected, 0 new code findings
+
+Everything substantive in this pass's delta was already fixed by other work
+before the pass began. This pass's own contribution: verifying CMP2-1's fix
+against current code rather than trusting its commit message or the
+`KNOWN_LIMITATIONS.md` row it already updated; catching and correcting a
+finding (attestation-history over-fetch) that six consecutive prior passes
+had carried forward as open when it had been fixed before the rotation's
+own first pass; and reviewing the six remaining commits (rolling-hours,
+My Training split, mypy batches) for anything security-relevant, finding
+nothing.
+
+## Completion gate (pass 8)
+
+| Check                                                                                                                                                                 | Result                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                         | ✅ 0 violations                                                                                                                                |
+| `black --check app/ tests/ alembic/`                                                                                                                                  | ✅ 2360 files unchanged                                                                                                                        |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                             | ✅ clean                                                                                                                                       |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                     | ✅ 607 revisions, single head `f236c56b1b49`                                                                                                   |
+| `pytest tests/ -q -k "compliance or attestation"`                                                                                                                     | ✅ 546 passed, 1 pre-existing skip (up from 490 in pass 7, matching new coverage)                                                              |
+| `pytest tests/test_compliance_member_notices.py tests/test_compliance_grace_period_is_unwired.py tests/test_training_compliance.py tests/test_my_training_records.py` | ✅ 146 passed                                                                                                                                  |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                 | ✅ 270 routes, 0 errors/warnings (up from 251 in pass 7, from other features' new routes)                                                      |
+| `cd frontend && npm run typecheck`                                                                                                                                    | ✅ 0 errors (after `npm ci` from repo root — sandbox's `node_modules` predated the `@tiptap/*` dependency; environment fix, not a code defect) |
+| `cd frontend && npm run lint`                                                                                                                                         | ✅ 0 errors/warnings (`--max-warnings 10`)                                                                                                     |
+| 8 compliance-scoped frontend test files                                                                                                                               | ✅ 131 passed                                                                                                                                  |
+
+**Environment note:** this sandbox's `frontend/node_modules` was missing
+`@tiptap/react`/`@tiptap/starter-kit`/`@tiptap/pm` (declared in
+`package.json`, not installed), failing `npm run typecheck` on an unrelated
+rich-text-editor component with no connection to this feature. Fixed by
+`npm ci` from the repo root (never `rm package-lock.json && npm install`,
+per CLAUDE.md) — resolved cleanly, 673 packages added, no lockfile change.
 
 ## Pass 7 (2026-10-07)
 

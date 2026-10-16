@@ -16,6 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3307 (Feature 19, Skills testing, pass 8) merged clean. 0 new
+findings beyond what pass 8's own note already recorded (see the superseded
+entry below) — nothing further to add here. Rotation row 19 confirmed ✅.
+Next: Feature 20 (Compliance), picked up in this iteration.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 8, PR #3307, merged), preserved for history</summary>
+
 **PR [#3307](https://github.com/thegspiro/the-logbook/pull/3307)** (branch
 `claude/security-review-skills-testing-p8`):
 Feature 19 (Skills testing), pass 8. Watchdog pickup. **0 new findings.**
@@ -34,6 +42,8 @@ already merged; CLAUDE.md Pitfall #24). Every standing fix from passes 1–7
 (29/29, unchanged) and org-scoping re-swept (87/87 `select(` sites). See
 `SKT-19-skills-testing.md`'s **Pass 8** section. Row 19 → ✅ (pending this
 PR's merge); next is Feature 20 (Compliance).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 8, PR #3302, merged), preserved for history</summary>
@@ -19496,7 +19506,7 @@ here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
@@ -19518,6 +19528,76 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-16 — Feature 20 (Compliance, pass 8) — routine pickup, 1 fix already landed verified, 1 stale finding corrected, 0 new findings
+
+**Step 0.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 results. `PROGRESS.md`'s own Open PR row still named PR #3307
+(Feature 19, Skills testing, pass 8), confirmed merged via `git log` on
+`main` (merge commit `4aa3496c`). Row 19 was already ✅; row 20 (Compliance)
+was the first `⬜`.
+
+**Baseline.** Pass 7 merged as `db6716d37` (PR #2977, 2026-10-07). Since
+then: 10 non-merge commits touch this feature's declared surface
+(`compliance_config.py`, `compliance_officer.py`,
+`compliance_config_service.py`, `compliance_officer_service.py`,
+`training_compliance.py`, `models/compliance_config.py`, the new
+`compliance_member_notices.py`). Full write-up:
+[`CMP-20-compliance.md`](./CMP-20-compliance.md) → **Pass 8**.
+
+**Findings: 0 new.** The real delta's one substantive item — CMP2-1
+(`notify_days_before_deadline`/`notify_non_compliant_members`, write-only
+for seven straight passes) — was already fixed before this pass started
+(`afd687449`, 2026-10-11, owner decision: build the daily
+`compliance_member_notices` sender). Verified end to end rather than
+trusted from the commit message: org-scoped at every query (the sent-log
+dedup, the member grading, the shared `grade_org_members` evaluator), graded
+through the same `ComplianceGrading`/`tally_standing` path every other
+compliance screen uses (Pitfall #29), HTML-escaped email body, idempotent
+via `NotificationLog` keyed by `(requirement, deadline, offset)` /
+`(requirement, window)`, no new table or migration. `grace_period_days`'s
+separate, still-unwired "Not yet active" notice on the same screen was not
+touched by this commit and remains correctly labeled, still guarded by
+`test_compliance_grace_period_is_unwired.py`. Six further commits
+(rolling-hours calendar windows, a My Training split, four mypy-ratchet
+typing batches) touch the shared `training_compliance.py`/
+`models/compliance_config.py` but carry no query or permission change —
+read in full, no finding.
+
+**One stale finding corrected — not a code defect.** Passes 1 through 7 each
+carried forward "attestation history over-fetches globally, blocked on the
+deferred `audit_logs.organization_id` column" as open. Reading
+`compliance_officer_service.py` directly shows the query has filtered
+`AuditLog.organization_id == str(organization_id)` since **2026-07-30**
+(`d07a51821`) — before this rotation's own pass 1 (2026-08-26).
+`docs/module-audit/compliance-skills.md` already had this right; this file
+and the `KNOWN_LIMITATIONS.md` row it mirrors did not. Both corrected in
+place this pass, naming the commit that actually fixed it, per this
+rotation's "re-verify by direct code read, not by trusting prior prose"
+discipline.
+
+**Route re-enumeration:** 12 + 8 = 20/20, byte-for-byte unchanged from pass
+7; every route still gated by `require_permission(...)`, no broadened
+grant, every by-id operation still org-scoped at the service call.
+
+**Gate**, run against CI's pinned tool versions: `flake8`/`black --check`/
+`isort --check-only` clean over `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — single head `f236c56b1b49`, 607
+revisions; `check_route_permissions.py --strict` — 270 routes, 0 errors;
+`pytest tests/ -q -k "compliance or attestation"` — 546 passed, 1
+pre-existing skip; the four delta-touched test files — 146 passed; the 8
+compliance-scoped frontend test files — 131 passed; frontend
+`npm run typecheck`/`npm run lint` both clean (after `npm ci` from the repo
+root to fill in this sandbox's incomplete `node_modules/` —
+`@tiptap/react`/`@tiptap/starter-kit`/`@tiptap/pm` were declared but not
+installed, affecting one unrelated rich-text-editor file; no
+`package-lock.json` change).
+
+Findings doc: [`CMP-20-compliance.md`](./CMP-20-compliance.md)'s **Pass 8**
+section. `KNOWN_LIMITATIONS.md` updated (CS-9 row's attestation-history cell
+corrected; CMP2-1 row already correctly said ✅ Resolved from the owning
+commit). Rotation row 20 → ✅ (pending PR merge). Next: Feature 21 (Admin
+hours).
 
 ### 2026-10-16 — Feature 17 (Training core, pass 8) — watchdog pickup, 0 fixes needed, TR7-1 re-verified and widened
 
