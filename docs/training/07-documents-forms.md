@@ -799,7 +799,7 @@ Members choose how they are reached under **Settings → Notifications**:
   optional email the department has made required is listed here too.
 - **Urgent Text Messages** — get a text for urgent messages. It needs a mobile
   number on file, text messaging set up by the department, **and** your express
-  consent under **My Account → Security → Privacy Choices**. Turning texts off,
+  consent under **My Account → Privacy → Privacy Choices**. Turning texts off,
   or never consenting, never stops the email.
 
 The in-app notification always arrives, whatever these settings say.
