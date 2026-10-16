@@ -17,7 +17,7 @@ The downgrade drops the columns; recorded roll calls are lost with them, the
 totals on each motion stay.
 
 Revision ID: 9ce470b513ae
-Revises: b90813f63e25
+Revises: c903fc771081
 Create Date: 2026-10-15 16:52:00.000000
 
 """
@@ -29,7 +29,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "9ce470b513ae"
-down_revision: Union[str, None] = "b90813f63e25"
+down_revision: Union[str, None] = "c903fc771081"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

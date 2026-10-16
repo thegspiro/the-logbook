@@ -1321,6 +1321,29 @@ class ItemRetireRequest(BaseModel):
     notes: Optional[FreeText] = None
 
 
+class ItemBulkRetireRequest(BaseModel):
+    """Retire several items at once, with one note for all of them."""
+
+    # Capped like a received delivery: a selection larger than a page of the
+    # list is not something anyone ticked by hand.
+    item_ids: List[UUID] = Field(..., min_length=1, max_length=200)
+    notes: Optional[FreeText] = None
+
+
+class ItemBulkRetireFailure(BaseModel):
+    """One item a bulk retire left in place, and why."""
+
+    item_id: str
+    error: str
+
+
+class ItemBulkRetireResult(BaseModel):
+    """What a bulk retire did, item by item."""
+
+    retired: List[str]
+    failed: List[ItemBulkRetireFailure]
+
+
 class ItemGroupCount(BaseModel):
     """One bucket of a grouped items list, counted over the whole filtered set.
 

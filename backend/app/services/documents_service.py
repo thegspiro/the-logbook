@@ -11,6 +11,7 @@ and HTTPException-style error handling rather than tuple returns).
 
 import asyncio
 import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
 
@@ -42,7 +43,7 @@ from app.models.document import (
     system_folder_fields,
 )
 from app.models.facilities import FacilityDocument, FacilityPhoto
-from app.models.user import Organization, Position, User, UserStatus
+from app.models.user import Organization, Position, User
 from app.services import file_storage_service as file_storage
 from app.services.file_storage_service import StorageArea
 from app.utils.member_names import format_display_name
@@ -280,6 +281,27 @@ _SHUT_OUT_MESSAGE = (
 )
 
 
+def _mark_admin_only(folder: DocumentFolder, actor_id: Optional[UUID | str]) -> None:
+    """Record that *folder* was confirmed as meant for administrators only."""
+    folder.admin_only_confirmed_at = datetime.now(timezone.utc)
+    folder.admin_only_confirmed_by = str(actor_id) if actor_id else None
+
+
+def _in_personal_folder(
+    folder: DocumentFolder, folders_by_id: Dict[str, DocumentFolder]
+) -> bool:
+    """Whether *folder* is, or sits inside, a folder only its owner opens."""
+    current: Optional[DocumentFolder] = folder
+    seen: Set[str] = set()
+    while current is not None and str(current.id) not in seen:
+        if current.visibility == FolderVisibility.OWNER:
+            return True
+        seen.add(str(current.id))
+        parent_id = current.parent_id
+        current = folders_by_id.get(str(parent_id)) if parent_id else None
+    return False
+
+
 def _distinct(values: Optional[List[str]]) -> List[str]:
     """Trimmed, non-empty, first occurrence kept."""
     seen: List[str] = []
@@ -317,7 +339,8 @@ class DocumentsService:
 
         ``confirm_admin_only``: a folder that no active member but a full
         administrator could open is refused with DOC_FOLDER_ADMIN_ONLY
-        unless this is set (decision 29).
+        unless this is set (decision 29), and recorded as confirmed when it
+        is (decision 30).
         """
         # DOC-6 (XC-1): validate client-supplied FKs are in-org before storing.
         await assert_in_org(
@@ -344,12 +367,12 @@ class DocumentsService:
             folder, organization_id, acting_user, require_write=True
         ):
             raise ValueError(_SHUT_OUT_MESSAGE)
-        if not confirm_admin_only and not await self._someone_but_admins_opens(
-            folder, organization_id
-        ):
-            raise CodedValueError(
-                _ADMIN_ONLY_MESSAGE, error_code=ErrorCode.DOC_FOLDER_ADMIN_ONLY
-            )
+        if not await self._someone_but_admins_opens(folder, organization_id):
+            if not confirm_admin_only:
+                raise CodedValueError(
+                    _ADMIN_ONLY_MESSAGE, error_code=ErrorCode.DOC_FOLDER_ADMIN_ONLY
+                )
+            _mark_admin_only(folder, acting_user.id if acting_user else created_by)
         self.db.add(folder)
         await self.db.commit()
         await self.db.refresh(folder)
@@ -714,7 +737,9 @@ class DocumentsService:
 
         ``acting_user`` and ``confirm_admin_only``: as for ``create_folder``.
         Both are checked only when the save changes who can open the folder:
-        an access field, or its place in the tree.
+        an access field, or its place in the tree. Such a save also settles
+        the folder's admin-only confirmation: recorded when it is confirmed,
+        cleared when someone besides administrators can open the folder.
         """
         folder = await self.get_folder_by_id(folder_id, organization_id)
         if not folder:
@@ -799,19 +824,57 @@ class DocumentsService:
             await self.db.rollback()
             raise ValueError(_SHUT_OUT_MESSAGE)
 
-        if (
-            (access_changed or "parent_id" in update_data)
-            and not confirm_admin_only
-            and not await self._someone_but_admins_opens(folder, organization_id)
-        ):
-            await self.db.rollback()
-            raise CodedValueError(
-                _ADMIN_ONLY_MESSAGE, error_code=ErrorCode.DOC_FOLDER_ADMIN_ONLY
-            )
+        if access_changed or "parent_id" in update_data:
+            if await self._someone_but_admins_opens(folder, organization_id):
+                folder.admin_only_confirmed_at = None
+                folder.admin_only_confirmed_by = None
+            elif not confirm_admin_only:
+                await self.db.rollback()
+                raise CodedValueError(
+                    _ADMIN_ONLY_MESSAGE, error_code=ErrorCode.DOC_FOLDER_ADMIN_ONLY
+                )
+            else:
+                _mark_admin_only(folder, acting_user.id if acting_user else None)
 
         await self.db.commit()
         await self.db.refresh(folder)
         return folder
+
+    async def _members_besides_admins(self, organization_id: UUID | str) -> List[User]:
+        """The department's active members who are not full administrators.
+
+        Active as sign-in counts it (``User.is_active``): a probationary member
+        is a current member and opens what their positions open.
+        """
+        members = (
+            (
+                await self.db.execute(
+                    select(User)
+                    .options(selectinload(User.positions))
+                    .where(
+                        User.organization_id == str(organization_id),
+                        User.is_active,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return [m for m in members if not _is_full_admin(_get_user_permissions(m))]
+
+    async def _opens_to_any(
+        self,
+        folder: DocumentFolder,
+        organization_id: UUID | str,
+        members: List[User],
+        folders_by_id: Dict[str, DocumentFolder],
+    ) -> bool:
+        for member in members:
+            if await self.can_access_folder(
+                folder, organization_id, member, folders_by_id
+            ):
+                return True
+        return False
 
     async def _someone_but_admins_opens(
         self, folder: DocumentFolder, organization_id: UUID | str
@@ -830,6 +893,9 @@ class DocumentsService:
         only be noise. What this catches is a restriction that excludes
         everyone who exists.
         """
+        others = await self._members_besides_admins(organization_id)
+        if not others:
+            return True
         ancestors: Dict[str, DocumentFolder] = {}
         parent_id = folder.parent_id
         while parent_id is not None and str(parent_id) not in ancestors:
@@ -838,29 +904,110 @@ class DocumentsService:
                 break
             ancestors[str(parent.id)] = parent
             parent_id = parent.parent_id
+        return await self._opens_to_any(folder, organization_id, others, ancestors)
 
-        members = (
+    async def admin_only_folders(
+        self, organization_id: UUID | str, viewer: User
+    ) -> List[DocumentFolder]:
+        """Folders no active member but a full administrator can open now, and
+        that nobody has confirmed are meant to be that way (decision 30).
+
+        The save-time question (decision 29) cannot see a folder that loses
+        its audience later: the last member holding its permission leaves the
+        position, is archived, changes rank. Those changes come from a dozen
+        screens and from unattended jobs (auto-archive, tier advancement), so
+        rather than asking at each of them, this is read when an
+        administrator opens Documents.
+
+        Reported once, at the top: a folder shut because its parent is shut
+        is not listed separately, since fixing or confirming the parent
+        settles it. A member's personal folder, and anything inside one, is
+        left out — it opens to its owner alone by design, and a departed
+        owner's folder closing to administrators is the intended outcome.
+
+        Empty unless *viewer* is a full administrator: nobody else can open
+        these folders, so nobody else can fix or confirm them, and their
+        names are not listed to people they are closed to.
+
+        A confirmation holds only while the folder stays administrators-only.
+        Once someone else can open it again (a member took up the position),
+        the confirmation is dropped here, so a later loss lists the folder
+        again instead of hiding behind a decision made about an audience
+        that has since changed. This is the one write a read makes, and it
+        only ever clears a confirmation that no longer describes the folder.
+        """
+        if not _is_full_admin(_get_user_permissions(viewer)):
+            return []
+        others = await self._members_besides_admins(organization_id)
+        if not others:
+            return []
+        folders = (
             (
                 await self.db.execute(
-                    select(User)
-                    .options(selectinload(User.positions))
-                    .where(
-                        User.organization_id == str(organization_id),
-                        User.status == UserStatus.ACTIVE,
-                        User.deleted_at.is_(None),
+                    select(DocumentFolder).where(
+                        DocumentFolder.organization_id == str(organization_id)
                     )
                 )
             )
             .scalars()
             .all()
         )
-        others = [m for m in members if not _is_full_admin(_get_user_permissions(m))]
-        if not others:
-            return True
-        for member in others:
-            if await self.can_access_folder(folder, organization_id, member, ancestors):
-                return True
-        return False
+        by_id = {str(f.id): f for f in folders}
+        opens: Dict[str, bool] = {}
+        for folder in folders:
+            opens[str(folder.id)] = await self._opens_to_any(
+                folder, organization_id, others, by_id
+            )
+
+        stale = [f for f in folders if opens[str(f.id)] and f.admin_only_confirmed_at]
+        for folder in stale:
+            folder.admin_only_confirmed_at = None
+            folder.admin_only_confirmed_by = None
+        if stale:
+            await self.db.commit()
+            logger.info(
+                f"Dropped the admin-only confirmation on {len(stale)} folder(s) "
+                f"in organization {organization_id}: members can open them again"
+            )
+
+        flagged: List[DocumentFolder] = []
+        for folder in folders:
+            if opens[str(folder.id)] or folder.admin_only_confirmed_at is not None:
+                continue
+            if _in_personal_folder(folder, by_id):
+                continue
+            parent_id = str(folder.parent_id) if folder.parent_id else None
+            if parent_id is not None and not opens.get(parent_id, True):
+                continue
+            flagged.append(folder)
+        flagged.sort(key=lambda f: (f.name.lower(), str(f.id)))
+        return flagged
+
+    async def confirm_admin_only(
+        self,
+        folder_id: UUID | str,
+        organization_id: UUID | str,
+        acting_user: User,
+    ) -> Optional[DocumentFolder]:
+        """Record that a folder is meant for full administrators alone, so the
+        Documents notice stops listing it. Returns None if not found.
+
+        Refused when someone besides administrators can open it after all:
+        the mark would then be a claim nobody made, and would hide the folder
+        if it later lost that audience.
+        """
+        folder = await self.get_folder_by_id(folder_id, organization_id)
+        if folder is None:
+            return None
+        if await self._someone_but_admins_opens(folder, organization_id):
+            raise ValueError(
+                "Members besides full administrators can open this folder, so "
+                "there is nothing to confirm"
+            )
+        _mark_admin_only(folder, acting_user.id)
+        await self.db.commit()
+        await self.db.refresh(folder)
+        return folder
 
     async def _settle_access_fields(
         self,

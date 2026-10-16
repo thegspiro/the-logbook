@@ -15,6 +15,7 @@ import type {
   ExpiringLot,
   InventoryCategory,
   InventoryCategoryCreate,
+  InventoryImportResult,
   InventoryItem,
   InventoryItemCreate,
   InventoryItemsListResponse,
@@ -113,6 +114,24 @@ export interface MedicalItemFilters {
   limit?: number | undefined;
 }
 
+/**
+ * The general import's result, plus what only this import does. `imported`
+ * counts supplies created; `lots_added` counts stock lots recorded, whether on
+ * a supply the file created or on one already on file.
+ */
+export interface MedicalImportResult extends InventoryImportResult {
+  lots_added: number;
+  categories_created: string[];
+}
+
+export interface MedicalBulkRetireResult {
+  retired: string[];
+  failed: Array<{ item_id: string; error: string }>;
+}
+
+/** The list's filters, minus paging: an export is the whole filtered set. */
+export type MedicalExportFilters = Omit<MedicalItemFilters, 'skip' | 'limit' | 'fuzzy'>;
+
 export const medicalSuppliesService = {
   async getSummary(expiringWithinDays?: number, options?: MedicalReadOptions): Promise<MedicalSupplySummary> {
     const response = await api.get<MedicalSupplySummary>('/medical-supplies/summary', {
@@ -195,6 +214,19 @@ export const medicalSuppliesService = {
     await api.post(`/medical-supplies/items/${itemId}/retire`, { notes });
   },
 
+  /**
+   * Retire several supplies at once. Each is retired on its own, so ones that
+   * cannot go (checked out, assigned) come back in `failed` while the rest
+   * are retired.
+   */
+  async bulkRetireItems(itemIds: string[], notes?: string): Promise<MedicalBulkRetireResult> {
+    const response = await api.post<MedicalBulkRetireResult>('/medical-supplies/items/bulk-retire', {
+      item_ids: itemIds,
+      ...(notes ? { notes } : {}),
+    });
+    return response.data;
+  },
+
   async getItemLots(itemId: string): Promise<InventoryLot[]> {
     const response = await api.get<InventoryLot[]>(`/medical-supplies/items/${itemId}/lots`);
     return response.data;
@@ -218,6 +250,44 @@ export const medicalSuppliesService = {
 
   async deleteLot(lotId: string): Promise<void> {
     await api.delete(`/medical-supplies/lots/${lotId}`);
+  },
+
+  // Exports skip the response cache: a file somebody reconciles stock against
+  // must be what the server holds now, not what it held thirty seconds ago.
+  async exportItemsCsv(filters?: MedicalExportFilters): Promise<Blob> {
+    const response = await api.get<Blob>('/medical-supplies/items/export', {
+      params: filters,
+      responseType: 'blob',
+      ...readConfig({ bypassCache: true }),
+    });
+    return response.data;
+  },
+
+  async exportLotsCsv(): Promise<Blob> {
+    const response = await api.get<Blob>('/medical-supplies/lots/export', {
+      responseType: 'blob',
+      ...readConfig({ bypassCache: true }),
+    });
+    return response.data;
+  },
+
+  async downloadImportTemplate(): Promise<Blob> {
+    const response = await api.get<Blob>('/medical-supplies/items/import-template', { responseType: 'blob' });
+    return response.data;
+  },
+
+  /**
+   * A row creates a new supply, or — when it carries lot columns and names a
+   * supply already on file — adds a stock lot to that supply. An unknown
+   * category is created as a medical one.
+   */
+  async importItemsCsv(file: File): Promise<MedicalImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<MedicalImportResult>('/medical-supplies/items/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
   },
 
   async getExpiringLots(daysAhead = 30, options?: MedicalReadOptions): Promise<ExpiringLot[]> {

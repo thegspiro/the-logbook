@@ -289,8 +289,11 @@ class ShiftFinalizeRequest(BaseModel):
     member_call_counts: Optional[List[MemberCallCredit]] = None
     # Calls another unit already logged that this shift's apparatus was also
     # on. Attaching instead of re-reporting is what keeps one incident counted
-    # once for the department when two units roll.
-    attach_call_ids: Optional[List[UUID]] = None
+    # once for the department when two units roll. Bounded to match the
+    # picker's own ceiling (CallTrackingService.MAX_ATTACHABLE_CALLS) — each
+    # id costs the server a lookup, so an unbounded list is a free multiplier
+    # on a single authenticated request.
+    attach_call_ids: Optional[List[UUID]] = Field(default=None, max_length=200)
 
     @model_validator(mode="after")
     def _validate_call_volume(self) -> "ShiftFinalizeRequest":
@@ -431,11 +434,15 @@ class CloseoutCallsRequest(BaseModel):
         default=None, ge=0, le=MAX_CALLS_PER_SHIFT
     )
     reported_call_types: Optional[dict[str, int]] = None
-    attach_call_ids: Optional[List[UUID]] = None
+    # Bounded to match the picker's own ceiling
+    # (CallTrackingService.MAX_ATTACHABLE_CALLS) — each id costs the server a
+    # lookup, so an unbounded list is a free multiplier on a single
+    # authenticated request.
+    attach_call_ids: Optional[List[UUID]] = Field(default=None, max_length=200)
     # Calls this shift claimed earlier and the officer has unticked. Only this
     # shift's own response is removed, and only from a call another unit is
     # also on — a call this shift alone logged is corrected through the count.
-    detach_call_ids: Optional[List[UUID]] = None
+    detach_call_ids: Optional[List[UUID]] = Field(default=None, max_length=200)
 
     @model_validator(mode="after")
     def _validate(self) -> "CloseoutCallsRequest":

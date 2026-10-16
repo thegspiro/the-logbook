@@ -1,14 +1,30 @@
 # Department Store
 
-The Department Store module lets your department sell merchandise to members —
-job shirts, coins, patches, Class B uniforms — with ordering windows, size and
-colour options, name embroidery, and payment tracking.
+The Department Store lets your department sell merchandise to members: job
+shirts, coins, patches and Class B uniforms. It handles ordering windows, size
+and colour options, name embroidery or engraving, and payment tracking.
 
-**Read this first:** The Logbook never takes a payment. There is no card form
-and no money passes through the system. The store records what members ordered
-and what they owe; the money moves the way it always has — Venmo, PayPal, Cash
-App, Zelle, cash, a check, or payroll deduction. What the store does is make
-settling up fast to record and hard to lose track of.
+**Read this first:** The Logbook never takes a payment. There is no card form,
+and no money passes through it. The store records what members ordered and what
+they owe. The money moves the way it always has: Venmo, PayPal, Cash App,
+Zelle, cash, a check or payroll deduction. The store makes settling up quick to
+record and hard to lose track of.
+
+## Lesson at a Glance
+
+|                     |                                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| **Who this is for** | Members, for ordering and paying. Quartermasters and treasurers, for running the store |
+| **What you need**   | A Logbook account. Running the store needs a position that can manage the store        |
+| **Essential path**  | Members: about 10 minutes. Quartermasters: about an hour                               |
+| **Full guide**      | About 90 minutes                                                                       |
+| **Last verified**   | 2026-10-14                                                                             |
+| **Owner**           | Your department's quartermaster                                                        |
+
+**Members:** read [Placing an Order](#placing-an-order-member-view) and
+[Paying](#paying-member-view).
+
+**Quartermasters and treasurers:** read the whole guide.
 
 ---
 
@@ -31,632 +47,658 @@ settling up fast to record and hard to lose track of.
 15. [Closing a Window and Ordering from the Vendor](#closing-a-window-and-ordering-from-the-vendor)
 16. [Realistic Example: A Fall Job-Shirt Window](#realistic-example-a-fall-job-shirt-window)
 17. [Troubleshooting](#troubleshooting)
+18. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
 ## Store Overview
 
-Navigate to **Store** in the sidebar. The module must be enabled for your
-organization in Organization/Admin Settings > Modules (`enabled_modules`).
+Members select **Department Store** in the sidebar. The entry appears only when
+the store module is turned on for your department.
 
-| URL                      | Page                                         | Permission          |
-| ------------------------ | -------------------------------------------- | ------------------- |
-| `/store`                 | Browse the open window and place an order    | `storefront.view`   |
-| `/store/orders`          | My Orders — status, balance, payment buttons | `storefront.view`   |
-| `/inventory/admin/store` | Quartermaster console — **Department Store** | `storefront.manage` |
+| Where                | What it is                                               | Who can open it                   |
+| -------------------- | -------------------------------------------------------- | --------------------------------- |
+| **Department Store** | Browse the open window and order                         | Members who can browse the store  |
+| **My Orders**        | Your orders: status, balance and payment buttons         | Members who can browse the store  |
+| **Store Admin**      | The quartermaster's console, headed **Department Store** | Officers who can manage the store |
+
+The console is also reached from **Inventory Administration**, which has a
+**Department Store** section with four cards: **Store Overview**, **Store
+Catalog**, **Store Orders** and **Store Payments**. Each opens the console on
+that tab.
+
+The sidebar entry says **Store Admin** but the page it opens is headed
+**Department Store**. Say so when you train people, because the two names
+differ.
 
 ### Permissions
 
-| Permission          | Description                                                   |
-| ------------------- | ------------------------------------------------------------- |
-| `storefront.view`   | Browse the store and see your own orders                      |
-| `storefront.order`  | Place orders                                                  |
-| `storefront.manage` | Catalog, order windows, everyone's orders, payments, settings |
+On the Role Management screen, the store's three permissions read:
+
+| Permission                                                        | Lets someone                                                                |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Browse the department store and track your own orders**         | Browse the store and see their own orders                                   |
+| **Place store orders**                                            | Place orders                                                                |
+| **Manage the store catalog, order windows, orders, and payments** | Run the console: catalog, windows, everyone's orders, payments and settings |
+
+**Nobody settles their own order.** Someone who can manage the store still
+cannot mark their own order paid, waive it or refund it. Another officer has to.
 
 ![Member storefront with the order window banner and product grid](./images/18-01-member-storefront.png)
-
-**[SCREENSHOT — CHECK `18-01-member-storefront.png`.** A window with no description now reads "Open for orders.", and the cart button **Review order** (was Review); replace if either is in frame.**]**
 
 ---
 
 ## Turning the Store On
 
-There are two separate switches, and knowing why is worth thirty seconds.
+There are two separate switches, and it is worth knowing why.
 
-1. **The module** — Admin Settings > Modules. Controls whether "Store" appears
-   in navigation at all.
-2. **The store itself** — Department Store > Settings > "Store is live for
-   members".
+1. **The module** — **Organization Settings → Modules → Department Store**.
+   This decides whether the store appears in the menus at all.
+2. **The store itself** — the console's **Settings** tab, **Store is live for
+   members**.
 
-The second one exists so you can take the member-facing shop offline —
-mid-season, between windows, while you rebuild the catalog — **without** hiding
-the admin screens you still need to work the orders already placed. When it is
-off, members see nothing; you keep everything.
+The second switch lets you take the members' shop offline without hiding the
+console. Use it mid-season, between windows, or while you rebuild the catalog.
+You can still work the orders already placed. When it is off, members see
+nothing, and you keep everything.
 
 ---
 
 ## Store Settings
 
-**Department Store (`/inventory/admin/store`) > Settings tab.**
+Open the console and select the **Settings** tab.
 
 ### Identity
 
-| Field       | Notes                              |
-| ----------- | ---------------------------------- |
-| Store name  | Shown as the page heading          |
-| Tagline     | One line under the name            |
-| Description | Longer intro text                  |
-| Currency    | Three-letter code, defaults to USD |
+The **Storefront** section holds:
 
-Beside **Store is live for members**, the Storefront section has **Show the
-"Ordering is open" banner**, on by default. Turn it off for a store that is
-always open and needs no availability callout: the order-window card on the
-member storefront then drops its check mark and the words "is open", and keeps
-the window name, the countdown and the last day to order.
+| Field                                  | Notes                      |
+| -------------------------------------- | -------------------------- |
+| **Store is live for members**          | The switch described above |
+| **Show the "Ordering is open" banner** | On at first. See below     |
+| **Store name**                         | Shown as the page heading  |
+| **Tagline**                            | One line under the name    |
+| **Description**                        | Longer introduction        |
+
+Turn the banner off for a store that is always open. The order-window card
+then drops its check mark and the words "is open". It keeps the window name,
+the countdown and the last day to order.
 
 ### Payment methods
 
-A new store starts on **cash** only. That is deliberate: cash is the one
-method that works with nothing filled in, so a fresh store can take an order
-on day one. Tick the others as you configure them.
+A new store starts with **Cash** only. Cash is the one method that works with
+nothing filled in, so a new store can take an order on day one. Tick the
+others as you set them up.
 
-Tick every method your department accepts, then fill in the details for each.
-Except for the offline methods — cash, payroll deduction, other — the
-member-facing side only shows a method that is **both ticked and configured**;
-a ticked method with no handle stays hidden. See
+Tick every method your department accepts, then fill in its details. Members
+see a method only when it is **both ticked and filled in**. The exceptions are
+cash, payroll deduction and other, which need nothing filled in. See
 [Paying](#paying-member-view).
 
-Un-tick everything and it falls back to cash. A store has to accept something,
-and cash is the floor.
+Untick everything and the store goes back to cash. A store has to accept
+something.
 
-| Method            | What to enter                                                                 |
-| ----------------- | ----------------------------------------------------------------------------- |
-| Venmo             | Your handle, with or without the `@`                                          |
-| PayPal            | Your PayPal.Me link, and/or the PayPal email                                  |
-| Cash App          | Your `$cashtag`                                                               |
-| Zelle             | The email or mobile number Zelle is registered to, plus optional instructions |
-| Check             | Who checks are payable to, and the mailing address                            |
-| Cash              | Free-text instructions ("Pay the quartermaster at drill")                     |
-| Payroll deduction | Free-text instructions                                                        |
-| Other             | Free-text instructions                                                        |
+| Method            | What to enter                                                     |
+| ----------------- | ----------------------------------------------------------------- |
+| Venmo             | Your handle, with or without the `@`                              |
+| PayPal            | Your PayPal.Me link, the PayPal email, or both                    |
+| Cash App          | Your `$cashtag`                                                   |
+| Zelle             | The email or mobile number Zelle uses, plus optional instructions |
+| Check             | Who checks are payable to, and the mailing address                |
+| Cash              | Instructions, such as "Pay the quartermaster at drill"            |
+| Payroll deduction | Instructions                                                      |
+| Other             | Instructions                                                      |
 
-Cash App and Zelle handles are **validated when you save**. If you mistype a
-`$cashtag`, you get an error rather than a silently missing button.
+**General payment note (shown with every order)** adds a line of your own to
+every order.
 
-Un-ticking a method takes it off the member's screen immediately and blocks it
-at checkout — a crafted request cannot slip past the buttons. The one
-exception: a member who **already** placed an order on that method keeps their
-button, because they still owe you and still need a way to pay. If you have
-closed the account entirely, clear the handle as well and the button goes for
-everyone.
+Cash App and Zelle details are **checked when you save**. A mistyped
+`$cashtag` gives an error, rather than a button that quietly goes missing.
+
+**Unticking a method** removes it from members' screens at once and blocks it
+at checkout. One exception: a member who **already** ordered with that method
+keeps their button, because they still owe you. If you have closed the account,
+clear its details too and the button goes for everyone.
 
 ### Pricing
 
-| Field                         | Notes                                                          |
-| ----------------------------- | -------------------------------------------------------------- |
-| Tax rate                      | Entered as a percentage; stored as a fraction                  |
-| Flat shipping rate            | Applied to orders that ship                                    |
-| Allow pickup / Allow shipping | Leave at least one on — with both off, every order is rejected |
-| Unpaid orders                 | Your department's payment rule — see below                     |
-| Pickup location               | Where members collect                                          |
+The **Pricing and delivery** section holds:
+
+| Field                                 | Notes                                                        |
+| ------------------------------------- | ------------------------------------------------------------ |
+| **Sales tax (%)**                     | A percentage                                                 |
+| **Flat shipping rate**                | Added to orders that are shipped                             |
+| **Allow pickup** / **Allow shipping** | Leave at least one on. With both off, every order is refused |
+| **Pickup location**                   | Where members collect, shown at checkout                     |
+
+The **Order text** section holds **Terms shown at checkout** and **Receipt
+footer**.
 
 ### Unpaid orders — your department's rule
 
-Departments genuinely differ on this, so pick the one that matches yours.
-**Unpaid orders** in Settings offers three:
+Departments really do differ on this, so pick the rule that matches yours.
+Under **Payments**, **What happens to an unpaid order?** offers three:
 
-| Setting                                      | What happens to a member who hasn't paid                                                                                                                                                                                                       |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **No payment gate**                          | Their shirt is ordered and they can collect it. You chase the money separately. This is the default and what the store did before this setting existed.                                                                                        |
-| **Payment required before pickup**           | Their shirt _is_ ordered — it's in the vendor order like everyone else's — but they cannot collect it until they've paid.                                                                                                                      |
-| **Payment required before the vendor order** | Their shirt is **not ordered at all**. They're held out of the vendor order until they pay, and it cannot be marked _ordered_ either — the record would otherwise claim the vendor was told about a shirt you deliberately left off the sheet. |
+| Setting                                      | What happens to a member who has not paid                                                                                                                                            |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **No payment gate**                          | Their shirt is ordered and they can collect it. You chase the money separately. This is the starting setting                                                                         |
+| **Payment required before pickup**           | Their shirt _is_ ordered, along with everyone else's. They cannot collect it until they pay                                                                                          |
+| **Payment required before the vendor order** | Their shirt is **not ordered at all**. They are left out of the vendor order until they pay. Their order cannot be marked ordered either, because the vendor was never told about it |
 
-Under the third rule, held-back orders are **shown** on the Tally, not silently
-dropped. You need to see who is being left out — and chase them — before the
-order goes in. Record their payment and they rejoin the totals immediately.
+Under the third rule, held-back orders are **shown** on the Tally, not quietly
+dropped. You need to see who is left out, and chase them, before the order
+goes in. Record their payment and they rejoin the totals at once.
 
-The setting is presented as a comparison of all three, with what each does to
-the vendor order and to pickup side by side, because you pick it before there
-is a catalog to test it against. **Change it whenever your practice changes** —
-it governs what happens next and never undoes a step already taken, so
-switching mid-window will not un-order anything you have already sent.
+The three rules are shown side by side, with what each does to the vendor
+order and to pickup. You choose before there is a catalog to test against, so
+the screen explains each one. **Change it whenever your practice changes.** It
+governs what happens next and never undoes a step already taken. Switching
+mid-window will not un-order anything you already sent.
 
-Under either of the last two, marking an unpaid order **fulfilled** is refused
-with the balance in the message. Bulk-fulfilling a window still works: the paid
-orders go through and the unpaid ones come back listed by order number, so you
-know exactly who to go find. Recording the payment _or_ waiving the balance
-both release it — a comp or a replacement clears the gate without money moving.
+Under either of the last two rules, marking an unpaid order **fulfilled** is
+refused, and the message gives the balance. Moving a window's orders to
+fulfilled in one go still works: the paid orders go through, and the unpaid
+ones come back listed by order number. Recording the payment _or_ waiving the
+balance releases an order. So a free replacement clears the rule without money
+changing hands.
 
-Every step short of the handover still runs under all three rules. The shirt
-gets ordered, received, and marked ready for pickup regardless; it is only
-putting it in the member's hands that waits.
+Under **No payment gate** and **Payment required before pickup**, every step
+before the handover still happens. The shirt is ordered, received and marked
+ready for pickup either way. Only putting it in the member's hands waits.
+
+Under **Payment required before the vendor order**, an unpaid order stops
+sooner. It cannot be marked **ordered** or **ready for pickup** until it is
+paid or the balance is waived. The message gives the balance.
 
 ### Notifications
 
-The **Notifications** panel lists every email the store can send, in two
+The **Notifications** section lists every email the store can send, in two
 groups, each with a line saying who receives it. Untick one and the department
-stops sending it; all nine start switched on.
+stops sending it. All nine start switched on.
 
 **Order notices**
 
-| Switch             | Who gets it, and when                                                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| Order confirmation | The member, the moment they order — their receipt and how to pay                                                         |
-| Status changes     | The member, when their order becomes ordered, ready for pickup, picked up, or cancelled                                  |
-| Payment receipts   | The member, when you record a payment, waive one, or record a refund                                                     |
-| Payment reminders  | Members still carrying a balance, after N days                                                                           |
-| New order alert    | You and the addresses in **Extra recipients for new order alerts (comma-separated)**, each time a member places an order |
+| Switch             | Who gets it, and when                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Order confirmation | The member, the moment they order: their receipt and how to pay                                                 |
+| Status changes     | The member, when their order is ordered, ready for pickup, picked up or cancelled                               |
+| Payment receipts   | The member, when you record a payment, waive one or record a refund                                             |
+| Payment reminders  | Members who still owe, after the number of days in **Payment reminder after (days)**                            |
+| New order alert    | You and the addresses in **Extra recipients for new order alerts (comma-separated)**, each time a member orders |
 
 **Order window notices**
 
-| Switch                       | Who gets it, and when                                  |
-| ---------------------------- | ------------------------------------------------------ |
-| Ordering is open             | Every active member when a window opens                |
-| Last call                    | Every active member, N hours before the window closes  |
-| Ordering has closed          | Everyone who ordered in that window                    |
-| Order placed with the vendor | Everyone who ordered, when you record the vendor order |
+| Switch                       | Who gets it, and when                                                                              |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| Ordering is open             | Every active member, when a window opens                                                           |
+| Last call                    | Every active member, the hours set in **Last call reminder (hours before close)** before it closes |
+| Ordering has closed          | Everyone who ordered in that window                                                                |
+| Order placed with the vendor | Everyone who ordered, when you record the vendor order                                             |
 
-Two of these catch people out. **Status changes** also covers the cancellation
-email — untick it and a member whose order you cancel hears nothing. And
-**Payment receipts** covers refunds and waivers as well as payments, because
-all three are money moving on someone's order.
+Two of these catch people out:
 
-Nobody learns who else received a notice. The four order-window notices are
-sent as a separate email to each member, never one message with everyone on
-it, and every order notice goes to the one member whose order it is. The
-**New order alert** is the exception by design — it is one staff email, so you
-and the extra notification recipients see each other's addresses.
+- **Status changes** also covers the cancellation email. Untick it and a member
+  whose order is cancelled hears nothing.
+- **Payment receipts** covers refunds and waivers as well as payments.
 
-A switch is a ceiling, not a duplicate. Actions that offer an "email members"
-box — opening a window, closing one, recording the vendor order — can still
-skip a single send, and an individual window can decline to announce itself.
-Neither can send a notice you have switched off here.
+**Nobody learns who else got a notice.** The four window notices go as a
+separate email to each member, never one email to everyone. Every order notice
+goes only to the member whose order it is. The **New order alert** is the one
+exception: it is a single staff email, so you and the extra recipients see each
+other's addresses.
 
-Some of what the emails say is set here rather than in the template: the payment
-instructions and per-method notes appear under the pay buttons, the receipt
-footer closes the confirmation, a window's pickup instructions ride along with
-every announcement about it, and the open / close / vendor-order actions each
-take a free-text message for that send only. The prose around them is editable
-too — see "Rewriting one properly" below. The layout, your logo and your colours
-come from the organization's email branding.
+**A switch is a ceiling.** Actions with an "email" box — opening a window,
+closing one, recording the vendor order — can still skip a single send. A
+window can also choose not to announce itself. Neither can send a notice you
+have switched off here.
+
+Some of what the emails say is set here rather than in the email wording:
+
+- the payment instructions and per-method notes, under the pay buttons
+- the receipt footer, at the end of the confirmation
+- a window's pickup instructions, in every notice about that window
+- the one-off message you can type when you open, close or record the vendor
+  order
+
+The rest of the wording can be edited too — see
+[Rewriting one properly](#rewriting-one-properly). The layout, logo and colours
+come from your department's email branding.
 
 ### Seeing one before you send it
 
-Every switch has a **Preview** button beside it. It opens the actual email —
-subject line, layout, your logo, and the pay buttons exactly as a member's
-phone will show them — built against a sample job shirt order and a sample
-window.
+Every switch has a **Preview** button. It opens the actual email: subject,
+layout, your logo, and the pay buttons as a member's phone shows them. It uses
+a sample job-shirt order and a sample window.
 
-The sample order is invented. Everything a department controls is not: the
+The sample order is made up. Everything your department controls is real: the
 Venmo handle, the cash instructions, the receipt footer, the store name and
-your branding all come from your own saved settings. That makes the preview the
-fastest way to answer the questions that actually bite — _is my cashtag
-right? does the Zelle handle read properly? did I leave a method ticked that I
-never configured?_ A method you do not accept simply is not there.
+your branding all come from your saved settings. So the preview is the quickest
+way to check: _is my cashtag right? does the Zelle handle read properly? did I
+leave a method ticked that I never filled in?_ A method you do not accept is
+simply not there.
 
-Two things to know. The preview reads **saved** settings, so reword the
-instructions and hit Save before you look. And you can preview a notice that is
-switched off — the panel says so at the top of the preview — which is the point,
-since otherwise you could not see what you were deciding about.
+Two things to know:
 
-Nothing is sent and nothing is recorded. Previewing does not create an order,
-does not touch a window, and does not email anybody, including you.
+- The preview uses **saved** settings. Save your changes before you look.
+- You can preview a notice that is switched off. The preview says so at the
+  top. That way you can see what you are deciding about.
+
+Previewing sends nothing and records nothing. It does not create an order,
+touch a window or email anybody, including you.
 
 ### Sending it to yourself
 
-Inside the preview there is **Send this to me**. An iframe is not an inbox —
-Gmail and Outlook rewrite email HTML, and whether the Venmo button actually taps
-through on a phone is a question only a real message answers. So this mails you
-the same notice, with the same sample order.
+Inside the preview, **Send this to me** emails you the same notice with the
+same sample order. A preview on screen is not an inbox. Gmail and Outlook
+change how emails look, and only a real email shows whether the Venmo button
+opens Venmo on a phone.
 
-It goes to **your** address and nowhere else; there is no box to type someone
-else's in. The subject arrives prefixed `[TEST]` and the body opens with a
-banner saying it is a test, because the sample announces order ORD-2026-0042 and
-an unmarked copy sitting in your inbox is a message you or somebody else acts on
-three weeks later.
+It goes to **your** address only; there is no box for anyone else's. The
+subject starts with `[TEST]` and the email opens with a banner saying it is a
+test. The sample mentions order ORD-2026-0042, and an unmarked copy could be
+acted on weeks later.
 
-If your department has not finished setting up email, it will tell you that
-plainly rather than claiming to have sent something. Every test send is recorded
-in **Communications → Message History** like any other email.
+If your department has not finished setting up email, it tells you so rather
+than claiming it sent something. Every test is recorded in **Communications →
+Message History** like any other email.
 
 ### Rewriting one properly
 
-The switches, previews and test sends live in the Notifications panel. The
-_words_ live in **Communications → Email Templates**, alongside your welcome
-message and password reset. Look for the ten entries beginning **Store —**.
+The switches, previews and test sends are in the Notifications section. The
+_words_ are in **Communications → Email Templates**, with your welcome message
+and password reset. Look for the ten templates whose names begin **Store —**.
 
-Ten, not nine, because the cancellation notice gets its own template even
-though it shares the "status changes" switch. One switch, two emails to word:
-"your order is ready" and "your order is cancelled" should not read the same.
+There are ten, not nine, because the cancellation notice has its own template
+even though it shares the "status changes" switch. "Your order is ready" and
+"your order is cancelled" should not read the same.
 
-Edit the subject and the body like any other template. The parts that cannot
-be typed out — the table of items, the pay buttons — are variables the store
-fills in:
+Edit the subject and body like any other template. Some parts cannot be typed
+out, such as the table of items and the pay buttons. The store fills these in
+from placeholders:
 
-| Variable                                                                   | What appears there                                                          |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `{{items_table_html}}`                                                     | The ordered items, with sizes, embroidery text and prices                   |
-| `{{payment_block_html}}`                                                   | Balance due, a pay button per method you accept, your payment instructions  |
-| `{{receipt_footer_html}}`                                                  | Your receipt footer                                                         |
-| `{{window_extra_html}}`                                                    | Whatever that notice adds — the closing time, the vendor, the delivery date |
-| `{{order_number}}`, `{{first_name}}`, `{{balance_due}}`, `{{window_name}}` | Exactly what they say                                                       |
+| Placeholder                                                                | What appears there                                                         |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `{{items_table_html}}`                                                     | The ordered items, with sizes, embroidery text and prices                  |
+| `{{payment_block_html}}`                                                   | Balance due, a pay button per method you accept, your payment instructions |
+| `{{receipt_footer_html}}`                                                  | Your receipt footer                                                        |
+| `{{window_extra_html}}`                                                    | Whatever that notice adds: the closing time, the vendor, the delivery date |
+| `{{order_number}}`, `{{first_name}}`, `{{balance_due}}`, `{{window_name}}` | Exactly what they say                                                      |
 
-The editor lists every variable available for the template you have open, and
-its preview fills them with sample data.
+The editor lists every placeholder for the template you have open, and its
+preview fills them with sample data.
 
-Two things worth knowing. **Deleting a variable really deletes it** — take
-`{{payment_block_html}}` out of the confirmation and members are no longer told
-how to pay. **Reset to default** puts the original wording back, and switching
-a template to inactive does the same thing without losing your edit.
+Two things worth knowing:
 
-Until you touch them, nothing changes: a department that never opens this
-screen keeps receiving the wording the store has always sent. And whichever
-version is in force, the Notifications panel's **Preview** and **Send this to
-me** show you _that_ one — so edit here, then go look.
+- **Deleting a placeholder really deletes it.** Take `{{payment_block_html}}`
+  out of the confirmation and members are no longer told how to pay.
+- **Reset to default** puts the original wording back. Making a template
+  inactive does the same, but keeps your edit.
 
-Every send is recorded in **Message History** with a `storefront_` type, which
-is where you check whether a particular member's reminder actually went out.
+Until you change them, members get the store's standard wording. Whichever
+version is in force, **Preview** and **Send this to me** show you _that_ one.
+So edit here, then go and look.
+
+Times in store emails, such as a window's closing time, use your department's
+time zone from **Organization Settings → General → Profile**.
 
 ### When it doesn't do what you expect
 
-| What you did                                     | What happens                                                                                            | What to do about it                                                                                                                            |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Edited a template and nobody got it              | The **switch** for that notice is off. Editing the words does not turn the notice on                    | Tick it in Settings → Notifications                                                                                                            |
-| Deleted a template to "start over"               | You get the shipped default back, not your earlier version                                              | Use **Reset to Default**; it does the same thing without the round trip                                                                        |
-| Set a template inactive                          | The store goes back to its built-in wording, and your edit is kept                                      | This is the safe way to undo — nothing is lost                                                                                                 |
-| Left the subject line blank                      | The built-in subject is used instead                                                                    | An email with no subject looks like spam, so it will not send one                                                                              |
-| Rewrote the HTML but not the plain-text version  | Members on HTML clients (nearly all) see your version; the few on text-only clients see the old wording | Edit the text body too, or leave both alone                                                                                                    |
-| Typo'd a variable — `{{ordr_number}}`            | It renders as nothing. No braces reach the member, but no order number does either                      | Copy variable names from the list in the editor                                                                                                |
-| Removed `{{payment_block_html}}`                 | Members are no longer told how to pay                                                                   | That is what the variable is; put it back                                                                                                      |
-| Cannot find a store notice in **Schedule Email** | They are excluded on purpose                                                                            | These are raised by the store against a real order. Scheduled by hand there is no order, so it would send "Order received" over an empty table |
-| Searching Message History for cancellations      | Older rows say `storefront_order_update`, newer ones say `storefront_order_cancelled`                   | The cancellation notice got its own type when it became separately editable. Search both across that date                                      |
-| Email says "Hi ," with no name                   | The order has no first name on it                                                                       | Check the member's profile has a first name                                                                                                    |
+| What you did                                     | What happens                                                                         | What to do                                                                                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Edited a template and nobody got it              | The **switch** for that notice is off. Editing the words does not turn it on         | Tick it under **Settings → Notifications**                                                                                  |
+| Deleted a template to "start over"               | You get the standard wording back, not your earlier version                          | Use **Reset to default**; it does the same thing more simply                                                                |
+| Made a template inactive                         | The store goes back to its standard wording, and your edit is kept                   | This is the safe way to undo — nothing is lost                                                                              |
+| Left the subject blank                           | The standard subject is used                                                         | An email with no subject looks like spam, so the store never sends one                                                      |
+| Rewrote the formatted version but not plain text | Nearly everyone sees your version; the few with plain-text email see the old wording | Edit the plain-text version too, or leave both alone                                                                        |
+| Mistyped a placeholder, like `{{ordr_number}}`   | It shows as nothing. No braces reach the member, but no order number does either     | Copy placeholder names from the list in the editor                                                                          |
+| Removed `{{payment_block_html}}`                 | Members are no longer told how to pay                                                | Put it back                                                                                                                 |
+| Cannot find a store notice in **Schedule Email** | They are left out on purpose                                                         | Store notices belong to a real order. Sent by hand there is no order, so it would send "Order received" over an empty table |
+| Email says "Hi ," with no name                   | The order has no first name on it                                                    | Check the member's profile has a first name                                                                                 |
 
-One more worth knowing: **Order Status Change covers two emails** — the
-automatic "your order is now ready for pickup", and a note you type on an order
-and send. They share a template. Word it so it reads for both; the shipped
-default does.
+One more: **Order Status Change covers two emails.** One is the automatic
+"your order is now ready for pickup". The other is a note you type on an order
+and send. They share a template, so word it to read for both. The standard
+wording does.
 
-Everything the store sends is logged in **Communications → Message History**
-under a `storefront_` type, so "did she ever get the reminder?" is a question
-with an answer.
+Everything the store sends is logged in **Communications → Message History**,
+with a type beginning **storefront_**. So "did she ever get the reminder?" has
+an answer.
 
 ![Store administration settings with the payment method options](./images/18-02-store-admin.png)
-
-**[SCREENSHOT — CHECK `18-02-store-admin.png`.** If the frame reaches the notification settings, the fields now read **Last call reminder (hours before close)** and **Extra recipients for new order alerts (comma-separated)**.**]**
 
 ---
 
 ## Building the Catalog
 
-**Department Store > Catalog tab > New item.**
+Open the console's **Catalog** tab and select **New item**.
 
-(The UI calls catalog entries _items_ and their size/colour choices _options_.
-This guide uses the same words.)
+The screens call catalog entries _items_ and their size or colour choices
+_options_. This guide does too.
 
-| Field                  | Notes                                                                |
-| ---------------------- | -------------------------------------------------------------------- |
-| Name, SKU, Description |                                                                      |
-| Category               | Free text, used for grouping                                         |
-| Price                  | Base price before option adjustments                                 |
-| Cost                   | What you pay the vendor — internal only, never shown to members      |
-| Taxable                | Applies the store tax rate to this item                              |
-| Status                 | **Draft** (invisible), **Active (for sale)**, **Archived** (retired) |
-| Max per member         | Caps how many one member can order                                   |
-| Track stock            | Enables quantity enforcement                                         |
-| Link to inventory item | Ties the store item to an existing inventory record                  |
+| Field                                         | Notes                                                               |
+| --------------------------------------------- | ------------------------------------------------------------------- |
+| **Name**, **SKU (optional)**, **Description** |                                                                     |
+| **Category**                                  | Used for grouping                                                   |
+| **Price**                                     | The price before any option adds to it                              |
+| **Department cost (optional)**                | What you pay the vendor. Never shown to members                     |
+| **Status**                                    | **Draft** (hidden), **Active (for sale)** or **Archived** (retired) |
+| **Max per member**                            | How many one member can order                                       |
+| **Stock on hand**                             | How many you have                                                   |
+| **Limit sales to stock on hand**              | Stops orders once stock runs out                                    |
+| **Taxable**                                   | Adds the store's sales tax to this item                             |
+| **Requires an option (size/color)**           | The member must pick an option                                      |
+| **Internal notes (not shown to members)**     | Notes for staff                                                     |
 
-Draft is the useful one while you build: add the item, load the photo, set up
-options, then flip to **Active (for sale)** when it is ready.
+Use **Draft** while you build. Add the item, add the photo, set up options,
+then switch it to **Active (for sale)**.
 
 ---
 
 ## Options — Sizes and Colours
 
-Add **options** to an item for anything a member has to choose between: S/M/L/XL,
-navy vs. black, men's vs. women's cut. Use **Add option** on the item form.
+Add **options** for anything a member has to choose between: S/M/L/XL, navy
+or black, men's or women's cut. Use **Add option** on the item form.
 
-Each option carries:
+Each option has:
 
-- **Label** — what the member picks ("XL", "Navy — Women's")
-- **SKU** — the vendor's code for that specific option
-- **Price delta** — added to the base price. `+3.00` on 2XL is the usual case;
-  a negative delta works too.
-- **Stock quantity** — tracked per option, not just per item
-- **Active** — retire a size without deleting order history
+- **Label** — what the member picks, such as "XL" or "Navy — Women's"
+- **+/- price** — added to the item's price. `+3.00` on 2XL is the usual case;
+  a negative amount works too
+- **Stock** — counted per option, not just per item
 
-Mark the item as requiring an option if the member must pick one.
+Tick **Requires an option (size/color)** on the item if the member must pick
+one.
+
+**Sizes are listed in garment order** (XS, S, M, L, XL, 2XL…), not
+alphabetically.
 
 ---
 
 ## Personalization
 
-For embroidered or engraved items. On the product:
+For items with a name embroidered or engraved on them. On the item:
 
-| Setting                                               | Effect                                                                                                                                                          |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Members can personalize this item (name, callsign, …) | Adds a text box to the member's order                                                                                                                           |
-| Prompt shown to the member                            | What the box says — e.g. "Name to embroider". Left blank, it reads "Add name embroidery" or "Add name engraving", by method                                     |
-| Upcharge per unit                                     | Surcharge added per personalized item                                                                                                                           |
-| How is it applied?                                    | **Embroidered** (stitched into cloth — shirts, polos, caps) or **Engraved** (cut into metal — coins, badges, plaques). Decides what the vendor sheet asks for   |
-| Thread color                                          | Embroidered items only: what the vendor embroiders in, and the colour members see their name previewed in. An engraved item has no thread and does not offer it |
-| Maximum characters                                    | Character limit (the vendor's limit), default 30                                                                                                                |
-| Required — the member must enter text                 | They cannot order without filling it in                                                                                                                         |
+| Setting                                                   | Effect                                                                                                                                                           |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Members can personalize this item (name, callsign, …)** | Adds a text box to the member's order                                                                                                                            |
+| **Prompt shown to the member**                            | What the box says, such as "Name to embroider". Left blank, it reads "Add name embroidery" or "Add name engraving"                                               |
+| **Upcharge per unit**                                     | Extra charge for each personalized item                                                                                                                          |
+| **How is it applied?**                                    | **Embroidered** (stitched into cloth: shirts, polos, caps) or **Engraved** (cut into metal: coins, badges, plaques). This decides what the vendor sheet asks for |
+| **Thread color**                                          | Embroidered items only. The colour the vendor stitches in, and the colour members see their name previewed in. Engraved items do not offer it                    |
+| **Maximum characters**                                    | The vendor's limit. Starts at 30                                                                                                                                 |
+| **Required — the member must enter text**                 | Members cannot order without filling it in                                                                                                                       |
 
-Two shirts with different names are always listed as **separate lines**, never
-merged into one line of quantity 2. They are physically different items and
-your vendor needs them listed separately.
+Embroidery and engraving are separate jobs. An engraved item asks only what
+engraving needs; it never asks for a thread colour.
+
+Two shirts with different names are always **separate lines**, never one line
+with quantity 2. They are different items, and your vendor needs them listed
+separately.
 
 ---
 
 ## Product Photos
 
-**Catalog > edit an item > Upload photo.** Up to 5 MB; JPEG, PNG, or WebP.
-Images are re-encoded on upload, so the stored file is smaller than what you
-sent.
+Save the item first, then open it again and select **Upload photo**. Photos can
+be JPEG, PNG or WebP, up to 5 MB. Each photo is converted on upload, so the
+saved file is smaller than the one you sent.
 
-Members shop by picture. A catalog of text rows sells nothing.
+Members shop by picture. A catalog of text sells nothing.
 
 ---
 
 ## Order Windows
 
-**Department Store > Order Windows tab > New order window.**
+Open the console's **Order Windows** tab and select **New order window**.
 
-A window is an ordering period — you open it, members order, you close it, you
-place one bulk order with the vendor.
+A window is an ordering period. You open it, members order, you close it, and
+you place one bulk order with the vendor.
 
-| Status    | Meaning                                                   |
-| --------- | --------------------------------------------------------- |
-| Draft     | Being set up, invisible to members                        |
-| Scheduled | Has dates but is not open yet                             |
-| Open      | Members can order                                         |
-| Closed    | No new orders; existing ones continue through fulfillment |
-| Fulfilled | Everything handed out                                     |
-| Cancelled | Called off                                                |
+| Status    | Meaning                                              |
+| --------- | ---------------------------------------------------- |
+| Draft     | Being set up, hidden from members                    |
+| Scheduled | Has dates but is not open yet                        |
+| Open      | Members can order                                    |
+| Closed    | No new orders; existing ones carry on to fulfillment |
+| Fulfilled | Everything handed out                                |
+| Cancelled | Called off                                           |
 
-**More than one window can be open at once.** Members land on whichever closes
-soonest — that being the deadline that matters to them — and get a switcher for
+**More than one window can be open at once.** Members land on the one that
+closes soonest, because that is their nearest deadline. They get a switcher for
 the others. So an apparel window and a Class B uniform window can run side by
-side without either hiding the other.
+side.
 
-When creating a window, choose either **all active products** or a specific
-list. The specific list is how you run a "Class B uniforms only" window without
-archiving the rest of the catalog.
-
-Each window row carries **Open ordering** and **Close ordering** (they read
-Open and Close before 2026-09-29), and its confirmation button repeats the
-same words. Opening a window can **email the membership**; closing it can
-**email everyone who ordered about what happens next**, with an optional
-**Extra message for the email**. The "last call" reminder goes out
-automatically, **Last call reminder (hours before close)** hours ahead, per
-your notification settings. A window's closing date is entered as **Ordering
+When you create a window, offer either **all active products** or a chosen
+list. The chosen list is how you run a "Class B uniforms only" window without
+archiving the rest of the catalog. The closing date goes in **Ordering
 closes**.
 
-**Times in store emails are the department's** _(2026-09-25)_. The
-window-open and last-call emails printed the closing time in UTC ("…at 11:00
-PM UTC"); they now print it in the timezone under **Settings → Organization →
-Profile → Timezone**. The orders CSV's submitted time is local too, with the
-zone's abbreviation, where it said UTC (2026-09-27).
+Each window row has **Open ordering** and **Close ordering**, and the
+confirmation button repeats the same words.
+
+- Opening a window can **Email the membership**.
+- Closing it can **Email everyone who ordered about what happens next**.
+- Either can carry an **Extra message for the email (optional)**.
+
+The last-call email goes out by itself, the number of hours in **Last call
+reminder (hours before close)** before closing, if that notice is switched on.
+
+Closing times in these emails use your department's time zone.
 
 ![Store order windows tab with the open window and its order totals](./images/18-03-order-windows.png)
-
-**[SCREENSHOT — REPLACE `18-03-order-windows.png`.** The window row's buttons now read **Open ordering** / **Close ordering** and **Record vendor order** (or **Update vendor order** once recorded); counts read "1 order" / "3 orders" rather than "order(s)".**]**
 
 ---
 
 ## Placing an Order (Member View)
 
-At `/store`:
+Select **Department Store** in the sidebar.
 
-1. Browse the products in the open window.
+1. Browse the items in the open window.
 2. Pick a size or colour if the item has options.
-3. Type the personalization if offered.
-4. Set quantity and tap **Add to cart · $(line total)** (the button read "Add $…").
-5. Tap **Review order** and check the cart — subtotal, tax, shipping, total.
-6. Choose **pickup** or **shipping** (shipping asks for an address).
-7. Choose a payment method.
-8. Add notes if you need to, then **Place order**.
+3. Type the name to embroider or engrave, if offered.
+4. Set the quantity and tap **Add to cart · $(line total)**.
+5. Tap **Review order** and check the cart: subtotal, tax, shipping and total.
+6. On the checkout page, choose pickup or shipping. Shipping asks for an
+   address.
+7. Choose how you will pay.
+8. Add **Notes for the quartermaster (optional)** if you need to, then tap
+   **Submit order**.
 
 You get an order number like `ORD-2026-0042` and a confirmation email. That
-number is what ties your payment to your order — keep it.
+number links your payment to your order, so keep it.
 
 If the store is closed, or no window is open, the page says so instead of
 showing an empty catalog.
 
-When several members order the last of a stock-tracked item at the same moment,
-only the orders the stock can cover are accepted; the rest are refused with a
-message saying how many remain available (for example _Only 1 of 'Station
-T-Shirt' remain available_).
+> **What if several members order the last few at once?** For an item limited
+> to stock on hand, only the orders the stock can cover are accepted. The rest
+> are refused with a message such as _Only 1 of 'Station T-Shirt' remain
+> available_.
+
+> **What if I ordered by mistake?** On **My Orders**, **Cancel order** is
+> offered while the order is still **Submitted** or **Awaiting payment**.
 
 ---
 
 ## Paying (Member View)
 
-**My Orders (`/store/orders`)** shows each order with its balance and a button
-for every payment method the department has set up.
+**My Orders** shows each order with its balance and a button for every payment
+method the department has set up.
 
-| Method                 | What you get                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------- |
-| Venmo                  | A button that opens Venmo with the amount **and your order number** already filled in |
-| PayPal                 | A button with the amount filled in — type your order number in the note               |
-| Cash App               | A button with the amount filled in — type your order number in the note               |
-| Zelle                  | The department's handle, tap to copy — enter it in your own bank's app                |
-| Check / cash / payroll | The payee and instructions                                                            |
+| Method                 | What you get                                                                  |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| Venmo                  | A button that opens Venmo with the amount **and your order number** filled in |
+| PayPal                 | A button with the amount filled in. Type your order number in the note        |
+| Cash App               | A button with the amount filled in. Type your order number in the note        |
+| Zelle                  | The department's Zelle details, tap to copy. Use them in your own bank's app  |
+| Check, cash or payroll | Who to pay and the instructions                                               |
 
 Three things worth knowing:
 
-- **You are not stuck with the method you picked at checkout.** Every method the
-  department set up stays available. If you chose Venmo and later realise you
-  only have Cash App, just use the Cash App button.
-- **Zelle has no button on purpose.** Zelle lives inside your own bank's app and
-  has no web link, so all anyone can give you is the handle to type. A button
-  would go nowhere.
-- **Where the button cannot carry your order number, type it.** The screen shows
-  it right there. It is what lets your treasurer match your payment to your
-  order — without it, your payment lands in a queue for somebody to chase.
+- **You are not stuck with the method you picked at checkout.** Every method
+  the department set up stays available. If you chose Venmo and only have Cash
+  App, use the Cash App button.
+- **Zelle has no button, on purpose.** Zelle lives inside your bank's app and
+  has no web link. All anyone can give you is the details to type.
+- **Where the button cannot carry your order number, type it.** The screen
+  shows "Include **ORD-…** as the reference on your payment." It is how your
+  treasurer matches your payment to your order. Without it, your payment waits
+  in a queue for someone to chase.
 
-After sending, tap **I've sent payment** and enter the reference (Venmo
-transaction, check number, etc.). That marks your order as _pending
-verification_ — it tells the quartermaster to look, it does not mark you paid.
-Somebody confirms the money actually arrived.
+After paying, tap **I've sent payment** and enter the reference: a Venmo
+transaction, a check number, and so on. Your payment then reads **Reported —
+needs verification**. That tells the quartermaster to look; it does not mark
+you paid. Someone confirms the money really arrived.
 
-To record a different plan, click **Change payment method** under the order and
-pick from the methods the store accepts. It is offered only on your own orders
-— the change goes through `/orders/mine/`, so there is no way to change the
-method on anyone else's — and only while a balance is due, the order is not
-cancelled, and no payment report is awaiting verification.
+To record a different plan, select **Change payment method** under the order
+and pick from the methods the store accepts. It is offered only on your own
+orders, while a balance is due, the order is not cancelled, and no payment
+report is waiting to be checked.
 
 ![A member changing the payment method on their own order: a method picker over the department's payment handles and the "I've sent payment" report](./images/19-07-member-payment-method.png)
 
-**Nothing on that screen says the department is not taking the money, so say
-it in training.** The picker records _how_ a member intends to pay and **I've
-sent payment** records _that they say they have_ — both are claims the
-treasurer then reconciles against the actual account. No card is charged and no
-transfer happens in the app.
+**Say this out loud in training: the department is not taking the money in the
+app.** The method picker records _how_ a member means to pay. **I've sent
+payment** records _that they say they have_. Both are claims the treasurer
+checks against the real account. No card is charged and no money moves in The
+Logbook.
 
 ![My Orders showing an unpaid order with its balance and payment options](./images/18-04-my-orders-unpaid.png)
-
-**[SCREENSHOT — REPLACE `18-04-my-orders-unpaid.png`.** The payment line now reads "Include **ORD-…** as the reference on your payment." (was "Reference ORD-… on your payment"), and item counts read "1 item" / "3 items".**]**
 
 ---
 
 ## Working the Orders
 
-The **Overview** tab is where a shift of order work starts. Across the top,
-**New (24 hours)** counts recent orders and **Collected (open window)** totals
-what the current window has taken in. The **Order workflow** grid below counts
-the orders in each order status, from Submitted to Cancelled, and clicking a
-count opens the Orders tab filtered to that status — so the two agree: a grid
-reading **Paid 2** filters the list to those same two orders. **Updates from
-the last 7 days** lists recent order activity — orders placed, status changes,
-payments reported and recorded, refunds and messages.
+The **Overview** tab is where a stint of order work starts.
+
+- **New (24 hours)** counts recent orders.
+- **Collected (open window)** totals what the current window has taken in.
+- **Order workflow** counts the orders in each status, from Submitted to
+  Cancelled. Select a count to open the **Orders** tab filtered to that status.
+  A grid reading **Paid 2** opens a list of those same two orders.
+- **Updates from the last 7 days** lists recent activity, newest first: orders
+  placed, status changes, payments reported and recorded, refunds and messages.
 
 ![Store Admin's Overview: the activity counts across the top and the order-workflow breakdown counting each order status the Orders list can be filtered by](./images/19-08-store-admin-activity.png)
 
-**[SCREENSHOT — CHECK `19-08-store-admin-activity.png`.** The recent-updates panel now reads "Newest first" and its empty state "No order updates in the last 7 days."; replace if visible.**]**
-
-**Department Store > Orders tab.** Filter by window, status, or payment status.
+The **Orders** tab has a search box and four filters: window, order status,
+payment status and **payment method**. The payment method filter is how you
+reconcile. Each app pays out separately, so "show me everyone who paid by
+Zelle" is the question you have in front of a bank statement.
 
 ![Store Admin's Orders tab narrowed to paid orders, the list showing only the two the status filter matches](./images/19-06-store-admin-orders.png)
 
-**[SCREENSHOT — REPLACE `19-06-store-admin-orders.png`.** The export button reads **Export CSV** (was Export), the bulk control **New status for selected orders** (was Bulk status), and rows read "1 item" / "2 items".**]**
+Open an order to work on it:
 
-Filters: window, order status, payment status, and **payment method**. That
-last one is how you reconcile — each app pays out separately, so "show me
-everyone who paid by Zelle" is the question you actually have in front of a
-bank statement.
+| Action                                | What it does                                                                                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Mark paid in full ($…)**            | Settles the whole remaining balance in one step                                                                                      |
+| **Record payment**                    | Records a specific amount (part payments)                                                                                            |
+| **Refund**                            | Records money going back                                                                                                             |
+| **Waive payment**                     | Settles the balance without collecting money. Needs a **Reason (shown to the member)**. The window's collected total does not change |
+| **Change status** → **Update status** | Moves the order on: Awaiting payment, Paid, Ordered from vendor, Ready for pickup, Fulfilled                                         |
+| **Send an update** → **Send update**  | Sends the member a note, in the app, by email, or both                                                                               |
+| **Internal notes** → **Save notes**   | Notes only staff see                                                                                                                 |
 
-| Action                                | What it does                                                                              |
-| ------------------------------------- | ----------------------------------------------------------------------------------------- |
-| **Change status** → **Update status** | Move through submitted → ordered → ready for pickup → fulfilled                           |
-| Mark paid                             | Settle the whole remaining balance in one click                                           |
-| **Record payment**                    | Enter a specific amount (partial payments)                                                |
-| **Waive payment**                     | Settle the balance without collecting money; the window's collected total does not change |
-| Refund                                | Record money going back                                                                   |
-| Message → **Send update**             | Post an update to the member (optionally emailing them)                                   |
-| Internal notes                        | Notes only staff see                                                                      |
-| Cancel                                | Cancel the order                                                                          |
+The order also shows its **Timeline**: everything that has happened to it.
 
-Select several orders and use **Mark selected paid** or **New status for
-selected orders** to move a whole window at once — "everything's in, mark them all ready for
-pickup" is one action, not forty.
+To move many orders at once, select them on the **Orders** tab. Then use
+**Mark selected paid** or **New status for selected orders**. "Everything's in,
+mark them all ready for pickup" is one action, not forty. **Export CSV**
+downloads the list.
 
 ### Two statuses, not one
 
-Every order has a **fulfillment status** and a **payment status**, and they move
-independently:
+Every order has an **order status** and a **payment status**, and they move
+separately:
 
 - A member can pay for a shirt you have not ordered from the vendor yet.
-- A shirt can be sitting on the shelf ready for pickup while the member still
-  owes for it.
+- A shirt can be on the shelf, ready for pickup, while the member still owes
+  for it.
 
-That is why they are separate. Combining them would force one to wait on the
-other.
+That is why they are separate. Combining them would make one wait on the other.
+
+Payment statuses are **Unpaid**, **Reported — needs verification**,
+**Partially paid**, **Paid**, **Refunded** and **Waived**.
 
 ---
 
 ## Recording Payment
 
-The common case is **Mark paid**: money arrived out of band for exactly what was
-owed, and you just need to say so. It reads the balance off the order, so there
-is no amount to mistype.
+The common case is **Mark paid in full**. The money arrived for exactly what was
+owed, and you just need to say so. It reads the balance from the order, so
+there is no amount to mistype.
 
 ### Record how they _actually_ paid
 
-The **Paid by** dropdown on an order defaults to the method the member chose at
-checkout — but change it if they paid another way. Casey picked Venmo and then
-handed you cash at drill; record it as **cash**.
+**Paid by** starts on the method the member chose at checkout. Change it if
+they paid another way. Casey picked Venmo, then handed you cash at drill:
+record it as **Cash**.
 
-This matters more than it looks. If you leave it as Venmo, your treasurer
-reconciles the Venmo payout, comes up one payment short, and has no way to
-find out why. The **Reference** box next to it takes whatever identifies the
-payment — a Venmo transaction, a check number, or just "handed over at drill".
+This matters more than it looks. Leave it as Venmo, and your treasurer checks
+the Venmo payout, finds one payment missing, and has no way to find out why.
+The **Reference** box beside it takes whatever identifies the payment: a Venmo
+transaction, a check number, or just "handed over at drill".
 
-Use **Record payment** when somebody pays part of it, or when you need the
-amount on record to differ from the balance.
+Use **Record payment** when someone pays part of the balance, or when the
+amount you record must differ from it.
 
-**Waive payment** is for the cases where the balance goes away without money — a
-replacement for a defective item, a departmental comp. It is recorded as a
-waiver, not as a payment, so your totals still tell the truth.
+Use **Waive payment** when the balance goes away without money: a replacement
+for a faulty item, or something the department is giving free. It is recorded
+as a waiver, not a payment, so your totals stay true.
 
-Orders where the member has tapped "I've sent payment" show as **pending
-verification** — that is your queue. Confirm the money arrived, then mark it
-paid.
+Orders where the member tapped **I've sent payment** read **Reported — needs
+verification**. That is your queue. Filter the **Orders** tab by that payment
+status, confirm the money arrived, then mark it paid.
 
 ---
 
 ## Automatic PayPal Reconciliation
 
-Optional. If your department has a PayPal **Business** account, connect it under
-**Settings > Integrations > PayPal** and PayPal will tell The Logbook what it
-received. Orders whose payment reference carries the order number settle
-themselves — no marking paid by hand.
+This is optional. If your department has a PayPal **Business** account, an
+administrator can connect it on the **Integrations** page, under **PayPal**.
+PayPal then tells The Logbook what it received. Orders whose payment carries
+the order number settle themselves, with nobody marking them paid.
 
-Full setup walkthrough: [Integrations guide, PayPal
-section](./16-integrations.md#paypal--store-payment-reconciliation).
+Full setup:
+[Integrations guide, PayPal section](./16-integrations.md#paypal--store-payment-reconciliation).
 
-A payment settles automatically only when **both** are true:
+A payment settles by itself only when **both** are true:
 
-1. The reference names exactly one order number (`ORD-2026-0042`).
-2. The amount equals that order's balance exactly.
+1. The reference names exactly one order number, such as `ORD-2026-0042`.
+2. The amount is exactly the order's balance.
 
-Anything else goes to **Department Store > Payments** for you to decide:
+Everything else goes to the console's **Payments** tab for you to decide:
 
-| What you see          | What happened                                                     |
-| --------------------- | ----------------------------------------------------------------- |
-| Applied               | Matched and settled — nothing for you to do                       |
-| Matched — not applied | Would have settled, but automatic settlement is off               |
-| No order found        | No order number in the reference                                  |
-| Needs a decision      | Amount doesn't match, or the order is cancelled or already square |
-| Dismissed             | You decided it wasn't a store payment                             |
+| What you see          | What happened                                                        |
+| --------------------- | -------------------------------------------------------------------- |
+| Applied               | Matched and settled — nothing for you to do                          |
+| Matched — not applied | Would have settled, but automatic settlement is off                  |
+| No order found        | No order number in the reference                                     |
+| Needs a decision      | The amount does not match, or the order is cancelled or already paid |
+| Dismissed             | You decided it was not a store payment                               |
 
-For each one you can **Apply to order** (entering the order if the matcher
-couldn't find it) or **Dismiss** it — for a donation, a dues payment, or a
-refund that isn't store business.
+For each one you can **Apply to order** (entering the order if none was found)
+or **Dismiss** it. Dismiss is for a donation, dues, or a refund that is not
+store business.
 
-Payments that match nothing still appear here. That is the point: the money has
-already left the member's account, so it has to reach a person rather than
-being dropped.
+Payments that match nothing still appear here. That is the point: the money
+has already left the member's account, so a person has to see it.
 
-Why only PayPal? Venmo publishes no API for personal transfers, and Zelle runs
-inside each bank. PayPal is the only one that can report back.
+**Why only PayPal?** Venmo has no way to report personal transfers, and Zelle
+runs inside each bank. PayPal is the only one that can report back.
 
-> **No screenshot of this tab exists, and cannot.** A row only appears here
-> when PayPal reports a capture through the webhook, and that webhook verifies
-> every payload against PayPal's signature API before writing anything. There is
-> no endpoint that records a payment by hand, deliberately — this table is a
-> ledger of what a provider actually said. A demo department with no PayPal
-> account therefore has an empty Payments tab, and a photograph of one would be
-> a fabrication rather than a screenshot. See
-> [Known Limitations](../KNOWN_LIMITATIONS.md).
+The **Payments** tab only ever shows what PayPal reported. There is no way to
+add a row by hand. A department without PayPal connected has an empty
+Payments tab.
 
 ---
 
 ## Telling the Vendor, and Telling the Members
 
-Once you have the tally, place the order with your vendor — then come back and
-hit **Record vendor order** on the window.
+Once you have the Tally, place the order with your vendor. Then come back and
+select **Record vendor order** on the window. (It reads **Update vendor order**
+once recorded.)
 
 | Field             | Why                                               |
 | ----------------- | ------------------------------------------------- |
@@ -664,47 +706,50 @@ hit **Record vendor order** on the window.
 | PO / reference    | Their order number, for when you have to chase it |
 | Expected delivery | Goes in the email to members                      |
 
-Recording it does three things in one action, so they cannot drift apart:
+Recording it does three things at once, so they cannot drift apart:
 
-1. Stamps who, what reference, and when — so "has this been ordered yet?" is
-   answered from the record instead of from memory.
-2. Marks every eligible order **ordered**.
-3. Emails everyone who ordered, with the vendor and the expected date.
+1. Records who ordered it, the reference and when. "Has this been ordered
+   yet?" is then answered by the record, not by memory.
+2. Marks every eligible order **Ordered from vendor**.
+3. Emails everyone who ordered, with the vendor and expected date (if you leave
+   **Email everyone who ordered** ticked).
 
-That email is the one members actually want. Between "ordering closed" and
-"come pick it up" there can be six quiet weeks, and without it you field the
+That email is the one members actually want. There can be six quiet weeks
+between "ordering closed" and "come and pick it up". Without it, you answer the
 same question a dozen times.
 
-Orders your payment rule holds back are **skipped**, not marked ordered — they
-were not on the sheet the vendor received. The result tells you how many moved
-and how many were held, so you know who to chase.
+Orders your payment rule holds back are **skipped**, not marked ordered. They
+were not on the sheet the vendor got. The result tells you how many moved and
+how many were held, so you know who to chase.
 
 ---
 
 ## Closing a Window and Ordering from the Vendor
 
-1. **Close ordering** — no new orders; existing ones keep moving.
-2. Open the window's **Tally**. It shows the money — order count, members,
-   gross, collected, outstanding — then two tables.
-3. **Order this from the vendor** is the purchase order: quantity per size,
-   merged across every member. _"10 job shirts — 3 M, 2 L, 3 XL, 1 2XL, 1 3XL."_
-   This is what you send the vendor. If your rule is _payment before the vendor
-   order_, unpaid members are excluded here and listed under **Held back**
+1. **Close ordering.** No new orders; existing ones keep moving.
+2. Open the window's **Tally**. It shows the money (order count, members,
+   gross, collected, outstanding), then two tables.
+3. **Order this from the vendor** is your purchase order: the quantity of each
+   size, added up across every member. _"10 job shirts — 3 M, 2 L, 3 XL, 1 2XL,
+   1 3XL."_ Send this to the vendor. Under the _payment before the vendor
+   order_ rule, unpaid members are left out here and listed under **Held back**
    instead.
-4. **Line detail** below it breaks the same shirts out by embroidery name. That
-   is what the vendor stitches. On a personalized item the two always differ —
-   ten shirts, ten names, five sizes.
-5. **Export CSV** — on the **Orders** tab, filtered to the window — if the vendor wants it as a file rather than a screenshot.
-   It keeps **every** order, unpaid ones included, because it doubles as the
-   treasurer's record — so under the _payment before the vendor order_ rule,
-   check the **Held From Vendor Order** column and drop the `yes` rows before
-   sending it. Without that step you would mail the vendor a sheet that undoes
-   the rule you set.
-6. When the goods arrive, bulk-set the window's orders to **ready for pickup**.
-7. Hand them out, mark **fulfilled**, then mark the window fulfilled.
+4. **Line detail** below it lists the same shirts by name. That is what the
+   vendor stitches. On a personalized item the two always differ: ten shirts,
+   ten names, five sizes.
+5. If the vendor wants a file, use **Export CSV** on the **Orders** tab,
+   filtered to the window. It keeps **every** order, unpaid ones included,
+   because it is also the treasurer's record. So under the _payment before the
+   vendor order_ rule, check the **Held From Vendor Order** column and remove
+   the `yes` rows before sending it. Otherwise you send the vendor a sheet
+   that undoes your own rule.
+6. When the goods arrive, set the window's orders to **Ready for pickup** in
+   one go.
+7. Hand them out and mark them **Fulfilled**. Then select **Mark fulfilled** on
+   the window.
 
-The outstanding-balance figure is your chase list. Sort the Orders tab by
-payment status to find who still owes.
+The outstanding figure is your chase list. Filter the **Orders** tab by
+payment status to see who still owes.
 
 ---
 
@@ -712,226 +757,171 @@ payment status to find who still owes.
 
 **Setup (September)**
 
-1. Settings: tick Venmo, Cash App, Zelle and Check. Enter the handle, the
-   `$cashtag`, the treasurer's Zelle email, and who checks are payable to.
-   Under **What happens to an unpaid order?**, this department picks _payment
-   required before the vendor order_ — they won't front the cost of a shirt
-   somebody might never pay for.
-2. Catalog: create "Department Job Shirt", $45, taxable, max 2 per member.
-   Upload a photo. Add options S–3XL, with `+3.00` on 2XL and 3XL.
-3. Enable personalization: label "Name for embroidery", max 20 characters,
-   $8.00 surcharge.
-4. Save as **Draft**, check the member view, flip to **Active**.
+1. **Settings:** tick Venmo, Cash App, Zelle and Check. Enter the Venmo
+   handle, the `$cashtag`, the treasurer's Zelle email, and who checks are
+   payable to. Under **What happens to an unpaid order?**, the department picks
+   **Payment required before the vendor order**. They will not pay for a shirt
+   someone might never pay for.
+2. **Catalog:** create "Department Job Shirt", $45, taxable, max 2 per member.
+   Add options S to 3XL, with `+3.00` on 2XL and 3XL. Save it, then upload a
+   photo.
+3. **Personalization:** prompt "Name for embroidery", **Embroidered**, maximum
+   20 characters, $8.00 upcharge.
+4. Leave it as **Draft** while you check its details in the catalog. Members
+   cannot see a draft item, and there is no member preview of one. Then switch
+   it to **Active (for sale)**.
 
 **Opening (October 1)**
 
-5. Create window "Fall Apparel 2026", closing October 21, all active products.
-   **Open ordering** — with the notify option on, the department gets an email.
+5. Create the window "Fall Apparel 2026", closing October 21, all active
+   products. Select **Open ordering** with **Email the membership** ticked.
 
 **During**
 
-6. Orders arrive. 14 members order 19 shirts, 11 personalized.
-7. Members pay by Venmo and Cash App from their My Orders page. Venmo payments
-   carry the order number; Cash App ones need it typed, and the screen tells
-   them so.
-8. You mark each paid as the money lands — or, with PayPal connected, the
-   PayPal ones settle themselves.
+6. Orders arrive. 14 members order 19 shirts, 11 of them personalized.
+7. Members pay by Venmo and Cash App from **My Orders**. Venmo payments carry
+   the order number. Cash App payments need it typed, and the screen tells them
+   so.
+8. You mark each paid as the money lands. With PayPal connected, PayPal
+   payments settle themselves.
 
 **Closing (October 21)**
 
-9. **Close ordering** on the window. Summary reads: 14 orders, 19 shirts,
-   $921.00 gross, $812.00 collected, $109.00 outstanding — 12 members paid, 2
-   have not.
+9. Select **Close ordering**. The Tally reads: 14 orders, 19 shirts, $921.00
+   gross, $812.00 collected, $109.00 outstanding. 12 members paid, 2 have not.
 10. **Order this from the vendor**: 2 M, 6 L, 7 XL, 1 2XL, 1 3XL — **17
-    shirts**, not 19. **Line detail** lists the 9 names to embroider on them.
-    Send both.
-11. **Held back — unpaid (2 orders)** sits underneath: 1 M and 1 2XL, $109.00
-    between them. Their shirts are deliberately _not_ in the 17, they are not
-    on the embroidery list, and their orders cannot be marked ordered. Chase
-    them; the moment they pay they rejoin the totals — add them to this run if
-    the vendor hasn't started, or catch them on the next one.
-12. Sort by payment status for the reminder list.
+    shirts**, not 19. **Line detail** lists the 9 names to embroider. Send
+    both.
+11. **Held back — unpaid (2 orders)** is underneath: 1 M and 1 2XL, $109.00
+    between them. Their shirts are deliberately _not_ in the 17, not on the
+    embroidery list, and their orders cannot be marked ordered. Chase them. The
+    moment they pay, they rejoin the totals. Add them to this order if the
+    vendor has not started, or to the next one.
+12. Filter **Orders** by payment status for the reminder list.
 
 **Fulfillment (November)**
 
-13. 17 shirts arrive. Bulk-set the window's orders to **ready for pickup** —
-    the 2 held-back orders are skipped, because there is no shirt on the shelf
-    for them to be ready for.
-14. Hand them out at drill and mark **fulfilled**. The bulk action moves the 12
-    paid orders and returns the 2 unpaid ones by order number with what they
-    owe — so you know exactly who to find before handing anything over.
-15. Mark the window fulfilled.
+13. 17 shirts arrive. Set the window's orders to **Ready for pickup** in one
+    go. The 2 held-back orders are skipped, because there is no shirt on the
+    shelf for them.
+14. Hand them out at drill and mark them **Fulfilled**. The 12 paid orders
+    move. The 2 unpaid ones come back by order number with what they owe, so
+    you know who to find before handing anything over.
+15. Select **Mark fulfilled** on the window.
 
 ---
 
 ## Troubleshooting
 
 **A member says the store is empty.**
-Check that a window is **open** (not draft or scheduled), that products are
-**Active** (not draft), and — if the window uses a specific product list — that
-the products are actually on it.
+Check that a window is **Open** (not Draft or Scheduled) and that the items are
+**Active (for sale)**. If the window offers a chosen list of items, check the
+items are on it. Also check **Store is live for members** is on.
 
-**A payment button isn't showing.**
-The method has to be both ticked in Settings _and_ have its details filled in. A
-method with no handle is hidden on purpose, so members never get a button that
-goes nowhere. Check the handle saved without an error.
+**A member cannot find the store.**
+The sidebar entry is **Department Store**. It appears only when the module is
+on and the member's position lets them browse the store.
 
-**There's no Zelle button.**
+**A payment button is not showing.**
+The method must be ticked in Settings _and_ have its details filled in. A
+method with no details is hidden on purpose, so members never get a button that
+goes nowhere. Check the details saved without an error.
+
+**There is no Zelle button.**
 There is never a Zelle button. Zelle runs inside each bank's app and has no web
-link — members get the handle to copy instead.
+link, so members get the details to copy instead.
 
-**An unpaid member's shirt isn't in the vendor order.**
-That is the _payment required before the vendor order_ rule doing its job. They
-are listed under **Held back** on the Tally. Record their payment and they
-rejoin the totals; if you want them ordered anyway, switch the rule to
+**An unpaid member's shirt is not in the vendor order.**
+That is the _payment required before the vendor order_ rule doing its job.
+They are listed under **Held back** on the Tally. Record their payment and they
+rejoin the totals. If you want them ordered anyway, switch the rule to
 _payment required before pickup_.
 
-**I can't mark an order fulfilled.**
+**I cannot mark an order fulfilled.**
 Under either payment rule, an order with a balance due cannot be handed over.
-The error names the amount owed. Record the payment, or waive the balance if
-the department is comping it.
+The message gives the amount owed. Record the payment, or waive the balance if
+the department is giving it free.
 
-**I can't mark a held order ready for pickup either.**
-Under _payment required before the vendor order_ their item was never bought,
-so it cannot be on the shelf. Marking it ready would email them to come and
-collect something that does not exist. Take their payment and it unblocks.
+**I cannot mark a held order ready for pickup either.**
+Under _payment required before the vendor order_, their item was never bought,
+so it cannot be on the shelf. Marking it ready would email them to collect
+something that does not exist. Record their payment and it unblocks.
 
-**The treasurer's Venmo total doesn't match the store.**
-Check the **Paid by** column. If somebody paid cash or by check and it was
-recorded as Venmo, the store and the payout will disagree by exactly that
-amount. Open the order and correct the method.
+**I cannot mark my own order paid.**
+Nobody settles their own order. Ask another officer who manages the store.
+
+**The treasurer's Venmo total does not match the store.**
+Check the **Paid by** method on each order. If someone paid cash or by check
+and it was recorded as Venmo, the two differ by exactly that amount. Open the
+order and correct the method.
 
 **A member paid but their order still says unpaid.**
 Paying happens outside The Logbook, so nothing changes until someone records
-it. If they tapped "I've sent payment", the order is in **pending
-verification** — confirm and mark it paid. With PayPal connected, check the
-**Payments** tab: it may be sitting there because the amount didn't match or
-the reference had no order number.
+it. If they tapped **I've sent payment**, the order reads **Reported — needs
+verification**: confirm and mark it paid. With PayPal connected, check the
+**Payments** tab. It may be there because the amount did not match or the
+reference had no order number.
 
-**PayPal payments aren't arriving at all.**
+**PayPal payments are not arriving at all.**
 The integration needs a **Webhook ID**, not just credentials. Without it,
-deliveries can't be verified and are rejected. Test Connection warns you when
-it's missing. Also confirm the webhook is subscribed to _Payment capture
-completed_.
+payments cannot be checked and are refused. **Test** on the PayPal card warns
+you when it is missing. Also check the PayPal webhook is subscribed to _Payment
+capture completed_.
 
-**The vendor tally doesn't match what I counted.**
-The tally counts all non-cancelled orders in the window. Cancelled orders drop
-out; unpaid ones do not — somebody who ordered and hasn't paid still needs a
-shirt ordered for them.
+**The vendor tally does not match what I counted.**
+The tally counts every order in the window that is not cancelled. Cancelled
+orders drop out. Unpaid ones stay in (except under _payment required before the
+vendor order_), because someone who ordered still needs a shirt ordered.
 
 **A member ordered the wrong size.**
-Cancel the line and have them reorder while the window is open. After closing,
-edit the order and message them so the change is on the record.
+While the order is still **Submitted** or **Awaiting payment**, the member can
+select **Cancel order** on **My Orders** and order again, if the window is
+still open. After that, send them an update on the order so the change is on
+record, and correct it with the vendor.
+
+**You cannot find a store email in Message History.**
+Search for store emails by type. Cancellation emails sent by older versions
+are filed under **storefront_order_update**; newer ones under
+**storefront_order_cancelled**. Search both.
 
 ---
 
 ## Related Guides
 
 - [Integrations](./16-integrations.md) — connecting PayPal
-- [Inventory Management](./05-inventory.md) — linking store products to
-  inventory records
+- [Inventory Management](./05-inventory.md) — the Inventory Administration hub
 - [Finance](./11-finance.md) — how store income relates to budgets and dues
 
-## August 23–24, 2026 update
-
-**The member storefront was redesigned end to end** — catalog, checkout and My
-Orders, all built around the cart. Checkout is now its own page at
-`/store/checkout`.
-
-Several setup defects were fixed in the same window, and they are worth knowing
-if turning the store on has previously failed for you:
-
-- **The store admin dashboard returned an error** rather than loading.
-- **Onboarding's Enable button did not actually enable the store.** If you
-  pressed it and the store did not appear, press it again after upgrading.
-- **The position editor stripped store permissions on first save**, so grants
-  handed out during setup vanished the next time somebody edited the position.
-- An inert configuration step was removed from onboarding, and the store route
-  is now gated on the organization's storefront module — so a department
-  without the module gets a clean refusal rather than a broken page.
-- **Errors on the admin side are now visible** instead of failing silently.
-
-The settings and notification emails themselves are described under
-[Store Settings](#store-settings).
-
-**[SCREENSHOT — REPLACE every storefront capture in this guide.** The catalog,
-the cart, checkout and My Orders all changed. _Demo data:_ a cart holding two
-different products, at least one with a size or variant selected, so the cart
-lines and the order stepper are both populated.**]**
-
 ---
 
-## Embroidery and Engraving Are Different Jobs _(2026-08-26)_
+## If You Learned an Older Version
 
-They used to share one "customization" field. So an **engraved brass plate
-asked the member for a thread colour**, which means nothing, and there was no
-way to specify what an engraving should say separately from what an embroidery
-should.
+If you are following older notes, an older recording or an SOP, these things
+have moved, been renamed or work differently.
 
-They are separate now, and **the thread swatch appears only where thread is
-actually used**. An engraved item asks the questions engraving needs and no
-others.
+### Renamed or moved
 
-### Variant sizes sort in garment order
+- **The store console moved into Inventory Administration.** It is reached
+  from the **Store Admin** sidebar entry or the **Department Store** cards in
+  Inventory Administration, and its page is headed **Department Store**. Old
+  bookmarks to the console's previous address still open it.
+- **Members find the store under Department Store** in the sidebar, not
+  "Store".
+- **Window buttons read Open ordering and Close ordering**, not Open and Close.
+- **The cart buttons read Add to cart · $… and Review order**, not "Add $…" and
+  "Review". Checkout is its own page, and its button reads **Submit order**.
+- **Embroidery and engraving are separate.** Older notes describe one
+  "customization" field, and engraved items that asked for a thread colour.
+- **Mark paid is Mark paid in full ($…)** on an order.
 
-`XL` no longer files between `L` and `XS`. Sizes on a variant group are ordered
-the way a quartermaster reads them, not the way a computer sorts strings.
+### Works differently now
 
-> **[SCREENSHOT — REPLACE the store item detail and sizing request captures.**
-> Capture an embroidered item **and** an engraved one — the difference between
-> them is the point of the change, and a single capture cannot show it.**]**
-
-### Also in this window
-
-- A **storefront manager could settle their own order's payment.** Closed — the
-  person who placed an order is no longer the person who can mark it paid.
-- Store access grants were backfilled onto the member and corporate positions
-  that were meant to have them.
-
----
-
-## The console moved into Inventory Administration _(2026-09-03)_
-
-**The quartermaster console lives at `/inventory/admin/store` and its page
-title now reads "Department Store".** It was at `/store/admin`.
-
-**The sidebar entry is still labelled "Store Admin"**, in the Administration
-section — so that is what you tell someone to click, even though the page they
-land on is headed Department Store. Worth saying out loud in training, because
-the two names differ.
-
-Nothing inside it changed — the same six tabs (Overview, Order Windows, Catalog,
-Orders, Payments, Settings), the same `storefront.manage` permission, the same
-module flag. Only the name and the address moved, as part of the same tidy-up
-that renamed Gear Admin to Inventory Administration (see
-[Inventory](./05-inventory.md)).
-
-**Reach it from Inventory Administration**, where the store now has its own
-section with four cards, each a deep link into the tab it names:
-
-| Card           | Goes to                               |
-| -------------- | ------------------------------------- |
-| Store Overview | `/inventory/admin/store`              |
-| Store Catalog  | `/inventory/admin/store?tab=catalog`  |
-| Store Orders   | `/inventory/admin/store?tab=orders`   |
-| Store Payments | `/inventory/admin/store?tab=payments` |
-
-**`/store/admin` still works** — it redirects to the new address, so existing
-bookmarks and any older printed handout do not break. The member-facing routes
-(`/store`, `/store/orders`, `/store/checkout`) did not move at all.
-
-**Why it moved:** uniforms and turnout gear are bought through the store and
-issued through inventory, so the officer doing one is usually doing the other.
-Putting the store under the same administration hub means the whole job is one
-screen away rather than two unrelated top-level areas. The store keeps its own
-permission and module flag, so a department can still run inventory without the
-store, or the store without inventory.
-
-> **[SCREENSHOT — REPLACE the store admin console capture (`18-02-store-admin`).**
-> The header now reads **Department Store** and the browser address is
-> `/inventory/admin/store`. The existing capture shows the old title and URL, so
-> it dates the whole guide. Capture from the Overview tab.**]**
-
-> **[SCREENSHOT — NEW: the Department Store section of the Inventory
-> Administration hub**, showing the four cards above. This is the entry point the
-> guide now tells readers to use, and nothing in the set shows it.**]**
+- **Store emails show times in your department's time zone**, not UTC. The
+  orders CSV does too, with the zone's short name.
+- **A store manager cannot settle their own order.** Older notes may say
+  otherwise.
+- **If turning the store on failed in an older version** — the console showed
+  an error, or the setup wizard's Enable button did nothing — check
+  **Organization Settings → Modules** and turn **Department Store** on.
+- **Check that positions still hold the store permissions.** An older position
+  editor removed them on the first save after setup.

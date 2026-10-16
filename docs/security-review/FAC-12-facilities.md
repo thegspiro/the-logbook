@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on two call sites (the root and per-facility folder lookups); FAC-45 fixed — a same-facility concurrent-creation deadlock the FAC-43 fix left in the per-facility check — pass 3 continued, closing this PR), [#2425](https://github.com/thegspiro/the-logbook/pull/2425) (pass 4, FAC-46 through FAC-57 fixed across 7 Codex rounds), [#2563](https://github.com/thegspiro/the-logbook/pull/2563) (pass 5, FAC-58 fixed — access-key create/update/delete had no audit trail), [#2621](https://github.com/thegspiro/the-logbook/pull/2621) (pass 6, watchdog re-verification, 0 fixed, 0 new findings), [#2968](https://github.com/thegspiro/the-logbook/pull/2968) (pass 7, 0 fixed, 0 new findings, FAC-41/FAC-44 confirmed fixed and intact), [#3169](https://github.com/thegspiro/the-logbook/pull/3169) (pass 8, watchdog pickup, 0 new application findings, FAC-13 re-verified already fixed by owner-direct work, 1 cross-cutting migration-head conflict fixed)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on two call sites (the root and per-facility folder lookups); FAC-45 fixed — a same-facility concurrent-creation deadlock the FAC-43 fix left in the per-facility check — pass 3 continued, closing this PR), [#2425](https://github.com/thegspiro/the-logbook/pull/2425) (pass 4, FAC-46 through FAC-57 fixed across 7 Codex rounds), [#2563](https://github.com/thegspiro/the-logbook/pull/2563) (pass 5, FAC-58 fixed — access-key create/update/delete had no audit trail), [#2621](https://github.com/thegspiro/the-logbook/pull/2621) (pass 6, watchdog re-verification, 0 fixed, 0 new findings), [#2968](https://github.com/thegspiro/the-logbook/pull/2968) (pass 7, 0 fixed, 0 new findings, FAC-41/FAC-44 confirmed fixed and intact), [#3169](https://github.com/thegspiro/the-logbook/pull/3169) (pass 8, watchdog pickup, 0 new application findings, FAC-13 re-verified already fixed by owner-direct work, 1 cross-cutting migration-head conflict fixed), pass 9 PR recorded in `PROGRESS.md`
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes, 4051 L),
 `services/facilities_service.py` (3453 L), `services/documents_service.py`
@@ -8,9 +8,160 @@
 schemas `app/schemas/facilities.py` (1422 L), `app/mcp/tools/facilities.py`
 (139 L)
 **Frontend:** `modules/facilities`
-**Migrations:** none touching this module's own tables this pass; one
-cross-cutting merge migration (`05ec84735fcf`) reconciling two unrelated
-feature branches' heads — see Pass 8 below.
+**Migrations:** none touching this module's own tables this pass.
+
+---
+
+## Pass 9 (2026-10-15) — watchdog pickup; 0 application fixes needed, 0 new findings; FAC-30 re-confirmed the only standing item
+
+**Watchdog pickup.** No `claude/security-review-*` PR or branch was open
+(`search_pull_requests`/`list_pull_requests` against `thegspiro/the-logbook`,
+0 matches for a `claude/security-review-` head). PR #3272 (Feature 11,
+Inventory, pass 9) had already merged, and per `PROGRESS.md`'s rotation
+table Feature 12 (Facilities) was the first `⬜` row.
+
+### Prior art loaded first
+
+Read, in full: `CHECKLIST.md`; `SEC-00-cross-cutting-baseline.md`'s pass 9
+entry (all 13 standing sweep classes re-swept clean against 364 commits,
+2026-10-14 — after this feature's own pass 8); `docs/module-audit/facilities.md`
+and `docs/app-review/facilities.md` (both defer security-relevant claims to
+this file; their own open items — FAC-4/search-unexposed closed by a prior
+security-review correction, FAC2-5/"awaiting result" UX — are app-review
+scope, not security); and this file's own pass 8 section (standing items
+FAC-13 closed, FAC-30 P2/flagged/owner-accepted).
+
+### Real delta since pass 8 (`8d2e4d7a`, PR #3169's merge, 2026-10-13T19:57:57Z)
+
+**343 commits landed repo-wide in this window; of those, 4 touched this
+feature's declared scope files** (`facilities.py`, `facilities_service.py`,
+`models/facilities.py`, `schemas/facilities.py`, `mcp/tools/facilities.py`)
+and **5 touched its shared dependencies** (`documents_service.py`,
+`core/permissions.py`, `utils/org_scoping.py`, `core/audit.py`,
+`utils/model_updates.py`, `utils/sql_search.py`, `models/document.py`),
+each read via `git show` in full:
+
+- **`49ed9764`** — "Facilities: keep record dialogs on screen, ask for the
+  type, show due dates". Frontend-only (`InspectionsSection.tsx`,
+  `MaintenanceSection.tsx`, `MaintenanceDueLabel.tsx`, `useMaintenanceForm.ts`,
+  `MaintenanceListPage.tsx`, plus their tests). Moves the New Maintenance
+  Record / New Inspection dialogs to render through `DialogPortal` (fixing a
+  backdrop-clipping bug, not a security surface), marks `Maintenance Type` as
+  a required field client-side to match the server's existing requirement,
+  and surfaces the server's own `is_overdue`/due-date fields in the list
+  rows. No new endpoint call, no change to what is sent or requested — a UX
+  fix with no security surface.
+- **`51c77a9c`** (mypy sweep, API layer) — `models/facilities.py` gains a
+  `TYPE_CHECKING`-only `display_code: Optional[str]` declaration (not a
+  column; set by the service for serialization, exactly like the
+  already-reviewed `FacilityRoom` pattern); `facilities_service.py`'s
+  `list_rooms` narrows `floor: Optional[str]` to `Optional[int]` to match the
+  column's actual type. No query, filter, or org-scope clause touched.
+- **`265a26be`** (mypy sweep, batch 6, ratchet to zero) — `facilities_service.py`'s
+  only hunks are four `result.scalar() or 0` additions on COUNT queries
+  (type/status/maintenance-type delete-guard counts, and the list-facilities
+  total). Diffed in full: every one of the four `.where(...)` clauses
+  surrounding these counts is byte-identical before and after; the `or 0`
+  only prevents a hypothetical `None > 0` `TypeError` on an empty aggregate,
+  it does not change which rows are counted.
+- **`f5ad6018`** (mypy sweep, batch 5) — its only hit in this feature's
+  dependency set is `models/document.py`, which gains three
+  `TYPE_CHECKING`-only declarations (`DocumentFolder.document_count`,
+  `Document.uploader_name`/`folder_name`) for fields the service already
+  stamps onto loaded rows for serialization — not new columns, not an access
+  change. `documents_service.py`'s own hunk in this commit is outside this
+  feature's facility-folder code paths (confirmed via `git show --stat`).
+- **`3a1a5f75`** — "Confirm a folder only full administrators could open"
+  (decision 29), the real feature-shaped change in this window. Adds a
+  `confirm_admin_only` guard to `DocumentsService.create_folder`/
+  `update_folder`: a folder whose access rule, once saved, no active member
+  but a full administrator could open is refused with `DOC_FOLDER_ADMIN_ONLY`
+  unless re-sent confirmed. **Checked whether this reaches facility
+  folders and found it does not apply to them, correctly**:
+  `ensure_facility_folder`/`ensure_facility_sub_folder`/
+  `_new_facility_sub_folder` (the only creators of facility folders)
+  construct `DocumentFolder` rows directly via `self.db.add(...)` and never
+  call `create_folder`/`update_folder` — confirmed by grepping every call
+  site of both methods repo-wide (`grep -rn "\.create_folder(\|\.update_folder("`),
+  none in `facilities.py`/`facilities_service.py`. This is not a gap: facility
+  folders' `required_permissions` come from the fixed
+  `FACILITY_ACCESS_PERMISSIONS`/`FACILITY_SENSITIVE_PERMISSIONS` constants
+  (FAC-13's own subject), not from an admin-editable access form — `facilities.py`
+  exposes no endpoint to edit a facility folder's access at all (only
+  `GET /{facility_id}/folders`, read-only). There is nothing for decision 29's
+  "would this lock everyone out" check to guard against here, since the
+  access rule is never operator-set in the first place.
+
+### Standing findings re-verified
+
+- **FAC-30 (P2, owner-accepted "leave as is", 2026-10-05)** — re-confirmed
+  unchanged. `FACILITY_FOLDER_PERMISSIONS`/`FACILITY_ACCESS_PERMISSIONS`
+  (`app/models/document.py:84-94`, line numbers drifted only by the
+  `TYPE_CHECKING` blocks added above) still never include
+  `facilities.delete` on either tier; `core/permissions.py` still bundles
+  `.delete` only with `.edit`/`.manage` on the three chief ranks. No commit in
+  this pass's delta touches either constant.
+- **FAC-13 (HIGH, closed pass 8)** — stays closed; no commit in this pass's
+  delta touches `FACILITY_ACCESS_PERMISSIONS`/`FACILITY_SENSITIVE_PERMISSIONS`
+  or the migration that stamped existing rows.
+- **FAC-41/FAC-44 (locking fixes, confirmed intact every pass since 3)** —
+  `ensure_facility_folder` and the folder-reference lock path are untouched
+  in this window (neither function name appears in any of the 9 commits'
+  diffs read above).
+
+### Route inventory
+
+**98 routes, unchanged from pass 6/7/8.** Re-enumerated by a fresh AST walk
+(not a grep count): every `@router.(get|post|put|patch|delete)`-decorated
+`async def` parsed, and every one's default-argument expressions checked for
+a `require_permission`/`require_all_permissions`/`get_current_user` call —
+**98 of 98** carry one, 0 missing. `check_route_permissions.py --strict`:
+270 total app-wide routes (up from 268 at pass 8, 17 redirects skipped; the
+increase is other features' rotation turns in the same window, not this
+one), 0 errors, 0 warnings.
+
+### Verified good ✅ (pass 9)
+
+- All 98 routes carry a permission dependency (AST-verified fresh, not
+  carried over from pass 8's result).
+- `list_facilities`'s three-column search still builds via `like_pattern()`
+  with `escape=LIKE_ESCAPE_CHAR` on `name`, `facility_number`, `city`
+  (`facilities_service.py:638-642`) — unchanged, `test_like_escaping.py`
+  passes.
+- Schema casing convention unchanged: `schemas/facilities.py` still declares
+  `alias_generator=to_camel`, and `modules/facilities/types/facilities.ts`
+  still matches it field-for-field (spot-checked `facilityNumber`,
+  `facilityTypeId`) — no drift introduced by this window's mypy-narrowing
+  commits.
+- No CSV export in this module (none existed before; none added).
+- No new by-id endpoint missing org-scoping; the 10 `assert_in_org`/
+  `_assert_facility_in_org` call sites are unchanged.
+- The one locking read in this service (`get_emergency_contact(...,
+for_update=True)`, FAC-51's invariant lock) is unchanged this pass.
+- The new admin-only-confirm folder guard (decision 29, `3a1a5f75`) does
+  **not** reach facility folders, and that is correct rather than a gap —
+  see the delta analysis above.
+
+### Completion gate
+
+| Check                                                                                                                            | Result                                                                               |
+| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (7.3.0)                                                                                            | ✅ 0 violations                                                                      |
+| `black --check app/ tests/ alembic/` (26.5.1)                                                                                    | ✅ clean (2331 files unchanged)                                                      |
+| `isort --check-only app/ tests/ alembic/` (9.0.1)                                                                                | ✅ clean                                                                             |
+| `python3 scripts/validate_migrations.py --strict`                                                                                | ✅ single head (`b90813f63e25`), 600 revisions                                       |
+| `python3 scripts/check_route_permissions.py --strict`                                                                            | ✅ 270 routes, 0 errors, 0 warnings                                                  |
+| `pytest tests/ -k "facilit"`                                                                                                     | ✅ 229 passed, 1 pre-existing skip (`pywebpush`)                                     |
+| Tenancy/security guard tests (auth coverage, LIKE escaping, capacity locking, CSV sweep, org-scoping ratchet, MCP member gating) | ✅ 181 passed (combined with migration guard tests, below)                           |
+| Migration guard tests (`test_alembic_migrations`, `test_migration_create_all_tables`)                                            | ✅ included in the 181 above                                                         |
+| `npm run typecheck` (frontend)                                                                                                   | ✅ clean                                                                             |
+| `npm run lint` (frontend)                                                                                                        | ✅ clean, exit 0                                                                     |
+| `npx vitest run src/modules/facilities`                                                                                          | ✅ 130 passed (18 files, up from 124 at pass 8 — pass 9's own dialog/due-date tests) |
+
+**0 application-security findings, 0 new FAC-N findings.** FAC-30 (P2,
+owner-accepted "leave as is") remains the only standing flagged item.
+Rotation row 12 → ✅ (pending this PR's merge). Next: Feature 13 (Apparatus &
+NFC).
 
 ---
 

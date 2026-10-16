@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Archive,
   ArrowLeft,
+  ArrowUpDown,
   CalendarClock,
   PackagePlus,
   Pencil,
@@ -36,9 +37,12 @@ import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
 import { EmptyState } from '../../../components/ux/EmptyState';
+import { SortableHeader } from '../../../components/ux/SortableHeader';
+import type { SortDirection } from '../../../components/ux/SortableHeader';
 import { SkeletonCard } from '../../../components/ux/Skeleton';
 import { MedicalItemFormModal } from '../components/MedicalItemFormModal';
 import { ReceiveDeliveryModal } from '../components/ReceiveDeliveryModal';
+import { MedicalImportExportModal } from '../components/MedicalImportExportModal';
 import { EXPIRY_WINDOW_DAYS } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 
@@ -66,9 +70,12 @@ function expiryLabel(days: number | undefined): string {
  * NUL separator, because a plain space would let search "a b" with no category
  * collide with search "a" under category "b".
  */
-function itemQueryKey(searchTerm: string, category: string, pageIndex: number): string {
-  return `${searchTerm}\u0000${category}\u0000${pageIndex}`;
+function itemQueryKey(searchTerm: string, category: string, sort: string, pageIndex: number): string {
+  return `${searchTerm}\u0000${category}\u0000${sort}\u0000${pageIndex}`;
 }
+
+/** The columns the supplies table sorts by, as the API names them. */
+type SortField = 'name' | 'category' | 'on_hand' | 'reorder_point';
 
 type Section = 'summary' | 'items' | 'categories' | 'expiring';
 
@@ -164,10 +171,19 @@ const MedicalSuppliesPage: React.FC = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [page, setPage] = useState(0);
+  // Sorted on the server, not in the browser: the list is paged, and sorting
+  // one page would only reorder whichever rows happened to be fetched.
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const sortKey = sortField && sortDirection ? `${sortField}:${sortDirection}` : '';
+  // Ids, not rows: a refreshed page hands back new objects for the same items.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [isBulkRetiring, setIsBulkRetiring] = useState(false);
   const [itemPage, setItemPage] = useState({ total: 0, skip: 0, limit: PAGE_SIZE });
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [showImportExport, setShowImportExport] = useState(false);
 
   // Which query the rows in `items` actually answer. Rendering the empty state
   // off `items.length` alone reports "no medical supplies" whenever the list
@@ -194,7 +210,7 @@ const MedicalSuppliesPage: React.FC = () => {
   });
   const itemsAbortController = useRef<AbortController | null>(null);
 
-  const filterKey = itemQueryKey(debouncedSearch, categoryFilter, page);
+  const filterKey = itemQueryKey(debouncedSearch, categoryFilter, sortKey, page);
 
   /**
    * Shown while the numbers still describe something real: the rows on screen,
@@ -238,7 +254,7 @@ const MedicalSuppliesPage: React.FC = () => {
 
   const loadSections = useCallback(
     async (sections: Section[], { bypassCache = false }: { bypassCache?: boolean } = {}) => {
-      const requestedFilterKey = itemQueryKey(debouncedSearch, categoryFilter, page);
+      const requestedFilterKey = itemQueryKey(debouncedSearch, categoryFilter, sortKey, page);
       setLoading((current) => ({ ...current, ...Object.fromEntries(sections.map((section) => [section, true])) }));
 
       let controller: AbortController | undefined;
@@ -258,6 +274,8 @@ const MedicalSuppliesPage: React.FC = () => {
             {
               search: debouncedSearch || undefined,
               category_id: categoryFilter || undefined,
+              sort_by: (sortDirection && sortField) || undefined,
+              sort_order: (sortField && sortDirection) || undefined,
               skip: page * PAGE_SIZE,
               limit: PAGE_SIZE,
             },
@@ -375,7 +393,7 @@ const MedicalSuppliesPage: React.FC = () => {
         })
       );
     },
-    [debouncedSearch, categoryFilter, page]
+    [debouncedSearch, categoryFilter, sortField, sortDirection, sortKey, page]
   );
 
   const loadSectionsRef = useRef(loadSections);
@@ -405,13 +423,69 @@ const MedicalSuppliesPage: React.FC = () => {
   // Compared by value rather than gated on a "has mounted" ref: the mount
   // effect above runs first, so a flag would let this one fire immediately
   // after it and load the items twice.
-  const lastItemQuery = useRef(itemQueryKey('', '', 0));
+  const lastItemQuery = useRef(itemQueryKey('', '', '', 0));
   useEffect(() => {
-    const key = itemQueryKey(debouncedSearch, categoryFilter, page);
+    const key = itemQueryKey(debouncedSearch, categoryFilter, sortKey, page);
     if (lastItemQuery.current === key) return;
     lastItemQuery.current = key;
+    // A selection made against one view is not carried into another: rows
+    // ticked on page 1 would otherwise be retired from a screen that no longer
+    // shows them.
+    setSelectedIds(new Set());
     void loadSectionsRef.current(['items']);
-  }, [debouncedSearch, categoryFilter, page]);
+  }, [debouncedSearch, categoryFilter, sortKey, page]);
+
+  const handleSort = (field: string, direction: SortDirection) => {
+    setSortField(direction ? (field as SortField) : null);
+    setSortDirection(direction);
+    setPage(0);
+  };
+
+  const toggleSelected = (itemId: string) =>
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+
+  const allOnPageSelected = items.length > 0 && items.every((item) => selectedIds.has(item.id));
+  const toggleAllOnPage = () => setSelectedIds(allOnPageSelected ? new Set() : new Set(items.map((item) => item.id)));
+
+  const handleBulkRetire = async () => {
+    const ids = items.filter((item) => selectedIds.has(item.id)).map((item) => item.id);
+    if (ids.length === 0) return;
+    const confirmed = await confirm({
+      title: 'Retire supplies',
+      message: `Retire ${formatNumber(ids.length)} ${ids.length === 1 ? 'supply' : 'supplies'}? They leave every list and cannot be brought back from this page.`,
+      confirmLabel: `Retire ${formatNumber(ids.length)}`,
+    });
+    if (!confirmed) return;
+    setIsBulkRetiring(true);
+    try {
+      const result = await medicalSuppliesService.bulkRetireItems(ids);
+      if (result.retired.length > 0) {
+        toast.success(
+          `Retired ${formatNumber(result.retired.length)} ${result.retired.length === 1 ? 'supply' : 'supplies'}`
+        );
+      }
+      if (result.failed.length > 0) {
+        const names = new Map(items.map((item) => [item.id, item.name]));
+        const first = result.failed[0];
+        toast.error(
+          `${formatNumber(result.failed.length)} could not be retired` +
+            (first ? `: ${names.get(first.item_id) ?? 'a supply'} — ${first.error}` : '')
+        );
+      }
+      // Failed ones stay ticked, so the officer can see which they were.
+      setSelectedIds(new Set(result.failed.map((failure) => failure.item_id)));
+      void refresh();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to retire supplies'));
+    } finally {
+      setIsBulkRetiring(false);
+    }
+  };
 
   useRegisterPullToRefresh(refresh);
 
@@ -436,6 +510,15 @@ const MedicalSuppliesPage: React.FC = () => {
     // different state: the section error says so, and it keeps the dash.
     return loading.categories ? '…' : '—';
   };
+
+  // The summary's total, not the items page: the items list is filtered and
+  // paged, so its length cannot say whether the catalog itself is empty.
+  const noSuppliesYet = loaded.summary && summary?.total_items === 0;
+  const emptyCatalogHint = !canManage
+    ? 'Nothing has been added to the medical catalog yet.'
+    : categories.length === 0
+      ? 'Add a category first, then the supplies that go in it.'
+      : 'Add the supplies you stock, then receive deliveries to record their lots and expiry dates.';
 
   const handleSaved = () => {
     setShowItemModal(false);
@@ -492,7 +575,7 @@ const MedicalSuppliesPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Four actions do not fit across a phone — "Add supply" ran to
+          {/* Five actions do not fit across a phone — "Add supply" ran to
               408px. `hscroll` already scrolls them; the marker is what tells the
               mobile pass that is deliberate. Buttons inside, so no tabIndex. */}
           <div
@@ -510,13 +593,25 @@ const MedicalSuppliesPage: React.FC = () => {
             </button>
             {canManage && (
               <>
+                {/* Labelled, not an icon alone: a supply needs a category
+                    before it can exist, and a bare tag glyph was the only way
+                    to the page that makes one. */}
                 <Link
                   to="/medical-supplies/categories"
-                  className="btn-icon"
-                  aria-label="Manage medical supply categories"
+                  className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium"
                 >
-                  <Tag className="h-4 w-4" />
+                  <Tag className="h-4 w-4" aria-hidden="true" />
+                  Categories
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowImportExport(true)}
+                  className="btn-icon"
+                  aria-label="Import or export medical supplies"
+                  title="Import / export"
+                >
+                  <ArrowUpDown className="h-4 w-4" />
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowDeliveryModal(true)}
@@ -652,7 +747,12 @@ const MedicalSuppliesPage: React.FC = () => {
         <SkeletonCard />
       ) : tab === 'expiring' ? (
         <section aria-label="Expiring stock">
-          {loaded.expiring && expiring.length === 0 ? (
+          {loaded.expiring && expiring.length === 0 && noSuppliesYet ? (
+            // "Nothing expiring" over an empty catalog reads as an all-clear
+            // for stock nobody has entered (CLAUDE.md pitfall #29: an empty set
+            // is not a passing one).
+            <EmptyState icon={Stethoscope} title="No medical supplies yet" description={emptyCatalogHint} />
+          ) : loaded.expiring && expiring.length === 0 ? (
             <EmptyState
               icon={CalendarClock}
               title="Nothing expiring"
@@ -765,95 +865,167 @@ const MedicalSuppliesPage: React.FC = () => {
                 description="Try a different search or category."
               />
             ) : (
-              <EmptyState
-                icon={Stethoscope}
-                title="No medical supplies yet"
-                description={
-                  canManage
-                    ? 'Add a category first, then the supplies that go in it.'
-                    : 'Nothing has been added to the medical catalog yet.'
-                }
-              />
+              <EmptyState icon={Stethoscope} title="No medical supplies yet" description={emptyCatalogHint} />
             )
           ) : (
-            <div className="card overflow-x-auto p-0">
-              <table className="rwd-table w-full text-sm">
-                <thead>
-                  <tr className="border-theme-surface-border border-b">
-                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">Item</th>
-                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                      Category
-                    </th>
-                    <th className="text-theme-text-muted px-4 py-3 text-right text-xs font-semibold uppercase">
-                      On hand
-                    </th>
-                    <th className="text-theme-text-muted px-4 py-3 text-right text-xs font-semibold uppercase">
-                      Reorder at
-                    </th>
-                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                      Storage
-                    </th>
-                    {canManage && (
-                      <th className="px-4 py-3 text-right">
-                        <span className="sr-only">Actions</span>
+            <>
+              {canManage && selectedIds.size > 0 && (
+                <div
+                  className="card mb-3 flex flex-wrap items-center justify-between gap-3 p-3"
+                  role="region"
+                  aria-label="Selected supplies"
+                >
+                  <p className="text-theme-text-primary text-sm" aria-live="polite">
+                    {formatNumber(selectedIds.size)} selected
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button type="button" className="btn-secondary" onClick={() => setSelectedIds(new Set())}>
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary inline-flex items-center gap-2"
+                      disabled={isBulkRetiring}
+                      onClick={() => void handleBulkRetire()}
+                    >
+                      <Archive className="h-4 w-4" />
+                      {isBulkRetiring ? 'Retiring…' : 'Retire selected'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="card overflow-x-auto p-0">
+                <table className="rwd-table w-full text-sm">
+                  <thead>
+                    <tr className="border-theme-surface-border border-b">
+                      {canManage && (
+                        <th className="w-10 px-4 py-3 text-left">
+                          <input
+                            type="checkbox"
+                            className="form-checkbox"
+                            checked={allOnPageSelected}
+                            onChange={toggleAllOnPage}
+                            aria-label="Select every supply on this page"
+                          />
+                        </th>
+                      )}
+                      <th className="px-4 py-3 text-left">
+                        <SortableHeader
+                          label="Item"
+                          field="name"
+                          currentSort={sortField}
+                          currentDirection={sortDirection}
+                          onSort={handleSort}
+                        />
                       </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => {
-                    const isLow = item.reorder_point !== undefined && onHandQuantity(item) <= (item.reorder_point ?? 0);
-                    return (
-                      <tr key={item.id} className="border-theme-surface-border border-b last:border-0">
-                        <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
-                          {item.name}
-                          {item.unit_of_measure && (
-                            <span className="text-theme-text-muted ml-1 text-xs">({item.unit_of_measure})</span>
+                      <th className="px-4 py-3 text-left">
+                        <SortableHeader
+                          label="Category"
+                          field="category"
+                          currentSort={sortField}
+                          currentDirection={sortDirection}
+                          onSort={handleSort}
+                        />
+                      </th>
+                      <th className="px-4 py-3 text-right">
+                        <SortableHeader
+                          label="On hand"
+                          field="on_hand"
+                          currentSort={sortField}
+                          currentDirection={sortDirection}
+                          onSort={handleSort}
+                        />
+                      </th>
+                      <th className="px-4 py-3 text-right">
+                        <SortableHeader
+                          label="Reorder at"
+                          field="reorder_point"
+                          currentSort={sortField}
+                          currentDirection={sortDirection}
+                          onSort={handleSort}
+                        />
+                      </th>
+                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
+                        Storage
+                      </th>
+                      {canManage && (
+                        <th className="px-4 py-3 text-right">
+                          <span className="sr-only">Actions</span>
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item) => {
+                      const isLow =
+                        item.reorder_point !== undefined && onHandQuantity(item) <= (item.reorder_point ?? 0);
+                      return (
+                        <tr key={item.id} className="border-theme-surface-border border-b last:border-0">
+                          {canManage && (
+                            <td data-label="Select" className="px-4 py-3">
+                              <input
+                                type="checkbox"
+                                className="form-checkbox"
+                                checked={selectedIds.has(item.id)}
+                                onChange={() => toggleSelected(item.id)}
+                                aria-label={`Select ${item.name}`}
+                              />
+                            </td>
                           )}
-                        </td>
-                        <td data-label="Category" className="text-theme-text-muted px-4 py-3">
-                          {categoryName(item)}
-                        </td>
-                        <td
-                          data-label="On hand"
-                          className={`px-4 py-3 text-right tabular-nums ${
-                            isLow ? 'font-semibold text-orange-700 dark:text-orange-400' : 'text-theme-text-primary'
-                          }`}
-                        >
-                          {formatNumber(onHandQuantity(item))}
-                        </td>
-                        <td data-label="Reorder at" className="text-theme-text-muted px-4 py-3 text-right tabular-nums">
-                          {item.reorder_point === undefined ? '—' : formatNumber(item.reorder_point)}
-                        </td>
-                        <td data-label="Storage" className="text-theme-text-muted px-4 py-3">
-                          {item.storage_location || '—'}
-                        </td>
-                        {canManage && (
-                          <td data-label="Actions" className="px-4 py-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => setEditingItem(item)}
-                              className="btn-icon"
-                              aria-label={`Edit ${item.name}`}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleRetire(item)}
-                              className="btn-icon"
-                              aria-label={`Retire ${item.name}`}
-                            >
-                              <Archive className="h-4 w-4" />
-                            </button>
+                          <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
+                            {item.name}
+                            {item.unit_of_measure && (
+                              <span className="text-theme-text-muted ml-1 text-xs">({item.unit_of_measure})</span>
+                            )}
                           </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          <td data-label="Category" className="text-theme-text-muted px-4 py-3">
+                            {categoryName(item)}
+                          </td>
+                          <td
+                            data-label="On hand"
+                            className={`px-4 py-3 text-right tabular-nums ${
+                              isLow ? 'font-semibold text-orange-800 dark:text-orange-300' : 'text-theme-text-primary'
+                            }`}
+                          >
+                            {formatNumber(onHandQuantity(item))}
+                            {isLow && <span className="ml-1 text-xs"> Low</span>}
+                          </td>
+                          <td
+                            data-label="Reorder at"
+                            className="text-theme-text-muted px-4 py-3 text-right tabular-nums"
+                          >
+                            {item.reorder_point === undefined ? '—' : formatNumber(item.reorder_point)}
+                          </td>
+                          <td data-label="Storage" className="text-theme-text-muted px-4 py-3">
+                            {item.storage_location || '—'}
+                          </td>
+                          {canManage && (
+                            <td data-label="Actions" className="px-4 py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setEditingItem(item)}
+                                className="btn-icon"
+                                aria-label={`Edit ${item.name}`}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleRetire(item)}
+                                className="btn-icon"
+                                aria-label={`Retire ${item.name}`}
+                              >
+                                <Archive className="h-4 w-4" />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
 
           {pagerNavigable && itemPage.total > 0 && (
@@ -924,6 +1096,18 @@ const MedicalSuppliesPage: React.FC = () => {
       )}
 
       {showDeliveryModal && <ReceiveDeliveryModal onClose={() => setShowDeliveryModal(false)} onSaved={handleSaved} />}
+      {showImportExport && (
+        <MedicalImportExportModal
+          onClose={() => setShowImportExport(false)}
+          onImported={() => void refresh()}
+          filters={{
+            search: debouncedSearch || undefined,
+            category_id: categoryFilter || undefined,
+            sort_by: (sortDirection && sortField) || undefined,
+            sort_order: (sortField && sortDirection) || undefined,
+          }}
+        />
+      )}
     </div>
   );
 };

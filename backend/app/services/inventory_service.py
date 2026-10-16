@@ -2059,7 +2059,71 @@ class InventoryService:
         "purchase_price": InventoryItem.purchase_price,
         "created_at": InventoryItem.created_at,
         "updated_at": InventoryItem.updated_at,
+        "reorder_point": InventoryItem.reorder_point,
     }
+    # "category" and "on_hand" are computed per query; see _sort_expression.
+    _NULLS_LAST_SORTS = {"category", "reorder_point"}
+    _NAME_TIEBREAK_SORTS = {"category", "on_hand", "reorder_point"}
+
+    async def _sort_expression(
+        self, sort_by: Optional[str], organization_id: UUID | str
+    ) -> Any:
+        """The ORDER BY expression for ``sort_by``; unknown keys sort by name.
+
+        ``category`` orders by the category's *name*, not its id, through a
+        correlated subquery rather than a join, so it cannot collide with the
+        category join a ``group_by`` adds.
+
+        ``on_hand`` orders by the number every list displays, which is not
+        ``quantity`` for a lot-stocked item: once an item has any lot, its
+        stock is the sum of its in-date lots and the column is no longer
+        maintained (see ``_in_date_lot_totals``, whose rule this mirrors).
+        Sorting by the raw column put a supply showing 40 on hand among the
+        empty ones.
+        """
+        org = str(organization_id)
+        if sort_by == "category":
+            return (
+                select(InventoryCategory.name)
+                .where(
+                    InventoryCategory.id == InventoryItem.category_id,
+                    InventoryCategory.organization_id == org,
+                )
+                .scalar_subquery()
+            )
+        if sort_by == "on_hand":
+            today = await resolve_org_today(self.db, org)
+            lot_scope = (
+                InventoryLot.inventory_item_id == InventoryItem.id,
+                InventoryLot.organization_id == org,
+            )
+            in_date_total = (
+                select(
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    or_(
+                                        InventoryLot.expiration_date.is_(None),
+                                        InventoryLot.expiration_date >= today,
+                                    ),
+                                    InventoryLot.quantity,
+                                ),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    )
+                )
+                .where(*lot_scope)
+                .scalar_subquery()
+            )
+            has_lots = select(InventoryLot.id).where(*lot_scope).exists()
+            return case(
+                (has_lots, in_date_total),
+                else_=func.coalesce(InventoryItem.quantity, 0),
+            )
+        return self._SORTABLE_COLUMNS.get(sort_by or "name", InventoryItem.name)
 
     @staticmethod
     def _category_ids_of_type(
@@ -2579,7 +2643,7 @@ class InventoryService:
         # Apply sorting
         # The id breaks ties (repeated uniforms share a name), so an offset
         # page never repeats or skips a row between calls.
-        col = self._SORTABLE_COLUMNS.get(sort_by or "name", InventoryItem.name)
+        col = await self._sort_expression(sort_by, organization_id)
         order: List[Any] = []
         if pinned_for_user_id is not None:
             # Pinned rows first, in the member's own order, ahead of whatever
@@ -2600,10 +2664,22 @@ class InventoryService:
                 group[0].is_(None),
                 group[0].asc(),
             ]
+        if sort_by in self._NULLS_LAST_SORTS:
+            # Blanks last in both directions. MySQL puts NULL first ascending,
+            # so uncategorized rows and items with no reorder point would
+            # otherwise head the list ahead of every real value.
+            order.append(col.is_(None))
         if sort_order == "desc":
-            order += [col.desc(), InventoryItem.id.desc()]
+            order.append(col.desc())
         else:
-            order += [col.asc(), InventoryItem.id.asc()]
+            order.append(col.asc())
+        if sort_by in self._NAME_TIEBREAK_SORTS:
+            # Many rows share a category or a count; alphabetical within each
+            # reads as a list, where the id order alone reads as random.
+            order.append(InventoryItem.name.asc())
+        order.append(
+            InventoryItem.id.desc() if sort_order == "desc" else InventoryItem.id.asc()
+        )
         query = query.order_by(*order)
 
         query = query.offset(skip).limit(limit)
@@ -9199,6 +9275,82 @@ class InventoryService:
             query.order_by(InventoryLot.expiration_date.asc())
         )
         return [(row[0], row[1]) for row in result.all()]
+
+    async def pool_item_ids_by_name(
+        self,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> Dict[str, str]:
+        """Active pool items in a domain, keyed by ``normalize_name``.
+
+        One query for a whole import, rather than ``_item_id_by_name`` per row
+        — that scans the org's entire catalog each call, and an import naming
+        two hundred lots would scan it two hundred times.
+
+        Pool rows only, for the reason ``create_item_if_absent`` gives: a pool
+        row is the definition of a supply and owns its lots, while two
+        individual rows sharing a name are two physical devices. Oldest first
+        wins a name collision, so an older record's lots are not split onto a
+        later duplicate.
+        """
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.name)
+            .where(
+                InventoryItem.organization_id == organization_id,
+                InventoryItem.active.is_(True),
+                InventoryItem.tracking_type == TrackingType.POOL,
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                ),
+            )
+            .order_by(InventoryItem.created_at.asc(), InventoryItem.id.asc())
+        )
+        by_name: Dict[str, str] = {}
+        for item_id, name in result.all():
+            key = normalize_name(name or "")
+            if key:
+                by_name.setdefault(key, str(item_id))
+        return by_name
+
+    async def get_lots_for_export(
+        self,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> List[Tuple[InventoryLot, str, Optional[str]]]:
+        """Every stocked lot in a domain, as ``(lot, item_name, category_name)``.
+
+        The lot-level counterpart to the items export: one row per lot still
+        holding stock, soonest expiry first, so an expiry audit reads top-down.
+        Undated lots sort last rather than first — MySQL orders NULL ahead of
+        any date ascending, which would bury the lots that actually expire.
+
+        Retired items and emptied lots are left out for the reason
+        ``get_expiring_lots`` gives: neither is stock anyone can act on.
+        """
+        query = (
+            select(InventoryLot, InventoryItem.name, InventoryCategory.name)
+            .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
+            .outerjoin(
+                InventoryCategory, InventoryCategory.id == InventoryItem.category_id
+            )
+            .where(
+                InventoryLot.organization_id == organization_id,
+                InventoryItem.organization_id == organization_id,
+                InventoryItem.active.is_(True),
+                InventoryLot.quantity > 0,
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                ),
+            )
+            .order_by(
+                InventoryLot.expiration_date.is_(None),
+                InventoryLot.expiration_date.asc(),
+                InventoryItem.name.asc(),
+                InventoryLot.id.asc(),
+            )
+        )
+        result = await self.db.execute(query)
+        return [(row[0], row[1], row[2]) for row in result.all()]
 
     async def get_overdue_checkouts_for_alerts(
         self,
