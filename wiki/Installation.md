@@ -89,7 +89,7 @@ Redis are supported through an override. See
 ## Development Setup
 
 For contributors, running the backend and frontend directly on the host.
-Prerequisites: Python 3.13+, Node.js 22+, MySQL 8.0 and Redis 7 reachable from
+Prerequisites: Python 3.13+, Node.js 22.22.1+ with npm 10+, MySQL 8.0 and Redis 7 reachable from
 the host.
 
 ```bash

@@ -167,6 +167,7 @@ describe('PledgesPage', () => {
         pledgeDate: '2026-10-01',
         dueDate: undefined,
         notes: undefined,
+        reminderEnabled: true,
       })
     );
     await waitFor(() => expect(listPledges).toHaveBeenCalledTimes(2));
@@ -195,8 +196,37 @@ describe('PledgesPage', () => {
         fulfilledAmount: '500.00',
         status: 'fulfilled',
         notes: null,
+        reminderEnabled: true,
       })
     );
+  });
+
+  it("turns a pledge's reminders off, and back on for a new one", async () => {
+    const user = userEvent.setup();
+    renderPage(<PledgesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit the pledge from Ann Lee' }));
+    let dialog = screen.getByRole('dialog');
+    const reminders = within(dialog).getByRole('checkbox', { name: 'Send reminders' });
+    expect(reminders).toBeChecked();
+    expect(within(dialog).getByText(/donor is never emailed/i)).toBeInTheDocument();
+    await user.click(reminders);
+    await user.click(within(dialog).getByRole('button', { name: 'Save pledge' }));
+    await waitFor(() =>
+      expect(updatePledge).toHaveBeenCalledWith('pl-1', expect.objectContaining({ reminderEnabled: false }))
+    );
+
+    await user.click(await screen.findByRole('button', { name: /record pledge/i }));
+    dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('checkbox', { name: 'Send reminders' })).toBeChecked();
+  });
+
+  it('opens an existing pledge with its reminders switched off as off', async () => {
+    listPledges.mockResolvedValue([pledge({ reminderEnabled: false })]);
+    renderPage(<PledgesPage />);
+
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Edit the pledge from Ann Lee' }));
+    expect(within(screen.getByRole('dialog')).getByRole('checkbox', { name: 'Send reminders' })).not.toBeChecked();
   });
 
   it('offers a viewer the list and nothing to change', async () => {

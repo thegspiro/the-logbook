@@ -79,6 +79,22 @@ describe('MedicalItemLotsModal', () => {
       <MedicalItemLotsModal item={item} canManage={canManage} onClose={onClose} onChanged={onChanged} />
     );
 
+  it('shows no stock-lot controls for a supply kept on apparatus only', async () => {
+    renderWithRouter(
+      <MedicalItemLotsModal
+        item={{ ...item, name: 'LUCAS device', apparatus_only: true }}
+        canManage
+        onClose={onClose}
+        onChanged={onChanged}
+      />
+    );
+
+    expect(await screen.findByText(/Kept on apparatus only, so there are no stock-room lots/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Where it is carried — LUCAS device' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add lot/ })).not.toBeInTheDocument();
+    expect(mockGetItemLots).not.toHaveBeenCalled();
+  });
+
   it('lists the lots and counts only the in-date ones as usable', async () => {
     renderModal();
 

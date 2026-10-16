@@ -73,6 +73,7 @@ from app.schemas.inventory import (
     ItemBulkRetireResult,
     ItemRetireRequest,
     ItemsListResponse,
+    MedicalExpiringStockRow,
     MedicalStorageAreaOption,
     MedicalStorageOptionsResponse,
     MedicalStorageRoom,
@@ -372,6 +373,7 @@ async def list_medical_items(
     limit: int = Query(100, ge=1, le=500),
     fuzzy: bool = False,
     low_stock: bool = False,
+    exclude_apparatus_only: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("inventory.view_medical", "inventory.view")
@@ -382,6 +384,8 @@ async def list_medical_items(
 
     ``low_stock=true`` narrows to the supplies at or below their reorder
     point — the set the summary's "Low stock" figure counts.
+    ``exclude_apparatus_only=true`` leaves out supplies kept on the apparatus
+    only, which have no shelf for a delivery to be received into.
 
     **Authentication required**
     **Requires permission: inventory.view_medical or inventory.view**
@@ -418,6 +422,7 @@ async def list_medical_items(
         low_stock=low_stock,
         location_id=location_id,
         storage_area_id=storage_area_id,
+        exclude_apparatus_only=exclude_apparatus_only,
     )
 
     items, total = await service.get_items(
@@ -446,6 +451,7 @@ async def _medical_filter_ids(
     low_stock: bool,
     location_id: Any,
     storage_area_id: Any,
+    exclude_apparatus_only: bool = False,
 ) -> Optional[List[str]]:
     """The id set the list and its export narrow to, or None for no narrowing.
 
@@ -467,6 +473,11 @@ async def _medical_filter_ids(
             )
         )
         ids = stored if ids is None else ids & stored
+    if exclude_apparatus_only:
+        stocked = set(
+            await service.item_ids_kept_in_stock(organization_id, MEDICAL_ITEM_TYPES)
+        )
+        ids = stocked if ids is None else ids & stocked
     return sorted(ids) if ids is not None else None
 
 
@@ -486,6 +497,7 @@ async def _attach_medical_list_extras(
     areas = await service.storage_area_index(org_id)
     rooms = await service.location_names(org_id)
     carriers = await EquipmentCheckService(db).apparatus_places_for_items(org_id, ids)
+    stock = await service.stock_breakdown(org_id, items)
     for item in items:
         expires = soonest.get(str(item.id))
         item.next_expiration_date = expires
@@ -496,6 +508,14 @@ async def _attach_medical_list_extras(
         carried = carriers.get(str(item.id))
         item.apparatus_count = carried["count"] if carried else 0
         item.apparatus_places = carried["places"] if carried else []
+        parts = stock[item.id]
+        item.apparatus_stock = parts["apparatus"]
+        item.apparatus_uncounted = parts["uncounted"]
+        # The same test the Low stock tile and the alert email apply, on the
+        # same shelf-plus-trucks figure (InventoryService.ready_on_hand).
+        item.is_low_stock = service.is_at_or_below_reorder_point(
+            parts["shelf"] + parts["apparatus"], item.reorder_point
+        )
 
 
 async def _low_stock_ids(service: InventoryService, organization_id: Any) -> List[str]:
@@ -1931,6 +1951,68 @@ async def list_expiring_medical_lots(
     return result
 
 
+@router.get("/expiring-stock", response_model=list[MedicalExpiringStockRow])
+async def list_expiring_medical_stock(
+    days_ahead: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.view_medical", "inventory.view")
+    ),
+):
+    """
+    Medical stock expiring within N days, on the shelves and on the apparatus
+
+    One list for everything to pull: shelf lots (with their storage path) and
+    units aboard the trucks (with the apparatus and compartment), soonest
+    first. ``/expiring-lots`` remains the shelf-only list.
+
+    **Authentication required**
+    **Requires permission: inventory.view_medical or inventory.view**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    today = await resolve_org_today(db, org_id)
+    shelf = await service.get_expiring_lots(
+        org_id, days_ahead, item_types=MEDICAL_ITEM_TYPES, today=today
+    )
+    item_ids = {str(lot.inventory_item_id) for lot, _ in shelf}
+    sizes = await service.item_sizes(org_id, item_ids)
+    paths = await service.storage_paths_for(org_id, item_ids)
+    rows: List[MedicalExpiringStockRow] = []
+    for lot, item_name in shelf:
+        item_id = str(lot.inventory_item_id)
+        rows.append(
+            MedicalExpiringStockRow(
+                key=f"lot:{lot.id}",
+                location="shelf",
+                inventory_item_id=item_id,
+                item_name=item_name,
+                item_size=sizes.get(item_id),
+                lot_id=str(lot.id),
+                lot_number=lot.lot_number,
+                expiration_date=lot.expiration_date,
+                days_until_expiration=(
+                    (lot.expiration_date - today).days if lot.expiration_date else None
+                ),
+                quantity=lot.quantity,
+                # A lot's own location note outranks the supply's filing.
+                where=lot.storage_location or paths.get(item_id),
+            )
+        )
+    aboard = await EquipmentCheckService(db).apparatus_expiring_stock(
+        org_id, list(MEDICAL_ITEM_TYPES), days_ahead=days_ahead, today=today
+    )
+    rows.extend(MedicalExpiringStockRow(**row) for row in aboard)
+    rows.sort(
+        key=lambda r: (
+            r.expiration_date or date.max,
+            (r.item_name or "").lower(),
+            r.location,
+        )
+    )
+    return rows
+
+
 # ============================================
 # Overview
 # ============================================
@@ -1981,10 +2063,23 @@ async def medical_supply_summary(
     )
     low_stock = len(low_stock_items)
 
+    # Truck stock in the same window, counted apart so the tiles can say how
+    # much of each figure is on the apparatus. The shelf figures above keep
+    # their meaning; the page adds the two.
+    aboard = await EquipmentCheckService(db).apparatus_expiring_stock(
+        org_id,
+        list(MEDICAL_ITEM_TYPES),
+        days_ahead=expiring_within_days,
+        today=today,
+    )
+    expired_aboard = sum(1 for r in aboard if r["expiration_date"] < today)
+
     return {
         "total_items": total,
         "expiring_soon": len(expiring) - already_expired,
         "expired": already_expired,
         "low_stock": low_stock,
         "expiring_within_days": expiring_within_days,
+        "expiring_soon_on_apparatus": len(aboard) - expired_aboard,
+        "expired_on_apparatus": expired_aboard,
     }

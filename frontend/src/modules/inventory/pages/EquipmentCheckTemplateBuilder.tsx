@@ -126,6 +126,7 @@ import {
   CHECK_TYPE_HELP,
   CHECK_TYPE_SUMMARY,
   LEVEL_UNIT_PRESETS,
+  COUNT_UNIT_PRESETS,
   POSITIONS,
   apparatusTypeLabel,
   apparatusTypeOptions,
@@ -304,6 +305,7 @@ interface ItemFormState {
   requiredQuantity: string;
   expectedQuantity: string;
   criticalMinimumQuantity: string;
+  countUnit: string;
   minLevel: string;
   levelUnit: string;
   serialNumber: string;
@@ -313,6 +315,28 @@ interface ItemFormState {
   expirationDate: string;
   expirationWarningDays: string;
   imageUrl: string;
+}
+
+/**
+ * What is wrong with a count position's three numbers, or null.
+ *
+ * They must run Critical Min ≤ Min to Pass ≤ Par. Critical above Min to Pass
+ * means a line can be critical while it passes its own minimum; Min to Pass
+ * above Par means a restock up to par still leaves the line failing (the
+ * server restocks to the larger of the two for exactly that reason). Equal is
+ * allowed throughout.
+ */
+function countOrderProblem(
+  item: Pick<ItemFormState, 'expectedQuantity' | 'requiredQuantity' | 'criticalMinimumQuantity'>
+): string | null {
+  const num = (v: string) => (v.trim() === '' ? null : Number(v));
+  const par = num(item.expectedQuantity);
+  const min = num(item.requiredQuantity);
+  const critical = num(item.criticalMinimumQuantity);
+  if (critical !== null && min !== null && critical > min) return 'Critical Min is above Min to Pass.';
+  if (min !== null && par !== null && min > par) return 'Min to Pass is above Par.';
+  if (critical !== null && par !== null && critical > par) return 'Critical Min is above Par.';
+  return null;
 }
 
 let nextItemKey = 0;
@@ -340,6 +364,7 @@ function emptyItem(): ItemFormState {
     requiredQuantity: '',
     expectedQuantity: '',
     criticalMinimumQuantity: '',
+    countUnit: '',
     minLevel: '',
     levelUnit: '',
     serialNumber: '',
@@ -371,6 +396,7 @@ function itemFormFromResponse(created: CheckTemplateItem): ItemFormState {
     requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
     expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
     criticalMinimumQuantity: created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
+    countUnit: created.countUnit ?? '',
     minLevel: created.minLevel != null ? String(created.minLevel) : '',
     levelUnit: created.levelUnit ?? '',
     serialNumber: created.serialNumber ?? '',
@@ -393,6 +419,7 @@ function itemCreateFromForm(item: ItemFormState, sortOrder: number, name = item.
     required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
     expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
     critical_minimum_quantity: item.criticalMinimumQuantity ? Number(item.criticalMinimumQuantity) : undefined,
+    count_unit: item.countUnit.trim() || undefined,
     min_level: item.minLevel ? Number(item.minLevel) : undefined,
     level_unit: item.levelUnit.trim() || undefined,
     serial_number: item.serialNumber.trim() || undefined,
@@ -814,6 +841,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             expectedQuantity: item.expectedQuantity != null ? String(Number(item.expectedQuantity)) : '',
             criticalMinimumQuantity:
               item.criticalMinimumQuantity != null ? String(Number(item.criticalMinimumQuantity)) : '',
+            countUnit: item.countUnit ?? '',
             minLevel: item.minLevel != null ? String(Number(item.minLevel)) : '',
             levelUnit: item.levelUnit ?? '',
             serialNumber: item.serialNumber ?? '',
@@ -1247,6 +1275,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           requiredQuantity: '',
           expectedQuantity: '',
           criticalMinimumQuantity: '',
+          countUnit: '',
           minLevel: '',
           levelUnit: '',
           serialNumber: '',
@@ -2133,6 +2162,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         apiPatch.critical_minimum_quantity = numberOrNull(patch.criticalMinimumQuantity);
       if (patch.minLevel !== undefined) apiPatch.min_level = numberOrNull(patch.minLevel);
       if (patch.levelUnit !== undefined) apiPatch.level_unit = blankToNull(patch.levelUnit);
+      if (patch.countUnit !== undefined) apiPatch.count_unit = blankToNull(patch.countUnit);
       if (patch.serialNumber !== undefined) apiPatch.serial_number = blankToNull(patch.serialNumber);
       if (patch.lotNumber !== undefined) apiPatch.lot_number = blankToNull(patch.lotNumber);
       if (patch.inventoryItemId !== undefined) apiPatch.inventory_item_id = blankToNull(patch.inventoryItemId);
@@ -2242,15 +2272,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           if (item.hasExpiration && !item.expirationDate.trim()) {
             warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
           }
-          if (
-            item.checkType === 'count' &&
-            item.criticalMinimumQuantity &&
-            item.expectedQuantity &&
-            // Equal is a real setting: any shortfall is critical (see
-            // isBelowCriticalMinimum). Only above it can never apply.
-            Number(item.criticalMinimumQuantity) > Number(item.expectedQuantity)
-          ) {
-            warnings.push(`"${item.name || 'Untitled'}" has a critical minimum above its expected quantity.`);
+          const orderProblem = item.checkType === 'count' ? countOrderProblem(item) : null;
+          if (orderProblem) {
+            warnings.push(
+              `"${item.name || 'Untitled'}": ${orderProblem} They should run Critical Min ≤ Min to Pass ≤ Par.`
+            );
           }
           if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
             warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
@@ -2351,6 +2377,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       critical_minimum_quantity: numberOrNull(item.criticalMinimumQuantity),
                       min_level: numberOrNull(item.minLevel),
                       level_unit: blankToNull(item.levelUnit),
+                      count_unit: blankToNull(item.countUnit),
                       serial_number: blankToNull(item.serialNumber),
                       lot_number: blankToNull(item.lotNumber),
                       inventory_item_id: item.inventoryItemId || null,
@@ -2644,6 +2671,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           criticalMinimumQuantity: item.criticalMinimumQuantity ? Number(item.criticalMinimumQuantity) : undefined,
           minLevel: item.minLevel ? Number(item.minLevel) : undefined,
           levelUnit: item.levelUnit || undefined,
+          countUnit: item.countUnit || undefined,
           serialNumber: item.serialNumber || undefined,
           lotNumber: item.lotNumber || undefined,
           hasExpiration: item.hasExpiration,
@@ -2734,6 +2762,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               item.criticalMinimumQuantity != null ? String(Number(item.criticalMinimumQuantity)) : '',
             minLevel: item.minLevel != null ? String(Number(item.minLevel)) : '',
             levelUnit: (item.levelUnit as string) ?? '',
+            countUnit: (item.countUnit as string) ?? '',
             serialNumber: (item.serialNumber as string) ?? '',
             lotNumber: (item.lotNumber as string) ?? '',
             hasExpiration: Boolean(item.hasExpiration),
@@ -2762,7 +2791,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         checkType: string;
         expectedQty: string;
         criticalMin: string;
+        minToPass: string;
         levelUnit: string;
+        countUnit: string;
       }[]
     | null
   >(null);
@@ -2793,7 +2824,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           checkType: csvValue(record, 'check type', 'type') || 'function',
           expectedQty: csvValue(record, 'expected qty', 'expected quantity', 'quantity', 'qty', 'par'),
           criticalMin: csvValue(record, 'critical min', 'critical minimum', 'minimum'),
+          minToPass: csvValue(record, 'min to pass', 'min'),
           levelUnit: csvValue(record, 'level unit', 'unit'),
+          countUnit: csvValue(record, 'count unit'),
         }));
 
         if (rows.every((r) => !r.name)) {
@@ -2870,9 +2903,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         name: row.name,
         checkType,
         expectedQuantity: row.expectedQty,
-        requiredQuantity: row.expectedQty,
+        // Par only. Copying it into Min to Pass would fail every line the
+        // moment it fell below par, which the department ruled is a restock.
+        requiredQuantity: row.minToPass,
         criticalMinimumQuantity: row.criticalMin,
         levelUnit: row.levelUnit,
+        // A plain "Unit" column names what a count row counts, too.
+        countUnit: checkType === CheckType.COUNT ? row.countUnit || row.levelUnit : '',
       });
     }
 
@@ -2964,6 +3001,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           ...(item.criticalMinimumQuantity ? { criticalMinimumQuantity: Number(item.criticalMinimumQuantity) } : {}),
           ...(item.minLevel ? { minLevel: Number(item.minLevel) } : {}),
           ...(item.levelUnit ? { levelUnit: item.levelUnit } : {}),
+          ...(item.countUnit ? { countUnit: item.countUnit } : {}),
+          // What the crew screen shows; a linked catalog unit is not known here.
+          ...(item.countUnit && !item.inventoryItemId ? { unitOfMeasure: item.countUnit } : {}),
           ...(item.serialNumber ? { serialNumber: item.serialNumber } : {}),
           ...(item.lotNumber ? { lotNumber: item.lotNumber } : {}),
           ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
@@ -3398,8 +3438,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               {item.checkType === 'count' && (
                 <>
                   <div>
-                    <label className={labelClass}>Expected Qty</label>
-                    {!phone && fieldHint('How many should be on the apparatus')}
+                    <label className={labelClass}>Par</label>
+                    {!phone && fieldHint('Restock up to this; short of par is not a failure')}
                     <input
                       type="number"
                       className={inputClass}
@@ -3410,11 +3450,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })
                       }
                     />
-                    {phone && fieldHint('Par on the apparatus')}
+                    {phone && fieldHint('Restock up to this')}
                   </div>
                   <div>
                     <label className={labelClass}>Min to Pass</label>
-                    {!phone && fieldHint('Below this count = auto-fail')}
+                    {!phone && fieldHint('Below this count, the line fails')}
                     <input
                       type="number"
                       className={inputClass}
@@ -3432,7 +3472,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-red-500" />
                       Critical Min
                     </label>
-                    {!phone && fieldHint('Below this = urgent alert to leadership')}
+                    {!phone && fieldHint('Below this, the line fails and leadership is alerted')}
                     <input
                       type="number"
                       className={inputClass}
@@ -3443,8 +3483,71 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         updateItemFieldWithAutoSave(compIdx, itemIdx, { criticalMinimumQuantity: e.target.value })
                       }
                     />
-                    {phone && fieldHint('Below this alerts leadership')}
+                    {phone && fieldHint('Below this fails and alerts')}
                   </div>
+                  <div>
+                    <label
+                      className={labelClass}
+                      htmlFor={item.inventoryItemId ? undefined : `count-unit-${item.id ?? item.clientKey}`}
+                    >
+                      Counted in
+                    </label>
+                    {item.inventoryItemId ? (
+                      // A linked position counts in the catalog's unit, because
+                      // that is the unit a stock swap moves into it.
+                      <p className="text-theme-text-muted text-xs">The linked inventory item&apos;s unit</p>
+                    ) : (
+                      // Same shape as the level-unit picker: a preset, or Custom
+                      // with a text box. A blank unit reads as Custom-and-empty,
+                      // which is "no unit".
+                      <div className={phone ? 'flex flex-col gap-1.5' : 'flex gap-1.5'}>
+                        <select
+                          id={`count-unit-${item.id ?? item.clientKey}`}
+                          className={selectClass}
+                          value={
+                            COUNT_UNIT_PRESETS.includes(item.countUnit as (typeof COUNT_UNIT_PRESETS)[number])
+                              ? item.countUnit
+                              : '__custom__'
+                          }
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateItemFieldWithAutoSave(compIdx, itemIdx, {
+                              countUnit: val === '__custom__' ? '' : val,
+                            });
+                          }}
+                        >
+                          {COUNT_UNIT_PRESETS.map((u) => (
+                            <option key={u} value={u}>
+                              {u}
+                            </option>
+                          ))}
+                          <option value="__custom__">Custom or none...</option>
+                        </select>
+                        {!COUNT_UNIT_PRESETS.includes(item.countUnit as (typeof COUNT_UNIT_PRESETS)[number]) && (
+                          <input
+                            type="text"
+                            className={inputClass}
+                            maxLength={50}
+                            placeholder="e.g. vials (blank for none)"
+                            aria-label={`Custom count unit for ${item.name.trim() || 'item'}`}
+                            value={item.countUnit}
+                            onChange={(e) =>
+                              updateItemFieldWithAutoSave(compIdx, itemIdx, { countUnit: e.target.value })
+                            }
+                          />
+                        )}
+                      </div>
+                    )}
+                    {!phone && fieldHint('Count a partial pack in the smaller unit')}
+                  </div>
+                  {countOrderProblem(item) && (
+                    <p
+                      className={`text-theme-alert-warning-text text-xs ${phone ? 'col-span-2' : 'col-span-full'}`}
+                      role="status"
+                    >
+                      {countOrderProblem(item)} They should run Critical Min ≤ Min to Pass ≤ Par.
+                    </p>
+                  )}
                 </>
               )}
 
@@ -6601,7 +6704,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     <th className="pr-3 pb-2">Compartment</th>
                     <th className="pr-3 pb-2">Item</th>
                     <th className="pr-3 pb-2">Type</th>
-                    <th className="pr-3 pb-2">Expected</th>
+                    <th className="pr-3 pb-2">Par</th>
+                    <th className="pr-3 pb-2">Min to Pass</th>
                     <th className="pb-2">Critical Min</th>
                   </tr>
                 </thead>
@@ -6611,7 +6715,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       <td className="text-theme-text-secondary py-1.5 pr-3">{row.compartment}</td>
                       <td className="text-theme-text-primary py-1.5 pr-3">{row.name}</td>
                       <td className="py-1.5 pr-3">{row.checkType}</td>
-                      <td className="py-1.5 pr-3">{row.expectedQty || '—'}</td>
+                      <td className="py-1.5 pr-3">
+                        {row.expectedQty || '—'}
+                        {row.expectedQty && (row.countUnit || row.levelUnit)
+                          ? ` ${row.countUnit || row.levelUnit}`
+                          : ''}
+                      </td>
+                      <td className="py-1.5 pr-3">{row.minToPass || '—'}</td>
                       <td className="py-1.5">{row.criticalMin || '—'}</td>
                     </tr>
                   ))}

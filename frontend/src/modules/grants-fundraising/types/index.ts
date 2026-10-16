@@ -602,6 +602,7 @@ export interface PledgeCreatePayload {
   pledgeDate: string;
   dueDate?: string | undefined;
   notes?: string | undefined;
+  reminderEnabled: boolean;
 }
 
 /** `PUT /grants/pledges/:id`. `null` clears a field. */
@@ -614,6 +615,7 @@ export interface PledgeUpdatePayload {
   fulfilledAmount: string;
   status: PledgeStatus;
   notes: string | null;
+  reminderEnabled: boolean;
 }
 
 // =============================================================================

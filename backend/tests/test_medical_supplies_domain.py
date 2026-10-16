@@ -398,6 +398,17 @@ class TestSummaryCounts:
     item list.
     """
 
+    @pytest.fixture(autouse=True)
+    def _no_truck_stock(self):
+        # The truck-stock half of the summary has its own integration tests
+        # (test_medical_supplies_truck_stock.py); here it is simply empty.
+        with patch.object(
+            ms.EquipmentCheckService,
+            "apparatus_expiring_stock",
+            AsyncMock(return_value=[]),
+        ):
+            yield
+
     async def test_low_stock_comes_from_the_uncapped_domain_scoped_scan(self, svc):
         """`low_stock` must equal the alert scan's count, not a page of items.
 

@@ -28,7 +28,7 @@ _rules_ and the member notification inbox are covered under
   identity, so renaming a role never silently stops delivery.
 - **Member controls** — members opt out of urgent-SMS texts under
   Settings → Notifications (SMS also requires express consent under My Account →
-  Security → Privacy Choices); the in-app notification is always delivered, and
+  Privacy → Privacy Choices); the in-app notification is always delivered, and
   the department-message **email cannot be opted out of** — it is the record
   that the member was notified. Since 2026-09-28 every other member email is on
   one required/optional list, with a switch per optional email for members and

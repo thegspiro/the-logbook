@@ -28,6 +28,8 @@ const mockGetMcpStatus = vi.fn();
 const mockCreateMcpKey = vi.fn();
 const mockRevokeMcpKey = vi.fn();
 const mockLinkExistingGoogleMembers = vi.fn();
+const mockGetIcalFeed = vi.fn();
+const mockRotateIcalFeed = vi.fn();
 
 vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
@@ -48,6 +50,8 @@ vi.mock('../services/api', () => ({
     createMcpKey: (...args: unknown[]) => mockCreateMcpKey(...args) as unknown,
     revokeMcpKey: (...args: unknown[]) => mockRevokeMcpKey(...args) as unknown,
     linkExistingGoogleMembers: (...args: unknown[]) => mockLinkExistingGoogleMembers(...args) as unknown,
+    getIcalFeed: (...args: unknown[]) => mockGetIcalFeed(...args) as unknown,
+    rotateIcalFeed: (...args: unknown[]) => mockRotateIcalFeed(...args) as unknown,
   },
 }));
 
@@ -587,6 +591,100 @@ describe('IntegrationsPage', () => {
       // only ever produced an error toast.
       expect(within(card).queryByText('Test')).not.toBeInTheDocument();
       expect(within(card).queryByText('Connected')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Calendar cards', () => {
+    const calendarRow = (
+      integration_type: string,
+      name: string,
+      status: 'available' | 'connected' | 'coming_soon'
+    ) => ({
+      id: `${integration_type}-1`,
+      organization_id: 'org-1',
+      integration_type,
+      name,
+      description: `${name} description`,
+      category: 'Calendar',
+      status,
+      config: {},
+      enabled: status === 'connected',
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    });
+    const firstPath = '/api/public/v1/calendar/org/first-token.ics';
+    const secondPath = '/api/public/v1/calendar/org/second-token.ics';
+
+    beforeEach(() => {
+      mockGetIcalFeed.mockReset();
+      mockGetIcalFeed.mockResolvedValue({ token: 'first-token', feed_path: firstPath });
+      mockRotateIcalFeed.mockReset();
+      mockRotateIcalFeed.mockResolvedValue({ token: 'second-token', feed_path: secondPath });
+    });
+
+    it('describes Google and Outlook as one-way publishing, not two-way or contact sync', async () => {
+      mockGetIntegrations.mockResolvedValue([
+        calendarRow('google-calendar', 'Google Calendar', 'coming_soon'),
+        calendarRow('outlook', 'Microsoft Outlook', 'coming_soon'),
+      ]);
+
+      renderPage();
+      await screen.findByText('Google Calendar');
+      for (const type of ['google-calendar', 'outlook']) {
+        const card = screen.getByTestId(`integration-card-${type}`);
+        expect(within(card).getByText('One-way publishing')).toBeInTheDocument();
+        expect(within(card).getByText('Coming Soon')).toBeInTheDocument();
+        expect(within(card).queryByText('Connect')).not.toBeInTheDocument();
+        expect(within(card).queryByText(/two-way/i)).not.toBeInTheDocument();
+        expect(within(card).queryByText(/contact sync/i)).not.toBeInTheDocument();
+        expect(within(card).queryByText(/email notifications/i)).not.toBeInTheDocument();
+      }
+    });
+
+    it('shows the department feed URL with a copy button on a connected iCalendar card', async () => {
+      mockGetIntegrations.mockResolvedValue([calendarRow('ical', 'iCalendar (ICS)', 'connected')]);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-ical');
+      const input = await within(card).findByLabelText('Department events feed URL');
+      expect(input).toHaveValue(`${window.location.origin}${firstPath}`);
+      expect(within(card).getByRole('button', { name: 'Copy feed link' })).toBeInTheDocument();
+      expect(within(card).getByText('Department events feed')).toBeInTheDocument();
+      expect(mockGetIcalFeed).toHaveBeenCalledWith('ical-1');
+    });
+
+    it('resets the feed link only after confirmation', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([calendarRow('ical', 'iCalendar (ICS)', 'connected')]);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-ical');
+      await within(card).findByLabelText('Department events feed URL');
+
+      await user.click(within(card).getByRole('button', { name: 'Reset link' }));
+      await user.click(await screen.findByRole('button', { name: 'Keep current link' }));
+      expect(mockRotateIcalFeed).not.toHaveBeenCalled();
+
+      await user.click(within(card).getByRole('button', { name: 'Reset link' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'Reset link' }));
+
+      await waitFor(() => {
+        expect(within(card).getByLabelText('Department events feed URL')).toHaveValue(
+          `${window.location.origin}${secondPath}`
+        );
+      });
+      expect(mockRotateIcalFeed).toHaveBeenCalledWith('ical-1');
+    });
+
+    it('does not fetch the feed link while the iCalendar card is not connected', async () => {
+      mockGetIntegrations.mockResolvedValue([calendarRow('ical', 'iCalendar (ICS)', 'available')]);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-ical');
+      expect(within(card).queryByLabelText('Department events feed URL')).not.toBeInTheDocument();
+      expect(mockGetIcalFeed).not.toHaveBeenCalled();
     });
   });
 

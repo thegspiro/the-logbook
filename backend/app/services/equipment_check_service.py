@@ -34,7 +34,7 @@ from app.models.apparatus import (
     EquipmentCheckTemplate,
     TemplateChangeLog,
 )
-from app.models.inventory import InventoryItem, InventoryLot
+from app.models.inventory import InventoryCategory, InventoryItem, InventoryLot
 from app.models.training import (
     AssignmentStatus,
     Shift,
@@ -91,6 +91,11 @@ class EquipmentCheckService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Catalog items whose truck count a crew changed in this request. A
+        # medical supply is judged low on shelf plus trucks, so a lower count
+        # can make it low; these are checked for a reorder once the change
+        # has committed (see _reorder_after_counts).
+        self._counted_inventory_ids: Set[str] = set()
 
     @staticmethod
     def is_check_completed(check: Optional[ShiftEquipmentCheck]) -> bool:
@@ -299,10 +304,13 @@ class EquipmentCheckService:
         gloves, and the catalog already knows which. Read from the linked
         inventory item rather than stored again on the checklist, so a
         department that relabels a unit does not have to re-enter it on every
-        truck that carries it.
+        truck that carries it. A position with no catalog link shows its own
+        ``count_unit`` instead.
         """
         inv_ids = [i.inventory_item_id for i in items if i.inventory_item_id]
         if not inv_ids:
+            for item in items:
+                item.unit_of_measure = item.count_unit
             return
         # Org-scoped: inventory_item_id is a client-supplied FK, and an
         # unfiltered read here would render a foreign org's label (EC2-4).
@@ -314,8 +322,12 @@ class EquipmentCheckService:
         )
         units = {iid: unit for iid, unit in result.all()}
         for item in items:
+            # A linked position counts in the catalog's unit, because that is
+            # the unit a stock swap moves; its own count_unit is ignored.
             item.unit_of_measure = (
-                units.get(item.inventory_item_id) if item.inventory_item_id else None
+                units.get(item.inventory_item_id)
+                if item.inventory_item_id
+                else item.count_unit
             )
 
     async def list_templates(
@@ -928,6 +940,7 @@ class EquipmentCheckService:
                     required_quantity=item.required_quantity,
                     expected_quantity=item.expected_quantity,
                     critical_minimum_quantity=item.critical_minimum_quantity,
+                    count_unit=item.count_unit,
                     min_level=item.min_level,
                     level_unit=item.level_unit,
                     serial_number=item.serial_number,
@@ -1506,9 +1519,11 @@ class EquipmentCheckService:
             # but a shortfall cannot be read off an item nobody is carrying.
             if item.get("status") == "not_applicable":
                 continue
-            req_qty = item.get("required_quantity")
+            floor = cls._pass_floor(
+                item.get("required_quantity"), item.get("critical_minimum_quantity")
+            )
             found_qty = item.get("quantity_found")
-            if req_qty is not None and found_qty is not None and found_qty < req_qty:
+            if floor is not None and found_qty is not None and found_qty < floor:
                 item["status"] = "fail"
 
         total = len(items_data)
@@ -1559,6 +1574,8 @@ class EquipmentCheckService:
                 status=item_data.get("status", "not_checked"),
                 quantity_found=item_data.get("quantity_found"),
                 required_quantity=item_data.get("required_quantity"),
+                expected_quantity=item_data.get("expected_quantity"),
+                count_unit=item_data.get("count_unit"),
                 critical_minimum_quantity=item_data.get("critical_minimum_quantity"),
                 level_reading=item_data.get("level_reading"),
                 level_unit=item_data.get("level_unit"),
@@ -1594,6 +1611,9 @@ class EquipmentCheckService:
         """
         if normalize_check_type(template_item.check_type) != COUNT:
             return
+        linked = getattr(template_item, "inventory_item_id", None)
+        if linked:
+            self._counted_inventory_ids.add(str(linked))
         # Where lots are aboard the total has to be reconciled against them;
         # writing the scalar alone would be discarded, since their sum is what
         # every reader uses.
@@ -1747,6 +1767,8 @@ class EquipmentCheckService:
             # row so canonicalisation cannot accidentally use a client label.
             template_item._check_compartment_name = compartment_name
             items[str(template_item.id)] = template_item
+        # The unit a count was taken in is snapshotted onto each result.
+        await self._attach_unit_labels(organization_id, list(items.values()))
         return items
 
     @staticmethod
@@ -1814,9 +1836,12 @@ class EquipmentCheckService:
             # validated snapshot value. This assignment is intentionally
             # before either destination consumes the submission.
             item["quantity_found"] = quantity
-            target = EquipmentCheckService._target_quantity(template_item)
-            if target is not None:
-                observation_passes = quantity >= target
+            floor = EquipmentCheckService._pass_floor(
+                template_item.required_quantity,
+                template_item.critical_minimum_quantity,
+            )
+            if floor is not None:
+                observation_passes = quantity >= floor
         elif check_type == LEVEL and item.get("level_reading") is not None:
             reading = item["level_reading"]
             if isinstance(reading, bool) or not isinstance(reading, (int, float)):
@@ -1960,22 +1985,26 @@ class EquipmentCheckService:
         result whose serial or lot disagrees with the authoritative row it
         claims to answer, and every report downstream reads the snapshot.
 
-        ``required_quantity`` is snapshotted through ``_target_quantity`` rather
-        than off the column, because the column is only half of what this
-        service means by a target: ``required_quantity or expected_quantity``.
-        Storing the raw value gave the service two definitions of "short" —
-        ``_compute_check_status`` and the recompute in ``update_check`` compared
-        against this snapshot, while ``_is_short`` and ``swap_item_lot``'s
-        submitter limits used the resolved one. A position carrying
-        ``required_quantity = 0`` beside a positive ``expected_quantity`` was
-        therefore short by one rule and full by the other, and the crew-facing
-        screens read the resolved rule while the filed record kept the raw one.
+        Two quantities are snapshotted because a count now answers two
+        questions. ``required_quantity`` is Min to Pass, taken raw off the
+        column: with ``critical_minimum_quantity`` it is the pass floor
+        ``_compute_check_status`` and the recompute on completion judge by.
+        ``expected_quantity`` is par as ``_target_quantity`` resolves it — the
+        same resolution ``_is_short`` and the swap limits use — so the filed
+        record and the crew-facing screens measure a shortfall the same way.
+        ``count_unit`` keeps what was counted, the way ``level_unit`` does.
         """
         item["item_name"] = template_item.name
         item["compartment_name"] = template_item._check_compartment_name
         item["check_type"] = template_item.check_type
-        item["required_quantity"] = EquipmentCheckService._target_quantity(
+        item["required_quantity"] = template_item.required_quantity
+        item["expected_quantity"] = EquipmentCheckService._target_quantity(
             template_item
+        )
+        item["count_unit"] = (
+            getattr(template_item, "unit_of_measure", None)
+            if normalize_check_type(template_item.check_type) == COUNT
+            else None
         )
         item["critical_minimum_quantity"] = template_item.critical_minimum_quantity
         item["level_unit"] = template_item.level_unit
@@ -2268,11 +2297,17 @@ class EquipmentCheckService:
                 "out_of_service": item_data.get("status") == "out_of_service",
             }
             found = item_data.get("quantity_found")
-            expected = item_data.get("required_quantity")
+            # Par, not the pass floor: "found 5, expected 10" is what the
+            # officer restocks to. Pre-snapshot rows have only the old target.
+            expected = item_data.get("expected_quantity")
+            if expected is None:
+                expected = item_data.get("required_quantity")
             crit = item_data.get("critical_minimum_quantity")
             if found is not None and expected is not None:
                 detail["expected"] = expected
                 detail["found"] = found
+                if item_data.get("count_unit"):
+                    detail["unit"] = item_data["count_unit"]
             if self._is_below_critical_minimum(found, crit, expected):
                 detail["critical_minimum"] = crit
                 critical_items.append(detail)
@@ -2297,6 +2332,7 @@ class EquipmentCheckService:
         except Exception:
             await self.db.rollback()
             raise
+        await self._reorder_after_counts(organization_id, checked_by)
         return await self.get_check(check.id, organization_id)
 
     async def submit_standalone_check(
@@ -2401,6 +2437,7 @@ class EquipmentCheckService:
         except Exception:
             await self.db.rollback()
             raise
+        await self._reorder_after_counts(organization_id, checked_by)
         return await self.get_check(check.id, organization_id)
 
     async def complete_incomplete_check(
@@ -2481,6 +2518,8 @@ class EquipmentCheckService:
                 existing.compartment_name = item_data["compartment_name"]
                 existing.check_type = item_data["check_type"]
                 existing.required_quantity = item_data["required_quantity"]
+                existing.expected_quantity = item_data["expected_quantity"]
+                existing.count_unit = item_data["count_unit"]
                 existing.critical_minimum_quantity = item_data[
                     "critical_minimum_quantity"
                 ]
@@ -2560,9 +2599,11 @@ class EquipmentCheckService:
             # _compute_check_status, which this mirrors.
             if item.status == "not_applicable":
                 continue
-            req_qty = item.required_quantity
+            floor = self._pass_floor(
+                item.required_quantity, item.critical_minimum_quantity
+            )
             found_qty = item.quantity_found
-            if req_qty is not None and found_qty is not None and found_qty < req_qty:
+            if floor is not None and found_qty is not None and found_qty < floor:
                 item.status = "fail"
 
         total = len(all_items)
@@ -2591,6 +2632,7 @@ class EquipmentCheckService:
             check.client_submission_id = data["client_submission_id"]
 
         await self.db.commit()
+        await self._reorder_after_counts(organization_id, checked_by)
         return await self.get_check(check.id, organization_id)
 
     async def get_checks_for_shift(
@@ -3053,11 +3095,12 @@ class EquipmentCheckService:
                     # of four is the same shortfall as a crew reporting it.
                     and_(
                         CheckTemplateItem.quantity_on_truck.isnot(None),
+                        # Par as _target_quantity resolves it: the larger
+                        # of the two columns.
                         CheckTemplateItem.quantity_on_truck
-                        < func.coalesce(
-                            CheckTemplateItem.required_quantity,
-                            CheckTemplateItem.expected_quantity,
-                            0,
+                        < func.greatest(
+                            func.coalesce(CheckTemplateItem.required_quantity, 0),
+                            func.coalesce(CheckTemplateItem.expected_quantity, 0),
                         ),
                     ),
                 ),
@@ -3288,14 +3331,43 @@ class EquipmentCheckService:
 
     @staticmethod
     def _target_quantity(item: CheckTemplateItem) -> Optional[int]:
-        """How many this position should hold, or None if it is not counted.
+        """Par: how many this position should hold, or None if not counted.
 
-        ``required_quantity`` is the state-mandated floor and outranks the
-        department's own ``expected_quantity`` where both are set — being short
-        of the legal minimum is the fact that matters.
+        Par is what a shortfall, a restock and a swap are measured against; it
+        is not what fails the line (``_pass_floor`` decides that). Where both
+        columns are set the larger wins, because restocking only up to a par
+        below Min to Pass would leave the position failing after the restock.
+        A template with only Min to Pass therefore has a par equal to it.
+
+        When neither is positive this keeps the old ``required or expected``
+        answer, so a position configured at 0 still reads as counted.
         """
+        positive = [v for v in (item.expected_quantity, item.required_quantity) if v]
+        if positive:
+            return max(positive)
         count: Optional[int] = item.required_quantity or item.expected_quantity
         return count
+
+    @staticmethod
+    def _pass_floor(
+        required_quantity: Optional[int], critical_minimum: Optional[int]
+    ) -> Optional[int]:
+        """The count below which a position fails, or None if nothing fails it.
+
+        Min to Pass fails the line, and so does Critical Min even when Min to
+        Pass is blank — the department chose that a count low enough to alert
+        leadership is never a pass. Par is deliberately absent: short of par
+        is a restock line, not a failure.
+
+        Results filed before par was snapshotted carry the old single target
+        (min, else par) in ``required_quantity``, so passing their snapshot
+        here re-judges them by the rule they were filed under.
+
+        The check form applies the same rule (``passFloor`` in
+        ``types/equipmentCheck.ts``); keep the two in step.
+        """
+        floors = [v for v in (required_quantity, critical_minimum) if v is not None]
+        return max(floors) if floors else None
 
     @staticmethod
     def _is_below_critical_minimum(
@@ -3574,8 +3646,12 @@ class EquipmentCheckService:
                 "quantity_on_truck": item.quantity_on_truck,
             },
         )
+        state = self._restock_state(item)
+        if quantity_used and item.inventory_item_id:
+            self._counted_inventory_ids.add(str(item.inventory_item_id))
         await self.db.commit()
-        return self._restock_state(item)
+        await self._reorder_after_counts(organization_id, str(user.id))
+        return state
 
     @staticmethod
     def _retire_replaced_units(
@@ -3797,7 +3873,10 @@ class EquipmentCheckService:
             action="counted",
             changes={"from": previous, "to": quantity},
         )
+        if item.inventory_item_id:
+            self._counted_inventory_ids.add(str(item.inventory_item_id))
         await self.db.commit()
+        await self._reorder_after_counts(organization_id, str(user.id))
         return self._restock_state(item)
 
     async def clear_item_restock(
@@ -4028,6 +4107,137 @@ class EquipmentCheckService:
                 current = parent
             paths[cid] = list(reversed(chain))
         return paths
+
+    async def apparatus_expiring_stock(
+        self,
+        organization_id: str,
+        item_types: Sequence[Any],
+        *,
+        days_ahead: int,
+        today: date,
+    ) -> List[Dict[str, Any]]:
+        """Stock on the trucks that expires within ``days_ahead``, or has.
+
+        One row per dated lot aboard a position (a position carrying three
+        boxes from two lots expires twice), and one per position with no lot
+        recorded whose own date falls in the window, carrying the position's
+        count. Only active templates, and only positions linked to an item of
+        ``item_types`` — the Medical Supplies page asks for its own domain.
+
+        Each row names where the units are, as the checklist does: the
+        apparatus (or "Any <type>", or the template) and the compartment path.
+        """
+        horizon = today + timedelta(days=days_ahead)
+        positions = (
+            await self.db.execute(
+                select(
+                    CheckTemplateItem,
+                    InventoryItem.name,
+                    InventoryItem.size,
+                    EquipmentCheckTemplate.id,
+                    EquipmentCheckTemplate.name,
+                    EquipmentCheckTemplate.apparatus_id,
+                    EquipmentCheckTemplate.apparatus_type,
+                )
+                .join(
+                    CheckTemplateCompartment,
+                    CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+                )
+                .join(
+                    EquipmentCheckTemplate,
+                    EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+                )
+                .join(
+                    InventoryItem,
+                    InventoryItem.id == CheckTemplateItem.inventory_item_id,
+                )
+                .join(
+                    InventoryCategory,
+                    InventoryCategory.id == InventoryItem.category_id,
+                )
+                .where(
+                    EquipmentCheckTemplate.organization_id == organization_id,
+                    EquipmentCheckTemplate.is_active.is_(True),
+                    InventoryItem.organization_id == organization_id,
+                    InventoryCategory.item_type.in_(list(item_types)),
+                )
+            )
+        ).all()
+        if not positions:
+            return []
+        paths = await self._compartment_paths({str(r[3]) for r in positions})
+        apparatus_ids = {r[5] for r in positions if r[5]}
+        names: Dict[str, str] = {}
+        if apparatus_ids:
+            named = await self.db.execute(
+                select(Apparatus.id, Apparatus.name).where(
+                    Apparatus.id.in_(apparatus_ids),
+                    Apparatus.organization_id == organization_id,
+                )
+            )
+            names = {str(aid): n for aid, n in named.all() if n}
+
+        rows: List[Dict[str, Any]] = []
+        for (
+            item,
+            item_name,
+            item_size,
+            tmpl_id,
+            tmpl_name,
+            app_id,
+            app_type,
+        ) in positions:
+            if app_id:
+                carrier = names.get(str(app_id)) or tmpl_name
+            elif app_type:
+                carrier = f"Any {app_type}"
+            else:
+                carrier = tmpl_name
+            where = " › ".join(
+                [carrier or "Checklist", *paths.get(str(item.compartment_id), [])]
+            )
+            base = {
+                "location": "apparatus",
+                "inventory_item_id": str(item.inventory_item_id),
+                "item_name": item_name,
+                "item_size": item_size,
+                "template_item_id": str(item.id),
+                "where": where,
+            }
+            lots = self._deployed_lots(item)
+            if lots:
+                for lot in lots:
+                    when = lot.expiration_date
+                    if when is None or when > horizon:
+                        continue
+                    rows.append(
+                        {
+                            **base,
+                            "key": f"deployed:{lot.id}",
+                            "lot_number": lot.lot_number,
+                            "expiration_date": when,
+                            "quantity": lot.quantity,
+                            "days_until_expiration": (when - today).days,
+                        }
+                    )
+                continue
+            when = item.expiration_date if item.has_expiration else None
+            if when is None or when > horizon:
+                continue
+            rows.append(
+                {
+                    **base,
+                    "key": f"position:{item.id}",
+                    "lot_number": item.lot_number,
+                    "expiration_date": when,
+                    "quantity": self._on_truck(item) or 0,
+                    "days_until_expiration": (when - today).days,
+                }
+            )
+        rows.sort(
+            key=lambda r: (r["expiration_date"], r["item_name"] or "", r["where"])
+        )
+        return rows
 
     async def apparatus_places_for_items(
         self, organization_id: str, inventory_item_ids: List[str]
@@ -4442,10 +4652,48 @@ class EquipmentCheckService:
         )
         return result
 
+    async def _reorder_after_counts(
+        self, organization_id: str, requested_by: Optional[str]
+    ) -> None:
+        """File reorders for medical supplies a committed recount left low.
+
+        A medical supply is low on its department-wide total — shelf plus
+        trucks (InventoryService.stock_breakdown) — so stock used off a truck
+        lowers it as surely as a swap lowers the shelf, and usage only shows up
+        when a crew records a lower count. Gear is still judged on the shelf
+        alone, which a truck count cannot move, so it is left out and its
+        reorders keep coming from swaps only.
+
+        One open request per item (AutoReorderService), so checking an item
+        that was already low, or already ordered, files nothing.
+        """
+        ids = sorted(self._counted_inventory_ids)
+        self._counted_inventory_ids = set()
+        if not ids:
+            return
+        try:
+            medical = await InventoryService(self.db)._medical_item_ids(
+                organization_id, ids
+            )
+        except Exception as exc:
+            logger.error(
+                "Auto reorder lookup after a count in org {} failed: {}",
+                organization_id,
+                exc,
+            )
+            return
+        for inventory_item_id in sorted(medical):
+            await self._raise_low_stock_reorder(
+                organization_id, inventory_item_id, requested_by
+            )
+
     async def _raise_low_stock_reorder(
         self, organization_id: str, inventory_item_id: str, requested_by: Optional[str]
     ) -> None:
-        """File a reorder if the swap left shelf stock at its reorder point.
+        """File a reorder if the item's ready stock is at its reorder point.
+
+        Ready stock is the shelf, plus the trucks for a medical supply (see
+        InventoryService.stock_breakdown).
 
         Runs in a session of its own. ``rollback()`` expires every object a
         session holds regardless of ``expire_on_commit``, so rolling back the
@@ -5359,6 +5607,7 @@ class EquipmentCheckService:
                 required_quantity=item.required_quantity,
                 expected_quantity=item.expected_quantity,
                 critical_minimum_quantity=item.critical_minimum_quantity,
+                count_unit=item.count_unit,
                 min_level=item.min_level,
                 level_unit=item.level_unit,
                 serial_number=item.serial_number,
@@ -5582,6 +5831,8 @@ class EquipmentCheckService:
                     line += " (out of service)"
                 if "expected" in ci and "found" in ci:
                     line += f" — expected {ci['expected']}, found {ci['found']}"
+                    if ci.get("unit"):
+                        line += f" {ci['unit']}"
                 if "critical_minimum" in ci:
                     line += f" (critical min: {ci['critical_minimum']})"
                 item_lines.append(line)
@@ -5591,6 +5842,8 @@ class EquipmentCheckService:
                     line += " (out of service)"
                 if "expected" in wi and "found" in wi:
                     line += f" — expected {wi['expected']}, found {wi['found']}"
+                    if wi.get("unit"):
+                        line += f" {wi['unit']}"
                 item_lines.append(line)
             if item_lines:
                 message += "\n\nFailed items:\n" + "\n".join(
@@ -5665,6 +5918,9 @@ class EquipmentCheckService:
                                     f"Expected: {ci['expected']}, "
                                     f"Found: {ci['found']}"
                                 )
+                                # Admin-typed free text: escaped for HTML.
+                                if ci.get("unit"):
+                                    qty_info += " " + _esc(str(ci["unit"]))
                                 if "critical_minimum" in ci:
                                     qty_info += (
                                         f" (Critical min: " f"{ci['critical_minimum']})"
@@ -5689,6 +5945,9 @@ class EquipmentCheckService:
                                     f"Expected: {wi['expected']}, "
                                     f"Found: {wi['found']}"
                                 )
+                                # Admin-typed free text: escaped for HTML.
+                                if wi.get("unit"):
+                                    qty_info += " " + _esc(str(wi["unit"]))
                             status_label = (
                                 "Out of service"
                                 if wi.get("out_of_service")
@@ -6101,6 +6360,15 @@ class EquipmentCheckService:
                     "check_type": fi.check_type,
                     "status": fi.status,
                     "notes": fi.notes,
+                    "quantity_found": fi.quantity_found,
+                    # Par as filed; a result from before par was snapshotted
+                    # has only the single target it was judged by.
+                    "target_quantity": (
+                        fi.expected_quantity
+                        if fi.expected_quantity is not None
+                        else fi.required_quantity
+                    ),
+                    "count_unit": fi.count_unit,
                     "checked_by_name": (
                         user_map.get(str(check.checked_by), "Unknown")
                         if check and check.checked_by

@@ -16,14 +16,18 @@ import { formatCalendarDate } from '../../../utils/dateFormatting';
 
 interface CheckStripProps {
   entries: CheckStripEntry[];
-  /** Larger squares for the apparatus detail header. */
-  size?: 'sm' | 'md';
+  /**
+   * `md`: larger squares. `fill`: squares share the full width, for the
+   * apparatus detail header on a phone, where fourteen 16px squares left the
+   * strip a quarter of the card and too small to read.
+   */
+  size?: 'sm' | 'md' | 'fill';
 }
 
 export const CheckStrip: React.FC<CheckStripProps> = ({ entries, size = 'sm' }) => {
   if (entries.length === 0) return null;
 
-  const box = size === 'md' ? 'h-4 w-4' : 'h-3 w-3';
+  const box = size === 'fill' ? 'h-4 max-w-6 min-w-0 flex-1' : size === 'md' ? 'h-4 w-4' : 'h-3 w-3';
   const summary = entries
     .filter((e) => e.status)
     .map(
@@ -36,7 +40,7 @@ export const CheckStrip: React.FC<CheckStripProps> = ({ entries, size = 'sm' }) 
 
   return (
     <div
-      className="flex items-center gap-[3px]"
+      className={`flex items-center gap-[3px] ${size === 'fill' ? 'w-full' : ''}`}
       role="img"
       aria-label={summary ? `Recent checks — ${summary}` : 'No checks in this window'}
     >

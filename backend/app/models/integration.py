@@ -9,7 +9,17 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from loguru import logger
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -21,6 +31,13 @@ from app.core.utils import generate_uuid
 INTEGRATION_RUN_RUNNING = "running"
 INTEGRATION_RUN_SUCCESS = "success"
 INTEGRATION_RUN_FAILURE = "failure"
+
+# CalendarSyncMapping.status. A "failed" row with next_attempt_at set is
+# waiting for its next retry; with next_attempt_at empty, retries are spent
+# and the row is left alone until the event changes.
+CALENDAR_SYNC_SYNCED = "synced"
+CALENDAR_SYNC_PENDING_DELETE = "pending_delete"
+CALENDAR_SYNC_FAILED = "failed"
 
 
 class Integration(Base):
@@ -169,5 +186,66 @@ class IntegrationSyncLog(Base):
             "ix_integration_sync_logs_org_started",
             "organization_id",
             "started_at",
+        ),
+    )
+
+
+class CalendarSyncMapping(Base):
+    """One department event as published to an external calendar.
+
+    Written only by app.services.calendar_sync_service. ``content_hash`` is
+    the digest of the payload the reconciler last meant the calendar to hold
+    (empty once the event is due for deletion); with ``status`` "synced" the
+    calendar is known to hold exactly that. ``last_error`` is sanitized.
+    """
+
+    __tablename__ = "calendar_sync_mappings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    integration_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("integrations.id", ondelete="CASCADE"), nullable=False
+    )
+    # No foreign key: when an event is deleted the row has to outlive it, so
+    # the next pass can still delete the copy in the external calendar.
+    event_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    external_event_id: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    external_calendar_id: Mapped[Optional[str]] = mapped_column(
+        String(512), nullable=True
+    )
+    content_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    last_synced_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=CALENDAR_SYNC_SYNCED
+    )
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    next_attempt_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_calendar_sync_mappings_organization_id", "organization_id"),
+        UniqueConstraint(
+            "integration_id",
+            "event_id",
+            name="uq_calendar_sync_mappings_integration_event",
+        ),
+        Index(
+            "ix_calendar_sync_mappings_status_next_attempt",
+            "status",
+            "next_attempt_at",
         ),
     )

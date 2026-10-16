@@ -280,17 +280,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
 
   deleteApprovalChain: async (id) => {
-    set({ isLoading: true, error: null });
-    try {
-      await approvalChainService.delete(id);
-      set((state) => ({
-        approvalChains: state.approvalChains.filter((c) => c.id !== id),
-        isLoading: false,
-      }));
-    } catch (err) {
-      set({ error: handleStoreError(err, 'Failed to delete approval chain'), isLoading: false });
-      throw err;
-    }
+    await approvalChainService.delete(id);
+    set((state) => ({
+      approvalChains: state.approvalChains.filter((c) => c.id !== id),
+    }));
   },
 
   updateApprovalChain: async (id, data) => {

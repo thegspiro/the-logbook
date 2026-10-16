@@ -504,6 +504,38 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Equipment-check counts: short of par is a restock, not a failure (2026-10-16)
+
+A count line on an equipment checklist now answers two questions with two
+numbers. **Min to Pass** fails the line when the count is below it, and so
+does **Critical Min** even when Min to Pass is blank. **Par** no longer fails
+anything: a count below par but at or above the minimum **passes** and puts the
+shortfall on the restock list.
+
+What changes from the upgrade onward:
+
+- **Checklists with only Par set stop failing for being short.** Under the old
+  rule a count below par failed the line, the check, and the apparatus's
+  readiness. Those lines now pass with a restock line instead, so compliance
+  and failure reports show fewer failures from the upgrade date. Checks filed
+  before the upgrade keep their original verdict. If a line should still fail
+  below a number, set **Min to Pass** on it in the checklist builder.
+- **Par and Min to Pass both set now raise a restock between them.** Before,
+  Min to Pass was used as the only target, so a count of 8 against par 10 /
+  min 6 passed and nothing was restocked. It now passes and asks for 2.
+- **The CSV checklist import stops copying the par column into Min to Pass.**
+  Add a `Min to Pass` column to the file to set a pass floor.
+- **Count lines can name a unit** ("each", "rolls", "boxes", …). Count a
+  partial pack in the smaller unit; every quantity stays a whole number. A line
+  linked to an inventory item always counts in that item's unit of measure.
+
+The migration (`12e20092c1a8`) only adds three nullable columns and rewrites
+no rows, so it is safe on a running database.
+
+A check saved for offline sending on a device still running the previous app
+is accepted: that app reports short-of-par lines as **Fail**, and the server
+files the crew's answer as sent.
+
 ### Installer and backup settings (2026-10-13)
 
 - **`BACKUP_ENABLED` and `BACKUP_SCHEDULE` did nothing** and are gone from the
@@ -815,6 +847,25 @@ folder unless somebody has filed it elsewhere since.
   columns (no backfill). `4b7e1f0c9a2d` then gives each Compliance box that is
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
+
+### Facility files upload in one step (2026-10-16)
+
+Nothing here stops the stack from starting, and there is no migration. The
+facility Files section now uploads through two new endpoints:
+
+- `POST /facilities/{facility_id}/photos/upload`: an image, with an optional
+  `caption`.
+- `POST /facilities/{facility_id}/documents/upload`: any document type the
+  Documents library accepts, with an optional `document_type` (default
+  `facility_record`) and `description`.
+
+Both take `facilities.create`, `facilities.edit` or `facilities.manage`, and
+no Documents permission. Before this, a facilities manager without
+`documents.manage` was refused. The file is stored straight into the
+facility's Photos or Facility Documents folder.
+
+The old two-step path still works: `POST /documents/upload`, then
+`POST /facilities/photos` or `POST /facilities/documents`.
 
 ### Full administrators get a weekly email of admin-only folders (2026-10-16)
 

@@ -47,6 +47,8 @@ interface FormState {
   quantity: string;
   unit_of_measure: string;
   reorder_point: string;
+  /** Carried on the apparatus only; there is no shelf stock to count or file. */
+  apparatus_only: boolean;
   /** The room and the storage area within it; the free text is a note beside them. */
   location_id: string;
   storage_area_id: string;
@@ -67,6 +69,7 @@ function initialState(item?: InventoryItem): FormState {
     // `!= null`, not `!== undefined`: the API sends an unset value as null,
     // which the strict check turned into the text "null" in the box.
     reorder_point: item?.reorder_point != null ? String(item.reorder_point) : '',
+    apparatus_only: Boolean(item?.apparatus_only),
     location_id: item?.location_id ?? '',
     storage_area_id: item?.storage_area_id ?? '',
     storage_location: item?.storage_location ?? '',
@@ -175,6 +178,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           ...(isLotStocked || quantity === null ? {} : { quantity }),
           unit_of_measure: blankToNull(form.unit_of_measure),
           reorder_point: numberOrNull(form.reorder_point),
+          apparatus_only: form.apparatus_only,
           location_id: blankToNull(form.location_id),
           storage_area_id: blankToNull(form.storage_area_id),
           storage_location: blankToNull(form.storage_location),
@@ -197,6 +201,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           quantity: form.quantity === '' ? 0 : Number(form.quantity),
           unit_of_measure: form.unit_of_measure.trim() || undefined,
           reorder_point: form.reorder_point === '' ? undefined : Number(form.reorder_point),
+          apparatus_only: form.apparatus_only,
           location_id: form.location_id || undefined,
           storage_area_id: form.storage_area_id || undefined,
           storage_location: form.storage_location.trim() || undefined,
@@ -329,12 +334,36 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           />
         </div>
 
+        <div>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="form-checkbox mt-0.5"
+              checked={form.apparatus_only}
+              onChange={(e) => set('apparatus_only', e.target.checked)}
+              aria-describedby="ms-apparatus-only-hint"
+            />
+            <span className="text-theme-text-primary font-medium">Kept on apparatus only</span>
+          </label>
+          <p id="ms-apparatus-only-hint" className="text-theme-text-muted mt-1 ml-6 text-xs">
+            For equipment with no spare in a stock room, such as a LUCAS device. It is counted on the apparatus
+            checklists, and judged low on what the trucks carry.
+          </p>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <label htmlFor="ms-qty" className="form-label">
               On hand
             </label>
-            {isLotStocked ? (
+            {form.apparatus_only ? (
+              // The shelf is not counted for this supply (the backend treats it
+              // as 0), so a box here would edit a number nothing reads. The
+              // stored value is left as it is, so unticking restores it.
+              <p className="text-theme-text-muted border-theme-surface-border rounded-md border border-dashed px-3 py-2 text-sm">
+                Counted on the apparatus checklists.
+              </p>
+            ) : isLotStocked ? (
               // The count for a lot-stocked item lives in its lots, and this
               // field writes `quantity` — a separate ledger the page never
               // displays for such an item. Editing it would change nothing
@@ -413,7 +442,9 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           </div>
         </div>
 
-        <fieldset className="space-y-3">
+        {/* Hidden rather than cleared: the stored room and area stay as they
+            were, so a supply ticked by mistake loses nothing when unticked. */}
+        <fieldset className="space-y-3" hidden={form.apparatus_only}>
           <legend className="form-label">Where it is kept</legend>
           {storageError && (
             <p role="alert" className="alert-warning text-sm">

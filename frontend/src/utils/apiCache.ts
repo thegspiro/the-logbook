@@ -187,6 +187,8 @@ const UNCACHEABLE_SUBSTRINGS = [
   // a 30s-stale count is how a quartermaster is offered stock another one just issued.
   // Nothing in the cache's URL-prefix invalidation connects an issuance recorded under
   // /inventory/checkout to this request's option list.
+  '/ical-feed', // the department events feed URL carries its bearer token; a cached
+  // copy would keep showing the old link for 90s after a reset.
 ] as const;
 
 interface CacheEntry {

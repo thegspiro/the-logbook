@@ -154,7 +154,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
   const ThemeIcon = themeIcon;
 
-  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
+  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission, { checkInStationOn: isNfcCardsOn });
   const canReviewLegalDocuments = LEGAL_DOCUMENTS_PERMISSIONS.some((p) => checkPermission(p));
 
   // Build the divider sentinel used between Admin sub-groups
