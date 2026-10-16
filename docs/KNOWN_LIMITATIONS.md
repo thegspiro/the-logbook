@@ -5728,6 +5728,30 @@ design call. **Owner decision:**
 
 See `docs/app-review/notifications.md` → Pass 5.
 
+## INT2-3 / INT2-4 — Integrations Connect Without Credentials, And The Catalog Never Updates Existing Rows (2026-10-16)
+
+**INT2-3.** Chat and webhook integrations now refuse to connect without a destination
+URL, but PayPal, Documenso, Cal.com and Salesforce still accept `POST /{id}/connect`
+with an empty config and show _connected_ and _enabled_; `test-connection` then fails
+with "PayPal client ID and secret are required" and its siblings. A two-step "connect,
+then test" is arguable for these because everything but the credential has a default.
+**Owner decision:**
+
+1. **Require the credentials at connect** — a 422 naming the missing field, as the
+   chat integrations now do. Simplest and matches what the badge claims.
+2. **Show an in-between state** — connect succeeds but the health state reads
+   "needs credentials" until a test passes.
+3. **Leave as is** — the failing test result is the signal.
+
+**INT2-4.** `ensure_catalog` only inserts rows an organization lacks. A catalog entry
+promoted from `coming_soon` to `available`, demoted, or reworded keeps its seeded values
+for every existing department, and no migration reconciles them. **Owner decision:**
+decide which columns the catalog owns (status, description, category), then reconcile
+them in a migration — noting that a status reconcile can change what a department sees as
+connected — or accept that catalog changes reach new organizations only.
+
+See `docs/app-review/integrations.md` → Pass 5.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

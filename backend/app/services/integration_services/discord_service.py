@@ -16,7 +16,6 @@ from app.utils.url_validator import assert_outbound_url_safe
 COLOR_BLUE = 0x3498DB
 COLOR_GREEN = 0x2ECC71
 COLOR_ORANGE = 0xE67E22
-COLOR_RED = 0xE74C3C
 
 
 async def send_discord_notification(
