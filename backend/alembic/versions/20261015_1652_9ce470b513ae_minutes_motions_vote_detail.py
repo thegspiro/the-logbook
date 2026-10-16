@@ -9,6 +9,9 @@ Adds three nullable columns to ``meeting_motions``:
   votes cast, which is what every existing motion was decided by.
 * ``roll_call`` — each member's vote when taken by roll call (JSON).
 
+It also joins the two heads main carried (the Google account provisions and
+the medical storage auto-match), so the chain has a single head again.
+
 Nothing is backfilled: every existing motion keeps NULL in all three. The table
 may be absent on a fresh database where ``create_all`` builds it from the models
 (which already declare these columns), so the step is skipped then.
@@ -17,7 +20,7 @@ The downgrade drops the columns; recorded roll calls are lost with them, the
 totals on each motion stay.
 
 Revision ID: 9ce470b513ae
-Revises: c903fc771081
+Revises: 61dfbcc23cba, 58522b08f6a7
 Create Date: 2026-10-15 16:52:00.000000
 
 """
@@ -29,7 +32,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "9ce470b513ae"
-down_revision: Union[str, None] = "c903fc771081"
+down_revision: Union[str, Sequence[str], None] = ("61dfbcc23cba", "58522b08f6a7")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

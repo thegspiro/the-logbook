@@ -131,6 +131,11 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
     - Personal folders are never listed, since they open to their owner
       alone by design.
     - Probationary members count, as sign-in counts them.
+    - Full administrators are also emailed the list, at most once a week per
+      department, while any folder is on it (2026-10-16). Each email repeats
+      every folder still listed. It is the optional "Document folder access"
+      email (`EmailKind.DOCUMENT_DUTIES`), which a department can make
+      required.
 
 ## Phases
 

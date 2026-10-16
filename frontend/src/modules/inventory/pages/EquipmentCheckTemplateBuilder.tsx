@@ -2246,9 +2246,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             item.checkType === 'count' &&
             item.criticalMinimumQuantity &&
             item.expectedQuantity &&
-            Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
+            // Equal is a real setting: any shortfall is critical (see
+            // isBelowCriticalMinimum). Only above it can never apply.
+            Number(item.criticalMinimumQuantity) > Number(item.expectedQuantity)
           ) {
-            warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
+            warnings.push(`"${item.name || 'Untitled'}" has a critical minimum above its expected quantity.`);
           }
           if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
             warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);

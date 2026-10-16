@@ -34,6 +34,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:20 AM — email reminders about open action items from adopted minutes, and the weekly open-items list to minutes managers
 20 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=minutes_action_item_reminders
 
+# Daily at 7:25 AM — the weekly list of document folders only full administrators can open
+25 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=admin_only_folder_digest
+
 # Every 15 minutes — process delayed inventory change notifications
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_notifications
 
@@ -273,6 +276,15 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:20",
         "cron": "20 7 * * *",
+    },
+    "admin_only_folder_digest": {
+        "description": (
+            "Email full administrators the document folders only they can "
+            "open, at most once a week per department while any is listed"
+        ),
+        "frequency": "daily check, weekly send",
+        "recommended_time": "07:25",
+        "cron": "25 7 * * *",
     },
     "inventory_notifications": {
         "description": "Process delayed inventory change notifications — consolidate and send one email per member for changes older than 1 hour",
@@ -521,6 +533,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
+    },
+    "google_workspace_suspension_sync": {
+        "description": "Finish Google Workspace suspensions (and their lifting) that a member's departure or return left unsettled, and retry failed ones",
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15 * * * *",
+        "cron": "*/15 * * * *",
     },
     "admin_hours_auto_close": {
         "description": "Auto-close admin-hours sessions that exceeded their category's max-hours limit (caps a forgotten clock-in and flags it for review)",
@@ -1024,6 +1042,16 @@ async def run_minutes_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
         return reminders + digests
 
     return await _for_each_org(db, "minutes_action_item_reminders", _process)
+
+
+async def run_admin_only_folder_digest(db: AsyncSession) -> Dict[str, Any]:
+    """Email full administrators the folders only they can open (decision 30)."""
+    from app.services.admin_only_folder_digest import send_admin_only_folder_digest
+
+    async def _process(db_session, org):
+        return await send_admin_only_folder_digest(db_session, org)
+
+    return await _for_each_org(db, "admin_only_folder_digest", _process)
 
 
 async def run_membership_inactivity_warnings(db: AsyncSession) -> Dict[str, Any]:
@@ -6418,6 +6446,19 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
     }
 
 
+async def run_google_workspace_suspension_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Backstop for the departure hook's after-commit sync (see
+    app/models/google_workspace_departure.py). Each row is org-scoped and
+    locked while it is reconciled, so a run that overlaps the after-commit
+    task finds it settled and does nothing."""
+    from app.services.google_workspace_provisioning_service import (
+        GoogleWorkspaceProvisioningService,
+    )
+
+    attempted = await GoogleWorkspaceProvisioningService(db).sync_pending_suspensions()
+    return {"task": "google_workspace_suspension_sync", "attempted": attempted}
+
+
 async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
     """Mark fully-unpaid dues past their due date as OVERDUE.
 
@@ -7237,6 +7278,7 @@ TASK_RUNNERS = {
     "property_return_reminders": run_property_return_reminders,
     "action_item_reminders": run_action_item_reminders,
     "minutes_action_item_reminders": run_minutes_action_item_reminders,
+    "admin_only_folder_digest": run_admin_only_folder_digest,
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
@@ -7272,6 +7314,7 @@ TASK_RUNNERS = {
     "external_training_auto_sync": run_external_training_auto_sync,
     "salesforce_auto_sync": run_salesforce_auto_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
+    "google_workspace_suspension_sync": run_google_workspace_suspension_sync,
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
     "admin_hours_auto_close": run_admin_hours_auto_close,
     "expire_ip_exceptions": run_expire_ip_exceptions,
@@ -7326,6 +7369,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "action_item_reminders": 86400,
     # Checked daily; the weekly list keeps its own last-sent day per org.
     "minutes_action_item_reminders": 86400,
+    # Checked daily; sends at most weekly per org (see admin_only_folder_digest).
+    "admin_only_folder_digest": 86400,
     "inventory_low_stock_alerts": 86400,
     "inventory_overdue_alerts": 86400,
     # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).
@@ -7345,6 +7390,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "rolling_recurrence_extend": 86400,
     "trainee_report_escalation": 86400,
     "mark_overdue_dues": 86400,
+    "google_workspace_suspension_sync": 900,
     "mark_overdue_maintenance": 86400,
     "admin_hours_auto_close": 1800,
     "expire_ip_exceptions": 86400,

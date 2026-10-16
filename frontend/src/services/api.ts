@@ -255,4 +255,5 @@ export type {
   SalesforcePreviewResult,
   SalesforceSyncResult,
   CalcomBooking,
+  GoogleWorkspaceLinkResult,
 } from './adminServices';

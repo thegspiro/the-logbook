@@ -14,6 +14,7 @@ import { medicalSuppliesService } from '../../../services/medicalSuppliesService
 import type { InventoryCategory, InventoryItem } from '../../../services/eventServices';
 import { formatNumber } from '../../../utils/dateFormatting';
 import { onHandQuantity } from '../../inventory/utils/onHand';
+import { supplyLabel } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
@@ -32,6 +33,15 @@ const EMPTY_FORM: FormState = { name: '', description: '', low_stock_threshold: 
 // One page of the list API. A category holding more than this is told so and
 // pointed at Medical Supplies, which pages through all of them.
 const CATEGORY_ITEMS_LIMIT = 100;
+
+/**
+ * "3 supplies" when the server sent a count, plain "supplies" when it did not,
+ * so the card says how much is inside before it is opened.
+ */
+function supplyCountLabel(count: number | null | undefined): string {
+  if (count == null) return 'supplies';
+  return `${formatNumber(count)} ${count === 1 ? 'supply' : 'supplies'}`;
+}
 
 interface CategorySupplies {
   items: InventoryItem[];
@@ -86,7 +96,7 @@ const CategorySupplyList: React.FC<CategorySupplyListProps> = ({ categoryId, cat
       <ul className="divide-theme-surface-border divide-y text-sm" aria-label={`Supplies in ${categoryName}`}>
         {state.items.map((item) => (
           <li key={item.id} className="flex items-baseline justify-between gap-3 py-1.5">
-            <span className="text-theme-text-primary min-w-0 truncate">{item.name}</span>
+            <span className="text-theme-text-primary min-w-0 truncate">{supplyLabel(item)}</span>
             <span className="text-theme-text-muted shrink-0 tabular-nums">
               {formatNumber(onHandQuantity(item))} on hand
             </span>
@@ -160,7 +170,7 @@ const MedicalCategoriesPage: React.FC = () => {
     setForm({
       name: category.name,
       description: category.description ?? '',
-      low_stock_threshold: category.low_stock_threshold !== undefined ? String(category.low_stock_threshold) : '',
+      low_stock_threshold: category.low_stock_threshold != null ? String(category.low_stock_threshold) : '',
     });
     setShowModal(true);
   };
@@ -324,7 +334,9 @@ const MedicalCategoriesPage: React.FC = () => {
                 <div className="min-w-0">
                   <p className="text-theme-text-primary font-medium">{category.name}</p>
                   {category.description && <p className="text-theme-text-muted mt-1 text-sm">{category.description}</p>}
-                  {category.low_stock_threshold !== undefined && (
+                  {/* `!= null`: an unset threshold arrives as null, and the
+                      strict check printed "Low stock at or below" with no number. */}
+                  {category.low_stock_threshold != null && (
                     <p className="text-theme-text-muted mt-1 text-xs">
                       Low stock at {category.low_stock_threshold} or below
                     </p>
@@ -363,7 +375,7 @@ const MedicalCategoriesPage: React.FC = () => {
                 ) : (
                   <ChevronRight className="h-4 w-4" aria-hidden="true" />
                 )}
-                {expandedIds.has(category.id) ? 'Hide supplies' : 'Show supplies'}
+                {`${expandedIds.has(category.id) ? 'Hide' : 'Show'} ${supplyCountLabel(category.item_count)}`}
               </button>
               {expandedIds.has(category.id) && (
                 <div id={`category-supplies-${category.id}`}>

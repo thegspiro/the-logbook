@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (branch `claude/friendly-babbage-uted34`, to be opened)**: Feature 17
+(Training core), pass 8. 0 new findings, 0 fixed — the real delta since pass
+7 was entirely already-fixed XC-1/XC-3 sweeps and correctness-only changes
+landed by other sessions, re-verified by direct read rather than trusting
+commit messages. TR7-1 (`POST /training/enrollments` duplicates and lags the
+fixed enrollment path) re-verified still OPEN/FLAGGED, and the gap widened —
+a new prerequisite-enforcement check landed on the fixed path only, so the
+duplicate now also bypasses that gate. A correction to pass 7's own route-
+count claim is recorded (true count 92, not 49; conclusion — 0 missing auth
+— unchanged). Docs-only — no application code changed. See
+`TR-17-training-core.md`'s **Pass 8** section. Row 17 → ✅ (pending this PR's
+merge); next is Feature 18 (Training extended).
+
+<details>
+<summary>Superseded — prior Open PR note (PR #3294, Feature 16 Events & requests pass 8, before it merged), preserved for history</summary>
+
 **PR [#3294](https://github.com/thegspiro/the-logbook/pull/3294)**: branch
 `claude/security-review-events-requests-p8` (suffixed rather than the bare
 `claude/security-review-events-requests`, since that name's own PR history
@@ -26,6 +42,8 @@ EV-23 confirmed resolved (owner decision, between pass 7 and this pass).
 Docs-only — no application code changed. See
 `EV-16-events-requests.md`'s **Pass 8** section for the full write-up.
 Row 16 → ✅ (pending this PR's merge); next is Feature 17 (Training core).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (PR #3293, Feature 15 Scheduling pass-8 addendum, before it merged), preserved for history</summary>
@@ -19427,7 +19445,7 @@ here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
@@ -19452,6 +19470,74 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-16 — Feature 17 (Training core, pass 8) — watchdog pickup, 0 fixes needed, TR7-1 re-verified and widened
+
+**Step 0.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 results. `PROGRESS.md`'s own Open PR row still named PR #3294
+(Feature 16, Events & requests, pass 8), confirmed merged via `main`
+(merge commit `28987390`). That merge touched only `PROGRESS.md` and
+`EV-16-events-requests.md` — docs-only, so per the "docs-only PR is not a
+recordable event" rule there was nothing further to record beyond clearing
+the row (row 16 already ✅). Row 17 (Training core) was the first `⬜`.
+
+**Shallow-clone check.** `git rev-parse --is-shallow-repository` → `true`
+(47 grafted boundaries) in this sandbox. Pass 7's own cited baseline hashes
+(`df0c1dc1`, `012f3da49`) were unreachable objects here, so the review
+substituted a nearby commit (`b5bb513e`) verified by content — its tree
+already contains pass 7's full section while its parent does not — rather
+than trusting the hash. Diffed from there to `HEAD`.
+
+**Baseline.** Pass 7 content reachable as of `b5bb513e` (2026-10-07). Since
+then: 38 non-merge commits touch this feature's nine declared files (1,343
+insertions / 453 deletions). Full write-up:
+`docs/security-review/TR-17-training-core.md` → **Pass 8**.
+
+**Findings: 0 new, 0 fixed by this pass.** Everything in the real delta was
+already landed, tested and (where relevant) documented by other sessions
+before this pass started — in-org FK validation (XC-1) on several
+course/requirement/category fields, an XC-3 fix scoping a program-
+requirement PATCH to its path's own program, prerequisite-program support
+with cycle detection, a new officer void/edit-training-record feature
+(nullable migration, in-org record resolution, HTML-escaped and header-
+injection-safe notification emails), a new self-scoped `/my-training/records`
+endpoint using this repo's `like_pattern()`/`LIKE_ESCAPE_CHAR` helper
+correctly, malware scanning added ahead of both CSV import endpoints, and a
+run of mypy-driven null-safety fixes — each read directly, not inferred from
+commit messages.
+
+**TR7-1 re-verified: still OPEN/FLAGGED, and now wider.** `training.py`'s
+`enroll_member_in_program` (`POST /training/enrollments`) still lacks the
+row lock, `RequirementProgress` creation, phase/recert scheduling and
+notification that `TrainingProgramService.enroll_member` (the fixed sibling
+endpoint) has. New this window: the fixed path gained prerequisite-program
+enforcement (`e3aee773`); the duplicate was not touched, so it now also
+silently bypasses that gate. No owner decision recorded in
+`KNOWN_LIMITATIONS.md` yet — mirrored the widened gap into the existing
+entry rather than leaving it to be rediscovered.
+
+**Correction to pass 7's own claim.** Pass 7 stated it enumerated 49 routes
+(28+13+8) across the three endpoint files "by signature, not spot check."
+A fresh automated enumeration this pass found the true count is 92
+(35+46+11) — pass 7's count cannot have come from reading every route at
+the stated total. The underlying conclusion (0 routes missing an auth
+dependency) is re-confirmed true at the correct count; recorded as a
+correction per this rotation's own convention (pass 3 did the same), not as
+a new vulnerability.
+
+**Gate**, run against CI's pinned tool versions: `flake8`/`black --check`/
+`isort --check-only` clean over `app/ tests/ alembic/`; `validate_
+migrations.py --strict` — single head `c903fc771081`, 601 revisions;
+`check_route_permissions.py --strict` — 270 routes, 0 errors; `pytest
+tests/ -q -k "training or compliance"` — 1866 passed, 1 pre-existing skip;
+frontend `npm run typecheck`/`npm run lint` both clean (after `npm ci` to
+fill in this sandbox's incomplete `node_modules/`, which affected an
+unrelated file only — confirmed no `package-lock.json` change).
+
+Findings doc: [`TR-17-training-core.md`](./TR-17-training-core.md)'s
+**Pass 8** section. `KNOWN_LIMITATIONS.md` updated (TR7-1 entry widened).
+Rotation row 17 → ✅ (pending PR merge). Next: Feature 18 (Training
+extended).
 
 ### 2026-10-15 — Feature 16 (Events & requests, pass 8) — watchdog pickup, 0 fixes needed, real delta (36 commits)
 

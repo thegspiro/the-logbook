@@ -156,6 +156,37 @@ condition the intake refuses on, so the two cannot disagree
 Turning a form public after it is published, or switching the toggle off later,
 does not warn — publishing is the one moment the owner chose.
 
+## Google Workspace — What Account Provisioning Leaves Out (2026-10-15)
+
+The Google Workspace integration creates an account for each applicant
+converted to a member and suspends it when the member is dropped or deleted
+(`wiki/Integration-Google-Workspace.md`). Each of these is a deliberate
+choice an owner may want to revisit:
+
+- **Retirement keeps the account.** Only a drop or a delete suspends it; a
+  department may let retirees keep their address. Retired, on-leave, inactive
+  and Logbook-suspended members keep a working Google account.
+- **Suspended, never deleted.** A departed member's account keeps its mailbox
+  and its Workspace license until an administrator deletes it in Google.
+- **A permanent delete cannot be retried.** The account record goes with the
+  member, so a Google failure while suspending is recorded only in the audit
+  log; an administrator suspends the account by hand.
+- **No rename.** A member's name change in The Logbook does not reach Google.
+- **Members added any other way get no account.** Only conversion from the
+  prospective-members pipeline creates one; Add Member and roster import do
+  not.
+- **Linking existing members is by exact address, and on demand.** **Link
+  existing members** matches a member's Logbook email to an account's primary
+  address only — not an alias, not a personal address — and skips members who
+  have already left. A member added later by Add Member or import is not linked
+  until it is run again.
+- **A delegated key is domain-wide.** The service account can manage every
+  user in the domain, not only members The Logbook created. That is why
+  changing the integration needs `admin.access`, and why the requested scopes
+  are limited to users and group membership.
+
+---
+
 ## Claude (MCP) — Member Sign-In (OAuth) Residuals (2026-10-06)
 
 **The original limitation is resolved.** "claude.ai custom connectors need an
@@ -893,8 +924,13 @@ module folder on that module's rights.
     again lists the folder once more. It lapses when a full administrator
     next opens Documents, not at the moment of the change: a folder that
     regains and loses its member between two visits keeps its confirmation.
-  - Nobody is told until a full administrator opens Documents. Nothing
-    emails them.
+  - **Resolved 2026-10-16: full administrators are emailed the list once a
+    week** while any folder is on it (the `admin_only_folder_digest` task).
+    Each email repeats every folder still listed, not only new ones. A
+    folder shut on a Tuesday can wait up to a week for the next email,
+    unless someone opens Documents first. An administrator can turn the
+    email off ("Document folder access"), and a department can make it
+    required.
 - **Resolved 2026-10-13: positions are stored by id** (decision 28). Deleting
   a position takes it out of every folder, and is refused while it alone opens
   a folder. A position created later with the same name inherits nothing.
@@ -6063,6 +6099,21 @@ the response shape and the audit event) or removing the apparently-unused
 duplicate route outright — is a product decision, not a drive-by patch.
 Exposure today is narrow: nothing in the frontend calls this route, so it
 reaches only a direct API client holding `training.manage`.
+
+**Still open as of security review TR-17 pass 8 (2026-10-16), and the gap
+widened in the interim.** `training_program_service.py`'s `enroll_member` (the
+fixed path) gained prerequisite-program enforcement on 2026-10-14
+(`e3aee773`, "enforce prerequisites on single-member enrollment") — a member
+missing a prerequisite now gets a clean 400 through that path. `training.py`'s
+duplicate was not touched, so `POST /training/enrollments` now also silently
+enrolls a member who has not met a program's prerequisites, in addition to the
+race and the missing `RequirementProgress`/phase/recert/notification behavior
+already recorded above. Every one of this duplicate's defects traces to the
+same root cause — a second, hand-maintained copy of enrollment logic that
+nothing keeps in sync with the one the rest of the codebase fixes — so each
+new fix to the real path is now also a new way for the duplicate to fall
+further behind it. Confirmed the frontend still calls only
+`/training/programs/enrollments`; no owner decision has been recorded yet.
 
 ## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06)
 

@@ -42,6 +42,9 @@ class McpPrincipal:
     # see, since a service key has no rank or qualifications to be
     # eligible with.
     expose_full_schedule: bool = False
+    # Whether the medical supply tools are listed and answer. Off, medical
+    # stock is not visible through this connection at all.
+    expose_medical_supplies: bool = False
     # The department's enabled module keys, resolved when the key was
     # authenticated. A tool owned by a module not in this set is hidden and
     # refused, exactly as the module's API router answers 403 — switching a

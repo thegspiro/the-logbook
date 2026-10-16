@@ -22,7 +22,8 @@ availability of that information.
    and vendor-supported software versions kept current.
 5. **Incident readiness.** Suspected incidents are reported to
    [DEPARTMENT: role/contact] immediately. HIPAA breach notification has
-   statutory deadlines (60 days) — see the incident procedure.
+   statutory deadlines (60 days) — see the
+   [incident response and breach notification policy](./incident-response-and-breach-notification-policy.md).
 
 ## Responsibilities
 

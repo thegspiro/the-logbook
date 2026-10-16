@@ -938,10 +938,16 @@ Currently no formal bug bounty program, but we may offer:
 
 If PHI is breached, you may need to:
 
-1. **Immediate** (within 60 days):
+1. **Without unreasonable delay, and no later than 60 calendar days after
+   discovery** (45 CFR 164.404–408; state law may be shorter):
    - Notify affected individuals
-   - Notify media (if >500 people affected)
-   - Notify HHS (Department of Health and Human Services)
+   - Notify media (if more than 500 residents of one state are affected)
+   - Notify HHS (Department of Health and Human Services): at the same time
+     as individuals for 500 or more, otherwise within 60 days after the end
+     of the calendar year
+
+   The full procedure, roles and risk-assessment steps are in
+   [docs/policies/incident-response-and-breach-notification-policy.md](docs/policies/incident-response-and-breach-notification-policy.md).
 
 2. **Documentation**:
    - What happened

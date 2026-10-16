@@ -342,3 +342,221 @@ class TestLinkAcrossTemplates:
                 org.id, {theirs.id: ours.id}, user_id=user_id, user_name="Pat"
             )
         assert theirs.inventory_item_id is None
+
+
+class TestAutoLink:
+    """The one-click pass: exact and strong matches, never a tie."""
+
+    async def _run(self, db_session, org_id):
+        user_id = await _user(db_session, org_id)
+        return await EquipmentCheckService(db_session).auto_link_report(
+            org_id, user_id=user_id, user_name="Pat Officer"
+        )
+
+    async def _link_of(self, db_session, item_id):
+        return await db_session.scalar(
+            select(CheckTemplateItem.inventory_item_id).where(
+                CheckTemplateItem.id == item_id
+            )
+        )
+
+    async def test_an_exact_match_is_linked_on_every_template(self, db_session):
+        org = await _org(db_session)
+        gauze = await _catalog(db_session, org.id, "Gauze Pads 4x4")
+        _, (first,) = await _template(
+            db_session, org.id, "Medic 1", [("Gauze Pads 4x4", "count", None)]
+        )
+        _, (second,) = await _template(
+            db_session,
+            org.id,
+            "Medic 2",
+            [("gauze pads, 4x4", "count", None)],
+            active=False,
+        )
+
+        result = await self._run(db_session, org.id)
+
+        assert result["linked"] == 2
+        assert result["left_for_review"] == 0
+        assert [g["confidence"] for g in result["groups"]] == ["exact"]
+        assert await self._link_of(db_session, first.id) == gauze.id
+        assert await self._link_of(db_session, second.id) == gauze.id
+
+    async def test_a_strong_match_through_an_alias_is_linked(self, db_session):
+        org = await _org(db_session)
+        bvm = await _catalog(db_session, org.id, "Bag Valve Mask")
+        bvm.also_called = ["BVM"]
+        await db_session.flush()
+        _, (line,) = await _template(
+            db_session, org.id, "Medic 1", [("BVM", "count", None)]
+        )
+
+        result = await self._run(db_session, org.id)
+
+        assert await self._link_of(db_session, line.id) == bvm.id
+        (group,) = result["groups"]
+        assert group["confidence"] == "strong"
+        assert group["matched_alias"] == "BVM"
+
+    async def test_a_tie_between_two_items_is_left_for_a_person(self, db_session):
+        org = await _org(db_session)
+        await _catalog(db_session, org.id, "Oxygen Mask Adult")
+        await _catalog(db_session, org.id, "Oxygen Mask Pediatric")
+        _, (line,) = await _template(
+            db_session, org.id, "Medic 1", [("Oxygen Mask", "count", None)]
+        )
+
+        result = await self._run(db_session, org.id)
+
+        assert result["linked"] == 0
+        assert result["left_for_review"] == 1
+        assert await self._link_of(db_session, line.id) is None
+
+    async def test_weak_and_unmatched_names_are_left_alone(self, db_session):
+        org = await _org(db_session)
+        await _catalog(db_session, org.id, "Trauma Bag")
+        _, lines = await _template(
+            db_session,
+            org.id,
+            "Medic 1",
+            [
+                ("Bag Valve Mask", "count", None),
+                ("Check tire pressure", "function", None),
+            ],
+        )
+
+        result = await self._run(db_session, org.id)
+
+        assert result["linked"] == 0
+        assert result["left_for_review"] == 2
+        for line in lines:
+            assert await self._link_of(db_session, line.id) is None
+
+    async def test_an_existing_link_is_never_replaced(self, db_session):
+        org = await _org(db_session)
+        gauze = await _catalog(db_session, org.id, "Gauze Pads 4x4")
+        chosen = await _catalog(db_session, org.id, "Gauze, Bulk")
+        _, (line,) = await _template(
+            db_session, org.id, "Medic 1", [("Gauze Pads 4x4", "count", chosen.id)]
+        )
+
+        result = await self._run(db_session, org.id)
+
+        assert result["linked"] == 0
+        assert await self._link_of(db_session, line.id) == chosen.id
+        assert gauze.id != chosen.id
+
+    async def test_each_link_is_logged_as_automatic(self, db_session):
+        org = await _org(db_session)
+        await _catalog(db_session, org.id, "Gauze Pads 4x4")
+        template, _ = await _template(
+            db_session, org.id, "Medic 1", [("Gauze Pads 4x4", "count", None)]
+        )
+
+        await self._run(db_session, org.id)
+
+        changes = (
+            (
+                await db_session.execute(
+                    select(TemplateChangeLog.changes).where(
+                        TemplateChangeLog.template_id == template.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [c["source"] for c in changes] == ["catalog_auto_link"]
+
+    async def test_another_departments_catalog_is_never_linked(self, db_session):
+        org = await _org(db_session, "Mine")
+        other = await _org(db_session, "Theirs")
+        await _catalog(db_session, other.id, "Gauze Pads 4x4")
+        _, (line,) = await _template(
+            db_session, org.id, "Medic 1", [("Gauze Pads 4x4", "count", None)]
+        )
+
+        result = await self._run(db_session, org.id)
+
+        assert result["linked"] == 0
+        assert await self._link_of(db_session, line.id) is None
+
+    async def test_reports_the_positions_it_linked(self, db_session):
+        org = await _org(db_session)
+        await _catalog(db_session, org.id, "Gauze Pads 4x4")
+        template, (line,) = await _template(
+            db_session, org.id, "Medic 1", [("Gauze Pads 4x4", "count", None)]
+        )
+
+        result = await self._run(db_session, org.id)
+
+        (group,) = result["groups"]
+        assert group["position_count"] == 1
+        assert [
+            (p["template_item_id"], p["template_id"], p["template_name"])
+            for p in group["positions"]
+        ] == [(line.id, template.id, "Medic 1")]
+
+
+class TestUndoAutoLink:
+    """Undoing one name's links, without touching a choice made since."""
+
+    async def _undo(self, db_session, org_id, links):
+        user_id = await _user(db_session, org_id)
+        return await EquipmentCheckService(
+            db_session
+        ).unlink_inventory_items_across_templates(
+            org_id, links, user_id=user_id, user_name="Pat Officer"
+        )
+
+    async def test_clears_positions_still_linked_to_the_item(self, db_session):
+        org = await _org(db_session)
+        gauze = await _catalog(db_session, org.id, "Gauze Pads 4x4")
+        template, (line,) = await _template(
+            db_session, org.id, "Medic 1", [("Gauze Pads 4x4", "count", gauze.id)]
+        )
+
+        result = await self._undo(db_session, org.id, {line.id: gauze.id})
+
+        assert result == {"unlinked": 1, "skipped": 0}
+        await db_session.refresh(line)
+        assert line.inventory_item_id is None
+        changes = (
+            (
+                await db_session.execute(
+                    select(TemplateChangeLog.changes).where(
+                        TemplateChangeLog.template_id == template.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [c["source"] for c in changes] == ["catalog_auto_link_undo"]
+
+    async def test_a_position_relinked_since_is_left_alone(self, db_session):
+        org = await _org(db_session)
+        gauze = await _catalog(db_session, org.id, "Gauze Pads 4x4")
+        bulk = await _catalog(db_session, org.id, "Gauze, Bulk")
+        _, (line,) = await _template(
+            db_session, org.id, "Medic 1", [("Gauze Pads 4x4", "count", bulk.id)]
+        )
+
+        result = await self._undo(db_session, org.id, {line.id: gauze.id})
+
+        assert result == {"unlinked": 0, "skipped": 1}
+        await db_session.refresh(line)
+        assert line.inventory_item_id == bulk.id
+
+    async def test_another_departments_line_is_refused(self, db_session):
+        org = await _org(db_session, "Mine")
+        other = await _org(db_session, "Theirs")
+        gauze = await _catalog(db_session, other.id, "Gauze Pads 4x4")
+        _, (line,) = await _template(
+            db_session, other.id, "Medic 1", [("Gauze Pads 4x4", "count", gauze.id)]
+        )
+
+        with pytest.raises(ValueError, match="not found"):
+            await self._undo(db_session, org.id, {line.id: gauze.id})
+        await db_session.refresh(line)
+        assert line.inventory_item_id == gauze.id

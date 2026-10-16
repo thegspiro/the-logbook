@@ -50,7 +50,7 @@ from app.services.inventory_service import InventoryService
 from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
 from app.utils.check_types import COUNT, EXPIRY, LEVEL, normalize_check_type
 from app.utils.model_updates import apply_updates
-from app.utils.name_matching import best_matches, normalize_name
+from app.utils.name_matching import EXACT, STRONG, best_matches, normalize_name
 from app.utils.org_scoping import is_in_org
 from app.utils.org_timezone import (
     local_day_start_utc,
@@ -2273,7 +2273,7 @@ class EquipmentCheckService:
             if found is not None and expected is not None:
                 detail["expected"] = expected
                 detail["found"] = found
-            if crit is not None and found is not None and found <= crit:
+            if self._is_below_critical_minimum(found, crit, expected):
                 detail["critical_minimum"] = crit
                 critical_items.append(detail)
             else:
@@ -3298,6 +3298,27 @@ class EquipmentCheckService:
         return count
 
     @staticmethod
+    def _is_below_critical_minimum(
+        found: Optional[int], critical_minimum: Optional[int], target: Optional[int]
+    ) -> bool:
+        """Whether a counted position is short enough to be critical.
+
+        Strictly below the critical minimum: the minimum is the lowest
+        acceptable count, so holding exactly that many is at it, not below it.
+        And never once the count meets the target, so a full position is never
+        reported as critical whatever the template's minimum says.
+
+        The check form applies the same rule on screen
+        (``isBelowCriticalMinimum`` in ``types/equipmentCheck.ts``); keep the
+        two in step.
+        """
+        if critical_minimum is None or found is None:
+            return False
+        if target is not None and found >= target:
+            return False
+        return found < critical_minimum
+
+    @staticmethod
     def _deployed_lots(item: CheckTemplateItem) -> List[CheckItemDeployedLot]:
         """Lots aboard for this position, soonest to expire first.
 
@@ -3955,12 +3976,65 @@ class EquipmentCheckService:
                     "apparatus_type": tmpl.apparatus_type,
                     "lot_number": self._soonest_lot_number(item),
                     "serial_number": item.serial_number,
+                    # What the position should hold and what was last counted
+                    # aboard. A null count means nobody has counted since the
+                    # position was defined; the reader shows the target then.
+                    "target_quantity": self._target_quantity(item),
+                    "quantity_on_truck": item.quantity_on_truck,
                     "expiration_date": exp,
                     "days_until_expiration": (exp - today).days if exp else None,
                     "is_expired": bool(exp and exp < today),
                 }
             )
         return deployments
+
+    async def apparatus_counts_for_items(
+        self, organization_id: str, inventory_item_ids: List[str]
+    ) -> Dict[str, int]:
+        """``{inventory_item_id: how many apparatus carry it}``, in one query.
+
+        Counted over active templates, as ``get_item_deployments`` lists them,
+        so the badge on a supply and the list it opens agree. A template made
+        for an apparatus *type* rather than one vehicle counts once per type:
+        it is one place the supply is carried, even without a named truck.
+        """
+        ids = list({str(i) for i in inventory_item_ids})
+        if not ids:
+            return {}
+        rows = await self.db.execute(
+            select(
+                CheckTemplateItem.inventory_item_id,
+                EquipmentCheckTemplate.apparatus_id,
+                EquipmentCheckTemplate.apparatus_type,
+                EquipmentCheckTemplate.id,
+            )
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                CheckTemplateItem.inventory_item_id.in_(ids),
+                EquipmentCheckTemplate.organization_id == organization_id,
+                EquipmentCheckTemplate.is_active.is_(True),
+            )
+        )
+        carriers: Dict[str, set] = {}
+        for item_id, apparatus_id, apparatus_type, template_id in rows.all():
+            key = (
+                f"apparatus:{apparatus_id}"
+                if apparatus_id
+                else (
+                    f"type:{apparatus_type}"
+                    if apparatus_type
+                    else f"tmpl:{template_id}"
+                )
+            )
+            carriers.setdefault(str(item_id), set()).add(key)
+        return {item_id: len(keys) for item_id, keys in carriers.items()}
 
     async def swap_item_lot(
         self,
@@ -4692,6 +4766,7 @@ class EquipmentCheckService:
         *,
         user_id: str,
         user_name: str,
+        source: str = "catalog_link_report",
     ) -> Dict[str, Any]:
         """Apply a reviewed set of links that may span many templates.
 
@@ -4787,7 +4862,7 @@ class EquipmentCheckService:
                 entity_name=item.name,
                 changes={
                     "inventory_item_id": {"old": None, "new": item.inventory_item_id},
-                    "source": "catalog_link_report",
+                    "source": source,
                 },
             )
             linked += 1
@@ -4819,6 +4894,172 @@ class EquipmentCheckService:
             "skipped": len(skipped),
             "skipped_positions": skipped,
         }
+
+    async def auto_link_report(
+        self,
+        organization_id: str,
+        *,
+        user_id: str,
+        user_name: str,
+    ) -> Dict[str, Any]:
+        """Link every unlinked position whose catalog match is clear enough.
+
+        Built on the department-wide report, so it links exactly what a person
+        would have seen suggested there. A name group is linked when its best
+        suggestion is ``exact`` or ``strong`` *and* beats the runner-up. Exact
+        and strong was the department's call: strong takes in "also called"
+        names and subset matches, which are usually right and occasionally
+        need fixing by hand.
+
+        The runner-up rule is what keeps "occasionally" from becoming a coin
+        toss. "Oxygen Mask" is a subset of both "Oxygen Mask Adult" and
+        "Oxygen Mask Pediatric" and scores the same against each; linking
+        either would be a guess, so a tied group is left on the report for a
+        person, together with everything weak or unmatched.
+
+        Writes through ``link_inventory_items_across_templates``, so it is all
+        or nothing and a position linked by hand in the meantime keeps its
+        link.
+        """
+        report = await self.get_link_report(organization_id, limit_per_group=2)
+
+        links: Dict[str, str] = {}
+        applied: List[Dict[str, Any]] = []
+        left_for_review = 0
+        for group in report["groups"]:
+            suggestions = group["suggestions"]
+            best = suggestions[0] if suggestions else None
+            runner_up = suggestions[1] if len(suggestions) > 1 else None
+            clear = (
+                best is not None
+                and best["confidence"] in (EXACT, STRONG)
+                and (runner_up is None or runner_up["score"] < best["score"])
+            )
+            if not clear or best is None:
+                left_for_review += group["position_count"]
+                continue
+            for position in group["positions"]:
+                links[str(position["template_item_id"])] = str(best["id"])
+            applied.append(
+                {
+                    "name": group["name"],
+                    "inventory_item_id": str(best["id"]),
+                    "inventory_item_name": best["name"],
+                    "confidence": best["confidence"],
+                    "matched_alias": best.get("matched_alias"),
+                    "position_count": group["position_count"],
+                    "positions": group["positions"],
+                }
+            )
+
+        if not links:
+            return {
+                "linked": 0,
+                "skipped": 0,
+                "skipped_positions": [],
+                "left_for_review": left_for_review,
+                "groups": [],
+            }
+
+        result = await self.link_inventory_items_across_templates(
+            organization_id,
+            links,
+            user_id=user_id,
+            user_name=user_name,
+            source="catalog_auto_link",
+        )
+        # A position somebody linked by hand in the meantime was not written,
+        # so it is neither reported as linked nor offered for undo: undoing it
+        # would clear a choice this pass never made.
+        skipped_ids = {str(p["template_item_id"]) for p in result["skipped_positions"]}
+        for entry in applied:
+            entry["positions"] = [
+                p
+                for p in entry["positions"]
+                if str(p["template_item_id"]) not in skipped_ids
+            ]
+            entry["position_count"] = len(entry["positions"])
+        return {
+            **result,
+            "left_for_review": left_for_review,
+            "groups": [entry for entry in applied if entry["positions"]],
+        }
+
+    async def unlink_inventory_items_across_templates(
+        self,
+        organization_id: str,
+        links: Dict[str, str],
+        *,
+        user_id: str,
+        user_name: str,
+        source: str = "catalog_auto_link_undo",
+    ) -> Dict[str, int]:
+        """Undo links the automatic pass made, position by position.
+
+        ``links`` maps template item id -> the inventory item it was linked
+        to. A position is cleared only while it still points at that item:
+        if someone has since re-linked it in the builder, that newer choice
+        is theirs and stays, counted in ``skipped``. This is the mirror of
+        the rule ``link_inventory_items_across_templates`` follows, and for
+        the same reason — the screen asking is showing a snapshot.
+
+        All or nothing, and every id is resolved through an org-scoped
+        template (XC-1), as on the link side.
+        """
+        if not links:
+            return {"unlinked": 0, "skipped": 0}
+
+        result = await self.db.execute(
+            select(CheckTemplateItem, EquipmentCheckTemplate.id)
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                CheckTemplateItem.id.in_(list(links)),
+                EquipmentCheckTemplate.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        found = {item.id: (item, template_id) for item, template_id in result.all()}
+        unknown = set(links) - set(found)
+        if unknown:
+            raise ValueError(
+                f"{len(unknown)} checklist item(s) were not found and nothing "
+                f"was unlinked"
+            )
+
+        unlinked = 0
+        skipped = 0
+        for item_id, expected in links.items():
+            item, template_id = found[item_id]
+            if str(item.inventory_item_id or "") != str(expected):
+                skipped += 1
+                continue
+            old = item.inventory_item_id
+            item.inventory_item_id = None
+            await self.log_template_change(
+                organization_id=organization_id,
+                template_id=template_id,
+                user_id=user_id,
+                user_name=user_name,
+                action="update",
+                entity_type="item",
+                entity_id=item_id,
+                entity_name=item.name,
+                changes={
+                    "inventory_item_id": {"old": old, "new": None},
+                    "source": source,
+                },
+            )
+            unlinked += 1
+
+        await self.db.commit()
+        return {"unlinked": unlinked, "skipped": skipped}
 
     # ------------------------------------------------------------------
     # Private Helpers

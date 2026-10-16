@@ -9,7 +9,14 @@
 // =============================================================================
 
 // Import enum types from the canonical source and re-export
-import type { StageType, ApplicantStatus, VotingMethod, VictoryCondition, MemberClass } from '../../../constants/enums';
+import type {
+  StageType,
+  ApplicantStatus,
+  VotingMethod,
+  VictoryCondition,
+  MemberClass,
+  GoogleAccountStatus,
+} from '../../../constants/enums';
 import {
   VotingMethod as VotingMethodValues,
   VictoryCondition as VictoryConditionValues,
@@ -733,6 +740,15 @@ export interface ConvertApplicantResponse {
   membership_number?: string | undefined;
   /** Whether the welcome email carrying the member's password went out. */
   welcome_email_sent: boolean;
+  /** The Google Workspace account outcome, when the integration applied. */
+  google_account?: ConvertGoogleAccountOutcome | undefined;
+}
+
+export interface ConvertGoogleAccountOutcome {
+  status: GoogleAccountStatus;
+  email: string;
+  credentials_sent: boolean;
+  last_error: string | null;
 }
 
 /** An approver role a Multi-Signer Approval stage asks for. */
