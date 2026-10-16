@@ -11,16 +11,20 @@ organization in the service.
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import require_all_permissions, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.models.google_workspace import GoogleAccountProvision
 from app.models.user import User
-from app.schemas.google_workspace import GoogleAccountEnvelope, GoogleAccountResponse
+from app.schemas.google_workspace import (
+    GoogleAccountEnvelope,
+    GoogleAccountResponse,
+    LinkExistingResponse,
+)
 from app.services.google_workspace_provisioning_service import (
     GoogleWorkspaceProvisioningService,
     ProvisionRetryError,
@@ -124,3 +128,52 @@ async def retry_member_google_account(
     )
     await db.commit()
     return _to_response(row)
+
+
+@router.post("/link-existing", response_model=LinkExistingResponse)
+async def link_existing_members(
+    request: Request,
+    apply: bool = Query(False, description="False previews the counts only"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_all_permissions("integrations.manage", "admin.access")
+    ),
+):
+    """Link current members to the Google accounts already at their addresses.
+
+    A member whose Logbook email is exactly an account's primary address gets
+    an "existing account" record, so leaving suspends it. Google is only read.
+    Members who have already left are counted, not linked. Organization
+    administrators only, like connecting the integration, since a linked
+    account is one The Logbook will later suspend.
+
+    **Requires permissions: integrations.manage and admin.access**
+    """
+    await check_rate_limit(
+        request,
+        max_requests=5,
+        window_seconds=60,
+        lockout_seconds=300,
+        scope="google_workspace_link_existing",
+    )
+    organization_id = str(current_user.organization_id)
+    try:
+        counts = await GoogleWorkspaceProvisioningService(db).link_existing_members(
+            organization_id, apply=apply, actor_id=str(current_user.id)
+        )
+    except ProvisionRetryError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+    if apply:
+        await log_audit_event(
+            db,
+            "google_workspace.existing_members_linked",
+            "integrations",
+            "warning",
+            dict(counts),
+            user_id=str(current_user.id),
+            organization_id=organization_id,
+            ip_address=get_client_ip(request),
+        )
+        await db.commit()
+    return LinkExistingResponse(applied=apply, **counts)

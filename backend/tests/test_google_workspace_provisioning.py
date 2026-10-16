@@ -60,6 +60,18 @@ def _key(**overrides: Any) -> str:
     return json.dumps(key)
 
 
+def _tag(member_id: str) -> dict:
+    from app.services.integration_services.google_workspace_service import (
+        LOGBOOK_EXTERNAL_ID_TYPE,
+    )
+
+    return {
+        "type": "custom",
+        "customType": LOGBOOK_EXTERNAL_ID_TYPE,
+        "value": member_id,
+    }
+
+
 class FakeDirectory:
     """Stands in for GoogleWorkspaceDirectory; records what it was asked."""
 
@@ -77,11 +89,14 @@ class FakeDirectory:
         self.resets: list[str] = []
         self.suspend_calls = []
         self.keys = []
+        self.member_ids: list[str] = []
+        self.domain_users: list[dict] = []
 
-    async def create_user(self, email, given, family, password, org_unit):
+    async def create_user(self, email, given, family, password, org_unit, member_id):
         if self.create_error:
             raise self.create_error
         self.created.append((email, given, family, password, org_unit))
+        self.member_ids.append(member_id)
         return "google-id-1"
 
     async def add_to_group(self, group, email):
@@ -104,6 +119,9 @@ class FakeDirectory:
     suspend_error: Optional[Exception] = None
     suspend_calls: list[bool]
     keys: list[str]
+
+    async def list_users(self, domain):
+        return list(self.domain_users)
 
     async def get_user(self, key):
         self.keys.append(key)
@@ -356,6 +374,7 @@ class TestConversion:
         dept = result["email"]
         assert dept.endswith(f"@{DOMAIN}")
         assert fake.created[0][0] == dept
+        assert fake.member_ids == [str(result["user_id"])]
         assert fake.created[0][4] == "/Members"
         assert fake.groups == [(GROUP, dept)]
         kwargs = welcome.call_args.kwargs
@@ -426,7 +445,7 @@ class TestConversion:
         fake.existing = lookup.get("existing")
         fake.lookup_error = lookup.get("lookup_error")
         if callable(fake.existing):
-            fake.existing = fake.existing(result["email"])
+            fake.existing = fake.existing(result["email"], str(result["user_id"]))
         with (
             patch(f"{SERVICE}.directory_for", return_value=fake),
             patch(
@@ -440,7 +459,7 @@ class TestConversion:
     async def test_an_existing_account_is_linked_and_left_alone(self, db_session):
         row, fake, _ = await self._provision_into_existing(
             db_session,
-            existing=lambda email: {
+            existing=lambda email, _member: {
                 "id": "g-other",
                 "primaryEmail": email,
                 "creationTime": "2019-03-01T12:00:00.000Z",
@@ -490,13 +509,14 @@ class TestConversion:
         self, db_session
     ):
         # users.insert succeeded at Google but its answer never arrived; the
-        # retry's 409 is The Logbook's own account, whose password nobody has.
+        # retry's 409 is The Logbook's own account -- tagged with this
+        # member's id at creation -- whose password nobody has.
         row, fake, send = await self._provision_into_existing(
             db_session,
-            existing=lambda email: {
+            existing=lambda email, member: {
                 "id": "g-ours",
                 "primaryEmail": email,
-                "creationTime": datetime.now(timezone.utc).isoformat(),
+                "externalIds": [_tag(member)],
             },
         )
         assert row.status == GoogleAccountStatus.CREATED.value
@@ -505,6 +525,33 @@ class TestConversion:
         assert len(fake.resets) == 1
         assert fake.resets[0] in send.call_args.kwargs["text_body"]
         assert row.credentials_sent is True
+
+    async def test_an_account_created_moments_ago_by_someone_else_is_not_ours(
+        self, db_session
+    ):
+        # Recency proves nothing: only the tag does.
+        row, fake, _ = await self._provision_into_existing(
+            db_session,
+            existing=lambda email, _member: {
+                "id": "g-new",
+                "primaryEmail": email,
+                "creationTime": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        assert row.status == GoogleAccountStatus.LINKED_EXISTING.value
+        assert fake.resets == []
+
+    async def test_an_account_tagged_for_another_member_is_not_reset(self, db_session):
+        row, fake, _ = await self._provision_into_existing(
+            db_session,
+            existing=lambda email, _member: {
+                "id": "g-former",
+                "primaryEmail": email,
+                "externalIds": [_tag("someone-else")],
+            },
+        )
+        assert row.status == GoogleAccountStatus.LINKED_EXISTING.value
+        assert fake.resets == []
 
     async def test_a_google_failure_never_undoes_the_conversion(self, db_session):
         org = await _org(db_session)
@@ -1356,3 +1403,233 @@ class TestAfterCommit:
         with patch.object(hook, "_run_after_commit", AsyncMock()) as run:
             hook._sync_after_commit(session)
         run.assert_not_called()
+
+
+@pytest.mark.unit
+class TestCreationTag:
+    async def test_the_account_is_created_carrying_the_member_id(self):
+        from app.services.integration_services.google_workspace_service import (
+            LOGBOOK_EXTERNAL_ID_TYPE,
+            logbook_member_id,
+        )
+
+        directory = GoogleWorkspaceDirectory({}, "admin@firedept.org")
+        service = MagicMock()
+        service.users.return_value.insert.return_value.execute.return_value = {
+            "id": "g-1"
+        }
+        with patch.object(directory, "_service", return_value=service):
+            await directory.create_user(
+                "a@firedept.org", "A", "B", "pw", "/", member_id="member-9"
+            )
+        body = service.users.return_value.insert.call_args.kwargs["body"]
+        assert body["externalIds"] == [
+            {
+                "type": "custom",
+                "customType": LOGBOOK_EXTERNAL_ID_TYPE,
+                "value": "member-9",
+            }
+        ]
+        assert logbook_member_id({"externalIds": body["externalIds"]}) == "member-9"
+        assert (
+            logbook_member_id({"externalIds": [{"type": "work", "value": "x"}]}) is None
+        )
+
+    async def test_the_domain_listing_follows_every_page(self):
+        directory = GoogleWorkspaceDirectory({}, "admin@firedept.org")
+        service = MagicMock()
+        service.users.return_value.list.return_value.execute.side_effect = [
+            {"users": [{"id": "1", "primaryEmail": "a@x.org"}], "nextPageToken": "p2"},
+            {"users": [{"id": "2", "primaryEmail": "b@x.org"}]},
+        ]
+        with patch.object(directory, "_service", return_value=service):
+            users = await directory.list_users("x.org")
+        assert [u["id"] for u in users] == ["1", "2"]
+        tokens = [
+            c.kwargs["pageToken"]
+            for c in service.users.return_value.list.call_args_list
+        ]
+        assert tokens == [None, "p2"]
+
+
+async def _member(db_session, org, email, **fields):
+    member = User(
+        organization_id=org.id,
+        username=f"m-{_hex()}",
+        email=email,
+        first_name="Pat",
+        last_name="Member",
+        **fields,
+    )
+    db_session.add(member)
+    await db_session.flush()
+    return member
+
+
+@pytest.mark.integration
+class TestLinkExistingMembers:
+    async def _roster(self, db_session):
+        org = await _org(db_session)
+        await _connect(db_session, org)
+        tag = _hex()
+        members = {
+            "match": await _member(db_session, org, f"match-{tag}@{DOMAIN}"),
+            "missing": await _member(db_session, org, f"missing-{tag}@{DOMAIN}"),
+            "alias": await _member(db_session, org, f"alias-{tag}@{DOMAIN}"),
+            "personal": await _member(db_session, org, f"pat-{tag}@gmail.com"),
+            "dropped": await _member(
+                db_session,
+                org,
+                f"dropped-{tag}@{DOMAIN}",
+                status=UserStatus.DROPPED_VOLUNTARY,
+            ),
+        }
+        await db_session.commit()
+        fake = FakeDirectory()
+        fake.domain_users = [
+            {"id": "g-match", "primaryEmail": f"Match-{tag}@{DOMAIN}"},
+            {"id": "g-dropped", "primaryEmail": f"dropped-{tag}@{DOMAIN}"},
+            # The alias address belongs to this account; users.list never
+            # lists an alias as a user, so it must not match.
+            {"id": "g-chief", "primaryEmail": f"chief-{tag}@{DOMAIN}"},
+        ]
+        return org, members, fake
+
+    async def test_a_preview_counts_without_writing(self, db_session):
+        org, members, fake = await self._roster(db_session)
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            counts = await GoogleWorkspaceProvisioningService(
+                db_session
+            ).link_existing_members(org.id, apply=False, actor_id=None)
+        assert counts == {
+            "linked": 1,
+            "already_linked": 0,
+            "departed": 1,
+            "not_in_google": 2,
+            "off_domain": 1,
+        }
+        rows = (
+            await db_session.execute(
+                select(GoogleAccountProvision).where(
+                    GoogleAccountProvision.organization_id == org.id
+                )
+            )
+        ).all()
+        assert rows == []
+
+    async def test_applying_links_only_exact_primary_addresses(self, db_session):
+        org, members, fake = await self._roster(db_session)
+        service = GoogleWorkspaceProvisioningService(db_session)
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await service.link_existing_members(org.id, apply=True, actor_id=None)
+            again = await service.link_existing_members(
+                org.id, apply=True, actor_id=None
+            )
+
+        row = await _row(db_session, str(members["match"].id))
+        assert row.status == GoogleAccountStatus.LINKED_EXISTING.value
+        assert row.google_user_id == "g-match"
+        assert again["linked"] == 0
+        assert again["already_linked"] == 1
+        for key in ("missing", "alias", "personal", "dropped"):
+            assert (await service.get_for_user(str(members[key].id), org.id)) is None
+
+    async def test_a_linked_member_who_leaves_is_suspended_by_id(self, db_session):
+        org, members, fake = await self._roster(db_session)
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            await GoogleWorkspaceProvisioningService(db_session).link_existing_members(
+                org.id, apply=True, actor_id=None
+            )
+            member = members["match"]
+            member.status = UserStatus.DROPPED_INVOLUNTARY
+            await db_session.commit()
+            await _settle(db_session)
+        assert fake.suspend_calls == [True]
+        assert fake.keys[-1] == "g-match"
+
+    async def test_another_departments_members_are_never_linked(self, db_session):
+        org, members, fake = await self._roster(db_session)
+        other = await _org(db_session)
+        await _connect(db_session, other)
+        with patch(f"{SERVICE}.directory_for", return_value=fake):
+            counts = await GoogleWorkspaceProvisioningService(
+                db_session
+            ).link_existing_members(other.id, apply=True, actor_id=None)
+        assert counts["linked"] == 0
+        assert (
+            await GoogleWorkspaceProvisioningService(db_session).get_for_user(
+                str(members["match"].id), org.id
+            )
+        ) is None
+
+    async def test_the_endpoint_previews_then_applies_and_audits(self, db_session):
+        from app.api.v1.endpoints.google_workspace import link_existing_members
+
+        org, members, fake = await self._roster(db_session)
+        admin = await _member(db_session, org, f"admin-{_hex()}@example.org")
+        caller = SimpleNamespace(id=admin.id, organization_id=org.id)
+        with (
+            patch(f"{SERVICE}.directory_for", return_value=fake),
+            patch(
+                "app.api.v1.endpoints.google_workspace.check_rate_limit", AsyncMock()
+            ),
+            patch(
+                "app.api.v1.endpoints.google_workspace.log_audit_event", AsyncMock()
+            ) as audit,
+        ):
+            preview = await link_existing_members(
+                MagicMock(), apply=False, db=db_session, current_user=caller
+            )
+            audit.assert_not_called()
+            applied = await link_existing_members(
+                MagicMock(), apply=True, db=db_session, current_user=caller
+            )
+        assert preview.applied is False
+        assert preview.linked == 1
+        assert applied.applied is True
+        assert audit.call_args.args[1] == "google_workspace.existing_members_linked"
+        row = await _row(db_session, str(members["match"].id))
+        assert row.created_by == admin.id
+
+    async def test_without_the_integration_it_refuses(self, db_session):
+        from app.api.v1.endpoints.google_workspace import link_existing_members
+
+        org = await _org(db_session)
+        with patch(
+            "app.api.v1.endpoints.google_workspace.check_rate_limit", AsyncMock()
+        ):
+            with pytest.raises(HTTPException) as refused:
+                await link_existing_members(
+                    MagicMock(),
+                    apply=False,
+                    db=db_session,
+                    current_user=SimpleNamespace(id=None, organization_id=org.id),
+                )
+        assert refused.value.status_code == 409
+
+    def test_the_endpoint_needs_an_organization_administrator(self):
+        from app.api.v1.endpoints.google_workspace import router
+
+        route = next(r for r in router.routes if r.path == "/link-existing")
+        checker = route.dependant.dependencies[-1].call
+        assert set(checker.required_permissions) == {
+            "integrations.manage",
+            "admin.access",
+        }
+
+
+@pytest.mark.unit
+class TestDuplicateKeyClassification:
+    def test_only_a_duplicate_key_reads_as_a_race(self):
+        from sqlalchemy.exc import IntegrityError
+
+        from app.services.google_workspace_provisioning_service import (
+            _is_duplicate_key,
+        )
+
+        def error(*args):
+            return IntegrityError("INSERT", {}, Exception(*args))
+
+        assert _is_duplicate_key(error(1062, "Duplicate entry")) is True
+        assert _is_duplicate_key(error(1452, "foreign key fails")) is False
+        assert _is_duplicate_key(error()) is False

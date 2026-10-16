@@ -175,6 +175,11 @@ choice an owner may want to revisit:
 - **Members added any other way get no account.** Only conversion from the
   prospective-members pipeline creates one; Add Member and roster import do
   not.
+- **Linking existing members is by exact address, and on demand.** **Link
+  existing members** matches a member's Logbook email to an account's primary
+  address only — not an alias, not a personal address — and skips members who
+  have already left. A member added later by Add Member or import is not linked
+  until it is run again.
 - **A delegated key is domain-wide.** The service account can manage every
   user in the domain, not only members The Logbook created. That is why
   changing the integration needs `admin.access`, and why the requested scopes

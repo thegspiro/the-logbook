@@ -40,3 +40,14 @@ class GoogleAccountEnvelope(UTCResponseBase):
     """``account`` is null for a member The Logbook made no account for."""
 
     account: Optional[GoogleAccountResponse] = None
+
+
+class LinkExistingResponse(UTCResponseBase):
+    """What linking the existing roster did (or, previewed, would do)."""
+
+    applied: bool
+    linked: int
+    already_linked: int
+    departed: int
+    not_in_google: int
+    off_domain: int

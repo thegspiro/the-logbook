@@ -3,6 +3,7 @@ import { render, screen, within, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import IntegrationsPage from './IntegrationsPage';
+import toast from 'react-hot-toast';
 import { ConfirmProvider } from '../contexts/ConfirmContext';
 
 // Mock the auth store
@@ -26,6 +27,7 @@ const mockGetCalcomBookings = vi.fn();
 const mockGetMcpStatus = vi.fn();
 const mockCreateMcpKey = vi.fn();
 const mockRevokeMcpKey = vi.fn();
+const mockLinkExistingGoogleMembers = vi.fn();
 
 vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
@@ -45,6 +47,7 @@ vi.mock('../services/api', () => ({
     getMcpStatus: (...args: unknown[]) => mockGetMcpStatus(...args) as unknown,
     createMcpKey: (...args: unknown[]) => mockCreateMcpKey(...args) as unknown,
     revokeMcpKey: (...args: unknown[]) => mockRevokeMcpKey(...args) as unknown,
+    linkExistingGoogleMembers: (...args: unknown[]) => mockLinkExistingGoogleMembers(...args) as unknown,
   },
 }));
 
@@ -997,6 +1000,80 @@ describe('IntegrationsPage', () => {
       expect(within(card).queryByText('Disconnect')).not.toBeInTheDocument();
       expect(within(card).queryByRole('button', { name: 'Google Workspace settings' })).not.toBeInTheDocument();
       expect(within(card).getByText('Test')).toBeInTheDocument();
+      expect(within(card).queryByText('Link existing members')).not.toBeInTheDocument();
+    });
+
+    describe('Link existing members', () => {
+      const counts = { already_linked: 2, departed: 1, not_in_google: 3, off_domain: 0 };
+
+      beforeEach(() => {
+        mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+        vi.mocked(toast.success).mockClear();
+        vi.mocked(toast.error).mockClear();
+        mockLinkExistingGoogleMembers.mockReset();
+        mockLinkExistingGoogleMembers.mockImplementation((apply: boolean) =>
+          Promise.resolve({ applied: apply, linked: 4, ...counts })
+        );
+      });
+
+      it('previews, confirms, then links', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText('Google Workspace');
+        const card = screen.getByTestId('integration-card-google-workspace');
+        await user.click(within(card).getByText('Link existing members'));
+
+        expect(await screen.findByText('Link 4 existing members to Google?')).toBeInTheDocument();
+        expect(
+          screen.getByText(/Skipped: 2 already linked, 3 with no account at their address, 1 who have already left\./)
+        ).toBeInTheDocument();
+        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledTimes(1);
+        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledWith(false);
+
+        await user.click(screen.getByRole('button', { name: 'Link accounts' }));
+
+        await waitFor(() => expect(mockLinkExistingGoogleMembers).toHaveBeenCalledWith(true));
+        expect(toast.success).toHaveBeenCalledWith('Linked 4 members to Google Workspace');
+      });
+
+      it('links nothing when the officer declines', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText('Google Workspace');
+        await user.click(screen.getByText('Link existing members'));
+        await user.click(await screen.findByRole('button', { name: 'Not now' }));
+
+        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledTimes(1);
+        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledWith(false);
+      });
+
+      it('asks nothing when there is no one to link', async () => {
+        const user = userEvent.setup();
+        mockLinkExistingGoogleMembers.mockResolvedValue({ applied: false, linked: 0, ...counts });
+        renderPage();
+        await screen.findByText('Google Workspace');
+        await user.click(screen.getByText('Link existing members'));
+
+        await waitFor(() =>
+          expect(toast.success).toHaveBeenCalledWith(
+            'No members to link. Skipped: 2 already linked, 3 with no account at their address, 1 who have already left.'
+          )
+        );
+        expect(screen.queryByRole('button', { name: 'Link accounts' })).not.toBeInTheDocument();
+        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledTimes(1);
+      });
+
+      it('reports a failure', async () => {
+        const user = userEvent.setup();
+        mockLinkExistingGoogleMembers.mockRejectedValue(new Error('boom'));
+        renderPage();
+        await screen.findByText('Google Workspace');
+        await user.click(screen.getByText('Link existing members'));
+
+        await waitFor(() =>
+          expect(toast.error).toHaveBeenCalledWith('Could not link existing members to Google Workspace')
+        );
+      });
     });
   });
 });

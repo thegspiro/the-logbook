@@ -21,6 +21,7 @@ from typing import Any, Optional
 
 from loguru import logger
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import generate_temporary_password
@@ -41,6 +42,7 @@ from app.services.integration_services.google_workspace_service import (
     GoogleAccountNotFoundError,
     GoogleWorkspaceError,
     directory_for,
+    logbook_member_id,
 )
 
 # Two retries this close together are a double click, not a decision.
@@ -117,12 +119,6 @@ ADDRESS_TAKEN_MESSAGE = (
     "or change the member's department email, then retry."
 )
 
-# An account Google says was created after The Logbook staged this record was
-# created by The Logbook: an earlier attempt that succeeded at Google but did
-# not get its answer back (a timeout, a crash before the commit). The margin
-# covers clock skew between this server and Google.
-_OWN_ACCOUNT_SKEW = timedelta(minutes=2)
-
 
 def _domain_mismatch(domain: str) -> str:
     return (
@@ -131,17 +127,10 @@ def _domain_mismatch(domain: str) -> str:
     )
 
 
-def _as_utc(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-
-
-def _google_time(value: object) -> Optional[datetime]:
-    if not isinstance(value, str) or not value:
-        return None
-    try:
-        return _as_utc(datetime.fromisoformat(value.replace("Z", "+00:00")))
-    except ValueError:
-        return None
+def _is_duplicate_key(exc: IntegrityError) -> bool:
+    """MySQL/MariaDB error 1062: a unique index refused the row."""
+    args: tuple[object, ...] = tuple(getattr(exc.orig, "args", None) or ())
+    return len(args) > 0 and args[0] == 1062
 
 
 def _account_key(row: GoogleAccountProvision) -> str:
@@ -299,7 +288,12 @@ class GoogleWorkspaceProvisioningService:
         try:
             directory = directory_for(integration)
             row.google_user_id = await directory.create_user(
-                row.primary_email, given_name, family_name, password, org_unit
+                row.primary_email,
+                given_name,
+                family_name,
+                password,
+                org_unit,
+                member_id=row.user_id,
             )
             row.status = GoogleAccountStatus.CREATED.value
             row.last_error = None
@@ -329,8 +323,11 @@ class GoogleWorkspaceProvisioningService:
     ) -> bool:
         """Decide what an address Google already holds means for this member.
 
-        Returns True when the account turns out to be The Logbook's own, whose
-        password has then been reset to *password* for delivery.
+        Returns True when the account turns out to be The Logbook's own --
+        tagged at creation with this member's id, from an attempt whose answer
+        never arrived -- whose password has then been reset to *password* for
+        delivery. An account tagged for a different member, or not tagged, is
+        somebody else's and is linked, never reset.
 
         Google answers a lookup of an alias with the account that owns it, so
         an address is only treated as the member's when it is that account's
@@ -356,13 +353,7 @@ class GoogleWorkspaceProvisioningService:
             return False
 
         row.google_user_id = google_id
-        created_at = _google_time(account.get("creationTime"))
-        staged_at = _as_utc(row.created_at) if row.created_at else None
-        if (
-            created_at is not None
-            and staged_at is not None
-            and created_at >= staged_at - _OWN_ACCOUNT_SKEW
-        ):
+        if logbook_member_id(account) == row.user_id:
             # Ours, from an attempt whose answer never arrived. Nobody holds
             # its password, so it is reset for this attempt to deliver.
             try:
@@ -575,6 +566,105 @@ class GoogleWorkspaceProvisioningService:
         )
         await self.db.commit()
         logger.info(f"Google Workspace suspension for user {row.user_id}: {outcome}")
+
+    async def link_existing_members(
+        self, organization_id: str, *, apply: bool, actor_id: Optional[str]
+    ) -> dict[str, int]:
+        """Bring members who joined before the integration under it.
+
+        A current member whose Logbook email is exactly the primary address of
+        an account in the Workspace domain gets an "existing account" record,
+        so leaving suspends that account. Nothing in Google is changed. Aliases
+        and groups are never listed as users, so they never match. Members who
+        have already left are counted, not linked: linking them would suspend
+        their accounts now, which is a decision this does not make.
+
+        With ``apply`` False nothing is written; the counts preview the run.
+        Raises ProvisionRetryError with a safe message when it cannot run.
+        """
+        integration = await self._active_integration(organization_id)
+        if integration is None:
+            raise ProvisionRetryError("Connect the Google Workspace integration first.")
+        domain = str((integration.config or {}).get("domain", "")).lower()
+        try:
+            accounts = await directory_for(integration).list_users(domain)
+        except GoogleWorkspaceError as exc:
+            raise ProvisionRetryError(str(exc))
+        by_address: dict[str, str] = {}
+        for account in accounts:
+            address = str(account.get("primaryEmail", "")).strip().lower()
+            google_id = account.get("id")
+            if address and isinstance(google_id, str) and google_id:
+                by_address[address] = google_id
+
+        recorded = set(
+            (
+                await self.db.execute(
+                    select(GoogleAccountProvision.user_id).where(
+                        GoogleAccountProvision.organization_id == str(organization_id)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        members = (
+            (
+                await self.db.execute(
+                    select(User).where(User.organization_id == str(organization_id))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        counts = {
+            "linked": 0,
+            "already_linked": 0,
+            "departed": 0,
+            "not_in_google": 0,
+            "off_domain": 0,
+        }
+        for member in members:
+            if str(member.id) in recorded:
+                counts["already_linked"] += 1
+                continue
+            address = (member.email or "").strip().lower()
+            if not address or _domain_of(address) != domain:
+                counts["off_domain"] += 1
+                continue
+            google_id = by_address.get(address)
+            if google_id is None:
+                counts["not_in_google"] += 1
+                continue
+            if member_has_departed(member):
+                counts["departed"] += 1
+                continue
+            counts["linked"] += 1
+            if apply:
+                self.db.add(
+                    GoogleAccountProvision(
+                        organization_id=str(organization_id),
+                        user_id=str(member.id),
+                        primary_email=address,
+                        status=GoogleAccountStatus.LINKED_EXISTING.value,
+                        google_user_id=google_id,
+                        created_by=actor_id,
+                    )
+                )
+        if apply:
+            try:
+                await self.db.commit()
+            except IntegrityError as exc:
+                await self.db.rollback()
+                # A conversion recorded one of these members meanwhile, and
+                # the unique index on user_id refused the second record.
+                # Anything else is not that, and is raised.
+                if not _is_duplicate_key(exc):
+                    raise
+                raise ProvisionRetryError(
+                    "A member was given an account while this ran. Run it again."
+                )
+        return counts
 
     async def sync_pending_suspensions(self) -> int:
         """Finish every suspension a departure or return left unsettled.

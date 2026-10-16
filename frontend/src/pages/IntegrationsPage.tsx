@@ -55,6 +55,7 @@ import {
   type SalesforceReadiness,
   type SalesforcePreviewResult,
   type CalcomBooking,
+  type GoogleWorkspaceLinkResult,
 } from '../services/api';
 import type { McpStatus } from '../services/adminServices';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -341,6 +342,17 @@ const labelClass = 'form-label';
 // PayPal settles a store order.
 const webhookCallbackUrl = (provider: 'documenso' | 'calcom' | 'paypal', integrationId: string): string =>
   `${window.location.origin}/api/public/v1/webhooks/${provider}/${integrationId}`;
+
+// The members a link run leaves alone, and why, in one sentence each.
+const describeGoogleLinkSkips = (result: GoogleWorkspaceLinkResult): string => {
+  const parts = [
+    result.already_linked > 0 && `${result.already_linked} already linked`,
+    result.not_in_google > 0 && `${result.not_in_google} with no account at their address`,
+    result.off_domain > 0 && `${result.off_domain} with an email outside the domain`,
+    result.departed > 0 && `${result.departed} who have already left`,
+  ].filter((part): part is string => typeof part === 'string');
+  return parts.length > 0 ? `Skipped: ${parts.join(', ')}.` : '';
+};
 
 const IntegrationsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -785,6 +797,33 @@ const IntegrationsPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Connection test failed'));
     } finally {
       setTesting(false);
+    }
+  };
+
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+
+  const handleLinkExistingGoogle = async () => {
+    setLinkingGoogle(true);
+    try {
+      const preview = await integrationsService.linkExistingGoogleMembers(false);
+      if (preview.linked === 0) {
+        toast.success(`No members to link. ${describeGoogleLinkSkips(preview)}`);
+        return;
+      }
+      const confirmed = await confirm({
+        title: `Link ${preview.linked} existing ${preview.linked === 1 ? 'member' : 'members'} to Google?`,
+        message: `Each one's Logbook email is already an account in Google Workspace. Once linked, The Logbook suspends that account when the member leaves and lifts its own suspension if they return; it changes nothing else about the account. ${describeGoogleLinkSkips(preview)}`,
+        confirmLabel: 'Link accounts',
+        cancelLabel: 'Not now',
+        variant: 'warning',
+      });
+      if (!confirmed) return;
+      const result = await integrationsService.linkExistingGoogleMembers(true);
+      toast.success(`Linked ${result.linked} ${result.linked === 1 ? 'member' : 'members'} to Google Workspace`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not link existing members to Google Workspace'));
+    } finally {
+      setLinkingGoogle(false);
     }
   };
 
@@ -1861,6 +1900,23 @@ const IntegrationsPage: React.FC = () => {
                           <span>Settings</span>
                         </button>
                       )}
+                      {integration.integration_type === 'google-workspace' &&
+                        canChange(integration.integration_type) && (
+                          <button
+                            onClick={() => {
+                              void handleLinkExistingGoogle();
+                            }}
+                            disabled={linkingGoogle}
+                            className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {linkingGoogle ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <Link className="h-3.5 w-3.5" aria-hidden="true" />
+                            )}
+                            <span>Link existing members</span>
+                          </button>
+                        )}
                       {integration.integration_type === 'salesforce' && (
                         <button
                           onClick={() => setShowSyncPanel(!showSyncPanel)}

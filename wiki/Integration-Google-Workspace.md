@@ -18,6 +18,7 @@ with a **Retry**.
 - **Password to the personal address** — the temporary Google password rides in the welcome email (as its own card, so customized welcome templates need no edits) or, when no welcome email is sent, in an email of its own; both go to the member's personal address, since the new mailbox cannot receive the password that opens it. It is never stored
 - **Existing accounts are linked, not changed** — if the address already belongs to an account, alias or group, The Logbook records the link and changes nothing except suspending it when the member leaves
 - **Suspended on departure** — dropping or deleting a member suspends the account; undoing the drop, a rejoin or a reactivation lifts a suspension The Logbook applied
+- **Members from before the integration** — **Link existing members** links current members to the accounts already at their addresses, so those are suspended when they leave too
 - **Administrator only** — connecting, changing or disconnecting needs `admin.access` in addition to `integrations.manage`
 
 ---
@@ -49,6 +50,34 @@ Each account created uses a Workspace license. Workspace for Nonprofits is free 
 
 A retry runs at most once a minute per member.
 
+Every account The Logbook creates carries the member's Logbook id in Google's
+standard **External IDs** field (type _custom_, `the-logbook-member`). It is
+how a retry recognises an account an earlier attempt created whose answer from
+Google never arrived: an account at the address carrying this member's id is
+The Logbook's own, and is finished; anything else at the address is linked as
+an existing account and never changed. Remove the entry in the Admin console
+and The Logbook treats that account as someone else's.
+
+---
+
+## Members Who Joined Before the Integration
+
+Accounts only get a record — and so only get suspended — when The Logbook
+creates or links them at conversion. For members who were already on the
+roster, an administrator clicks **Integrations → Google Workspace → Link
+existing members**. The Logbook lists the domain's users (read only), shows
+how many members it would link and why it would skip the rest, and links them
+when confirmed.
+
+A member is linked when their **Logbook email** is exactly an account's
+**primary** address in the integration's domain (an alias does not count).
+Skipped: members already linked, members with no account at their address,
+members whose email is outside the domain, and members who have already left —
+linking a departed member would suspend an account somebody may still be
+using, so that stays a decision for the Google Admin console. Linking changes
+nothing in Google; it only means the account is suspended when the member
+leaves. It is safe to run again, and is recorded in the audit log.
+
 ---
 
 ## API Endpoints
@@ -56,9 +85,12 @@ A retry runs at most once a minute per member.
 ```
 GET    /api/v1/integrations/google-workspace/members/{user_id}         # The member's account record, or account: null
 POST   /api/v1/integrations/google-workspace/members/{user_id}/retry   # Finish whatever is incomplete
+POST   /api/v1/integrations/google-workspace/link-existing?apply=false  # Preview (false) or link (true) existing members
 ```
 
-Both require `members.manage` and are scoped to the caller's organization. The
+The two member routes require `members.manage`; `link-existing` requires
+`integrations.manage` and `admin.access`. All are scoped to the caller's
+organization. The
 integration itself uses the standard `/api/v1/integrations/{id}/…` routes.
 
 ---

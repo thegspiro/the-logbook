@@ -533,6 +533,10 @@ The account is created **after** the conversion is saved, so a Google failure ne
 
 Dropping a member (voluntary or involuntary) or deleting them **suspends** their Google account; undoing the drop, a rejoin or reactivating an archived member lifts it again. Retired, on-leave and inactive members keep their account. The Logbook only lifts a suspension it applied itself — an account someone had already suspended in Google stays suspended. If Google cannot be reached, the departure still goes through and the member's profile offers a **Retry**.
 
+### Members Who Joined Earlier
+
+Only accounts The Logbook created or linked are suspended. To cover members who were on the roster before the integration, an administrator clicks **Link existing members** on the Google Workspace card. It shows how many members have an account at exactly their Logbook email and why the others are skipped, then links them once confirmed. Members who have already left are not linked. Nothing changes in Google.
+
 See [Google Workspace Integration](../../wiki/Integration-Google-Workspace.md) for setup steps and account states.
 
 ---

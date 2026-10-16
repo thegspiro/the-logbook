@@ -23,6 +23,26 @@ from app.services.integration_services.google_calendar_service import _BoundedHt
 if TYPE_CHECKING:
     from app.models.integration import Integration
 
+# The Logbook marks each account it creates with the member's id, in the
+# user's standard ``externalIds`` field (no extra scope). It is what tells a
+# 409 on a retry -- an account an earlier attempt created whose answer never
+# arrived -- from somebody else's account at the same address.
+LOGBOOK_EXTERNAL_ID_TYPE = "the-logbook-member"
+
+
+def logbook_member_id(account: dict[str, Any]) -> Optional[str]:
+    """The Logbook member id an account was created for, if it carries one."""
+    for entry in account.get("externalIds") or []:
+        if (
+            isinstance(entry, dict)
+            and entry.get("type") == "custom"
+            and entry.get("customType") == LOGBOOK_EXTERNAL_ID_TYPE
+            and isinstance(entry.get("value"), str)
+        ):
+            return str(entry["value"])
+    return None
+
+
 DIRECTORY_SCOPES = (
     "https://www.googleapis.com/auth/admin.directory.user",
     "https://www.googleapis.com/auth/admin.directory.group.member",
@@ -147,14 +167,22 @@ class GoogleWorkspaceDirectory:
         family_name: str,
         password: str,
         org_unit_path: str,
+        member_id: str,
     ) -> Optional[str]:
-        """Create the account; returns Google's user id."""
+        """Create the account, tagged with *member_id*; returns Google's id."""
         body = {
             "primaryEmail": primary_email,
             "name": {"givenName": given_name, "familyName": family_name},
             "password": password,
             "changePasswordAtNextLogin": True,
             "orgUnitPath": org_unit_path or "/",
+            "externalIds": [
+                {
+                    "type": "custom",
+                    "customType": LOGBOOK_EXTERNAL_ID_TYPE,
+                    "value": member_id,
+                }
+            ],
         }
 
         def call() -> Any:
@@ -163,6 +191,39 @@ class GoogleWorkspaceDirectory:
         created = await self._run("account creation", call)
         google_id = created.get("id") if isinstance(created, dict) else None
         return google_id if isinstance(google_id, str) else None
+
+    async def list_users(self, domain: str) -> list[dict[str, Any]]:
+        """Every user in *domain*: id, primary address and suspension.
+
+        Paged at Google's maximum of 500, so a department-sized domain takes a
+        call or two rather than one per member. Aliases are not users and are
+        not listed.
+        """
+        users: list[dict[str, Any]] = []
+        page_token: Optional[str] = None
+        while True:
+
+            def call(token: Optional[str] = page_token) -> Any:
+                return (
+                    self._service()
+                    .users()
+                    .list(
+                        domain=domain,
+                        maxResults=500,
+                        pageToken=token,
+                        projection="basic",
+                        fields="users(id,primaryEmail,suspended),nextPageToken",
+                    )
+                    .execute()
+                )
+
+            page = await self._run("account listing", call)
+            if not isinstance(page, dict):
+                return users
+            users.extend(u for u in page.get("users") or [] if isinstance(u, dict))
+            page_token = page.get("nextPageToken")
+            if not page_token:
+                return users
 
     async def get_user(self, user_key: str) -> dict[str, Any]:
         """The account *user_key* resolves to. An alias resolves to the account
