@@ -15,6 +15,7 @@ import type {
   ExpiringLot,
   InventoryCategory,
   InventoryCategoryCreate,
+  InventoryImportResult,
   InventoryItem,
   InventoryItemCreate,
   InventoryItemsListResponse,
@@ -68,13 +69,68 @@ export interface MedicalSupplySummary {
 export interface MedicalItemUpdate {
   name?: string;
   category_id?: string;
+  size?: string | null;
   description?: string | null;
   manufacturer?: string | null;
+  also_called?: string[] | null;
   quantity?: number | null;
   unit_of_measure?: string | null;
   reorder_point?: number | null;
+  /** Free text kept beside the structured location, shown as a note. */
   storage_location?: string | null;
+  /** The room, and the storage area within it (Inventory › Storage Areas). */
+  location_id?: string | null;
+  storage_area_id?: string | null;
   vendor?: string | null;
+}
+
+/** A room or place a supply can be filed under. */
+export interface MedicalStorageRoom {
+  id: string;
+  name: string;
+}
+
+/** An active storage area, with its room resolved from the top of its tree. */
+export interface MedicalStorageArea {
+  id: string;
+  name: string;
+  label?: string | null;
+  storage_type?: string | null;
+  parent_id?: string | null;
+  location_id?: string | null;
+  location_name?: string | null;
+  /** "Cabinet B › Shelf 2", the area's own name last. */
+  path: string;
+}
+
+export interface MedicalStorageOptions {
+  rooms: MedicalStorageRoom[];
+  areas: MedicalStorageArea[];
+}
+
+/**
+ * An apparatus checklist position this supply fills. camelCase: it is the
+ * equipment-check `ItemDeployment` schema, read through the medical route.
+ */
+export interface MedicalSupplyPlacement {
+  templateItemId: string;
+  itemName: string;
+  compartmentName?: string | null;
+  /** The checklist's nesting, outermost first: ["Main Compartment", "Jump Bag"]. */
+  compartmentPath?: string[];
+  templateId?: string | null;
+  templateName?: string | null;
+  apparatusId?: string | null;
+  apparatusName?: string | null;
+  apparatusType?: string | null;
+  lotNumber?: string | null;
+  expirationDate?: string | null;
+  daysUntilExpiration?: number | null;
+  isExpired: boolean;
+  /** What the position should hold. */
+  targetQuantity?: number | null;
+  /** Last counted aboard; null when nobody has counted since it was set up. */
+  quantityOnTruck?: number | null;
 }
 
 /** Same rationale as MedicalItemUpdate: a cleared field must send null. */
@@ -82,6 +138,12 @@ export interface MedicalCategoryUpdate {
   name?: string;
   description?: string | null;
   low_stock_threshold?: number | null;
+}
+
+export interface MedicalCategoryDeleteResult {
+  category_name: string;
+  items_moved: number;
+  moved_to_name: string | null;
 }
 
 /**
@@ -97,12 +159,34 @@ export interface MedicalItemFilters {
   location_id?: string | undefined;
   storage_area_id?: string | undefined;
   search?: string | undefined;
+  /** With `search`, also return supplies whose name or "also called" names merely resemble it, below the exact matches. */
+  fuzzy?: boolean | undefined;
+  /** Only supplies at or below their reorder point — the set the summary's Low stock figure counts. */
+  low_stock?: boolean | undefined;
   active_only?: boolean | undefined;
   sort_by?: string | undefined;
   sort_order?: 'asc' | 'desc' | undefined;
   skip?: number | undefined;
   limit?: number | undefined;
 }
+
+/**
+ * The general import's result, plus what only this import does. `imported`
+ * counts supplies created; `lots_added` counts stock lots recorded, whether on
+ * a supply the file created or on one already on file.
+ */
+export interface MedicalImportResult extends InventoryImportResult {
+  lots_added: number;
+  categories_created: string[];
+}
+
+export interface MedicalBulkRetireResult {
+  retired: string[];
+  failed: Array<{ item_id: string; error: string }>;
+}
+
+/** The list's filters, minus paging: an export is the whole filtered set. */
+export type MedicalExportFilters = Omit<MedicalItemFilters, 'skip' | 'limit' | 'fuzzy'>;
 
 export const medicalSuppliesService = {
   async getSummary(expiringWithinDays?: number, options?: MedicalReadOptions): Promise<MedicalSupplySummary> {
@@ -128,6 +212,18 @@ export const medicalSuppliesService = {
 
   async updateCategory(categoryId: string, data: MedicalCategoryUpdate): Promise<InventoryCategory> {
     const response = await api.patch<InventoryCategory>(`/medical-supplies/categories/${categoryId}`, data);
+    return response.data;
+  },
+
+  /**
+   * Permanently deletes a category. One that still holds supplies is refused
+   * (409) unless `moveItemsTo` names the category to move them to — a deleted
+   * category would otherwise leave them with none, which files them as gear.
+   */
+  async deleteCategory(categoryId: string, moveItemsTo?: string): Promise<MedicalCategoryDeleteResult> {
+    const response = await api.delete<MedicalCategoryDeleteResult>(`/medical-supplies/categories/${categoryId}`, {
+      params: moveItemsTo ? { move_items_to: moveItemsTo } : undefined,
+    });
     return response.data;
   },
 
@@ -174,6 +270,31 @@ export const medicalSuppliesService = {
     await api.post(`/medical-supplies/items/${itemId}/retire`, { notes });
   },
 
+  /**
+   * Retire several supplies at once. Each is retired on its own, so ones that
+   * cannot go (checked out, assigned) come back in `failed` while the rest
+   * are retired.
+   */
+  async bulkRetireItems(itemIds: string[], notes?: string): Promise<MedicalBulkRetireResult> {
+    const response = await api.post<MedicalBulkRetireResult>('/medical-supplies/items/bulk-retire', {
+      item_ids: itemIds,
+      ...(notes ? { notes } : {}),
+    });
+    return response.data;
+  },
+
+  /** Rooms and active storage areas a supply can be filed under. */
+  async getStorageOptions(): Promise<MedicalStorageOptions> {
+    const response = await api.get<MedicalStorageOptions>('/medical-supplies/storage-options');
+    return response.data;
+  },
+
+  /** The apparatus checklist positions that carry this supply. */
+  async getItemPlacements(itemId: string): Promise<MedicalSupplyPlacement[]> {
+    const response = await api.get<MedicalSupplyPlacement[]>(`/medical-supplies/items/${itemId}/placements`);
+    return response.data;
+  },
+
   async getItemLots(itemId: string): Promise<InventoryLot[]> {
     const response = await api.get<InventoryLot[]>(`/medical-supplies/items/${itemId}/lots`);
     return response.data;
@@ -197,6 +318,44 @@ export const medicalSuppliesService = {
 
   async deleteLot(lotId: string): Promise<void> {
     await api.delete(`/medical-supplies/lots/${lotId}`);
+  },
+
+  // Exports skip the response cache: a file somebody reconciles stock against
+  // must be what the server holds now, not what it held thirty seconds ago.
+  async exportItemsCsv(filters?: MedicalExportFilters): Promise<Blob> {
+    const response = await api.get<Blob>('/medical-supplies/items/export', {
+      params: filters,
+      responseType: 'blob',
+      ...readConfig({ bypassCache: true }),
+    });
+    return response.data;
+  },
+
+  async exportLotsCsv(): Promise<Blob> {
+    const response = await api.get<Blob>('/medical-supplies/lots/export', {
+      responseType: 'blob',
+      ...readConfig({ bypassCache: true }),
+    });
+    return response.data;
+  },
+
+  async downloadImportTemplate(): Promise<Blob> {
+    const response = await api.get<Blob>('/medical-supplies/items/import-template', { responseType: 'blob' });
+    return response.data;
+  },
+
+  /**
+   * A row creates a new supply, or — when it carries lot columns and names a
+   * supply already on file — adds a stock lot to that supply. An unknown
+   * category is created as a medical one.
+   */
+  async importItemsCsv(file: File): Promise<MedicalImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<MedicalImportResult>('/medical-supplies/items/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
   },
 
   async getExpiringLots(daysAhead = 30, options?: MedicalReadOptions): Promise<ExpiringLot[]> {

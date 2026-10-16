@@ -14,7 +14,7 @@ An open-source, modular intranet platform designed for fire departments, emergen
 - **Tamper-Proof Logging** — Cryptographic audit trails with integrity verification
 - **Multi-Tenancy Ready** — Host multiple organizations on a single installation
 - **Integration Framework** — Connect with Microsoft 365, Google Workspace, and more
-- **Role-Based Access Control** — Granular permissions with 16 system roles
+- **Role-Based Access Control** — Granular permissions with 31 default positions
 - **Mobile Responsive** — Progressive Web App (PWA) support
 - **Public Kiosk Displays** — Tablet-friendly pages for room QR code check-in, no login required
 - **Unified Location System** — Single source of truth for all rooms, buildings, and venues across every module
@@ -145,11 +145,11 @@ This automatically:
 
 Choose a profile based on your hardware:
 
-| Profile    | RAM   | Best For                          |
-| ---------- | ----- | --------------------------------- |
-| `minimal`  | 1-2GB | Raspberry Pi, small VPS           |
-| `standard` | 4GB   | Most deployments (default)        |
-| `full`     | 8GB+  | Large organizations, all features |
+| Profile    | RAM  | Best For                          |
+| ---------- | ---- | --------------------------------- |
+| `minimal`  | 3GB  | Raspberry Pi, small VPS           |
+| `standard` | 4GB  | Most deployments (default)        |
+| `full`     | 8GB+ | Large organizations, all features |
 
 ```bash
 # Raspberry Pi / Low memory
@@ -241,8 +241,11 @@ git clone https://github.com/thegspiro/the-logbook.git /opt/the-logbook
 cd /opt/the-logbook
 cp .env.example .env
 # Edit .env with your settings (set strong secrets + ENVIRONMENT=production)
+# The bundled MySQL/Redis speak plaintext, and the production override refuses
+# to boot against them unless you accept that explicitly (as the installers do):
+echo "SECURITY_REQUIRE_TLS=false" >> .env
 # Layer the production override so the deployment is hardened (no --reload,
-# docs disabled, HTTPS/TLS enforced) instead of the base development posture:
+# docs disabled, HTTPS enforced) instead of the base development posture:
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
@@ -262,6 +265,9 @@ cd /volume1/docker/the-logbook
 sudo git clone https://github.com/thegspiro/the-logbook.git .
 sudo cp .env.example .env
 # Edit .env with your settings (set strong secrets + ENVIRONMENT=production)
+# The bundled MySQL/Redis speak plaintext, and the production override refuses
+# to boot against them unless you accept that explicitly (as the installers do):
+echo "SECURITY_REQUIRE_TLS=false" | sudo tee -a .env
 # Layer the production override for a hardened deployment:
 sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
@@ -293,7 +299,7 @@ Two environment templates are provided. Choose the one that fits your deployment
 | --------------- | ----------------------------- | ------------------------------------------- |
 | **Best for**    | Quick setup, most deployments | Production hardening, advanced integrations |
 | **Variables**   | ~30                           | ~100+                                       |
-| **Default env** | `production`                  | `development`                               |
+| **Default env** | `development`                 | `development`                               |
 | **Setup time**  | 5 minutes                     | 15–30 minutes                               |
 
 **Use `.env.example` (recommended start)** if you want to get running quickly with sensible defaults. It covers security keys, database, Redis, CORS, ports, timezone, basic module toggles, email, and backups. This is sufficient for most single-server deployments.
@@ -335,21 +341,22 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 
 ## Supported Platforms
 
-| Platform                                                 | Architecture  | Profile           | Status                  |
-| -------------------------------------------------------- | ------------- | ----------------- | ----------------------- |
-| **Linux** (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch) | x86_64        | All               | ✅ Full support         |
-| **macOS** (Intel & Apple Silicon)                        | x86_64, ARM64 | All               | ✅ Full support         |
-| **Windows** (WSL2)                                       | x86_64        | All               | ✅ Full support         |
-| **Raspberry Pi 4/5**                                     | ARM64         | minimal, standard | ✅ Full support         |
-| **Raspberry Pi 3**                                       | ARMv7         | minimal           | ⚠️ Limited (1GB RAM)    |
-| **AWS** (EC2, ECS, Fargate)                              | x86_64, ARM64 | All               | ✅ Full support         |
-| **Azure** (VMs, Container Instances)                     | x86_64        | All               | ✅ Full support         |
-| **Google Cloud** (Compute, Cloud Run)                    | x86_64        | All               | ✅ Full support         |
-| **DigitalOcean** (Droplets, App Platform)                | x86_64        | All               | ✅ Full support         |
-| **Proxmox VE** (LXC, VM)                                 | x86_64        | All               | ✅ Full support         |
-| **Synology NAS** (DS+, XS+ series)                       | x86_64        | minimal, standard | ✅ Full support         |
-| **Unraid**                                               | x86_64        | standard          | ✅ Optimized            |
-| **Kubernetes**                                           | x86_64, ARM64 | standard, full    | ✅ Helm chart available |
+| Platform                                                 | Architecture  | Profile           | Status           |
+| -------------------------------------------------------- | ------------- | ----------------- | ---------------- |
+| **Linux** (Ubuntu, Debian, Fedora, CentOS, Alpine, Arch) | x86_64        | All               | ✅ Full support  |
+| **macOS** (Intel & Apple Silicon)                        | x86_64, ARM64 | All               | ✅ Full support  |
+| **Windows** (WSL2)                                       | x86_64        | All               | ✅ Full support  |
+| **Raspberry Pi 4/5**                                     | ARM64         | minimal, standard | ✅ Full support  |
+| **Raspberry Pi 3**                                       | ARMv7         | —                 | ❌ Not supported |
+| **AWS** (EC2, ECS, Fargate)                              | x86_64, ARM64 | All               | ✅ Full support  |
+| **Azure** (VMs, Container Instances)                     | x86_64        | All               | ✅ Full support  |
+| **Google Cloud** (Compute, Cloud Run)                    | x86_64        | All               | ✅ Full support  |
+| **DigitalOcean** (Droplets, App Platform)                | x86_64        | All               | ✅ Full support  |
+| **Proxmox VE** (LXC, VM)                                 | x86_64        | All               | ✅ Full support  |
+| **Synology NAS** (DS+, XS+ series)                       | x86_64        | minimal, standard | ✅ Full support  |
+| **Unraid**                                               | x86_64        | standard          | ✅ Optimized     |
+
+ARMv7 (32-bit) hosts cannot run the stack: the ClamAV image every profile requires is published for amd64, arm64 and ppc64le only.
 
 ## Documentation
 
@@ -379,11 +386,11 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 - [Public API](docs/PUBLIC_API_DOCUMENTATION.md) — Public forms and kiosk display endpoints
 - [Drop Notifications](docs/DROP_NOTIFICATIONS.md) — Configurable notifications, CC recipients, email templates
 - [Application Pages](APPLICATION_PAGES.md) — Complete page inventory and route map
-- [Role System](ROLE_SYSTEM_README.md) — Role-based access control (16 system roles)
+- [Role System](ROLE_SYSTEM_README.md) — Role-based access control (31 default positions)
 
 ### Development
 
-- [Python Backend Guide](docs/backend/python-backend.md) — Backend development
+- [Python Backend Guide](wiki/Development-Backend.md) — Backend development
 - [TypeScript Safeguards](docs/TYPESCRIPT_SAFEGUARDS.md) — Multi-layer build protection
 - [Testing Guide](TESTING.md) — Test suites for onboarding and event components
 

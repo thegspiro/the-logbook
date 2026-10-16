@@ -357,11 +357,18 @@ async def update_pipeline(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    pipeline = await service.update_pipeline(
-        str(pipeline_id),
-        current_user.organization_id,
-        data.model_dump(exclude_unset=True),
-    )
+    # apply_updates raises ValueError for a null aimed at a NOT NULL column
+    # (name, public_show_future_stages); unhandled, that was a 500.
+    try:
+        pipeline = await service.update_pipeline(
+            str(pipeline_id),
+            current_user.organization_id,
+            data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not pipeline:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
@@ -1926,6 +1933,40 @@ async def transfer_prospect(
         user_id=str(current_user.id),
         username=current_user.username,
     )
+
+    # A Google Workspace account is created only once the member is durable,
+    # and the welcome email that carries its password waits for it.
+    send_after_commit = result.pop("_send_welcome_email", None)
+    provision_after_commit = result.pop("_provision_google", None)
+    if send_after_commit is not None or provision_after_commit is not None:
+        await db.commit()
+        # The member is committed: nothing after this point may turn the
+        # response into an error. What failed is on the account record, where
+        # the member's profile offers a retry.
+        try:
+            if send_after_commit is not None:
+                result["welcome_email_sent"] = bool(await send_after_commit())
+            if provision_after_commit is not None:
+                await provision_after_commit()
+            from app.services.google_workspace_provisioning_service import (
+                GoogleWorkspaceProvisioningService,
+            )
+
+            row = await GoogleWorkspaceProvisioningService(db).get_for_user(
+                str(result["user_id"]), str(current_user.organization_id)
+            )
+            if row is not None:
+                result["google_account"] = {
+                    "status": row.status,
+                    "email": row.primary_email,
+                    "credentials_sent": bool(row.credentials_sent),
+                    "last_error": row.last_error,
+                }
+        except Exception:
+            logger.exception(
+                f"Post-conversion delivery failed for prospect {prospect_id}"
+            )
+            await db.rollback()
     return result
 
 

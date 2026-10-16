@@ -20,21 +20,44 @@ that runs everything through one quartermaster keeps working unchanged: they
 hold ``inventory.manage`` and these routes accept it.
 """
 
+import csv
+import io
+from collections.abc import AsyncGenerator
+from datetime import date
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends
+from fastapi import File as FastAPIFile
+from fastapi import HTTPException, Query, UploadFile, status
+from loguru import logger
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import StreamingResponse
 
 from app.api.dependencies import require_permission
+from app.api.v1.endpoints.inventory import (
+    _EXPORT_PAGE_SIZE,
+    _IMPORT_TEMPLATE_ROWS,
+    MAX_INVENTORY_CSV_BYTES,
+    _coerce_csv_row,
+)
 from app.core.audit import log_audit_event
-from app.core.database import get_db
+from app.core.database import async_session_factory, get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import safe_error_detail, sanitize_error_message
-from app.models.inventory import MEDICAL_ITEM_TYPES, ItemCondition, ItemStatus
+from app.models.inventory import (
+    MEDICAL_ITEM_TYPES,
+    InventoryItem,
+    ItemCondition,
+    ItemStatus,
+)
 from app.models.user import User
+from app.schemas.equipment_check import ItemDeployment
 from app.schemas.inventory import (
     ExpiringLotResponse,
     InventoryCategoryCreate,
+    InventoryCategoryDeleteResult,
     InventoryCategoryResponse,
     InventoryCategoryUpdate,
     InventoryItemCreate,
@@ -45,15 +68,28 @@ from app.schemas.inventory import (
     InventoryLotCreate,
     InventoryLotResponse,
     InventoryLotUpdate,
+    ItemBulkRetireFailure,
+    ItemBulkRetireRequest,
+    ItemBulkRetireResult,
     ItemRetireRequest,
     ItemsListResponse,
+    MedicalStorageAreaOption,
+    MedicalStorageOptionsResponse,
+    MedicalStorageRoom,
 )
+from app.services.equipment_check_service import EquipmentCheckService
 from app.services.inventory_service import (
+    CategoryHasItemsError,
     InventoryService,
     ItemNameTakenOutsideDomainError,
     ItemOutsideDomainError,
+    is_pool_without_stock,
 )
+from app.services.upload_scanning import reject_if_malicious
+from app.utils.csv_export import SafeCsvWriter
+from app.utils.name_matching import normalize_name
 from app.utils.org_timezone import resolve_org_today
+from app.utils.upload_limits import read_upload_limited
 
 router = APIRouter()
 
@@ -111,11 +147,19 @@ async def list_medical_categories(
     **Requires permission: inventory.view_medical or inventory.view**
     """
     service = InventoryService(db)
-    return await service.get_categories(
+    categories = await service.get_categories(
         organization_id=current_user.organization_id,
         item_types=MEDICAL_ITEM_TYPES,
         active_only=active_only,
     )
+    counts = await service.category_item_counts(
+        str(current_user.organization_id), [c.id for c in categories]
+    )
+    # Transient, like lot_stock on items: read by the response schema and
+    # never persisted.
+    for category in categories:
+        category.item_count = counts.get(str(category.id), 0)
+    return categories
 
 
 @router.post(
@@ -245,6 +289,69 @@ async def update_medical_category(
     return updated
 
 
+@router.delete(
+    "/categories/{category_id}", response_model=InventoryCategoryDeleteResult
+)
+async def delete_medical_category(
+    category_id: UUID,
+    move_items_to: UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.manage_medical", "inventory.manage")
+    ),
+):
+    """
+    Permanently delete a medical supply category
+
+    A category that still holds supplies is refused (409) unless
+    ``move_items_to`` names another medical supply category, in which case its
+    supplies — retired ones included — are moved there first. A category with
+    subcategories is refused (400). This cannot be undone.
+
+    **Authentication required**
+    **Requires permission: inventory.manage_medical or inventory.manage**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    await _require_medical_category(service, str(category_id), org_id)
+    if move_items_to:
+        await _require_medical_category(service, str(move_items_to), org_id)
+
+    try:
+        result = await service.delete_category_permanently(
+            category_id=category_id,
+            organization_id=org_id,
+            item_types=MEDICAL_ITEM_TYPES,
+            move_items_to=move_items_to,
+        )
+    except CategoryHasItemsError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Medical supply category not found")
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="medical_category_deleted",
+        event_category="inventory",
+        severity="warning",
+        event_data={
+            "category_id": str(category_id),
+            "category_name": result["category_name"],
+            "items_moved": result["items_moved"],
+            "moved_to_category_id": str(move_items_to) if move_items_to else None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return result
+
+
 # ============================================
 # Items
 # ============================================
@@ -263,6 +370,8 @@ async def list_medical_items(
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
+    fuzzy: bool = False,
+    low_stock: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("inventory.view_medical", "inventory.view")
@@ -270,6 +379,9 @@ async def list_medical_items(
 ):
     """
     List medical supply items
+
+    ``low_stock=true`` narrows to the supplies at or below their reorder
+    point — the set the summary's "Low stock" figure counts.
 
     **Authentication required**
     **Requires permission: inventory.view_medical or inventory.view**
@@ -299,22 +411,887 @@ async def list_medical_items(
             service, str(category_id), str(current_user.organization_id)
         )
 
+    org_id = str(current_user.organization_id)
+    item_ids = await _medical_filter_ids(
+        service,
+        org_id,
+        low_stock=low_stock,
+        location_id=location_id,
+        storage_area_id=storage_area_id,
+    )
+
     items, total = await service.get_items(
         organization_id=current_user.organization_id,
         category_id=category_id,
         status=status_enum,
         condition=condition_enum,
         item_types=MEDICAL_ITEM_TYPES,
-        location_id=location_id,
-        storage_area_id=storage_area_id,
         search=search,
         active_only=active_only,
         sort_by=sort_by,
         sort_order=sort_order,
         skip=skip,
         limit=limit,
+        fuzzy=fuzzy,
+        item_ids=item_ids,
     )
+    await _attach_medical_list_extras(db, service, org_id, items)
     return ItemsListResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+async def _medical_filter_ids(
+    service: InventoryService,
+    organization_id: str,
+    *,
+    low_stock: bool,
+    location_id: Any,
+    storage_area_id: Any,
+) -> Optional[List[str]]:
+    """The id set the list and its export narrow to, or None for no narrowing.
+
+    A storage filter reaches nested areas and an area's room (see
+    ``item_ids_stored_in``), which the exact-match item columns cannot, so it
+    becomes an id set intersected with the low-stock set. Shared by the list
+    and the export so a filtered export holds exactly the rows on screen.
+    """
+    ids: Optional[set] = None
+    if low_stock:
+        ids = set(await _low_stock_ids(service, organization_id))
+    if location_id or storage_area_id:
+        stored = set(
+            await service.item_ids_stored_in(
+                organization_id,
+                MEDICAL_ITEM_TYPES,
+                location_id=str(location_id) if location_id else None,
+                storage_area_id=str(storage_area_id) if storage_area_id else None,
+            )
+        )
+        ids = stored if ids is None else ids & stored
+    return sorted(ids) if ids is not None else None
+
+
+async def _attach_medical_list_extras(
+    db: AsyncSession, service: InventoryService, org_id: str, items: List[Any]
+) -> None:
+    """Next expiry, storage path and apparatus places for each listed supply.
+
+    Transient attributes, like lot_stock: read by the response schema and
+    never persisted. Each is one query for the whole page.
+    """
+    if not items:
+        return
+    ids = [str(i.id) for i in items]
+    soonest = await service.next_lot_expirations(org_id, ids)
+    today = await resolve_org_today(db, org_id) if soonest else None
+    areas = await service.storage_area_index(org_id)
+    rooms = await service.location_names(org_id)
+    carriers = await EquipmentCheckService(db).apparatus_places_for_items(org_id, ids)
+    for item in items:
+        expires = soonest.get(str(item.id))
+        item.next_expiration_date = expires
+        item.days_until_next_expiration = (
+            (expires - today).days if expires and today else None
+        )
+        item.storage_path = service.storage_path(item, areas, rooms)
+        carried = carriers.get(str(item.id))
+        item.apparatus_count = carried["count"] if carried else 0
+        item.apparatus_places = carried["places"] if carried else []
+
+
+async def _low_stock_ids(service: InventoryService, organization_id: Any) -> List[str]:
+    """Ids of the medical supplies at or below their reorder point.
+
+    The same scan the summary counts with, so the list a "Low stock 2" tile
+    opens holds exactly those two — a second definition of "low" here would
+    let the two disagree.
+    """
+    rows = await service.get_low_stock_items_for_alerts(
+        organization_id, item_types=MEDICAL_ITEM_TYPES
+    )
+    return [str(item.id) for item, _on_hand, _from_lots in rows]
+
+
+# ============================================
+# Import / export
+#
+# Registered ahead of /items/{item_id}: that route's path segment matches any
+# string, so "export" and "import-template" would otherwise be swallowed as an
+# item id and answered 422.
+#
+# The CSV parsing is the general inventory import's own (`_coerce_csv_row`),
+# not a copy of it, so a column the two imports share cannot come to mean
+# different things on the two pages. What differs is the domain: every row
+# here lands in a medical supply category, because an item reaches the
+# medical domain only through its category and an uncategorized one would be
+# filed as gear — gone from the page that imported it.
+# ============================================
+
+# Column order is also the import's: a file exported here imports unchanged
+# (the derived Ready Lot Stock and Barcode columns are ignored on the way in).
+_MEDICAL_EXPORT_COLUMNS = [
+    "Name",
+    "Category",
+    "Also Called",
+    "Description",
+    "Size",
+    "Unit of Measure",
+    "Tracking Type",
+    "Quantity",
+    # Lot-stocked supplies carry their real count here, not in Quantity —
+    # see the general export's column of the same name.
+    "Ready Lot Stock",
+    "Reorder Point",
+    "Status",
+    "Condition",
+    "Manufacturer",
+    "Model Number",
+    "Serial Number",
+    "Asset Tag",
+    "Barcode",
+    "Storage Location",
+    "Station",
+    "Vendor",
+    "Purchase Date",
+    "Purchase Price",
+    "Notes",
+]
+
+_MEDICAL_LOT_EXPORT_COLUMNS = [
+    "Item",
+    "Category",
+    "Lot Number",
+    "Expiration Date",
+    "Days Until Expiration",
+    "Quantity",
+    "Received Date",
+    "Storage Location",
+    "Unit Cost",
+    "Notes",
+]
+
+# Read on import only. A row carrying any of them records a stock lot of the
+# row's Quantity; the item export has no lot columns because an item has many
+# lots, and the lot export is where they are listed.
+_LOT_IMPORT_COLUMNS = ["Lot Number", "Expiration Date", "Received Date"]
+
+_MEDICAL_TEMPLATE_HEADER = [
+    column
+    for column in _MEDICAL_EXPORT_COLUMNS
+    if column not in ("Ready Lot Stock", "Barcode")
+] + _LOT_IMPORT_COLUMNS
+
+# Sample lots for a few of the general template's medical rows, so the
+# template shows both shapes: a supply with its first lot, and the same supply
+# named again to add a second lot rather than a second supply.
+_TEMPLATE_LOT_ROWS: Dict[str, List[Dict[str, str]]] = {
+    "Gauze Pads, 4x4 Sterile": [
+        {"Lot Number": "GZ-24117", "Expiration Date": "2028-03-31"},
+        {"Lot Number": "GZ-25002", "Expiration Date": "2029-01-31", "Quantity": "25"},
+    ],
+    "Glucometer Test Strips": [
+        {
+            "Lot Number": "GS-0912",
+            "Expiration Date": "2027-06-30",
+            "Received Date": "2026-10-01",
+            "Notes": "",
+        },
+    ],
+}
+
+# Columns the shared parser does not know. Item Type is read only to refuse a
+# row that says it is something other than medical — a gear row pasted into
+# this file would otherwise be filed as medical stock without a word.
+_REORDER_POINT_HEADERS = {"reorder point", "reorder_point", "reorderpoint"}
+_UNIT_HEADERS = {"unit of measure", "unit_of_measure", "unitofmeasure", "unit"}
+_ITEM_TYPE_HEADERS = {"item type", "item_type", "itemtype", "type"}
+_LOT_HEADERS = {
+    "lot number": "lot_number",
+    "lot_number": "lot_number",
+    "lotnumber": "lot_number",
+    "lot": "lot_number",
+    "lot #": "lot_number",
+    "expiration date": "expiration_date",
+    "expiration_date": "expiration_date",
+    "expirationdate": "expiration_date",
+    "expiration": "expiration_date",
+    "expires": "expiration_date",
+    "received date": "received_date",
+    "received_date": "received_date",
+    "receiveddate": "received_date",
+    "received": "received_date",
+}
+
+
+def _enum_text(value: Any) -> str:
+    return value.value if hasattr(value, "value") else str(value or "")
+
+
+def _medical_export_row(item: InventoryItem) -> List[Any]:
+    """One CSV row for a medical supply, in ``_MEDICAL_EXPORT_COLUMNS`` order."""
+    linked_vendor = item.__dict__.get("vendor_record")
+    return [
+        item.name,
+        item.category.name if item.category else "",
+        "; ".join(item.also_called or []),
+        item.description or "",
+        item.size or "",
+        item.unit_of_measure or "",
+        _enum_text(item.tracking_type),
+        item.quantity if item.quantity is not None else "",
+        (
+            getattr(item, "lot_stock", None)
+            if getattr(item, "is_lot_stocked", False)
+            else ""
+        ),
+        item.reorder_point if item.reorder_point is not None else "",
+        _enum_text(item.status),
+        _enum_text(item.condition),
+        item.manufacturer or "",
+        item.model_number or "",
+        item.serial_number or "",
+        item.asset_tag or "",
+        item.barcode or "",
+        item.storage_location or "",
+        item.station or "",
+        (linked_vendor.name if linked_vendor is not None else item.vendor) or "",
+        str(item.purchase_date) if item.purchase_date else "",
+        str(item.purchase_price) if item.purchase_price is not None else "",
+        item.notes or "",
+    ]
+
+
+def _parse_medical_extras(row: Dict[str, Any]) -> tuple[Dict[str, Any], Optional[str]]:
+    """Read the columns only this import understands.
+
+    Returns ``(fields, error)``; an error fails the row.
+    """
+    fields: Dict[str, Any] = {}
+    for raw_col, raw_value in row.items():
+        if raw_col is None or not raw_value or not str(raw_value).strip():
+            continue
+        normalized = raw_col.strip().lower()
+        value = str(raw_value).strip()
+
+        if normalized in _ITEM_TYPE_HEADERS:
+            if value.lower() != "medical":
+                return {}, (
+                    f"Item type '{value}' is not medical. Import gear and "
+                    "uniforms from Inventory instead."
+                )
+        elif normalized in _REORDER_POINT_HEADERS:
+            try:
+                reorder_point = int(value)
+            except ValueError:
+                return {}, f"Invalid reorder point: '{value}'"
+            if reorder_point < 0:
+                return {}, f"Reorder point cannot be negative: '{value}'"
+            fields["reorder_point"] = reorder_point
+        elif normalized in _UNIT_HEADERS:
+            if len(value) > 50:
+                return {}, "Unit of measure must be 50 characters or fewer"
+            fields["unit_of_measure"] = value
+    return fields, None
+
+
+def _parse_lot_columns(
+    row: Dict[str, Any],
+) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Read a row's lot columns.
+
+    Returns ``(lot_fields, error)``. ``lot_fields`` is ``None`` when the row
+    carries no lot data at all, which makes it a plain item row.
+    """
+    fields: Dict[str, Any] = {}
+    for raw_col, raw_value in row.items():
+        if raw_col is None or not raw_value or not str(raw_value).strip():
+            continue
+        field = _LOT_HEADERS.get(raw_col.strip().lower())
+        if field is None:
+            continue
+        value = str(raw_value).strip()
+        if field == "lot_number":
+            if len(value) > 100:
+                return None, "Lot number must be 100 characters or fewer"
+            fields[field] = value
+            continue
+        # ISO dates only. A spreadsheet's 03/04/2027 is the 3rd of April in
+        # one locale and the 4th of March in another, and guessing an
+        # expiration date wrong puts expired stock on a rig.
+        try:
+            fields[field] = date.fromisoformat(value)
+        except ValueError:
+            label = "expiration" if field == "expiration_date" else "received"
+            return None, (
+                f"Invalid {label} date: '{value}'. Use YYYY-MM-DD, "
+                "for example 2027-03-31"
+            )
+    return (fields or None), None
+
+
+@router.get("/items/export")
+async def export_medical_items_csv(
+    category_id: UUID | None = None,
+    status_filter: str | None = Query(None, alias="status"),
+    condition: str | None = None,
+    location_id: UUID | None = None,
+    storage_area_id: UUID | None = None,
+    search: str | None = None,
+    active_only: bool = True,
+    sort_by: str | None = None,
+    sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
+    low_stock: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.manage_medical", "inventory.manage")
+    ),
+):
+    """
+    Export medical supply items as CSV
+
+    Takes the list route's filters so the file matches the list it was
+    exported from. Paging is not accepted: the file is the whole filtered set.
+
+    **Authentication required**
+    **Requires permission: inventory.manage_medical or inventory.manage**
+    """
+    status_enum = None
+    if status_filter:
+        try:
+            status_enum = ItemStatus(status_filter)
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid status: {status_filter}"
+            )
+    condition_enum = None
+    if condition:
+        try:
+            condition_enum = ItemCondition(condition)
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid condition: {condition}"
+            )
+
+    organization_id = str(current_user.organization_id)
+    if category_id:
+        await _require_medical_category(
+            InventoryService(db), str(category_id), organization_id
+        )
+    # Resolved before streaming starts, on the request session, like the
+    # category check above.
+    filter_ids = await _medical_filter_ids(
+        InventoryService(db),
+        organization_id,
+        low_stock=low_stock,
+        location_id=location_id,
+        storage_area_id=storage_area_id,
+    )
+
+    async def _rows() -> AsyncGenerator[str, None]:
+        # Its own session, for the reason the general export gives: the
+        # request-scoped one is closed before a streamed body is consumed.
+        buffer = io.StringIO()
+        writer = SafeCsvWriter(buffer)
+
+        def drain() -> str:
+            text = buffer.getvalue()
+            buffer.seek(0)
+            buffer.truncate(0)
+            return text
+
+        writer.writerow(_MEDICAL_EXPORT_COLUMNS)
+        yield drain()
+
+        async with async_session_factory() as export_db:
+            service = InventoryService(export_db)
+            skip = 0
+            while True:
+                items = await service.get_items_page(
+                    organization_id=organization_id,
+                    category_id=category_id,
+                    status=status_enum,
+                    condition=condition_enum,
+                    item_types=MEDICAL_ITEM_TYPES,
+                    search=search,
+                    active_only=active_only,
+                    sort_by=sort_by,
+                    sort_order=sort_order,
+                    skip=skip,
+                    limit=_EXPORT_PAGE_SIZE,
+                    item_ids=filter_ids,
+                )
+                if not items:
+                    return
+                for item in items:
+                    writer.writerow(_medical_export_row(item))
+                yield drain()
+                if len(items) < _EXPORT_PAGE_SIZE:
+                    return
+                skip += _EXPORT_PAGE_SIZE
+
+    return StreamingResponse(
+        _rows(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=medical_supplies_export.csv"
+        },
+    )
+
+
+@router.get("/lots/export")
+async def export_medical_lots_csv(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.manage_medical", "inventory.manage")
+    ),
+):
+    """
+    Export every stocked medical lot as CSV, soonest expiry first
+
+    **Authentication required**
+    **Requires permission: inventory.manage_medical or inventory.manage**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    # The department's date, not the server's: a lot expiring "today" in the
+    # department's timezone must not read as tomorrow's problem.
+    today = await resolve_org_today(db, org_id)
+    rows = await service.get_lots_for_export(org_id, MEDICAL_ITEM_TYPES)
+
+    output = io.StringIO()
+    writer = SafeCsvWriter(output)
+    writer.writerow(_MEDICAL_LOT_EXPORT_COLUMNS)
+    for lot, item_name, category_name in rows:
+        writer.writerow(
+            [
+                item_name,
+                category_name or "",
+                lot.lot_number or "",
+                str(lot.expiration_date) if lot.expiration_date else "",
+                ((lot.expiration_date - today).days if lot.expiration_date else ""),
+                lot.quantity,
+                str(lot.received_date) if lot.received_date else "",
+                lot.storage_location or "",
+                str(lot.unit_cost) if lot.unit_cost is not None else "",
+                lot.notes or "",
+            ]
+        )
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=medical_supply_lots_export.csv"
+        },
+    )
+
+
+@router.get("/items/import-template")
+async def download_medical_import_template(
+    current_user: User = Depends(
+        require_permission("inventory.manage_medical", "inventory.manage")
+    ),
+):
+    """
+    Download a sample CSV for the medical supply import
+
+    The sample rows are the general template's medical ones, so the two
+    templates cannot drift apart, with sample lots added to a few of them.
+
+    **Authentication required**
+    **Requires permission: inventory.manage_medical or inventory.manage**
+    """
+    output = io.StringIO()
+    writer = SafeCsvWriter(output)
+    writer.writerow(_MEDICAL_TEMPLATE_HEADER)
+    for row in _IMPORT_TEMPLATE_ROWS:
+        if row.get("Item Type") != "medical":
+            continue
+        for lot in _TEMPLATE_LOT_ROWS.get(row["Name"], [{}]):
+            sample = {**row, **lot}
+            writer.writerow(
+                [sample.get(column, "") for column in _MEDICAL_TEMPLATE_HEADER]
+            )
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": (
+                "attachment; filename=medical_supplies_import_template.csv"
+            )
+        },
+    )
+
+
+@router.post("/items/import")
+async def import_medical_items_csv(
+    file: UploadFile = FastAPIFile(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.manage_medical", "inventory.manage")
+    ),
+):
+    """
+    Import medical supply items from a CSV file
+
+    A row creates a new item; nothing already on file is changed. The
+    'Name' and 'Category' columns are required. A category is matched by name
+    (case-insensitive) against the medical supply categories; a name that
+    matches none is created as a new medical supply category, and the
+    response lists each one created. A name already used by a gear or
+    uniform category is refused for that row rather than duplicated, since
+    two categories of one name on different pages is a mistake nobody can
+    see from either page.
+
+    A row that fills any of 'Lot Number', 'Expiration Date' or 'Received
+    Date' (YYYY-MM-DD) also records a stock lot of the row's Quantity. When
+    its Name matches an active pool-tracked medical supply — one on file, or
+    one an earlier row of the same file created — the lot is added to that
+    supply and the row's other columns are ignored, so naming a supply twice
+    records two lots rather than two supplies. Otherwise the supply is created
+    and the lot becomes its first stock. Lot rows are pool-tracked.
+
+    **Authentication required**
+    **Requires permission: inventory.manage_medical or inventory.manage**
+    """
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Please upload a CSV file.",
+            error_code=ErrorCode.UPLD_TYPE_NOT_ALLOWED,
+        )
+
+    try:
+        raw = await read_upload_limited(file, MAX_INVENTORY_CSV_BYTES)
+        try:
+            content = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            content = raw.decode("latin-1")
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="CSV file exceeds the 10MB limit.",
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to read the uploaded file.",
+        )
+    # Outside the try above, as in the general import: its catch-all would
+    # turn a malware refusal or a scanner outage into a generic 400.
+    await reject_if_malicious(
+        db, raw, upload_kind="inventory_import", detected_mime=None, user=current_user
+    )
+
+    reader = csv.DictReader(io.StringIO(content))
+    if not reader.fieldnames:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV file is empty or has no header row.",
+        )
+    normalized_headers = {name.strip().lower() for name in reader.fieldnames if name}
+    if "name" not in normalized_headers:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV must contain a 'Name' column.",
+        )
+    if not normalized_headers & {"category", "category_name", "categoryname"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV must contain a 'Category' column.",
+        )
+
+    rows = list(reader)
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV file contains no data rows.",
+        )
+
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    medical_by_name: Dict[str, str] = {
+        cat.name.strip().lower(): str(cat.id)
+        for cat in await service.get_categories(
+            organization_id=org_id, item_types=MEDICAL_ITEM_TYPES, active_only=True
+        )
+    }
+    other_names = {
+        cat.name.strip().lower()
+        for cat in await service.get_categories(
+            organization_id=org_id,
+            exclude_item_types=MEDICAL_ITEM_TYPES,
+            active_only=False,
+        )
+    }
+    # Inactive vendors included, for the reason the general import gives.
+    vendor_by_name: Dict[str, str] = {
+        vendor.name.strip().lower(): str(vendor.id)
+        for vendor in await service.list_vendors(
+            organization_id=org_id, active_only=False
+        )
+    }
+
+    # Updated as rows create supplies, so a later row naming one adds a lot to
+    # it instead of creating a duplicate.
+    pool_by_name = await service.pool_item_ids_by_name(org_id, MEDICAL_ITEM_TYPES)
+
+    imported = 0
+    lots_added = 0
+    failed = 0
+    errors: List[Dict[str, Any]] = []
+    warnings: List[str] = []
+    created_categories: List[str] = []
+    unmatched_vendors: Dict[str, str] = {}
+
+    for row_num, row in enumerate(rows, start=2):
+        item_data, category_name_raw, row_errors, fatal = _coerce_csv_row(row, row_num)
+        errors.extend(row_errors)
+        if fatal:
+            failed += 1
+            continue
+
+        if not item_data.get("name"):
+            errors.append(
+                {"row": row_num, "error": "Missing required 'Name' column value"}
+            )
+            failed += 1
+            continue
+
+        extras, extras_error = _parse_medical_extras(row)
+        if extras_error:
+            errors.append({"row": row_num, "error": extras_error})
+            failed += 1
+            continue
+        item_data.update(extras)
+
+        lot_fields, lot_error = _parse_lot_columns(row)
+        if lot_error:
+            errors.append({"row": row_num, "error": lot_error})
+            failed += 1
+            continue
+        if lot_fields is not None:
+            if item_data.get("tracking_type") == "individual":
+                errors.append(
+                    {
+                        "row": row_num,
+                        "error": (
+                            "Lots are recorded against pool-tracked supplies. "
+                            "Set Tracking Type to pool or clear the lot columns."
+                        ),
+                    }
+                )
+                failed += 1
+                continue
+            lot_quantity = item_data.get("quantity")
+            if not isinstance(lot_quantity, int) or lot_quantity < 1:
+                errors.append(
+                    {
+                        "row": row_num,
+                        "error": "A row with lot data needs a Quantity of 1 or more",
+                    }
+                )
+                failed += 1
+                continue
+            item_data["tracking_type"] = "pool"
+            lot_data = InventoryLotCreate(
+                quantity=lot_quantity, **lot_fields
+            ).model_dump(exclude_unset=True)
+
+            existing_id = pool_by_name.get(normalize_name(item_data["name"]))
+            if existing_id is not None:
+                # Only the lot is written: the row names a supply already on
+                # file, and the import never edits one.
+                lot = await service.add_lot(
+                    item_id=existing_id,
+                    organization_id=org_id,
+                    data=lot_data,
+                    created_by=str(current_user.id),
+                    required_item_types=MEDICAL_ITEM_TYPES,
+                )
+                if lot is None:
+                    errors.append(
+                        {"row": row_num, "error": "The supply could not be found"}
+                    )
+                    failed += 1
+                else:
+                    lots_added += 1
+                continue
+
+        category_key = (category_name_raw or "").strip().lower()
+        if not category_key:
+            errors.append(
+                {
+                    "row": row_num,
+                    "error": (
+                        "Category is required: a supply with no medical "
+                        "category would be filed as gear"
+                    ),
+                }
+            )
+            failed += 1
+            continue
+        if category_key not in medical_by_name and category_key in other_names:
+            errors.append(
+                {
+                    "row": row_num,
+                    "error": (
+                        f"Category '{category_name_raw}' belongs to gear and "
+                        "uniforms, not medical supplies. Use a different "
+                        "category name."
+                    ),
+                }
+            )
+            failed += 1
+            continue
+
+        # Checked before a category is created for the row, so a row that is
+        # going to fail anyway cannot leave an empty category behind.
+        if is_pool_without_stock(item_data):
+            errors.append(
+                {
+                    "row": row_num,
+                    "error": "Pool items must have a quantity of 1 or more",
+                }
+            )
+            failed += 1
+            continue
+
+        category_id = medical_by_name.get(category_key)
+        if category_id is None:
+            try:
+                category_data = InventoryCategoryCreate(
+                    name=(category_name_raw or "").strip(), item_type="medical"
+                ).model_dump()
+            except ValidationError:
+                errors.append(
+                    {
+                        "row": row_num,
+                        "error": "Category name must be 255 characters or fewer",
+                    }
+                )
+                failed += 1
+                continue
+            new_category, category_error = await service.create_category(
+                organization_id=org_id,
+                category_data=category_data,
+                created_by=current_user.id,
+            )
+            if category_error or new_category is None:
+                # create_category returns the raw exception text, which is not
+                # fit for a client: logged here, summarized in the response.
+                logger.error(
+                    "Medical import could not create category on row {}: {}",
+                    row_num,
+                    category_error,
+                )
+                errors.append(
+                    {"row": row_num, "error": "Could not create the category"}
+                )
+                failed += 1
+                continue
+            category_id = str(new_category.id)
+            medical_by_name[category_key] = category_id
+            created_categories.append(new_category.name)
+        item_data["category_id"] = category_id
+
+        vendor_raw = (item_data.get("vendor") or "").strip()
+        unmatched_key = ""
+        if vendor_raw:
+            vendor_id = vendor_by_name.get(vendor_raw.lower())
+            if vendor_id:
+                item_data["vendor_id"] = vendor_id
+            else:
+                unmatched_key = vendor_raw.lower()
+
+        if lot_fields is not None:
+            # The row's count goes into the lot, not the column. add_lot
+            # carries a positive column count forward into an undated
+            # opening-balance lot, so leaving it there would count the same
+            # boxes twice.
+            item_data["quantity"] = 0
+
+        new_item, error = await service.create_item(
+            organization_id=org_id,
+            item_data=item_data,
+            created_by=current_user.id,
+        )
+        if error or new_item is None:
+            errors.append(
+                {"row": row_num, "error": sanitize_error_message(error or "")}
+            )
+            failed += 1
+            continue
+        imported += 1
+        if unmatched_key:
+            unmatched_vendors.setdefault(unmatched_key, vendor_raw)
+
+        if lot_fields is not None:
+            pool_by_name.setdefault(normalize_name(new_item.name), str(new_item.id))
+            lot = await service.add_lot(
+                item_id=str(new_item.id),
+                organization_id=org_id,
+                data=lot_data,
+                created_by=str(current_user.id),
+                required_item_types=MEDICAL_ITEM_TYPES,
+            )
+            if lot is None:
+                errors.append(
+                    {
+                        "row": row_num,
+                        "error": "The supply was created but its lot was not",
+                    }
+                )
+            else:
+                lots_added += 1
+
+    if created_categories:
+        warnings.insert(
+            0,
+            f"Created {len(created_categories)} new medical supply "
+            f"categor{'y' if len(created_categories) == 1 else 'ies'}: "
+            + ", ".join(f'"{name}"' for name in created_categories[:10])
+            + (
+                f", and {len(created_categories) - 10} more"
+                if len(created_categories) > 10
+                else ""
+            )
+            + ".",
+        )
+    if unmatched_vendors:
+        shown = [unmatched_vendors[key] for key in sorted(unmatched_vendors)]
+        listed = ", ".join(f'"{name}"' for name in shown[:10])
+        if len(shown) > 10:
+            listed += f", and {len(shown) - 10} more"
+        warnings.append(
+            f"{len(shown)} vendor name(s) did not match a vendor on file and "
+            f"were left as free text: {listed}."
+        )
+
+    if imported > 0 or lots_added > 0 or created_categories:
+        await log_audit_event(
+            db=db,
+            event_type="medical_items_imported",
+            event_category="inventory",
+            severity="info",
+            event_data={
+                "imported": imported,
+                "lots_added": lots_added,
+                "failed": failed,
+                "total_rows": len(rows),
+                "categories_created": created_categories,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return {
+        "imported": imported,
+        "lots_added": lots_added,
+        "failed": failed,
+        "total_rows": len(rows),
+        "categories_created": created_categories,
+        "errors": errors[:50],
+        "warnings": warnings[:50],
+    }
 
 
 @router.get("/items/{item_id}", response_model=InventoryItemResponse)
@@ -596,9 +1573,160 @@ async def retire_medical_item(
     return {"message": "Item retired successfully"}
 
 
+@router.post("/items/bulk-retire", response_model=ItemBulkRetireResult)
+async def bulk_retire_medical_items(
+    data: ItemBulkRetireRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.manage_medical", "inventory.manage")
+    ),
+):
+    """
+    Retire several medical supply items at once
+
+    Each item is retired on its own, exactly as the single retire route does
+    it, so one that cannot go — checked out, assigned, or not a medical
+    supply — is reported and the rest still are. This is the opposite of a
+    received delivery, which is all or nothing: there a partial write leaves
+    stock nobody can reconcile, while here every item retired is retired
+    correctly, and the response names the ones that were not.
+
+    An id that is not a medical supply in the caller's department is
+    reported as not found, the same answer the single route gives.
+
+    **Authentication required**
+    **Requires permission: inventory.manage_medical or inventory.manage**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    # Order kept, duplicates dropped: retiring the same row twice would
+    # report a spurious failure for the second attempt.
+    item_ids = list(dict.fromkeys(str(item_id) for item_id in data.item_ids))
+    in_domain = await service.items_in_domain(item_ids, org_id, MEDICAL_ITEM_TYPES)
+
+    retired: List[str] = []
+    failed: List[ItemBulkRetireFailure] = []
+    for item_id in item_ids:
+        if item_id not in in_domain:
+            failed.append(ItemBulkRetireFailure(item_id=item_id, error=_NOT_FOUND))
+            continue
+        # required_item_types repeats the domain check under the item's lock,
+        # as on the single route.
+        _, error = await service.retire_item(
+            item_id=UUID(item_id),
+            organization_id=current_user.organization_id,
+            notes=data.notes,
+            required_item_types=MEDICAL_ITEM_TYPES,
+        )
+        if error:
+            failed.append(
+                ItemBulkRetireFailure(
+                    item_id=item_id,
+                    error=(
+                        _NOT_FOUND
+                        if error == "Item not found"
+                        else sanitize_error_message(error)
+                    ),
+                )
+            )
+        else:
+            retired.append(item_id)
+
+    if retired:
+        await log_audit_event(
+            db=db,
+            event_type="medical_items_bulk_retired",
+            event_category="inventory",
+            severity="warning",
+            event_data={
+                "item_ids": retired,
+                "failed": len(failed),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return ItemBulkRetireResult(retired=retired, failed=failed)
+
+
 # ============================================
 # Stock lots
 # ============================================
+
+
+@router.get("/storage-options", response_model=MedicalStorageOptionsResponse)
+async def list_medical_storage_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.view_medical", "inventory.view")
+    ),
+):
+    """
+    Rooms and active storage areas a medical supply can be filed under
+
+    The same rooms and areas Inventory › Storage Areas manages, read here so a
+    medical-only officer can file and find supplies without being granted
+    general inventory access. Read-only; areas are still created and edited
+    under Inventory.
+
+    **Authentication required**
+    **Requires permission: inventory.view_medical or inventory.view**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    areas = await service.storage_area_index(org_id)
+    rooms = await service.location_names(org_id)
+    options = sorted(
+        (a for a in areas.values() if a["is_active"]),
+        key=lambda a: (
+            (a["location_name"] or "").lower(),
+            [p.lower() for p in a["path"]],
+        ),
+    )
+    return MedicalStorageOptionsResponse(
+        rooms=[
+            MedicalStorageRoom(id=room_id, name=name)
+            for room_id, name in sorted(rooms.items(), key=lambda r: r[1].lower())
+        ],
+        areas=[
+            MedicalStorageAreaOption(
+                id=a["id"],
+                name=a["name"],
+                label=a["label"],
+                storage_type=a["storage_type"],
+                parent_id=a["parent_id"],
+                location_id=a["location_id"],
+                location_name=a["location_name"],
+                path=" › ".join(a["path"]),
+            )
+            for a in options
+        ],
+    )
+
+
+@router.get("/items/{item_id}/placements", response_model=list[ItemDeployment])
+async def list_medical_item_placements(
+    item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.view_medical", "inventory.view")
+    ),
+):
+    """
+    Which apparatus checklists carry this medical supply, and what is aboard
+
+    The medical-domain read of ``/equipment-checks/supply/item-deployments``,
+    which needs inventory or checklist access a medical-only officer may not
+    hold.
+
+    **Authentication required**
+    **Requires permission: inventory.view_medical or inventory.view**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    await _require_medical_item(service, item_id, org_id)
+    return await EquipmentCheckService(db).get_item_deployments(
+        inventory_item_id=item_id, organization_id=org_id
+    )
 
 
 @router.get("/items/{item_id}/lots", response_model=list[InventoryLotResponse])
@@ -781,12 +1909,23 @@ async def list_expiring_medical_lots(
         item_types=MEDICAL_ITEM_TYPES,
         today=today,
     )
+    # Sizes looked up separately rather than widening get_expiring_lots, whose
+    # other callers (the gear endpoint, the daily digest) have no use for them.
+    # Here they are what tells the adult mask's lot from the pediatric one's.
+    sizes = await service.item_sizes(
+        str(current_user.organization_id),
+        {str(lot.inventory_item_id) for lot, _ in rows},
+    )
     result: List[ExpiringLotResponse] = []
     for lot, item_name in rows:
         days_until = (lot.expiration_date - today).days if lot.expiration_date else None
         result.append(
             ExpiringLotResponse.model_validate(lot, from_attributes=True).model_copy(
-                update={"item_name": item_name, "days_until_expiration": days_until}
+                update={
+                    "item_name": item_name,
+                    "item_size": sizes.get(str(lot.inventory_item_id)),
+                    "days_until_expiration": days_until,
+                }
             )
         )
     return result

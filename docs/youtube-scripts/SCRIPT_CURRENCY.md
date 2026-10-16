@@ -1,5 +1,42 @@
 # Script currency
 
+## Flagged by the 2026-10-15 → 10-16 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-15--16-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 03 / 05 (Medical Supplies), 06 (My Checklists on a phone).
+
+| Script                           | Beat                  | Was                                 | Now                                                                                     |
+| -------------------------------- | --------------------- | ----------------------------------- | --------------------------------------------------------------------------------------- |
+| **03 / 05** (if inventory shown) | Medical Supplies      | Flat list, free-text location       | Room and storage area, **Where it is** dialog, sort, bulk retire, Lots, clickable tiles |
+| **05 / 07** (if shown)           | Catalog Links         | Link by hand                        | **Link matches automatically**, then **Undo**                                           |
+| **06** (member)                  | My Checklists         | Cards with All / Start / End filter | Compact rows by day on a phone; filter removed                                          |
+| **06 / 05**                      | Equipment check count | CRITICAL at the minimum             | CRITICAL only below the minimum                                                         |
+| **03** (IT, if Google shown)     | Google Workspace      | Accounts suspended at five places   | **Link existing members**; one departure hook                                           |
+| **03**                           | Upgrading             | —                                   | Unraid and minimal compose need explicit secrets                                        |
+| **07** (if documents shown)      | Admin-only folders    | Page list only                      | Weekly email to full administrators                                                     |
+
+## Flagged by the 2026-10-14 → 10-15 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-14--15-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 07 (minutes: the largest change), 05 / 07 (checklist item matching).
+
+| Script                           | Beat                        | Was                                                          | Now                                                                                                                                                           |
+| -------------------------------- | --------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **07** (secretary)               | Meeting minutes             | Submit for Approval, then Approve; members saw approved only | **Circulate for Review** (members are emailed and can read), **Suggest a change** from a section, **Recall to Draft**, **Adopt Minutes** with the voting date |
+| **07**                           | Minutes content (new beat)  | Free-text sections                                           | Rich-text sections; roll call with six statuses and quorum; closed sessions; election results; attachments and the signed copy; printable copy                |
+| **07**                           | Minutes template (new beat) | Built-in order of business                                   | **Minutes > Outlines**: required sections, default outline, **Apply outline**                                                                                 |
+| **07**                           | Action items                | Typed per minutes                                            | **Carry action items forward** from earlier adopted minutes; assignees emailed on adoption                                                                    |
+| **05 / 07** (if inventory shown) | Linking checklist items     | Exact-word search                                            | Near-match search; **Also called** names; only exact matches are pre-ticked                                                                                   |
+| **05** (if shown)                | Medical supplies            | A category could not be deleted                              | Delete asks where the supplies go                                                                                                                             |
+| **04** (finance, if shown)       | Start from last year        | Copied every line                                            | Lines on retired categories are skipped and counted                                                                                                           |
+| **03** (IT, if shown)            | Backups                     | Uploads missing from a Docker backup                         | `backup.sh` streams uploads from the backend container                                                                                                        |
+| **03**                           | Upgrading                   | —                                                            | Rebuild the backend image (rich-text minutes need `nh3`)                                                                                                      |
+| **All**                          | Dark mode, item pickers     | Result lists see-through                                     | Opaque lists                                                                                                                                                  |
+
 ## Flagged by the 2026-10-13 → 10-14 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-13--14-2026).
@@ -2191,7 +2228,7 @@ recorded yet, so these are capture-plan notes, not re-records:
 No script narrates facility-room management in enough depth to need a nested
 rooms chapter today; if a Facilities deep-dive script is added later, the
 walkthrough source is
-[`../training/06-apparatus-facilities.md`](../training/06-apparatus-facilities.md#nesting-rooms-inside-rooms-2026-08-16).
+[`../training/06-apparatus-facilities.md`](../training/06-apparatus-facilities.md#nesting-rooms-inside-rooms).
 
 ## Resolved in-script for the 2026-08-12 → 08-14 changes
 

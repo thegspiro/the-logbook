@@ -4,16 +4,19 @@ Meeting Minutes Service
 Business logic for meeting minutes management.
 """
 
+import copy
 from datetime import datetime, time, timezone
 from typing import List, Optional, Tuple
 from uuid import UUID
 
+from loguru import logger
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
 
 from app.core.utils import generate_uuid
 from app.models.document import Document
+from app.models.election import Election
 from app.models.event import Event
 from app.models.minute import (
     DEFAULT_ANNUAL_SECTIONS,
@@ -36,15 +39,20 @@ from app.models.user import User
 from app.schemas.minute import (
     ActionItemCreate,
     ActionItemUpdate,
+    MinutesAdopt,
     MinutesCreate,
     MinutesUpdate,
     MotionCreate,
     MotionUpdate,
 )
 from app.services.separation_of_duties import assert_different_person
+from app.services.template_service import TemplateService
+from app.utils.minutes_attendance import normalize_attendee
 from app.utils.model_updates import apply_updates
+from app.utils.motion_votes import settle_roll_call, tally
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.rich_text import normalize_format, section_is_blank
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 _DEFAULT_SECTIONS_BY_TYPE = {
@@ -59,6 +67,21 @@ _DEFAULT_SECTIONS_BY_TYPE = {
 # The only fields a member may change on an action item assigned to them
 # without minutes.manage (W52-7). Widening this widens a write permission.
 ASSIGNEE_EDITABLE_FIELDS = frozenset({"status", "completion_notes"})
+
+
+def member_visible_conditions() -> tuple:
+    """What a caller without ``minutes.manage`` may read.
+
+    Minutes that have been circulated for review (submitted) or adopted
+    (approved), and never executive-session minutes. A draft is the secretary's
+    work in progress and stays hidden until it is circulated.
+    """
+    return (
+        MeetingMinutes.status.in_(
+            [MinutesStatus.SUBMITTED.value, MinutesStatus.APPROVED.value]
+        ),
+        MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
+    )
 
 
 def _default_sections_for(meeting_type) -> list:
@@ -114,6 +137,164 @@ class MinuteService:
             raise ValueError("Invalid assignee: choose an active member")
         name: str = user.display_name or user.username
         return name
+
+    # ============================================
+    # Outlines and motion ballots
+    # ============================================
+
+    @staticmethod
+    def _sections_from_outline(sections) -> list:
+        """Minutes sections from an outline's (or a built-in's) section list.
+
+        The outline's ``default_content`` becomes the starting ``content`` and
+        its ``required`` flag travels with the section, so the rule survives the
+        outline being edited later.
+        """
+        return [
+            {
+                "order": s.get("order", index),
+                "key": s["key"],
+                "title": s["title"],
+                "content": s.get("default_content") or s.get("content") or "",
+                "format": normalize_format(s.get("format")),
+                "required": bool(s.get("required", False)),
+                "needs_motion": bool(s.get("needs_motion", False)),
+                "motion_text": s.get("motion_text") or "",
+            }
+            for index, s in enumerate(sections)
+        ]
+
+    async def _check_motion_ballot(
+        self,
+        election_id: Optional[str],
+        ballot_item_id: Optional[str],
+        organization_id: UUID | str,
+    ) -> None:
+        """A motion's ballot link must name this department's election and an
+        item that is really on that ballot (XC-1)."""
+        if not election_id:
+            if ballot_item_id:
+                raise ValueError("A ballot item needs the election it belongs to")
+            return
+        await assert_in_org(
+            self.db, Election, election_id, organization_id, label="election"
+        )
+        if not ballot_item_id:
+            return
+        election = (
+            await self.db.execute(
+                select(Election).where(
+                    Election.id == str(election_id),
+                    Election.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one()
+        known = {
+            str(item.get("id"))
+            for item in (election.ballot_items or [])
+            if isinstance(item, dict) and item.get("id")
+        }
+        if str(ballot_item_id) not in known:
+            raise ValueError("That item is not on the election's ballot")
+
+    @staticmethod
+    def _vote_record(roll_call, attendees) -> dict:
+        """The stored vote fields a roll call gives: the settled roll and the
+        totals counted from it, or ``{}`` when there is no roll call.
+
+        The totals are always derived, never taken from the request, so a
+        roll call and its counts cannot disagree.
+        """
+        if not roll_call:
+            return {}
+        entries = [
+            e.model_dump() if hasattr(e, "model_dump") else dict(e) for e in roll_call
+        ]
+        settled = settle_roll_call(entries, attendees)
+        return {"roll_call": settled, **tally(settled)}
+
+    @staticmethod
+    def _check_meeting_times(started, ended) -> None:
+        """The meeting cannot have ended at or before the moment it began.
+
+        MySQL hands back naive datetimes and a client may send either, so a
+        naive value is read as UTC, the zone everything here is stored in.
+        """
+        if started is None or ended is None:
+            return
+
+        def utc(value: datetime) -> datetime:
+            return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+        if utc(ended) <= utc(started):
+            raise ValueError(
+                "The meeting must be adjourned after it is called to order"
+            )
+
+    @staticmethod
+    def _check_motion_section(minutes: MeetingMinutes, section_key) -> None:
+        """A motion's section must be one of these minutes' own sections."""
+        if section_key and section_key not in {
+            s.get("key") for s in minutes.get_sections()
+        }:
+            raise ValueError("That section is not part of these minutes")
+
+    async def apply_outline(
+        self, minutes_id: str, organization_id: UUID | str, template_id: str
+    ) -> Optional[MeetingMinutes]:
+        """Lay an outline over draft minutes without losing what is written.
+
+        Sections the minutes already have keep their text and take the
+        outline's position and required flag; sections the outline has and the
+        minutes lack are added empty; sections only the minutes have stay if
+        they hold text and go if they are empty.
+        """
+        minutes = await self.get_minutes(minutes_id, organization_id)
+        if not minutes:
+            return None
+        if minutes.status not in (
+            MinutesStatus.DRAFT.value,
+            MinutesStatus.REJECTED.value,
+        ):
+            raise ValueError(
+                "An outline can only be applied to draft or rejected minutes"
+            )
+        outline = await self._get_template(template_id, organization_id)
+        if outline is None:
+            raise ValueError("Invalid outline")
+
+        existing = {s["key"]: s for s in minutes.get_sections()}
+        merged = []
+        for wanted in self._sections_from_outline(outline.sections or []):
+            have = existing.pop(wanted["key"], None)
+            if have is not None:
+                wanted["content"] = have.get("content", "")
+                wanted["format"] = normalize_format(have.get("format"))
+                wanted["title"] = have.get("title") or wanted["title"]
+            merged.append(wanted)
+        for leftover in existing.values():
+            if not section_is_blank(leftover):
+                merged.append(
+                    {
+                        "order": len(merged),
+                        "key": leftover["key"],
+                        "title": leftover.get("title", leftover["key"]),
+                        "content": leftover["content"],
+                        "format": normalize_format(leftover.get("format")),
+                        "required": False,
+                    }
+                )
+        for index, section in enumerate(merged):
+            section["order"] = index
+
+        minutes.sections = merged
+        minutes.template_id = outline.id
+        if not minutes.header_config and outline.header_config:
+            minutes.header_config = copy.deepcopy(outline.header_config)
+        if not minutes.footer_config and outline.footer_config:
+            minutes.footer_config = copy.deepcopy(outline.footer_config)
+        await self.db.commit()
+        return await self.get_minutes(minutes_id, organization_id)
 
     # ============================================
     # Meeting Minutes CRUD
@@ -190,15 +371,9 @@ class MinuteService:
         # If a template is provided but no sections, populate from template
         if template and not minutes_dict.get("sections"):
             if template.sections:
-                minutes_dict["sections"] = [
-                    {
-                        "order": s["order"],
-                        "key": s["key"],
-                        "title": s["title"],
-                        "content": s.get("default_content", ""),
-                    }
-                    for s in template.sections
-                ]
+                minutes_dict["sections"] = self._sections_from_outline(
+                    template.sections
+                )
                 # Inherit header/footer from template if not explicitly set
                 if not minutes_dict.get("header_config") and template.header_config:
                     minutes_dict["header_config"] = template.header_config
@@ -207,17 +382,13 @@ class MinuteService:
 
         # If no template and no sections, generate default sections for the meeting type
         if not minutes_dict.get("sections"):
-            default = _default_sections_for(minutes_dict.get("meeting_type"))
-            minutes_dict["sections"] = [
-                {
-                    "order": s["order"],
-                    "key": s["key"],
-                    "title": s["title"],
-                    "content": s.get("default_content", ""),
-                }
-                for s in default
-            ]
+            minutes_dict["sections"] = self._sections_from_outline(
+                _default_sections_for(minutes_dict.get("meeting_type"))
+            )
 
+        self._check_meeting_times(
+            minutes_dict.get("called_to_order_at"), minutes_dict.get("adjourned_at")
+        )
         minutes = MeetingMinutes(
             **minutes_dict,
             organization_id=str(organization_id),
@@ -230,6 +401,16 @@ class MinuteService:
         # Create inline motions
         if data.motions:
             for i, motion_data in enumerate(data.motions):
+                await self._check_motion_ballot(
+                    motion_data.election_id, motion_data.ballot_item_id, organization_id
+                )
+                votes = {
+                    "votes_for": motion_data.votes_for,
+                    "votes_against": motion_data.votes_against,
+                    "votes_abstain": motion_data.votes_abstain,
+                    "votes_recused": motion_data.votes_recused,
+                    **self._vote_record(motion_data.roll_call, minutes.attendees),
+                }
                 motion = Motion(
                     minutes_id=minutes.id,
                     order=motion_data.order if motion_data.order else i,
@@ -238,9 +419,10 @@ class MinuteService:
                     seconded_by=motion_data.seconded_by,
                     discussion_notes=motion_data.discussion_notes,
                     status=MotionStatus(motion_data.status),
-                    votes_for=motion_data.votes_for,
-                    votes_against=motion_data.votes_against,
-                    votes_abstain=motion_data.votes_abstain,
+                    threshold=motion_data.threshold,
+                    election_id=motion_data.election_id,
+                    ballot_item_id=motion_data.ballot_item_id,
+                    **votes,
                 )
                 self.db.add(motion)
 
@@ -291,6 +473,7 @@ class MinuteService:
         organization_id: UUID | str,
         restricted: bool = False,
         load_children: bool = True,
+        refresh: bool = False,
     ) -> Optional[MeetingMinutes]:
         """Get a single meeting minutes record with all relationships.
 
@@ -299,11 +482,19 @@ class MinuteService:
         closed executive-session minutes return None (→ 404) so their existence
         isn't revealed. Internal/manage callers use the default (see all).
 
+        ``refresh=True`` re-reads the row and its relationships even if the
+        session already holds it, for a caller that has just changed what a
+        relationship points at (the adopting meeting) and must not return the
+        stale object.
+
         ``load_children=False`` leaves the motions and action items unloaded
         for a caller that pages them with queries of its own; the returned
         row must not have those attributes read.
         """
-        options = [selectinload(MeetingMinutes.template)]
+        options = [
+            selectinload(MeetingMinutes.template),
+            selectinload(MeetingMinutes.adopting_minutes),
+        ]
         if load_children:
             options = [
                 selectinload(MeetingMinutes.motions),
@@ -318,9 +509,10 @@ class MinuteService:
         )
         if restricted:
             query = query.where(
-                MeetingMinutes.status == MinutesStatus.APPROVED.value,
-                MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
+                *member_visible_conditions(),
             )
+        if refresh:
+            query = query.execution_options(populate_existing=True)
         result = await self.db.execute(query)
         meeting_minutes: Optional[MeetingMinutes] = result.scalar_one_or_none()
         return meeting_minutes
@@ -383,8 +575,7 @@ class MinuteService:
             # Members see only ratified, non-executive minutes; a requested
             # status filter cannot widen this.
             query = query.where(
-                MeetingMinutes.status == MinutesStatus.APPROVED.value,
-                MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
+                *member_visible_conditions(),
             )
         elif status:
             query = query.where(MeetingMinutes.status == status)
@@ -485,6 +676,15 @@ class MinuteService:
         ):
             update_data["footer_config"] = data.footer_config.model_dump()
 
+        # Only when a time is being changed, so minutes saved before this check
+        # existed stay editable. Judged on what the minutes will hold: moving
+        # only the end is checked against the saved start.
+        if "called_to_order_at" in update_data or "adjourned_at" in update_data:
+            self._check_meeting_times(
+                update_data.get("called_to_order_at", minutes.called_to_order_at),
+                update_data.get("adjourned_at", minutes.adjourned_at),
+            )
+
         apply_updates(
             minutes, update_data, skip={"id", "organization_id", "created_by"}
         )
@@ -521,7 +721,7 @@ class MinuteService:
     async def submit_for_approval(
         self, minutes_id: str, organization_id: UUID | str, submitted_by: UUID | str
     ) -> Optional[MeetingMinutes]:
-        """Submit draft minutes for approval"""
+        """Circulate draft minutes for review (the 'submitted' status)"""
         minutes = await self.get_minutes(minutes_id, organization_id)
         if not minutes:
             return None
@@ -532,6 +732,13 @@ class MinuteService:
         ):
             raise ValueError("Can only submit draft or rejected minutes")
 
+        missing = self.missing_required_sections(minutes)
+        if missing:
+            raise ValueError(
+                "These sections are required by the outline and have no "
+                f"content yet: {', '.join(missing)}"
+            )
+
         minutes.status = MinutesStatus.SUBMITTED
         minutes.submitted_at = datetime.now(timezone.utc)
         minutes.submitted_by = str(submitted_by)
@@ -540,12 +747,87 @@ class MinuteService:
         minutes.rejection_reason = None
 
         await self.db.commit()
+        circulated = await self.get_minutes(minutes_id, organization_id)
+        if circulated is not None:
+            await self._notify_circulated(circulated)
+        return circulated
+
+    async def _notify_circulated(self, minutes: MeetingMinutes) -> None:
+        """Tell the members the minutes are out for review; never raises.
+
+        The status change has already committed, so a mail problem must not
+        turn a successful circulation into an error the secretary retries.
+        """
+        from app.services.minutes_notifications import notify_minutes_circulated
+
+        try:
+            await notify_minutes_circulated(self.db, minutes)
+            await self.db.commit()
+        except Exception as exc:
+            await self.db.rollback()
+            logger.warning(
+                "Circulation notification for minutes {} failed: {}", minutes.id, exc
+            )
+
+    @staticmethod
+    def missing_required_sections(minutes: MeetingMinutes) -> List[str]:
+        """Titles of the outline's required sections that are still empty.
+
+        The roll-call section is met by a recorded roll, since attendance is
+        taken on its own panel and not typed into the section.
+        """
+        missing = []
+        for section in minutes.get_sections():
+            if not section.get("required"):
+                continue
+            if not section_is_blank(section):
+                continue
+            if section.get("key") == "roll_call" and minutes.attendees:
+                continue
+            missing.append(section.get("title") or section.get("key") or "Untitled")
+        return missing
+
+    async def recall_minutes(
+        self, minutes_id: str, organization_id: UUID | str
+    ) -> Optional[MeetingMinutes]:
+        """Take circulated minutes back to draft so suggestions can be made.
+
+        Suggestions already made are kept. The minutes must be circulated again
+        before they can be adopted.
+        """
+        minutes = await self.get_minutes(minutes_id, organization_id)
+        if not minutes:
+            return None
+        if minutes.status != MinutesStatus.SUBMITTED.value:
+            raise ValueError("Only minutes circulated for review can be recalled")
+
+        minutes.status = MinutesStatus.DRAFT
+        minutes.submitted_at = None
+        minutes.submitted_by = None
+        await self.db.commit()
         return await self.get_minutes(minutes_id, organization_id)
 
     async def approve_minutes(
-        self, minutes_id: str, organization_id: UUID | str, approved_by: UUID | str
+        self,
+        minutes_id: str,
+        organization_id: UUID | str,
+        approved_by: UUID | str,
+        adoption: Optional[MinutesAdopt] = None,
     ) -> Optional[MeetingMinutes]:
-        """Approve submitted minutes"""
+        """Adopt submitted minutes and record the adopted version
+
+        ``adoption`` says what the body did: the day of the vote, the minutes of
+        the meeting that adopted these, and whether as presented or as amended.
+        Left out, the vote is dated now and "as amended" follows whether any
+        suggestion was accepted.
+        """
+        from app.services.minutes_record_service import MinutesRecordService
+
+        # Locked before the status is read: two approvers acting at once would
+        # otherwise both see SUBMITTED and each write a revision.
+        records = MinutesRecordService(self.db)
+        if await records.lock_minutes(minutes_id, organization_id) is None:
+            return None
         minutes = await self.get_minutes(minutes_id, organization_id)
         if not minutes:
             return None
@@ -565,12 +847,67 @@ class MinuteService:
             record="meeting minutes",
         )
 
-        minutes.status = MinutesStatus.APPROVED
-        minutes.approved_at = datetime.now(timezone.utc)
-        minutes.approved_by = str(approved_by)
+        adoption = adoption or MinutesAdopt()
+        if adoption.adopting_minutes_id:
+            # XC-1: the id is the client's. The adopting meeting must be one of
+            # this department's own, and not these minutes themselves.
+            if str(adoption.adopting_minutes_id) == str(minutes.id):
+                raise ValueError("Minutes cannot be adopted at their own meeting")
+            await assert_in_org(
+                self.db,
+                MeetingMinutes,
+                adoption.adopting_minutes_id,
+                organization_id,
+                label="adopting meeting",
+            )
+        as_amended = adoption.as_amended
+        if as_amended is None:
+            as_amended = await records.has_accepted_suggestions(minutes.id)
 
+        # Whole seconds: MySQL rounds a fractional second when it stores one,
+        # MariaDB truncates, and the snapshot truncates. A value with a
+        # fraction would be stored a second later than it was hashed, and
+        # verify would report the adoption as changed on MySQL only.
+        approved_at = datetime.now(timezone.utc).replace(microsecond=0)
+        minutes.status = MinutesStatus.APPROVED
+        minutes.approved_at = approved_at
+        minutes.approved_by = str(approved_by)
+        minutes.adopted_on = (
+            adoption.adopted_on.replace(microsecond=0)
+            if adoption.adopted_on
+            else approved_at
+        )
+        minutes.adopted_as_amended = as_amended
+        minutes.adoption_moved_by = adoption.moved_by
+        minutes.adoption_seconded_by = adoption.seconded_by
+        minutes.adopting_minutes_id = (
+            str(adoption.adopting_minutes_id) if adoption.adopting_minutes_id else None
+        )
+
+        await records.record_approval(minutes, approved_by, approved_at)
         await self.db.commit()
-        return await self.get_minutes(minutes_id, organization_id)
+
+        approved = await self.get_minutes(minutes_id, organization_id, refresh=True)
+        if approved is not None:
+            await self._notify_assignees(approved, approved.action_items or [])
+        return approved
+
+    async def _notify_assignees(self, minutes: MeetingMinutes, items) -> None:
+        """Email assignees about items in approved minutes; never raises.
+
+        The approval has already committed, so a mail problem must not turn a
+        successful approval into an error the secretary retries.
+        """
+        from app.services.minutes_notifications import notify_action_item_assignees
+
+        try:
+            await notify_action_item_assignees(self.db, minutes, items)
+            await self.db.commit()
+        except Exception as exc:
+            await self.db.rollback()
+            logger.warning(
+                "Action item notification for minutes {} failed: {}", minutes.id, exc
+            )
 
     async def reject_minutes(
         self,
@@ -596,7 +933,11 @@ class MinuteService:
         return await self.get_minutes(minutes_id, organization_id)
 
     async def reopen_minutes(
-        self, minutes_id: str, organization_id: UUID | str
+        self,
+        minutes_id: str,
+        organization_id: UUID | str,
+        reopened_by: Optional[UUID | str] = None,
+        reason: Optional[str] = None,
     ) -> Optional[Tuple[MeetingMinutes, dict]]:
         """Return approved minutes to draft so a correction can be made.
 
@@ -609,6 +950,11 @@ class MinuteService:
         it did to the first). The prior approval is returned so the caller can
         write it into the audit trail, which is the only place it survives.
         """
+        from app.services.minutes_record_service import MinutesRecordService
+
+        records = MinutesRecordService(self.db)
+        if await records.lock_minutes(minutes_id, organization_id) is None:
+            return None
         minutes = await self.get_minutes(minutes_id, organization_id)
         if not minutes:
             return None
@@ -624,9 +970,20 @@ class MinuteService:
             "previous_submitted_by": minutes.submitted_by,
         }
 
+        # The approved version is kept on file, marked as replaced, so the
+        # text the body first approved survives the correction.
+        await records.supersede_on_reopen(
+            minutes, reopened_by, reason, datetime.now(timezone.utc)
+        )
+
         minutes.status = MinutesStatus.DRAFT
         minutes.approved_at = None
         minutes.approved_by = None
+        minutes.adopted_on = None
+        minutes.adopted_as_amended = None
+        minutes.adoption_moved_by = None
+        minutes.adoption_seconded_by = None
+        minutes.adopting_minutes_id = None
         minutes.submitted_at = None
         minutes.submitted_by = None
         minutes.rejected_at = None
@@ -650,7 +1007,7 @@ class MinuteService:
                 published.under_correction_since = datetime.now(timezone.utc)
 
         await self.db.commit()
-        refreshed = await self.get_minutes(minutes_id, organization_id)
+        refreshed = await self.get_minutes(minutes_id, organization_id, refresh=True)
         if refreshed is None:
             return None
         return refreshed, prior
@@ -673,17 +1030,30 @@ class MinuteService:
         ):
             raise ValueError("Can only add motions to draft or rejected minutes")
 
+        self._check_motion_section(minutes, data.section_key)
+        await self._check_motion_ballot(
+            data.election_id, data.ballot_item_id, organization_id
+        )
+        votes = {
+            "votes_for": data.votes_for,
+            "votes_against": data.votes_against,
+            "votes_abstain": data.votes_abstain,
+            "votes_recused": data.votes_recused,
+            **self._vote_record(data.roll_call, minutes.attendees),
+        }
         motion = Motion(
             minutes_id=minutes_id,
             order=data.order,
             motion_text=data.motion_text,
             moved_by=data.moved_by,
             seconded_by=data.seconded_by,
+            section_key=data.section_key,
             discussion_notes=data.discussion_notes,
             status=MotionStatus(data.status),
-            votes_for=data.votes_for,
-            votes_against=data.votes_against,
-            votes_abstain=data.votes_abstain,
+            threshold=data.threshold,
+            election_id=data.election_id,
+            ballot_item_id=data.ballot_item_id,
+            **votes,
         )
         self.db.add(motion)
         await self.db.commit()
@@ -720,6 +1090,28 @@ class MinuteService:
         update_data = data.model_dump(exclude_unset=True)
         if "status" in update_data:
             update_data["status"] = MotionStatus(update_data["status"])
+        self._check_motion_section(minutes, update_data.get("section_key"))
+
+        # A roll call replaces the totals; clearing it leaves the totals as
+        # they were, since they are then the record of a vote taken by count.
+        if "roll_call" in update_data:
+            record = self._vote_record(data.roll_call, minutes.attendees)
+            update_data.pop("roll_call")
+            update_data.update(record or {"roll_call": None})
+
+        if "election_id" in update_data or "ballot_item_id" in update_data:
+            election_id = update_data.get("election_id", motion.election_id)
+            # Un-linking the ballot drops the item that belonged to it.
+            ballot_item_id = (
+                update_data.get("ballot_item_id", motion.ballot_item_id)
+                if election_id
+                else None
+            )
+            await self._check_motion_ballot(
+                election_id, ballot_item_id, organization_id
+            )
+            update_data["election_id"] = election_id or None
+            update_data["ballot_item_id"] = ballot_item_id
 
         apply_updates(motion, update_data, skip={"id", "minutes_id"})
 
@@ -784,6 +1176,10 @@ class MinuteService:
         self.db.add(item)
         await self.db.commit()
         await self.db.refresh(item)
+        # Items added to draft minutes are announced when the minutes are
+        # approved; one added to approved minutes is already a commitment.
+        if minutes.status == MinutesStatus.APPROVED.value:
+            await self._notify_assignees(minutes, [item])
         return item
 
     async def update_action_item(
@@ -916,8 +1312,7 @@ class MinuteService:
         )
         if restricted:
             base = base.where(
-                MeetingMinutes.status == MinutesStatus.APPROVED.value,
-                MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
+                *member_visible_conditions(),
             )
 
         total_result = await self.db.execute(base)
@@ -945,6 +1340,8 @@ class MinuteService:
                     ]
                 )
             )
+            # An item carried into later minutes is open there, not here.
+            .where(ActionItem.carried_forward_at.is_(None))
         )
         if restricted:
             open_items_query = open_items_query.where(
@@ -1011,8 +1408,7 @@ class MinuteService:
             )
             if restricted:
                 stmt = stmt.where(
-                    MeetingMinutes.status == MinutesStatus.APPROVED.value,
-                    MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
+                    *member_visible_conditions(),
                 )
 
             res = await self.db.execute(stmt)
@@ -1058,7 +1454,11 @@ class MinuteService:
     # ============================================
 
     async def create_from_meeting(
-        self, meeting_id: UUID, organization_id: UUID | str, created_by: UUID | str
+        self,
+        meeting_id: UUID,
+        organization_id: UUID | str,
+        created_by: UUID | str,
+        template_id: Optional[str] = None,
     ) -> Optional[MeetingMinutes]:
         """
         Create meeting minutes pre-populated from a Meeting record.
@@ -1117,21 +1517,33 @@ class MinuteService:
                 )
                 user = user_result.scalar_one_or_none()
                 attendees_json.append(
-                    {
-                        "user_id": att.user_id,
-                        # The name the member goes by, as colleagues know
-                        # them. Snapshotted, so minutes already drafted keep
-                        # the name they were drafted with.
-                        "name": (
-                            (user.display_name or user.username) if user else "Unknown"
-                        ),
-                        "present": att.present,
-                        "excused": att.excused,
-                    }
+                    normalize_attendee(
+                        {
+                            "user_id": att.user_id,
+                            # The name the member goes by, as colleagues know
+                            # them. Snapshotted, so minutes already drafted
+                            # keep the name they were drafted with.
+                            "name": (
+                                (user.display_name or user.username)
+                                if user
+                                else "Unknown"
+                            ),
+                            "present": att.present,
+                            "excused": att.excused,
+                        }
+                    )
                 )
 
-        # Build default sections based on meeting type
-        section_defaults = _default_sections_for(minutes_type)
+        # The outline: the one asked for, else the department's default for
+        # this kind of meeting, else the built-in order of business.
+        outline = await TemplateService(self.db).resolve_outline(
+            organization_id, minutes_type.value, template_id, created_by
+        )
+        section_defaults = (
+            outline.sections
+            if outline is not None and outline.sections
+            else _default_sections_for(minutes_type)
+        )
 
         # The meeting's date and start time are the department's wall clock,
         # not UTC. Combining them as UTC put a 7 PM meeting at 2 PM, and a
@@ -1156,7 +1568,14 @@ class MinuteService:
             location=meeting.location,
             called_by=meeting.called_by,
             attendees=attendees_json,
-            sections=[{**s} for s in section_defaults],
+            sections=self._sections_from_outline(section_defaults),
+            template_id=outline.id if outline is not None else None,
+            header_config=(
+                copy.deepcopy(outline.header_config) if outline is not None else None
+            ),
+            footer_config=(
+                copy.deepcopy(outline.footer_config) if outline is not None else None
+            ),
             agenda=meeting.agenda if hasattr(meeting, "agenda") else None,
             meeting_id=str(meeting_id),
             event_id=meeting.event_id,

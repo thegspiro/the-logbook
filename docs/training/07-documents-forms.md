@@ -1,6 +1,31 @@
 # Documents, Forms & Communications
 
-The Documents module provides centralized file storage for SOPs, policies, and shared documents. The Forms module is a visual form builder for collecting structured data. The Communications module covers notifications, department-wide messages, and external integrations.
+This guide covers four parts of The Logbook:
+
+- **Documents** — the department's file library: SOPs, policies and other
+  shared files.
+- **Forms** — build your own forms, share them, and collect the answers.
+- **Communications** — notifications, department messages and suggestion
+  boxes.
+- **External integrations** — connecting The Logbook to other services.
+
+## Lesson at a Glance
+
+|                     |                                                                                                     |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| **Who this is for** | Every member, for documents, messages, notifications and suggestions. Officers, for setting them up |
+| **What you need**   | A Logbook account. Setup tasks need the permissions named in each section                           |
+| **Essential path**  | Members: about 20 minutes. Officers: about 90 minutes                                               |
+| **Full guide**      | About 2 hours                                                                                       |
+| **Last verified**   | 2026-10-14                                                                                          |
+| **Owner**           | Your department's secretary or communications officer                                               |
+
+**Members:** read [Documents Overview](#documents-overview),
+[Department Messages](#department-messages) (the parts on receiving and
+acknowledging), [Member notification controls](#member-notification-controls)
+and [Suggestion Boxes](#suggestion-boxes).
+
+**Officers:** add the sections for the tools you look after.
 
 ---
 
@@ -23,127 +48,144 @@ The Documents module provides centralized file storage for SOPs, policies, and s
 
 8. [Notification Rules & Logs](#notification-rules--logs)
 9. [Department Messages](#department-messages)
-10. [Suggestion Boxes](#suggestion-boxes-2026-09-23)
+10. [Suggestion Boxes](#suggestion-boxes)
 11. [External Integrations](#external-integrations)
 
 ### Worked Examples
 
 12. [Realistic Example: Building a Vehicle Pre-Trip Inspection Form](#realistic-example-building-a-vehicle-pre-trip-inspection-form)
 13. [Troubleshooting](#troubleshooting)
+14. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
 ## Documents Overview
 
-Navigate to **Documents** in the sidebar to access the department's document library.
+Select **Documents** in the menu. The page is called **Documents & Files**. It
+shows:
 
-The Documents page (**Documents & Files**) provides:
+- **Totals** across the top: **Total Documents**, **Folders**, **Total Size**
+  and **Added This Month**.
+- **Folders** as cards. Open one to see its subfolders and documents. The
+  breadcrumb, or **All Folders**, takes you back up.
+- An **All Documents** card, which lists every document you can see, including
+  ones with no folder.
+- **Grid view** and **List view** buttons.
+- **Search**. From **All Documents** it searches every document; inside a
+  folder it searches that folder. At the top level, open a folder (or All
+  Documents) first.
 
-- **Totals** across the top — **Total Documents**, **Folders**, **Total Size**
-  and **Added This Month**
-- **Folders** as cards, with an **All Documents** card that also lists files
-  uploaded without a folder; open one to see its subfolders and documents
-- **Grid and List view** toggles
-- **Search** — across every document from **All Documents**, or within the
-  folder you have open
+Long lists show 1 to _n_ of the total, with **Load more** for the rest.
 
-> **Corrected 2026-10-04.** This section described a folder tree on the left
-> and a file list on the right. The page shows folders as cards above the
-> document list, and you move back up through the breadcrumb.
+**Empty pages say which case you are in:**
 
-An empty library or folder shows its "get started" instruction — upload a file,
-create a folder — only to someone who can act on it; everyone else sees that it
-is empty. A search or filter that matches nothing is reported to everyone. If
-your permission to upload, create folders or delete is withdrawn while one of
-those dialogs is open, the dialog closes.
+| Message                         | Means                                                               |
+| ------------------------------- | ------------------------------------------------------------------- |
+| **No Matching Documents**       | Your search found nothing                                           |
+| **No Documents in This Folder** | The folder is empty                                                 |
+| **No Documents Yet**            | All Documents is empty                                              |
+| **Start Your Document Library** | The department has no folders yet (shown only to document managers) |
 
-The empty messages say which case you are in _(2026-09-29)_: **No Matching
-Documents** for a search that found nothing, **No Documents in This Folder**
-for an empty folder, and **Start Your Document Library** when the department
-has no folders yet. The last one no longer says the library is empty, because
-documents uploaded without a folder can still be listed under **All
-Documents**.
+The "upload a file" and "create a folder" prompts show only to people who can
+do those things. Everyone else just sees that a folder is empty. If your
+permission to upload, create folders or delete is taken away while one of
+those windows is open, the window closes.
 
 ![Documents page with the folder tree, file list, and search bar](./images/07-01-documents.png)
-
-**[SCREENSHOT — REPLACE `07-01-documents.png`.** The page subtitle now reads "SOPs, policies, forms, and other department files in one place" and the fourth total is **Added This Month** (was "This Month") _(#2785)_. Re-take Documents & Files as an administrator with the four totals, the folder cards and the search bar in frame**]**
 
 ---
 
 ## Folders and Organization
 
-Documents are organized into folders. The system provides default folders, and administrators can create additional ones.
+Documents are kept in folders. The Logbook creates some folders itself, and
+document managers can add more.
 
-**System Folders** (created automatically). A module's folder opens to that
-module's rights, not to document managers; only a full administrator sees every
-folder:
+### Built-in folders
 
-| Folder                                                                                      | Who can open it                                                                                                                                      |
-| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Meeting Minutes, SOPs & Procedures, Policies, Forms & Templates, Reports, General Documents | anyone with `documents.view`                                                                                                                         |
-| Training Materials                                                                          | `training.view` or `training.manage`                                                                                                                 |
-| Event Attachments                                                                           | `events.view`, `events.edit` or `events.manage`                                                                                                      |
-| Apparatus Files                                                                             | `apparatus.view`, `apparatus.edit` or `apparatus.manage`; photos and documents are uploaded on the vehicle's page                                    |
-| Facility Files                                                                              | `facilities.view_sensitive`, `facilities.edit` or `facilities.manage`                                                                                |
-| Finance (and Receipts)                                                                      | `finance.view`, `finance.manage` or `finance.approve`; a member opens their own receipt on the request itself                                        |
-| Member Separations                                                                          | `members.manage`. Property-return reports are filed here, because each names a departed member, the reason for the separation and their home address |
-| Member Files                                                                                | each member sees their own folder only                                                                                                               |
+Each built-in folder opens to the people who use that part of The Logbook, not
+to document managers in general. Only a full administrator sees every folder.
 
-A folder marked **Document managers only** opens to `documents.manage`.
+| Folder                                                                                      | Who can open it                                                                                                                                  |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Meeting Minutes, SOPs & Procedures, Policies, Forms & Templates, Reports, General Documents | Everyone who can view documents                                                                                                                  |
+| Training Materials                                                                          | Members who can view or manage training                                                                                                          |
+| Event Attachments                                                                           | Members who can view, edit or manage events                                                                                                      |
+| Apparatus Files                                                                             | Members who can view, edit or manage apparatus. Photos and documents are uploaded on the vehicle's page                                          |
+| Facility Files                                                                              | Members who can see sensitive facility details, or edit or manage facilities                                                                     |
+| Finance (and Receipts)                                                                      | Members who can view, manage or approve finance. A member opens their own receipt from the request itself                                        |
+| Member Separations                                                                          | Officers who can manage members. Property-return reports are filed here, because each names a departed member, the reason and their home address |
+| Member Files                                                                                | Each member sees only their own folder                                                                                                           |
+
+A built-in folder keeps its name and place and cannot be deleted, because the
+part of The Logbook that made it files into it. You can still change its
+description and who can open it, but its built-in access always applies too.
+
+A folder card marked **Document managers only** opens only to officers who can
+manage documents. One marked **Specific roles only** opens only to members in
+the positions chosen for it.
 
 ### Creating Folders
 
-**Required Permission:** `documents.manage`
+**Who can do this:** roles that can manage documents and folders.
 
-1. Open the folder the new one should sit in (or stay at the top level).
-2. Click **New Folder** in the page header.
-3. Enter the **Folder Name** and, optionally, a description. The dialog shows
-   the **Location** it will be created in — **Root** at the top level.
-4. Click **Create Folder**.
+1. Open the folder the new one should sit in, or stay at the top level.
+2. Select **New Folder** at the top of the page.
+3. The window shows the **Location** it will be created in — **Root** at the
+   top level. Enter the **Folder Name** and, if you like, a **Description**.
+4. Under **Who can open it**, choose who may open the folder (see below).
+5. Select **Create Folder**.
 
 ![The Create Folder dialog with its Location, Folder Name and description fields](./images/07-02-new-folder-dialog.png)
 
-> **Corrected 2026-10-04.** Step 3 used to offer a parent-folder selector. There
-> is none: a folder is created inside the folder you have open, which the
-> dialog names as its **Location**.
+### Who can open it
 
-### Managing a Folder _(2026-10-11)_
+| Choice                 | Who can open the folder                            |
+| ---------------------- | -------------------------------------------------- |
+| **Organization**       | Every member who can open Documents                |
+| **Leadership**         | Officers who manage the department's documents     |
+| **Specific positions** | Only members holding one of the positions you tick |
 
-**Required Permission:** `documents.manage`
+- With **Specific positions**, **Save** waits until you tick at least one.
+- **Also require a permission** is optional. If you pick any permissions, a
+  member also needs at least one of them. For example, pick Inventory
+  management for the quartermaster's files. A permission follows the member
+  if they change position.
 
-Each folder card carries a **Manage folder** (gear) button. It opens the
-folder's settings:
+### Managing a Folder
+
+**Who can do this:** roles that can manage documents and folders.
+
+Each folder card has a **Manage folder** (gear) button. It opens the folder's
+settings:
 
 - **Name** and **Description**.
-- **Who can open it** — **Organization** (every member who can open
-  Documents), **Leadership** (officers who manage the department's documents),
-  or **Specific roles** (tick one or more positions; **Save** waits until at
-  least one is ticked). The card then reads **Leadership only** or **Specific
-  roles only**. A personal folder under Member Files keeps its owner-only
-  access and is not offered these choices.
-- **Move** — browse to the folder it should sit in (or stay at **Top level**),
-  click **Move here**, then **Save**. The folder itself is not offered as a
-  destination, so it cannot be moved inside itself.
-- **Delete folder…** — asks first, naming what goes with it: the documents
-  directly in it and how many subfolders, with everything inside them. The files
-  are deleted too and it cannot be undone. **Keep it** backs out.
+- **Who can open it**, as above. A personal folder under Member Files is not
+  offered these choices: only its member and full administrators can open it.
+- **Move** — browse to the folder it should sit in (or **Top level**), select
+  **Move here**, then **Save**. **Undo** cancels the move. A folder cannot be
+  moved inside itself.
+- **Delete folder…** — asks first, naming what goes with it: the documents in
+  it and how many subfolders, with everything inside them. The files are
+  deleted too, and it cannot be undone. **Delete folder and contents**
+  confirms; **Keep it** backs out.
 
-**A folder only administrators could open is confirmed first** _(2026-10-14)_.
-Creating a folder, changing **Who can open it** or moving it can leave a folder
-that no active member except a full administrator could open (for example a
-**Specific roles** folder whose only ticked position nobody holds, or a move
-under a leadership-only folder). The dialog then stops and says so, naming what
-would happen, with **Go back** and a confirm button; confirming saves it. A
-department made up of administrators alone, such as a fresh installation, is not
-asked. A script calling the folders API must send `confirm_admin_only: true` to
-do this on purpose; without it the server answers `LB-DOC-001` (400).
+**A folder only administrators could open is confirmed first.** Creating a
+folder, changing who can open it, or moving it could leave a folder no active
+member except a full administrator can open. For example: a Specific positions
+folder whose only position nobody holds, or a move under a leadership-only
+folder. The window then asks **Only full administrators could open this
+folder**, with **Go back and change it** and **Save for administrators only**.
+A department made up only of administrators, such as a new installation, is
+not asked.
+
+**Full administrators are emailed a weekly list.** A folder can become
+administrator-only without anyone choosing it (auto-archive, a tier change).
+Once a week, while any such folder exists, each active full administrator gets
+an email listing every one, the same list the Documents page shows. If sending
+fails it retries the next day. The email is the optional **Document folder
+access** kind; a department can make it required under notification settings.
 
 _[Screenshot needed: the confirmation shown after choosing Specific roles with a position nobody holds, in Manage folder.]_
-
-**System folders** (the list above) keep their name and place and cannot be
-deleted: the module that made each one files into it. Their description and who
-can open them can still be changed. The server refuses a rename, move or delete
-of a system folder even from the API.
 
 ---
 
@@ -151,176 +193,190 @@ of a system folder even from the API.
 
 ### Uploading Files
 
-**Required Permission:** `documents.manage`
+**Who can do this:** roles that can manage documents and folders.
 
-1. Click **Upload Document** in the page header.
-2. In the box headed **Choose the file to upload**, click **Choose File** and
-   pick the file.
+1. Select **Upload Document** at the top of the page.
+2. In the box headed **Choose the file to upload**, select **Choose File** and
+   pick the file. You cannot drag a file onto the box.
 3. Optionally fill in **Document Name** (the file name is used if you leave it
-   blank) and **Description**, and choose the **Folder** — the folder you have
-   open is preselected, and **No folder** lists it under **All Documents**
-   only.
-4. Click **Upload**.
+   blank) and **Description**.
+4. Choose the **Folder**. **General Documents (default)** files it into
+   General Documents. The folder you have open is offered as **(current)**.
+5. Select **Upload**.
 
-> **No drag and drop** _(2026-09-29)_. The upload box used to say "Drag and
-> drop your file here", but it never accepted a dropped file. It now says
-> **Choose the file to upload**; use its **Choose File** button.
-
-### Document Actions
-
-- **Download** — download the file to your device
-- **Delete** — permanently deletes the document and its file, after a **Delete
-  Document** confirmation that says it cannot be undone (`documents.manage`)
-
-> **Corrected 2026-10-04.** **Move** and **Rename** were listed here. The page
-> offers neither; to file a document elsewhere, upload it again into the right
-> folder and delete the old copy.
+**What you can upload:** PDF, Word, Excel, PowerPoint, text, CSV, images (JPEG,
+PNG, GIF, WebP) and ZIP files, up to **50 MB** each. The Logbook checks what
+the file really is, not just its name.
 
 ![Document upload dialog with the file box, name, description and folder fields](./images/07-03-upload-documents.png)
 
-**[SCREENSHOT — REPLACE `07-03-upload-documents.png`.** The file box no longer reads "Drag and drop your file here / or click to browse"; it reads **Choose the file to upload**, and the name field's placeholder is "Optional — uses the file name if left blank" _(#2785)_. Re-take the Upload Document dialog, empty, with the file box and the name, description and folder fields in frame**]**
+### Document Actions
 
-> **Hint:** Events automatically create a document folder for attachments. Training sessions and meetings can also have linked documents.
+- **Download** — save the file to your device.
+- **Delete** — permanently deletes the document and its file, after a
+  **Delete Document** confirmation that says it cannot be undone. Only roles
+  that can manage documents see it.
+
+There is no move or rename. To file a document somewhere else, upload it again
+into the right folder and delete the old copy.
+
+> **Tip.** Events, training sessions and meetings can also have documents
+> attached on their own pages. Those are filed into the matching built-in
+> folder.
 
 ---
 
 ## Forms Overview
 
-Navigate to **Forms** in the sidebar (under Administration) to access the form builder.
+**Where to find it:** **Administration → Forms & Comms → Forms**. You need a
+role that can create, edit and manage forms, and the Forms module must be on.
 
-Custom forms let you collect structured data for:
+Custom forms collect structured answers, for example:
 
-- Incident reports
-- Equipment inspections
-- Shift reports
-- Member applications
-- Surveys and feedback
-- Any custom data collection need
+- incident reports;
+- equipment inspections;
+- membership interest from the public;
+- surveys and feedback;
+- event requests from the community.
 
-The page has three tabs: **Forms** (every form the department has, not only
-yours — it was labelled "My Forms" until 2026-09-29), **Starter Templates** and
-**Submissions**. Each form's status and category are shown capitalised
-(**Published**, **Operations**).
+The page has three tabs:
+
+| Tab                   | What it holds                                        |
+| --------------------- | ---------------------------------------------------- |
+| **Forms**             | Every form in the department, not only yours         |
+| **Starter Templates** | Ready-made forms to copy                             |
+| **Submissions**       | Pick a form to see its **Responses** and **Results** |
+
+Each form card shows its status (for example **Published**), its category, and
+whether it is **Public** or **Accepting submissions**.
 
 ![Forms listing page with status, submission counts, and actions](./images/07-04-forms-list.png)
 
-**[SCREENSHOT — REPLACE `07-04-forms-list.png`.** The first tab now reads **Forms** (was "My Forms"), status and category badges are capitalised, and the subtitle reads "Build forms, share them publicly, and send responses to other modules" _(#2789)_. Re-take the Forms tab with at least one published public form and one draft in frame**]**
+> **Important — members fill in forms through the form's link.** There is no
+> page where members browse forms. To have members fill in a form, turn on
+> **Public Access** and share the link (see
+> [Publishing and Sharing Forms](#publishing-and-sharing-forms)). Leave
+> **Allow submissions without signing in** off and only signed-in members can
+> send it.
 
 ---
 
 ## Building a Form
 
-**Required Permission:** `forms.manage`
+**Who can do this:** roles that can create, edit and manage forms.
 
 ### Creating a New Form
 
-1. Click **Create Form**.
-2. Enter the form **title** and **description**.
-3. Select a **category** (or create a custom one).
+1. Select **Create Form**.
+2. Fill in:
+   - **Form Name** (required).
+   - **Category**: **Safety**, **Operations**, **Administration** or
+     **Training**.
+   - **Description**.
+   - **Public Form** — tick to let anyone open the form from a public link.
+     Whether submitting needs a sign-in is set later under **Share**.
+   - **One submission per person** — see
+     [One submission per person](#one-submission-per-person).
+3. Select **Create Form**. The form opens in the editor, as a draft.
+
+The editor has four tabs: **Form Builder**, **Preview & Submit**,
+**Submissions** and **Results**.
 
 ### Adding Fields
 
-The form builder supports these field types:
+Select **Add Field**, choose a type, and fill in its settings. The field types
+are:
 
-| Field Type         | Description                        |
-| ------------------ | ---------------------------------- |
-| **Text**           | Single-line text input             |
-| **Textarea**       | Multi-line text area               |
-| **Number**         | Numeric input                      |
-| **Email**          | Email address with validation      |
-| **Phone**          | Phone number input                 |
-| **Date**           | Date picker                        |
-| **Time**           | Time picker                        |
-| **Select**         | Dropdown selection                 |
-| **Multi-Select**   | Multiple choice selection          |
-| **Radio**          | Single choice radio buttons        |
-| **Checkbox**       | Boolean checkbox                   |
-| **File Upload**    | File attachment                    |
-| **Signature**      | Digital signature capture          |
-| **Section Header** | Visual divider with heading        |
-| **Hidden**         | Hidden field for metadata          |
-| **Calculated**     | Auto-calculated from other fields  |
-| **DateTime**       | Combined date and time picker      |
-| **Member Lookup**  | Search and select existing members |
+| Field type         | What it is                                     |
+| ------------------ | ---------------------------------------------- |
+| **Text**           | One line of text                               |
+| **Text Area**      | Several lines of text                          |
+| **Email**          | An email address, checked for the right format |
+| **Phone**          | A phone number                                 |
+| **Number**         | A number                                       |
+| **Date**           | A date picker                                  |
+| **Time**           | A time picker                                  |
+| **Date & Time**    | Date and time together                         |
+| **Dropdown**       | Pick one from a list                           |
+| **Multi-Select**   | Pick several from a list                       |
+| **Checkboxes**     | Tick any number of options                     |
+| **Radio Buttons**  | Pick one, with all options showing             |
+| **Member Lookup**  | Search for and pick a member                   |
+| **Section Header** | A heading that divides the form                |
+| **File Upload**    | Attach a file                                  |
+| **Signature**      | Sign with a finger or mouse                    |
 
-For each field, configure:
+For each field you can set:
 
-- Label and help text
-- Required or optional
-- Validation rules (min/max, pattern)
-- Default value
-- Conditional visibility (show/hide based on other field values)
+- the label and help text;
+- whether it is required;
+- a placeholder and a default value;
+- the width (**Full Width**, **Half Width** or **One Third**);
+- limits: minimum and maximum length, a **Validation Pattern** (such as a US
+  ZIP code), or minimum and maximum values;
+- the options, for dropdowns, multi-selects, checkboxes and radio buttons;
+- **Conditional Visibility** — show the field only when another question has a
+  certain answer.
 
-> **A hidden question is really hidden now** _(2026-09-23)_. Conditional
-> visibility used to be a screen-only effect, and the server did not know about
-> it. Two things went wrong because of that, and both are fixed:
->
-> - **A required question the submitter could not see blocked the form.** Make
->   "Previous EMT experience" required and show it only when Membership Type is
->   EMT, and an applicant who chose Administrative could never submit — the
->   server demanded an answer to a question the form had hidden from them, and
->   they saw an **LB-API-400** error saying the field was missing. A required
->   question is now only required **while it is showing**.
-> - **An answer typed into a question that was later hidden was still saved.**
->   Somebody who picked EMT, filled in their EMT experience, then switched to
->   Administrative still sent the EMT answer, and it was stored against their
->   submission. Answers to hidden questions are now discarded when the form is
->   submitted.
->
-> Both rules apply to internal and public forms alike. **Submissions saved
-> before this date may still hold such answers**; your administrator can clear
-> them with a one-off script (see the
-> [upgrade note](../UPGRADING.md)). Records other features already built from
-> those submissions — a prospective member created from an interest form, for
-> example — keep whatever they copied at the time.
+### Conditional visibility (branching)
 
-> **Branching follows every level now** _(2026-10-02)_. A question that
-> branches from a hidden question is hidden too, and is not required — before
-> this, closing a branch could leave its follow-up on screen and required, so
-> somebody who answered "No" still had to invent an "EMT card number" to submit.
-> The in-app preview, the public page and the server all apply the same rule,
-> and answers to hidden questions are not sent. Other builder fixes from the
-> same review:
->
-> - **"Contains" on a checkbox or multi-select matches a whole option.** "Contains
->   EMT" no longer opens for someone who ticked only **AEMT**. A free-text
->   question still matches part of the answer.
-> - **Clearing a condition, a placeholder or another setting now saves.** It used
->   to report success and keep the old value.
-> - **A question cannot branch from itself or from one of its own follow-ups.**
->   The editor no longer offers those questions, and the server refuses the
->   rule, because a loop hid the whole branch from everyone.
-> - **A rule needs a value**, and one left over from a different parent question
->   is dropped.
-> - **Duplicate** keeps the copy's condition and its number limits, and reopening
->   a number question shows its limits instead of blanks.
-> - **Deleting a question asks first.** The confirmation names any follow-ups
->   that branch from it and says they will be shown to everyone instead; their
->   rules are cleared with the delete.
+Under **Conditional Visibility**, choose **Show when this field...** and the
+question it depends on, then the condition:
+
+- **Equals** or **Does not equal** a value;
+- **Contains** a value;
+- **Is answered (not empty)** or **Is not answered (empty)**;
+- **Is at least** or **Is at most** a number.
+
+How branching behaves:
+
+- **A hidden question is not required.** A required question counts only while
+  it is showing. So an applicant who chose "Administrative" is never asked for
+  their EMT experience.
+- **Answers to hidden questions are thrown away** when the form is sent. If
+  someone picked EMT, typed their experience, then switched to Administrative,
+  the EMT answer is not saved.
+- **Branching follows every level.** A question that depends on a hidden
+  question is hidden too, and not required.
+- **"Contains" on checkboxes or a multi-select matches a whole option.**
+  "Contains EMT" does not open for someone who ticked only "AEMT". On a text
+  question it matches part of the answer.
+- **A rule needs a value**, and one left over from a different question is
+  dropped.
+- **A question cannot depend on itself** or on one of its own follow-ups. The
+  editor does not offer those questions.
+- **Deleting a question asks first.** The confirmation names any follow-ups
+  that depend on it, and says they will be shown to everyone instead.
+
+These rules apply the same way in the preview, on the public page and when The
+Logbook saves the answers.
 
 ### Form Builder Features
 
-The form builder includes advanced capabilities:
-
-- **Drag-and-drop reordering**: Rearrange fields by dragging them to new positions
-- **Field duplication**: Click the duplicate button on any field to create a copy
-- **Incomplete field highlighting**: Fields with missing required configuration (e.g., no label, no options for select fields) are visually highlighted so you can fix them before publishing
-- **Guided tooltips**: First-time form builders see helpful tooltips explaining each feature
-
-> **Hint:** If a field is highlighted in yellow or red, it means the field configuration is incomplete. Click on the field to see what's missing.
+- **Reorder fields** by dragging them, or with the up and down arrows.
+- **Duplicate** a field with its copy button. The copy keeps its condition and
+  number limits.
+- **Badges** on each field show **Required**, **Conditional**, its width, and
+  **Needs setup** when something is missing (for example, a dropdown with no
+  options). Select the field to fix it.
 
 ![Form builder with the field palette, canvas, and field settings](./images/07-06-form-builder.png)
 
 ### Form Templates
 
-The system includes pre-built templates:
+The **Starter Templates** tab has ready-made forms:
 
 - Incident Report
-- Shift Report
+- Membership Interest Form
 - Equipment Inspection
-- Vehicle Check
+- Equipment Assignment
+- Apparatus Check-off
+- Member Feedback Survey
+- Community Event Request
 
-Select a template to start with a pre-configured form that you can customize.
+Select **Use Template** to create a form from one, then change it as you need.
+Some templates are marked **Public**, and some say where they send responses
+(for example "Sends responses to Membership").
 
 ---
 
@@ -333,51 +389,39 @@ Do not press **Use Template**, which creates a form.]_
 
 ## Publishing and Sharing Forms
 
+A form takes submissions only once it is **published**. On a draft form's
+card, select **Publish Form**. Other buttons on a form's card are **Edit
+Fields**, **Submissions**, **Share**, **Integrations**, **Archive** and
+**Delete**.
+
 ### Internal Forms
 
-Internal forms are accessible only to logged-in members:
-
-1. **Publish** the form.
-2. Share the form link with members.
-3. Members can fill out and submit the form from within The Logbook.
+A form without public access can be filled in only from its own editor
+(**Preview & Submit**), by people who can manage forms. To collect answers
+from members, use public access with sign-in required, below.
 
 ### Public Forms
 
-Anyone with a public form's link can **open** it. Whether they can **submit** it
-without signing in is a separate choice, and **a new form requires a signed-in
-member until you change it**:
+Anyone with a public form's link can **open** it. Whether they can **send** it
+without signing in is a separate choice, and **a new form needs a signed-in
+member until you change it**.
 
-1. On the form's card, click **Share** to open the **Share Form** dialog.
-2. Switch on **Public Access**. The form gets a **Public URL** and a **QR code**
-   (download it as PNG or SVG to print).
+1. On the form's card, select **Share** to open the **Share Form** window.
+2. Switch on **Public Access**. The form gets a **Public URL** and a **QR
+   Code**. Select **Download PNG** or **Download SVG** to print the code.
 3. Tick **Allow submissions without signing in** if people outside the
-   department should be able to send it. Leave it off to accept responses from
-   signed-in members only — the dialog then says "Anyone with the link can view
+   department should be able to send it. Leave it off to accept answers from
+   signed-in members only. The window then says "Anyone with the link can view
    this form; submitting requires signing in".
-4. **Publish** the form. Until it is published the public link does not work,
-   and the dialog says "Publish this form to turn on its public link."
-5. Share the URL or QR code. Responses sent through the public link show a
-   **globe icon** in your submissions list.
+4. **Publish** the form. Until then, the public link does not work, and the
+   window says "Publish this form to turn on its public link."
+5. Share the link or QR code, then select **Done**. Answers sent through the
+   public link show a **globe icon** in your submissions list.
 
-> **Publish warning _(2026-10-11)_.** If a public form files event requests but
-> the department has turned off **accept public requests** in Events settings,
-> publishing would file nothing. **Publish** now says so first, in a "Publish
-> this form?" dialog with **Publish anyway** and **Not yet**. A form with no
-> such problem publishes straight away. A forms manager sees the warning even
-> without Events settings access, because the server checks it.
-
-> **"No login required" was not true until 2026-09-29.** The Share dialog
-> promised it, but every form is created requiring a sign-in and no screen could
-> change that, so a signed-out visitor who filled in a public form was refused
-> when they pressed Submit. **Allow submissions without signing in** is that
-> missing switch. Forms you made public before then still require a sign-in:
-> open **Share** on each one meant for the public and tick the box.
->
-> **Visitors are told before they start** _(2026-10-03)_. When a form needs a
-> signed-in member and the visitor is not signed in, the public page shows
-> **Sign in to submit this form** above the questions, with a **Sign in** button
-> that returns them to the form afterwards. The same notice appears if a
-> submission is refused for want of a sign-in.
+**Visitors are told before they start.** If a form needs a signed-in member
+and the visitor is not signed in, the page shows **Sign in to submit this
+form** above the questions. Its **Sign in** button brings them back to the
+form afterwards.
 
 <!-- Screenshot needed:
 _[A public form at `/f/<slug>` opened in a signed-out browser, for a form
@@ -386,93 +430,123 @@ submit this form** notice above the first question, naming the department,
 with its **Sign in** button.]_
 -->
 
-> **One submission per person** _(2026-10-11)_. Tick **One submission per
-> person** when creating a form, or at the top of the form editor's **Builder**
-> tab, to let each member answer once. The limit holds everywhere a member can
-> submit — inside the app and through the public link — and a member who
-> answered one way is refused the other with _"You have already submitted this
-> form"_, even when two submissions arrive at the same moment. Leave it unticked
-> for anything members fill in repeatedly (a shift report, a recurring
-> acknowledgment). Such a form always needs a signed-in member, because that is
-> the only way to tell whether someone has already answered, so its **Allow
-> submissions without signing in** box is greyed out with the reason under it.
+> **What if publishing warns me?** A public form that files event requests
+> does nothing if the department has turned off accepting public requests in
+> Events settings. **Publish** then asks "Publish this form?", with **Publish
+> anyway** and **Not yet**. You see the warning even without access to Events
+> settings. A form with no such problem publishes straight away.
 
-**Each public form takes a limited number of submissions a day.** The ceiling
-is a server setting (`PUBLIC_FORM_DAILY_LIMIT`, 500 per form per day unless the
-operator changes it). Only accepted submissions count toward it: one that fails
-validation — a required answer missing, a value too long — and one caught as a
-bot are turned away without using up the day's allowance, so a flood of junk
-cannot lock genuine submitters out. Once the ceiling is reached, a visitor is
-told _"This form is not accepting further submissions today."_
+### One submission per person
 
-**The full catalog of forms is the Forms page**, which requires `forms.manage`.
-Event administrators who look after the public outreach request form do not
-need it: **Manage Events → Settings → Public Form** lists only the forms wired
-to the event request pipeline, under `events.manage` — see
+Tick **One submission per person** when creating a form, or at the top of the
+editor's **Form Builder** tab, to let each member answer once.
+
+- The limit holds everywhere a member can send the form. A second attempt is
+  refused with _"You have already submitted this form"_, even if two arrive at
+  the same moment.
+- Leave it off for anything members fill in again and again, such as a shift
+  report.
+- Such a form always needs a signed-in member, because that is the only way to
+  tell who has answered. Its **Allow submissions without signing in** box is
+  greyed out, with the reason under it.
+
+### Daily limit on public forms
+
+Each public form accepts a limited number of submissions a day: **500**, unless
+whoever runs your server changes it.
+
+- Only accepted submissions count. One turned away for a missing answer or a
+  too-long value, or caught as a robot, does not use up the allowance. So a
+  flood of junk cannot lock real people out.
+- Once the limit is reached, visitors see _"This form is not accepting further
+  submissions today."_
+
+**Event officers do not need the Forms page.** **Manage Events → Settings →
+Public Form** lists only the forms connected to event requests, for officers
+who can manage events. See
 [Events & Meetings → Public Request Form](./04-events-meetings.md#public-request-form).
 
 ![Form sharing dialog with the public URL and its QR code](./images/07-05-form-sharing.png)
 
-**[SCREENSHOT — REPLACE `07-05-form-sharing.png`.** The dialog is now titled **Share Form** (was "Public Sharing Settings"), carries the **Allow submissions without signing in** checkbox under **Public Access**, and its footer reads "Anyone can submit this form without signing in." or "Only signed-in members can submit this form." followed by the globe-icon sentence _(#2789, #2811)_. Re-take it for a published public form with the box ticked, the Public URL and QR code in frame**]**
-
-> **Hint:** Public forms are great for community feedback, mutual aid incident reports, or application forms linked from your department's public portal.
+> **Tip.** Public forms suit community feedback, mutual aid incident reports,
+> and application forms linked from your department's public portal.
 
 ---
 
 ## Viewing Submissions
 
-1. Navigate to the form in the Forms list.
-2. Click **View Submissions**.
-3. Browse submissions in a table view with all field values.
-4. Click any submission to view the full response.
-5. **Export to CSV** for external analysis or reporting.
+1. Open the **Submissions** tab and choose the form (or select
+   **Submissions** on its card).
+2. **Responses** lists submissions, newest first, 20 to a page. Each shows who
+   sent it (or **Anonymous**) and when. Select one to see every answer.
+3. **Export CSV** downloads the submissions on the page you are looking at,
+   with the time, the sender and every answer.
+4. **Delete** removes a single submission.
 
 ![Form submissions table listing responses with their timestamps](./images/07-07-form-submissions.png)
 
+> **What if I need every submission in one file?** **Export CSV** saves the
+> current page only (up to 20). Export each page with **Next**, or use the
+> **Results** summary.
+
 ### Survey Results Panel
 
-For survey-style forms (forms with multiple select, radio, or checkbox fields), a **Results** panel provides aggregated analysis:
+The **Results** tab adds up the answers across all submissions:
 
-- **Distribution charts** for select, radio, and checkbox fields showing response breakdowns
-- **Response counts** and statistics for text and numeric fields
-- **Per-field aggregation** so you can see trends across all submissions at a glance
+- charts of how often each option was chosen, for dropdowns, radio buttons and
+  checkboxes;
+- counts and figures for text and number questions;
+- **Export Summary** to download the summary.
 
-This is useful for feedback surveys, polls, and any form where you want to see aggregated patterns rather than individual responses.
+Use it for feedback surveys, polls and any form where the pattern matters more
+than single answers.
 
-### Integration Health
+### Sending answers to other modules
 
-If your form has cross-module integrations (Membership or Inventory), the submissions view shows integration processing status for each submission:
+A form can pass each submission to another part of The Logbook. On the form's
+card, select **Integrations**:
 
-- **Success** — Integration processed correctly
-- **Failed** — Integration encountered an error (click **Reprocess** to retry)
-- **Pending** — Integration is queued for processing
+| Target Module  | What it can do                                        |
+| -------------- | ----------------------------------------------------- |
+| **Membership** | **Membership Interest** — create a prospective member |
+| **Inventory**  | **Equipment Assignment**                              |
+| **Events**     | **Event Registration** or **Event Request**           |
+
+Choose the target and type, match each form field to the field it fills, then
+select **Add Integration**. The window shows how many submissions
+**Succeeded** and **Failed**.
+
+On the **Responses** list, each submission shows **Synced** or **Failed**.
+Open one to see **Integration Results**, and select **Reprocess** to try a
+failed one again.
 
 ---
 
 ## Notification Rules & Logs
 
-Navigate to **Notifications** in the sidebar (`/notifications`) to manage notification rules, view delivery logs, and configure email templates. The page has been renamed from "Email Notifications" to "Notification Rules & Logs" to reflect both email and in-app delivery channels.
+Select **Notifications** in the menu. The page holds your own notifications
+and, for officers, the department's notification rules.
 
 ### Four tabs
 
-The Notifications page has four tabs; the middle two need officer permissions:
+| Tab                    | What it is for                                                                                                        | Who sees it                              |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| **My Notifications**   | Your in-app inbox, with an unread count, a **Show read** switch and **Mark all as read**. Pinned ones stay at the top | Everyone                                 |
+| **Notification Rules** | Switch a built-in notification off for the whole department                                                           | Roles that can view notifications        |
+| **Email Templates**    | A link to change the wording of the emails                                                                            | Administrators with full settings access |
+| **Send Log**           | Your own delivery history, email and in-app, with **All**, **Email** and **In-App** filters                           | Everyone                                 |
 
-| Tab                    | Purpose                                                                                                      |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------ |
-| **My Notifications**   | Your own in-app inbox, with an unread count and a **Show read** switch. Pinned notifications stay at the top |
-| **Notification Rules** | Switch a built-in notification off for the whole department                                                  |
-| **Email Templates**    | Link to email template management for customizing notification formats                                       |
-| **Send Log**           | Your own delivery history, email and in-app, with channel filtering (All / Email / In-App)                   |
+**Notifications of the same kind stack.** Two or more in-app notifications of
+one kind fold into one row, such as "5 attendance validations". The row shows
+the newest one's subject as **Latest:** and an **unread** count.
 
-**Notifications of the same kind stack** _(2026-09-28)_. Two or more in-app
-notifications of one category — a weekend's attendance validations, one
-shift-report follow-up per report — fold into a single row such as "5
-attendance validations", with the newest one's subject as **Latest:** and an
-**unread** count that includes ones further down the list. Click the row to
-expand it; each notification inside keeps its own link and read state. **Mark
-all read** on the row clears the whole category, including any not yet loaded.
-A pinned notification never stacks. On the dashboard's **My Updates** card a
-stack is one row that opens this inbox.
+- Select the row to open it. Each notification inside keeps its own link and
+  read state.
+- **Mark all read** on the row clears the whole kind, including ones not yet
+  loaded.
+- A pinned notification never stacks.
+- On the dashboard's **My Updates** card, a stack is one row that opens this
+  inbox.
 
 <!-- Screenshot needed:
 _[Notifications → **My Notifications** with a collapsed stack (for example
@@ -485,40 +559,41 @@ its individual rows.]_
 
 ### Notification Rules
 
-**Every wired notification already goes out with its built-in defaults.** A
-rule is what lets you switch one off: it stops for the whole department once
-**every** rule for its trigger is switched off. With no rules at all, nothing is
-off. Members choose their own email and text preferences separately (see
+**Every notification already goes out with its built-in settings.** A rule is
+how you switch one off. It stops for the whole department only when **every**
+rule for its trigger is switched off. With no rules at all, nothing is off.
+Members choose their own email and text preferences separately (see
 [Member notification controls](#member-notification-controls)).
 
-The **Create Rule** dropdown offers only the triggers a sender actually reads:
+The cards at the top count **Notification Rules**, **Active Rules** and
+notifications **Sent This Month**.
 
-| Trigger                      | What switching it off stops                                                                                                                                         |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Event Reminder**           | Reminders before scheduled events                                                                                                                                   |
-| **Training Expiry**          | Certification expiration alerts, when the training module has them switched on                                                                                      |
-| **Suggestion Submitted**     | The notices telling a suggestion box's reviewers, and anyone the box notifies, that a submission arrived. Replies and status updates still go out                   |
-| **Equipment Request Update** | The notice telling a member the quartermaster approved, declined or issued their equipment request _(2026-09-28)_. The request's status still shows on My Equipment |
+The trigger list offers only the notifications a rule can actually switch off:
 
-> **Corrected 2026-10-04.** This table used to list **schedule_change**,
-> **new_member**, **maintenance_due** and **form_submitted** as well. No sender
-> reads a rule for those, so the dropdown stopped offering them; a rule created
-> for one earlier is still listed, badged **Not enforced**.
->
-> The empty Rules tab used to say "Create your first notification rule to start
-> sending automated notifications". It now says what is true: automated
-> notifications already go out with their default settings _(2026-09-29)_.
+| Trigger                      | What switching it off stops                                                                                                                   |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Event Reminder**           | Reminders before scheduled events                                                                                                             |
+| **Training Expiry**          | Certification expiration alerts, when the training module has them switched on                                                                |
+| **Suggestion Submitted**     | Notices telling a suggestion box's reviewers, and anyone the box notifies, that a submission arrived. Replies and status updates still go out |
+| **Equipment Request Update** | The notice telling a member the quartermaster approved, declined or issued their equipment request. Its status still shows on My Equipment    |
+
+A rule made earlier for another trigger, such as Schedule Change or Form
+Submitted, is still listed, badged **Not enforced**: switching it does
+nothing.
+
+With no rules, the tab says automated notifications already go out with their
+default settings.
 
 ### Creating a Rule
 
-1. Navigate to **Notifications > Notification Rules**.
-2. Click **Create Rule**.
-3. Enter a **name** and select a **trigger** from the dropdown.
-4. The **category** and **channel** auto-populate based on the trigger (can be overridden).
-5. Add an optional **description**.
-6. Click **Save**.
+1. Open **Notifications → Notification Rules**.
+2. Select **Add Rule**.
+3. Enter a **Rule Name** and choose the **Trigger Event**. The window explains
+   what the trigger does and which category it is filed under.
+4. Add a **Description** if you like.
+5. Select **Create Rule**.
 
-Rules can be enabled/disabled individually with toggle switches. The summary cards at the top show total rules, active rules, and total sent notifications.
+Each rule has its own on/off switch. A switched-off rule keeps its settings.
 
 ![Create notification rule modal with its trigger and channel fields](./images/07-10-create-rule-modal.png)
 
@@ -529,260 +604,227 @@ press **Add Rule**, name it "Gear request notices" and choose the trigger
 not press **Create Rule**.]_
 -->
 
-**[SCREENSHOT — REPLACE `07-10-create-rule-modal.png`.** The trigger dropdown now also offers **Equipment Request Update** _(#2767)_, and the note under it reads "To stop it for the whole department, switch off **every** rule for this trigger — any one left on keeps it running. Members set their own email and text preferences separately." _(#2791)_. Re-take Create Notification Rule with **Event Reminder** chosen and that note in frame; never save**]**
-
 ### Send Log
 
 The **Send Log** tab shows **your own** delivery history — the email and in-app
-notifications sent to you — and every member can open it. It lists:
+notifications sent to you. Every member can open it. It lists:
 
-- Date and time
-- Subject and message content
-- Channel (email or in-app)
-- Delivery status (sent, read, failed)
-- **Channel filter** — filter by All, Email only, or In-App only
-- **Mark All Read** button to bulk-clear unread notifications
+- the date and time;
+- the subject and message;
+- the channel (Email or In-App);
+- the delivery status — hover over a failed one to see why.
 
-The department-wide view of every member's deliveries, for checking that mail is
-getting through, requires `notifications.manage`.
+Use the **All**, **Email** and **In-App** filters, and **Mark all as read** to
+clear unread notifications.
+
+The department-wide view of every member's deliveries, for checking mail is
+getting through, needs a role that can manage notification rules.
 
 ![Notification send log with channel filters and delivery status](./images/07-09-notification-send-log.png)
 
 ### Notifications on the dashboard
 
 The dashboard's **My Updates** card shows your unread notifications and
-department messages in one feed, five rows at a time, with **Older Items**
-opening the full inbox — see
+department messages in one list, five at a time. **Older Items** opens the
+full inbox — see
 [Administration & Reports → Dashboard Notification Management](./08-admin-reports.md#dashboard-notification-management).
-A run of same-category notifications shows there as one row that opens the
-inbox (see [Four tabs](#four-tabs) above).
+You mark notifications read on the **My Notifications** tab. Only a persistent
+department message has a clear button on the dashboard, and only for officers
+who manage messages.
 
-> **Corrected 2026-10-04.** This section described a **Clear All** button and a
-> dismiss ✕ on each dashboard notification. Both went with the 2026-08-16
-> dashboard rebuild: you mark notifications read from the **My Notifications**
-> tab. Only a persistent department message carries a clear control on the
-> dashboard, and only for officers who manage messages.
+### What if …?
 
-### Edge Cases
-
-| Scenario                       | Behavior                                                                                        |
-| ------------------------------ | ----------------------------------------------------------------------------------------------- |
-| Channel filter defaults        | Defaults to "All" — shows both email and in-app logs                                            |
-| Bulk mark-as-read              | Only marks currently unread notifications; already-read are not modified                        |
-| Rule with trigger already used | Multiple rules can use the same trigger (e.g., two event_reminder rules for different channels) |
-| Disabled rule                  | Stops sending but retains configuration and history                                             |
+| What happened               | What it means                                                   |
+| --------------------------- | --------------------------------------------------------------- |
+| You open the Send Log       | It shows All channels unless you filter                         |
+| You select Mark all as read | Only unread notifications change                                |
+| Two rules share a trigger   | Allowed. The notification stops only when both are switched off |
+| A rule is switched off      | It keeps its settings and history                               |
 
 ---
 
 ## Department Messages
 
-Department Messages are leadership announcements broadcast to the whole
-department or a targeted group. There are two surfaces:
+Department messages are announcements from leadership to the whole department
+or a chosen group.
 
-- **Members** read them at **Messages** (`/messages`, the megaphone icon in the
-  sidebar), on the **dashboard** — the **My Updates** feed, or **Needs you**
-  while a message waits for your acknowledgment — and in the notification
-  **bell**. No special permission is required to read your own
-  messages.
-- **Officers** compose and manage them at **Communications → Messages**
-  (`/communications/messages`). **Required Permission:** `notifications.manage`.
+- **Members** read them under **Messages** in the menu (the megaphone), on the
+  **dashboard** — in **My Updates**, or **Needs you** while a message waits
+  for your acknowledgment — and in the notification **bell**. Anyone signed in
+  can read the messages sent to them.
+- **Officers** write and manage them at **Administration → Forms & Comms →
+  Messages**. This needs a role that can manage notification rules.
 
 ### Posting a message
 
-1. Go to **Communications → Messages** and click **New message**.
-2. Enter a **title** and **message** body. URLs you type (e.g. a sign-up form or
-   SOP link) become clickable links automatically.
-3. Set the **priority**: Normal, Important, or Urgent. Priority drives both the
-   styling and how far the message is escalated (see below).
+1. Open **Administration → Forms & Comms → Messages** and select **New
+   message**.
+2. Enter a **title** and the **message**. Web addresses you type become links.
+3. Set the **priority**: **Normal**, **Important** or **Urgent**. It decides the
+   styling and how far the message is pushed out (see below).
 4. Choose the **audience**:
    - **Everyone** — the whole department.
-   - **By role** — one or more roles (e.g. Probationary Members, Officers).
-   - **By status** — member statuses (Active, Probationary, Leave, etc.).
-   - **Specific members** — hand-picked individuals (searchable list).
-5. Optionally toggle **Pin to top**, **Keep in inbox after it is read**
-   (persistent), or **Require acknowledgment**, and set an **Expires** date and/or a **Schedule for later**
-   time (see the sections below).
-6. Click **Post message** (or **Schedule message** if you set a future time).
+   - **By role** — one or more roles, such as Probationary Members.
+   - **By status** — member statuses, such as Active or Leave.
+   - **Specific members** — people you pick from a searchable list.
+5. If you like, tick **Pin to top**, **Keep in inbox after it is read** or
+   **Require acknowledgment**. Set **Expires (optional)** and **Schedule for
+   later (optional)** if needed.
+6. Select **Post message** — or **Schedule message** if you set a later time.
 
 ![New department message form with audience and scheduling fields](./images/07-11-new-message-form.png)
 
-**[SCREENSHOT — REPLACE `07-11-new-message-form.png`.** The **Persistent** checkbox now reads **Keep in inbox after it is read** _(#2790)_. Re-take New message with the audience and scheduling fields and the four checkboxes in frame; never post**]**
-
 ### How members receive a message
 
-Every targeted member gets the message in the app (the dashboard card, the
-`/messages` inbox, and a bell notification) **and by email** — email goes out
-for every message at every priority, though it is best-effort rather than a
-guaranteed record of notice (see the caveats below). The dashboard card shows
-what still needs your attention:
-unread messages, acknowledgment-required messages you haven't acknowledged,
-and persistent notices. Once you resolve a message it clears off the card on
-your next visit — never while you are reading it; the full history stays on the
-**Messages** page. Urgent
-messages are additionally **escalated** to SMS:
+Every member in the audience gets the message **in the app** (dashboard, inbox
+and bell) **and by email**, at every priority. **Urgent** messages also go by
+**text message**:
 
-| Priority / flag         | In-app (bell, inbox, dashboard) | Email | SMS |
-| ----------------------- | :-----------------------------: | :---: | :-: |
-| Normal                  |               ✅                |  ✅   |  —  |
-| Important               |               ✅                |  ✅   |  —  |
-| Requires acknowledgment |               ✅                |  ✅   |  —  |
-| Urgent                  |               ✅                |  ✅   | ✅  |
+| Priority or setting     | In the app | Email | Text |
+| ----------------------- | :--------: | :---: | :--: |
+| Normal                  |     ✅     |  ✅   |  —   |
+| Important               |     ✅     |  ✅   |  —   |
+| Requires acknowledgment |     ✅     |  ✅   |  —   |
+| Urgent                  |     ✅     |  ✅   |  ✅  |
 
-The email is _not_ suppressed by a
-member's email preference or by consent (a member can never opt out of being
-informed of a department notice); important/urgent messages carry an
-`[IMPORTANT]`/`[URGENT]` subject prefix.
+- The dashboard card shows what still needs you: unread messages, messages you
+  have not acknowledged, and persistent notices. Once dealt with, a message
+  leaves the card on your next visit — never while you are reading it. The
+  full history stays on the **Messages** page.
+- A member cannot opt out of a department message email: the department must
+  be able to show the member was told. Important and urgent emails start with
+  **[IMPORTANT]** or **[URGENT]**.
+- The author is not notified about their own message.
 
-**Email is attempted, and retried when it does not go out** _(2026-10-11)_:
+**Email is tried, and retried when it does not go out:**
 
-- **No address on file.** Members without an email address are skipped.
-- **Hourly cap.** A department sends at most 30 message emails per hour. A
-  message held back by the cap is queued for each member and sent on a retry
-  once the hour has room.
-- **Delivery failures.** A send the provider refuses, or cannot be reached
-  for, is retried five times — 5, 10, 20, 40 and 80 minutes apart. After that
-  it is marked failed.
+- **No address on file:** the member is skipped.
+- **Hourly limit:** a department sends at most 30 message emails an hour. A
+  held-back email is queued and sent once the hour has room.
+- **Delivery failures:** a send the email service refuses, or cannot be
+  reached for, is retried five times — 5, 10, 20, 40 and 80 minutes apart.
+  After that it is marked failed.
 
 The **acknowledgment report** shows each member's email (and text) when it has
 not simply gone out: _"Email not sent yet, trying again …"_ while a retry is
-pending, and _"Email failed — …"_ in red once the retries are spent. A failed
-email is the one to follow up by hand.
+waiting, and _"Email failed — …"_ in red once the retries are used up. Follow
+up a failed one by hand.
 
-Treat the in-app inbox and the acknowledgment report — not the email — as the
-record that a member was notified. For anything time-critical, use **Require
-acknowledgment** and check the report rather than assuming the email landed.
+> **Important.** Treat the in-app inbox and the acknowledgment report — not the
+> email — as the record that a member was told. For anything urgent, use
+> **Require acknowledgment** and check the report.
 
-**SMS** is different: it is only sent
-when the department has SMS (Twilio) configured, the member has a mobile number
-on file, the member has granted **express SMS consent** (US TCPA rules — a member
-who was never asked counts as _not_ consented), **and** their text-message
-preference is on. A member who turns off or never grants SMS is still included
-in the email escalation, subject to the caveats above. The author of a message
-is not notified about their own post.
+**Texts are sent only when all of these are true:**
+
+- the department has text messaging set up;
+- the member has a mobile number on file;
+- the member has given **express consent to texts** (US TCPA rules — a member
+  never asked counts as _not_ consenting);
+- the member's own **Urgent Text Messages** setting is on.
+
+A member who gets no text still gets the email.
 
 ### Opening a message
 
-Each message has its own page at `/messages/:id`, opened from the inbox or the
-dashboard card, so a link to a message works: paste it into an email or a chat
-and the recipient lands on that message. The breadcrumb leads back to
-**Messages**. Opening the page marks the message read, and an
-acknowledgment-required message carries its **Acknowledge** button there.
+Each message has its own page, opened from the inbox or the dashboard. A link
+to it works: paste it into an email or chat and the reader lands on that
+message. The breadcrumb leads back to **Messages**. Opening the page marks the
+message read, and a message needing acknowledgment shows its **Acknowledge**
+button there.
 
-The page needs no permission beyond signing in, and that is safe rather than
-loose: the server serves a message only to a member it was targeted at. Anyone
-else — or anyone opening a message that has expired or been removed — sees
-**Message unavailable** with a way back to the inbox.
+Only members the message was sent to can open it. Anyone else — or anyone
+opening a message that has expired or been removed — sees **Message
+unavailable**, with a way back to the inbox.
 
 ![A department message on its own page: the breadcrumb back to Messages, the title, sender and sent date, and a body several paragraphs long](./images/19-42-message-detail.png)
 
 ### Requiring acknowledgment
 
-Toggle **Require acknowledgment** for messages members must confirm they've read
-(e.g. an SOP change). These behave differently:
+Tick **Require acknowledgment** for messages members must confirm they have
+read, such as an SOP change.
 
-- The member sees an **Acknowledge** button on the message and the message stays
-  in their "new/unread" count until they acknowledge it — simply opening it is
-  not enough.
-- Acknowledgment-required messages are also emailed to targeted members.
-- Officers can open the **acknowledgment report** (the bar-chart icon on a
-  message) to see the completion rate — **X of Y acknowledged / read** — and a
-  per-member breakdown listing exactly who still owes an acknowledgment.
-  Acknowledgments are treated as compliance evidence and are recorded in the
-  audit log.
+- The member sees an **Acknowledge** button. The message counts as new until
+  they select it — just opening it is not enough.
+- Officers open the **acknowledgment report** (the bar-chart button on a
+  message). It shows **X of Y acknowledged / read** and lists exactly who still
+  owes an acknowledgment.
+- Acknowledgments are recorded in the audit log as evidence.
 
 ![Acknowledgment report showing who has and has not acknowledged a message](./images/07-12-acknowledgment-report.png)
 
 ### Scheduling a message
 
-Set **Schedule for later** to a future date/time to have the message publish
-automatically at that time instead of immediately. Until then it is hidden from
-members and shows a **"Scheduled · <time>"** badge in the admin list. When the
-scheduled time arrives (checked every ~15 minutes) the message goes live and is
-escalated just like an immediate post. Leave the field blank to publish now.
+Set **Schedule for later** to a future time to post the message then, instead
+of now. Until then members cannot see it, and the officers' list shows a
+**Scheduled · (time)** badge. The Logbook checks about every 15 minutes, so it
+goes out within 15 minutes of the time you set, with the same emails and texts
+as an immediate post. Leave the box empty to post now.
 
-> A message that has **already been published cannot be moved back to a future
-> time** — that would re-send it. You can still reschedule a message that is
-> _pending_ (has not gone out yet).
+> **What if I want to reschedule?** You can change the time on a message that
+> has not gone out yet. A message already posted cannot be moved to a later
+> time, because that would send it again.
 
 ### Editing and managing messages
 
-- **Edit** — the pencil icon reopens the compose form so you can fix the title,
-  body, audience, flags, or expiry in place (no need to delete and repost).
-- **Search & filter** — the admin list has a search box (title/body) and a
-  priority filter, and paginates for large histories.
-- **Delete** — the trash icon removes the message from members' view. This is a
-  **soft delete**: the read/acknowledgment records are preserved for compliance,
-  so a deleted acknowledgment-required message still has its evidence trail.
+- **Edit** — the pencil button reopens the form. Fix the title, text, audience,
+  settings or expiry in place. Saving does **not** send it again.
+- **Search and filter** — the officers' list has a search box and a priority
+  filter, and pages through long histories.
+- **Delete** — the bin button removes the message from members' view. The
+  read and acknowledgment records are kept as evidence.
 
 ### Persistent messages
 
-When **Keep in inbox after it is read** is ticked (the compose form's name for a
-persistent message since 2026-09-29; it was labelled **Persistent**):
+When **Keep in inbox after it is read** is ticked:
 
-- The message shows a **"Persistent"** badge on the dashboard.
-- It stays on the dashboard/inbox for targeted members regardless of read state
-  — it does not drop off once read, and messages you've already read never
-  crowd it off the dashboard card. (Pin a standing notice to also keep it above
-  any backlog of newer unread messages.)
-- Only users with `notifications.manage` see the clear control (✕) that removes
-  it.
+- The message shows a **Persistent** badge on the dashboard.
+- It stays on members' dashboard and inbox even after they read it, and
+  messages already read never push it off the dashboard card. Pin it too, to
+  keep it above newer unread messages.
+- Only officers who can manage messages see the ✕ button that removes it.
 
-This is useful for standing notices that should remain visible until leadership
-takes them down (e.g., "SCBA annual inspection mandatory by March 31 — contact
-Lt. Smith to schedule").
+Use it for standing notices, such as "SCBA annual inspection mandatory by March
+31 — contact Lt. Smith to schedule".
 
 ### Member notification controls
 
-Members manage how they're reached under **Settings → Notifications**
-_(reorganised 2026-09-28)_:
+Members choose how they are reached under **Settings → Notifications**:
 
-- **Email Notifications** — the master switch for the emails a member may turn
-  off. Off stops every one of them at once.
-- **Emails you can turn off** — one switch per optional email: **Event
-  reminders**, **Off the waitlist** _(2026-10-11: the email telling a member a
-  spot opened on an event they were waitlisted for)_, **Training and
-  certification reminders**, **Shift notices**,
-  **Equipment and inventory updates**, **Store announcements**, **Volunteer
-  calls**, **Election notices** and **Suggestion box**. Members who hold a
-  management permission also see the officer duty emails (event, scheduling and
-  training officer duties, election administration, quartermaster duties,
-  membership and store administration). The notice still appears in the bell
-  either way.
+- **Email Notifications** — the main switch for the emails a member may turn
+  off. Off stops all of them at once.
+- **Emails you can turn off** — one switch for each optional email: **Event
+  reminders**, **Off the waitlist** (a place opened on an event you were
+  waitlisted for), **Training and certification reminders**, **Shift
+  notices**, **Equipment and inventory updates**, **Store announcements**,
+  **Volunteer calls**, **Election notices** and **Suggestion box**. Members
+  with an officer role also see the emails for their duties (events,
+  scheduling, training, elections, quartermaster, membership and store). The
+  notice still appears in the bell either way.
 - **Always emailed to you** — the emails nobody can turn off: account and
   security, election ballots, **department messages**, leaving-the-department
-  notices, store receipts, skills test results and overdue equipment. The
-  department needs to be able to show the member was told. Any optional email
-  the department has made required is listed here too, not offered as a switch.
-- **Urgent Text Messages** — receive an SMS for urgent messages. Requires a mobile
-  number on file, the department to have SMS (Twilio) enabled, **and** the
-  member's express **SMS consent** under **My Account → Security → Privacy Choices**
-  (a member who has never granted consent will not receive texts, per US TCPA
-  rules). Turning this off — or never granting SMS consent — never stops the email.
+  notices, store receipts, skills test results and overdue equipment. Any
+  optional email the department has made required is listed here too.
+- **Urgent Text Messages** — get a text for urgent messages. It needs a mobile
+  number on file, text messaging set up by the department, **and** your express
+  consent under **My Account → Security → Privacy Choices**. Turning texts off,
+  or never consenting, never stops the email.
 
-The in-app notification is always delivered regardless of these settings.
-
-> **Changed 2026-09-28.** The separate **Event Reminders** and **Training
-> Reminders** switches are gone; their place is taken by the per-email list
-> above, and a choice a member made with the old switches is still honoured.
-> Before this, **Email Notifications** stopped some emails and not others,
-> depending on which part of the system sent them; it now covers every optional
-> email.
+The in-app notification always arrives, whatever these settings say.
 
 #### Which emails are required — Member Emails & Texts
 
-**Communications → Member Emails & Texts** (**Administration → Forms & Comms →
-Member Emails & Texts**, `/communications/member-emails`) lists every email the
-system sends to members and officers under **Always sent** and **Members can
-turn off**, and the alerts that may also be texted under **Text messages**.
-Email to applicants, event requesters and addresses you type in yourself is not
-on it. Holders of `settings.manage`, `organization.update_settings` or
-`notifications.manage` can open it.
+**Administration → Forms & Comms → Member Emails & Texts** lists every email
+The Logbook sends to members and officers, under **Always sent** and
+**Members can turn off**, and the alerts that may also go by text under **Text
+messages**. Emails to applicants, event requesters and addresses typed in by
+hand are not on it. Administrators, and officers who can manage notification
+rules, can open it.
 
-Holders of `settings.manage` or `organization.update_settings` can turn on
-**Require for every member** on an optional email. Members then see it under
-**Always emailed to you**, and every sender delivers it whatever the member's
-own switches say. It works in one direction only: an email the system itself
-requires cannot be made optional. Each change is written to the audit log.
+Administrators with full settings access, or who can update organization
+settings, can switch on **Require for every member** for an optional email.
+Members then see it under **Always emailed to you**, and it is sent whatever
+their own switches say. It works one way only: an email The Logbook itself
+requires cannot be made optional. Each change is recorded in the audit log.
 
 <!-- Screenshot needed:
 _[Communications → **Member Emails & Texts** as an administrator: the **Always
@@ -806,101 +848,96 @@ shows **Required by your department** beside cards reading **On unless turned
 off**; switch it back off afterwards.]_
 -->
 
-### Edge Cases
+### What if …?
 
-| Scenario                                    | Behavior                                                                                                                   |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Message targeting specific roles            | Only members holding one of those roles see it. Targeting follows the role even if it is later renamed.                    |
-| Renaming a targeted role                    | Existing role-targeted messages keep reaching the same role (targeting is by role identity, not name).                     |
-| Member marks all notifications as read      | Persistent messages are unaffected — only an admin can clear them.                                                         |
-| Deleting an acknowledgment-required message | The message is hidden from members but its read/acknowledgment records are kept for compliance.                            |
-| Editing an already-sent message             | Saves changes in place; it is **not** re-sent or re-escalated.                                                             |
-| Urgent message when Twilio isn't configured | Still delivered in-app and by email; SMS is skipped.                                                                       |
-| Very high volume of urgent/ack messages     | Email/SMS escalation is rate-limited per department to prevent runaway sends; the in-app notification is always delivered. |
-| Sending is retried for a message            | Each member gets the email (and any SMS) once; a send already made to them is not repeated.                                |
-| A send to a member fails                    | It is recorded as failed, never as delivered.                                                                              |
+| What happened                                    | What it means                                                                                            |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| A message targets certain roles                  | Only members holding one of those roles see it                                                           |
+| A targeted role is renamed                       | The message still reaches that role                                                                      |
+| A member marks everything read                   | Persistent messages stay. Only an officer can clear them                                                 |
+| An acknowledgment message is deleted             | Members no longer see it, but the read and acknowledgment records are kept                               |
+| A sent message is edited                         | The change is saved in place. It is **not** sent again                                                   |
+| An urgent message, with no text messaging set up | Still delivered in the app and by email. The text is skipped                                             |
+| Very many urgent or acknowledgment messages      | Emails and texts are limited per department to prevent runaway sending. The in-app notice always arrives |
+| Sending is retried                               | Each member gets the email (and any text) once                                                           |
+| A send to a member fails                         | It is recorded as failed, never as delivered                                                             |
 
 ---
 
-## Suggestion Boxes _(2026-09-23)_
+## Suggestion Boxes
 
 A department can run any number of **suggestion boxes** — "Training ideas",
-"Station 2 facilities", a complaints box — each with its own reviewers and its
-own rules about anonymity. Members submit from one place, reviewers work each
-box's submissions, and an anonymous submitter can still hold a conversation
-with the reviewers without ever being identified.
+"Station 2 facilities", a complaints box. Each has its own reviewers and its
+own rules about anonymity. Members send suggestions from one place, reviewers
+work through each box, and an anonymous sender can still talk with reviewers
+without ever being identified.
 
-| Who                       | Where                                                                                      | Needs                                                           |
-| ------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| Every member              | **Suggestions** in the sidebar (after **Messages**) — `/suggestions`                       | Signed in                                                       |
-| A box's reviewers         | The **Review** tab on the same page — it appears only for reviewers                        | Being named as a reviewer of a box, or forwarded one suggestion |
-| Whoever sets the boxes up | **Administration → Forms & Comms → Suggestion Boxes** — `/communications/suggestion-boxes` | `suggestions.manage`                                            |
+| Who                       | Where                                                       | Needs                                                        |
+| ------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------ |
+| Every member              | **Suggestions** in the menu (after **Messages**)            | Signed in                                                    |
+| A box's reviewers         | The **Review** tab on the same page — only reviewers see it | Being named as a box's reviewer, or forwarded one suggestion |
+| Whoever sets up the boxes | **Administration → Forms & Comms → Suggestion Boxes**       | A role that can create and configure suggestion boxes        |
 
-**Setting up boxes and reading them are deliberately separate.**
-`suggestions.manage` lets you create boxes and choose their reviewers. It does
-**not** let you read what anybody submitted — only a box's own reviewers can.
-That is what makes a complaints box possible in a department whose
-administrators might be what somebody is complaining about. It ships on the
-Fire Chief, Deputy Chief, Assistant Chief, President and Communications Officer
-positions.
+**Setting up boxes and reading them are separate on purpose.** Setting up
+boxes lets you create them and choose their reviewers. It does **not** let you
+read what anyone sent — only a box's own reviewers can. That makes a
+complaints box possible even when the administrators might be what someone is
+complaining about. The Fire Chief, Deputy Chief, Assistant Chief, President
+and Communications Officer positions can set up boxes unless your department
+changes that.
 
-**Every department starts with a Compliance box** _(2026-09-24)_. It is named
-**Compliance**, described to members as "Report a compliance concern: a policy,
-safety, training-record or regulatory issue. Reviewed by the Compliance
-Officer.", lets the submitter choose whether to stay anonymous, and allows
-follow-up. Its reviewer is the **Compliance Officer** position, which is also
-new and starts with nobody in it. **The box is open from day one, so reports
-filed before you appoint a Compliance Officer wait unread** — assign that
-position on the positions screen promptly; whoever holds it sees everything the
-box has received. A department that already had a box named Compliance keeps
-its own, and one that had created its own `compliance_officer` position gets
-that position as the reviewer. If no position carries that slug, the box is
-created closed, because an open box needs a reviewer.
+**Every department starts with a Compliance box.** Members see it described as
+"Report a compliance concern: a policy, safety, training-record or regulatory
+issue. Reviewed by the Compliance Officer." The sender chooses whether to stay
+anonymous, and follow-up is allowed.
 
-### Submitting to a box with questions _(2026-10-12)_
-
-_(2026-10-14)_ In the box editor, **Questions** now sits right after **Name** and
-**Description**, above anonymity, follow-up, the idea board, reviewers and
-**Also notify**; it used to be at the foot of a long dialog. Nothing about how
-questions behave changed.
-
-_[Screenshot needed: the Suggestion Box editor with Questions directly under Description; REPLACE the box-dialog Questions shot.]_
-
-A box with intake questions shows them first, on a step of their own, with a
-**Continue** button. Title, details and screenshots follow on a second step with a
-**Back** button that keeps your answers. The answers decide where the submission
-goes and whether it can be anonymous, so you see that before writing anything. A
-box with no questions keeps its single page.
-
-_[Screenshot needed: the question step of the Compliance box ("What kind of concern is this?") with Continue; and step two with Back.]_
+- Its reviewer is the **Compliance Officer** position, which starts with nobody
+  in it.
+- **The box is open from day one, so reports sent before you appoint a
+  Compliance Officer wait unread.** Fill that position promptly. Whoever holds
+  it sees everything the box has received.
+- It asks a required **What kind of concern is this?** (policy or procedure,
+  safety, training record, regulatory or legal, other). Choosing safety adds
+  **Is anyone at immediate risk?**, whose help text says the box is not
+  watched around the clock. Neither answer sends the report anywhere else.
+- A department that already had a box named Compliance keeps its own. If no
+  Compliance Officer position exists, the box starts closed, because an open
+  box needs a reviewer.
 
 ### Setting up a box
 
-**Required Permission:** `suggestions.manage`
+**Who can do this:** roles that can create and configure suggestion boxes.
 
-1. Go to **Administration → Forms & Comms → Suggestion Boxes** and press **New
+1. Open **Administration → Forms & Comms → Suggestion Boxes** and select **New
    box**.
-2. Give it a **Name** (unique in your department) and a **Description (shown to
-   members)** — say what the box is for and who reads it.
-3. Choose its **Anonymity**:
+2. Give it a **Name** (unique in your department) and a **Description (shown
+   to members)**. Say what the box is for and who reads it.
+3. Add any **Questions** to ask first (see
+   [Asking questions first](#asking-questions-first-and-sending-answers-to-another-box)).
+4. Choose its **Anonymity**:
    - **Submitter chooses** — the member ticks **Submit anonymously** or not.
    - **Always anonymous** — no submission to this box ever records who sent it.
    - **Always named** — every submission carries the member's name.
-4. Tick **Allow follow-up** if reviewers and submitters should be able to
-   exchange replies and the submitter should see the outcome. Leave it off for a
-   one-way box: reviewers read every submission but do not reply or report a
-   status.
-5. Pick the reviewers: any mix of **Reviewer positions** (whoever holds that
-   position) and **Reviewer members**. An active box needs at least one. They
-   are the only people who will ever read it, so choose them with the box's
-   purpose in mind — a complaints box reviewed by the people most likely to be
-   complained about will not be used.
-6. Leave **Accepting submissions** ticked, and **Save box**.
+5. Tick **Allow follow-up** if reviewers and senders should be able to reply to
+   each other and the sender should see the outcome. Leave it off for a one-way
+   box: reviewers read everything but do not reply or report a status.
+6. Tick **Public idea board** to let reviewers share ideas with everyone (see
+   [The idea board](#the-idea-board)).
+7. Pick the reviewers: any mix of **Reviewer positions** (whoever holds that
+   position) and **Reviewer members**. An open box needs at least one. They
+   are the only people who will ever read it, so choose with care — a
+   complaints box reviewed by the people most likely to be complained about
+   will not be used.
+8. Optionally, under **Also notify**, name people who should be told when
+   something arrives (see [Reviewing submissions](#reviewing-submissions)).
+9. Leave **Accepting submissions** ticked, and select **Save box**.
 
 ![The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below](./images/07-14-suggestion-box-dialog.png)
 
-To close a box, untick **Accepting submissions**. Its existing submissions stay
-readable by its reviewers.
+_[Screenshot needed: the Suggestion Box editor with Questions directly under Description; REPLACE the box-dialog Questions shot.]_
+
+To close a box, untick **Accepting submissions**. Its reviewers can still read
+what it holds.
 
 <!-- Screenshot needed:
 _[Holder of `suggestions.manage` (e.g. the demo chief) at
@@ -911,55 +948,60 @@ follow-up allowed, its submission count, "Reviewers: Compliance Officer"),
 **Edit** and **Delete** buttons on each row. Nothing saved or deleted.]_
 -->
 
-To remove a box you no longer need, press **Delete** on it:
+To remove a box, select **Delete** on it:
 
-- **A box that never received a submission** is deleted after you confirm.
-- **A box with submissions** shows how many it holds and offers **Archive
-  instead**, which closes it and keeps everything. Deleting it permanently
-  removes every submission, screenshot and reply in it, cannot be undone, and
-  asks you to type the box's name first.
+- **A box that never received a submission** is deleted once you confirm.
+- **A box with submissions** says how many it holds and offers **Archive
+  instead**, which closes it and keeps everything. Deleting it removes every
+  submission, screenshot and reply in it, cannot be undone, and asks you to
+  type the box's name before **Delete permanently** works.
 
 ![The Delete "Training ideas"? dialog: the warning giving how many submissions the box holds and that deleting removes them all, the Archive instead button, and the field for typing the box's name, with Delete permanently still disabled](./images/07-23-suggestion-box-delete-dialog.png)
 
-### Asking questions first, and sending answers to another box _(2026-10-11)_
+### Asking questions first, and sending answers to another box
 
 A box can ask its own **Questions** before the title and details. In the box's
-edit dialog (**Administration → Forms & Comms → Suggestion Boxes**), the
-**Questions** section adds one question at a time: its wording, an **Answer
-type**, optional help text, and whether it is required. Reorder with the arrows.
+settings, the **Questions** section sits right under **Description**. Add one
+question at a time: its wording, an **Answer type**, optional help text, and
+whether it is required. Reorder with the arrows.
 
-- **Show only after this question.** A follow-up can appear only when an earlier
-  answer matches a rule (**is**, **is not**, **includes**, **is answered**,
-  **is not answered**). Removing a question warns you how many follow-ups hang
-  off it.
-- **Where an option sends the submission.** On a dropdown or single-choice
-  question, each option can send the submission to another box (the default is
-  **Keep in this box**). Only the destination's reviewers and watchers are told,
-  and only they can read it. Reviewers there see the answers with their question
-  wording.
+**Answer types** include text, choices, a **Rating** (1 to 5, shown to
+reviewers as "4 / 5"), a **Time** (24-hour, kept as typed), **Pick a member**
+and **Pick a vehicle**.
 
-**Answer types _(2026-10-11)_.** Besides text and choices, a question can be a
-**Rating** (1 to 5, shown to reviewers as "4 / 5"), a **Time** (24-hour
-HH:MM, kept as entered), **Pick a member** or **Pick a vehicle**. The member and
-vehicle lists come from your own department; the name is saved with the answer,
-so a reviewer can still read it after the member leaves or the vehicle is
-retired. A department with no vehicles on file skips vehicle questions instead of
-blocking the form. A follow-up can also appear when a rating or number is **at
-least** or **at most** a value (forms with number fields get the same two rules).
+- The member and vehicle lists come from your own department. The name is
+  saved with the answer, so reviewers can still read it after the member
+  leaves or the vehicle is retired.
+- A department with no vehicles on file skips vehicle questions rather than
+  blocking the form.
 
-Rules that protect the submitter: a route must stay inside your department and
-cannot point at the box itself; a box that **requires anonymity** cannot route to
-a box that refuses it, and anonymity holds wherever an answer sends the
-submission; a route to a **closed** box is ignored and the submission stays where
-it was sent; deleting a box removes routes that point at it.
+**Show only after this question.** A follow-up question can appear only when
+an earlier answer matches a rule: **is**, **is not**, **includes**, **is
+answered**, **is not answered**, or — for a rating or number — **at least** or
+**at most** a value. Removing a question warns you how many follow-ups depend
+on it.
 
-**The Compliance box now asks two questions.** Every department's seeded
-Compliance box asks a required **What kind of concern is this?** (policy or
-procedure, safety, training record, regulatory or legal, other). Choosing safety
-adds **Is anyone at immediate risk?**, whose help text says the box is not
-watched around the clock. Neither answer routes anywhere. An existing Compliance
-box gets the question only if nobody has edited it; a box you changed is left
-alone.
+**Where an option sends the submission.** On a dropdown or single-choice
+question, each option can send the submission to another box. The default is
+**Keep in this box**. Only the other box's reviewers and watchers are told,
+and only they can read it. They see the answers with their question wording.
+
+Rules that protect the sender:
+
+- A route must stay inside your department and cannot point at the same box.
+- A box that **requires anonymity** cannot send to a box that refuses it.
+  Anonymity holds wherever an answer sends the submission.
+- A route to a **closed** box is ignored, and the submission stays where it was
+  sent.
+- Deleting a box removes routes that point at it.
+
+**What the member sees.** A box with questions shows them first, on a step of
+their own, with a **Continue** button. Title, details and screenshots follow on
+a second step, with a **Back** button that keeps your answers. The answers
+decide where the submission goes and whether it can be anonymous, so you see
+that before writing anything. A box with no questions keeps its single page.
+
+_[Screenshot needed: the question step of the Compliance box ("What kind of concern is this?") with Continue; and step two with Back.]_
 
 > **Screenshot needed:** the box dialog's **Questions** section with one routed
 > dropdown; the member's submit form showing a follow-up question; a reviewer's
@@ -967,177 +1009,26 @@ alone.
 
 ### Submitting a suggestion (every member)
 
-1. Open **Suggestions** from the sidebar. The **Submit** tab is first.
-2. Pick the **Suggestion box**. Its description appears underneath, along with
+1. Open **Suggestions** from the menu. The **Submit** tab is first.
+2. Pick the **Suggestion box**. Its description appears underneath, with
    whether your name will be recorded and whether reviewers will reply.
-3. Enter a **Title** and the **Details**, and optionally attach up to **five
-   screenshots**. The form states the rules _(2026-09-29)_: PNG, JPEG, WebP or
-   GIF, up to 10 MB each; larger images are scaled down to 2560 pixels on the
-   longest side, and animated GIFs keep only their first frame.
-4. If the box lets you choose, tick **Submit anonymously**.
-5. Press **Submit** (or **Submit anonymously**).
+3. Answer any questions and select **Continue**.
+4. Enter a **Title** and the **Details**. Optionally attach up to **five
+   screenshots**: PNG, JPEG, WebP or GIF, up to 10 MB each. Larger images are
+   shrunk to 2560 pixels on the longest side, and animated GIFs keep only
+   their first frame.
+5. If the box lets you choose, tick **Submit anonymously**.
+6. Select **Submit** (or **Submit anonymously**).
 
 Named submissions appear under **My submissions**, where you can follow the
 status and reply if the box allows follow-up. In a follow-up box, **Status
-history** shows when your submission was received, each status it has moved
+history** shows when your submission arrived, each status it has moved
 through, and any response the reviewers wrote for you. An anonymous submission
 shows the same history when you open it with its follow-up key.
 
 ![Suggestions → My submissions with the accepted night-time extrication drill open: its Status history running from Received through Accepted, with the reviewers' response to the submitter under the Accepted step](./images/07-20-suggestion-status-history.png)
 
 ![Suggestions → Submit with the Training ideas box chosen, its description and anonymity hint showing, a title and details filled in, one screenshot attached, and Submit anonymously ticked with the warning to check screenshots for your name](./images/07-15-suggestion-submit-anonymous.png)
-
-**[SCREENSHOT — REPLACE `07-15-suggestion-submit-anonymous.png`.** A hint now sits under **Screenshots (optional, up to 5)**: "PNG, JPEG, WebP or GIF, up to 10 MB each. Larger images are scaled down to 2560 pixels on the longest side, and animated GIFs keep only their first frame." _(#2830)_. Same state as before, with that hint in frame**]**
-
-### What "anonymous" means here
-
-It is built into what is stored, not just hidden on screen:
-
-- **No name is stored.** The submission has no author, and nothing is written
-  to the audit log about who sent it. **Reviewers cannot find out, and neither
-  can an administrator.**
-- **Times are kept to the day only**, so "submitted at 23:47, when only one
-  person was on shift" cannot be worked out from the record.
-- **Screenshots are re-encoded**, which strips location, device and other
-  hidden image data, and their filenames are discarded. What is _visible_ in a
-  screenshot is not changed — **if your name is on the screen you captured, it
-  is in the screenshot.** The form reminds you of this.
-
-**Following up anonymously uses a key.** In a follow-up box, an anonymous
-submission gives you a **follow-up key**, once:
-
-> **Save your follow-up key.** Your submission was sent anonymously. This key is
-> the only way to see replies and respond. It is shown once and cannot be
-> recovered — nobody, including the reviewers, can look it up for you.
-
-Press **Copy**, keep it somewhere private, then **I saved it**. Later, open
-**Follow up with a key**, paste it and press **Open submission** to see the
-status and any replies and to answer them — still without your name attached.
-**A lost key cannot be replaced**; the submission survives, but nobody can
-reconnect you to it.
-
-![The Save your follow-up key panel shown after an anonymous submission, with a demonstration key and the Copy and I saved it buttons](./images/07-16-suggestion-follow-up-key.png)
-
-> **What anonymity does not cover.** Somebody with access to the **server
-> itself** — its database and mail records — could line up the time a
-> submission arrived with who was signed in then. The application does not
-> expose this to anyone using it, but it is not a guarantee against the people
-> who run the server. The full list is in
-> [Known Limitations](../KNOWN_LIMITATIONS.md). If that matters for what you
-> want to report, say so to your department's leadership through another route.
->
-> **Request logs no longer record it** _(2026-09-30)_. Submitting and following
-> up are left out of the web server's and the backend's request logs, so those
-> no longer hold your address and the exact second. A failed submission is not
-> filed on the **Error Monitoring** page under your name either. A proxy your
-> department runs in front of The Logbook (for example on Unraid or AWS) is
-> outside the application and logs requests unless it is set up the same way —
-> ask whoever runs the server.
-
-### The idea board
-
-Some boxes have an **Idea board** tab on the Suggestions page. It shows ideas
-the box's reviewers chose to share with everyone, written up by them, never
-the original submission, its screenshots or who sent it. Press the arrow on
-an idea to vote for it; press it again to take your vote back. Sort by
-**Top** (most votes) or **New**, and filter by status. When reviewers have
-responded to an idea, their latest response is shown with it.
-
-![Suggestions → Idea board sorted by Top: the night-time extrication drill with three votes, already voted for, marked Accepted with the reviewers' response, above the SCBA sessions idea with one vote, marked Under review](./images/07-21-suggestion-idea-board.png)
-
-Reviewers of a board-enabled box see an **Idea board** section when they open a
-submission. **Publish to the board** asks for a title and summary in your own
-words, so write it without names or anything that identifies the sender.
-**Edit published copy** changes it and **Take off the board** removes it. Its
-votes are kept if you publish it again. While an idea is published, your
-latest response to the submitter is shown on the board too. Administrators
-turn the board on per box with **Public idea board** in the box's settings.
-
-![The Edit published copy dialog opened from a submission's Idea board section: the note that every member can read it and that the submission, its screenshots and its sender are never shown, then the public title and summary](./images/07-22-suggestion-publish-dialog.png)
-
-### Reviewing submissions
-
-Reviewers see a **Review** tab on the Suggestions page, with a count of open
-items. Filter by **Box** and by **Status** — the default, **Open**, means New or
-Under review.
-
-Open a submission to:
-
-- set its **Disposition** — **New**, **Under review**, **Accepted**,
-  **Implemented**, **Declined** or **Duplicate**. In a follow-up box, a named
-  submitter is notified when it changes (by email too, unless they have turned
-  suggestion-box emails off);
-- write a **Response to the submitter**, in a follow-up box. It appears on the
-  submitter's **Status history** under "Reviewers", never with your name, and
-  they are notified that you responded. Each response is added as a new step;
-  use it to explain a decision or what happens next;
-- keep an **Internal note (reviewers only)** — never shown to the submitter;
-- reply in the **Follow-up** thread, if the box allows follow-up. An anonymous
-  author appears as **Anonymous submitter**.
-
-Reviewers get a notification in the app (and a push notification, where your
-department has them switched on) and an email of their own when a submission or
-a submitter's reply arrives. **Neither carries the submission's content, only a
-link to it.** The email is one a member can turn off — **Suggestion box** under
-Settings → Notifications — unless the department has made it required on
-**Member Emails & Texts**; the in-app notification always arrives _(2026-09-28)_. A department can turn the new-submission notices off under
-**Notifications → Notification Rules** with a **Suggestion Submitted** rule; replies and
-status changes still go out.
-
-![Notifications → Create Notification Rule with the trigger event set to Suggestion Submitted, and the note under it saying it tells the box's reviewers, and anyone the box notifies, that a submission arrived, and that replies and status updates still go out when it is switched off](./images/07-24-suggestion-notification-rule.png)
-
-**[SCREENSHOT — REPLACE `07-24-suggestion-notification-rule.png`.** Re-shot 2026-09-25, before the rule note's second sentence was reworded to "To stop it for the whole department, switch off **every** rule for this trigger — any one left on keeps it running. Members set their own email and text preferences separately." _(#2791)_. Same state: **Suggestion Submitted** chosen, never saved**]**
-
-**Telling someone about new submissions without letting them read them.** In a
-box's settings, **Also notify** names positions or members who are told when
-something arrives in that box. They cannot open it: their notice says which box
-received a submission and that its reviewers have it, nothing more. Use it for
-someone who needs to know a box is being used, such as a chief who wants to know
-the Compliance box has something in it, without making them a reviewer. The
-email reviewers receive is editable under **Communications → Email Templates →
-Suggestion Boxes → Suggestion Submitted**.
-
-**Forwarding one suggestion to somebody else.** A box's reviewer can press
-**Forward** and choose members and/or positions. They can read **that
-suggestion only** — its screenshots and thread — set its disposition, keep the
-note and reply, but they see nothing else in the box and cannot forward it on.
-They are emailed a link, and see a **Forwarded to you** badge. Reviewers see who
-it was forwarded to and can **Withdraw** a forward. An anonymous submitter stays
-anonymous when forwarded. Forwards and withdrawals are audit-logged.
-
-![Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the Response to the submitter and internal note fields, the Status history from Received to Under review, the Idea board section with its published copy and the Edit published copy and Take off the board buttons, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply](./images/07-17-suggestion-review.png)
-
-The person it was forwarded to finds it on their own **Review** tab, even if
-they review no box. Only the suggestions forwarded to them appear there, each
-marked **Forwarded to you**, and the **Forward** button is replaced by a note
-that only the box's reviewers can forward it.
-
-![Suggestions → Review as a member who reviews no box: the one submission forwarded to them, marked Forwarded to you, open on the right with its disposition, internal note and thread, its Idea board section saying only the box's reviewers can publish it, and under Forwarded to the note that only the box's reviewers can forward it, with no Forward button](./images/07-18-suggestion-forwarded-to-you.png)
-
-**On a phone** the list and the open submission stack rather than sitting side
-by side. Tap a submission and the page scrolls down to it; scroll back up for the
-list. The tab strip scrolls the tab you are on into view, and two tabs take
-shorter names — **Mine** for My submissions and **Follow up** for Follow up with
-a key — so all of them usually fit.
-
-<!-- Screenshot needed:
-_[Suggestions → **Review** on a phone, a submission open: its title and
-details at the top of the screen, then the **Disposition** and **Internal
-note**, with the mobile bottom navigation below.]_
--->
-
-### Edge cases
-
-| Scenario                                                      | Behavior                                                                                                 |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| You hold `suggestions.manage` but are not a reviewer          | You configure boxes and see no **Review** tab. That is by design                                         |
-| A reviewer position changes hands                             | Reviewing follows the position: the new holder reviews, the previous one no longer does                  |
-| An anonymous submission made before follow-up was switched on | It has no key, so its author cannot read replies. Reviewers are told so on the submission                |
-| Follow-up is off                                              | Submitters see no status and no replies; reviewers can still set a disposition and a note for themselves |
-| Communications module switched off                            | Suggestion boxes still work — they are deliberately not tied to that module switch                       |
-| More than five screenshots, or a file that is not an image    | Refused with a message naming the limit                                                                  |
-
----
 
 <!-- Screenshot needed:
 _[Ordinary member at `/suggestions`, **Submit** tab, with the **Compliance**
@@ -1146,213 +1037,396 @@ Compliance Officer."), the anonymity hint and the follow-up hint visible.
 Nothing typed or submitted.]_
 -->
 
+### What "anonymous" means here
+
+It is built into what is saved, not just hidden on screen:
+
+- **No name is saved.** The submission has no author, and nothing in the audit
+  log says who sent it. **Reviewers cannot find out, and neither can an
+  administrator.**
+- **Only the day is kept**, not the time. So "sent at 23:47, when only one
+  person was on shift" cannot be worked out.
+- **Screenshots are re-saved**, which removes location, device and other
+  hidden details, and their file names are thrown away. What is _visible_ in a
+  screenshot is not changed — **if your name is on the screen you captured, it
+  is in the screenshot.** The form reminds you.
+
+**Following up anonymously uses a key.** In a follow-up box, an anonymous
+submission gives you a **follow-up key**, once:
+
+> **Save your follow-up key.** Your submission was sent anonymously. This key is
+> the only way to see replies and respond. It is shown once and cannot be
+> recovered — nobody, including the reviewers, can look it up for you.
+
+Select **Copy**, keep it somewhere private, then select **I saved it**. Later,
+open **Follow up with a key**, paste it and select **Open submission**. You see
+the status and replies and can answer — still without your name. **A lost key
+cannot be replaced**: the submission stays, but nobody can reconnect you to
+it.
+
+![The Save your follow-up key panel shown after an anonymous submission, with a demonstration key and the Copy and I saved it buttons](./images/07-16-suggestion-follow-up-key.png)
+
+> **What anonymity does not cover.** Someone with access to the **server
+> itself** — its stored data and mail records — could match the time a
+> submission arrived with who was signed in then. The Logbook does not show
+> this to anyone using it, but it is no protection against the people who run
+> the server. The Logbook's own web logs leave out sending and following up,
+> and a failed submission is not filed under your name. But a separate system
+> your department runs in front of The Logbook may log visits unless it is set
+> up the same way — ask whoever runs your server. The full list is in
+> [Known Limitations](../KNOWN_LIMITATIONS.md). If that matters for your
+> report, raise it with leadership another way.
+
+### The idea board
+
+Some boxes have an **Idea board** tab on the Suggestions page. It shows ideas
+the box's reviewers chose to share with everyone, written up in their own
+words. It never shows the original submission, its screenshots or who sent it.
+
+- Select the arrow on an idea to vote for it; select it again to take your
+  vote back.
+- Sort by **Top** (most votes) or **New**, and filter by status.
+- When reviewers have responded to an idea, their latest response is shown
+  with it.
+
+![Suggestions → Idea board sorted by Top: the night-time extrication drill with three votes, already voted for, marked Accepted with the reviewers' response, above the SCBA sessions idea with one vote, marked Under review](./images/07-21-suggestion-idea-board.png)
+
+Reviewers of a box with **Public idea board** on see an **Idea board** section
+when they open a submission:
+
+- **Publish to the board** asks for a title and summary in your own words.
+  Write it without names or anything that identifies the sender.
+- **Edit published copy** changes it, and **Take off the board** removes it.
+  Its votes are kept if you publish it again.
+- While an idea is published, your latest response to the sender shows on the
+  board too.
+
+![The Edit published copy dialog opened from a submission's Idea board section: the note that every member can read it and that the submission, its screenshots and its sender are never shown, then the public title and summary](./images/07-22-suggestion-publish-dialog.png)
+
+### Reviewing submissions
+
+Reviewers see a **Review** tab on the Suggestions page, with a count of open
+items. Filter by **Box** and by **Status**. The default, **Open**, means New
+or Under review.
+
+Open a submission to:
+
+- set its **Disposition**: **New**, **Under review**, **Accepted**,
+  **Implemented**, **Declined** or **Duplicate**. In a follow-up box, a named
+  sender is told when it changes (by email too, unless they turned
+  suggestion-box emails off);
+- write a **Response to the submitter**, in a follow-up box. It appears on the
+  sender's **Status history** under "Reviewers", never with your name, and they
+  are told you responded. Each response is a new step;
+- keep an **Internal note (reviewers only)**, never shown to the sender;
+- reply in the **Follow-up** thread, if the box allows it. An anonymous sender
+  appears as **Anonymous submitter**.
+
+**Notices to reviewers.** Reviewers get an in-app notification (and a push
+notification, where your department has them on) and an email when a
+submission or a sender's reply arrives. **Neither includes the submission's
+content, only a link.** Members can turn the email off — **Suggestion box**
+under Settings → Notifications — unless the department has made it required.
+The in-app notice always arrives. A department can turn the new-submission
+notices off with a **Suggestion Submitted** rule under **Notifications →
+Notification Rules**; replies and status changes still go out.
+
+![Notifications → Create Notification Rule with the trigger event set to Suggestion Submitted, and the note under it saying it tells the box's reviewers, and anyone the box notifies, that a submission arrived, and that replies and status updates still go out when it is switched off](./images/07-24-suggestion-notification-rule.png)
+
+**Telling someone about new submissions without letting them read them.**
+**Also notify** in a box's settings names positions or members who are told
+when something arrives. They cannot open it: their notice says which box
+received a submission and that its reviewers have it, nothing more. Use it for
+someone who needs to know a box is being used — such as a chief who wants to
+know the Compliance box has something in it — without making them a reviewer.
+The reviewers' email can be edited under **Communications → Email Templates →
+Suggestion Boxes → Suggestion Submitted**.
+
+**Forwarding one suggestion.** A box's reviewer can select **Forward** and
+choose members or positions.
+
+- They can read **that suggestion only** — its screenshots and thread — set
+  its disposition, keep the note and reply. They see nothing else in the box
+  and cannot forward it on.
+- They are emailed a link and see a **Forwarded to you** badge.
+- Reviewers see who it was forwarded to and can **Withdraw** a forward.
+- An anonymous sender stays anonymous when forwarded.
+- Forwards and withdrawals are recorded in the audit log.
+
+![Suggestions → Review with an anonymous submission open: the list on the left, and on the right the Disposition set to Under review, the Response to the submitter and internal note fields, the Status history from Received to Under review, the Idea board section with its published copy and the Edit published copy and Take off the board buttons, the Forwarded to list naming the Training Officer position and a member, and the follow-up thread with the reviewer's question and the anonymous submitter's reply](./images/07-17-suggestion-review.png)
+
+The person it was forwarded to finds it on their own **Review** tab, even if
+they review no box. Only suggestions forwarded to them appear there, each
+marked **Forwarded to you**. Instead of **Forward**, they see a note that only
+the box's reviewers can forward it.
+
+![Suggestions → Review as a member who reviews no box: the one submission forwarded to them, marked Forwarded to you, open on the right with its disposition, internal note and thread, its Idea board section saying only the box's reviewers can publish it, and under Forwarded to the note that only the box's reviewers can forward it, with no Forward button](./images/07-18-suggestion-forwarded-to-you.png)
+
+**On a phone**, the list and the open submission stack instead of sitting side
+by side. Tap a submission and the page scrolls to it; scroll back up for the
+list. Two tabs take shorter names — **Mine** for My submissions and **Follow
+up** for Follow up with a key — so they usually all fit.
+
+<!-- Screenshot needed:
+_[Suggestions → **Review** on a phone, a submission open: its title and
+details at the top of the screen, then the **Disposition** and **Internal
+note**, with the mobile bottom navigation below.]_
+-->
+
+### What if …?
+
+| What happened                                                     | What it means                                                                             |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| You can set up boxes but are not a reviewer                       | You see no **Review** tab. That is on purpose                                             |
+| A reviewer position changes hands                                 | The new holder reviews; the previous one no longer does                                   |
+| An anonymous submission was made before follow-up was switched on | It has no key, so its sender cannot read replies. Reviewers are told so on the submission |
+| Follow-up is off                                                  | Senders see no status and no replies. Reviewers can still set a disposition and a note    |
+| The Communications module is switched off                         | Suggestion boxes still work                                                               |
+| More than five screenshots, or a file that is not an image        | Refused, with a message naming the limit                                                  |
+| A Compliance box you changed                                      | Keeps your version. Only an unedited Compliance box got the two built-in questions        |
+
+---
+
 ## External Integrations
 
-Navigate to **Integrations** in the sidebar to configure connections with external services.
+**Where to find it:** **Administration → Forms & Comms → Integrations**. You
+need full settings access, and the Integrations module must be on.
+
+External integrations connect The Logbook to other services. They are
+different from a form's **Integrations** button, which sends form answers to
+another part of The Logbook (see
+[Sending answers to other modules](#sending-answers-to-other-modules)).
 
 ### Available Integrations
 
-| Integration         | Description                             |
-| ------------------- | --------------------------------------- |
-| **Google Calendar** | Sync events to Google Calendar          |
-| **Outlook**         | Sync events to Outlook Calendar         |
-| **Slack**           | Post notifications to Slack channels    |
-| **Discord**         | Post notifications to Discord channels  |
-| **CSV Export**      | Scheduled data exports                  |
-| **iCal Feed**       | Subscribe to events in any calendar app |
+Integrations you can connect today include:
+
+| Integration                                                       | What it does                                         |
+| ----------------------------------------------------------------- | ---------------------------------------------------- |
+| **Google Calendar**, **Microsoft Outlook**                        | Calendar connections                                 |
+| **iCalendar (ICS)**                                               | Points members to their personal shift calendar feed |
+| **Slack**, **Discord**, **Microsoft Teams**                       | Post the department's notifications to a channel     |
+| **Salesforce**, **Documenso**, **Cal.com**, **PayPal** and others | See guide 16                                         |
+
+Integrations marked **Coming Soon** — among them **CSV Import/Export** — cannot
+be connected yet. They have no **Connect** button.
+
+The full list, with what each one does, is in
+[Integrations → Integration Catalog](./16-integrations.md#integration-catalog).
 
 ### Setting Up an Integration
 
-1. Navigate to **Integrations**.
-2. Click on the integration you want to configure.
-3. Follow the setup steps (typically involves authorizing access or entering a webhook URL).
-4. Configure which events or triggers should use this integration.
-5. Test the connection.
+1. Open **Integrations**.
+2. Find the integration and select **Connect**.
+3. Fill in what it asks for. A messaging integration asks for a **Webhook
+   URL** from your Slack, Discord or Teams channel; others ask you to sign in
+   to the service or enter its details.
+4. Use **Test** on the card to check the connection, and the integration's
+   **Details** page to see whether recent messages went through.
+
+> **Important — you cannot choose which notifications post.** A messaging
+> integration posts every notification the department sends. There is no
+> setting to pick events or triggers.
+
+See [Integrations → Connecting an Integration](./16-integrations.md#connecting-an-integration)
+for step-by-step instructions for each service.
 
 ![Integrations page showing available integrations and connection status](./images/07-13-integrations.png)
-
-> **Hint:** Calendar integrations use iCal feeds. After connecting, events from The Logbook will appear in your personal calendar app automatically.
 
 ---
 
 ## Realistic Example: Building a Vehicle Pre-Trip Inspection Form
 
-This walkthrough demonstrates building a custom form from scratch using the form builder — from creating the form through publishing it and reviewing the first submission.
+This walkthrough builds a form from scratch, publishes it and reviews the
+first answers.
 
 ### Background
 
-**Safety Officer Capt. Linda Zhao** at **Brookfield Fire Department** wants to digitize their daily apparatus pre-trip inspection checklist. Currently, drivers fill out a paper form clipped to a clipboard in each bay. She wants to replace it with a form members can complete on their phone or tablet.
+**Safety Officer Capt. Linda Zhao** at **Brookfield Fire Department** wants to
+replace the paper pre-trip checklist clipped in each bay. Drivers should fill
+it in on a phone or the station tablet.
 
 The paper form has:
 
-- Date and apparatus selection
-- Driver name
-- Checkbox list for each inspection point (lights, tires, fluids, etc.)
-- Mileage reading
-- Overall condition assessment
-- Notes field for deficiencies
-- Driver signature
+- the date and the apparatus;
+- the driver's name;
+- a list of inspection points (lights, tires, fluids and so on);
+- the mileage;
+- an overall condition;
+- notes on problems;
+- the driver's signature.
 
 ---
 
 ### Step 1: Creating the Form
 
-Capt. Zhao navigates to **Administration > Forms** and clicks **Create Form**.
+Capt. Zhao opens **Administration → Forms & Comms → Forms** and selects
+**Create Form**.
 
 | Field           | Value                                                                                                           |
 | --------------- | --------------------------------------------------------------------------------------------------------------- |
-| **Title**       | Daily Apparatus Pre-Trip Inspection                                                                             |
-| **Description** | Complete this form before taking any apparatus out of quarters. Report all deficiencies to the on-duty officer. |
+| **Form Name**   | Daily Apparatus Pre-Trip Inspection                                                                             |
 | **Category**    | Operations                                                                                                      |
+| **Description** | Complete this form before taking any apparatus out of quarters. Report all deficiencies to the on-duty officer. |
+
+She leaves **Public Form** and **One submission per person** unticked for now,
+and selects **Create Form**.
 
 ---
 
 ### Step 2: Adding Fields
 
-She uses the form builder to add fields by clicking **Add Field** for each one. Here is the form layout she builds:
+She selects **Add Field** for each one. The driver's name does not need a
+field: each submission records who sent it.
 
-**Section 1 — Header fields:**
+**Section 1 — Header:**
 
-| #   | Field Type         | Label              | Required | Configuration                                                                |
+| #   | Field type         | Label              | Required | Settings                                                                     |
 | --- | ------------------ | ------------------ | -------- | ---------------------------------------------------------------------------- |
-| 1   | **Section Header** | Inspection Details | —        | Heading text for the top of the form                                         |
-| 2   | **Date**           | Inspection Date    | Yes      | Default: today's date                                                        |
-| 3   | **Select**         | Apparatus          | Yes      | Options: Engine 1, Engine 2, Ladder 1, Rescue 1, Squad 3, Chief 1, Utility 1 |
-| 4   | **Hidden**         | Inspector          | —        | Auto-filled with logged-in user's name                                       |
+| 1   | **Section Header** | Inspection Details | —        | —                                                                            |
+| 2   | **Date**           | Inspection Date    | Yes      | —                                                                            |
+| 3   | **Dropdown**       | Apparatus          | Yes      | Options: Engine 1, Engine 2, Ladder 1, Rescue 1, Squad 3, Chief 1, Utility 1 |
 
-**Section 2 — Exterior checks:**
+**Section 2 — Exterior:**
 
-| #   | Field Type         | Label                                               | Required | Configuration |
-| --- | ------------------ | --------------------------------------------------- | -------- | ------------- |
-| 5   | **Section Header** | Exterior Inspection                                 | —        | —             |
-| 6   | **Checkbox**       | Headlights / taillights / turn signals functional   | Yes      | —             |
-| 7   | **Checkbox**       | Emergency lights and siren tested                   | Yes      | —             |
-| 8   | **Checkbox**       | Tires — adequate tread, proper inflation, no damage | Yes      | —             |
-| 9   | **Checkbox**       | Body — no visible damage, compartment doors secure  | Yes      | —             |
-| 10  | **Checkbox**       | Mirrors clean and properly adjusted                 | Yes      | —             |
-| 11  | **Checkbox**       | Fuel level above 3/4 tank                           | Yes      | —             |
+| #   | Field type         | Label                      | Required | Settings                                                                                                                                                              |
+| --- | ------------------ | -------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4   | **Section Header** | Exterior Inspection        | —        | —                                                                                                                                                                     |
+| 5   | **Checkboxes**     | Tick each item that passed | No       | Options: Headlights / taillights / turn signals; Emergency lights and siren; Tires — tread, inflation, no damage; Body and compartment doors; Mirrors; Fuel above 3/4 |
 
 **Section 3 — Engine and fluids:**
 
-| #   | Field Type         | Label                               | Required | Configuration     |
-| --- | ------------------ | ----------------------------------- | -------- | ----------------- |
-| 12  | **Section Header** | Engine & Fluids                     | —        | —                 |
-| 13  | **Checkbox**       | Engine oil level normal             | Yes      | —                 |
-| 14  | **Checkbox**       | Coolant level normal                | Yes      | —                 |
-| 15  | **Checkbox**       | Transmission fluid level normal     | Yes      | —                 |
-| 16  | **Checkbox**       | Power steering fluid level normal   | Yes      | —                 |
-| 17  | **Checkbox**       | Battery connections clean and tight | Yes      | —                 |
-| 18  | **Number**         | Current Mileage                     | Yes      | Validation: min 0 |
+| #   | Field type         | Label                      | Required | Settings                                                                                                    |
+| --- | ------------------ | -------------------------- | -------- | ----------------------------------------------------------------------------------------------------------- |
+| 6   | **Section Header** | Engine & Fluids            | —        | —                                                                                                           |
+| 7   | **Checkboxes**     | Tick each item that passed | No       | Options: Engine oil; Coolant; Transmission fluid; Power steering fluid; Battery connections clean and tight |
+| 8   | **Number**         | Current Mileage            | Yes      | Min Value: 0                                                                                                |
 
-**Section 4 — Equipment checks:**
+**Section 4 — Equipment and cab:**
 
-| #   | Field Type         | Label                                   | Required | Configuration |
-| --- | ------------------ | --------------------------------------- | -------- | ------------- |
-| 19  | **Section Header** | Equipment & Cab                         | —        | —             |
-| 20  | **Checkbox**       | SCBA bottles — full and secured         | Yes      | —             |
-| 21  | **Checkbox**       | Portable radio — charged and functional | Yes      | —             |
-| 22  | **Checkbox**       | First aid kit — stocked                 | Yes      | —             |
-| 23  | **Checkbox**       | Hand tools — present and secured        | Yes      | —             |
-| 24  | **Checkbox**       | Cab — clean, no loose items             | Yes      | —             |
+| #   | Field type         | Label                      | Required | Settings                                                                                                             |
+| --- | ------------------ | -------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
+| 9   | **Section Header** | Equipment & Cab            | —        | —                                                                                                                    |
+| 10  | **Checkboxes**     | Tick each item that passed | No       | Options: SCBA bottles full and secured; Portable radio charged; First aid kit stocked; Hand tools secured; Cab clean |
 
 **Section 5 — Summary:**
 
-| #   | Field Type         | Label                | Required | Configuration                                                                                                                                                            |
-| --- | ------------------ | -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 25  | **Section Header** | Overall Assessment   | —        | —                                                                                                                                                                        |
-| 26  | **Radio**          | Overall Condition    | Yes      | Options: Ready for Service, Minor Issues (note below), Out of Service (notify officer immediately)                                                                       |
-| 27  | **Textarea**       | Deficiencies / Notes | No       | Help text: "Describe any issues found during inspection. Include location and severity." Conditional visibility: shown when Overall Condition is NOT "Ready for Service" |
-| 28  | **Signature**      | Driver Signature     | Yes      | —                                                                                                                                                                        |
+| #   | Field type         | Label                | Required | Settings                                                                                                                                                                |
+| --- | ------------------ | -------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 11  | **Section Header** | Overall Assessment   | —        | —                                                                                                                                                                       |
+| 12  | **Radio Buttons**  | Overall Condition    | Yes      | Options: Ready for Service, Minor Issues (note below), Out of Service (notify officer immediately)                                                                      |
+| 13  | **Text Area**      | Deficiencies / Notes | Yes      | Help text: "Describe any issues found during inspection. Include location and severity." Conditional Visibility: Overall Condition **Does not equal** Ready for Service |
+| 14  | **Signature**      | Driver Signature     | Yes      | —                                                                                                                                                                       |
 
-> **Hint:** The **conditional visibility** on the Deficiencies field (item 27) is a key usability feature. By setting it to show only when the condition is NOT "Ready for Service," the form stays clean for routine inspections where everything passes. Drivers only see the notes field when they actually need it.
+> **Tip.** The condition on field 13 keeps the form short for routine checks.
+> Drivers only see the notes box when something is wrong. Because a hidden
+> question is not required, making it required forces a note only when the
+> truck is not ready.
 
 ---
 
-### Step 3: Configuring and Publishing
+### Step 3: Publishing and Sharing
 
-Capt. Zhao configures the form settings:
-
-| Setting                     | Value                                                                                    |
-| --------------------------- | ---------------------------------------------------------------------------------------- |
-| **Status**                  | Active                                                                                   |
-| **Public Access**           | Off (internal only — requires login)                                                     |
-| **Submission Notification** | On — notify Safety Officer when a submission includes "Minor Issues" or "Out of Service" |
-
-She clicks **Save**. The form is now live and accessible to all logged-in members.
+1. On the form's card, she selects **Share** and switches on **Public Access**.
+   She leaves **Allow submissions without signing in** off, so only signed-in
+   members can send it.
+2. She selects **Publish Form**.
+3. She downloads the **QR Code** as a PNG and tapes a copy in each bay.
 
 ---
 
 ### Step 4: First Submission
 
-The next morning, **D/O Mike Torres** opens The Logbook on the station tablet, navigates to **Forms**, and opens the pre-trip inspection form.
+The next morning, **D/O Mike Torres** scans the QR code with the station
+tablet, which is signed in to The Logbook. He fills it in for Engine 1:
 
-He fills it out for Engine 1:
+- ticks every exterior, engine and equipment item;
+- mileage: 28,523;
+- Overall Condition: **Minor Issues**;
+- the notes box appears, and he types: _"Rear passenger-side turn signal bulb
+  is out. Replacement bulb needed — have one in station supply. Will replace
+  after shift."_;
+- signs with his finger;
+- selects **Submit**.
 
-- Checks off all exterior items
-- Checks off all engine/fluids items
-- Mileage: 28,523
-- Checks off all equipment items
-- Overall Condition: **Minor Issues**
-- The deficiency notes field appears. He types: _"Rear passenger-side turn signal bulb is out. Replacement bulb needed — have one in station supply. Will replace after shift."_
-- Signs with his finger on the tablet
-- Clicks **Submit**
-
-Capt. Zhao receives a notification because the submission included "Minor Issues." She opens the submission, sees the turn signal note, and adds a comment for follow-up.
+A form with no integration sends nobody a notice when it is submitted.
+Capt. Zhao checks the
+**Responses** list each morning, sees the turn signal note, and tells the
+on-duty officer.
 
 ---
 
 ### Step 5: Reviewing Submissions Over Time
 
-After two weeks of use, Capt. Zhao navigates to **Forms > Daily Apparatus Pre-Trip Inspection > View Submissions**.
+After two weeks, Capt. Zhao opens the **Submissions** tab and picks the
+pre-trip form. The **Responses** list shows each inspection with who sent it
+and when; she opens the ones marked Minor Issues.
 
-The submissions table shows:
+On the **Results** tab, the Overall Condition chart shows how often each truck
+reported a problem. She selects **Export CSV** on each page of **Responses**
+for the monthly operations report.
 
-| Date   | Apparatus | Inspector | Condition         | Deficiencies                    |
-| ------ | --------- | --------- | ----------------- | ------------------------------- |
-| Mar 14 | Engine 1  | Torres    | Ready for Service | —                               |
-| Mar 14 | Ladder 1  | Chen      | Ready for Service | —                               |
-| Mar 14 | Rescue 1  | Brooks    | Minor Issues      | Low windshield washer fluid     |
-| Mar 13 | Engine 1  | Garcia    | Ready for Service | —                               |
-| Mar 13 | Engine 2  | Torres    | Ready for Service | —                               |
-| Mar 13 | Ladder 1  | Walsh     | Minor Issues      | Bay door sensor slow to respond |
-| ...    | ...       | ...       | ...               | ...                             |
-
-She clicks **Export CSV** to download the data for the monthly operations report. The CSV includes all field values from every submission — ready for spreadsheet analysis.
-
-> **Hint:** Over time, the inspection data reveals patterns. If Engine 2 has recurring "Minor Issues" submissions, that signals a maintenance trend worth investigating. Export the data quarterly and review by apparatus to spot chronic problems.
+> **Tip.** Over time, the data shows patterns. If Engine 2 keeps reporting
+> Minor Issues, that points to a maintenance trend worth looking into. Review
+> the results by apparatus each quarter to spot chronic problems.
 
 ---
 
 ## Troubleshooting
 
-| Issue                                                          | Solution                                                                                                                                                                                                                                                                                                                                                            |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cannot upload a document                                       | Check file size limits (configured by your department). Verify you have permission to upload to the selected folder.                                                                                                                                                                                                                                                |
-| Form not accepting submissions                                 | Ensure the form is **Published** (the card's **Publish Form** button). Draft forms cannot receive submissions.                                                                                                                                                                                                                                                      |
-| Public form URL not working                                    | Verify that Public Access is enabled on the form (**Share**). The form must be **Published**. Ensure the URL uses the correct format: `/f/{slug}`.                                                                                                                                                                                                                  |
-| Visitors see **Sign in to submit this form** on a public form  | The form requires a signed-in member, which is how every form is created. If outsiders should submit it, open **Share** on the form and tick **Allow submissions without signing in**. A form limited to one submission per person cannot be opened up this way. _(added 2026-10-04)_                                                                               |
-| Form builder drag-and-drop not working                         | The builder uses `@dnd-kit` for reordering. Clear browser cache and reload. If the issue persists, run `cd frontend && npm install` to ensure dependencies are installed.                                                                                                                                                                                           |
-| Public form shows 404 error                                    | Fixed in March 2026 — a doubled `/v1` in the API URL path has been corrected. Pull latest code and rebuild.                                                                                                                                                                                                                                                         |
-| Forms page not visible in navigation                           | The Forms page requires `forms.manage` permission. Ask your administrator to grant `forms.manage` to your role.                                                                                                                                                                                                                                                     |
-| Integration reprocessing fails                                 | Check that the target module (Membership or Inventory) is enabled and the field mapping is correct. Review the error details on the failed submission.                                                                                                                                                                                                              |
-| Not receiving email notifications                              | Check **Settings → Notifications**: **Email Notifications** must be on, and the email's own switch under **Emails you can turn off** too (required emails arrive regardless). Verify your email address is correct. Check your spam folder. If using Cloudflare Email Service, verify the API token is valid in Administration > Organization Settings > Email tab. |
-| Slack integration not posting                                  | Verify the webhook URL is correct and the Slack channel exists. Check the integration logs for errors.                                                                                                                                                                                                                                                              |
-| Calendar events not syncing                                    | Ensure the calendar integration is connected. Some calendar apps cache iCal feeds and may take up to 24 hours to refresh.                                                                                                                                                                                                                                           |
-| Form submissions not appearing in pipeline                     | Fixed in March 2026 — multiple field mapping issues resolved. Pull latest backend code. Check backend logs for "Field mapping" warnings if issues persist.                                                                                                                                                                                                          |
-| Cannot delete a form linked to a pipeline                      | As of 2026-03-04, forms linked to active pipelines are protected from deletion. Remove the pipeline integration first (Pipeline Settings → edit stage → remove form link), then delete the form.                                                                                                                                                                    |
-| Reprocessing submission doesn't update prospect                | Fixed in March 2026 — reprocessing now re-evaluates pipeline stage assignment. Pull latest backend code.                                                                                                                                                                                                                                                            |
-| Duplicate prospect not detected on form submission             | As of 2026-03-04, duplicate detection by email is active. The pipeline coordinator receives a notification with a link to the existing prospect.                                                                                                                                                                                                                    |
-| Form field compatibility warning on save                       | This is a new validation (2026-03-04) that checks if form fields match expected pipeline field mappings. Review the warning and update field names to match.                                                                                                                                                                                                        |
-| Modal dialog buttons unresponsive (delete, confirm)            | Fixed in March 2026 — backdrop overlay no longer intercepts button clicks. Pull latest and rebuild.                                                                                                                                                                                                                                                                 |
-| Form submission does not auto-advance prospect                 | As of 2026-03-14, auto-advance must be explicitly enabled in the pipeline stage configuration. Open Pipeline Settings, edit the form_submission stage, and check "Auto-advance when form is submitted".                                                                                                                                                             |
-| Automated pipeline email not sent on form submission           | The email is triggered when advancing to an `automated_email` stage, not when submitting a form. Verify the pipeline has an `automated_email` stage after the `form_submission` stage and that SMTP is configured. _(added 2026-03-14)_                                                                                                                             |
-| "Required field '…' is missing" on a question nobody could see | Fixed 2026-09-23. A required question hidden by its conditional-visibility rule is no longer enforced. If it still happens, check the rule: an operator the server does not recognise counts as **visible**, so the field stays required rather than silently becoming optional.                                                                                    |
-| Public form submission by bot                                  | The system uses a hidden honeypot field for bot detection. If filled, the submission is answered with an ordinary thank-you (fake success) — no record is created. Legitimate users never see this field.                                                                                                                                                           |
+| Problem                                                      | What to do                                                                                                                                                                                                              |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| You cannot upload a document                                 | Files must be PDF, Word, Excel, PowerPoint, text, CSV, an image or ZIP, up to 50 MB. You need a role that can manage documents                                                                                          |
+| A folder you expect is missing                               | Built-in folders open only to members of that part of The Logbook. A restricted folder opens only to the people chosen for it                                                                                           |
+| A form is not accepting submissions                          | Make sure it is published (**Publish Form** on its card). Drafts take no submissions                                                                                                                                    |
+| A public form's link does not work                           | Check **Public Access** is on under **Share**, and that the form is published                                                                                                                                           |
+| Visitors see **Sign in to submit this form**                 | The form needs a signed-in member, as every new form does. If outsiders should send it, open **Share** and tick **Allow submissions without signing in**. A one-submission-per-person form cannot be opened up this way |
+| Members cannot find a form to fill in                        | There is no forms list for members. Turn on **Public Access** and share the link                                                                                                                                        |
+| Forms is not in the menu                                     | You need a role that can create, edit and manage forms, and the Forms module must be on                                                                                                                                 |
+| A form's answers do not reach another module                 | Open the submission's **Integration Results**. Check the target module is on and the fields are matched, then select **Reprocess**                                                                                      |
+| A form cannot be deleted                                     | It is used by a prospective-member pipeline stage. Remove it from the stage first (**Pipeline Settings** → edit the stage), then delete the form                                                                        |
+| A pipeline form submission does not move the applicant on    | In **Pipeline Settings**, edit the form stage and tick **Auto-advance when form is submitted**                                                                                                                          |
+| A pipeline email does not go out when a form is sent         | The email is sent when the applicant moves to an automated email stage, not when the form is sent. Check the pipeline has that stage after the form stage                                                               |
+| "Required field … is missing" on a question nobody could see | Check the question's condition. A condition The Logbook cannot read counts as **showing**, so the question stays required                                                                                               |
+| A robot fills in a public form                               | A hidden trap field catches most robots. They get an ordinary thank-you, and nothing is saved                                                                                                                           |
+| You are not getting email notifications                      | In **Settings → Notifications**, **Email Notifications** must be on, and the email's own switch too (required emails always arrive). Check your address and spam folder                                                 |
+| A Slack, Discord or Teams channel gets no posts              | Check the webhook URL and that the channel exists. Use **Test**, and the integration's **Details** page                                                                                                                 |
+| Calendar events do not appear                                | Check the calendar integration is connected. Some calendar apps take up to 24 hours to refresh a feed                                                                                                                   |
+| A rule's switch makes no difference                          | It is badged **Not enforced**: no notification reads that trigger. Or another rule for the same trigger is still on                                                                                                     |
+
+---
+
+## If You Learned an Older Version
+
+If you are following older notes or an SOP, these things have moved, been
+renamed or work differently.
+
+- **Documents shows folders as cards**, not a folder tree beside a file list.
+  You move back up with the breadcrumb.
+- **New folders are created where you are.** There is no parent-folder picker;
+  the window names the **Location**. You choose who can open the folder as you
+  create it.
+- **Documents has no Move or Rename**, and the upload box has no drag and drop.
+- **The upload's folder default is General Documents.**
+- **The Forms page's first tab is Forms**, not My Forms.
+- **Forms created before public sign-in could be switched off still require a
+  sign-in.** Open **Share** on each one meant for the public and tick **Allow
+  submissions without signing in**.
+- **Answers to hidden questions are no longer kept.** Submissions saved before
+  that may still hold them; your administrator has a one-off clean-up (see the
+  [upgrade notes](../UPGRADING.md)). Records other features already built from
+  those submissions keep what they copied.
+- **Notification rules list four triggers.** Rules made earlier for other
+  triggers show **Not enforced**.
+- **The dashboard has no Clear All button** and no ✕ on each notification.
+  Mark them read on **My Notifications**.
+- **"Persistent" is now "Keep in inbox after it is read"** on the message form.
+- **Settings → Notifications** replaced the separate Event Reminders and
+  Training Reminders switches with one switch per email. Choices made with the
+  old switches still count.
+- **External integrations:** CSV Export is not available, and there is no step
+  to choose which events post to a channel.
 
 ---
 
 **Previous:** [Apparatus & Facilities](./06-apparatus-facilities.md) | **Next:** [Administration & Reports](./08-admin-reports.md)
-
-## August 12–14, 2026 update
-
-The public-outreach form list event administrators see, and how it differs from the Forms catalog, is covered under [Public Forms](#public-forms).

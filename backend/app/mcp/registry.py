@@ -39,7 +39,7 @@ from app.mcp.db import open_session
 from app.mcp.principal import McpPrincipal, current_principal, peek_principal
 from app.mcp.redaction import redact
 
-Gate = Literal["write", "finance", "medical_screening"]
+Gate = Literal["write", "finance", "medical_screening", "medical_supplies"]
 
 # What the model is told when a switch is off. Naming the screen matters: an
 # operator reading the transcript should know where to turn it on rather
@@ -55,6 +55,10 @@ GATE_MESSAGES: dict[str, str] = {
     ),
     "medical_screening": (
         "Medical screening status is not shared with Claude. An administrator "
+        "can enable it under Settings → Integrations → Claude (MCP)."
+    ),
+    "medical_supplies": (
+        "Medical supply inventory is not shared with Claude. An administrator "
         "can enable it under Settings → Integrations → Claude (MCP)."
     ),
 }
@@ -108,6 +112,8 @@ def gate_allows(
         return principal.expose_finance
     if gate == "medical_screening":
         return principal.expose_medical_screening
+    if gate == "medical_supplies":
+        return principal.expose_medical_supplies
     return False
 
 
@@ -160,7 +166,10 @@ def logbook_tool(
                     raise ToolError(module_message(module or ""))
                 if not principal.member_allows(permissions):
                     raise ToolError(MEMBER_PERMISSION_MESSAGE)
-                if not gate_allows(principal, gate):
+                # The full argument list, not just the gate: gate_allows also
+                # checks the member's permissions, and called without them it
+                # fails closed for every OAuth connection.
+                if not gate_allows(principal, gate, module, permissions):
                     raise ToolError(GATE_MESSAGES[gate or ""])
                 check_argument_sizes(kwargs)
             except ToolError as exc:

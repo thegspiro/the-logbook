@@ -4,15 +4,29 @@ Meeting Minutes Pydantic Schemas
 Request and response schemas for meeting minutes, templates, and related endpoints.
 """
 
+import re
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
-from app.models.minute import MinutesMeetingType
+from app.models.minute import MinutesAttachmentCategory, MinutesMeetingType
 from app.schemas.base import UTCResponseBase
+from app.utils.minutes_attendance import COUNTS_TOWARD_QUORUM, derive_status
+from app.utils.redline import describe_change
+from app.utils.rich_text import MAX_HTML_LENGTH, sanitize_html
 
 _response_config = ConfigDict(from_attributes=True)
+
+# The wording a section's motion starts with becomes a motion's text, which is
+# capped at this length.
+MAX_MOTION_TEXT = 2000
 
 # MeetingMinutes.meeting_type / MinutesTemplate.meeting_type are strict MySQL
 # ENUMs; SQLAlchemy doesn't validate the string on bind, so an out-of-set value
@@ -40,6 +54,17 @@ def _validate_minutes_meeting_type(value: Optional[str]) -> Optional[str]:
 # ============================================
 
 
+def _clean_rich_text(value: str, what: str) -> str:
+    """Sanitized rich text, refused when it is longer than a section may be.
+
+    The check follows the cleaning, so it measures what would be stored.
+    """
+    cleaned = sanitize_html(value)
+    if len(cleaned) > MAX_HTML_LENGTH:
+        raise ValueError(f"{what} text is too long")
+    return cleaned
+
+
 class SectionEntry(BaseModel):
     """A single content section within minutes or a template"""
 
@@ -49,6 +74,31 @@ class SectionEntry(BaseModel):
     )
     title: str = Field(..., min_length=1, max_length=200, description="Display title")
     content: str = Field(default="", description="Section content (minutes only)")
+    format: Literal["text", "html"] = Field(
+        default="text",
+        description="'text' is plain text, as every section was before the "
+        "editor; 'html' is the rich-text subset in app/utils/rich_text.py",
+    )
+    required: bool = Field(
+        default=False,
+        description="Copied from the outline; a required section needs content "
+        "before the minutes can be circulated",
+    )
+    needs_motion: bool = Field(
+        default=False,
+        description="Copied from the outline; the section is moved and seconded",
+    )
+    motion_text: str = Field(
+        default="",
+        max_length=MAX_MOTION_TEXT,
+        description="Copied from the outline; the wording the motion starts with",
+    )
+
+    @model_validator(mode="after")
+    def _settle_rich_text(self):
+        if self.format == "html":
+            self.content = _clean_rich_text(self.content, "Section")
+        return self
 
 
 class TemplateSectionEntry(BaseModel):
@@ -58,7 +108,26 @@ class TemplateSectionEntry(BaseModel):
     key: str = Field(..., min_length=1, max_length=100)
     title: str = Field(..., min_length=1, max_length=200)
     default_content: str = Field(default="", description="Default content to pre-fill")
+    format: Literal["text", "html"] = Field(
+        default="text", description="How default_content is written: text or html"
+    )
     required: bool = Field(default=False, description="Whether the section is required")
+    needs_motion: bool = Field(
+        default=False,
+        description="Whether the body moves and seconds this section, as it does "
+        "to adopt minutes or adjourn",
+    )
+    motion_text: str = Field(
+        default="",
+        max_length=MAX_MOTION_TEXT,
+        description="The wording the motion starts with",
+    )
+
+    @model_validator(mode="after")
+    def _settle_rich_text(self):
+        if self.format == "html":
+            self.default_content = _clean_rich_text(self.default_content, "Outline")
+        return self
 
 
 # ============================================
@@ -107,6 +176,35 @@ class FooterConfig(BaseModel):
 # ============================================
 
 
+_SECTION_KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_]*$")
+
+
+def _validate_outline_sections(
+    value: Optional[List["TemplateSectionEntry"]],
+) -> Optional[List["TemplateSectionEntry"]]:
+    """An outline is an ordered list of sections with unique keys.
+
+    The order given is the order kept: ``order`` is renumbered 0..n so two
+    sections can never tie and a gap never leaves the list ambiguous. A key is
+    what a section is known by from outline to minutes, so it must be unique and
+    URL-safe.
+    """
+    if value is None:
+        return value
+    keys: set[str] = set()
+    for section in value:
+        if not _SECTION_KEY_PATTERN.match(section.key):
+            raise ValueError(
+                f"Section key '{section.key}' must be lowercase letters, "
+                "digits and underscores"
+            )
+        if section.key in keys:
+            raise ValueError(f"Section key '{section.key}' is used twice")
+        keys.add(section.key)
+    ordered = sorted(value, key=lambda s: s.order)
+    return [s.model_copy(update={"order": index}) for index, s in enumerate(ordered)]
+
+
 class TemplateCreate(BaseModel):
     """Schema for creating a minutes template"""
 
@@ -121,6 +219,7 @@ class TemplateCreate(BaseModel):
     _check_meeting_type = field_validator("meeting_type")(
         _validate_minutes_meeting_type
     )
+    _check_sections = field_validator("sections")(_validate_outline_sections)
 
 
 class TemplateUpdate(BaseModel):
@@ -137,6 +236,7 @@ class TemplateUpdate(BaseModel):
     _check_meeting_type = field_validator("meeting_type")(
         _validate_minutes_meeting_type
     )
+    _check_sections = field_validator("sections")(_validate_outline_sections)
 
 
 class TemplateResponse(UTCResponseBase):
@@ -176,6 +276,19 @@ class TemplateListItem(UTCResponseBase):
 # ============================================
 
 
+class RollCallEntry(BaseModel):
+    """One member's vote in a roll call.
+
+    ``user_id`` is filled in by the server from the minutes' own roll and is
+    ignored on the way in: a vote belongs to the person the minutes record as
+    present, not to whoever the request names.
+    """
+
+    name: str = Field(..., min_length=1, max_length=200)
+    vote: Literal["yes", "no", "abstain", "recuse"]
+    user_id: Optional[str] = None
+
+
 class MotionBase(BaseModel):
     """Base motion schema"""
 
@@ -189,12 +302,40 @@ class MotionBase(BaseModel):
         None, max_length=200, description="Name of person who seconded"
     )
     discussion_notes: Optional[str] = None
+    section_key: Optional[str] = Field(
+        None, max_length=100, description="The outline section this motion belongs to"
+    )
     status: str = Field(
         default="passed", description="Motion result: passed, failed, tabled, withdrawn"
     )
     votes_for: Optional[int] = Field(None, ge=0)
     votes_against: Optional[int] = Field(None, ge=0)
     votes_abstain: Optional[int] = Field(None, ge=0)
+    votes_recused: Optional[int] = Field(None, ge=0)
+    threshold: Optional[Literal["majority_cast", "majority_present", "two_thirds"]] = (
+        Field(
+            None,
+            description="What the motion needed to carry; a majority of the votes "
+            "cast when unset",
+        )
+    )
+    roll_call: Optional[List[RollCallEntry]] = Field(
+        None,
+        description="Each member's vote. When given, the vote totals are "
+        "counted from it and any totals sent with it are ignored",
+    )
+    election_id: Optional[str] = Field(
+        None, max_length=36, description="The ballot that decided this motion"
+    )
+    ballot_item_id: Optional[str] = Field(
+        None, max_length=100, description="The item on that ballot"
+    )
+
+    @model_validator(mode="after")
+    def _item_needs_election(self):
+        if self.ballot_item_id and not self.election_id:
+            raise ValueError("A ballot item needs the election it belongs to")
+        return self
 
 
 class MotionCreate(MotionBase):
@@ -210,11 +351,19 @@ class MotionUpdate(BaseModel):
     moved_by: Optional[str] = Field(None, max_length=200)
     seconded_by: Optional[str] = Field(None, max_length=200)
     discussion_notes: Optional[str] = None
+    section_key: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = None
     votes_for: Optional[int] = Field(None, ge=0)
     votes_against: Optional[int] = Field(None, ge=0)
     votes_abstain: Optional[int] = Field(None, ge=0)
+    votes_recused: Optional[int] = Field(None, ge=0)
+    threshold: Optional[Literal["majority_cast", "majority_present", "two_thirds"]] = (
+        None
+    )
+    roll_call: Optional[List[RollCallEntry]] = None
     order: Optional[int] = Field(None, ge=0)
+    election_id: Optional[str] = Field(None, max_length=36)
+    ballot_item_id: Optional[str] = Field(None, max_length=100)
 
 
 class MotionResponse(MotionBase):
@@ -223,6 +372,12 @@ class MotionResponse(MotionBase):
     id: str
     minutes_id: str
     order: int
+    election_title: Optional[str] = None
+    suggested_status: Optional[str] = Field(
+        None,
+        description="passed or failed when the counts and threshold decide it; "
+        "the recorded status is the secretary's",
+    )
     created_at: datetime
     updated_at: datetime
 
@@ -283,10 +438,38 @@ class ActionItemResponse(ActionItemBase):
     status: str
     completed_at: Optional[datetime] = None
     completion_notes: Optional[str] = None
+    carried_from_id: Optional[str] = None
+    carried_forward_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
     model_config = _response_config
+
+
+class OpenActionItem(ActionItemResponse):
+    """An open item from an earlier meeting, offered for carry-forward"""
+
+    minutes_title: str
+    meeting_date: datetime
+
+
+class MyActionItem(ActionItemResponse):
+    """An item assigned to the caller, with where it came from"""
+
+    minutes_title: str
+    meeting_date: datetime
+    minutes_status: str
+
+
+class CarryForwardRequest(BaseModel):
+    """Open items to copy into a set of minutes"""
+
+    item_ids: List[str] = Field(..., min_length=1, max_length=100)
+
+    @field_validator("item_ids")
+    @classmethod
+    def _unique(cls, value: List[str]) -> List[str]:
+        return list(dict.fromkeys(value))
 
 
 # ============================================
@@ -294,13 +477,49 @@ class ActionItemResponse(ActionItemBase):
 # ============================================
 
 
+AttendanceStatus = Literal[
+    "present", "late", "left_early", "excused", "absent", "guest"
+]
+
+
 class AttendeeEntry(BaseModel):
-    """Individual attendee record"""
+    """Individual attendee record
+
+    ``status`` is the record and ``present`` is derived from it (see
+    ``app.utils.minutes_attendance``). A client that sends only ``present``
+    gets the matching status; one that sends both gets its ``status``, with
+    ``present`` corrected to agree, so the two can never disagree in storage.
+    """
 
     user_id: Optional[str] = None
     name: str = Field(..., min_length=1, max_length=200)
     role: Optional[str] = Field(None, max_length=100)
+    status: Optional[AttendanceStatus] = None
     present: bool = True
+    note: Optional[str] = Field(None, max_length=300)
+
+    @model_validator(mode="after")
+    def _settle_status(self) -> "AttendeeEntry":
+        if self.status is None:
+            self.status = derive_status({"present": self.present})  # type: ignore[assignment]
+        self.present = self.status in COUNTS_TOWARD_QUORUM
+        return self
+
+
+def _reject_duplicate_attendees(
+    value: Optional[List[AttendeeEntry]],
+) -> Optional[List[AttendeeEntry]]:
+    """One roll-call line per member: a member listed twice would count twice
+    toward quorum."""
+    if not value:
+        return value
+    seen: set[str] = set()
+    for entry in value:
+        if entry.user_id:
+            if entry.user_id in seen:
+                raise ValueError("A member can be listed only once in attendance")
+            seen.add(entry.user_id)
+    return value
 
 
 class MinutesBase(BaseModel):
@@ -357,6 +576,7 @@ class MinutesCreate(MinutesBase):
     _check_meeting_type = field_validator("meeting_type")(
         _validate_minutes_meeting_type
     )
+    _check_attendees = field_validator("attendees")(_reject_duplicate_attendees)
 
 
 class MinutesUpdate(BaseModel):
@@ -391,6 +611,7 @@ class MinutesUpdate(BaseModel):
     _check_meeting_type = field_validator("meeting_type")(
         _validate_minutes_meeting_type
     )
+    _check_attendees = field_validator("attendees")(_reject_duplicate_attendees)
 
 
 class MinutesResponse(UTCResponseBase):
@@ -422,6 +643,12 @@ class MinutesResponse(UTCResponseBase):
     rejected_at: Optional[datetime] = None
     rejected_by: Optional[str] = None
     rejection_reason: Optional[str] = None
+    adopted_on: Optional[datetime] = None
+    adopted_as_amended: Optional[bool] = None
+    adoption_moved_by: Optional[str] = None
+    adoption_seconded_by: Optional[str] = None
+    adopting_minutes_id: Optional[str] = None
+    adopting_minutes_title: Optional[str] = None
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -453,6 +680,96 @@ class MinutesListItem(UTCResponseBase):
     model_config = _response_config
 
 
+class MinutesAdopt(BaseModel):
+    """What the body did when it adopted the minutes"""
+
+    adopted_on: Optional[datetime] = Field(
+        None, description="When the body voted; defaults to now"
+    )
+    adopting_minutes_id: Optional[str] = Field(
+        None,
+        max_length=36,
+        description="The minutes of the meeting at which these were adopted",
+    )
+    as_amended: Optional[bool] = Field(
+        None,
+        description="Adopted as amended; defaults to whether any suggestion "
+        "was accepted",
+    )
+    moved_by: Optional[str] = Field(
+        None, max_length=200, description="Who moved the adoption"
+    )
+    seconded_by: Optional[str] = Field(
+        None, max_length=200, description="Who seconded the adoption"
+    )
+
+    @field_validator("moved_by", "seconded_by")
+    @classmethod
+    def _blank_is_none(cls, value: Optional[str]) -> Optional[str]:
+        return (value or "").strip() or None
+
+
+class ApplyOutline(BaseModel):
+    """Which outline to lay over draft minutes"""
+
+    template_id: str = Field(..., min_length=1, max_length=36)
+
+
+class SignatureSlotResponse(BaseModel):
+    """A place on the adopted minutes for a signature."""
+
+    key: str
+    title: str
+    position_slug: Optional[str] = None
+
+
+class MinutesReminderSettingsResponse(BaseModel):
+    """The department's action item reminder settings, as the server resolves them.
+
+    Keys match the ``minutes`` section of ``PATCH /organization/settings``.
+    """
+
+    action_item_reminders: bool
+    reminder_days_before_due: int
+    overdue_repeat_days: int
+    open_items_digest: bool
+    signature_slots: List[SignatureSlotResponse] = []
+
+
+class SignatureResponse(BaseModel):
+    id: str
+    slot_key: str
+    slot_title: str
+    signed_name: str
+    signed_at: datetime
+    intact: bool = Field(
+        True,
+        description="The signature was given on the version now on file",
+    )
+
+    model_config = _response_config
+
+
+class SignatureStatusSlot(SignatureSlotResponse):
+    can_sign: bool = False
+    signature: Optional[SignatureResponse] = None
+
+
+class SignatureStatusResponse(BaseModel):
+    """Each slot and who has signed it, for the current adopted version."""
+
+    version: Optional[int] = None
+    slots: List[SignatureStatusSlot] = []
+
+
+class SignRequest(BaseModel):
+    """A signature: the slot, the signer's name as typed, and their password."""
+
+    slot_key: str = Field(..., min_length=1, max_length=50)
+    signed_name: str = Field(..., min_length=1, max_length=200)
+    password: str = Field(..., min_length=1, max_length=1000, repr=False)
+
+
 class MinutesReject(BaseModel):
     """Schema for rejecting minutes"""
 
@@ -482,5 +799,358 @@ class MinutesSearchResult(UTCResponseBase):
     status: str
     snippet: str = Field(..., description="Matching text snippet")
     match_field: str = Field(..., description="Which field matched")
+
+    model_config = _response_config
+
+
+# ============================================
+# Attendance Suggestions
+# ============================================
+
+
+class AttendanceSuggestions(BaseModel):
+    """A starting roll for the minutes, for the secretary to correct.
+
+    Nothing is saved: the entries come back so the roll call can be reviewed
+    and then written with the ordinary minutes update.
+    """
+
+    source: Literal["event", "roster"]
+    event_title: Optional[str] = None
+    entries: List[AttendeeEntry]
+
+
+# ============================================
+# Election Results
+# ============================================
+
+
+class BallotItemRef(BaseModel):
+    """A ballot item a motion can be tied to"""
+
+    id: str
+    title: str
+
+
+class ImportableElection(UTCResponseBase):
+    """A closed election whose result can be filed with the minutes"""
+
+    id: str
+    title: str
+    election_type: Optional[str] = None
+    closed_at: Optional[datetime] = None
+    positions: Optional[List[str]] = None
+    already_imported: bool = False
+    # Held at this meeting's event or recorded against its meeting record.
+    linked_to_meeting: bool = False
+    ballot_items: List[BallotItemRef] = []
+
+    model_config = _response_config
+
+
+class ElectionResultCapture(BaseModel):
+    """Which election's result to freeze into the minutes"""
+
+    election_id: str = Field(..., min_length=1, max_length=36)
+
+
+class MinutesElectionResultResponse(UTCResponseBase):
+    """An election result as it was filed with the minutes"""
+
+    id: str
+    minutes_id: str
+    election_id: Optional[str] = None
+    election_title: str
+    election_closed_at: Optional[datetime] = None
+    snapshot: Dict[str, Any]
+    is_addendum: bool = False
+    captured_by: Optional[str] = None
+    captured_by_name: Optional[str] = None
+    created_at: datetime
+
+    model_config = _response_config
+
+
+# ============================================
+# Attachments
+# ============================================
+
+_ATTACHMENT_CATEGORIES = {c.value for c in MinutesAttachmentCategory}
+
+
+def validate_attachment_category(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized not in _ATTACHMENT_CATEGORIES:
+        raise ValueError(
+            f"Invalid category '{value}'. Must be one of: "
+            f"{', '.join(sorted(_ATTACHMENT_CATEGORIES))}"
+        )
+    return normalized
+
+
+class MinutesAttachmentResponse(UTCResponseBase):
+    """A file kept with the minutes"""
+
+    id: str
+    minutes_id: str
+    title: str
+    category: str
+    description: Optional[str] = None
+    original_name: str
+    mime_type: str
+    file_size: int
+    sha256: str
+    uploaded_by: Optional[str] = None
+    uploaded_by_name: Optional[str] = None
+    uploaded_at: datetime
+
+    model_config = _response_config
+
+
+# ============================================
+# Revisions
+# ============================================
+
+
+class MinutesRevisionResponse(UTCResponseBase):
+    """One approved version of the minutes"""
+
+    id: str
+    minutes_id: str
+    version: int
+    content_hash: str
+    submitted_by: Optional[str] = None
+    submitted_by_name: Optional[str] = None
+    approved_by: Optional[str] = None
+    approved_by_name: Optional[str] = None
+    approved_at: datetime
+    superseded_at: Optional[datetime] = None
+    superseded_by: Optional[str] = None
+    superseded_by_name: Optional[str] = None
+    superseded_reason: Optional[str] = None
+
+    model_config = _response_config
+
+
+class MinutesRevisionDetail(MinutesRevisionResponse):
+    """An approved version with the content it recorded"""
+
+    snapshot: Dict[str, Any]
+
+
+class MinutesVerification(BaseModel):
+    """Whether the minutes still match the version that was approved"""
+
+    verified: bool
+    version: Optional[int] = None
+    content_hash: Optional[str] = None
+    current_hash: Optional[str] = None
+    changed: List[str] = []
+    detail: str
+
+
+# ============================================
+# Closed Sessions
+# ============================================
+
+
+class ClosedSessionParticipant(BaseModel):
+    """One person in the room for a closed session"""
+
+    user_id: Optional[str] = Field(None, max_length=36)
+    name: str = Field(..., min_length=1, max_length=200)
+    joined_at: Optional[datetime] = None
+    left_at: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def _left_after_joined(self):
+        if self.joined_at and self.left_at and self.left_at < self.joined_at:
+            raise ValueError(f"{self.name} left before they joined")
+        return self
+
+
+def _whole_seconds(value: Optional[datetime]) -> Optional[datetime]:
+    """Drop the fraction of a second before it reaches a DATETIME column.
+
+    MySQL rounds a stored fraction while MariaDB truncates it, and the approved
+    version's snapshot truncates. A value kept with its fraction would be
+    stored a second later than it was hashed on MySQL.
+    """
+    return value.replace(microsecond=0) if value is not None else None
+
+
+def _validate_participants(
+    value: Optional[List[ClosedSessionParticipant]],
+) -> Optional[List[ClosedSessionParticipant]]:
+    if not value:
+        return value
+    seen: set[str] = set()
+    for person in value:
+        if person.user_id:
+            if person.user_id in seen:
+                raise ValueError("A member can be listed only once in a closed session")
+            seen.add(person.user_id)
+    return value
+
+
+class ClosedSessionBase(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=300)
+    legal_basis: Optional[str] = Field(None, max_length=300)
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    motion_id: Optional[str] = Field(
+        None, max_length=36, description="The motion that moved into closed session"
+    )
+    participants: Optional[List[ClosedSessionParticipant]] = Field(None, max_length=300)
+    summary: Optional[str] = Field(
+        None,
+        max_length=4000,
+        description="What may be said publicly, e.g. 'no action was taken'",
+    )
+
+    _check_participants = field_validator("participants")(_validate_participants)
+    _whole_times = field_validator("started_at", "ended_at")(_whole_seconds)
+
+    @model_validator(mode="after")
+    def _ends_after_start(self):
+        if self.ended_at and self.ended_at < self.started_at:
+            raise ValueError("A closed session cannot end before it starts")
+        return self
+
+
+class ClosedSessionCreate(ClosedSessionBase):
+    """Schema for recording a closed session"""
+
+
+class ClosedSessionUpdate(BaseModel):
+    """Schema for changing a closed session"""
+
+    reason: Optional[str] = Field(None, min_length=1, max_length=300)
+    legal_basis: Optional[str] = Field(None, max_length=300)
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    motion_id: Optional[str] = Field(None, max_length=36)
+    participants: Optional[List[ClosedSessionParticipant]] = Field(None, max_length=300)
+    summary: Optional[str] = Field(None, max_length=4000)
+
+    _check_participants = field_validator("participants")(_validate_participants)
+    _whole_times = field_validator("started_at", "ended_at")(_whole_seconds)
+
+
+class ClosedSessionResponse(UTCResponseBase):
+    """A closed session as recorded"""
+
+    id: str
+    minutes_id: str
+    motion_id: Optional[str] = None
+    reason: str
+    legal_basis: Optional[str] = None
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    participants: List[ClosedSessionParticipant] = []
+    summary: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
+# ============================================
+# Member Suggestions
+# ============================================
+
+
+class SuggestionCreate(BaseModel):
+    """A change a member proposes while the minutes are circulated
+
+    Either a comment (with optional wording), or — for a section — an edited copy
+    of the section, from which the server derives the tracked changes. An edit
+    needs no comment.
+    """
+
+    section_key: Optional[str] = Field(
+        None, max_length=100, description="The section it is about; none = overall"
+    )
+    comment: str = Field(default="", max_length=2000)
+    proposed_text: Optional[str] = Field(
+        None, max_length=10000, description="Replacement wording, if offered"
+    )
+    proposed_html: Optional[str] = Field(
+        None,
+        max_length=MAX_HTML_LENGTH,
+        description="The reviewer's edited copy of the section, as rich text",
+    )
+
+    @field_validator("comment")
+    @classmethod
+    def _tidy_comment(cls, value: str) -> str:
+        return value.strip()
+
+    @model_validator(mode="after")
+    def _says_something(self):
+        if self.proposed_html is not None and self.proposed_html.strip():
+            if not self.section_key:
+                raise ValueError("Tracked changes are made to a section")
+            return self
+        self.proposed_html = None
+        if len(self.comment) < 3:
+            raise ValueError("Say what should change")
+        return self
+
+
+class SuggestionResolve(BaseModel):
+    """The secretary's answer to a suggestion"""
+
+    status: Literal["accepted", "declined"]
+    note: Optional[str] = Field(None, max_length=1000)
+
+
+class SuggestionApply(BaseModel):
+    """Which tracked changes the secretary accepts; the rest are rejected"""
+
+    accepted: List[str] = Field(default_factory=list, max_length=500)
+    note: Optional[str] = Field(None, max_length=1000)
+
+
+class SuggestionChangeView(BaseModel):
+    """One tracked change as a reader sees it"""
+
+    id: str
+    kind: Literal["replace", "insert", "delete", "format"]
+    deleted: str = ""
+    inserted: str = ""
+    before: str = ""
+    after: str = ""
+    decision: Literal["open", "accepted", "rejected"] = "open"
+
+
+class SuggestionResponse(UTCResponseBase):
+    """A suggestion with its author and answer"""
+
+    id: str
+    minutes_id: str
+    section_key: Optional[str] = None
+    comment: str
+    proposed_text: Optional[str] = None
+    base_content: Optional[str] = None
+    proposed_content: Optional[str] = None
+    changes: List[SuggestionChangeView] = []
+    section_changed: bool = False
+    applied_at: Optional[datetime] = None
+
+    @field_validator("changes", mode="before")
+    @classmethod
+    def _as_views(cls, value: Any) -> Any:
+        """The stored changes carry token positions; a reader gets the words."""
+        return [describe_change(c) for c in value or []]
+
+    status: str
+    resolution_note: Optional[str] = None
+    resolved_by: Optional[str] = None
+    resolved_by_name: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    created_by: Optional[str] = None
+    created_by_name: Optional[str] = None
+    created_at: datetime
 
     model_config = _response_config

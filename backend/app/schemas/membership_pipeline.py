@@ -867,6 +867,15 @@ class TransferProspectRequest(BaseModel):
         return self
 
 
+class TransferGoogleAccountSummary(BaseModel):
+    """The Google Workspace account outcome of a conversion, when one applied."""
+
+    status: str
+    email: str
+    credentials_sent: bool = False
+    last_error: Optional[str] = None
+
+
 class TransferProspectResponse(BaseModel):
     """Response after transferring a prospect"""
 
@@ -879,6 +888,7 @@ class TransferProspectResponse(BaseModel):
     department_email_generated: bool = False
     message: str
     welcome_email_sent: bool = False
+    google_account: Optional[TransferGoogleAccountSummary] = None
 
 
 # --- Activity Log Schema ---
@@ -896,17 +906,6 @@ class ActivityLogResponse(UTCResponseBase):
     created_at: datetime
 
     model_config = _response_config
-
-
-# --- Kanban Board Schema ---
-
-
-class PipelineKanbanColumn(BaseModel):
-    """Schema for a kanban board column (one per step)"""
-
-    step: PipelineStepResponse
-    prospects: List[ProspectListResponse] = []
-    count: int = 0
 
 
 # --- Document Schemas ---

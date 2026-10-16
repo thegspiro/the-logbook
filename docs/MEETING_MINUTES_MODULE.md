@@ -15,6 +15,12 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 - **Publish Workflow**: Approved minutes are published as styled HTML to the Documents module
 - **Event Linking**: Minutes can be linked to events for context
 - **Full-Text Search**: Search across minutes titles and section content
+- **Roll Call**: Six attendance statuses with notes, a suggested roll from event check-ins or the member list, and a quorum derived from it _(2026-10-14)_
+- **Election Results**: A closed election's certified tally frozen into the minutes _(2026-10-14)_
+- **Attachments**: Reports, handouts and the signed copy, scanned and stored encrypted _(2026-10-14)_
+- **Approved Versions**: An immutable, SHA-256-hashed snapshot per approval, with verification _(2026-10-14)_
+- **Action-Item Follow-Through**: Carry-forward between meetings, a "assigned to me" list, and an email to each assignee on approval _(2026-10-14)_
+- **Printable PDF**: With signature lines and, once approved, the version and hash _(2026-10-14)_
 
 ---
 
@@ -22,12 +28,17 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 
 ### Database Models
 
-| Model             | Description                                                                                                |
-| ----------------- | ---------------------------------------------------------------------------------------------------------- |
-| `MeetingMinutes`  | Minutes record with title, meeting type, status, sections (JSON), event link, and publish reference        |
-| `MinutesTemplate` | Template definition with name, meeting type, default sections, header/footer config, and `is_default` flag |
-| `DocumentFolder`  | Folder hierarchy for organizing documents with system/custom distinction                                   |
-| `Document`        | Document record with file metadata, content HTML, source tracking, and folder assignment                   |
+| Model                   | Description                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `MeetingMinutes`        | Minutes record with title, meeting type, status, sections (JSON), event link, and publish reference                            |
+| `MinutesTemplate`       | Template definition with name, meeting type, default sections, header/footer config, and `is_default` flag                     |
+| `Motion`                | A motion with mover, seconder, result and vote counts                                                                          |
+| `ActionItem`            | `minutes_action_items`; `carried_from_id` / `carried_forward_at` link an item to the one it continues                          |
+| `MinutesElectionResult` | `minutes_election_results`; a frozen `ElectionResults` dump, one per (minutes, election)                                       |
+| `MinutesAttachment`     | `minutes_attachments`; file metadata, category and SHA-256 (bytes live under `minutes-attachments/`)                           |
+| `MinutesRevision`       | `minutes_revisions`; one row per approval: snapshot, content hash, who approved, and — once replaced — who reopened it and why |
+| `DocumentFolder`        | Folder hierarchy for organizing documents with system/custom distinction                                                       |
+| `Document`              | Document record with file metadata, content HTML, source tracking, and folder assignment                                       |
 
 ### Enums
 
@@ -45,8 +56,14 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 | `backend/app/models/minute.py`                             | SQLAlchemy models, MeetingType/MinuteStatus enums, default section presets                             |
 | `backend/app/models/document.py`                           | Document and DocumentFolder models                                                                     |
 | `backend/app/schemas/minute.py`                            | Pydantic schemas for minutes and templates                                                             |
-| `backend/app/schemas/document.py`                          | Pydantic schemas for documents and folders                                                             |
+| `backend/app/schemas/documents.py`                         | Pydantic schemas for documents and folders                                                             |
 | `backend/app/services/minute_service.py`                   | Minutes CRUD, search, section management                                                               |
+| `backend/app/services/minutes_record_service.py`           | Roll-call suggestions, election results, attachments, revisions, carry-forward, "assigned to me"       |
+| `backend/app/services/minutes_notifications.py`            | Assignment email, decided by `EmailKind.MINUTES_ACTION_ITEMS`                                          |
+| `backend/app/api/v1/endpoints/minutes_records.py`          | Record-keeping endpoints, mounted beside `minutes.py` at the same prefix                               |
+| `backend/app/utils/minutes_attendance.py`                  | The one canonical attendee shape and what counts toward quorum                                         |
+| `backend/app/utils/minutes_snapshot.py`                    | What an approval covers, and its hash                                                                  |
+| `backend/app/utils/minutes_pdf.py`                         | The printable minutes                                                                                  |
 | `backend/app/services/template_service.py`                 | Template CRUD, default template creation                                                               |
 | `backend/app/services/document_service.py`                 | Document/folder CRUD, system folder initialization, publish target                                     |
 | `backend/app/api/v1/endpoints/minutes.py`                  | Minutes and template API endpoints                                                                     |
@@ -59,7 +76,6 @@ The Meeting Minutes module enables organizations to create, manage, and publish 
 | `frontend/src/modules/minutes/store/minutesStore.ts`       | Zustand store for minutes CRUD                                                                         |
 | `frontend/src/modules/minutes/types/minutes.ts`            | TypeScript types and interfaces                                                                        |
 | `frontend/src/pages/MinutesPage.tsx`                       | Re-export from module (backward compatibility)                                                         |
-| `frontend/src/pages/MinutesDetailPage.tsx`                 | Re-export from module (backward compatibility)                                                         |
 | `frontend/src/pages/DocumentsPage.tsx`                     | Folder browsing, document viewer                                                                       |
 
 ---
@@ -93,8 +109,12 @@ submitter **Approve Minutes**; it reads _"Waiting for another officer to
 approve. You submitted these minutes, so you cannot approve them."_ **Reject
 Minutes** stays available to them as a way to withdraw.
 
-**Who sees what.** Callers without `minutes.manage` see approved, non-executive
-minutes only; the list endpoint decides this server-side.
+**Who sees what.** Callers without `minutes.manage` see circulated (`submitted`)
+and approved, non-executive minutes; drafts and executive sessions are hidden.
+The list endpoint decides this server-side (updated 2026-10-14, see
+[Review, adoption and outlines](#review-adoption-and-outlines-2026-10-14); the
+screens now say _Circulated for review_ and _Adopted_ for `submitted` and
+`approved`).
 
 ---
 
@@ -188,7 +208,7 @@ These use the business meeting defaults or a subset tailored to the meeting scop
 Use the templates API to create custom templates:
 
 ```
-POST /api/v1/minutes/templates
+POST /api/v1/minutes-records/templates
 {
   "name": "Special Budget Meeting",
   "meeting_type": "special",
@@ -276,9 +296,8 @@ Users with `documents.manage` permission can:
 
 ### Minutes Endpoints
 
-_(Corrected 2026-10-04: the router is mounted at `/api/v1/minutes-records`, not
-`/api/v1/minutes`, and is gated on `minutes.view` / `minutes.manage`, not the
-`meetings.*` permissions this table used to name.)_
+The router is mounted at `/api/v1/minutes-records` and is gated on
+`minutes.view` / `minutes.manage`.
 
 | Method   | Path                                                | Permission       | Description                                                                                                   |
 | -------- | --------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -400,13 +419,480 @@ All write operations are logged to the tamper-proof audit trail:
 
 ---
 
+## Record keeping _(2026-10-14)_
+
+### Roll call
+
+`meeting_minutes.attendees` stays a JSON list; its entries now have one stored
+shape (`app/utils/minutes_attendance.py`):
+
+```json
+{
+  "user_id": "…|null",
+  "name": "…",
+  "role": "…|null",
+  "status": "present|late|left_early|excused|absent|guest",
+  "present": true,
+  "note": "…|null"
+}
+```
+
+`status` is the record; `present` is derived from it and means "counted toward
+quorum". **Present, late and left early count; excused, absent and guests do
+not.** A client that sends only `present` (the old contract) gets the matching
+status, so existing callers keep working. A member can be listed once. A
+migration rewrote every stored entry; a legacy entry that was present stays
+`present`, so a quorum already recorded does not change.
+
+`GET /{id}/attendance-suggestions` builds a starting roll without saving it:
+the active members, with those who checked in to the linked event marked
+present and checked-in outside guests added as guests; with no event, everyone
+starts absent. Whatever the minutes already record for a member wins.
+
+### Election results
+
+`GET /{id}/importable-elections` lists the department's closed elections;
+`POST /{id}/election-results {"election_id"}` copies that election's results
+into `minutes_election_results`. Only a **closed** election in the caller's own
+department can be filed (a foreign id and a missing one answer identically),
+and each election once per set of minutes. The copy is the record: renaming or
+annotating the election later does not change what the minutes say. While the
+minutes are a draft or rejected, a filed result can be removed.
+
+**Elections that run past the meeting.** A result can also be filed once the
+minutes have been circulated or adopted. It is then stored with
+`is_addendum = true`: permanent (it cannot be removed), dated by its filing
+time, outside the approved version's hash (so `verify` still matches what the
+body adopted), and labelled as an addendum on the screen, the PDF and the
+published copy. `importable-elections` lists the elections held at this meeting
+(through a motion's ballot link) first, flagged `linked_to_meeting`.
+
+### Attachments
+
+`POST /{id}/attachments` (multipart: `file`, `title`, `category`) stores a
+file through `FileStorageService` — 25 MB cap, content-type detection, malware
+scan, encrypted at rest — under `<org>/minutes-attachments/<minutes id>/` on
+the uploads volume, so it is covered by the same backup as every other upload.
+Allowed: PDF, Word, Excel, text, JPEG/PNG/GIF/WebP. They are **not** filed as
+shared Documents: that folder's rights reach every `documents.view` holder and
+would expose an executive session's files. Instead they are served only through
+`GET /{id}/attachments/{attachment_id}/file`, with the minutes' own visibility —
+a member sees them once the minutes are approved, and never for executive
+minutes. Categories: `signed_copy`, `report`, `agenda`, `handout`,
+`correspondence`, `other`.
+
+### Locking and approved versions
+
+Everything above follows the MM-17 lock: roll call, election results and
+attachments change only while the minutes are a draft or rejected. **Two
+deliberate exceptions:** a `signed_copy` attachment can be filed on approved
+minutes (it is the scanned signature page and cannot exist before approval) and
+can never be deleted from them; and an election result can be filed as an
+addendum (see above). Anything else attached before approval is part
+of what was approved.
+
+Every approval writes a `minutes_revisions` row: a snapshot of the minutes
+(heading, roll, quorum, sections, motions, action items _as assigned_, filed
+election results, and a manifest of attachments by hash) and its SHA-256.
+Action-item progress and the signed copy are outside the snapshot on purpose —
+assignees update progress on approved minutes by design. `GET /{id}/verify`
+rebuilds the snapshot from the live record and compares; a mismatch names the
+parts that differ. Reopening supersedes the current revision (who, when, why)
+and keeps it; the corrected minutes are approved as the next version.
+`GET /{id}/revisions` lists them and `GET /{id}/revisions/{revision_id}` returns
+one with its snapshot. Minutes approved before this change have no revision;
+`verify` says so, and reopening and re-approving establishes one.
+
+### Action items between meetings
+
+`GET /{id}/open-action-items` offers the open items of earlier **approved**
+minutes of the same meeting type (`?include_other_types=true` widens it;
+executive-session items are never offered to another kind of meeting).
+`POST /{id}/carry-forward {"item_ids": [...]}` copies them into draft minutes
+and stamps the originals `carried_forward_at`, so an item is open in exactly one
+place — in the stats, the list counts and the due-date reminders. It is all or
+nothing, and the same item cannot be carried twice.
+
+`GET /action-items/mine` lists the caller's own items from approved minutes
+(`?include_closed=true` for finished ones); it needs no permission beyond being
+signed in, and shows no one else's.
+
+When minutes are approved each assignee is emailed their items, once. This is
+`EmailKind.MINUTES_ACTION_ITEMS` in `email_policy.py`: on by default, a member
+can turn it off, and a department can make it required. An item added to
+already-approved minutes is emailed when it is added. A failed send is logged
+and never fails the approval.
+
+### Action item reminders _(2026-10-15)_
+
+Before this, an assignee was reminded only by a bell notification
+(`run_action_item_reminders`, 3, 1 and 0 days out and once overdue) and never by
+email, so a member who reads only their inbox heard nothing. The
+`minutes_action_item_reminders` task (daily, `07:20`) adds the email, in the
+same order of channels as everything else here: email first, bell as an
+addition. The bell task is unchanged.
+
+- **To the assignee**, one email per member per run, listing their items that
+  are due soon and overdue, only for items on **adopted** minutes that are open
+  (pending, in progress or overdue), have a due date and have not been carried
+  forward. The first reminder goes out _N_ days before the due date, the first
+  overdue one the day after, and later ones every _R_ days until the item is
+  completed or cancelled. An item more than 90 days overdue is no longer chased
+  by email, so the first run after an upgrade does not mail a member about
+  work from years ago; it still appears in the weekly list. `last_reminded_at`
+  on the item records the last reminder, and an item is marked only after the
+  email was accepted, so a refused or failed send is tried again next run.
+- **To the people who manage minutes**, a weekly list of every open item with
+  its owner and due date, overdue first, whether or not it has a due date. It
+  goes to active members holding `minutes.manage` who have not turned it off
+  (`EmailKind.MINUTES_DUTIES`, "Secretary duties"), at most once in seven days;
+  the day it last went out is kept in the `minutes` section of the organization
+  settings (`last_open_items_digest_on`). Nothing is sent when nothing is open.
+- Assignee reminders follow the member's existing choice under
+  `EmailKind.MINUTES_ACTION_ITEMS`, so turning off the assignment email turns
+  off the reminders with it.
+- **Settings** live in the organization settings' `minutes` section and are read
+  by `app/utils/minutes_settings.py`: `action_item_reminders` (on),
+  `reminder_days_before_due` (3; 0 to 30; 0 is the due date itself),
+  `overdue_repeat_days` (7; 0 to 90; 0 is one overdue reminder only) and
+  `open_items_digest` (on). Anything missing or malformed reads as its default.
+  **Minutes → Reminders** shows the server's reading to anyone who manages
+  minutes (`GET /minutes-records/settings`) and lets a settings administrator
+  change it (`PATCH /organization/settings`).
+- **Upgrading:** the reminders are on by default, so a department that has open
+  items on adopted minutes will start receiving these emails the day after the
+  upgrade. They can be switched off in **Minutes → Reminders** before or after.
+
+### Printable minutes
+
+`GET /{id}/pdf` renders the minutes with attendance by status, quorum, sections,
+motions, action items, filed election results, the attachment list, signature
+lines for the recording secretary and presiding officer, and — for approved
+minutes — the approver, version and SHA-256 in the footer. It follows the same
+visibility as the minutes.
+
+### Record-keeping endpoints
+
+| Method   | Path                                               | Permission       | Description                                                      |
+| -------- | -------------------------------------------------- | ---------------- | ---------------------------------------------------------------- |
+| `GET`    | `/{id}/attendance-suggestions`                     | `minutes.manage` | Starting roll from event check-ins or the roster (not saved)     |
+| `GET`    | `/{id}/importable-elections`                       | `minutes.manage` | Closed elections that can be filed                               |
+| `GET`    | `/{id}/election-results`                           | `minutes.view`   | Results filed with the minutes                                   |
+| `POST`   | `/{id}/election-results`                           | `minutes.manage` | File a closed election's result (draft/rejected)                 |
+| `DELETE` | `/{id}/election-results/{result_id}`               | `minutes.manage` | Remove a filed result (draft/rejected)                           |
+| `GET`    | `/{id}/attachments`                                | `minutes.view`   | List files                                                       |
+| `POST`   | `/{id}/attachments`                                | `minutes.manage` | Attach a file (draft/rejected; `signed_copy` only once approved) |
+| `GET`    | `/{id}/attachments/{attachment_id}/file`           | `minutes.view`   | Download                                                         |
+| `DELETE` | `/{id}/attachments/{attachment_id}`                | `minutes.manage` | Delete (draft/rejected)                                          |
+| `GET`    | `/{id}/revisions`, `/{id}/revisions/{revision_id}` | `minutes.view`   | Approved versions                                                |
+| `GET`    | `/{id}/verify`                                     | `minutes.view`   | Does the record still match the version in force                 |
+| `GET`    | `/{id}/open-action-items`                          | `minutes.manage` | Open items from earlier approved minutes                         |
+| `POST`   | `/{id}/carry-forward`                              | `minutes.manage` | Carry items into draft minutes                                   |
+| `GET`    | `/action-items/mine`                               | signed in        | The caller's own items                                           |
+| `GET`    | `/{id}/pdf`                                        | `minutes.view`   | Printable minutes                                                |
+
+Every `{id}` route resolves the minutes in the caller's own department first;
+without `minutes.manage`, drafts and executive-session minutes answer 404.
+
+### Not built
+
+Recorded in [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#meeting-minutes--what-record-keeping-does-not-do-2026-10-14):
+automatic filing of results at certification.
+
+---
+
+## Review, adoption and outlines _(2026-10-14)_
+
+### Review and adoption
+
+Most departments circulate draft minutes, take corrections, and adopt them at
+the next meeting. The API statuses are unchanged (`draft`, `submitted`,
+`approved`, `rejected`); the screens say **Circulated for review** and
+**Adopted**.
+
+```
+Draft ──Circulate──> Circulated ──Adopt──> Adopted ──Reopen──> Draft
+  ^                      |  |
+  |                      |  +──Return for changes──> Rejected
+  +──────Recall──────────+
+```
+
+- **Members read circulated minutes.** `member_visible_conditions()` in
+  `minute_service.py` is the one definition of what a caller without
+  `minutes.manage` may read: status `submitted` or `approved`, and never an
+  executive session. Drafts stay hidden.
+- **Required sections.** A section marked `required` in its outline must have
+  text before the minutes can be circulated (`missing_required_sections`); the
+  roll-call section is satisfied by a recorded roll.
+- **Circulation email.** Circulating minutes emails every active member with
+  an address except the officer who circulated them, linking to the minutes
+  (`EmailKind.MINUTES_CIRCULATED`, in `minutes_notifications.py`). It is
+  optional and on by default: a member can switch it off, and a department can
+  make it required. Executive-session minutes are never announced, and a failed
+  send is logged without failing the circulation. Circulating again after a
+  return or recall emails again.
+- **Suggestions.** While the minutes circulate, anyone who can view them may
+  suggest a change. A member does it **from the section it is about** — each
+  section card has a _Suggest a change_ button that opens the section's own text
+  in the editor under it. The reviewer **edits a copy**; a comment is optional.
+  For the minutes as a whole there is no text to edit, so it is a comment with
+  optional suggested wording. A member sees only their own suggestions;
+  `minutes.manage` sees all, with a count of open suggestions on each section,
+  and is offered the review actions instead of a form (the secretary corrects
+  the minutes, not suggests to them).
+- **Tracked changes.** The server turns a reviewer's edit into a list of
+  discrete changes (`app/utils/redline.py`: Python's `difflib` over tags, words
+  and whitespace, so a change is a few words, not a paragraph). The secretary
+  sees each as struck-out and added words with a little context, and **accepts
+  or rejects each one** (`POST /{id}/suggestions/{id}/apply {accepted: [...]}`).
+  Applying writes the accepted changes into the section (which becomes rich
+  text), rejects the rest, and marks the suggestion accepted, or declined if
+  nothing was accepted. Only **draft or rejected** minutes take it: on circulated
+  minutes the screen asks to recall them first. It is all or nothing. If the
+  section has been edited since the reviewer saw it, the suggestion says so and
+  each change is placed by its surrounding text, only where that text matches
+  exactly once; if any accepted change cannot be placed the answer is `409`
+  naming it, nothing is written, and the secretary rejects it or makes it by
+  hand. A plain-text section is compared as the paragraphs the editor opens it
+  in, and list items and quotes the editor wraps in a paragraph compare equal to
+  bare ones, so untouched text never shows as a change. A tracked suggestion is
+  never accepted without applying (`PUT … {status: accepted}` is refused);
+  declining it rejects every change.
+  Suggestions never edit the minutes by themselves. After **Recall to Draft**
+  (`POST /{id}/recall`, circulated → draft; suggestions are kept) the secretary
+  works accepted comment-only suggestions in by hand and circulates again.
+- **Adoption.** `POST /{id}/approve` takes an optional body
+  `{adopted_on, adopting_minutes_id, as_amended}`. `adopted_on` defaults to now;
+  `adopting_minutes_id` is the minutes of the meeting at which the body voted
+  (resolved inside the caller's department); `as_amended` defaults to true when
+  any suggestion was accepted. The same separation of duties applies. Reopening
+  clears the adoption details and keeps the superseded version.
+- **Closed sessions.** `meeting_minutes` is joined by `minutes_closed_sessions`:
+  reason, legal basis, start and end, participants (`{user_id, name, joined_at,
+left_at}`, so someone who stepped out is recorded), a summary, and the motion
+  that moved into it. Draft/rejected only, like the rest of the record.
+- **Motion → ballot.** A motion can name the `election_id` (and optionally the
+  `ballot_item_id`) that decided it, so the minutes link to the tally. A ballot
+  item must belong to that election; the election must be in the department.
+
+The approved version's snapshot now also holds the adoption details, closed
+sessions and each motion's ballot link. It still excludes action-item progress,
+signed copies and election addenda.
+
+### Outlines
+
+An **outline** is the department's standard order of business. It is stored as a
+minutes template (`/minutes-records/templates`), edited at **Minutes → Outlines**
+(`/minutes/outlines`, `minutes.manage`). Each outline has a meeting type, a
+sequence of sections (`key`, `title`, prefilled text, `required`) and header and
+footer settings, and one outline per meeting type is the default.
+
+- New minutes start from `TemplateService.resolve_outline`: the outline chosen
+  on the Minutes page; else the department's default for that meeting type; else
+  any outline of that type; else the built-in order of business. The page asks
+  only when a meeting type has more than one outline.
+- **Apply an outline** (`POST /{id}/apply-outline {template_id}`) on a draft lays
+  an outline over it: its sections in its order, keeping every section that
+  already has text and any section the outline lacks.
+- Outline sections are validated on save: unique lowercase keys, order
+  renumbered. The editor will not save an outline with no sections; the API
+  still accepts an empty list, as it always has.
+
+### Motions on sections _(2026-10-15)_
+
+Some business is only done by a motion and a second: approving the previous
+minutes and adjourning, in the built-in outlines. An outline marks such a
+section **Needs a motion and a second** and carries the wording the motion
+starts with (`needs_motion`, `motion_text` on each outline and minutes section,
+inside the sections' JSON — no column). The built-in outlines mark
+`approval_of_previous` and `adjournment`; an outline a department already saved
+is not changed, and the flag is set on the Outlines screen.
+
+- On the minutes, a flagged section shows a **Motion** card with the wording
+  written, **Moved by** and **Seconded by** drop-downs, and a result. Recording
+  it creates an ordinary motion with `section_key` set to the section
+  (`meeting_motions.section_key`, nullable, validated against the minutes' own
+  sections). A section with no motion shows a reminder; nothing is blocked,
+  because a body sometimes acts by consent.
+- The drop-downs list the people recorded **present, late or left early** on the
+  roll, each name once. **Someone else (type a name)** is always offered, so a
+  guest can move or second as an honorary act. The value is the name as typed
+  (up to 200 characters), not a user id. The seconder list leaves out the
+  mover, and the form refuses the same name twice.
+- The same pickers are used on the general **Add Motion** form and in the
+  **Adopt** dialog. The adoption motion's mover and seconder are stored on the
+  minutes (`adoption_moved_by`, `adoption_seconded_by`), sent in
+  `POST /{id}/approve`, cleared when the minutes are reopened, printed on the
+  PDF's approval block and included in the sealed snapshot **only when
+  recorded**, so a snapshot sealed earlier verifies exactly as it did.
+
+### Votes on motions _(2026-10-15)_
+
+A motion's vote is recorded as **totals** or as a **roll call**, and carries the
+**threshold** it needed.
+
+- **Threshold** (`meeting_motions.threshold`, NULL reads as the first):
+  `majority_cast` — more for than against, with abstentions and recusals not
+  counted and a tie failing; `majority_present` — more than half of the members
+  recorded present vote for, so abstentions and recusals count against;
+  `two_thirds` — at least two thirds of the votes cast. The rules live in
+  `app/utils/motion_votes.py`.
+- **Totals**: for, against, abstain and, new, **recused** (`votes_recused`).
+- **Roll call** (`roll_call`, JSON): the members recorded **present, late or
+  left early** vote yes, no, abstain or recuse. The server settles it against
+  the minutes' own roll — only those present, each once, the member id taken
+  from the roll and not the request — and **counts the totals from it**, so any
+  totals sent with a roll call are ignored and the two cannot disagree. Clearing
+  a roll call leaves the totals it produced. Entering the roll call before the
+  roll is taken, or for someone not on it, is refused with a 400.
+- **Suggested result**: every motion response carries `suggested_status`
+  (`passed`/`failed`, or null with no for-count), from the threshold and the
+  counts. It is a suggestion only: the recorded status is still the
+  secretary's, because a motion carried by voice or consent has no count. The
+  screen shows the server's reading, says so when it differs from the recorded
+  result, and offers to change it (CLAUDE.md pitfall #29: one definition, not
+  one on the screen).
+- **Who sees names**: how each member voted is shown in the app and sealed in the
+  adopted record (included in the snapshot only when recorded, so earlier
+  records verify unchanged). The **PDF and the published copy show totals, the
+  threshold when it is not the usual one, and the result — never names.**
+- It is recorded from the **Add Motion** form and from a section's **Motion**
+  card, which share one set of fields.
+
+### Signatures _(2026-10-16)_
+
+Once minutes are adopted, the people the department names sign them, in the app.
+
+- **Slots**: the `minutes` organization setting `signature_slots` lists them in
+  order as `{key, title, position_slug}`. A slot with a `position_slug` is signed
+  by a member holding that position; one without is signed by anyone who holds
+  `minutes.manage`. Unset, it reads as a **Recording Secretary** and a
+  **Presiding Officer**, both open to anyone who manages minutes, so an upgrade
+  changes nothing. Up to six; an entry that is malformed or repeats a key is
+  dropped rather than failing the rest. **Minutes → Signers** shows the server's
+  reading to anyone who manages minutes and lets a settings administrator
+  change it.
+- **Signing** (`POST /{id}/signatures {slot_key, signed_name, password}`): the
+  signer types their name **as it stands on their account** (legal name or the
+  name they go by, ignoring case and spacing) and **confirms their password**, so
+  the act is tied to a person at the keyboard and not to a session someone left
+  open. The password is checked and never stored or echoed; an account with no
+  password (single sign-on only) cannot sign. The endpoint has its own rate
+  limit (10 a minute, five minutes' lockout) since it is a place a password can
+  be guessed from a signed-in session.
+- **Who may sign**: anyone the slot allows, including the person who circulated
+  or adopted the minutes, since signing is a separate attestation from adopting.
+  A slot is signed once; a person may sign more than one slot.
+- **What a signature is tied to**: the adopted version current when it was given.
+  It records that revision's SHA-256 and the panel flags a signature whose hash
+  no longer matches (`intact`). **Reopening the minutes supersedes the revision
+  and leaves its signatures on file against the text they were given for; the
+  corrected version starts unsigned** and must be signed again.
+- **Printed**: the PDF's approval block lists each signature with the name and
+  the time. The published copy does not carry them yet.
+- Signatures can only be added; there is no way to withdraw one except reopening
+  the minutes.
+
+### Start and end times _(2026-10-15)_
+
+`called_to_order_at` and `adjourned_at` are recorded from the **Call to Order**
+and **Adjournment** sections (keys `call_to_order` and `adjournment`), on draft
+or rejected minutes, by someone with `minutes.manage`:
+
+- **Record now** stamps the current minute in one tap; **Use scheduled time**
+  (start only) takes the meeting's scheduled time; **Set a time…** and
+  **Change** open a date and time picker in the department's timezone. **Clear**
+  sends an explicit `null`.
+- The times travel with `PUT /{id}` like any other field. The server refuses an
+  end at or before the start whichever one is being changed — judged against
+  the value the minutes will hold, so moving only the end is checked against the
+  saved start — with a 400, and the same rule is applied on create. A naive
+  timestamp is read as UTC.
+- Circulating without the times is not warned about and not blocked.
+
+### Page layout _(2026-10-15)_
+
+The detail page opens on the minutes themselves. Motions, closed sessions,
+election results, action items, attachments and approved versions are panels
+(`PanelDisclosure`) that start folded with their count in the heading ("Motions
+(3)"); a panel's buttons appear when it is open, and what was typed in a folded
+panel is kept. The approved-versions panel unfolds itself and says "Needs
+attention" when the record no longer matches the approved version, so a failed
+integrity check cannot be hidden behind a fold. Attendance, the suggestions
+panel and the sections stay open.
+
+### Rich text sections _(2026-10-14)_
+
+A section's text can be written in a rich-text editor (TipTap). The editor
+offers bold, italic, underline, two heading levels, bulleted and numbered
+lists, block quotes and links — the set the server stores and the PDF can print
+— and nothing else (no tables, images, colors or code blocks).
+
+- **Format marker.** A section carries `format`: `"text"` (the default, what
+  every section was before the editor) or `"html"`. Nothing was converted:
+  existing sections stay plain text, shown exactly as typed with `<` and `&`
+  untouched, until someone edits them. Editing opens the text as paragraphs and
+  saves it as `html`. The same marker is on an outline section's
+  `default_content`.
+- **Sanitized on write, and again on output.** `app/utils/rich_text.py` is the
+  one definition of the allowed subset. The schemas clean `html` content with
+  `nh3` (an allowlist sanitizer) on every write path; links keep only
+  `http`, `https` and `mailto` and get `rel="noopener noreferrer"`; `script` and
+  `style` lose their content too. The published Documents copy cleans it again,
+  and the browser cleans it with DOMPurify before rendering. A section may hold
+  up to 100,000 characters of HTML. The allowlists in
+  `app/utils/rich_text.py`, `frontend/src/utils/richText.ts` and the editor's
+  extension list are one decision; change them together.
+- **Blank means no words.** An empty `<p></p>` does not satisfy a required
+  section: the circulation check, outline merging and the PDF all measure the
+  text, not the markup.
+- **Approved versions.** The snapshot records `format` only for rich sections,
+  so a version approved before the editor existed still verifies byte for byte.
+  A rich section is hashed as stored (already cleaned).
+- **Outputs.** The PDF prints headings, lists, quotes, bold, italic, underline
+  and links; the published Documents copy renders the cleaned HTML; the MCP
+  minutes tools return rich sections as plain text.
+- **Not rich text:** members' suggestions (comment and suggested wording),
+  closed-session summaries, motion text and action items stay plain text.
+
+### Endpoints added
+
+| Method   | Path                                      | Permission       | Description                                                                            |
+| -------- | ----------------------------------------- | ---------------- | -------------------------------------------------------------------------------------- |
+| `GET`    | `/settings`                               | `minutes.manage` | The action item reminder settings the server applies                                   |
+| `POST`   | `/{id}/approve`                           | `minutes.manage` | Adopt; optional `{adopted_on, adopting_minutes_id, as_amended, moved_by, seconded_by}` |
+| `POST`   | `/{id}/suggestions/{suggestion_id}/apply` | `minutes.manage` | Apply the accepted tracked changes `{accepted: [...], note}`                           |
+| `POST`   | `/{id}/recall`                            | `minutes.manage` | Circulated → draft                                                                     |
+| `GET`    | `/{id}/suggestions`                       | `minutes.view`   | All for a manager; the caller's own otherwise                                          |
+| `POST`   | `/{id}/suggestions`                       | `minutes.view`   | Suggest a change (circulated minutes only)                                             |
+| `PUT`    | `/{id}/suggestions/{suggestion_id}`       | `minutes.manage` | Accept or decline, with a note                                                         |
+| `GET`    | `/{id}/closed-sessions`                   | `minutes.view`   | Closed sessions                                                                        |
+| `POST`   | `/{id}/closed-sessions`                   | `minutes.manage` | Record one (draft/rejected)                                                            |
+| `PUT`    | `/{id}/closed-sessions/{session_id}`      | `minutes.manage` | Edit                                                                                   |
+| `DELETE` | `/{id}/closed-sessions/{session_id}`      | `minutes.manage` | Remove                                                                                 |
+| `POST`   | `/{id}/apply-outline`                     | `minutes.manage` | Lay an outline over a draft                                                            |
+| `POST`   | `/from-meeting/{meeting_id}?template_id=` | `minutes.manage` | Create minutes from a meeting, optionally from an outline                              |
+| `GET`    | `/templates`, `/templates/{id}`           | `minutes.view`   | Outlines                                                                               |
+| `POST`   | `/templates`                              | `minutes.manage` | Create an outline                                                                      |
+| `PUT`    | `/templates/{id}`                         | `minutes.manage` | Edit an outline, or make it the default                                                |
+| `DELETE` | `/templates/{id}`                         | `minutes.manage` | Delete an outline (minutes already written are unchanged)                              |
+
+---
+
 ## Database Migrations
 
-| Migration                                                     | Revision              | Description                                                         |
-| ------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------- |
-| `20260212_1200_add_meeting_minutes_tables.py`                 | `add_meeting_minutes` | Creates `meeting_minutes` table                                     |
-| `20260213_0800_add_templates_documents_dynamic_sections.py`   | `20260213_0800`       | Creates `minutes_templates`, `document_folders`, `documents` tables |
-| `20260213_1400_add_trustee_executive_annual_meeting_types.py` | `a7f3e2d91b04`        | Extends MeetingType ENUM with `trustee`, `executive`, `annual`      |
+| Migration                                                           | Revision              | Description                                                                                                                           |
+| ------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `20260212_1200_add_meeting_minutes_tables.py`                       | `add_meeting_minutes` | Creates `meeting_minutes` table                                                                                                       |
+| `20260213_0800_add_templates_documents_dynamic_sections.py`         | `20260213_0800`       | Creates `minutes_templates`, `document_folders`, `documents` tables                                                                   |
+| `20260213_1400_add_trustee_executive_annual_meeting_types.py`       | `a7f3e2d91b04`        | Extends MeetingType ENUM with `trustee`, `executive`, `annual`                                                                        |
+| `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`            | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them) |
+| `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py`      | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)      |
+| `20261015_0910_48f403b2631f_minutes_suggestions_tracked_changes.py` | `48f403b2631f`        | Tracked-change columns on `minutes_suggestions` (idempotent; the downgrade drops them)                                                |
+| `20261016_1101_f236c56b1b49_minutes_signatures.py`                  | `f236c56b1b49`        | `minutes_signatures` table (idempotent; the downgrade drops it)                                                                       |
+| `20261015_1652_9ce470b513ae_minutes_motions_vote_detail.py`         | `9ce470b513ae`        | `meeting_motions.votes_recused` / `threshold` / `roll_call` (idempotent; the downgrade drops them)                                    |
+| `20261015_1441_b90813f63e25_minutes_action_items_last_reminded.py`  | `b90813f63e25`        | `minutes_action_items.last_reminded_at` (idempotent; the downgrade drops it)                                                          |
+| `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`    | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)    |
 
 ### Migration Chain
 
@@ -416,6 +902,8 @@ All write operations are logged to the tamper-proof audit trail:
         → 20260213_0800 (templates, documents, dynamic sections)
             → a7f3e2d91b04 (new meeting types)
                 → 20260312_0200 (rename meeting_action_items table)
+                    → … → 8efc77d4c0c3 (record keeping)
+                        → f2c5e55e7dda (adoption, suggestions, closed sessions)
 ```
 
 ---
@@ -441,7 +929,7 @@ The minutes module was refactored to follow the standard module conventions used
 
 ### Changes
 
-- **Module extraction**: Pages moved from `frontend/src/pages/` to `frontend/src/modules/minutes/pages/`. Original files re-export from the module for backward compatibility with existing routes and deep links
+- **Module extraction**: Pages moved from `frontend/src/pages/` to `frontend/src/modules/minutes/pages/`. `frontend/src/pages/MinutesPage.tsx` re-exports the module page for backward compatibility; there is no top-level `MinutesDetailPage.tsx`
 - **Dedicated Zustand store**: `minutesStore.ts` manages loading/error states for all minutes CRUD operations, replacing ad-hoc state management in page components
 - **Module API service**: `services/api.ts` provides a dedicated axios instance with auth interceptors (CSRF, `withCredentials: true`), matching the pattern used by other modules
 - **TypeScript types**: All minutes-related interfaces and types extracted to `types/minutes.ts`
@@ -460,7 +948,7 @@ The minutes module was refactored to follow the standard module conventions used
 ### Edge Cases
 
 - Existing deployments must run `alembic upgrade head` for the table rename migration
-- Deep links to `/minutes/:id` continue to work via re-exported route definitions
+- Deep links to `/minutes/:id` work through the module's own route (`modules/minutes/routes.tsx`)
 - The old `meetingsServices.ts` API methods remain functional alongside the new module API service
 
 ---

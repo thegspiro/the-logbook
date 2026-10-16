@@ -123,6 +123,20 @@ def _days(start: Optional[date], end: Optional[date], today: date) -> int:
     return max(0, ((end or today) - start).days)
 
 
+def _stint_closed_by(
+    periods: Sequence[MemberServicePeriod], separation_status: UserStatus
+) -> Optional[MemberServicePeriod]:
+    """The latest stint that ``separation_status`` closed, if it is the last word.
+
+    None while any stint is still open -- the history then says the member is
+    serving, whatever their status, and there is no separation to point at.
+    """
+    if any(p.end_date is None for p in periods):
+        return None
+    closed = [p for p in periods if p.separation_status == separation_status.value]
+    return closed[-1] if closed else None
+
+
 def implicit_separation_date(member: Any, today: date, tz: tzinfo) -> date:
     """Best available last day of service for a separated member with no stints.
 
@@ -296,11 +310,19 @@ class MemberServiceHistoryService:
         separation_status: UserStatus,
         on_date: date,
         created_by: Optional[str],
+        *,
+        officer_dated: bool = False,
     ) -> Optional[MemberServicePeriod]:
         """Close the member's current stint as of ``on_date``.
 
         Does not commit; the caller's status change and this write land
         together or not at all.
+
+        ``officer_dated`` means an officer typed ``on_date``. A date before the
+        stint began is then refused rather than clamped: the clamp exists for
+        the default of today against a hire date set in the future, and
+        silently moving a date somebody entered would record a separation they
+        never asked for. Raises ValueError for such a date.
 
         The caller must hold the member row's lock (Pitfall #27). The stints
         are read with a locking read as well: under REPEATABLE READ a plain
@@ -315,6 +337,11 @@ class MemberServiceHistoryService:
         if open_periods:
             current = open_periods[-1]
             start = current.start_date or member.hire_date
+            if officer_dated and start and on_date < start:
+                raise ValueError(
+                    f"The effective date cannot be before the member's current "
+                    f"service began ({start.isoformat()})."
+                )
             current.end_date = max(on_date, start) if start else on_date
             current.separation_status = separation_status.value
             return current
@@ -323,6 +350,11 @@ class MemberServiceHistoryService:
             # by hand. There is nothing open to close, and inventing a stint
             # would double-count time they already accounted for.
             return None
+        if officer_dated and member.hire_date and on_date < member.hire_date:
+            raise ValueError(
+                f"The effective date cannot be before the member's hire date "
+                f"({member.hire_date.isoformat()})."
+            )
         period = MemberServicePeriod(
             organization_id=str(member.organization_id),
             user_id=str(member.id),
@@ -334,6 +366,19 @@ class MemberServiceHistoryService:
         )
         self.db.add(period)
         return period
+
+    async def separation_date(
+        self, member: User, separation_status: UserStatus
+    ) -> Optional[date]:
+        """The effective date of the drop or retirement the member is in now.
+
+        The end of the stint that :meth:`undo_separation` would reopen, so the
+        two always agree on which stint the separation closed. ``None`` when
+        there is no such stint.
+        """
+        periods = await self.list_periods(member.organization_id, member.id)
+        stint = _stint_closed_by(periods, separation_status)
+        return stint.end_date if stint else None
 
     async def undo_separation(
         self, member: User, separation_status: UserStatus
@@ -353,12 +398,9 @@ class MemberServiceHistoryService:
         periods = await self.list_periods(
             member.organization_id, member.id, for_update=True
         )
-        if any(p.end_date is None for p in periods):
+        reopened = _stint_closed_by(periods, separation_status)
+        if reopened is None:
             return None
-        closed = [p for p in periods if p.separation_status == separation_status.value]
-        if not closed:
-            return None
-        reopened = closed[-1]
         reopened.end_date = None
         reopened.separation_status = None
         return reopened

@@ -743,13 +743,15 @@ class AuthService:
         Returns:
             Tuple of (success, error_message)
         """
-        # Verify current password
+        # Verify current password. An account with no hash (SSO-only) has no
+        # current password to match, so it is refused here like a wrong one.
+        current_hash = user.password_hash
         current_valid, _ = (
-            verify_password(current_password, user.password_hash)
-            if user.password_hash
+            verify_password(current_password, current_hash)
+            if current_hash
             else (False, None)
         )
-        if not current_valid:
+        if not current_hash or not current_valid:
             return (
                 False,
                 "Current password is incorrect. Please verify your existing password and try again.",
@@ -800,12 +802,12 @@ class AuthService:
             )
 
         # Also check against current password
-        same_as_current, _ = verify_password(new_password, user.password_hash)
+        same_as_current, _ = verify_password(new_password, current_hash)
         if same_as_current:
             return False, "New password must be different from your current password."
 
         # Save current password to history before changing
-        await _save_password_to_history(self.db, str(user.id), user.password_hash)
+        await _save_password_to_history(self.db, str(user.id), current_hash)
 
         # Update password
         user.password_hash = hash_password(new_password)

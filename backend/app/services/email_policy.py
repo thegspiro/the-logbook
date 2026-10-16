@@ -83,6 +83,8 @@ class EmailKind(str, enum.Enum):
     ELECTION_NOTICES = "election_notices"
     SUGGESTION_BOX = "suggestion_box"
     BUDGET_REQUESTS = "budget_requests"
+    MINUTES_ACTION_ITEMS = "minutes_action_items"
+    MINUTES_CIRCULATED = "minutes_circulated"
 
     # Optional, sent to officers because of a role they hold
     EVENT_DUTIES = "event_duties"
@@ -92,6 +94,8 @@ class EmailKind(str, enum.Enum):
     INVENTORY_DUTIES = "inventory_duties"
     MEMBERSHIP_ADMIN = "membership_admin"
     FINANCE_DUTIES = "finance_duties"
+    MINUTES_DUTIES = "minutes_duties"
+    DOCUMENT_DUTIES = "document_duties"
 
 
 class EmailAudience(str, enum.Enum):
@@ -381,12 +385,54 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         ),
         rationale="The same records are kept in Membership and the store.",
     ),
+    EmailKind.MINUTES_ACTION_ITEMS: EmailPolicy(
+        label="Action items from meeting minutes",
+        required=False,
+        audience=_M,
+        includes=(
+            "Action items assigned to you when meeting minutes are approved",
+            "Reminders before an action item is due and while it is overdue",
+        ),
+        rationale=(
+            "Minutes > Action Items lists everything assigned to you, and "
+            "due-date reminders continue in the app."
+        ),
+    ),
+    EmailKind.MINUTES_CIRCULATED: EmailPolicy(
+        label="Meeting minutes circulated for review",
+        required=False,
+        audience=_M,
+        includes=(
+            "A notice that meeting minutes are ready to read and comment on "
+            "before they are adopted",
+        ),
+        rationale=(
+            "The minutes stay in Minutes, where members can read them and "
+            "suggest changes; the email only says they are there."
+        ),
+    ),
+    EmailKind.MINUTES_DUTIES: EmailPolicy(
+        label="Secretary duties",
+        required=False,
+        audience=_O,
+        includes=("A weekly list of open action items and who owns them",),
+        rationale="Minutes > Action Items lists every open item.",
+    ),
     EmailKind.FINANCE_DUTIES: EmailPolicy(
         label="Treasurer duties",
         required=False,
         audience=_O,
         includes=("A budget request submitted for your review",),
         rationale="Finance > Budget requests lists every request waiting.",
+    ),
+    EmailKind.DOCUMENT_DUTIES: EmailPolicy(
+        label="Document folder access",
+        required=False,
+        audience=_O,
+        includes=(
+            "A weekly list of document folders only full administrators can open",
+        ),
+        rationale="Documents lists the same folders to full administrators.",
     ),
 }
 

@@ -32,7 +32,7 @@ The Logbook is designed with security as a core principle, implementing industry
 
 ✅ **Password Hashing**: Argon2id algorithm (OWASP recommended)
 ✅ **Data Encryption**: AES-256-GCM authenticated encryption for sensitive data at rest (legacy Fernet values still readable)
-✅ **Transport Security**: TLS 1.3 for data in transit
+✅ **Transport Security**: TLS 1.2 or 1.3 for data in transit (the bundled nginx accepts both)
 ✅ **Tamper-Proof Logging**: Blockchain-inspired hash chain for audit logs
 ✅ **Multi-Factor Authentication**: TOTP-based 2FA support
 ✅ **Role-Based Access Control**: Granular permission system
@@ -80,7 +80,7 @@ The Logbook includes security features designed with HIPAA requirements in mind 
 
 #### Transmission Security (§ 164.312(e)(1))
 
-- ✅ **TLS 1.3**: Encrypted data in transit
+- ✅ **TLS 1.2+**: Encrypted data in transit (the bundled nginx accepts TLS 1.2 and 1.3)
 - ✅ **Integrity Controls**: Hash verification for transmitted data
 - ✅ **End-to-End Encryption**: For sensitive communications
 
@@ -245,7 +245,7 @@ Regular testing should include:
 - **History**: Last 12 passwords remembered
 - **Age**: Maximum 90 days between changes (configurable)
 - **Complexity**: Enforced on client and server side
-- **Lockout**: 5 failed attempts = 30 minute lockout
+- **Lockout**: 5 consecutive failed attempts (`MAX_LOGIN_ATTEMPTS`) lock the account for 15 minutes (`ACCOUNT_LOCKOUT_DURATION_MINUTES`). The sign-in screen keeps showing the generic "Incorrect username or password" unless `ACCOUNT_LOCKOUT_REVEAL` is enabled, so it never confirms an account exists
 - **Reset**: Secure password reset with time-limited tokens
 
 ### Best Practices for Users
@@ -266,11 +266,16 @@ Regular testing should include:
 
 **What is Encrypted:**
 
-- User passwords (Argon2id hashing)
-- Sensitive PHI fields
-- File uploads containing sensitive data
-- Backup files
-- Database columns marked as sensitive
+- Medical-screening PHI (`screening_records`: provider, result summary, structured results, notes)
+- Officer evaluation narrative on shift completion reports
+- MFA secrets and recovery codes, applicant status tokens
+- Integration, external-training-provider, email, file-storage and OAuth secrets
+- Every uploaded file stored under the uploads root (per-file AES-256-GCM key)
+
+Passwords are not encrypted but hashed (Argon2id). Other member data — names,
+contact details, dates of birth — is protected by access control, not field
+encryption. The full list is in
+[Encryption → What Is Encrypted](wiki/Security-Encryption.md#what-is-encrypted).
 
 **Key Management:**
 
@@ -288,23 +293,16 @@ Regular testing should include:
 
 ### Encryption in Transit
 
-**TLS 1.3** for all network communications:
+**TLS** for all network communications (the bundled nginx accepts TLS 1.2 and 1.3):
 
 - HTTPS for web traffic
-- TLS for database connections
+- TLS for database and Redis connections (`DB_SSL` / `REDIS_SSL`). In
+  production and staging, startup refuses to boot with either off unless
+  `SECURITY_REQUIRE_TLS=false` records the accepted risk, and refuses to boot
+  with either on but no CA (`DB_SSL_CA` / `REDIS_SSL_CA`, so the server
+  certificate would go unverified) unless `SECURITY_ALLOW_UNVERIFIED_TLS=true`
 - Encrypted email (STARTTLS)
 - VPN for admin access to servers
-
-### Field-Level Encryption
-
-Sensitive fields that can be encrypted:
-
-- Social Security Numbers
-- Driver's License Numbers
-- Medical Record Numbers
-- Bank Account Information
-- Credit Card Numbers
-- Date of Birth (if PHI)
 
 ---
 
@@ -326,12 +324,11 @@ The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling 
 
 #### Authentication Events
 
-- Login attempts (success and failure)
-- Logout events
-- Password changes
+- Sign-in (success and failure), including OAuth
+- Sign-out
+- Password resets (a self-service password change is not audited)
 - MFA enable/disable
-- Account lockouts
-- Session creation/termination
+- Account lockouts and unlocks
 
 #### Data Access
 
@@ -360,7 +357,7 @@ The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling 
 
 - **Minimum**: 7 years (exceeds HIPAA 6-year minimum)
 - **Format**: Immutable, tamper-evident
-- **Storage**: Encrypted at rest
+- **Storage**: Hash-chained in the database; rows past retention are exported to `AUDIT_ARCHIVE_DIR` (owner-only file permissions) before purge
 - **Backup**: Included in disaster recovery
 - **Access**: Restricted to authorized personnel
 
@@ -406,51 +403,34 @@ Automated monitoring for:
 ### Session Management
 
 - **Token Type**: JWT (JSON Web Tokens)
-- **Access Token Lifetime**: 8 hours (configurable)
-- **Refresh Token Lifetime**: 7 days (configurable)
+- **Access Token Lifetime**: 30 minutes by default (`ACCESS_TOKEN_EXPIRE_MINUTES`; the refresh flow renews it silently)
+- **Refresh Token Lifetime**: 7 days by default (`REFRESH_TOKEN_EXPIRE_DAYS`)
 - **Automatic Logout**: 15 minutes inactivity (configurable, aligned with HIPAA recommendation)
-- **Concurrent Sessions**: Configurable limit
-- **Session Revocation**: Manual logout or admin revoke
+- **Session Revocation**: Manual logout or admin revoke; a password change signs the member out of every session
 
 ### Role-Based Access Control (RBAC)
 
-#### Default Roles
+#### Default Positions
 
-1. **Super Admin**
-   - Full system access
-   - User management
-   - System configuration
-
-2. **Admin**
-   - Organization management
-   - User management within org
-   - Module configuration
-
-3. **Chief/Officer**
-   - Department oversight
-   - Approvals
-   - Report access
-
-4. **Member**
-   - Standard access
-   - Own data management
-   - Limited module access
-
-5. **Probationary**
-   - Restricted access
-   - Supervised permissions
+31 system positions are seeded (`DEFAULT_POSITIONS` in
+`backend/app/core/permissions.py`) — command ranks (Chief through
+Lieutenant), operational ranks (Engineer / Driver Operator, Firefighter, EMT),
+administrative officers (President, Secretary, Treasurer, Board of Directors,
+IT Manager and others), functional coordinators (Training Officer,
+Quartermaster, Membership Coordinator, Safety Officer, Scheduling Officer and
+others), and **Member**, the baseline every member holds. Departments can
+edit them and add their own.
 
 #### Permission Granularity
 
-Permissions are structured as: `module.resource.action`
+Permissions are dot-notation strings, `module.action`, with module-level
+(`module.*`) and global (`*`) wildcards. Examples:
 
-Examples:
-
-- `users.profile.view`
-- `users.profile.edit`
-- `documents.sensitive.view`
-- `training.records.approve`
-- `inventory.equipment.checkout`
+- `apparatus.view`
+- `members.manage`
+- `settings.manage`
+- `audit.view`
+- `audit.export`
 
 ---
 
@@ -511,7 +491,7 @@ The Logbook supports public-facing forms that can be accessed without authentica
 
 ---
 
-## Guest Event Check-In Security _(2026-08-09)_
+## Guest Event Check-In Security
 
 ### Overview
 
@@ -616,7 +596,7 @@ The election system uses database-level constraints to prevent double-voting:
 ### Authentication & Token Security
 
 - **Token Storage**: Auth tokens live in **httpOnly cookies** set by the backend and are never readable by JavaScript. Only a non-sensitive `has_session` flag is kept in localStorage, to decide whether a page refresh should attempt to restore the session. CSRF is handled by double-submit (`csrf_token` cookie echoed as an `X-CSRF-Token` header on state-changing requests)
-- **Onboarding session storage** _(2026-08-15)_: The onboarding identifier is kept in **`sessionStorage`** (`onboarding_session_id`), not localStorage. It is a bearer credential — sent as `X-Session-ID`, it authorizes the setup mutations that create the organization, its stations and apparatus, the IT team, and the first System Owner — so it must not survive a browser restart or be readable from unrelated tabs on a shared or station-kiosk machine. Identifiers written by older clients are deleted on load and on clear. Its CSRF companion (`onboarding_csrf_token`) is a `SameSite=Strict` cookie, and the server-side session carries a 30-minute sliding expiry. The wizard's non-sensitive answers (`onboarding-storage`) remain in localStorage by design, which is why a restarted browser can repaint the form while the session behind it is gone — see [`docs/ONBOARDING_FLOW.md`](docs/ONBOARDING_FLOW.md)
+- **Onboarding session storage**: The onboarding identifier is kept in **`sessionStorage`** (`onboarding_session_id`), not localStorage. It is a bearer credential — sent as `X-Session-ID`, it authorizes the setup mutations that create the organization, its stations and apparatus, the IT team, and the first System Owner — so it must not survive a browser restart or be readable from unrelated tabs on a shared or station-kiosk machine. Identifiers written by older clients are deleted on load and on clear. Its CSRF companion (`onboarding_csrf_token`) is a `SameSite=Strict` cookie, and the server-side session carries a 30-minute sliding expiry. The wizard's non-sensitive answers (`onboarding-storage`) remain in localStorage by design, which is why a restarted browser can repaint the form while the session behind it is gone — see [`docs/ONBOARDING_FLOW.md`](docs/ONBOARDING_FLOW.md)
 - **Concurrent Refresh Protection**: Multiple simultaneous 401 responses share a single token refresh promise — prevents replay detection from invalidating the session
 - **Account Lockout**: Failed login counter persists correctly via explicit database commit (not rolled back by HTTPException)
 - **Session Revocation**: Logout properly invalidates the server-side session record
@@ -709,10 +689,14 @@ Retention is configurable per organization rather than hardcoded, because
 statutory retention for fire-service records varies by state (ISO 15489).
 
 - **Business records** — each managed record class (message history,
-  notification logs, form submissions) has a safe default and a **minimum
-  floor** that a typo cannot go below; the floor is re-applied at enforcement
-  time so settings edited outside the API cannot bypass it. Configured via
-  `GET/PUT /organizations/retention-policy` (audited), enforced daily.
+  notification logs, error logs, form submissions, guest check-ins, practice
+  skills tests) has a safe default and a **minimum floor** that a typo cannot
+  go below; the floor is re-applied at enforcement time so settings edited
+  outside the API cannot bypass it. Read with
+  `GET /organization/retention-policy`, set one class at a time with
+  `PUT /organization/retention-policy/{record_class}` (audited), enforced
+  daily. The full table is in
+  [Privacy & Data Protection](wiki/Security-Privacy.md#records-retention).
 - **Documents and meeting minutes are deliberately excluded** from automatic
   deletion. Destroying official records on a timer is a department decision
   belonging in its own retention schedule, executed by a human.
@@ -954,10 +938,16 @@ Currently no formal bug bounty program, but we may offer:
 
 If PHI is breached, you may need to:
 
-1. **Immediate** (within 60 days):
+1. **Without unreasonable delay, and no later than 60 calendar days after
+   discovery** (45 CFR 164.404–408; state law may be shorter):
    - Notify affected individuals
-   - Notify media (if >500 people affected)
-   - Notify HHS (Department of Health and Human Services)
+   - Notify media (if more than 500 residents of one state are affected)
+   - Notify HHS (Department of Health and Human Services): at the same time
+     as individuals for 500 or more, otherwise within 60 days after the end
+     of the calendar year
+
+   The full procedure, roles and risk-assessment steps are in
+   [docs/policies/incident-response-and-breach-notification-policy.md](docs/policies/incident-response-and-breach-notification-policy.md).
 
 2. **Documentation**:
    - What happened

@@ -35,6 +35,8 @@ import type {
   FailureLogResponse,
   FleetReadinessResponse,
   InventoryLinkResult,
+  AutoLinkResult,
+  CrossTemplateUnlinkResult,
   LinkReportResult,
   CrossTemplateLinkResult,
   InventoryMatchesResult,
@@ -317,6 +319,22 @@ export const equipmentCheckService = {
   /** Every unlinked position in the department, grouped by name. Read-only. */
   async getLinkReport(): Promise<LinkReportResult> {
     const response = await api.get<LinkReportResult>('/equipment-checks/inventory-link-report');
+    return response.data;
+  },
+  /**
+   * Link every unlinked position whose best match is exact or strong and
+   * beats the runner-up. Ties and weaker matches stay on the report.
+   */
+  async autoLinkAcrossTemplates(): Promise<AutoLinkResult> {
+    const response = await api.post<AutoLinkResult>('/equipment-checks/inventory-links/auto');
+    return response.data;
+  },
+  /**
+   * Undo links, given each position and the item it was linked to. A position
+   * re-linked to something else since is left alone and counted as skipped.
+   */
+  async unlinkAcrossTemplates(links: Record<string, string>): Promise<CrossTemplateUnlinkResult> {
+    const response = await api.post<CrossTemplateUnlinkResult>('/equipment-checks/inventory-links/undo', { links });
     return response.data;
   },
   /** Apply reviewed links that may span many templates. All or nothing. */

@@ -2322,3 +2322,296 @@ never at risk; the message text was.
   secret.
 - **Tests:** `TestNoLogLineCarriesTheCredentials` in
   `tests/test_external_training_target_solutions.py`.
+
+## Pass 8 (2026-10-16) — 0 new findings, 0 fixed; TR7-1 re-verified still OPEN, the gap now wider
+
+**Prefix:** `TR8` (none assigned — no new finding this pass). **Scoped since
+pass 7's merge.** This conversation's git checkout is a **shallow clone**
+(`git rev-parse --is-shallow-repository` → `true`, 47 grafted boundaries), so
+neither `df0c1dc1` nor `012f3da49`, the two commit hashes pass 7's own text
+cites, are reachable objects here — confirmed with `git cat-file -e`, not
+assumed. The earliest commit reachable from `HEAD` predates pass 7
+(`9a1198e7`, 2026-10-04), so the window is not truncated at the start, but a
+hash-pinned diff against pass 7's own cited baseline is not reproducible in
+this checkout. Used `b5bb513e` ("docs(security-review): record PR #2986 in
+the Open PR row," 2026-10-07) instead — confirmed by content
+(`git show b5bb513e:docs/security-review/TR-17-training-core.md` already
+contains this file's "Pass 7 (2026-10-06)" section in full, while its parent
+does not) rather than by trusting the commit message alone — and diffed from
+there to `HEAD`:
+
+```
+git diff --stat b5bb513e..HEAD -- <the nine declared files>
+ backend/app/api/v1/endpoints/training.py          | 328 ++++++++--
+ backend/app/api/v1/endpoints/training_programs.py | 177 ++++--
+ backend/app/api/v1/endpoints/training_sessions.py |  33 +-
+ backend/app/mcp/tools/training.py                 |   3 +-
+ backend/app/schemas/training.py                   | 125 +++-
+ backend/app/services/training_compliance.py       | 198 +++-
+ backend/app/services/training_program_service.py  | 739 +++++++++++++++-------
+ backend/app/services/training_service.py          |  94 ++-
+ backend/app/services/training_session_service.py  |  99 +--
+ 9 files changed, 1343 insertions(+), 453 deletions(-)
+```
+
+38 commits touch these files in that range (`git log --oneline
+b5bb513e..HEAD -- <the nine files>`). Read every one, not sampled — the
+commit messages are detailed enough (this repo writes commit bodies as
+design notes) that most needed only confirming the message matches the
+diff, but every file's net diff was also read directly end to end.
+
+### What changed, grouped by disposition
+
+**Already-fixed XC-1/XC-3 sweeps (landed outside a formal pass, re-verified
+correct by direct read):**
+
+- `15ceda02` ("validate client-supplied foreign keys are in-org (XC-1)") —
+  `TrainingCourse.category_ids`/`prerequisites`, `TrainingCategory.
+parent_category_id` (explicit null still clears it), `TrainingRequirement.
+category_ids`, a bulk-record row's `category_id`, `TrainingSessionService`'s
+  `location_id`, and (outside our nine files, read anyway since it shares the
+  commit) `CompetencyMatrix.role_id`/`skill_evaluation_id` and the module
+  config's `manual_entry_apparatus_ids` (checked against _either_
+  `Apparatus` or `BasicApparatus`, matching what the picker actually serves).
+  Every site refuses a foreign id with a 400 before anything is written;
+  confirmed by reading `assert_all_in_org`/`assert_in_org` call sites
+  directly, not by trusting the commit message.
+- `7f815476` ("validate required_skills and target_roles are in-org (XC-1)")
+  — closes the exact gap pass 3's "Verified good" section had explicitly
+  excused (`TrainingProgramUpdate.target_roles` "advisory-only, non-gating
+  display data, not a security boundary"). That claim is unchanged as a
+  reason nothing reads the field to make an authorization decision, but the
+  field is now validated in-org anyway, on `create_training_program`,
+  `build_program` and `update_training_program`. `required_skills` (skill
+  ids a `SKILLS_EVALUATION` requirement is graded against) is validated on
+  both `training.py`'s and `training_program_service.py`'s requirement
+  create/update paths. Not a correction to pass 3 — the claim that nothing
+  gates on `target_roles` is re-verified still true — just tightened.
+- `6edf8f35` ("scope the program-requirement PATCH to the program in the
+  path") — a genuine XC-3 fix: `PATCH /training/programs/programs/{program_id}
+/requirements/{id}` used to load the link by org only, commit the edit
+  (recomputing every enrollment's progress for an `is_required` change), and
+  only afterward 400 if the link's actual `program_id` didn't match the path
+  — so a wrong `program_id` left the edit and the recompute in place behind
+  an error response. `update_program_requirement` now takes `program_id` and
+  filters the lookup on it before anything is read or written, mirroring
+  `remove_requirement_from_program`'s existing shape. Confirmed by reading
+  both the old and new `WHERE` clauses.
+- `93f3043d` ("accept prerequisite programs and concurrent enrollment on
+  program create, build and update") — new `prerequisite_program_ids` write
+  paths validate in-org via `assert_all_in_org`, refuse self-reference,
+  and walk the org's whole prerequisite graph (one query; "a department has
+  tens of programs, not thousands," confirmed plausible for this scale) to
+  refuse a cycle. Deleting a program strips it from every other program's
+  `prerequisite_program_ids` so it can't leave an uncompletable gate.
+  Verified by reading `_validate_prerequisite_programs` and the delete-path
+  cleanup directly — correct.
+- `624f4566` ("My Training: split current needs from full history") adds
+  `GET /my-training/records` in `training_module_config.py` (outside the
+  nine declared files, read because it's new training-module surface
+  reachable from a URL under `/training/`). Self-scoped correctly
+  (`TrainingRecord.user_id == str(current_user.id)` **and** `organization_id
+== str(current_user.organization_id)`, `Depends(get_current_user)`, no
+  permission needed because it's the caller's own data), `page_size` capped
+  at 100, and its free-text `search` filter uses this repo's own
+  `like_pattern()` + `escape=LIKE_ESCAPE_CHAR` helper (Pitfall #25) rather
+  than a bare `.ilike()` — the first and only new LIKE call site introduced
+  in this window, and it's done correctly.
+
+**Correctness-only fixes with no security dimension** (read each diff to
+confirm, not inferred from the commit message): `ca9fde87` (tolerate a
+non-enum ledger status), `f60f4d83`/`856307be` (prerequisite-check query
+skip; cohort roster sync honors the shared prerequisite rule instead of
+silently bypassing it), `c97277a4` (a dropped `required_call_types` field),
+`135d85b9` (three seeded requirement templates switched from HOURS to
+COURSES so an unrelated CE hour can't satisfy a HIPAA/BBP/Hazmat
+requirement), `7e4b9f84` (an update comparison that treated `NULL` and `[]`
+as different, defeating the new-members-only split's no-op guard), `4b4bf168`
+(wires three previously-write-only columns: `custom_deadline_days`,
+`program_specific_description`, `notification_message` — Pitfall #19's
+exact shape, now closed for this trio), `52f05fad`/`624f4566` (rolling-hours
+window and My Training UI rework), `afd68744` (CMP2-1 member compliance
+emails — shares a new `training_compliance.grade_org_members`, read directly:
+org-scoped member/requirement queries, reuses the same `ComplianceGrading`/
+`tally_standing` machinery as `compute_org_compliance_tally`, so it can't
+disagree with the dashboard the way pitfall #29 describes), `7b422750`
+(removed four dead "notify the mentor" blocks — `ProgramEnrollment` has no
+`mentor_id` column, so they always read `None` via `getattr` and did
+nothing), and a long run of mechanical mypy-driven null-safety fixes
+(`d1d72a3c`, `0d4d7c5a`, `265a26be`, `51c77a9c`, `a0c75d07`, `69d88b7f`,
+`c1b56a4b`) — each read directly; every behavior change called out in its
+own commit message (a NULL progress percentage, a NULL approval status, a
+NULL sort order, etc.) is a defensive narrowing, not a new code path.
+
+**New feature with its own security review, read in full:** `02376871`
+("Let officers void or edit a member's training record, and tell the
+member"). Migration `26ca07c56d0f` adds three nullable columns to
+`training_records` (Pitfall #2/#26-compliant — every step checks first and
+is a no-op on a re-run or a `create_all`-built table) and widens two email
+enums. `void_record`/`update_record` both resolve the target record through
+`TrainingRecord.id == ... , TrainingRecord.organization_id ==
+current_user.organization_id` before any read or write (XC-3 clean); a void
+now requires a non-empty reason (`min_length=1`) and is irreversible by
+design (`update_record` 400s if `voided_at is not None`). The new
+`app/services/training_record_notices.py` (read in full, 352 L) re-resolves
+the record, member and officer **by id and `organization_id`** inside its own
+background-task session rather than trusting the request-scoped objects
+handed to it, uses `html.escape()` on every value interpolated into an HTML
+email variable, and strips newlines from the subject line
+(`_subject_safe`) — closing a header-injection vector a course name or a
+void reason could otherwise open. Skips sending if the record's user is the
+acting officer (no self-notification) or the member has no email/is
+inactive. No new finding.
+
+### Correction to a prior pass's own claim
+
+Pass 7's "Verified good" section stated: _"No new route is missing an auth
+dependency. Enumerated every `@router.*` in all three endpoint files (28 in
+`training.py`, 13 in `training_programs.py`, 8 in `training_sessions.py`) by
+signature, not by spot check."_ Those counts are wrong, and were already
+wrong **at pass 7's own baseline** — not a regression introduced since. Checked
+directly: `git show b5bb513e:backend/app/api/v1/endpoints/training_programs.py
+| grep -c "^@router\."` returns **46**, not 13; `training.py` returns **35**,
+not 28; `training_sessions.py` returns **11**, not 8 — all three confirmed
+unchanged between `b5bb513e` and `HEAD`, so pass 7's own code was never at 28/
+13/8 either. The conclusion ("every one carries an auth dependency") still
+holds — re-verified in this pass with an automated script that parses every
+`@router.*` decorator plus its function signature across all three files and
+flags any whose `Depends(...)` set lacks `get_current_user`, `require_permission`
+or `require_all_permissions`: **92 routes total (35 + 46 + 11), 0 flagged.**
+But pass 7's claim to have done this "by signature, not by spot check" against
+the true route count cannot be verified after the fact, and the 2-3x
+undercount is large enough that "spot check" is the more likely description
+of what actually happened. Recorded here as a correction per this rotation's
+own standard (pass 3 did the same for a wrong "already reviewed" claim), not
+as a new vulnerability — this pass's own fresh, automated enumeration is the
+thing to trust, not pass 7's count.
+
+### TR7-1 — re-verified: still OPEN/FLAGGED, and the gap widened
+
+Re-read `training.py`'s `enroll_member_in_program` at its current location
+(now **`training.py:2232-2324`**, was `:2107-2186` at pass 7 — moved by
+intervening additions, not edited) against `training_program_service.py`'s
+`enroll_member` (now `:2391-2526`). Byte-for-byte the same defect pass 7
+described: no `lock_organization_scope`/`.with_for_update()` around its
+existing-ACTIVE-enrollment check (still a plain `select()` then
+`db.add()`/`commit()`), no backing unique constraint on `program_enrollments`
+(confirmed: `models/training.py`'s `ProgramEnrollment` class still declares
+no `UniqueConstraint`/`Index` combining `user_id`/`program_id`/`status`,
+checked directly rather than trusting the pass-7 citation), no
+`RequirementProgress` row creation, no phase determination, no recert
+scheduling, no enrollment notification.
+
+**Checked `docs/KNOWN_LIMITATIONS.md` for an owner decision, per this pass's
+instructions: none has been recorded.** The "Training —
+`POST /training/enrollments` Duplicates, and Lags, the Fixed Enrollment Path
+(2026-10-06)" entry is exactly as pass 7 left it, with no resolution note
+appended by an owner in the interim. Carrying this forward as still
+**OPEN, FLAGGED** — the three candidate fixes pass 7 named (delegate to the
+service method, add the same lock in place, or remove the apparently-dead
+duplicate route) remain a product decision this pass does not guess at.
+
+**The gap is now wider than at pass 7, not merely unchanged.** `e3aee773`
+("enforce prerequisites on single-member enrollment," 2026-10-14) added a
+fourth capability to the fixed path only: `TrainingProgramService.
+enroll_member` now refuses to enroll a member who has not completed a
+program's prerequisite programs (`missing_prerequisites`, shared with the
+enroll picker, bulk enrollment and — since `856307be` the same week — cohort
+roster sync). `training.py`'s duplicate was not touched by that commit and
+has no equivalent check, so a caller of `POST /training/enrollments` can now
+also silently bypass a prerequisite gate that every other enrollment path in
+the application enforces. This is not a new, separately-numbered finding —
+it is the same root cause (a hand-maintained duplicate nothing keeps in sync
+with the path the rest of the codebase fixes) producing a fourth symptom,
+exactly as predicted by pass 7's own framing. Updated the
+`docs/KNOWN_LIMITATIONS.md` entry to record this instead of leaving the
+reader to discover it by diffing the two functions themselves.
+
+**Exposure unchanged:** confirmed again that
+`frontend/src/services/trainingServices.ts`'s `enrollMember()` still calls
+only `/training/programs/enrollments` (the fixed path); no frontend file
+calls `/training/enrollments`. Still reachable only by a direct API client
+holding `training.manage`.
+
+### Verified good ✅ (pass 8 additions)
+
+- **The prerequisite-graph cycle check in `93f3043d` is correct**, including
+  the one-query-for-the-whole-org-graph approach and the self-reference
+  refusal checked before the org-membership check (so a self-referencing id
+  never even reaches `assert_all_in_org`).
+- **`training_record_notices.py`'s background-task re-fetch is a real
+  isolation boundary, not just a style choice.** It re-queries the record,
+  member and officer by id + `organization_id` inside its own DB session
+  rather than closing over the request-scoped ORM objects, so a notice sent
+  after the response returns reflects what was actually committed — and
+  can't leak a value from an object that was mutated or rolled back on a
+  concurrent request to the same record.
+- **No upload path in this window skips malware scanning.** `ce50c5c6`
+  ("store every upload through one scanned, org-first storage service")
+  added `reject_if_malicious(...)` to both training CSV import endpoints
+  (`parse_historical_import`, `import_training_csv`) ahead of parsing the
+  file contents, even though the CSV itself is never written to disk —
+  consistent with that change's stated policy that anything entering the
+  platform is scanned regardless of whether it's persisted.
+- **`GET /my-training/records`'s new LIKE site is escaped correctly** (see
+  above) — the first LIKE call site training-core has gained since pass 3's
+  "no SQL injection / no LIKE surface" finding, and it doesn't reopen that.
+- **`grade_org_members` (CMP2-1) can't disagree with the dashboard.** Traced
+  that it calls the identical `ComplianceGrading.from_config` /
+  `evaluate_member_requirement_detail` / `tally_standing` chain
+  `compute_org_compliance_tally` uses, rather than re-deriving thresholds or
+  applicability — the exact discipline Pitfall #29 exists to enforce, applied
+  correctly to a brand-new caller.
+
+## Schema & migration notes (pass 8)
+
+One migration touches a training-core table in this window:
+`26ca07c56d0f` (`02376871`) adds `training_records.voided_at`/`voided_by`/
+`void_reason`, all nullable (Pitfall #2 n/a — not a FK, no `SET NULL`), and
+widens `email_templates.template_type`/`scheduled_emails.template_type` with
+two new enum values. Guarded on table/column existence throughout (Pitfall
+#26-compliant) and reversible (`downgrade()` drops the three columns and the
+two template rows, narrowing the enums back). `4b4bf168`'s migration
+(`5372d41aaf3e`, four nullable marker columns on `program_requirements` with
+a backfill for already-completed rows) is read and correct but is not a
+training-core table in this feature's narrower sense — `program_requirements`
+is `training_programs.py`'s own domain and the migration is squarely inside
+scope either way; recorded for completeness. No seeded-grant change, no JSON
+column gains a new write path without a corresponding normalization (checked
+`training_program_service.py`'s `prerequisite_program_ids` write path: always
+assigned a fresh list via `list(prerequisite_ids) or None`, never mutated
+in place).
+
+## Guard tests added (pass 8)
+
+None. No new finding this pass to guard; TR7-1 remains flagged, not fixed,
+for the same reason pass 7 gave — the owner's eventual fix should land with
+its own test, the way `012f3da49`'s sibling fix did.
+
+## Completion gate (pass 8)
+
+| Check                                                 | Result                                                    |
+| ----------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                           |
+| `black --check app/ tests/ alembic/`                  | ✅ 2335 files unchanged                                   |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean                                                  |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ 601 revisions, single head `c903fc771081`              |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 270 routes, 0 errors, 0 warnings                       |
+| `pytest tests/ -q -k "training or compliance"`        | ✅ 1866 passed, 1 skipped (pre-existing `pywebpush` skip) |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors — see environment note below                  |
+| `cd frontend && npm run lint`                         | ✅ 0 errors, 0 warnings — see environment note below      |
+
+**Environment note, not a code finding:** this sandbox's `frontend/
+node_modules/` was missing most packages (`@tiptap/*` and others —
+`node_modules/@tiptap` did not exist, despite being declared in
+`package.json`), so the first `npm run typecheck` failed with four
+`TS2307`/`TS7031`/`TS7006` errors in `src/components/ux/RichTextEditor.tsx`,
+a file this pass never touched and training-core does not use. Ran `npm ci`
+from the repo root (the lockfile-trusting install CLAUDE.md's own
+"Two TypeScript installs" section prescribes for exactly this situation —
+never `rm package-lock.json && npm install`), which added 673 packages with
+no change to `package-lock.json` (`git status` clean before and after,
+confirmed) and no change to `node_modules/typescript` vs.
+`node_modules/typescript-native`'s split. Both `npm run typecheck` and
+`npm run lint` then passed clean — **this sandbox's incomplete dependency
+install, not training-core's code, was what the first run hit.**

@@ -317,6 +317,14 @@ export interface ArchivedMember {
   status_change_reason?: string;
 }
 
+/** `GET /users/{id}/status-change` — the member's most recent status change, as recorded. */
+export interface StatusChangeRecord {
+  user_id: string;
+  status: string;
+  status_changed_at: string | null;
+  status_change_reason: string | null;
+}
+
 /** `POST /users/{id}/reactivate` — the archived member restored to active. */
 export interface MemberReactivationResponse {
   user_id: string;
@@ -437,6 +445,8 @@ export interface RejoinServiceOptions {
 export interface MemberStatusChangeRequest extends RejoinServiceOptions {
   new_status: string;
   reason?: string | undefined;
+  /** The day a member left (YYYY-MM-DD); read only when the change takes them out of membership. Defaults to today. */
+  separation_date?: string | undefined;
   send_property_return_email?: boolean | undefined;
   return_deadline_days?: number | undefined;
   custom_instructions?: string | undefined;

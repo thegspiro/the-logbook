@@ -36,6 +36,7 @@ from app.api.v1.endpoints import (
     facilities,
     finance,
     forms,
+    google_workspace,
     grants,
     integrations,
     inventory,
@@ -63,6 +64,7 @@ from app.api.v1.endpoints import (
     message_history,
     messages,
     minutes,
+    minutes_records,
     nfc_tags,
     notifications,
     officers,
@@ -358,6 +360,12 @@ api_router.include_router(
     dependencies=module_gate("minutes", "Meeting Minutes"),
 )
 api_router.include_router(
+    minutes_records.router,
+    prefix="/minutes-records",
+    tags=["minutes"],
+    dependencies=module_gate("minutes", "Meeting Minutes"),
+)
+api_router.include_router(
     scheduling.router,
     prefix="/scheduling",
     tags=["scheduling"],
@@ -468,6 +476,12 @@ api_router.include_router(
     mcp_oauth.router,
     prefix="/mcp-oauth",
     tags=["claude-mcp"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
+    google_workspace.router,
+    prefix="/integrations/google-workspace",
+    tags=["google-workspace"],
     dependencies=module_gate("integrations", "Integrations"),
 )
 api_router.include_router(

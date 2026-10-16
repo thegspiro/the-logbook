@@ -6,16 +6,20 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '@/test/utils';
 
 const mockGetLinkReport = vi.fn();
 const mockLinkAcrossTemplates = vi.fn();
+const mockAutoLink = vi.fn();
+const mockUnlink = vi.fn();
 vi.mock('../services/equipmentCheckApi', () => ({
   equipmentCheckService: {
     getLinkReport: (...a: unknown[]) => mockGetLinkReport(...a) as unknown,
     linkAcrossTemplates: (...a: unknown[]) => mockLinkAcrossTemplates(...a) as unknown,
+    autoLinkAcrossTemplates: (...a: unknown[]) => mockAutoLink(...a) as unknown,
+    unlinkAcrossTemplates: (...a: unknown[]) => mockUnlink(...a) as unknown,
   },
 }));
 
@@ -91,10 +95,163 @@ describe('CatalogLinkReportPage', () => {
   beforeEach(() => {
     mockGetLinkReport.mockReset();
     mockLinkAcrossTemplates.mockReset();
+    mockAutoLink.mockReset();
+    mockUnlink.mockReset();
+    mockUnlink.mockResolvedValue({ unlinked: 1, skipped: 0 });
     mockToastSuccess.mockReset();
     mockToastError.mockReset();
     mockGetLinkReport.mockResolvedValue(report());
     mockLinkAcrossTemplates.mockResolvedValue({ linked: 2, skipped: 0, skippedPositions: [] });
+    mockAutoLink.mockResolvedValue({
+      linked: 3,
+      skipped: 0,
+      skippedPositions: [],
+      leftForReview: 2,
+      groups: [
+        {
+          name: 'Gauze Pads 4x4',
+          inventoryItemId: 'inv-gauze',
+          inventoryItemName: 'Gauze Pads 4x4',
+          confidence: 'exact',
+          positionCount: 2,
+          positions: [position('ti-1', 'Medic 1'), position('ti-2', 'Medic 2', false)],
+        },
+        {
+          name: 'Oxygen Mask',
+          inventoryItemId: 'inv-mask-adult',
+          inventoryItemName: 'Oxygen Mask Adult',
+          confidence: 'strong',
+          matchedAlias: null,
+          positionCount: 1,
+          positions: [position('ti-3', 'Medic 1')],
+        },
+      ],
+    });
+  });
+
+  describe('linking automatically', () => {
+    it('links after confirmation, then lists what it linked and flags the close matches', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Link matches automatically/ }));
+      await user.click(await screen.findByRole('button', { name: 'Link matches' }));
+
+      await waitFor(() => expect(mockAutoLink).toHaveBeenCalled());
+      const panel = await screen.findByRole('region', { name: /Linked 2 names automatically/ });
+      expect(panel).toHaveTextContent('Oxygen Mask → Oxygen Mask Adult');
+      expect(panel).toHaveTextContent('check this');
+      expect(mockToastSuccess).toHaveBeenCalledWith('Linked 3 positions; 2 left for you to review');
+      // The report is reloaded so the linked names drop off it.
+      expect(mockGetLinkReport).toHaveBeenCalledTimes(2);
+    });
+
+    it('links each name to the templates it landed on', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Link matches automatically/ }));
+      await user.click(await screen.findByRole('button', { name: 'Link matches' }));
+
+      const panel = await screen.findByRole('region', { name: /Linked 2 names automatically/ });
+      const links = within(panel).getAllByRole('link', { name: 'Open Medic 1' });
+      expect(links.map((l) => l.getAttribute('href'))).toEqual([
+        '/inventory/admin/checklists/templates/t-Medic 1',
+        '/inventory/admin/checklists/templates/t-Medic 1',
+      ]);
+      expect(within(panel).getByRole('link', { name: 'Open Medic 2' })).toBeInTheDocument();
+    });
+
+    it('undoes one name, sending each position with the item it was linked to', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Link matches automatically/ }));
+      await user.click(await screen.findByRole('button', { name: 'Link matches' }));
+      await user.click(await screen.findByRole('button', { name: 'Undo linking Oxygen Mask' }));
+
+      await waitFor(() => expect(mockUnlink).toHaveBeenCalledWith({ 'ti-3': 'inv-mask-adult' }));
+      expect(mockToastSuccess).toHaveBeenCalledWith('Unlinked 1 position of Oxygen Mask');
+      // Gone from the panel, the other name kept, and the report reloaded so
+      // the undone line is back on it to choose again.
+      const panel = await screen.findByRole('region', { name: /Linked 1 name automatically/ });
+      expect(panel).not.toHaveTextContent('Oxygen Mask →');
+      expect(panel).toHaveTextContent('Gauze Pads 4x4 → Gauze Pads 4x4');
+      expect(mockGetLinkReport).toHaveBeenCalledTimes(3);
+    });
+
+    it('says when an undone position had been changed in its template since', async () => {
+      mockUnlink.mockResolvedValue({ unlinked: 1, skipped: 1 });
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Link matches automatically/ }));
+      await user.click(await screen.findByRole('button', { name: 'Link matches' }));
+      await user.click(await screen.findByRole('button', { name: 'Undo linking Gauze Pads 4x4' }));
+
+      await waitFor(() =>
+        expect(mockToastSuccess).toHaveBeenCalledWith(
+          'Unlinked 1 position of Gauze Pads 4x4; 1 had been changed in the template since and was left as it was'
+        )
+      );
+    });
+
+    it('keeps the name listed when an undo fails', async () => {
+      mockUnlink.mockRejectedValue(new Error('Server unavailable'));
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Link matches automatically/ }));
+      await user.click(await screen.findByRole('button', { name: 'Link matches' }));
+      await user.click(await screen.findByRole('button', { name: 'Undo linking Oxygen Mask' }));
+
+      await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Server unavailable'));
+      expect(screen.getByRole('button', { name: 'Undo linking Oxygen Mask' })).toBeEnabled();
+    });
+
+    it('sends nothing when the confirmation is declined', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Link matches automatically/ }));
+      await user.click(await screen.findByRole('button', { name: /cancel|keep/i }));
+
+      expect(mockAutoLink).not.toHaveBeenCalled();
+    });
+
+    it('says so when nothing was clear enough to link', async () => {
+      mockAutoLink.mockResolvedValue({ linked: 0, skipped: 0, skippedPositions: [], leftForReview: 5, groups: [] });
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Link matches automatically/ }));
+      await user.click(await screen.findByRole('button', { name: 'Link matches' }));
+
+      await waitFor(() =>
+        expect(mockToastSuccess).toHaveBeenCalledWith('No lines had a clear enough match to link automatically')
+      );
+    });
+
+    it('reports a failure', async () => {
+      mockAutoLink.mockRejectedValue(new Error('Server unavailable'));
+      const user = userEvent.setup();
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Link matches automatically/ }));
+      await user.click(await screen.findByRole('button', { name: 'Link matches' }));
+
+      await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Server unavailable'));
+    });
+
+    it('is not offered when no name has a catalog match', async () => {
+      const onlyUnmatched = report();
+      onlyUnmatched.groups = onlyUnmatched.groups.filter((g) => g.suggestions.length === 0);
+      mockGetLinkReport.mockResolvedValue(onlyUnmatched);
+      renderWithRouter(<CatalogLinkReportPage />);
+
+      await screen.findByText(/No catalog match/);
+      expect(screen.queryByRole('button', { name: /Link matches automatically/ })).not.toBeInTheDocument();
+    });
   });
 
   it('pre-selects exact matches only', async () => {

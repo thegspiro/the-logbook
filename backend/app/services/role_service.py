@@ -337,7 +337,7 @@ class RoleManagementService:
                 db, organization_id, name, exclude_role_id=role_id
             )
 
-        changes = {}
+        changes: Dict[str, Dict[str, Any]] = {}
 
         # System roles: only the member position's display label is customizable.
         # Its stable slug remains the identifier used for baseline assignment and
@@ -560,7 +560,7 @@ class RoleManagementService:
             permissions=source.permissions or [],
             created_by=created_by,
             description=new_description or f"Clone of {source.name}",
-            priority=source.priority,
+            priority=source.priority or 0,
             is_system=False,  # Cloned roles are never system roles
         )
 

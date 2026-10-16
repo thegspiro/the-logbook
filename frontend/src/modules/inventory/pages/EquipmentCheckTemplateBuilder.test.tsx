@@ -899,66 +899,64 @@ describe('EquipmentCheckTemplateBuilder clearing a field on save', () => {
   });
 });
 
-describe('EquipmentCheckTemplateBuilder save never nulls a NOT NULL field', () => {
-  // expiration_warning_days and container_type are NOT NULL columns. Save sent
-  // an explicit null for a blank box, so the backend refused the whole save
-  // (or, for container_type, failed it at flush) over one emptied field.
-  const expiryTemplate = () => {
-    const copy = structuredClone(template);
-    const radio = copy.compartments[0]?.items[0];
-    if (radio) radio.checkType = 'expiry';
-    return copy;
-  };
-
-  const lastSavePayload = (id: string): Record<string, unknown> | undefined => {
-    const saves = (updateCheckItem.mock.calls as unknown[][]).filter(
-      (call) => call[0] === id && typeof call[1] === 'object' && call[1] !== null && 'name' in call[1]
-    );
-    return saves[saves.length - 1]?.[1] as Record<string, unknown> | undefined;
-  };
-
+describe('EquipmentCheckTemplateBuilder saving a NOT NULL column left blank', () => {
+  // container_type and expiration_warning_days are NOT NULL columns with no
+  // cleared state. A blank in either (a "Custom..." storage type nobody typed
+  // a label into; a warning-days box emptied by hand) used to travel as an
+  // explicit null, which the backend can only refuse -- so Save failed for that
+  // row. Omitting the key leaves the stored value alone, which is what the
+  // auto-save path in this component already does for the same two fields.
   beforeEach(() => {
+    vi.clearAllMocks();
+    const blanked = structuredClone(template);
+    const cab = blanked.compartments[0];
+    const radio = cab?.items[0];
+    if (!cab || !radio) throw new Error('fixture changed: cab/radio missing');
+    cab.containerType = '';
+    (radio as { expirationWarningDays: number | string }).expirationWarningDays = '';
     getTemplate.mockReset();
-    getTemplate.mockResolvedValue(expiryTemplate());
+    getTemplate.mockResolvedValue(blanked);
     updateCheckItem.mockReset();
     updateCheckItem.mockResolvedValue({});
     updateCompartment.mockReset();
     updateCompartment.mockResolvedValue({});
     updateEquipmentCheckTemplate.mockReset();
     updateEquipmentCheckTemplate.mockResolvedValue(template);
+    createEquipmentCheckTemplate.mockReset();
+    createEquipmentCheckTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
     reorderItems.mockReset();
     reorderItems.mockResolvedValue(undefined);
-    mockViewport('laptop');
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
   });
 
-  it('omits a blank expiration warning, as the auto-save path does', async () => {
+  const payloadFor = (mock: typeof updateCompartment, id: string): Record<string, unknown> => {
+    const call = mock.mock.calls.find((args: unknown[]) => args[0] === id);
+    if (!call) throw new Error(`no update call for ${id}`);
+    return call[1] as Record<string, unknown>;
+  };
+
+  it('leaves container_type and expiration_warning_days out of the payload', async () => {
     const user = userEvent.setup();
     renderBuilder();
-    const warning = await screen.findByRole('spinbutton', { name: 'Expiration warning days for Radio' });
+    await screen.findByRole('button', { name: 'Edit Radio' });
 
-    await user.clear(warning);
     await user.click(screen.getByRole('button', { name: /Save draft/ }));
 
-    await waitFor(() => expect(lastSavePayload('radio')).toBeDefined());
-    expect(lastSavePayload('radio')?.expiration_warning_days).toBeUndefined();
-    expect(lastSavePayload('flashlight')?.expiration_warning_days).toBe(30);
-  });
-
-  it('saves a custom storage type left blank as a compartment, never null', async () => {
-    const user = userEvent.setup();
-    renderBuilder();
-    // The medical bag: stored as 'bag', so 'compartment' below can only come
-    // from the blank custom label, not from a value that was already there.
-    const storageType = await screen.findByDisplayValue('Bag');
-    await user.selectOptions(storageType, '__custom__');
-    await user.click(screen.getByRole('button', { name: /Save draft/ }));
-
-    await waitFor(() =>
-      expect(updateCompartment).toHaveBeenCalledWith('bag', expect.objectContaining({ container_type: 'compartment' }))
-    );
-    for (const call of updateCompartment.mock.calls as unknown[][]) {
-      expect((call[1] as Record<string, unknown>).container_type).not.toBeNull();
-    }
+    await waitFor(() => expect(updateCompartment).toHaveBeenCalled());
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalled());
+    // Compared on the wire form: `{ a: undefined }` still HAS key 'a' in JS, and
+    // it is JSON.stringify that drops it.
+    expect(JSON.stringify(payloadFor(updateCompartment, 'cab'))).not.toContain('container_type');
+    expect(JSON.stringify(payloadFor(updateCheckItem, 'radio'))).not.toContain('expiration_warning_days');
   });
 });
 

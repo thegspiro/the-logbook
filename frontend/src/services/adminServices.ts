@@ -819,6 +819,23 @@ export const memberStatusService = {
     return response.data;
   },
 
+  async getStatusChange(userId: string): Promise<import('../types/user').StatusChangeRecord> {
+    const response = await api.get<import('../types/user').StatusChangeRecord>(`/users/${userId}/status-change`);
+    return response.data;
+  },
+
+  /** Rewords the reason for the last status change; null clears it. Nothing else about the change moves. */
+  async updateStatusChangeReason(
+    userId: string,
+    reason: string | null
+  ): Promise<import('../types/user').StatusChangeRecord> {
+    const response = await api.patch<import('../types/user').StatusChangeRecord>(
+      `/users/${userId}/status-change-reason`,
+      { reason }
+    );
+    return response.data;
+  },
+
   async getArchivedMembers(): Promise<{ members: import('../types/user').ArchivedMember[] }> {
     const response = await api.get<{ members: import('../types/user').ArchivedMember[] }>('/users/archived');
     return response.data;
@@ -1380,6 +1397,7 @@ export interface McpStatus {
   expose_finance: boolean;
   expose_medical_screening: boolean;
   expose_full_schedule: boolean;
+  expose_medical_supplies: boolean;
   active_key: McpServiceKey | null;
 }
 
@@ -1388,6 +1406,18 @@ export interface McpKeyCreateResult {
   plaintext: string;
   revoked: McpServiceKey[];
   endpoint_path: string;
+}
+
+/** What linking the existing roster to Google did, or (previewed) would do. */
+export interface GoogleWorkspaceLinkResult {
+  applied: boolean;
+  linked: number;
+  already_linked: number;
+  unfinished: number;
+  departed: number;
+  not_in_google: number;
+  off_domain: number;
+  account_in_use: number;
 }
 
 export const integrationsService = {
@@ -1498,6 +1528,17 @@ export const integrationsService = {
   async revokeMcpKey(keyId: string): Promise<McpServiceKey> {
     const response = await api.delete<{ key: McpServiceKey }>(`/integrations/claude-mcp/keys/${keyId}`);
     return response.data.key;
+  },
+
+  // Google is only read. Called without `expected` it previews the counts;
+  // with the previewed count it links exactly those members, and refuses if
+  // the roster changed since. A linked account is suspended when its member leaves.
+  async linkExistingGoogleMembers(expected?: number): Promise<GoogleWorkspaceLinkResult> {
+    const params = expected === undefined ? { apply: false } : { apply: true, expected };
+    const response = await api.post<GoogleWorkspaceLinkResult>('/integrations/google-workspace/link-existing', null, {
+      params,
+    });
+    return response.data;
   },
 };
 

@@ -31,6 +31,12 @@ Recommended crontab (add to host or container cron):
 # Monthly on the 1st at 8:00 AM — membership tier auto-advancement
 0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
 
+# Daily at 7:20 AM — email reminders about open action items from adopted minutes, and the weekly open-items list to minutes managers
+20 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=minutes_action_item_reminders
+
+# Daily at 7:25 AM — the weekly list of document folders only full administrators can open
+25 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=admin_only_folder_digest
+
 # Every 15 minutes — process delayed inventory change notifications
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_notifications
 
@@ -260,6 +266,25 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:00",
         "cron": "0 7 * * *",
+    },
+    "minutes_action_item_reminders": {
+        "description": (
+            "Email assignees before an action item from adopted minutes is due "
+            "and while it is overdue, and send minutes managers a weekly list "
+            "of every open item"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:20",
+        "cron": "20 7 * * *",
+    },
+    "admin_only_folder_digest": {
+        "description": (
+            "Email full administrators the document folders only they can "
+            "open, at most once a week per department while any is listed"
+        ),
+        "frequency": "daily check, weekly send",
+        "recommended_time": "07:25",
+        "cron": "25 7 * * *",
     },
     "inventory_notifications": {
         "description": "Process delayed inventory change notifications — consolidate and send one email per member for changes older than 1 hour",
@@ -508,6 +533,12 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
+    },
+    "google_workspace_suspension_sync": {
+        "description": "Finish Google Workspace suspensions (and their lifting) that a member's departure or return left unsettled, and retry failed ones",
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15 * * * *",
+        "cron": "*/15 * * * *",
     },
     "admin_hours_auto_close": {
         "description": "Auto-close admin-hours sessions that exceeded their category's max-hours limit (caps a forgotten clock-in and flags it for review)",
@@ -1000,6 +1031,29 @@ async def run_property_return_reminders(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "property_return_reminders", _process)
 
 
+async def run_minutes_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Email action item reminders to assignees and the weekly open-items list."""
+    from app.services.minutes_reminder_service import MinutesReminderService
+
+    async def _process(db_session, org):
+        service = MinutesReminderService(db_session)
+        reminders = await service.send_assignee_reminders(org)
+        digests = await service.send_open_items_digest(org)
+        return reminders + digests
+
+    return await _for_each_org(db, "minutes_action_item_reminders", _process)
+
+
+async def run_admin_only_folder_digest(db: AsyncSession) -> Dict[str, Any]:
+    """Email full administrators the folders only they can open (decision 30)."""
+    from app.services.admin_only_folder_digest import send_admin_only_folder_digest
+
+    async def _process(db_session, org):
+        return await send_admin_only_folder_digest(db_session, org)
+
+    return await _for_each_org(db, "admin_only_folder_digest", _process)
+
+
 async def run_membership_inactivity_warnings(db: AsyncSession) -> Dict[str, Any]:
     """Process prospect inactivity warnings and auto-mark stale prospects inactive.
 
@@ -1163,21 +1217,27 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                 ]
             ),
             MinutesActionItem.due_date.isnot(None),
+            # An item carried into later minutes is reminded about there.
+            MinutesActionItem.carried_forward_at.is_(None),
             MinutesActionItem.due_date
             <= datetime.combine(
                 three_days, datetime.min.time(), tzinfo=_tz_reminders.utc
             ),
         )
     )
-    for item in minutes_items.scalars().all():
-        if item.assignee_id and item.due_date is not None:
+    for minutes_item in minutes_items.scalars().all():
+        if minutes_item.assignee_id and minutes_item.due_date is not None:
             due_d = (
-                item.due_date.date()
-                if hasattr(item.due_date, "date")
-                else item.due_date
+                minutes_item.due_date.date()
+                if hasattr(minutes_item.due_date, "date")
+                else minutes_item.due_date
             )
             today = todays.get(
-                str(item.minutes.organization_id) if item.minutes else "",
+                (
+                    str(minutes_item.minutes.organization_id)
+                    if minutes_item.minutes
+                    else ""
+                ),
                 fallback_today,
             )
             days_until = (due_d - today).days if due_d else None
@@ -1192,13 +1252,15 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                     log = NotificationLog(
                         id=generate_uuid(),
                         organization_id=(
-                            item.minutes.organization_id if item.minutes else None
+                            minutes_item.minutes.organization_id
+                            if minutes_item.minutes
+                            else None
                         ),
-                        recipient_id=item.assignee_id,
+                        recipient_id=minutes_item.assignee_id,
                         channel="in_app",
                         category="action_items",
-                        subject=f"Action item {urgency}: {item.description[:80]}",
-                        message=f"Your action item is {urgency}. Description: {item.description}",
+                        subject=f"Action item {urgency}: {minutes_item.description[:80]}",
+                        message=f"Your action item is {urgency}. Description: {minutes_item.description}",
                         action_url="/action-items",
                         delivered=True,
                     )
@@ -1873,8 +1935,10 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         ShiftCompletionReport.trainee_id,
                     ).where(ShiftCompletionReport.shift_id.in_(shift_ids))
                 )
-                for sid, oid, tid in rres.all():
-                    report_map.setdefault((str(sid), str(oid)), set()).add(str(tid))
+                for report_sid, officer_id, trainee_id in rres.all():
+                    report_map.setdefault(
+                        (str(report_sid), str(officer_id)), set()
+                    ).add(str(trainee_id))
 
                 cres = await db.execute(
                     select(
@@ -1882,8 +1946,10 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         ShiftEquipmentCheck.template_id,
                     ).where(ShiftEquipmentCheck.shift_id.in_(shift_ids))
                 )
-                for sid, tid in cres.all():
-                    checks_done_map.setdefault(str(sid), set()).add(tid)
+                # An ad-hoc check has no template, so it cannot satisfy one.
+                for check_sid, tid in cres.all():
+                    if tid is not None:
+                        checks_done_map.setdefault(str(check_sid), set()).add(tid)
 
             # Many shifts share an apparatus; resolve end-of-shift templates
             # once per apparatus rather than once per shift.
@@ -2685,8 +2751,10 @@ async def run_end_of_shift_checklist_reminders(
                     ShiftEquipmentCheck.template_id,
                 ).where(ShiftEquipmentCheck.shift_id.in_(shift_ids))
             )
+            # An ad-hoc check has no template, so it cannot satisfy one.
             for sid, tid in cres.all():
-                checks_done_map.setdefault(str(sid), set()).add(tid)
+                if tid is not None:
+                    checks_done_map.setdefault(str(sid), set()).add(tid)
             asres = await db_session.execute(
                 select(ShiftAssignment.shift_id, ShiftAssignment.user_id)
                 .join(User, User.id == ShiftAssignment.user_id)
@@ -5696,12 +5764,14 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                     continue
 
                 # Count remaining future occurrences
-                remaining = sum(
-                    1
-                    for child in (event.recurrence_children or [])
-                    if not child.is_cancelled
-                    and child.start_datetime
-                    and child.start_datetime > now
+                remaining = len(
+                    [
+                        child
+                        for child in (event.recurrence_children or [])
+                        if not child.is_cancelled
+                        and child.start_datetime
+                        and child.start_datetime > now
+                    ]
                 )
                 # Include parent if it's in the future
                 if (
@@ -6376,6 +6446,19 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
     }
 
 
+async def run_google_workspace_suspension_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Backstop for the departure hook's after-commit sync (see
+    app/models/google_workspace_departure.py). Each row is org-scoped and
+    locked while it is reconciled, so a run that overlaps the after-commit
+    task finds it settled and does nothing."""
+    from app.services.google_workspace_provisioning_service import (
+        GoogleWorkspaceProvisioningService,
+    )
+
+    attempted = await GoogleWorkspaceProvisioningService(db).sync_pending_suspensions()
+    return {"task": "google_workspace_suspension_sync", "attempted": attempted}
+
+
 async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
     """Mark fully-unpaid dues past their due date as OVERDUE.
 
@@ -6543,7 +6626,7 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                 .all()
             )
 
-            for event_request in requests:
+            for listed_request in requests:
                 # FOR UPDATE: the ledger check below is an ordinary read, and
                 # the marker is only written after the send. The in-process
                 # runner and a manual /scheduled/run-task call can overlap, and
@@ -6553,7 +6636,7 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                 # marker the first one wrote.
                 event_request = await db.scalar(
                     select(EventRequest)
-                    .where(EventRequest.id == event_request.id)
+                    .where(EventRequest.id == listed_request.id)
                     .with_for_update()
                 )
                 if event_request is None:
@@ -7194,6 +7277,8 @@ TASK_RUNNERS = {
     "membership_tier_advance": run_membership_tier_advance,
     "property_return_reminders": run_property_return_reminders,
     "action_item_reminders": run_action_item_reminders,
+    "minutes_action_item_reminders": run_minutes_action_item_reminders,
+    "admin_only_folder_digest": run_admin_only_folder_digest,
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
@@ -7229,6 +7314,7 @@ TASK_RUNNERS = {
     "external_training_auto_sync": run_external_training_auto_sync,
     "salesforce_auto_sync": run_salesforce_auto_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
+    "google_workspace_suspension_sync": run_google_workspace_suspension_sync,
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
     "admin_hours_auto_close": run_admin_hours_auto_close,
     "expire_ip_exceptions": run_expire_ip_exceptions,
@@ -7281,6 +7367,10 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Daily (checked each loop tick; runs at most once per interval)
     "cert_expiration_alerts": 86400,
     "action_item_reminders": 86400,
+    # Checked daily; the weekly list keeps its own last-sent day per org.
+    "minutes_action_item_reminders": 86400,
+    # Checked daily; sends at most weekly per org (see admin_only_folder_digest).
+    "admin_only_folder_digest": 86400,
     "inventory_low_stock_alerts": 86400,
     "inventory_overdue_alerts": 86400,
     # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).
@@ -7300,6 +7390,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "rolling_recurrence_extend": 86400,
     "trainee_report_escalation": 86400,
     "mark_overdue_dues": 86400,
+    "google_workspace_suspension_sync": 900,
     "mark_overdue_maintenance": 86400,
     "admin_hours_auto_close": 1800,
     "expire_ip_exceptions": 86400,

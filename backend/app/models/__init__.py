@@ -171,6 +171,11 @@ from app.models.forms import (
     IntegrationTarget,
     IntegrationType,
 )
+from app.models.google_workspace import (
+    GoogleAccountProvision,
+    GoogleAccountStatus,
+)
+from app.models.google_workspace_departure import DEPARTED_STATUSES
 from app.models.grant import (
     ApplicationStatus,
     BudgetItemCategory,
@@ -308,8 +313,15 @@ from app.models.minute import (
     ActionItemPriority,
     MeetingMinutes,
     MinutesActionItemStatus,
+    MinutesAttachment,
+    MinutesAttachmentCategory,
+    MinutesClosedSession,
+    MinutesElectionResult,
     MinutesMeetingType,
+    MinutesRevision,
     MinutesStatus,
+    MinutesSuggestion,
+    MinutesSuggestionStatus,
     MinutesTemplate,
     Motion,
     MotionStatus,
@@ -515,6 +527,9 @@ __all__ = [
     "MessagePriority",
     "MessageTargetType",
     # Integration models
+    "DEPARTED_STATUSES",
+    "GoogleAccountProvision",
+    "GoogleAccountStatus",
     "Integration",
     "IntegrationSyncLog",
     "McpServiceKey",
@@ -555,6 +570,13 @@ __all__ = [
     "MaintenanceIntervalUnit",
     # Minutes models
     "MeetingMinutes",
+    "MinutesAttachment",
+    "MinutesAttachmentCategory",
+    "MinutesClosedSession",
+    "MinutesElectionResult",
+    "MinutesRevision",
+    "MinutesSuggestion",
+    "MinutesSuggestionStatus",
     "MinutesTemplate",
     "Motion",
     "ActionItem",

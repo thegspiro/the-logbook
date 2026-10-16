@@ -51,6 +51,7 @@ const statusNoKey: McpStatus = {
   expose_finance: false,
   expose_medical_screening: false,
   expose_full_schedule: false,
+  expose_medical_supplies: false,
   active_key: null,
 };
 

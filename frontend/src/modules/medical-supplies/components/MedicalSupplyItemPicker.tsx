@@ -3,6 +3,7 @@ import { Loader2, Search, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { supplyLabel } from '../types';
 
 const PAGE = 20;
 
@@ -21,7 +22,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
   onChange,
 }) => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<{ id: string; name: string }[]>([]);
+  const [results, setResults] = useState<{ id: string; name: string; size?: string | undefined }[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   // A rejected search is not an empty catalogue. Reporting "No matching items."
@@ -111,7 +112,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
       .then((response) => {
         if (request !== requestRef.current) return;
 
-        const page = response.items.map(({ id, name }) => ({ id, name }));
+        const page = response.items.map(({ id, name, size }) => ({ id, name, size }));
         setReachedEnd(response.items.length < PAGE);
         // The server's own offset plus what it actually returned, not what
         // survived deduplication.
@@ -179,7 +180,9 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
 
   const choose = (item: { id: string; name: string }) => {
     justChose.current = true;
-    onChange(item.id, item.name);
+    // The label, not the bare name, so a delivery line for the adult mask
+    // cannot be mistaken for the pediatric one once the list closes.
+    onChange(item.id, supplyLabel(item));
     setOpen(false);
     setQuery('');
     setActiveIndex(-1);
@@ -263,7 +266,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
           id={listboxId}
           ref={listboxRef}
           role="listbox"
-          className="card absolute z-20 mt-1 max-h-56 w-full overflow-auto shadow-lg"
+          className="popover-panel absolute z-20 mt-1 max-h-56 w-full overflow-auto"
         >
           {!loading && failed && (
             <div className="px-3 py-2 text-sm">
@@ -293,7 +296,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
               onMouseEnter={() => setActiveIndex(index)}
               onClick={() => choose(item)}
             >
-              {item.name}
+              {supplyLabel(item)}
             </button>
           ))}
           {!loading && !failed && !reachedEnd && (

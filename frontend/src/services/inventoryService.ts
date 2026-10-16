@@ -278,6 +278,8 @@ export const inventoryService = {
     color?: string | undefined;
     style?: string | undefined;
     search?: string | undefined;
+    /** With `search`, also return items whose name or "also called" names merely resemble it, below the exact matches. */
+    fuzzy?: boolean | undefined;
     active_only?: boolean | undefined;
     /** false = still needs a label; true = label confirmed printed. */
     label_printed?: boolean | undefined;

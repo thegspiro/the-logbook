@@ -15,50 +15,53 @@ Every significant action in the system is recorded in the audit log with:
 - **Details** — Specific changes (old value → new value)
 - **Hash** — Keyed HMAC-SHA256 hash linking to the previous entry (legacy pre-upgrade rows use unkeyed SHA-256)
 
-**Sealing** _(2026-10-12)_: an entry is written in the same transaction as the
-action it records, without its hash, and joined to the chain moments later by
-a sealer that takes one lock (the `audit_chain_head` row) in its own short
-transaction — so concurrent writers can no longer fork the chain, and a
-rolled-back action never reaches it. Chain order is `chain_seq`, not `id`. The
-integrity check reports entries still waiting as `pending_seal`, not as
-tampering; the `audit_chain_seal` task (every minute) seals anything the
-after-commit sealer missed.
+**Sealing:** an entry is written in the same transaction as the action it
+records, without its hash, and joined to the chain moments later by a sealer
+that takes one lock (the `audit_chain_head` row) in its own short transaction —
+so concurrent writers cannot fork the chain, and a rolled-back action never
+reaches it. Chain order is `chain_seq`, not `id`. The integrity check reports
+entries still waiting as `pending_seal`, not as tampering; the
+`audit_chain_seal` task (every minute) seals anything the after-commit sealer
+missed.
 
 ---
 
 ## What Is Logged
 
-| Category                       | Actions                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Authentication**             | OAuth sign-in (`oauth_login`), MFA enabled/disabled, recovery codes regenerated, MFA policy changes, password-reset requested/completed/failed. **Password sign-in, failed sign-in, account lockout and sign-out are not written to the audit log yet** — an open item in `docs/KNOWN_LIMITATIONS.md` (workflow review W02-3); `POST /auth/change-password` writes none either                                                                              |
-| **Privacy**                    | Personal-data export (`user_data_export`), member anonymization (`user_anonymized` — records the user id only, never the name), consent changes (`consent_updated`) _(2026-07-31)_                                                                                                                                                                                                                                                                          |
-| **Records Retention**          | Retention-policy changes (`retention_policy_updated`), audit archival and purge (`audit_log_archival`) _(2026-07-31)_                                                                                                                                                                                                                                                                                                                                       |
-| **User Management**            | Create, update, delete, status change, role assignment; service-history edits (`member_service_history_updated`) _(2026-09-24)_                                                                                                                                                                                                                                                                                                                             |
-| **Training**                   | Record creation, approval, rejection, waiver creation                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **Elections**                  | Election create/update/delete, open/close/rollback, votes cast (auth, token, bulk, proxy), blocked double-vote attempts, ballot emails sent, voter overrides, proxy authorizations, vote soft-deletes, integrity checks, forensics report access, pre-meeting package sends/downloads                                                                                                                                                                       |
-| **Events**                     | Event creation, check-in, attendance modification                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **Inventory**                  | Assignment, checkout, return, clearance; self-service kiosk loans (`inventory_kiosk_checkout`) and returns (`inventory_kiosk_return`, severity `warning` when returned damaged) _(2026-09-25)_                                                                                                                                                                                                                                                              |
-| **Settings**                   | Module toggle, configuration change, role permission change; required member emails (`member_email_policy_updated`, before and after lists) _(2026-09-28)_                                                                                                                                                                                                                                                                                                  |
-| **Administration**             | `email_link_domain_changed` (severity `warning`) — the email link address was saved or cleared on Settings → Email, with the previous and new address _(2026-09-25)_                                                                                                                                                                                                                                                                                        |
-| **Medical Screening**          | Requirement creation/update/delete, screening record creation/update/delete _(2026-03-29)_                                                                                                                                                                                                                                                                                                                                                                  |
-| **Documents**                  | Document upload (filename, MIME type, file size), document delete _(2026-03-29)_                                                                                                                                                                                                                                                                                                                                                                            |
-| **Membership Pipeline**        | Pipeline created/deleted, prospect created/advanced/transferred _(2026-03-29)_                                                                                                                                                                                                                                                                                                                                                                              |
-| **Messages**                   | Message creation and deletion _(2026-03-29)_                                                                                                                                                                                                                                                                                                                                                                                                                |
-| **Shift Completion Reports**   | Report created, updated, reviewed (approved/flagged/redacted), acknowledged by trainee, bulk submitted _(2026-04-07)_                                                                                                                                                                                                                                                                                                                                       |
-| **Salesforce Sync**            | Sync triggered, sync completed, webhook received, contact created/updated _(2026-04-11)_                                                                                                                                                                                                                                                                                                                                                                    |
-| **Training Programs**          | Program exported, program imported _(2026-04-11)_                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **Authentication (OAuth)**     | `oauth_login` — successful sign-in via Google or Microsoft _(2026-05-29)_                                                                                                                                                                                                                                                                                                                                                                                   |
-| **Events**                     | `event_attendee_overwritten` (severity `warning`) — a manager overwrote an existing RSVP when adding an attendee _(2026-05-29)_                                                                                                                                                                                                                                                                                                                             |
-| **Security**                   | Alert generated, alert acknowledged, integrity check                                                                                                                                                                                                                                                                                                                                                                                                        |
-| **Member PII**                 | `user_viewed` carries `restricted_pii_disclosed` — `true` when the viewer is leadership reading _another_ member's record, i.e. the only path that discloses a date of birth and a family's names and phone numbers. The flag makes the trail answer "who saw it", not merely "who looked" _(2026-08-04)_                                                                                                                                                   |
-| **Finance**                    | `finance.dues_waiver_reversed` (severity `warning`) — a dues waiver was reversed. _(Reversed 2026-08-13:)_ the event records only the dues id and restored status; the original waive reason is **erased, not copied into the log** — free-text waiver reasons may contain personal information, and the immutable audit log must not hold data that privacy scrubbing cannot reach. The un-waived row still cannot carry a waiver rationale _(2026-08-04)_ |
-| **Equipment checks**           | Bulk linking of checklist items to inventory catalog entries writes a `log_template_change` entry (action `update`, with `inventory_links` and `changed_count`) — the operation previously left no trail _(2026-08-11)_                                                                                                                                                                                                                                     |
-| **Member badges and ID cards** | `member_badge_reissued`, `member_badge_settings_updated` (Accept old badges), `id_card_layout_updated`, `id_cards_printed` (count only) _(2026-10-05)_                                                                                                                                                                                                                                                                                                      |
-| **Finance approvals**          | `finance.approval_step_approved` / `finance.approval_step_denied` now record `override`, `approver_type`, `approver_value` and, for an approvals-admin override, `override_reason`; an override is logged at `warning` _(2026-10-05)_                                                                                                                                                                                                                       |
-| **Training** (additions)       | `self_report_attachment_retention` (per organization sweep: the retention period, files deleted, and the submission and training-record ids), `self_report_attachment_retention_updated` (the period changed), `course_cohort_missed_class_credited` _(2026-10-05)_                                                                                                                                                                                         |
-| **Scheduling** (additions)     | `shift_exchange_qualification_override` — a duty officer approved an exchange with Approve anyway _(2026-10-05)_                                                                                                                                                                                                                                                                                                                                            |
-| **Scheduled-task failures**    | Not audit events: written to the error log as `SCHEDULED_TASK_FAILED` per organization, shown on Error Monitoring as "Scheduled task" _(2026-10-05)_                                                                                                                                                                                                                                                                                                        |
-| **Error logs**                 | Not audit events, but related: persisted error logs pass route paths through `sanitize_path()`, which redacts token-bearing params (finance approval tokens, application-status tokens, `.ics` calendar-feed tokens) before storage _(2026-08-12)_                                                                                                                                                                                                          |
+| Category                       | Actions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Authentication**             | Password sign-in (`login`, with `method`), refused sign-in (`login_failed`, with `reason` and `stage`), the attempt that locks an account (`account_locked`), an administrator unlocking it (`account_unlocked`), sign-out (`logout`), OAuth sign-in via Google or Microsoft (`oauth_login`), MFA enabled/disabled, recovery codes regenerated, MFA policy changes, password-reset requested/completed/failed. `POST /auth/change-password` writes no audit event                                                                                |
+| **Privacy**                    | Personal-data export (`user_data_export`), member anonymization (`user_anonymized` — records the user id only, never the name), consent changes (`consent_updated`)                                                                                                                                                                                                                                                                                                                                                                              |
+| **Records Retention**          | Retention-policy changes (`retention_policy_updated`), audit archival and purge (`audit_log_archival`)                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **User Management**            | Create, update, delete, status change, role assignment; service-history edits (`member_service_history_updated`)                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Member PII**                 | `user_viewed` carries `restricted_pii_disclosed` — `true` when the viewer is leadership reading _another_ member's record, i.e. the only path that discloses a date of birth and a family's names and phone numbers. The flag makes the trail answer "who saw it", not merely "who looked"                                                                                                                                                                                                                                                       |
+| **Member badges and ID cards** | `member_badge_reissued`, `member_badge_settings_updated` (Accept old badges), `id_card_layout_updated`, `id_cards_printed` (count only)                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Training**                   | Record creation, approval, rejection, waiver creation; `self_report_attachment_retention` (per organization sweep: the retention period, files deleted, and the submission and training-record ids), `self_report_attachment_retention_updated` (the period changed), `course_cohort_missed_class_credited`                                                                                                                                                                                                                                      |
+| **Training Programs**          | Program exported, program imported                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Shift Completion Reports**   | Report created, updated, reviewed (approved/flagged/redacted), acknowledged by trainee, bulk submitted                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Scheduling**                 | `shift_exchange_qualification_override` — a duty officer approved an exchange with Approve anyway                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Elections**                  | Election create/update/delete, open/close/rollback, votes cast (auth, token, bulk, proxy), blocked double-vote attempts, ballot emails sent, voter overrides, proxy authorizations, vote soft-deletes, integrity checks, forensics report access, pre-meeting package sends/downloads                                                                                                                                                                                                                                                            |
+| **Events**                     | Event creation, check-in, attendance modification; `event_attendee_overwritten` (severity `warning`) — a manager overwrote an existing RSVP when adding an attendee                                                                                                                                                                                                                                                                                                                                                                              |
+| **Inventory**                  | Assignment, checkout, return, clearance; self-service kiosk loans (`inventory_kiosk_checkout`) and returns (`inventory_kiosk_return`, severity `warning` when returned damaged)                                                                                                                                                                                                                                                                                                                                                                  |
+| **Equipment checks**           | Bulk linking of checklist items to inventory catalog entries writes a `log_template_change` entry (action `update`, with `inventory_links` and `changed_count`)                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Settings**                   | Module toggle, configuration change, role permission change; required member emails (`member_email_policy_updated`, before and after lists)                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Administration**             | `email_link_domain_changed` (severity `warning`) — the email link address was saved or cleared on Settings → Email, with the previous and new address                                                                                                                                                                                                                                                                                                                                                                                            |
+| **Medical Screening**          | Requirement creation/update/delete, screening record creation/update/delete                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Documents**                  | Document upload (filename, MIME type, file size), document delete                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Membership Pipeline**        | Pipeline created/deleted, prospect created/advanced/transferred                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Messages**                   | Message creation and deletion                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Salesforce Sync**            | Sync triggered, sync completed, webhook received, contact created/updated                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **Finance**                    | `finance.dues_waiver_reversed` (severity `warning`) records only the dues id and restored status — the original waive reason is erased rather than copied into the log, because free-text waiver reasons may contain personal information and the immutable audit log must not hold data that privacy scrubbing cannot reach. `finance.approval_step_approved` / `finance.approval_step_denied` record `override`, `approver_type`, `approver_value` and, for an approvals-admin override, `override_reason`; an override is logged at `warning` |
+| **Security**                   | Alert generated, alert acknowledged, integrity check                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+Two related records are **not** audit events:
+
+- **Scheduled-task failures** are written to the error log as
+  `SCHEDULED_TASK_FAILED` per organization and shown on Error Monitoring as
+  "Scheduled task".
+- **Error logs** pass route paths through `sanitize_path()`, which redacts
+  token-bearing params (finance approval tokens, application-status tokens,
+  `.ics` calendar-feed tokens) before storage.
 
 ---
 
@@ -72,43 +75,48 @@ Entry[n].hash = HMAC-SHA256(signing_key, Entry[n].data + Entry[n-1].hash)
 
 1. Each entry's hash incorporates the previous entry's hash
 2. Modifying any entry invalidates all subsequent hashes
-3. The hash is **keyed** with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling back to `SECRET_KEY`), so forging a valid chain requires the key, not just DB write access. Rows written before this upgrade are verified under the legacy unkeyed SHA-256 scheme, and a no-downgrade guard rejects a later unkeyed row after any keyed row
-   - Each row records `signing_key_id`, a short fingerprint of the key that signed it (never the key), and is verified only against that key. Rows signed with `SECRET_KEY` before a dedicated `AUDIT_LOG_SIGNING_KEY` took effect — including installs whose `.env` key never reached the container before 2026-10-06 — keep verifying, but only up to the first row signed with the dedicated key; a `SECRET_KEY` row after that is reported as tampered. Each verification run logs one `WARNING` when it used `SECRET_KEY`. Ballots (`VOTE_SIGNING_KEY`) follow the same rule. See `docs/KNOWN_LIMITATIONS.md` for what the bound does not cover
-4. Periodic checkpoints create verified anchors in the chain
-5. The chain is verified on demand via API
+3. The hash is **keyed** with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling back to `SECRET_KEY`), so forging a valid chain requires the key, not just DB write access. Rows written before the HMAC upgrade are verified under the legacy unkeyed SHA-256 scheme, and a no-downgrade guard rejects a later unkeyed row after any keyed row
+   - Each row records `signing_key_id`, a short fingerprint of the key that signed it (never the key), and is verified only against that key. Rows signed with `SECRET_KEY` before a dedicated `AUDIT_LOG_SIGNING_KEY` took effect keep verifying, but only up to the first row signed with the dedicated key; a `SECRET_KEY` row after that is reported as tampered. Each verification run logs one `WARNING` when it used `SECRET_KEY`. Ballots (`VOTE_SIGNING_KEY`) follow the same rule. See `docs/KNOWN_LIMITATIONS.md` for what the bound does not cover
+4. One helper (`_build_hash_data()` in `core/audit.py`) builds the hashed fields for creation, verification and rehash alike, so the three cannot drift apart in field order and report a false "compromised" result
+5. Checkpoints (created weekly by `audit_log_archival`, or on demand via `POST /api/v1/security/audit-log/checkpoint`) create verified anchors in the chain
+6. The chain is verified on demand via API
 
 ### Verifying the Chain
 
 ```bash
-# Full integrity check
+# Full integrity check (permission audit.view); optional start_id / end_id
 curl http://YOUR-IP:3001/api/v1/security/audit-log/integrity
 
 # Response:
 {
-  "status": "intact",        // or "compromised"
-  "entries_checked": 15432,
-  "issues": [],
-  "last_verified": "2026-02-23T12:00:00Z"
+  "verified": true,
+  "total_checked": 15432,
+  "pending_seal": 0,
+  "first_id": 1,
+  "last_id": 15432,
+  "errors": [],
+  "message": "Audit log integrity verified"   // or "INTEGRITY FAILURE DETECTED"
 }
 ```
 
-### Issue Types
+### What a Failure Reports
 
-| Issue           | Meaning                                |
-| --------------- | -------------------------------------- |
-| `hash_mismatch` | Entry data was modified after creation |
-| `chain_broken`  | Entry was deleted or reordered         |
-| `missing_entry` | Gap in the sequence                    |
+Each entry in `errors` names the `log_id` and an `error` message:
 
-### Hash Chain Reliability Fix _(2026-04-11)_
+| Error                                       | Meaning                                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Hash mismatch (with expected/calculated)    | Entry data was modified after creation                                                         |
+| Chain broken — previous hash does not match | An entry was deleted or reordered mid-chain                                                    |
+| Chain head missing                          | The first entry links to neither genesis nor an attested archival boundary (head rows removed) |
+| Chain tail truncated                        | A checkpoint attests entries past where the chain now ends (newest rows removed)               |
+| Unkeyed hash past the legacy boundary       | An unkeyed row sits above `AUDIT_LOG_LEGACY_MAX_ID` (see below)                                |
+| Hash version downgrade                      | An entry uses an older, unkeyed algorithm than earlier entries                                 |
 
-A `_build_hash_data()` helper was extracted in `core/audit.py` to prevent drift between hash verification, creation, and rehashing operations. Previously, the hash chain could report false "compromised" results if the field ordering differed between when an entry was created and when it was verified. The helper ensures consistent field ordering across all hash operations.
+### Rehash / Chain Recovery — Break-Glass Only
 
-### Rehash / Chain Recovery — Break-Glass Only _(2026-07)_
-
-`POST /api/v1/security/audit-log/rehash` is a **recovery** tool for the legacy
-hash-computation bug, not a routine operation. Because the audit hash chain is a
-single, cross-organization chain, it is now gated:
+`POST /api/v1/security/audit-log/rehash` is a **recovery** tool for a legacy
+hash-computation bug, not a routine operation. Because the audit hash chain is
+a single, cross-organization chain, it is gated:
 
 - **Disabled by default.** It returns `403` unless a server operator sets
   `AUDIT_ALLOW_CHAIN_REHASH=true`. An ordinary admin holding `audit.export`
@@ -119,17 +127,16 @@ single, cross-organization chain, it is now gated:
   `409` and refuses to overwrite it — a keyed mismatch is a genuine integrity
   signal (tamper or bug), not something to launder into a valid chain.
 
-### Legacy Hash Boundary Is Pinned in Config _(2026-08-12)_
+### Legacy Hash Boundary Is Pinned in Config
 
-Which rows are _allowed_ to use the legacy unkeyed SHA-256 scheme is no longer
+Which rows are _allowed_ to use the legacy unkeyed SHA-256 scheme is not
 decided by the row's own `hash_version` column — that column lives in the same
-attacker-writable table the chain protects, so an attacker with SQL write
-access could rewrite the entire keyed suffix, mark every forged row as
-version 1, and recompute a "valid" chain **without the HMAC key**. The
-no-downgrade guard didn't stop this because it derived its high-water mark
-from the same column.
+attacker-writable table the chain protects, so trusting it would let an
+attacker with SQL write access rewrite the entire keyed suffix, mark every
+forged row as version 1, and recompute a "valid" chain **without the HMAC
+key**.
 
-The trust boundary now lives in application configuration, outside the audit
+The trust boundary lives in application configuration, outside the audit
 database: **`AUDIT_LOG_LEGACY_MAX_ID`** (default `0`).
 
 - **New installations leave it at `0`** — no row may verify unkeyed, ever.
@@ -141,7 +148,7 @@ database: **`AUDIT_LOG_LEGACY_MAX_ID`** (default `0`).
   aborts `POST /security/audit-log/rehash` with a "hash-version downgrade
   attack" error rather than laundering it into the chain.
 
-### Audit Log Export — `session_id` Redaction _(2026-07)_
+### Audit Log Export — `session_id` Redaction
 
 `GET /api/v1/security/audit-log/export` is scoped to the caller's organization
 and returns the full chain values for offline integrity verification. The raw
@@ -154,16 +161,16 @@ hash chain, so redacting it does not affect integrity verification.
 
 ## Retention Policy
 
-| Setting             | Default             | Description                                                         |
-| ------------------- | ------------------- | ------------------------------------------------------------------- |
-| Retention period    | 2555 days (7 years) | `HIPAA_AUDIT_RETENTION_DAYS`; exceeds HIPAA 6-year minimum          |
-| Checkpoint interval | Daily               | Automatic integrity verification                                    |
-| Export format       | JSON                | For compliance reporting                                            |
-| Archive directory   | `./audit_archives`  | `AUDIT_ARCHIVE_DIR` — where purged rows are exported _(2026-07-31)_ |
+| Setting             | Default             | Description                                                |
+| ------------------- | ------------------- | ---------------------------------------------------------- |
+| Retention period    | 2555 days (7 years) | `HIPAA_AUDIT_RETENTION_DAYS`; exceeds HIPAA 6-year minimum |
+| Checkpoint interval | Weekly              | `audit_log_archival`, Sundays 02:00                        |
+| Export format       | JSON                | For compliance reporting                                   |
+| Archive directory   | `./audit_archives`  | `AUDIT_ARCHIVE_DIR` — where purged rows are exported       |
 
-### Retention Enforcement _(2026-07-31)_
+### Retention Enforcement
 
-The retention period is now **applied**, not merely declared. The weekly
+The retention period is applied, not merely declared. The weekly
 `audit_log_archival` task exports rows past retention to gzipped JSONL
 archives and then deletes them from the table.
 
@@ -181,11 +188,17 @@ to catch, so the purge is designed not to look like tampering:
   attestation without the audit signing key, so unsanctioned head deletion and
   forged attestations both still fail verification.
 
+Archive directories are created with mode `0700` and archive files with `0600`,
+through an exclusive file descriptor, so audit data is never briefly readable
+with a permissive mode. Archives written before this behaviour existed keep
+whatever mode they were given; check them by hand rather than loosening the
+live archive path for backup convenience.
+
 > ⚠️ **Back up `AUDIT_ARCHIVE_DIR`.** After a purge, those archives are the
 > only copy of the oldest audit history. The production backup sidecar
 > includes them automatically.
 
-### Off-Host Shipping _(2026-07-31)_
+### Off-Host Shipping
 
 The hash chain makes tampering _detectable_, but it cannot survive an attacker
 deleting the whole table. Set `AUDIT_SHIP_WEBHOOK_URL` and the
@@ -211,23 +224,7 @@ Unset, the task is a no-op.
 
 ### Via API
 
-```bash
-# Get recent audit entries
-curl http://YOUR-IP:3001/api/v1/audit-log?limit=50
-
-# Filter by user
-curl http://YOUR-IP:3001/api/v1/audit-log?user_id=123
-
-# Filter by action type
-curl http://YOUR-IP:3001/api/v1/audit-log?action=login
-
-# Filter by date range
-curl http://YOUR-IP:3001/api/v1/audit-log?start=2026-01-01&end=2026-02-01
-```
-
-### Admin Read API _(2026-05-29)_
-
-A dedicated admin read API (permission `audit.view`) exposes the audit trail for
+The admin read API (permission `audit.view`) exposes the audit trail for
 browsing and filtering:
 
 ```
@@ -238,22 +235,36 @@ GET /api/v1/audit-logs/stats      # counts by severity and category
 GET /api/v1/audit-logs/{log_id}   # single entry
 ```
 
-Results are org-scoped by the `organization_id` column on `audit_logs`
-_(2026-07-30)_: stamped at write time (explicitly, or auto-resolved from the
-acting user), backfilled from `user_id` for rows that predate the column, and
-included in the keyed hash chain from hash version 3 onward so org
-attribution on new rows is tamper-proof. Platform-level events (no acting
-user, no org) are visible to no organization.
+```bash
+# Recent entries
+curl "http://YOUR-IP:3001/api/v1/audit-logs?limit=50"
+
+# Filter by user
+curl "http://YOUR-IP:3001/api/v1/audit-logs?user_id=<user-id>"
+
+# Filter by event type
+curl "http://YOUR-IP:3001/api/v1/audit-logs?event_type=login"
+
+# Filter by date range
+curl "http://YOUR-IP:3001/api/v1/audit-logs?start_date=2026-01-01T00:00:00Z&end_date=2026-02-01T00:00:00Z"
+```
+
+Results are org-scoped by the `organization_id` column on `audit_logs`:
+stamped at write time (explicitly, or auto-resolved from the acting user),
+backfilled from `user_id` for rows that predate the column, and included in
+the keyed hash chain from hash version 3 onward so org attribution on new rows
+is tamper-proof. Platform-level events (no acting user, no org) are visible to
+no organization.
 
 ### Via UI
 
-Navigate to the **Audit Log** admin page at `/admin/audit-log` _(2026-05-29)_
-(or **Settings > Audit Log**) to browse, filter, and export audit entries.
+Navigate to the **Audit Log** admin page at `/admin/audit-log` to browse,
+filter, and export audit entries.
 
-> **Note on client IPs** _(2026-05-29)_: the IP recorded in audit/security
-> events comes from the spoof-proof `get_client_ip()` resolver. Behind a reverse
-> proxy you must set `TRUSTED_PROXY_IPS` or all entries will show the proxy's IP.
-> See [Security Configuration](Configuration-Security#client-ip-resolution--geoip-2026-05-29).
+> **Note on client IPs:** the IP recorded in audit/security events comes from
+> the spoof-proof `get_client_ip()` resolver. Behind a reverse proxy you must
+> set `TRUSTED_PROXY_IPS` or all entries will show the proxy's IP. See
+> [Security Configuration](Configuration-Security#client-ip-resolution--geoip-2026-05-29).
 
 ---
 
@@ -264,11 +275,3 @@ In addition to the system-wide audit log, each member has a dedicated audit hist
 ---
 
 **See also:** [Security Overview](Security-Overview) | [Encryption](Security-Encryption) | [HIPAA Security Features](Security-HIPAA)
-
-## Archive file permissions (August 14, 2026)
-
-New archive directories use `0700` and files use `0600`, created through an
-exclusive file descriptor so audit data is never briefly published with a
-permissive mode. Historical archives are not changed automatically; operators
-must inspect and remediate them during upgrade without weakening the live
-archive path for backup convenience.

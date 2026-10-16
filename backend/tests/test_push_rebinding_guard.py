@@ -122,3 +122,26 @@ def test_redirects_are_disabled_on_hardened_session(monkeypatch):
     session.post(_SUB["endpoint"], data=b"payload")
 
     assert send.call_args.kwargs["allow_redirects"] is False
+
+
+def test_pinned_adapter_rewrites_the_url_to_the_validated_address(monkeypatch):
+    adapter = push_module._PinnedHTTPSAdapter("1.1.1.1", "fcm.googleapis.com")
+    sent = MagicMock(return_value=MagicMock())
+    monkeypatch.setattr(push_module.requests.adapters.HTTPAdapter, "send", sent)
+    request = push_module.requests.Request(
+        "POST", "https://fcm.googleapis.com/fcm/send/abc?x=1"
+    ).prepare()
+
+    adapter.send(request)
+
+    assert request.url == "https://1.1.1.1/fcm/send/abc?x=1"
+    assert request.headers["Host"] == "fcm.googleapis.com"
+    sent.assert_called_once()
+
+
+def test_pinned_adapter_refuses_an_unprepared_request():
+    adapter = push_module._PinnedHTTPSAdapter("1.1.1.1", "fcm.googleapis.com")
+    request = push_module.requests.PreparedRequest()
+
+    with pytest.raises(ValueError, match="no URL"):
+        adapter.send(request)

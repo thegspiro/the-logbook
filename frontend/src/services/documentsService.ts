@@ -69,6 +69,22 @@ export const documentsService = {
     return response.data;
   },
 
+  /**
+   * Folders nobody but full administrators can open now and nobody has
+   * confirmed are meant that way (decision 30). Empty for anyone but a full
+   * administrator.
+   */
+  async getAdminOnlyFolders(): Promise<DocumentFolder[]> {
+    const response = await api.get<DocumentFolder[]>('/documents/folders/admin-only');
+    return response.data;
+  },
+
+  /** Confirm a folder is meant for full administrators alone; it stops being listed. */
+  async confirmAdminOnlyFolder(folderId: string): Promise<DocumentFolder> {
+    const response = await api.post<DocumentFolder>(`/documents/folders/${folderId}/confirm-admin-only`);
+    return response.data;
+  },
+
   async deleteFolder(folderId: string): Promise<void> {
     await api.delete(`/documents/folders/${folderId}`);
   },
@@ -94,23 +110,10 @@ export const documentsService = {
     return response.data;
   },
 
-  async getDocument(documentId: string): Promise<DocumentRecord> {
-    const response = await api.get<DocumentRecord>(`/documents/${documentId}`);
-    return response.data;
-  },
-
   async downloadDocument(documentId: string): Promise<Blob> {
     const response = await api.get<Blob>(`/documents/${documentId}/download`, {
       responseType: 'blob',
     });
-    return response.data;
-  },
-
-  async updateDocument(
-    documentId: string,
-    data: Partial<{ name: string; description: string; folder_id: string; tags: string; status: string }>
-  ): Promise<DocumentRecord> {
-    const response = await api.patch<DocumentRecord>(`/documents/${documentId}`, data);
     return response.data;
   },
 
@@ -120,11 +123,6 @@ export const documentsService = {
 
   async getSummary(): Promise<DocumentsSummary> {
     const response = await api.get<DocumentsSummary>('/documents/stats/summary');
-    return response.data;
-  },
-
-  async getMyFolder(): Promise<DocumentFolder> {
-    const response = await api.get<DocumentFolder>('/documents/my-folder');
     return response.data;
   },
 };

@@ -594,5 +594,5 @@ field and prints garbage.
 - [Training 05 — Gear & supplies](./training/05-inventory.md#connecting-a-sticker--label-printer)
 - [Training 03 — Scheduling](./training/03-scheduling.md#printing-station-documents)
 - [Training 08 — Admin & reports](./training/08-admin-reports.md)
-- [Scheduling module](./SCHEDULING_MODULE.md)
+- [Scheduling module](../wiki/Module-Scheduling-Developer.md)
 - [Alembic migrations](./ALEMBIC_MIGRATIONS.md)

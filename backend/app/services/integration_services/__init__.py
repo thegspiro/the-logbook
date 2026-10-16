@@ -116,6 +116,22 @@ async def test_integration_connection(integration: Integration) -> str:
             raise Exception("No Cal.com API key configured")
         return await CalcomService(creds).test_connection()
 
+    if itype == "google-workspace":
+        from app.services.integration_services.google_workspace_service import (
+            GoogleWorkspaceError,
+            directory_for,
+        )
+
+        # The connector's messages are hand-written and safe to show; they
+        # are re-raised as a bare Exception, which is what the test-connection
+        # endpoint trusts (see sanitize_connector_error).
+        try:
+            return await directory_for(integration).test_connection(
+                str(config.get("domain", "")), list(config.get("group_emails") or [])
+            )
+        except GoogleWorkspaceError as exc:
+            raise Exception(str(exc)) from exc
+
     if itype == "ical":
         return "iCal feeds are read-only — no connection test needed"
 

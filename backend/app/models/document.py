@@ -445,6 +445,18 @@ class DocumentFolder(Base):
         JSON, nullable=True
     )
 
+    # Decision 30: when an administrator decided this folder is meant for
+    # full administrators alone. The Documents notice lists folders nobody
+    # else can open, and leaves these out, so a deliberate choice is not
+    # raised again every time someone looks. Cleared whenever the folder's
+    # access is saved and someone besides administrators can open it.
+    admin_only_confirmed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    admin_only_confirmed_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Timestamps
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -496,6 +508,12 @@ class DocumentFolder(Base):
         single_parent=True,
     )
     owner: Mapped[Optional["User"]] = relationship("User", foreign_keys=[owner_user_id])
+
+    if TYPE_CHECKING:
+        # Not a column. DocumentsService stamps the active document count on
+        # loaded folders for the tree response. Declared only for the type
+        # checker: an annotation SQLAlchemy sees would have to be mapped.
+        document_count: int
 
     __table_args__ = (
         Index("idx_doc_folders_org", "organization_id"),
@@ -603,6 +621,14 @@ class Document(Base):
     uploader: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[uploaded_by]
     )
+
+    if TYPE_CHECKING:
+        # Not columns. DocumentsService stamps the uploader's and folder's
+        # display names on loaded rows for the list response. Declared only for
+        # the type checker: an annotation SQLAlchemy sees would have to be
+        # mapped.
+        uploader_name: Optional[str]
+        folder_name: Optional[str]
 
     __table_args__ = (
         Index("idx_documents_folder", "folder_id"),

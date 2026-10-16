@@ -522,9 +522,7 @@ class CertAlertService:
                 ):
                     if member.email:
                         to_emails.append(member.email)
-                    if include_personal_email and getattr(
-                        member, "personal_email", None
-                    ):
+                    if include_personal_email and member.personal_email:
                         to_emails.append(member.personal_email)
 
                 if to_emails or cc_emails:

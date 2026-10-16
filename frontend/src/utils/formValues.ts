@@ -67,3 +67,23 @@ export function formCoercions(isEdit: boolean): {
     num: (value) => (isEdit ? numberOrNull(value) : value ? Number(value) : undefined),
   };
 }
+
+/**
+ * Split a comma-separated text input into a list of names, dropping blanks.
+ *
+ * For fields like an item's "Also called". The server settles the real shape
+ * (trimmed, de-duplicated, bounded); this only turns the box into a list. An
+ * update sends the list even when it is empty, because `[]` is how the box
+ * being cleared reaches the server; a create sends it only when it has entries.
+ */
+export function parseNameList(value: string | null | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+/** The inverse of `parseNameList`, for filling the box from a stored list. */
+export function formatNameList(names: readonly string[] | null | undefined): string {
+  return (names ?? []).join(', ');
+}

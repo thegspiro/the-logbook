@@ -14,14 +14,15 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { ChevronDown, ChevronRight, Link2, Loader2, RefreshCw, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Link2, Loader2, RefreshCw, Undo2, Wand2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Breadcrumbs, EmptyState, SkeletonPage } from '../../../components/ux';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 import InventoryItemPicker from '../components/InventoryItemPicker';
 import { useChecklistCatalogAccess } from '../hooks/useChecklistCatalogAccess';
 import { equipmentCheckService } from '../services/equipmentCheckApi';
-import type { LinkReportGroup, LinkReportResult, SkippedLinkPosition } from '../types/equipmentCheck';
+import type { AutoLinkedGroup, LinkReportGroup, LinkReportResult, SkippedLinkPosition } from '../types/equipmentCheck';
 
 /** Matches the backend's per-request cap on CrossTemplateLinkRequest. */
 const LINK_BATCH_SIZE = 2000;
@@ -67,6 +68,87 @@ interface SkippedPanelProps {
  * the thing this screen must not do — so each is listed with both items and a
  * way into its template, where the officer can change it deliberately.
  */
+interface AutoLinkedPanelProps {
+  groups: AutoLinkedGroup[];
+  undoing: string | null;
+  onUndo: (group: AutoLinkedGroup) => void;
+  onDismiss: () => void;
+}
+
+/** One key per linked name; a name can only be linked to one item per pass. */
+const autoLinkedKey = (g: AutoLinkedGroup) => `${g.name}\u0000${g.inventoryItemId}`;
+
+/** Each template a group was linked on, once, in the order the report gave. */
+function linkedTemplates(group: AutoLinkedGroup): Array<{ id: string; name: string }> {
+  const seen = new Map<string, string>();
+  for (const p of group.positions) if (!seen.has(p.templateId)) seen.set(p.templateId, p.templateName);
+  return [...seen].map(([id, name]) => ({ id, name }));
+}
+
+/**
+ * What the automatic pass linked. Strong matches are flagged: they are the
+ * ones that can be wrong, and the reloaded report no longer lists them, so
+ * this is the one place to check them before the next check runs. Each name
+ * links to the templates it landed on and can be undone on its own, which
+ * puts its positions back on the report.
+ */
+const AutoLinkedPanel: React.FC<AutoLinkedPanelProps> = ({ groups, undoing, onUndo, onDismiss }) => (
+  <section aria-labelledby="auto-linked" className="alert-info space-y-2">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <h2 id="auto-linked" className="font-semibold">
+          Linked {groups.length} name{groups.length !== 1 ? 's' : ''} automatically
+        </h2>
+        <p className="text-sm">
+          Matches marked “check this” were close rather than identical. If one is wrong, undo it to choose again here,
+          or open the template and change its catalog item.
+        </p>
+      </div>
+      <button type="button" onClick={onDismiss} className="btn-icon shrink-0" aria-label="Dismiss linked names">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+    <ul className="space-y-2 text-sm">
+      {groups.map((g) => {
+        const key = autoLinkedKey(g);
+        return (
+          <li key={key} className="space-y-1 border-t border-current/20 pt-2">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <p className="min-w-0 break-words">
+                <span className="font-medium">{g.name}</span> → {g.inventoryItemName}
+                {g.matchedAlias ? ` (as “${g.matchedAlias}”)` : ''} · {g.positionCount} position
+                {g.positionCount !== 1 ? 's' : ''}
+                {g.confidence === 'strong' && <span className="ml-1 font-semibold">· check this</span>}
+              </p>
+              <button
+                type="button"
+                onClick={() => onUndo(g)}
+                disabled={undoing !== null}
+                className="btn-secondary inline-flex shrink-0 items-center gap-1 text-xs"
+                aria-label={`Undo linking ${g.name}`}
+              >
+                {undoing === key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+                Undo
+              </button>
+            </div>
+            <p className="flex flex-wrap gap-x-3 gap-y-1">
+              {linkedTemplates(g).map((t) => (
+                <Link
+                  key={t.id}
+                  to={`/inventory/admin/checklists/templates/${t.id}`}
+                  className="touch:min-h-11 inline-flex items-center underline"
+                >
+                  Open {t.name}
+                </Link>
+              ))}
+            </p>
+          </li>
+        );
+      })}
+    </ul>
+  </section>
+);
+
 const SkippedPanel: React.FC<SkippedPanelProps> = ({ positions, onDismiss }) => (
   <section aria-labelledby="skipped-links" className="alert-warning space-y-2">
     <div className="flex items-start justify-between gap-3">
@@ -157,7 +239,9 @@ const GroupRow: React.FC<GroupRowProps> = ({
             <option value="">Don&rsquo;t link</option>
             {group.suggestions.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} ({CONFIDENCE_LABEL[s.confidence] ?? s.confidence})
+                {s.name}
+                {s.matchedAlias ? ` · also called “${s.matchedAlias}”` : ''} (
+                {CONFIDENCE_LABEL[s.confidence] ?? s.confidence})
               </option>
             ))}
             <option value={SEARCH_OPTION}>Search the catalog…</option>
@@ -196,6 +280,9 @@ const GroupRow: React.FC<GroupRowProps> = ({
 
 const CatalogLinkReportPage: React.FC = () => {
   const access = useChecklistCatalogAccess();
+  const { confirm } = useConfirm();
+  const [autoLinked, setAutoLinked] = useState<AutoLinkedGroup[]>([]);
+  const [undoing, setUndoing] = useState<string | null>(null);
   const [report, setReport] = useState<LinkReportResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -276,6 +363,65 @@ const CatalogLinkReportPage: React.FC = () => {
     }
   };
 
+  const autoLink = async () => {
+    if (saving) return;
+    const confirmed = await confirm({
+      title: 'Link matches automatically',
+      message:
+        'Every checklist line whose name matches one catalog item exactly or closely is linked on every template. ' +
+        'Lines that match two items equally, match loosely or match nothing stay here for you to choose.',
+      confirmLabel: 'Link matches',
+      // Not destructive: the default danger style puts a red trash can on a
+      // dialog that only adds links.
+      variant: 'info',
+    });
+    if (!confirmed) return;
+    setSaving(true);
+    setSkippedPositions([]);
+    setAutoLinked([]);
+    try {
+      const result = await equipmentCheckService.autoLinkAcrossTemplates();
+      setAutoLinked(result.groups);
+      setSkippedPositions(result.skippedPositions);
+      if (result.linked === 0 && result.skipped === 0) {
+        toast.success('No lines had a clear enough match to link automatically');
+      } else {
+        toast.success(
+          `Linked ${result.linked} position${result.linked !== 1 ? 's' : ''}` +
+            (result.leftForReview > 0 ? `; ${result.leftForReview} left for you to review` : '')
+        );
+      }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to link positions'));
+    } finally {
+      setSaving(false);
+      await load();
+    }
+  };
+
+  const undoAutoLink = async (group: AutoLinkedGroup) => {
+    if (undoing !== null || saving) return;
+    const key = autoLinkedKey(group);
+    setUndoing(key);
+    try {
+      const result = await equipmentCheckService.unlinkAcrossTemplates(
+        Object.fromEntries(group.positions.map((p) => [p.templateItemId, group.inventoryItemId]))
+      );
+      setAutoLinked((prev) => prev.filter((g) => autoLinkedKey(g) !== key));
+      toast.success(
+        `Unlinked ${result.unlinked} position${result.unlinked !== 1 ? 's' : ''} of ${group.name}` +
+          (result.skipped > 0
+            ? `; ${result.skipped} had been changed in the template since and ${result.skipped !== 1 ? 'were' : 'was'} left as ${result.skipped !== 1 ? 'they were' : 'it was'}`
+            : '')
+      );
+      await load();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to undo the link'));
+    } finally {
+      setUndoing(null);
+    }
+  };
+
   const renderGroups = (groups: LinkReportGroup[]) => (
     <ul className="space-y-3">
       {groups.map((group) => (
@@ -315,15 +461,36 @@ const CatalogLinkReportPage: React.FC = () => {
             Choose the catalog item once and it links everywhere the line appears.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={loading || saving}
-          className="btn-secondary flex items-center gap-1 self-start text-sm"
-        >
-          <RefreshCw className="h-4 w-4" /> Refresh
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+          {matched.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void autoLink()}
+              disabled={loading || saving}
+              className="btn-secondary flex items-center gap-1 text-sm whitespace-nowrap"
+            >
+              <Wand2 className="h-4 w-4" /> Link matches automatically
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading || saving}
+            className="btn-secondary flex items-center gap-1 text-sm"
+          >
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </button>
+        </div>
       </div>
+
+      {autoLinked.length > 0 && (
+        <AutoLinkedPanel
+          groups={autoLinked}
+          undoing={undoing}
+          onUndo={(g) => void undoAutoLink(g)}
+          onDismiss={() => setAutoLinked([])}
+        />
+      )}
 
       {skippedPositions.length > 0 && (
         <SkippedPanel positions={skippedPositions} onDismiss={() => setSkippedPositions([])} />

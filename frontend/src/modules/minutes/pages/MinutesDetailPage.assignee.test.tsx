@@ -85,6 +85,7 @@ describe('MinutesDetailPage action-item assignee picker (W52-6)', () => {
     const user = userEvent.setup();
     renderWithRouter(<MinutesDetailPage />);
 
+    await user.click(await screen.findByRole('button', { name: /^Action Items/ }));
     await user.click(await screen.findByRole('button', { name: 'Add Action Item' }));
     const form = screen.getByRole('form', { name: 'Add action item' });
     const picker = within(form).getByLabelText('Assignee');
@@ -107,6 +108,7 @@ describe('MinutesDetailPage action-item assignee picker (W52-6)', () => {
     const user = userEvent.setup();
     renderWithRouter(<MinutesDetailPage />);
 
+    await user.click(await screen.findByRole('button', { name: /^Action Items/ }));
     await user.click(await screen.findByRole('button', { name: 'Add Action Item' }));
     const form = screen.getByRole('form', { name: 'Add action item' });
     await within(form).findByRole('option', { name: 'Alice Adams' });

@@ -2246,9 +2246,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             item.checkType === 'count' &&
             item.criticalMinimumQuantity &&
             item.expectedQuantity &&
-            Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
+            // Equal is a real setting: any shortfall is critical (see
+            // isBelowCriticalMinimum). Only above it can never apply.
+            Number(item.criticalMinimumQuantity) > Number(item.expectedQuantity)
           ) {
-            warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
+            warnings.push(`"${item.name || 'Untitled'}" has a critical minimum above its expected quantity.`);
           }
           if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
             warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
@@ -2318,10 +2320,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   description: blankToNull(comp.description),
                   image_url: blankToNull(comp.imageUrl),
                   is_header: comp.isHeader,
-                  // NOT NULL column. A blank (a "Custom…" pick with no label
-                  // typed) is shown as "Compartment" and stored as such on
-                  // create, so send that rather than a null the server refuses.
-                  container_type: comp.containerType.trim() || 'compartment',
+                  // NOT NULL column with no cleared state: a blank is left out
+                  // (keep the stored type), never sent as null.
+                  container_type: comp.containerType.trim() || undefined,
                   is_sealed: comp.isSealed,
                   // Compartments have no auto-save path, so this is the only
                   // writer: re-parenting one to the top level is expressible
@@ -2356,9 +2357,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       image_url: blankToNull(item.imageUrl),
                       has_expiration: item.hasExpiration,
                       expiration_date: blankToNull(item.expirationDate),
-                      // NOT NULL with no cleared state: a blank box is omitted
-                      // (stored value kept), exactly as the auto-save path does.
-                      expiration_warning_days: numberOrNull(item.expirationWarningDays) ?? undefined,
+                      // NOT NULL, like the auto-save path above: blank is omitted.
+                      expiration_warning_days: item.expirationWarningDays
+                        ? Number(item.expirationWarningDays)
+                        : undefined,
                     })
                     .then(() => undefined);
                   void registerInFlightSave(

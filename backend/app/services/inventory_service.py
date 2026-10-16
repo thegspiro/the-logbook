@@ -108,7 +108,7 @@ from app.utils.label_renderer import (
 )
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
-from app.utils.name_matching import normalize_name
+from app.utils.name_matching import best_matches, normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.org_timezone import resolve_org_today, scheduling_timezone
 from app.utils.sql_results import rows_affected
@@ -440,6 +440,13 @@ _AREA_PATH_SEPARATOR = " > "
 _RETIRE_VIA_RETIRE_ACTION = "Use the item's retire action to deactivate it"
 
 
+# How many item names a fuzzy search will rank. Names are short and the scan is
+# one narrow SELECT, so this is generous; it exists so a catalog that grows far
+# past any realistic department cannot turn every keystroke into a full-table
+# read. Items past it are simply not considered, and a warning is logged.
+_FUZZY_CANDIDATE_CAP = 5000
+
+
 class ItemOutsideDomainError(LookupError):
     """A domain-scoped bulk write named an item outside that domain.
 
@@ -457,6 +464,23 @@ class ItemNameTakenOutsideDomainError(LookupError):
     list. Carries no details of the other row on purpose — a medical-only
     officer is told the name is in use, not what it is.
     """
+
+
+class CategoryHasItemsError(ValueError):
+    """A category still holds items and the caller named nowhere to move them.
+
+    A ValueError so a caller that does not care to tell it apart still gets a
+    400; the medical route catches it first to answer 409, because the request
+    is well-formed and the conflict is with stored data the caller can resolve.
+    """
+
+    def __init__(self, item_count: int) -> None:
+        self.item_count = item_count
+        noun = "supply uses" if item_count == 1 else "supplies use"
+        super().__init__(
+            f"{item_count} {noun} this category. "
+            "Choose a category to move them to before deleting it."
+        )
 
 
 def storage_area_paths(areas) -> Dict[str, str]:
@@ -1056,6 +1080,126 @@ class InventoryService:
         except Exception as e:
             await self.db.rollback()
             return False, str(e)
+
+    async def delete_category_permanently(
+        self,
+        category_id: UUID | str,
+        organization_id: UUID | str,
+        item_types: Iterable[ItemType],
+        move_items_to: UUID | str | None = None,
+    ) -> Dict[str, Any]:
+        """Hard-delete a category, first moving its items to another one.
+
+        Distinct from ``delete_category``, which only deactivates. Both ids
+        must be categories of ``item_types`` in this organization: a medical
+        officer deleting through this path can neither remove a uniform
+        category nor move supplies into one.
+
+        Items are moved, never left to the foreign key. The FK is ``SET NULL``,
+        and a category-less item reads as gear, so deleting under it would
+        silently carry every supply off the medical page. That is why a
+        category that still holds items is refused unless ``move_items_to`` is
+        given, and why inactive items count: a retired supply keeps its history
+        under its category.
+
+        Both category rows are locked, in id order so two deletes naming each
+        other cannot deadlock, and the counts are locking reads (Pitfall #27).
+        The row lock is what stops a new item or subcategory being filed under
+        the category between the check and the DELETE — an INSERT must take a
+        shared lock on its parent row — and the counts must be locking reads
+        because the caller's preflight already opened this transaction's
+        snapshot.
+
+        Raises ``LookupError`` when either category is gone or outside the
+        domain, ``CategoryHasItemsError`` when items remain with nowhere to go,
+        and ``ValueError`` for any other refusal.
+        """
+        org_id = str(organization_id)
+        source_id = str(category_id)
+        target_id = str(move_items_to) if move_items_to else None
+        if target_id == source_id:
+            raise ValueError("Choose a different category to move the supplies to")
+
+        domain = list(item_types)
+        try:
+            names: Dict[str, str] = {}
+            for locked_id in sorted(i for i in (source_id, target_id) if i):
+                row = (
+                    await self.db.execute(
+                        select(InventoryCategory.id, InventoryCategory.name)
+                        .where(
+                            InventoryCategory.id == locked_id,
+                            InventoryCategory.organization_id == org_id,
+                            InventoryCategory.item_type.in_(domain),
+                        )
+                        .with_for_update()
+                    )
+                ).first()
+                if row is None:
+                    raise LookupError("Category not found")
+                names[locked_id] = row.name
+
+            child_count = (
+                await self.db.execute(
+                    select(func.count(InventoryCategory.id))
+                    .where(
+                        InventoryCategory.parent_category_id == source_id,
+                        InventoryCategory.organization_id == org_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one()
+            if child_count:
+                raise ValueError(
+                    "This category has subcategories. "
+                    "Move or delete them before deleting it."
+                )
+
+            item_count = (
+                await self.db.execute(
+                    select(func.count(InventoryItem.id))
+                    .where(
+                        InventoryItem.category_id == source_id,
+                        InventoryItem.organization_id == org_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one()
+
+            items_moved = 0
+            if item_count:
+                if target_id is None:
+                    raise CategoryHasItemsError(item_count)
+                move_result = await self.db.execute(
+                    update(InventoryItem)
+                    .where(
+                        InventoryItem.category_id == source_id,
+                        InventoryItem.organization_id == org_id,
+                    )
+                    .values(category_id=target_id)
+                )
+                items_moved = rows_affected(move_result)
+
+            await self.db.execute(
+                delete(InventoryCategory).where(
+                    InventoryCategory.id == source_id,
+                    InventoryCategory.organization_id == org_id,
+                )
+            )
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        logger.info(
+            f"Deleted category {source_id} in organization {org_id}; "
+            f"moved {items_moved} item(s) to {target_id}"
+        )
+        return {
+            "category_name": names[source_id],
+            "items_moved": items_moved,
+            "moved_to_name": names[target_id] if target_id else None,
+        }
 
     # ============================================
     # Vendor Management
@@ -1915,7 +2059,71 @@ class InventoryService:
         "purchase_price": InventoryItem.purchase_price,
         "created_at": InventoryItem.created_at,
         "updated_at": InventoryItem.updated_at,
+        "reorder_point": InventoryItem.reorder_point,
     }
+    # "category" and "on_hand" are computed per query; see _sort_expression.
+    _NULLS_LAST_SORTS = {"category", "reorder_point"}
+    _NAME_TIEBREAK_SORTS = {"category", "on_hand", "reorder_point"}
+
+    async def _sort_expression(
+        self, sort_by: Optional[str], organization_id: UUID | str
+    ) -> Any:
+        """The ORDER BY expression for ``sort_by``; unknown keys sort by name.
+
+        ``category`` orders by the category's *name*, not its id, through a
+        correlated subquery rather than a join, so it cannot collide with the
+        category join a ``group_by`` adds.
+
+        ``on_hand`` orders by the number every list displays, which is not
+        ``quantity`` for a lot-stocked item: once an item has any lot, its
+        stock is the sum of its in-date lots and the column is no longer
+        maintained (see ``_in_date_lot_totals``, whose rule this mirrors).
+        Sorting by the raw column put a supply showing 40 on hand among the
+        empty ones.
+        """
+        org = str(organization_id)
+        if sort_by == "category":
+            return (
+                select(InventoryCategory.name)
+                .where(
+                    InventoryCategory.id == InventoryItem.category_id,
+                    InventoryCategory.organization_id == org,
+                )
+                .scalar_subquery()
+            )
+        if sort_by == "on_hand":
+            today = await resolve_org_today(self.db, org)
+            lot_scope = (
+                InventoryLot.inventory_item_id == InventoryItem.id,
+                InventoryLot.organization_id == org,
+            )
+            in_date_total = (
+                select(
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    or_(
+                                        InventoryLot.expiration_date.is_(None),
+                                        InventoryLot.expiration_date >= today,
+                                    ),
+                                    InventoryLot.quantity,
+                                ),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    )
+                )
+                .where(*lot_scope)
+                .scalar_subquery()
+            )
+            has_lots = select(InventoryLot.id).where(*lot_scope).exists()
+            return case(
+                (has_lots, in_date_total),
+                else_=func.coalesce(InventoryItem.quantity, 0),
+            )
+        return self._SORTABLE_COLUMNS.get(sort_by or "name", InventoryItem.name)
 
     @staticmethod
     def _category_ids_of_type(
@@ -1980,6 +2188,7 @@ class InventoryService:
         style: Optional[str] = None,
         active_only: bool = True,
         label_printed: Optional[bool] = None,
+        item_ids: Optional[Iterable[str]] = None,
     ) -> "Select":
         """The filtered item select, with no ordering, joins or pagination.
 
@@ -1999,6 +2208,11 @@ class InventoryService:
 
         if category_id:
             query = query.where(InventoryItem.category_id == str(category_id))
+
+        # An explicit set from a caller that has already decided which rows it
+        # wants (the medical page's low-stock view). Empty means none, not all.
+        if item_ids is not None:
+            query = query.where(InventoryItem.id.in_([str(i) for i in item_ids]))
 
         if status:
             query = query.where(InventoryItem.status == status)
@@ -2149,8 +2363,16 @@ class InventoryService:
         group_by: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
+        fuzzy: bool = False,
+        item_ids: Optional[Iterable[str]] = None,
     ) -> Tuple[List[InventoryItem], int]:
         """Get items with filtering, sorting, and pagination.
+
+        ``fuzzy`` hands a first-page search to ``search_items_fuzzy``, which
+        appends near-name matches below the exact ones. It applies only to a
+        search with no grouping on page one; anything else is the plain list,
+        and sorting and pinning do not apply to a fuzzy result, which is ordered
+        by how well each item matches.
 
         ``unassigned_location`` restricts to items filed under no location at
         all — the population the location panel labels "Unassigned". It is
@@ -2179,6 +2401,30 @@ class InventoryService:
         a header tallying only the loaded page would be worse than no header,
         since "Class A Uniform (3)" reads as a total when 40 match.
         """
+        if fuzzy and search and skip == 0 and not group_by:
+            return await self.search_items_fuzzy(
+                organization_id,
+                search,
+                limit=limit,
+                category_id=category_id,
+                status=status,
+                condition=condition,
+                item_type=item_type,
+                item_types=item_types,
+                exclude_item_types=exclude_item_types,
+                assigned_to=assigned_to,
+                location_id=location_id,
+                unassigned_location=unassigned_location,
+                storage_area_id=storage_area_id,
+                vendor_id=vendor_id,
+                size=size,
+                color=color,
+                style=style,
+                active_only=active_only,
+                label_printed=label_printed,
+                item_ids=item_ids,
+            )
+
         query = self._joined_items_query(
             organization_id=organization_id,
             group=self._group_spec(group_by) if group_by else None,
@@ -2200,6 +2446,7 @@ class InventoryService:
             style=style,
             active_only=active_only,
             label_printed=label_printed,
+            item_ids=item_ids,
         )
 
         # Get total count
@@ -2218,6 +2465,97 @@ class InventoryService:
             limit=limit,
         )
         return items, total
+
+    async def search_items_fuzzy(
+        self,
+        organization_id: UUID | str,
+        search: str,
+        limit: int = 20,
+        **filters: Any,
+    ) -> Tuple[List[InventoryItem], int]:
+        """``get_items`` for a person who is looking a name up, not typing it exactly.
+
+        The substring matches ``get_items`` already finds come first, in the
+        order it returns them, so turning this on can only add results below
+        today's, never reorder or drop them. When that leaves room under
+        ``limit``, items whose *name* — or "also called" names — merely
+        resemble the search fill the rest, best match first: plurals,
+        "4 x 4" for "4x4", a near-spelling, "BVM" for "Bag Valve Mask". Only
+        names are compared; a manufacturer's or description's wording is not.
+
+        ``**filters`` are ``_build_items_query``'s, and are applied to both
+        halves, so the domain a caller is pinned to (medical or gear) bounds
+        the fuzzy results exactly as it bounds the exact ones. Always the first
+        page: ``total`` is the number returned and not a count of everything
+        that might resemble the search, because "resembles" has no natural
+        edge to count to.
+        """
+        exact, total = await self.get_items(
+            organization_id=organization_id,
+            search=search,
+            skip=0,
+            limit=limit,
+            **filters,
+        )
+        room = limit - len(exact)
+        if room <= 0:
+            return exact, total
+
+        criteria = self._build_items_query(
+            organization_id=organization_id, search=None, **filters
+        ).whereclause
+        if criteria is None:
+            # The builder always scopes to the organization. If that ever stops
+            # being true, a scan on its criteria would read every tenant's
+            # names, so refuse rather than run it.
+            raise RuntimeError("Fuzzy item search has no organization scope")
+        rows = (
+            await self.db.execute(
+                select(InventoryItem.id, InventoryItem.name, InventoryItem.also_called)
+                .where(criteria)
+                .order_by(InventoryItem.name)
+                .limit(_FUZZY_CANDIDATE_CAP)
+            )
+        ).all()
+        if len(rows) >= _FUZZY_CANDIDATE_CAP:
+            logger.warning(
+                f"Fuzzy item search scanned the {_FUZZY_CANDIDATE_CAP} item cap "
+                f"for organization {organization_id}; later names were not considered"
+            )
+
+        found = {str(item.id) for item in exact}
+        ranked = best_matches(
+            search,
+            [
+                (str(r.id), r.name, r.also_called)
+                for r in rows
+                if str(r.id) not in found
+            ],
+            limit=room,
+        )
+        if not ranked:
+            return exact, total
+
+        order = {str(match["id"]): rank for rank, match in enumerate(ranked)}
+        fuzzy_query = self._joined_items_query(
+            organization_id=organization_id,
+            group=None,
+            pinned_for_user_id=None,
+            search=None,
+            **filters,
+        ).where(InventoryItem.id.in_(list(order)))
+        fuzzy = await self._run_items_page(
+            fuzzy_query,
+            organization_id=organization_id,
+            group_by=None,
+            pinned_for_user_id=None,
+            sort_by=None,
+            sort_order=None,
+            skip=0,
+            limit=len(order),
+        )
+        fuzzy.sort(key=lambda item: order[str(item.id)])
+        return exact + fuzzy, total + len(fuzzy)
 
     async def get_items_page(
         self,
@@ -2314,7 +2652,7 @@ class InventoryService:
         # Apply sorting
         # The id breaks ties (repeated uniforms share a name), so an offset
         # page never repeats or skips a row between calls.
-        col = self._SORTABLE_COLUMNS.get(sort_by or "name", InventoryItem.name)
+        col = await self._sort_expression(sort_by, organization_id)
         order: List[Any] = []
         if pinned_for_user_id is not None:
             # Pinned rows first, in the member's own order, ahead of whatever
@@ -2335,10 +2673,22 @@ class InventoryService:
                 group[0].is_(None),
                 group[0].asc(),
             ]
+        if sort_by in self._NULLS_LAST_SORTS:
+            # Blanks last in both directions. MySQL puts NULL first ascending,
+            # so uncategorized rows and items with no reorder point would
+            # otherwise head the list ahead of every real value.
+            order.append(col.is_(None))
         if sort_order == "desc":
-            order += [col.desc(), InventoryItem.id.desc()]
+            order.append(col.desc())
         else:
-            order += [col.asc(), InventoryItem.id.asc()]
+            order.append(col.asc())
+        if sort_by in self._NAME_TIEBREAK_SORTS:
+            # Many rows share a category or a count; alphabetical within each
+            # reads as a list, where the id order alone reads as random.
+            order.append(InventoryItem.name.asc())
+        order.append(
+            InventoryItem.id.desc() if sort_order == "desc" else InventoryItem.id.asc()
+        )
         query = query.order_by(*order)
 
         query = query.offset(skip).limit(limit)
@@ -8939,6 +9289,317 @@ class InventoryService:
             query.order_by(InventoryLot.expiration_date.asc())
         )
         return [(row[0], row[1]) for row in result.all()]
+
+    async def item_sizes(
+        self, organization_id: str, item_ids: Iterable[str]
+    ) -> Dict[str, Optional[str]]:
+        """``{item_id: size}`` for these items, org-scoped, in one query."""
+        ids = {str(i) for i in item_ids}
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.size).where(
+                InventoryItem.id.in_(ids),
+                InventoryItem.organization_id == str(organization_id),
+            )
+        )
+        return {str(item_id): size for item_id, size in result.all()}
+
+    async def storage_area_index(
+        self, organization_id: str
+    ) -> Dict[str, Dict[str, Any]]:
+        """Every storage area in the organization, with its room and path.
+
+        A storage area names its room only at the top of its tree — a shelf
+        inherits the room of the rack it sits in (see ``StorageArea``) — so
+        both the room and the readable path ("Cabinet B › Shelf 2") are
+        resolved here by walking parents, once, rather than per row. Inactive
+        areas are included so an item still filed in one keeps its label; the
+        caller decides whether to offer them.
+        """
+        org = str(organization_id)
+        rows = (
+            await self.db.execute(
+                select(
+                    StorageArea.id,
+                    StorageArea.name,
+                    StorageArea.label,
+                    StorageArea.storage_type,
+                    StorageArea.parent_id,
+                    StorageArea.location_id,
+                    StorageArea.is_active,
+                    StorageArea.sort_order,
+                ).where(StorageArea.organization_id == org)
+            )
+        ).all()
+        rooms = await self.location_names(org)
+        raw = {str(r.id): r for r in rows}
+
+        index: Dict[str, Dict[str, Any]] = {}
+
+        def resolve(area_id: str) -> Dict[str, Any]:
+            if area_id in index:
+                return index[area_id]
+            # Walk to the top, guarding against a parent cycle a bad edit
+            # could leave behind: a repeated id ends the walk.
+            chain: List[Any] = []
+            seen: set = set()
+            current: Optional[str] = area_id
+            while current and current in raw and current not in seen:
+                seen.add(current)
+                chain.append(raw[current])
+                current = (
+                    str(raw[current].parent_id) if raw[current].parent_id else None
+                )
+            chain.reverse()
+            location_id = next(
+                (str(a.location_id) for a in chain if a.location_id), None
+            )
+            row = raw[area_id]
+            entry = {
+                "id": area_id,
+                "name": row.name,
+                "label": row.label,
+                "storage_type": getattr(row.storage_type, "value", row.storage_type),
+                "parent_id": str(row.parent_id) if row.parent_id else None,
+                "location_id": location_id,
+                "location_name": rooms.get(location_id) if location_id else None,
+                "is_active": bool(row.is_active),
+                "sort_order": row.sort_order or 0,
+                "path": [a.name for a in chain],
+            }
+            index[area_id] = entry
+            return entry
+
+        for area_id in raw:
+            resolve(area_id)
+        return index
+
+    async def location_names(self, organization_id: str) -> Dict[str, str]:
+        """``{location_id: name}`` for the organization's rooms and places."""
+        rows = await self.db.execute(
+            select(Location.id, Location.name).where(
+                Location.organization_id == str(organization_id)
+            )
+        )
+        return {str(loc_id): name for loc_id, name in rows.all()}
+
+    @staticmethod
+    def storage_path(
+        item: Any,
+        areas: Dict[str, Dict[str, Any]],
+        rooms: Dict[str, str],
+    ) -> Optional[str]:
+        """ "Station 1 › Supply Room › Shelf 2" for an item, or None.
+
+        The room comes from the item, falling back to its area's room, so an
+        item filed on a shelf by a form that did not also set the room still
+        says which building it is in.
+        """
+        area = areas.get(str(item.storage_area_id)) if item.storage_area_id else None
+        room_id = str(item.location_id) if item.location_id else None
+        if room_id is None and area is not None:
+            room_id = area["location_id"]
+        parts: List[str] = []
+        if room_id and rooms.get(room_id):
+            parts.append(rooms[room_id])
+        if area is not None:
+            parts.extend(area["path"])
+        return " › ".join(parts) or None
+
+    @staticmethod
+    def area_and_descendants(
+        areas: Dict[str, Dict[str, Any]], area_id: str
+    ) -> List[str]:
+        """This area and every area nested under it, at any depth."""
+        children: Dict[str, List[str]] = {}
+        for a in areas.values():
+            if a["parent_id"]:
+                children.setdefault(a["parent_id"], []).append(a["id"])
+        found: List[str] = []
+        stack = [str(area_id)]
+        while stack:
+            current = stack.pop()
+            if current in found:
+                continue
+            found.append(current)
+            stack.extend(children.get(current, []))
+        return found
+
+    async def item_ids_stored_in(
+        self,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+        *,
+        location_id: Optional[str] = None,
+        storage_area_id: Optional[str] = None,
+    ) -> List[str]:
+        """Items filed in a room or a storage area, nested areas included.
+
+        A room matches an item filed under it directly, or on any area inside
+        it — the area forms do not always set the room as well. An area
+        matches itself and everything nested beneath it, so asking for
+        "Cabinet B" finds the gauze on Shelf 2 of it.
+        """
+        org = str(organization_id)
+        areas = await self.storage_area_index(org)
+        area_ids: List[str] = []
+        if storage_area_id:
+            if str(storage_area_id) not in areas:
+                return []
+            area_ids = self.area_and_descendants(areas, str(storage_area_id))
+        elif location_id:
+            area_ids = [
+                a["id"] for a in areas.values() if a["location_id"] == str(location_id)
+            ]
+        conditions: List[Any] = []
+        if area_ids:
+            conditions.append(InventoryItem.storage_area_id.in_(area_ids))
+        if location_id and not storage_area_id:
+            conditions.append(InventoryItem.location_id == str(location_id))
+        if not conditions:
+            return []
+        rows = await self.db.execute(
+            select(InventoryItem.id)
+            .join(InventoryCategory, InventoryCategory.id == InventoryItem.category_id)
+            .where(
+                InventoryItem.organization_id == org,
+                InventoryCategory.item_type.in_(list(item_types)),
+                or_(*conditions),
+            )
+        )
+        return [str(i) for i in rows.scalars().all()]
+
+    async def next_lot_expirations(
+        self, organization_id: str, item_ids: Iterable[str]
+    ) -> Dict[str, date]:
+        """``{item_id: soonest expiry}`` across lots that still hold stock.
+
+        Expired lots count: a lot past its date with units left in it is the
+        most urgent thing on the shelf, and leaving it out would show the next
+        good date over stock that has to be pulled. Empty lots and lots with
+        no date have nothing to report.
+        """
+        ids = {str(i) for i in item_ids}
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                InventoryLot.inventory_item_id, func.min(InventoryLot.expiration_date)
+            )
+            .where(
+                InventoryLot.organization_id == str(organization_id),
+                InventoryLot.inventory_item_id.in_(ids),
+                InventoryLot.quantity > 0,
+                InventoryLot.expiration_date.is_not(None),
+            )
+            .group_by(InventoryLot.inventory_item_id)
+        )
+        # The WHERE excludes undated lots, so MIN is never NULL for a row
+        # returned; the guard is for the type checker's benefit only.
+        return {
+            str(item_id): soonest
+            for item_id, soonest in result.all()
+            if soonest is not None
+        }
+
+    async def category_item_counts(
+        self, organization_id: str, category_ids: Iterable[str]
+    ) -> Dict[str, int]:
+        """Active items filed under each category, org-scoped, in one query.
+
+        Active only, matching the supply list a category card opens, so the
+        count on the card and the rows under it agree.
+        """
+        ids = {str(i) for i in category_ids}
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(InventoryItem.category_id, func.count(InventoryItem.id))
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.category_id.in_(ids),
+                InventoryItem.active.is_(True),
+            )
+            .group_by(InventoryItem.category_id)
+        )
+        return {str(cat_id): int(n) for cat_id, n in result.all()}
+
+    async def pool_item_ids_by_name(
+        self,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> Dict[str, str]:
+        """Active pool items in a domain, keyed by ``normalize_name``.
+
+        One query for a whole import, rather than ``_item_id_by_name`` per row
+        — that scans the org's entire catalog each call, and an import naming
+        two hundred lots would scan it two hundred times.
+
+        Pool rows only, for the reason ``create_item_if_absent`` gives: a pool
+        row is the definition of a supply and owns its lots, while two
+        individual rows sharing a name are two physical devices. Oldest first
+        wins a name collision, so an older record's lots are not split onto a
+        later duplicate.
+        """
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.name)
+            .where(
+                InventoryItem.organization_id == organization_id,
+                InventoryItem.active.is_(True),
+                InventoryItem.tracking_type == TrackingType.POOL,
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                ),
+            )
+            .order_by(InventoryItem.created_at.asc(), InventoryItem.id.asc())
+        )
+        by_name: Dict[str, str] = {}
+        for item_id, name in result.all():
+            key = normalize_name(name or "")
+            if key:
+                by_name.setdefault(key, str(item_id))
+        return by_name
+
+    async def get_lots_for_export(
+        self,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> List[Tuple[InventoryLot, str, Optional[str]]]:
+        """Every stocked lot in a domain, as ``(lot, item_name, category_name)``.
+
+        The lot-level counterpart to the items export: one row per lot still
+        holding stock, soonest expiry first, so an expiry audit reads top-down.
+        Undated lots sort last rather than first — MySQL orders NULL ahead of
+        any date ascending, which would bury the lots that actually expire.
+
+        Retired items and emptied lots are left out for the reason
+        ``get_expiring_lots`` gives: neither is stock anyone can act on.
+        """
+        query = (
+            select(InventoryLot, InventoryItem.name, InventoryCategory.name)
+            .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
+            .outerjoin(
+                InventoryCategory, InventoryCategory.id == InventoryItem.category_id
+            )
+            .where(
+                InventoryLot.organization_id == organization_id,
+                InventoryItem.organization_id == organization_id,
+                InventoryItem.active.is_(True),
+                InventoryLot.quantity > 0,
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                ),
+            )
+            .order_by(
+                InventoryLot.expiration_date.is_(None),
+                InventoryLot.expiration_date.asc(),
+                InventoryItem.name.asc(),
+                InventoryLot.id.asc(),
+            )
+        )
+        result = await self.db.execute(query)
+        return [(row[0], row[1], row[2]) for row in result.all()]
 
     async def get_overdue_checkouts_for_alerts(
         self,

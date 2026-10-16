@@ -20,12 +20,19 @@ import {
   ChevronDown,
   ChevronUp,
   Users,
+  ListOrdered,
+  Bell,
+  PenLine,
 } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { Link, useNavigate } from 'react-router';
 import { meetingsService } from '../../../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../../../services/api';
 import { minutesService } from '../services/api';
+import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
+import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
+import { ReminderSettingsDialog } from '../components/ReminderSettingsDialog';
+import { SignerSettingsDialog } from '../components/SignerSettingsDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { toDisplayString } from '../../../utils/displayValue';
 import type { MeetingType, MinutesListItem, MinutesStats } from '../types/minutes';
@@ -75,8 +82,8 @@ const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
 
 const MINUTES_STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
-  submitted: 'Awaiting approval',
-  approved: 'Approved',
+  submitted: 'Circulated for review',
+  approved: 'Adopted',
   rejected: 'Returned for changes',
 };
 
@@ -87,6 +94,8 @@ const MinutesPage: React.FC = () => {
   // MM-3: minutes writes and restricted reads are gated on minutes.manage on
   // the backend, not meetings.manage — check the same permission the API does.
   const canManage = checkPermission('minutes.manage');
+  const [showReminderSettings, setShowReminderSettings] = useState(false);
+  const [showSignerSettings, setShowSignerSettings] = useState(false);
   // The attendance dashboard's endpoint is gated on meetings.manage.
   const canViewAttendance = checkPermission('meetings.manage');
 
@@ -98,6 +107,7 @@ const MinutesPage: React.FC = () => {
   const [minutesByMeeting, setMinutesByMeeting] = useState<Map<string, MinutesListItem[]>>(new Map());
   const [minutesStats, setMinutesStats] = useState<MinutesStats | null>(null);
   const [openingMeetingId, setOpeningMeetingId] = useState<string | null>(null);
+  const [pickingFor, setPickingFor] = useState<{ id: string; type: string } | null>(null);
 
   // Loading / error state
   const [loading, setLoading] = useState(true);
@@ -210,23 +220,43 @@ const MinutesPage: React.FC = () => {
 
   // Opens the meeting's existing minutes rather than writing a second set;
   // only a meeting with none gets new minutes (W51-3).
-  const handleOpenMinutes = async (meetingId: string) => {
-    const existing = minutesByMeeting.get(meetingId)?.[0];
-    if (existing) {
-      void navigate(`/minutes/${existing.id}`);
-      return;
-    }
-    if (openingMeetingId) return;
+  const createMinutesFor = async (meetingId: string, outlineId?: string) => {
     setOpeningMeetingId(meetingId);
     try {
-      const minutes = await minutesService.createFromMeeting(meetingId);
+      const minutes = outlineId
+        ? await minutesService.createFromMeeting(meetingId, outlineId)
+        : await minutesService.createFromMeeting(meetingId);
       toast.success('Minutes created from meeting');
+      setPickingFor(null);
       void navigate(`/minutes/${minutes.id}`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to create minutes from this meeting'));
     } finally {
       setOpeningMeetingId(null);
     }
+  };
+
+  const handleOpenMinutes = async (meetingId: string, meetingType: string) => {
+    const existing = minutesByMeeting.get(meetingId)?.[0];
+    if (existing) {
+      void navigate(`/minutes/${existing.id}`);
+      return;
+    }
+    if (openingMeetingId) return;
+    // A department with one outline for this kind of meeting has nothing to
+    // choose; the server starts from its default. With several, ask.
+    let choices: number;
+    try {
+      const outlines = await minutesService.getOutlines();
+      choices = outlines.filter((o) => o.meeting_type === meetingType).length;
+    } catch {
+      choices = 0;
+    }
+    if (choices > 1) {
+      setPickingFor({ id: meetingId, type: meetingType });
+      return;
+    }
+    await createMinutesFor(meetingId);
   };
 
   const handleDeleteMeeting = async (meetingId: string) => {
@@ -303,6 +333,32 @@ const MinutesPage: React.FC = () => {
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
+            {canManage && (
+              <Link to="/minutes/outlines" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
+                <ListOrdered className="h-4 w-4" aria-hidden="true" />
+                <span>Outlines</span>
+              </Link>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setShowReminderSettings(true)}
+                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
+              >
+                <Bell className="h-4 w-4" aria-hidden="true" />
+                <span>Reminders</span>
+              </button>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setShowSignerSettings(true)}
+                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
+              >
+                <PenLine className="h-4 w-4" aria-hidden="true" />
+                <span>Signers</span>
+              </button>
+            )}
             {canViewAttendance && (
               <Link to="/minutes/attendance" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
                 <Users className="h-4 w-4" aria-hidden="true" />
@@ -347,6 +403,8 @@ const MinutesPage: React.FC = () => {
             <p className="mt-1 text-2xl font-bold text-orange-700">{minutesStats?.pending_approval ?? 0}</p>
           </div>
         </div>
+
+        <MyActionItemsPanel />
 
         {/* Search & Filter */}
         <div className="card mb-6 p-4">
@@ -520,7 +578,7 @@ const MinutesPage: React.FC = () => {
                       <div className="ml-4 flex items-center gap-1">
                         <button
                           onClick={() => {
-                            void handleOpenMinutes(meeting.id);
+                            void handleOpenMinutes(meeting.id, String(meeting.meeting_type));
                           }}
                           disabled={openingMeetingId === meeting.id}
                           className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-cyan-500/10 hover:text-cyan-800 disabled:opacity-50 dark:hover:text-cyan-400"
@@ -676,7 +734,23 @@ const MinutesPage: React.FC = () => {
           </>
         )}
 
+        <OutlinePickerDialog
+          isOpen={pickingFor !== null}
+          meetingType={pickingFor?.type ?? ''}
+          busy={openingMeetingId !== null}
+          onClose={() => setPickingFor(null)}
+          onChoose={(outlineId) => {
+            if (pickingFor) void createMinutesFor(pickingFor.id, outlineId);
+          }}
+        />
+
         {/* Create Minutes Modal */}
+        {canManage && (
+          <ReminderSettingsDialog isOpen={showReminderSettings} onClose={() => setShowReminderSettings(false)} />
+        )}
+
+        {canManage && <SignerSettingsDialog isOpen={showSignerSettings} onClose={() => setShowSignerSettings(false)} />}
+
         {canManage && showCreateModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">

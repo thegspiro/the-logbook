@@ -109,3 +109,42 @@ async def test_normal_change_still_enforces_minimum_age():
     assert success is False
     assert error is not None
     assert "recently" in error.lower()
+
+
+@pytest.mark.unit
+@pytest.mark.usefixtures("_patched_helpers")
+async def test_an_account_with_no_password_cannot_change_one():
+    """An SSO-only account has no current password to match."""
+    user = _recent_user(password_hash=None, must_change_password=True)
+    svc = _service()
+
+    success, error = await svc.change_password(
+        user=user,
+        current_password=CURRENT_PASSWORD,
+        new_password=NEW_PASSWORD,
+    )
+
+    assert success is False
+    assert "current password is incorrect" in error.lower()
+    assert user.password_hash is None
+    auth_module._save_password_to_history.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.usefixtures("_patched_helpers")
+async def test_the_replaced_hash_is_what_history_records():
+    user = _recent_user(must_change_password=True)
+    old_hash = user.password_hash
+    svc = _service()
+
+    success, _ = await svc.change_password(
+        user=user,
+        current_password=CURRENT_PASSWORD,
+        new_password=NEW_PASSWORD,
+    )
+
+    assert success is True
+    auth_module._save_password_to_history.assert_awaited_once_with(
+        svc.db, "u1", old_hash
+    )
+    assert user.password_hash != old_hash

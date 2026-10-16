@@ -95,6 +95,12 @@ judged on required seats. Either way at most 500 candidate shifts in the
 window are examined. Every shift response carries its `roster` (seat
 occupants), so a month of shifts arrives with its occupants in one request.
 
+A finalized shift is locked: `DELETE /shifts/{id}` refuses it, as it refuses a
+shift that has shift completion reports (remove the reports first), and
+`POST …/cancel` and `POST …/late-signup` refuse it too. Cancelling keeps the
+record (`status` `cancelled`, with who, when and why), so it is the route for a
+shift that should not run.
+
 ### Signup, assignments and standing shifts
 
 ```
@@ -140,6 +146,29 @@ PUT    /eligibility/settings            # Update them (scheduling.manage)
 `/eligibility/positions/bulk` answers once for many shifts (the board asks
 once per day rather than once per shift): the expensive half of the answer
 is about the member and is identical across the shifts.
+
+**Driver exceptions** live on the apparatus router, `/api/v1/apparatus`, and
+are surfaced on Who Can Fill What (`PositionRosterPage`, Driver exceptions
+tab):
+
+```
+GET    /driver-exceptions                       # List (apparatus.view/manage or scheduling.view/manage)
+GET    /driver-exceptions/approvers             # Who may approve
+POST   /driver-exceptions                       # Request one (scheduling.assign, scheduling.manage or apparatus.manage)
+POST   /driver-exceptions/{exception_id}/review # Approve or deny (apparatus.approve_driver_exception)
+POST   /driver-exceptions/{exception_id}/revoke # Revoke (apparatus.approve_driver_exception)
+GET    /evoc-check/{apparatus_id}/{user_id}     # Would this member clear the unit's EVOC level?
+```
+
+A request grants nothing until approved; the requester cannot approve it and
+the member it covers cannot approve their own. `valid_until` is required and
+at most 366 days after `valid_from` (`MAX_VALIDITY_DAYS` in `driver_exception_service.py`). A
+NULL `apparatus_id` covers any unit; when both match, the unit-specific
+exception is preferred. `apparatus.approve_driver_exception` is granted by
+default to the fire chief, deputy chief and assistant chief positions and
+ranks only. Revoking has no separation-of-duties bar. The EVOC check itself is
+on while `org.settings["scheduling"]["enforce_evoc"]` is true (the default) and
+does nothing until an apparatus names a `required_evoc_level_id`.
 
 ### Attendance, check-in and pre-shift work
 
@@ -415,15 +444,15 @@ passes); on `POST …/swap` they may deploy only enough stock to fill the
 position's shortfall or replace the expired units aboard, and may not make
 a position's first catalog link.
 
-| Behaviour               | Detail                                                                                                                                                                  |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Derived values**      | A position's count is the sum of its deployed lots; its expiration is the earliest of them                                                                              |
-| **Consumption order**   | First-expiring-first-out; undated lots sort last                                                                                                                        |
-| **Expiry**              | Recomputed server-side from the soonest date aboard. A client-supplied `is_expired` is ignored — that flag force-fails a safety-critical item                           |
-| **Expired shelf stock** | Excluded from ready stock, flagged in the payload, and refused by `POST …/swap` with a `400`                                                                            |
-| **Lot corrections**     | `PUT …/deployed-lots/{lot_id}` requires `quantity`; `lot_number` and `expiration_date` are partial (omitted leaves alone, `null` clears). `quantity: 0` removes the lot |
-| **Match confidence**    | `inventory-matches` returns a `score` and a `confidence` of `exact`, `strong` or `weak`. Only `exact` (identical normalized names) is pre-selected client-side          |
-| **404 vs 400**          | An unknown template, item or lot is a `404`; a business-rule refusal (expired lot, over-draw, cross-org reference) is a `400` via `safe_error_detail()`                 |
+| Behaviour               | Detail                                                                                                                                                                                                                                                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Derived values**      | A position's count is the sum of its deployed lots; its expiration is the earliest of them                                                                                                                                                                                                                     |
+| **Consumption order**   | First-expiring-first-out; undated lots sort last                                                                                                                                                                                                                                                               |
+| **Expiry**              | Recomputed server-side from the soonest date aboard. A client-supplied `is_expired` is ignored — that flag force-fails a safety-critical item                                                                                                                                                                  |
+| **Expired shelf stock** | Excluded from ready stock, flagged in the payload, and refused by `POST …/swap` with a `400`                                                                                                                                                                                                                   |
+| **Lot corrections**     | `PUT …/deployed-lots/{lot_id}` requires `quantity`; `lot_number` and `expiration_date` are partial (omitted leaves alone, `null` clears). `quantity: 0` removes the lot                                                                                                                                        |
+| **Match confidence**    | `inventory-matches` returns a `score` and a `confidence` of `exact`, `strong` or `weak`, plus `matchedAlias` when an item's "also called" name rather than its own produced the match. Only `exact` (the same words) is pre-selected client-side; a plural, a near-spelling or an alias match never reaches it |
+| **404 vs 400**          | An unknown template, item or lot is a `404`; a business-rule refusal (expired lot, over-draw, cross-org reference) is a `400` via `safe_error_detail()`                                                                                                                                                        |
 
 The rest of the equipment-check API is documented in the
 [Inventory module](Module-Inventory#equipment-checklists).
@@ -451,6 +480,12 @@ The rest of the equipment-check API is documented in the
 | `external_agencies` / `external_apparatus` / `external_shift_hours`                     | Shifts with other departments (`start_at` / `end_at`; at most 48 h per entry)                                                                                                                                                                                                                                                                              |
 | `shift_history_imports` / `shift_history_import_rows` / `shift_history_import_mappings` | Shift history import drafts and persisted decisions                                                                                                                                                                                                                                                                                                        |
 | `check_item_deployed_lots`                                                              | One row per lot aboard one checklist position (Inventory)                                                                                                                                                                                                                                                                                                  |
+| `shift_completion_reports`                                                              | Training's shift reports; `UniqueConstraint(shift_id, trainee_id)` (`uq_shift_report_shift_trainee`)                                                                                                                                                                                                                                                       |
+| `driver_exceptions`                                                                     | Chief-approved permission for a member to drive below a unit's EVOC level: `apparatus_id` (NULL = any), `status` starting `pending`, `valid_from` / `valid_until`                                                                                                                                                                                          |
+
+Status values: `shifts.status` is `scheduled` or `cancelled` (finalizing is the
+separate `is_finalized` flag); swap and time-off requests are `pending`,
+`approved`, `denied` or `cancelled`.
 
 Related columns elsewhere:
 
@@ -469,6 +504,17 @@ Seat lists in `shifts.positions`, `shift_templates.positions` and
 `required=true`. Template positions are copied onto each shift when it is
 created, so later template edits do not change existing shifts.
 
+Every path that seats a member — signup, officer assignment and edit, swap
+review, offer acceptance, open-swap pickup and standing-shift seating — checks
+the requested seat with one function, `app.utils.positions.resolve_seat`,
+against **that shift's** seats. A seat the shift names is matched
+case-insensitively and stored in the shift's spelling; one of the ten built-in
+seats (`officer`, `driver`, `firefighter`, `ems`, `paramedic`, `captain`,
+`lieutenant`, `probationary`, `volunteer`, `other`) the shift does not name is
+left to the capacity check; anything else — including another department's
+seat — is a `422` with `LB-SCHED-003`. Seat names are at most 100 characters
+(`VARCHAR(100)` assignment columns).
+
 Settings live in `org.settings`: `scheduling` (platoons, overtime advisory,
 auto-generation, close-out rules, signup window, call tracking, decline
 alerts), `scheduling_assignment`, `shift_reminders`, and `shift_reports`
@@ -477,6 +523,25 @@ alerts), `scheduling_assignment`, `shift_reminders`, and `shift_reports`
 Scheduling response schemas derive from `UTCResponseBase`, which stamps naive
 datetimes as UTC; all times are stored in UTC and shown in the department's
 timezone.
+
+---
+
+## Scheduled Tasks
+
+Defined in `SCHEDULE` and `TASK_RUNNERS` in
+`backend/app/services/scheduled_tasks.py` and run by the backend's in-process
+task loop.
+
+| Task                               | Cadence      | What it does                                                                                                |
+| ---------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------- |
+| `shift_auto_checkout`              | every 15 min | Checkout reminders at shift end; auto-checks-out anyone still in 30 minutes later                           |
+| `shift_reminders`                  | every 30 min | Start-of-shift reminders, with the shift's equipment checklists, to assigned members                        |
+| `post_shift_validation`            | every 30 min | Asks shift officers to validate attendance and timing after the shift ends                                  |
+| `end_of_shift_checklist_reminders` | every 30 min | Reminds assigned members to complete end-of-shift equipment checklists before the shift ends                |
+| `end_of_shift_summary`             | every 30 min | Email and in-app summary (hours, calls, report link) to each member who attended                            |
+| `shift_pattern_generation`         | daily 04:00  | Generates upcoming shifts from active patterns where auto-generation is on                                  |
+| `swap_offer_expiry`                | daily 05:30  | Expires swap offers nobody accepted by the day before the shift and tells both members and the duty officer |
+| `trainee_report_escalation`        | daily 08:00  | Escalates shift completion reports awaiting trainee acknowledgment past the window (default 7 days)         |
 
 ---
 

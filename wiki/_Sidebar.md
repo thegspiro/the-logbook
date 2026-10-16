@@ -66,6 +66,7 @@
 - [Documenso Integration](Integration-Documenso)
 - [Cal.com Integration](Integration-Calcom)
 - [Claude (MCP) Integration](Integration-Claude-MCP)
+- [Google Workspace Integration](Integration-Google-Workspace)
 
 ### 🔐 Security
 

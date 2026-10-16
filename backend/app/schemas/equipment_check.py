@@ -459,20 +459,6 @@ class EquipmentCheckCompleteItems(BaseModel):
     signature_data: Optional[str] = None
 
 
-class LastSealRecord(BaseModel):
-    """What the previous crew read on one sealed container.
-
-    The form compares the number in front of the crew against this one: equal
-    means nothing was opened since, which is what the shortcut rests on.
-    """
-
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
-
-    seal_number: Optional[str] = None
-    intact: bool = True
-    checked_at: Optional[datetime] = None
-
-
 class ShiftEquipmentCheckItemResponse(UTCResponseBase):
     """Response schema for a single check item result."""
 
@@ -971,6 +957,8 @@ class ItemDeployment(BaseModel):
     template_item_id: str
     item_name: str
     compartment_name: Optional[str] = None
+    # The checklist's nesting, outermost first and ending in compartment_name.
+    compartment_path: List[str] = Field(default_factory=list)
     template_id: Optional[str] = None
     template_name: Optional[str] = None
     apparatus_id: Optional[str] = None
@@ -981,6 +969,10 @@ class ItemDeployment(BaseModel):
     expiration_date: Optional[date] = None
     days_until_expiration: Optional[int] = None
     is_expired: bool = False
+    # What the position should hold, and the running count aboard (null when
+    # nobody has counted since the position was defined).
+    target_quantity: Optional[int] = None
+    quantity_on_truck: Optional[int] = None
 
 
 class ExpiredStockDisposition(str, Enum):
@@ -1075,6 +1067,9 @@ class InventoryMatchSuggestion(BaseModel):
     # to arbitrate.
     score: float
     confidence: str
+    # Set when one of the item's "also called" names, not its name, produced the
+    # match, so the reviewer can see why an unlike-looking item was proposed.
+    matched_alias: Optional[str] = None
 
 
 class InventoryMatch(BaseModel):
@@ -1194,6 +1189,51 @@ class CrossTemplateLinkResponse(BaseModel):
     linked: int = 0
     skipped: int = 0
     skipped_positions: List[SkippedLinkPosition] = Field(default_factory=list)
+
+
+class AutoLinkedGroup(BaseModel):
+    """One checklist name that was linked automatically, and what to."""
+
+    model_config = _camel_config
+
+    name: str
+    inventory_item_id: str
+    inventory_item_name: str
+    confidence: str
+    # Set when an "also called" name produced the match, so the screen can say
+    # why "BVM" was linked to "Bag Valve Mask".
+    matched_alias: Optional[str] = None
+    position_count: int
+    # The positions this pass actually wrote — positions linked by hand in
+    # the meantime are left out — so the screen can link to each template and
+    # undo exactly these.
+    positions: List[LinkReportPosition] = Field(default_factory=list)
+
+
+class AutoLinkResponse(CrossTemplateLinkResponse):
+    """What the automatic pass linked, and how much it left for a person."""
+
+    left_for_review: int = 0
+    groups: List[AutoLinkedGroup] = Field(default_factory=list)
+
+
+class CrossTemplateUnlinkRequest(BaseModel):
+    """Links to undo: template item id -> the inventory item it was linked to.
+
+    The expected item is part of the request so a position re-linked by hand
+    since is recognised and left alone. Capped like the link request.
+    """
+
+    links: Dict[str, str] = Field(..., min_length=1, max_length=2000)
+
+
+class CrossTemplateUnlinkResponse(BaseModel):
+    """How many positions were unlinked, and how many had changed meanwhile."""
+
+    model_config = _camel_config
+
+    unlinked: int = 0
+    skipped: int = 0
 
 
 # CheckTemplateItemResponse references DeployedLot, which is declared with the

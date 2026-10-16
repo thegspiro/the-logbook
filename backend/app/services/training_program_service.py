@@ -208,7 +208,7 @@ class TrainingProgramService:
         user: User,
         organization_id: UUID | str,
     ) -> None:
-        """Send enrollment notification to the member and their mentors/officers."""
+        """Send enrollment notification to the member."""
         notif_service = NotificationsService(self.db)
 
         # Notify the member
@@ -228,25 +228,6 @@ class TrainingProgramService:
                 "sent_at": datetime.now(timezone.utc),
             },
         )
-
-        # Notify mentor/assigned officer if configured on the enrollment
-        # ProgramEnrollment has no mentor column today, so this reads None and
-        # sends nothing; kept as getattr so it starts working if one is added.
-        mentor_id = getattr(enrollment, "mentor_id", None)
-        if mentor_id:
-            await notif_service.log_notification(
-                organization_id=organization_id,
-                log_data={
-                    "recipient_id": str(mentor_id),
-                    "channel": NotificationChannel.IN_APP,
-                    "subject": f"New Trainee Enrolled: {user.display_name} - {program.name}",
-                    "message": f"{user.display_name} has been enrolled in {program.name}. You are assigned as their mentor.",
-                    "category": NotificationCategory.TRAINING,
-                    "action_url": f"/training/programs/{program.id}?tab=enrollments",
-                    "delivered": True,
-                    "sent_at": datetime.now(timezone.utc),
-                },
-            )
 
     async def _notify_phase_advancement(
         self,
@@ -273,25 +254,6 @@ class TrainingProgramService:
             },
         )
 
-        # Notify mentor
-        # ProgramEnrollment has no mentor column today, so this reads None and
-        # sends nothing; kept as getattr so it starts working if one is added.
-        mentor_id = getattr(enrollment, "mentor_id", None)
-        if mentor_id:
-            await notif_service.log_notification(
-                organization_id=organization_id,
-                log_data={
-                    "recipient_id": str(mentor_id),
-                    "channel": NotificationChannel.IN_APP,
-                    "subject": f"Trainee Advanced: {user.display_name} - {program.name}",
-                    "message": f"{user.display_name} has advanced to {new_phase_name} in {program.name}.",
-                    "category": NotificationCategory.TRAINING,
-                    "action_url": f"/training/programs/{program.id}?tab=enrollments",
-                    "delivered": True,
-                    "sent_at": datetime.now(timezone.utc),
-                },
-            )
-
     async def _notify_program_completion(
         self,
         enrollment: ProgramEnrollment,
@@ -315,25 +277,6 @@ class TrainingProgramService:
                 "sent_at": datetime.now(timezone.utc),
             },
         )
-
-        # Notify mentor
-        # ProgramEnrollment has no mentor column today, so this reads None and
-        # sends nothing; kept as getattr so it starts working if one is added.
-        mentor_id = getattr(enrollment, "mentor_id", None)
-        if mentor_id:
-            await notif_service.log_notification(
-                organization_id=organization_id,
-                log_data={
-                    "recipient_id": str(mentor_id),
-                    "channel": NotificationChannel.IN_APP,
-                    "subject": f"Trainee Completed: {user.display_name} - {program.name}",
-                    "message": f"{user.display_name} has completed {program.name}!",
-                    "category": NotificationCategory.TRAINING,
-                    "action_url": f"/training/programs/{program.id}?tab=enrollments",
-                    "delivered": True,
-                    "sent_at": datetime.now(timezone.utc),
-                },
-            )
 
     async def _notify_milestones_reached(
         self,
@@ -451,7 +394,7 @@ class TrainingProgramService:
         enrollment: ProgramEnrollment,
         program: TrainingProgram,
     ) -> None:
-        """Tell the member (and their mentor) that a new recertification cycle
+        """Tell the member that a new recertification cycle
         has started and their progress was reset for it. Best-effort — callers
         wrap this so a notification failure never breaks the reset itself."""
         organization_id = enrollment.organization_id
@@ -483,29 +426,6 @@ class TrainingProgramService:
                 "sent_at": datetime.now(timezone.utc),
             },
         )
-
-        # ProgramEnrollment has no mentor column today, so this reads None and
-        # sends nothing; kept as getattr so it starts working if one is added.
-        mentor_id = getattr(enrollment, "mentor_id", None)
-        if mentor_id:
-            await notif_service.log_notification(
-                organization_id=organization_id,
-                log_data={
-                    "recipient_id": str(mentor_id),
-                    "channel": NotificationChannel.IN_APP,
-                    "subject": (
-                        f"Recert cycle started: {user.display_name} - {program.name}"
-                    ),
-                    "message": (
-                        f"{user.display_name}'s recertification cycle for {program.name} "
-                        f"has restarted; their progress was reset."
-                    ),
-                    "category": NotificationCategory.TRAINING,
-                    "action_url": f"/training/programs/{program.id}?tab=enrollments",
-                    "delivered": True,
-                    "sent_at": datetime.now(timezone.utc),
-                },
-            )
 
     async def _safe_notify_recert_reset(
         self,
@@ -2498,6 +2418,18 @@ class TrainingProgramService:
         user = user_result.scalar_one_or_none()
         if not user:
             return None, "User not found"
+
+        # Every enrollment path ends here, so the prerequisite gate lives here
+        # too: the single-member endpoint used to skip it, while the picker,
+        # bulk enrollment and cohort roster sync applied it on their own.
+        missing = await self.missing_prerequisites(
+            getattr(program, "prerequisite_program_ids", None),
+            [enrollment_data.user_id],
+            organization_id,
+        )
+        if missing:
+            names = ", ".join(next(iter(missing.values())))
+            return None, f"Must first complete: {names}"
 
         # Check for existing active enrollment. A read-then-insert: two
         # concurrent enrollments of one member both passed a plain SELECT and

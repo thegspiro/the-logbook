@@ -1,5 +1,52 @@
 # Grants & Fundraising Module — Research & Design Document
 
+> **This is the original design research, written before the module was
+> built. It is kept for its funding-landscape research and its backlog of
+> ideas, not as a description of the module.** The built module is documented
+> in [wiki/Module-Grants-Fundraising](../wiki/Module-Grants-Fundraising.md).
+> Where this document and the code disagree, the code wins. In particular:
+>
+> - **§2.1 / §2.2 are out of date.** The module is not `comingSoon` (it is an
+>   optional module in `frontend/src/types/modules.ts`), and the grant side has
+>   tables: eleven in all — `grant_opportunities`, `grant_applications`,
+>   `grant_budget_items`, `grant_expenditures`, `grant_compliance_tasks`,
+>   `grant_notes`, plus the five fundraising tables listed in §2.1.
+> - **§4.2's permission model was not adopted.** There is no
+>   `fundraising.grants.view`, `fundraising.grants.manage` or
+>   `fundraising.admin`; the whole module uses `fundraising.view` (read) and
+>   `fundraising.manage` (write and delete).
+> - **§4.3's navigation differs.** There is no `/grants/campaigns/new`,
+>   `/grants/campaigns/:id`, `/grants/donors/:id` or `/grants/settings`;
+>   campaigns, donors, pledges and fundraising events are edited in dialogs on
+>   their list pages. Routes that exist beyond the plan:
+>   `/grants/opportunities/new` and `/grants/applications/:id/edit`.
+> - **§12.1:** built as `grant_budget_items` (not `grant_budgets`);
+>   `grant_application_documents`, `fundraising_settings`, `donation_receipts`,
+>   `campaign_updates` and `campaign_sponsors` were not built. None of the
+>   §12.2 column additions were made, except that a grant application links to
+>   a campaign (`grant_applications.linked_campaign_id`) rather than the reverse.
+>
+> **What was built, against §13's phases:**
+>
+> | Planned item                                                                                                                                     | Status                                                                          |
+> | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+> | Grant application tracker, pipeline and table views                                                                                              | Built                                                                           |
+> | Grant opportunity library                                                                                                                        | Built, but empty on install — no federal programs are pre-loaded                |
+> | Manual donations, donors, campaigns, pledges                                                                                                     | Built                                                                           |
+> | Dashboard with KPIs                                                                                                                              | Built                                                                           |
+> | Fundraising permissions enforcement                                                                                                              | Built (`fundraising.view` / `fundraising.manage`, plus the per-org module gate) |
+> | Module settings page                                                                                                                             | Not built                                                                       |
+> | Public donation portal, Stripe payments, recurring Stripe subscriptions                                                                          | Not built (donations carry an `is_recurring` flag, recorded manually)           |
+> | QR codes, campaign thermometer widgets                                                                                                           | Not built (campaigns show progress toward goal in the app only)                 |
+> | Automated thank-you emails and tax receipts                                                                                                      | Not built — `receipt_sent` / `thank_you_sent` are flags staff set by hand       |
+> | Pledge reminders, grant deadline notifications                                                                                                   | Not built — reminder fields are stored, but nothing sends them                  |
+> | Grant compliance task manager                                                                                                                    | Built, including tasks auto-generated when an application is awarded            |
+> | Grant spending tracker / budget planning                                                                                                         | Built — budget line items and expenditures, with overspend warnings             |
+> | Auto-population from other modules; documents integration                                                                                        | Not built                                                                       |
+> | Fundraising event management                                                                                                                     | Built (optionally linked to a calendar event)                                   |
+> | Financial reporting                                                                                                                              | Built — grant and fundraising reports over a date range                         |
+> | Phase 4–5 items (wizard, supporter program, segmentation, impact tracker, match challenges, kiosk, recommendations, gamification, AI narratives) | Not built                                                                       |
+
 ## Executive Summary
 
 This document captures research findings and design recommendations for the Grants & Fundraising module in The Logbook. The module aims to provide volunteer and career fire departments with an integrated system for managing grant applications, fundraising campaigns, donor relationships, and financial reporting — all within their existing intranet platform.
@@ -882,18 +929,6 @@ The existing fundraising tables from migration `20260201_0017` provide a solid f
 - Corporate matching program support
 - Multi-department grant collaboration
 - AI-assisted grant narrative writing
-
----
-
-## Dates on the department's calendar _(2026-09-26)_
-
-"Today" for the grants and fundraising dashboards, the auto-created
-equipment-inventory task's due date when a grant has no end date, and a
-compliance task's `completed_date` comes from `resolve_org_today`
-(`app/utils/org_timezone.py`) — the organization's timezone, `America/New_York`
-when unset — not the server's UTC date. Donor first/last donation dates are the
-department's calendar day of the donation timestamp. Report date-range bounds
-remain UTC; see GF-24a in `docs/KNOWN_LIMITATIONS.md`.
 
 ---
 

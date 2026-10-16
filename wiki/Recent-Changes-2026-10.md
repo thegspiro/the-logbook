@@ -5,6 +5,109 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 15 – 16, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-15--16-2026).
+Predecessor: [October 14 – 15](#recent-changes-october-14--15-2026).
+
+**The headline:** **Medical Supplies** now say where each supply is kept, on the
+shelf and on which apparatus, and can be sorted, filtered and retired in bulk.
+Catalog Links can link obvious matches for you. Google accounts of departed
+members are suspended more reliably.
+
+### Read this first
+
+**If you run the server:** the Unraid and minimal compose files now require your
+database, Redis and app secrets instead of falling back to placeholders; set them
+before upgrading. Error reports no longer include local variables. Three new
+migrations; `alembic heads` should report one head.
+
+**If you administer a department:**
+
+- **Medical Supplies.** File each supply under a room and storage area. Existing
+  supplies are filed automatically when exactly one active area matches their old
+  text. Use the location filter, sort the table, and retire several at once.
+- **Catalog Links.** **Link matches automatically** links exact and strong
+  matches and skips ties. Each name has an **Undo**.
+- **Google Workspace.** On the Google card, **Link existing members** covers
+  people who joined before the integration, so their accounts are suspended when
+  they leave.
+- **Documents.** Full administrators get a weekly email listing folders only
+  administrators can open. A department can make it required.
+
+**If you are a member:** My Checklists is a compact list by day on a phone. A
+position at its critical minimum is no longer flagged critical; only a count
+below it is.
+
+### What changed, by area
+
+| Area             | Change                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------- |
+| Medical Supplies | Storage room and area, apparatus places, location filter, Where it is dialog                            |
+| Medical Supplies | Sort, bulk retire, Lots dialog, clickable tiles, Size, Next expiry, unset reorder point shown as a dash |
+| Equipment checks | Automatic catalog linking with Undo; critical means strictly below the minimum; phone checklist layout  |
+| Google Workspace | Accounts tagged with the member; link existing members; suspension from one departure hook              |
+| Membership       | The undo window for a drop counts from its effective date                                               |
+| Documents        | Weekly administrator-only folder email                                                                  |
+| Security         | Reads of leave, service history and audit records are audited; incident-response policy added           |
+
+Screenshots to capture and video beats to redo are queued in the repository's
+`docs/training/SCREENSHOT_CURRENCY.md` and `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
+## Recent changes: October 14 – 15, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-14--15-2026).
+Predecessor: [October 13 – 14](#recent-changes-october-13--14-2026).
+
+**The headline:** **Meeting Minutes** now follow how a department really adopts
+them: circulate, take members' suggestions, adopt. Roll call, closed sessions,
+attachments, outlines and formatted text came with it. Checklist items also
+find catalog items under other names.
+
+### Read this first
+
+**If you run the server:** rebuild the backend image (`docker compose build
+backend`), or run `pip install -r backend/requirements.txt` from source; the
+minutes editor needs a new package, and the backend will not start without it.
+Three new migrations; `alembic heads` should report `1d65720bce34`. Manual Docker
+backups taken before this change did not include uploaded files; take a new one.
+
+**If you administer a department:**
+
+- **Minutes.** Members can now read minutes that have been circulated, and are
+  emailed when you circulate them (each member can turn that email off). Drafts
+  and executive sessions are still hidden. Set up your standard order of business
+  under **Minutes > Outlines**.
+- **Inventory.** Give items other names under **Also called** ("BVM" for "Bag
+  Valve Mask"). A medical supply category can be deleted; its supplies move to
+  another category first.
+- **Finance.** **Start from last year** no longer copies lines on retired
+  categories.
+
+**If you are a member:** open circulated minutes and use **Suggest a change** on
+the section you want corrected. Only you and the secretary see your suggestion.
+
+### What changed, by area
+
+| Area         | Change                                                                                                                             |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Minutes      | Circulate for review, member suggestions, recall, adopt as presented or amended; circulation email; required sections              |
+| Minutes      | Roll call with six statuses and quorum; closed sessions; election results and addenda; attachments and signed copy; printable copy |
+| Minutes      | Outlines page; formatted text in sections; approved versions with a fingerprint; carry open action items forward                   |
+| Inventory    | Also called names, near-match search in checklist pickers, CSV column; delete a medical supply category                            |
+| Finance      | Start from last year skips retired categories                                                                                      |
+| Training     | Single enrollment enforces prerequisite programs                                                                                   |
+| Integrations | Claude connections made with member sign-in can now run tools                                                                      |
+| Appearance   | Opaque result lists in dark mode; every control's visible text is in its accessible name                                           |
+| Operations   | Docker backups include uploads; upgraded installations no longer 500 on medical categories                                         |
+
+Screenshots to capture and video beats to redo are queued in the repository's
+`docs/training/SCREENSHOT_CURRENCY.md` and `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Recent changes: October 13 – 14, 2026
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering

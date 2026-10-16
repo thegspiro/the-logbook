@@ -432,7 +432,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
             width: anchor.width,
             maxHeight: anchor.maxHeight,
           }}
-          className="card fixed z-50 overflow-auto shadow-lg"
+          className="popover-panel fixed z-50 overflow-auto"
         >
           {results.map((r, index) => (
             <button

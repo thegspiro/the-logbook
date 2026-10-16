@@ -6,10 +6,12 @@ motions, action items, and full-text search.
 """
 
 import math
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -30,9 +32,11 @@ from app.schemas.minute import (
     ActionItemCreate,
     ActionItemResponse,
     ActionItemUpdate,
+    MinutesAdopt,
     MinutesCreate,
     MinutesListItem,
     MinutesReject,
+    MinutesReminderSettingsResponse,
     MinutesReopen,
     MinutesResponse,
     MinutesSearchResult,
@@ -41,6 +45,7 @@ from app.schemas.minute import (
     MotionResponse,
     MotionUpdate,
     SectionEntry,
+    SignatureSlotResponse,
     TemplateCreate,
     TemplateListItem,
     TemplateResponse,
@@ -50,6 +55,12 @@ from app.schemas.minute import (
 from app.services.document_service import DocumentService
 from app.services.minute_service import MinuteService
 from app.services.template_service import TemplateService
+from app.utils.minutes_settings import (
+    load_minutes_reminder_settings,
+    load_signature_slots,
+)
+from app.utils.motion_votes import members_present, suggested_status
+from app.utils.rich_text import normalize_format
 
 router = APIRouter()
 
@@ -112,6 +123,7 @@ async def list_minutes(
                 for a in (m.action_items or [])
                 if (a.status if isinstance(a.status, str) else a.status.value)
                 in ("pending", "in_progress", "overdue")
+                and a.carried_forward_at is None
             ),
             created_at=m.created_at,
         )
@@ -136,6 +148,39 @@ async def get_minutes_stats(
     service = MinuteService(db)
     return await service.get_stats(
         current_user.organization_id, restricted=not can_manage
+    )
+
+
+@router.get("/settings", response_model=MinutesReminderSettingsResponse)
+async def get_minutes_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    The department's action item reminder settings, as the server applies them.
+
+    Written through `PATCH /organization/settings` (`minutes` section), which
+    needs `settings.manage`.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    resolved = await load_minutes_reminder_settings(
+        db, str(current_user.organization_id)
+    )
+    return MinutesReminderSettingsResponse(
+        action_item_reminders=resolved.reminders_enabled,
+        reminder_days_before_due=resolved.days_before_due,
+        overdue_repeat_days=resolved.overdue_repeat_days,
+        open_items_digest=resolved.digest_enabled,
+        signature_slots=[
+            SignatureSlotResponse(
+                key=slot.key, title=slot.title, position_slug=slot.position_slug
+            )
+            for slot in await load_signature_slots(
+                db, str(current_user.organization_id)
+            )
+        ],
     )
 
 
@@ -398,11 +443,16 @@ async def submit_minutes(
 @router.post("/{minutes_id}/approve", response_model=MinutesResponse)
 async def approve_minutes(
     minutes_id: str,
+    data: Optional[MinutesAdopt] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("minutes.manage")),
 ):
     """
-    Approve submitted meeting minutes
+    Adopt submitted meeting minutes (the 'approved' status)
+
+    The optional body records what the body did: the day of the vote, the
+    minutes of the meeting that adopted these, and whether they were adopted as
+    presented or as amended. Left out, the vote is dated now.
 
     **Authentication required**
     **Requires permission: minutes.manage**
@@ -411,7 +461,7 @@ async def approve_minutes(
 
     async with handle_service_errors("Failed to approve minutes"):
         minutes = await service.approve_minutes(
-            minutes_id, current_user.organization_id, current_user.id
+            minutes_id, current_user.organization_id, current_user.id, data
         )
 
     minutes = ensure_found(minutes, "Meeting minutes")
@@ -422,7 +472,12 @@ async def approve_minutes(
         event_type="minutes_approved",
         event_category="meetings",
         severity="info",
-        event_data={"minutes_id": minutes_id, "title": minutes.title},
+        event_data={
+            "minutes_id": minutes_id,
+            "title": minutes.title,
+            "adopted_as_amended": minutes.adopted_as_amended,
+            "adopting_minutes_id": minutes.adopting_minutes_id,
+        },
         user_id=str(current_user.id),
     )
 
@@ -491,7 +546,12 @@ async def reopen_minutes(
     service = MinuteService(db)
 
     async with handle_service_errors("Failed to reopen minutes"):
-        outcome = await service.reopen_minutes(minutes_id, current_user.organization_id)
+        outcome = await service.reopen_minutes(
+            minutes_id,
+            current_user.organization_id,
+            reopened_by=current_user.id,
+            reason=data.reason,
+        )
 
     minutes, prior = ensure_found(outcome, "Meeting minutes")
 
@@ -551,7 +611,9 @@ async def add_motion(
         user_id=str(current_user.id),
     )
 
-    return _build_motion_response(motion)
+    return _build_motion_response(
+        motion, await _present_count(service, minutes_id, current_user)
+    )
 
 
 @router.put("/{minutes_id}/motions/{motion_id}", response_model=MotionResponse)
@@ -589,7 +651,9 @@ async def update_motion(
         user_id=str(current_user.id),
     )
 
-    return _build_motion_response(motion)
+    return _build_motion_response(
+        motion, await _present_count(service, minutes_id, current_user)
+    )
 
 
 @router.delete(
@@ -915,7 +979,10 @@ def _build_template_response(tpl) -> TemplateResponse:
             key=s.get("key", ""),
             title=s.get("title", ""),
             default_content=s.get("default_content", ""),
+            format=normalize_format(s.get("format")),
             required=s.get("required", False),
+            needs_motion=bool(s.get("needs_motion", False)),
+            motion_text=s.get("motion_text") or "",
         )
         for s in (tpl.sections or [])
     ]
@@ -953,6 +1020,10 @@ def _build_response(minutes) -> MinutesResponse:
             key=s.get("key", ""),
             title=s.get("title", ""),
             content=s.get("content", ""),
+            format=normalize_format(s.get("format")),
+            required=bool(s.get("required", False)),
+            needs_motion=bool(s.get("needs_motion", False)),
+            motion_text=s.get("motion_text") or "",
         )
         for s in raw_sections
     ]
@@ -998,18 +1069,66 @@ def _build_response(minutes) -> MinutesResponse:
         rejected_at=minutes.rejected_at,
         rejected_by=minutes.rejected_by,
         rejection_reason=minutes.rejection_reason,
+        adopted_on=minutes.adopted_on,
+        adopted_as_amended=minutes.adopted_as_amended,
+        adoption_moved_by=minutes.adoption_moved_by,
+        adoption_seconded_by=minutes.adoption_seconded_by,
+        adopting_minutes_id=minutes.adopting_minutes_id,
+        adopting_minutes_title=_adopting_title(minutes),
         created_by=minutes.created_by,
         created_at=minutes.created_at,
         updated_at=minutes.updated_at,
-        motions=[_build_motion_response(m) for m in (minutes.motions or [])],
+        motions=[
+            _build_motion_response(m, members_present(minutes.attendees))
+            for m in (minutes.motions or [])
+        ],
         action_items=[
             _build_action_item_response(a) for a in (minutes.action_items or [])
         ],
     )
 
 
-def _build_motion_response(motion) -> MotionResponse:
-    """Build a MotionResponse from a Motion model"""
+def _loaded(obj, relationship: str, attribute: str):
+    """``obj.relationship.attribute`` when that relationship was loaded.
+
+    The adopting meeting and a motion's ballot are loaded where a screen shows
+    them; elsewhere they are left unloaded rather than fetched one row at a
+    time, and read as missing.
+    """
+    if relationship in sa_inspect(obj).unloaded:
+        return None
+    related = getattr(obj, relationship)
+    return getattr(related, attribute) if related is not None else None
+
+
+def _adopting_title(minutes) -> Optional[str]:
+    """The adopting meeting's title, unless it was a closed session: its title
+    can name the matter, and these minutes may be read by every member."""
+    if "adopting_minutes" in sa_inspect(minutes).unloaded:
+        return None
+    adopting = minutes.adopting_minutes
+    if adopting is None:
+        return None
+    kind = (
+        adopting.meeting_type
+        if isinstance(adopting.meeting_type, str)
+        else adopting.meeting_type.value
+    )
+    return None if kind == "executive" else adopting.title
+
+
+async def _present_count(service, minutes_id: str, user) -> int:
+    """Members the minutes record as in the room, for a motion's suggested result."""
+    minutes = await service.get_minutes(minutes_id, user.organization_id)
+    return members_present(minutes.attendees) if minutes else 0
+
+
+def _build_motion_response(motion, present: int = 0) -> MotionResponse:
+    """Build a MotionResponse from a Motion model
+
+    ``present`` is how many members the minutes record as in the room, which
+    the majority-of-those-present threshold counts against.
+    """
     return MotionResponse(
         id=motion.id,
         minutes_id=motion.minutes_id,
@@ -1017,11 +1136,21 @@ def _build_motion_response(motion) -> MotionResponse:
         motion_text=motion.motion_text,
         moved_by=motion.moved_by,
         seconded_by=motion.seconded_by,
+        section_key=motion.section_key,
         discussion_notes=motion.discussion_notes,
         status=motion.status if isinstance(motion.status, str) else motion.status.value,
         votes_for=motion.votes_for,
         votes_against=motion.votes_against,
         votes_abstain=motion.votes_abstain,
+        votes_recused=motion.votes_recused,
+        threshold=motion.threshold,
+        roll_call=motion.roll_call,
+        suggested_status=suggested_status(
+            motion.threshold, motion.votes_for, motion.votes_against, present
+        ),
+        election_id=motion.election_id,
+        ballot_item_id=motion.ballot_item_id,
+        election_title=_loaded(motion, "election", "title"),
         created_at=motion.created_at,
         updated_at=motion.updated_at,
     )
@@ -1042,6 +1171,8 @@ def _build_action_item_response(item) -> ActionItemResponse:
         status=item.status if isinstance(item.status, str) else item.status.value,
         completed_at=item.completed_at,
         completion_notes=item.completion_notes,
+        carried_from_id=item.carried_from_id,
+        carried_forward_at=item.carried_forward_at,
         created_at=item.created_at,
         updated_at=item.updated_at,
     )
@@ -1194,6 +1325,9 @@ async def set_meeting_quorum_config(
 @router.post("/from-meeting/{meeting_id}", status_code=201)
 async def create_minutes_from_meeting(
     meeting_id: UUID,
+    template_id: Optional[str] = Query(
+        None, description="The outline to start from; default: the department's"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("minutes.manage")),
 ):
@@ -1205,14 +1339,14 @@ async def create_minutes_from_meeting(
     **Requires permission: minutes.manage**
     """
     service = MinuteService(db)
-    minutes = ensure_found(
-        await service.create_from_meeting(
+    async with handle_service_errors("Failed to create minutes from the meeting"):
+        created = await service.create_from_meeting(
             meeting_id=meeting_id,
             organization_id=current_user.organization_id,
             created_by=current_user.id,
-        ),
-        "Meeting",
-    )
+            template_id=template_id,
+        )
+    minutes = ensure_found(created, "Meeting")
 
     await log_audit_event(
         db=db,

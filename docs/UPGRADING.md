@@ -134,6 +134,45 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### The Unraid compose files no longer ship placeholder secrets (2026-10-16)
+
+`unraid/docker-compose-unraid.yml` and `unraid/docker-compose-build-from-source.yml`
+used to fall back to `change_me_strong_password` for `MYSQL_ROOT_PASSWORD`,
+`DB_PASSWORD` and `REDIS_PASSWORD`, and (Unraid file only) to
+`GENERATE_WITH_openssl_rand_hex_32` for `SECRET_KEY`, `ENCRYPTION_KEY` and
+`ENCRYPTION_SALT`. A missing `.env` value therefore started a database
+protected by a password printed in the repository. `docker-compose.minimal.yml`
+had the same fallback for `REDIS_PASSWORD`. Each is now a required variable,
+and `docker compose up` stops with `<NAME> must be set in .env`.
+
+- **Installs made with `unraid-setup.sh`:** nothing to do. It writes all six
+  values to `.env`.
+- **Compose Manager or hand-written `.env` that relied on the placeholder:**
+  the database was initialised with that password, so do not just set a new
+  `DB_PASSWORD` — the stored one will no longer match. Either put the password
+  you are actually running with into `.env`, or change it inside MySQL/Redis
+  first (`ALTER USER`, `CONFIG SET requirepass`) and then update `.env`.
+- Elasticsearch and MinIO keep an empty default: both refuse to start without
+  a password, and the variables only matter when their profile is enabled.
+
+No migration and no data change.
+
+### The backend needs the `nh3` package for rich-text minutes (2026-10-14)
+
+Meeting-minutes sections can now be written with a rich-text editor. The
+server cleans that HTML with `nh3`, now pinned in `backend/requirements.txt`,
+and imports it when the minutes schemas load — so a backend started without it
+fails at import and never serves a request.
+
+- **Docker (including Unraid Compose Manager):** rebuild the backend image
+  (`docker compose build backend` or `--build`); the Dockerfile installs
+  `requirements.txt`. Nothing else changes.
+- **Running from source:** run `pip install -r backend/requirements.txt`
+  before restarting.
+
+No migration, and nothing in existing minutes changes: every section written
+before the editor stays plain text until someone edits it.
+
 ### Audit rows are sealed onto the hash chain after they commit (2026-10-12)
 
 This does not stop a boot, but it changes what the audit-integrity screens and
@@ -776,6 +815,51 @@ folder unless somebody has filed it elsewhere since.
   columns (no backfill). `4b7e1f0c9a2d` then gives each Compliance box that is
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
+
+### Full administrators get a weekly email of admin-only folders (2026-10-16)
+
+Nothing here stops the stack from starting, and there is no migration. A new
+scheduled task, `admin_only_folder_digest`, checks daily and emails each
+department's active full administrators at most once a week, while any folder
+is on the Documents page's list of folders only they can open. Each email
+lists every such folder.
+
+- **External cron:** if you run scheduled tasks from cron rather than the
+  backend's own loop, add
+  `25 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=admin_only_folder_digest`.
+- **Opting out:** it is the optional "Document folder access" email. A full
+  administrator can turn it off under their email settings, and a department
+  can make it required on the Member Emails & Texts page.
+- When it was last sent is stored in the organization's settings, under
+  `documents.admin_only_digest_last_sent`.
+
+### Folders that lose everyone but administrators are listed (2026-10-15)
+
+Nothing here stops the stack from starting. Migration `c903fc771081` adds two
+nullable columns to `document_folders`, `admin_only_confirmed_at` and
+`admin_only_confirmed_by`, with no backfill. A folder can come to open to full
+administrators alone without being saved, for example when the last member
+holding its position leaves it. Full administrators now see those folders
+listed on the Documents page, each with **Change access** and **Keep for
+administrators only**.
+
+- **Folders confirmed before this upgrade are listed once.** The save-time
+  question from 2026-10-14 recorded nothing, so a folder confirmed then
+  appears on the list and needs **Keep for administrators only** a second
+  time.
+- **Probationary members now count** as members who open a folder, for this
+  list and for the save-time question. Sign-in already treats them as active,
+  and before this change a folder only probationary members could open was
+  reported as administrators-only.
+- **API:** `GET /documents/folders/admin-only` returns the list, and is empty
+  for anyone but a full administrator.
+  `POST /documents/folders/{id}/confirm-admin-only` records the confirmation.
+- **A confirmation lapses when the folder regains an audience.** Reading the
+  list clears it, so `GET /documents/folders/admin-only` can write: it clears
+  the confirmation on any folder someone besides administrators can open
+  again.
+- **Downgrade** drops both columns, so the list shows every confirmed folder
+  again after the next upgrade.
 
 ### A folder only administrators could open is confirmed first (2026-10-14)
 
@@ -2329,7 +2413,7 @@ the gear — that answer is the whole record.
 After that, a mark clears itself whenever the value the label encodes changes
 (barcode, else asset tag, else serial number), so an item whose barcode is
 edited goes back to needing a label. Details in
-[`training/05-inventory.md`](./training/05-inventory.md#knowing-which-items-still-need-a-label-2026-09-23).
+[`training/05-inventory.md`](./training/05-inventory.md#knowing-which-items-still-need-a-label).
 
 ### Suggestion boxes, and a new permission on five seeded positions (2026-09-23)
 

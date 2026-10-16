@@ -416,6 +416,27 @@ describe('EquipmentCheckForm quantity seeding', () => {
     expect(await screen.findByText('2/4 Box')).toBeInTheDocument();
   });
 
+  it('does not call a full position critical when its minimum equals its count', async () => {
+    // The reported case: 2 of 2 aboard, critical minimum also 2.
+    render({ requiredQuantity: 2, expectedQuantity: 2, criticalMinimumQuantity: 2, quantityOnTruck: 2 });
+
+    expect(await screen.findByText('2/2')).toBeInTheDocument();
+    expect(screen.queryByText(/CRITICAL/)).not.toBeInTheDocument();
+  });
+
+  it('does not call a count critical when it is at the minimum, only below it', async () => {
+    render({ criticalMinimumQuantity: 2, quantityOnTruck: 2 });
+
+    expect(await screen.findByText(/Below required \(4\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/CRITICAL/)).not.toBeInTheDocument();
+  });
+
+  it('calls a count below the minimum critical', async () => {
+    render({ criticalMinimumQuantity: 2, quantityOnTruck: 1 });
+
+    expect(await screen.findByText('CRITICAL — below minimum (2)')).toBeInTheDocument();
+  });
+
   it('does not count a carried-over number as checked', async () => {
     render({ quantityOnTruck: 4 });
     await screen.findByDisplayValue('4');

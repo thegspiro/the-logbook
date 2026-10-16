@@ -144,6 +144,57 @@ class TestListAndCall:
             names = {t.name for t in await server.list_tools()}
         assert {"list_events", "list_members", "create_event_draft"} <= names
 
+    async def test_member_with_the_permission_can_call_a_plain_read(self):
+        """The allowed half of the check above. A member holding the tool's
+        permission must get its result, not a refusal: every OAuth call to a
+        read tool once failed here with a KeyError the client saw only as
+        "Error executing tool"."""
+        server = LogbookMcpServer(name="t")
+        handler = AsyncMock(return_value={"ok": True})
+
+        @logbook_tool(server, permissions=("events.view",))
+        async def probe(db, principal) -> dict:
+            return await handler()
+
+        session = AsyncMock()
+        session.__aenter__.return_value = AsyncMock()
+        member = _principal(oauth=True, permissions=frozenset({"events.view"}))
+        with (
+            patch("app.mcp.registry.open_session", return_value=session),
+            patch("app.mcp.registry._audit", AsyncMock()) as audit,
+        ):
+            with bind_principal(member):
+                result = await server.call_tool("probe", {})
+        handler.assert_awaited_once()
+        assert "ok" in str(result)
+        assert audit.await_args is not None
+        assert audit.await_args.args[4] == "ok"
+
+    async def test_member_refused_by_a_department_switch_is_told_so(self):
+        """A member who holds the permission but meets a switch the
+        department left off gets that switch's message, not a crash."""
+        server = LogbookMcpServer(name="t")
+        handler = AsyncMock(return_value={"ok": True})
+
+        @logbook_tool(server, gate="write", permissions=("events.manage",))
+        async def probe(db, principal) -> dict:
+            return await handler()
+
+        audit = AsyncMock(return_value=True)
+        member = _principal(
+            oauth=True,
+            permissions=frozenset({"events.manage"}),
+            access_mode="read_only",
+        )
+        with patch("app.mcp.registry._audit_apart", audit):
+            with bind_principal(member):
+                with pytest.raises(ToolError) as excinfo:
+                    await server.call_tool("probe", {})
+        assert "read-only" in str(excinfo.value)
+        handler.assert_not_called()
+        assert audit.await_args is not None
+        assert audit.await_args.args[3] == "refused"
+
     async def test_call_without_the_permission_is_refused_and_audited(self):
         server = LogbookMcpServer(name="t")
         handler = AsyncMock(return_value={"ok": True})
@@ -162,3 +213,64 @@ class TestListAndCall:
         handler.assert_not_called()
         assert audit.await_args is not None
         assert audit.await_args.args[3] == "refused"
+
+
+class TestMedicalSuppliesForMembers:
+    """The medical supply switch rides on ``mcp:read`` for a member's
+    connection; the member's own inventory permission still decides."""
+
+    MEDICAL_TOOLS = {
+        "get_medical_supply_summary",
+        "list_medical_supply_items",
+        "list_low_stock_medical_supplies",
+        "list_expiring_medical_lots",
+    }
+
+    def _member(self, permissions: frozenset[str], shared: bool) -> McpPrincipal:
+        return McpPrincipal(
+            organization_id="org-a",
+            key_id="grant-1",
+            key_prefix="oauth",
+            issued_by_user_id="user-1",
+            access_mode="read_only",
+            expose_finance=False,
+            expose_medical_screening=False,
+            expose_medical_supplies=shared,
+            auth_method="oauth",
+            member_permissions=permissions,
+            enabled_modules=None,
+        )
+
+    async def test_member_needs_the_medical_inventory_permission(self):
+        server = build_server()
+        without = self._member(frozenset({"events.view"}), shared=True)
+        with bind_principal(without):
+            names = {t.name for t in await server.list_tools()}
+        assert not self.MEDICAL_TOOLS & names
+
+        holder = self._member(frozenset({"inventory.view_medical"}), shared=True)
+        with bind_principal(holder):
+            names = {t.name for t in await server.list_tools()}
+        assert self.MEDICAL_TOOLS <= names
+
+    async def test_switch_off_hides_them_even_from_a_quartermaster(self):
+        server = build_server()
+        holder = self._member(frozenset({"inventory.view"}), shared=False)
+        with bind_principal(holder):
+            names = {t.name for t in await server.list_tools()}
+        assert not self.MEDICAL_TOOLS & names
+
+    def test_consent_screen_counts_them_under_read(self):
+        from app.mcp.oauth import SCOPE_READ, scope_reach
+        from app.schemas.integration import ClaudeMcpConfig
+
+        permissions = frozenset({"inventory.view_medical"})
+        modules = frozenset({"medical_supplies"})
+        off = scope_reach(ClaudeMcpConfig(), modules, permissions, [SCOPE_READ])
+        on = scope_reach(
+            ClaudeMcpConfig(expose_medical_supplies=True),
+            modules,
+            permissions,
+            [SCOPE_READ],
+        )
+        assert on[SCOPE_READ] - off[SCOPE_READ] == len(self.MEDICAL_TOOLS)

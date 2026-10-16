@@ -3,6 +3,7 @@ import { render, screen, within, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import IntegrationsPage from './IntegrationsPage';
+import toast from 'react-hot-toast';
 import { ConfirmProvider } from '../contexts/ConfirmContext';
 
 // Mock the auth store
@@ -26,6 +27,7 @@ const mockGetCalcomBookings = vi.fn();
 const mockGetMcpStatus = vi.fn();
 const mockCreateMcpKey = vi.fn();
 const mockRevokeMcpKey = vi.fn();
+const mockLinkExistingGoogleMembers = vi.fn();
 
 vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
@@ -45,6 +47,7 @@ vi.mock('../services/api', () => ({
     getMcpStatus: (...args: unknown[]) => mockGetMcpStatus(...args) as unknown,
     createMcpKey: (...args: unknown[]) => mockCreateMcpKey(...args) as unknown,
     revokeMcpKey: (...args: unknown[]) => mockRevokeMcpKey(...args) as unknown,
+    linkExistingGoogleMembers: (...args: unknown[]) => mockLinkExistingGoogleMembers(...args) as unknown,
   },
 }));
 
@@ -611,6 +614,7 @@ describe('IntegrationsPage', () => {
         expose_finance: true,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
       },
     };
 
@@ -623,6 +627,7 @@ describe('IntegrationsPage', () => {
         expose_finance: true,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
         active_key: null,
       });
     });
@@ -644,6 +649,7 @@ describe('IntegrationsPage', () => {
         expose_finance: false,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
         oauth_enabled: false,
       });
     });
@@ -665,6 +671,7 @@ describe('IntegrationsPage', () => {
         expose_finance: true,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
         oauth_enabled: false,
       });
     });
@@ -685,8 +692,43 @@ describe('IntegrationsPage', () => {
         expose_finance: false,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
         oauth_enabled: true,
       });
+    });
+
+    it('sends the medical supply switch when it is turned on', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpAvailable]);
+      mockConnectIntegration.mockResolvedValue(mcpConnected);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      await user.click(within(screen.getByTestId('integration-card-claude-mcp')).getByText('Connect'));
+      expect(screen.getByLabelText(/Share medical supply inventory/)).not.toBeChecked();
+      await user.click(screen.getByLabelText(/Share medical supply inventory/));
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('mcp-1', {
+        access_mode: 'read_only',
+        expose_finance: false,
+        expose_medical_screening: false,
+        expose_full_schedule: false,
+        expose_medical_supplies: true,
+        oauth_enabled: false,
+      });
+    });
+
+    it('shows the stored medical supply switch in the settings form', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([
+        { ...mcpConnected, config: { ...mcpConnected.config, expose_medical_supplies: true } },
+      ]);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      await user.click(screen.getByRole('button', { name: 'Claude (MCP) settings' }));
+      expect(screen.getByLabelText(/Share medical supply inventory/)).toBeChecked();
     });
 
     it('shows the service key button to a delegated key manager without integrations.manage', async () => {
@@ -739,6 +781,7 @@ describe('IntegrationsPage', () => {
         expose_finance: false,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
         active_key: null,
       });
 
@@ -825,6 +868,7 @@ describe('IntegrationsPage', () => {
         expose_finance: true,
         expose_medical_screening: false,
         expose_full_schedule: false,
+        expose_medical_supplies: false,
         oauth_enabled: true,
       });
       expect(mockConnectIntegration).not.toHaveBeenCalled();
@@ -888,6 +932,198 @@ describe('IntegrationsPage', () => {
       expect(mockGetMcpStatus).toHaveBeenCalled();
       const filters = screen.getByRole('group', { name: 'Filter by category' });
       expect(within(filters).getByText('AI Assistants')).toBeInTheDocument();
+    });
+  });
+
+  describe('Google Workspace', () => {
+    const workspaceAvailable = {
+      id: 'gws-1',
+      organization_id: 'org-1',
+      integration_type: 'google-workspace',
+      name: 'Google Workspace',
+      description: 'Create a Google Workspace account for each new member',
+      category: 'Access Control',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const workspaceConnected = {
+      ...workspaceAvailable,
+      status: 'connected' as const,
+      enabled: true,
+      config: {
+        admin_email: 'admin@firedept.org',
+        domain: 'firedept.org',
+        org_unit_path: '/Members',
+        group_emails: ['members@firedept.org'],
+      },
+    };
+
+    beforeEach(() => {
+      mockCheckPermission.mockReset();
+      mockCheckPermission.mockReturnValue(true);
+      mockGetIntegrations.mockReset();
+      mockGetIntegrations.mockResolvedValue([workspaceAvailable]);
+      mockConnectIntegration.mockReset();
+      mockConnectIntegration.mockResolvedValue(workspaceConnected);
+      mockUpdateIntegration.mockReset();
+      mockUpdateIntegration.mockResolvedValue(workspaceConnected);
+    });
+
+    it('connects with the uploaded key, domain, org unit and groups', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Google Workspace');
+      const card = screen.getByTestId('integration-card-google-workspace');
+      await user.click(within(card).getByText('Connect'));
+
+      const key = new File(['{"type":"service_account"}'], 'key.json', { type: 'application/json' });
+      await user.upload(screen.getByLabelText('Service account key (JSON)'), key);
+      await screen.findByText(/Loaded key\.json/);
+      await user.type(screen.getByLabelText('Admin to act as'), 'admin@firedept.org');
+      await user.type(screen.getByLabelText('Domain'), 'firedept.org');
+      await user.clear(screen.getByLabelText('Organizational unit'));
+      await user.type(screen.getByLabelText('Organizational unit'), '/Members');
+      await user.type(
+        screen.getByLabelText('Add new members to these groups (optional)'),
+        'members@firedept.org{enter}all@firedept.org'
+      );
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('gws-1', {
+        service_account_key: '{"type":"service_account"}',
+        admin_email: 'admin@firedept.org',
+        domain: 'firedept.org',
+        org_unit_path: '/Members',
+        group_emails: ['members@firedept.org', 'all@firedept.org'],
+      });
+    });
+
+    it('keeps the stored key when settings are saved without a new file', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+      renderPage();
+      await screen.findByText('Google Workspace');
+      await user.click(screen.getByRole('button', { name: 'Google Workspace settings' }));
+
+      expect(screen.getByLabelText('Domain')).toHaveValue('firedept.org');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('gws-1', {
+        service_account_key: undefined,
+        admin_email: 'admin@firedept.org',
+        domain: 'firedept.org',
+        org_unit_path: '/Members',
+        group_emails: ['members@firedept.org'],
+      });
+    });
+
+    it('leaves connecting to an organization administrator', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission !== 'admin.access');
+      renderPage();
+      await screen.findByText('Google Workspace');
+      const card = screen.getByTestId('integration-card-google-workspace');
+
+      expect(within(card).queryByText('Connect')).not.toBeInTheDocument();
+      expect(within(card).getByText('An organization administrator connects this')).toBeInTheDocument();
+    });
+
+    it('offers a non-administrator no way to change or disconnect it', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission !== 'admin.access');
+      mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+      renderPage();
+      await screen.findByText('Google Workspace');
+      const card = screen.getByTestId('integration-card-google-workspace');
+
+      expect(within(card).queryByText('Disconnect')).not.toBeInTheDocument();
+      expect(within(card).queryByRole('button', { name: 'Google Workspace settings' })).not.toBeInTheDocument();
+      expect(within(card).getByText('Test')).toBeInTheDocument();
+      expect(within(card).queryByText('Link existing members')).not.toBeInTheDocument();
+    });
+
+    describe('Link existing members', () => {
+      const counts = {
+        already_linked: 2,
+        unfinished: 1,
+        departed: 1,
+        not_in_google: 3,
+        off_domain: 0,
+        account_in_use: 1,
+      };
+
+      beforeEach(() => {
+        mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+        vi.mocked(toast.success).mockClear();
+        vi.mocked(toast.error).mockClear();
+        mockLinkExistingGoogleMembers.mockReset();
+        mockLinkExistingGoogleMembers.mockImplementation((expected?: number) =>
+          Promise.resolve({ applied: expected !== undefined, linked: 4, ...counts })
+        );
+      });
+
+      it('previews, confirms, then links', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText('Google Workspace');
+        const card = screen.getByTestId('integration-card-google-workspace');
+        await user.click(within(card).getByText('Link existing members'));
+
+        expect(await screen.findByText('Link 4 existing members to Google?')).toBeInTheDocument();
+        expect(
+          screen.getByText(
+            /Skipped: 2 already linked, 1 whose account setup is unfinished \(retry from their profile\), 3 with no account at their address, 1 who have already left, 1 whose account is still recorded for another member\./
+          )
+        ).toBeInTheDocument();
+        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledTimes(1);
+        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledWith();
+
+        await user.click(screen.getByRole('button', { name: 'Link accounts' }));
+
+        await waitFor(() => expect(mockLinkExistingGoogleMembers).toHaveBeenCalledWith(4));
+        expect(toast.success).toHaveBeenCalledWith('Linked 4 members to Google Workspace');
+      });
+
+      it('links nothing when the officer declines', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText('Google Workspace');
+        await user.click(screen.getByText('Link existing members'));
+        await user.click(await screen.findByRole('button', { name: 'Not now' }));
+
+        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledTimes(1);
+        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledWith();
+      });
+
+      it('asks nothing when there is no one to link', async () => {
+        const user = userEvent.setup();
+        mockLinkExistingGoogleMembers.mockResolvedValue({ applied: false, linked: 0, ...counts });
+        renderPage();
+        await screen.findByText('Google Workspace');
+        await user.click(screen.getByText('Link existing members'));
+
+        await waitFor(() =>
+          expect(toast.success).toHaveBeenCalledWith(
+            'No members to link. Skipped: 2 already linked, 1 whose account setup is unfinished (retry from their profile), 3 with no account at their address, 1 who have already left, 1 whose account is still recorded for another member.'
+          )
+        );
+        expect(screen.queryByRole('button', { name: 'Link accounts' })).not.toBeInTheDocument();
+        expect(mockLinkExistingGoogleMembers).toHaveBeenCalledTimes(1);
+      });
+
+      it('reports a failure', async () => {
+        const user = userEvent.setup();
+        mockLinkExistingGoogleMembers.mockRejectedValue(new Error('boom'));
+        renderPage();
+        await screen.findByText('Google Workspace');
+        await user.click(screen.getByText('Link existing members'));
+
+        await waitFor(() =>
+          expect(toast.error).toHaveBeenCalledWith('Could not link existing members to Google Workspace')
+        );
+      });
     });
   });
 });

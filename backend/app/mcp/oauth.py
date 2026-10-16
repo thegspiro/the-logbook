@@ -410,13 +410,17 @@ def redirect_with(uri: str, params: dict[str, Optional[str]]) -> str:
 # What a consent would actually reach
 # ---------------------------------------------------------------------------
 
-# The gate each scope unlocks in the tool registry; ``None`` is the plain
-# reads ``mcp:read`` covers.
-_SCOPE_GATES: dict[str, Optional[str]] = {
-    SCOPE_READ: None,
-    SCOPE_WRITE: "write",
-    SCOPE_FINANCE: "finance",
-    SCOPE_MEDICAL: "medical_screening",
+# The gates each scope unlocks in the tool registry; ``None`` is the plain
+# reads. Medical supplies ride on ``mcp:read`` rather than a scope of their
+# own: clients such as claude.ai request only the scope the MCP endpoint's
+# 401 advertises, so a separate scope would never be granted and the
+# department's switch would do nothing for a member. The switch and the
+# member's own inventory permission are what gate them.
+_SCOPE_GATES: dict[str, tuple[Optional[str], ...]] = {
+    SCOPE_READ: (None, "medical_supplies"),
+    SCOPE_WRITE: ("write",),
+    SCOPE_FINANCE: ("finance",),
+    SCOPE_MEDICAL: ("medical_screening",),
 }
 
 
@@ -475,6 +479,7 @@ def scope_reach(
             config.expose_medical_screening and SCOPE_MEDICAL in granted
         ),
         expose_full_schedule=config.expose_full_schedule,
+        expose_medical_supplies=config.expose_medical_supplies,
         enabled_modules=enabled_modules,
         auth_method="oauth",
         member_permissions=permissions,
@@ -483,11 +488,11 @@ def scope_reach(
     for scope in granted:
         if scope not in _SCOPE_GATES:
             continue
-        gate = _SCOPE_GATES[scope]
+        gates = _SCOPE_GATES[scope]
         reach[scope] = sum(
             1
             for tool_gate, module, perms in _tool_catalog()
-            if tool_gate == gate and gate_allows(principal, tool_gate, module, perms)
+            if tool_gate in gates and gate_allows(principal, tool_gate, module, perms)
         )
     return reach
 
@@ -1310,6 +1315,7 @@ class McpOAuthService:
                 config.expose_medical_screening and SCOPE_MEDICAL in scopes
             ),
             expose_full_schedule=config.expose_full_schedule,
+            expose_medical_supplies=config.expose_medical_supplies,
             client_ip=client_ip,
             enabled_modules=enabled_modules,
             auth_method="oauth",
