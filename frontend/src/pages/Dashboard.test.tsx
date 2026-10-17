@@ -463,6 +463,54 @@ describe('Dashboard', () => {
       expect(within(card).queryByText('42.5')).not.toBeInTheDocument();
     });
 
+    describe('a member the scheduling service excludes from every seat', () => {
+      beforeEach(() => {
+        mockGetEligiblePositions.mockReset();
+        mockGetMyHoursHistory.mockReset();
+        mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 8 });
+      });
+
+      it('is not offered Take a Shift or a Standby row', async () => {
+        mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: true });
+        mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 0 } });
+
+        renderWithRouter(<Dashboard />);
+
+        const card = await screen.findByRole('region', { name: /My hours,/ });
+        await waitFor(() => {
+          expect(screen.queryByRole('button', { name: /Take a Shift/ })).not.toBeInTheDocument();
+        });
+        expect(within(card).queryByText('Standby')).not.toBeInTheDocument();
+        expect(within(card).getByText('Administrative')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Log Training/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Clock In/ })).toBeInTheDocument();
+      });
+
+      it('keeps the Standby row when hours were credited to them anyway', async () => {
+        // A position changed after the shifts were worked: dropping the row
+        // would leave the month total larger than the figures beside it.
+        mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: true });
+        mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 6 } });
+
+        renderWithRouter(<Dashboard />);
+
+        const card = await screen.findByRole('region', { name: /My hours,/ });
+        expect(await within(card).findByText('Standby')).toBeInTheDocument();
+        expect(await within(card).findByText('6')).toBeInTheDocument();
+      });
+
+      it('leaves both in place for a member who can hold a seat', async () => {
+        mockGetEligiblePositions.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
+        mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 0 } });
+
+        renderWithRouter(<Dashboard />);
+
+        const card = await screen.findByRole('region', { name: /My hours,/ });
+        expect(await within(card).findByText('Standby')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Take a Shift/ })).toBeInTheDocument();
+      });
+    });
+
     it('does not present a partial sum as the month total', async () => {
       // 3 + 2 = 5 is arithmetic, not the member's month: training failed, so
       // its hours are missing from the sum. "5 total" is a precise wrong
