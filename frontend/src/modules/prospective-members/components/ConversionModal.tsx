@@ -85,21 +85,22 @@ const PasswordOutcome: React.FC<{ delivery: PasswordDelivery; welcomeEmailSent: 
   );
 };
 
-/** What happened to the member's Google Workspace account, when one applied. */
+/** What happened to the member's directory account, when one applied. */
 const GoogleOutcome: React.FC<{ outcome: ConvertGoogleAccountOutcome }> = ({ outcome }) => {
+  const vendor = outcome.provider === 'microsoft' ? 'Microsoft' : 'Google';
   if (outcome.status === GoogleAccountStatus.CREATED && outcome.credentials_sent) {
     return (
       <p className="text-theme-text-muted mb-4 text-center text-sm">
-        Google account {outcome.email} was created; its temporary password went to the member&apos;s personal email.
+        {vendor} account {outcome.email} was created; its temporary password went to the member&apos;s personal email.
       </p>
     );
   }
   const reason =
     outcome.status === GoogleAccountStatus.CREATED
-      ? `Google account ${outcome.email} was created, but its password has not reached the member yet.`
+      ? `${vendor} account ${outcome.email} was created, but its password has not reached the member yet.`
       : outcome.status === GoogleAccountStatus.LINKED_EXISTING
-        ? `${outcome.email} already belongs to a Google account, so none was created; it was left unchanged.`
-        : `The Google account ${outcome.email} was not created.`;
+        ? `${outcome.email} already belongs to a ${vendor} account, so none was created; it was left unchanged.`
+        : `The ${vendor} account ${outcome.email} was not created.`;
   return (
     <div
       role="alert"

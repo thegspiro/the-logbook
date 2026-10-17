@@ -194,12 +194,14 @@ describe('ApparatusInventoryPage', () => {
     expect(screen.queryByRole('option', { name: /Ladder 1/ })).not.toBeInTheDocument();
   });
 
-  it('shows the back action and says each change saved, with no Save button to press', async () => {
+  it('says each change saved, with no Save button to press', async () => {
     const user = userEvent.setup();
     mockGetApparatusInventory.mockResolvedValue(inventory([makeItem({ targetQuantity: 4, quantityOnTruck: 4 })]));
     renderWithRouter(<ApparatusInventoryPage />);
 
-    expect(screen.getByRole('button', { name: 'Back to Scheduling' })).toBeInTheDocument();
+    // No back button: the Scheduling tab it returned to is gone, and the
+    // Operations section strip and breadcrumbs carry the way out.
+    expect(screen.queryByRole('button', { name: 'Back to Scheduling' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save inventory' })).not.toBeInTheDocument();
     await selectApparatus(user);
     expect(screen.getByRole('status')).toHaveTextContent('All changes saved');

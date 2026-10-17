@@ -1026,6 +1026,10 @@ export interface InventoryItem {
    */
   next_expiration_date?: string | null;
   days_until_next_expiration?: number | null;
+  /** Whether the soonest-expiring units are on the shelf or aboard an apparatus. */
+  next_expiration_location?: 'shelf' | 'apparatus' | null;
+  /** Where those units are: the storage path, or "Medic 1 › Jump Bag". */
+  next_expiration_where?: string | null;
   /** "Station 1 › Supply Room › Shelf 2". Sent by the medical supply list only. */
   storage_path?: string | null;
   /** How many apparatus checklists carry it. Sent by the medical supply list only. */

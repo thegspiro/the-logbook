@@ -1,14 +1,15 @@
-"""The daily email about Google Workspace accounts that need a person to act.
+"""The daily email about directory accounts (Google Workspace, Microsoft 365)
+that need a person to act.
 
 The Integrations page lists them (``attention_items``), but an administrator
 learns of them only by opening it, and the item that matters most -- a member
-who left and whose account Google still has not suspended -- is exactly the
+who left and whose account the directory still has not suspended -- is the
 one nobody goes looking for. This sends the overdue part of that same list to
 every active member holding ``admin.access`` (the people who connect and
 change the integration), at most once a day per department, and only while
 something has waited longer than ``ATTENTION_OVERDUE_AFTER``.
 
-The list is :meth:`GoogleWorkspaceProvisioningService.attention_items`, not a
+The list is :meth:`DirectoryAccountService.attention_items`, not a
 re-derivation of it (CLAUDE.md pitfall #29).
 """
 
@@ -25,6 +26,11 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies import user_has_permission
 from app.core.config import settings as app_settings
 from app.models.user import Organization, User
+from app.services.directory_account_service import (
+    AttentionIssue,
+    AttentionItem,
+    DirectoryAccountService,
+)
 from app.services.email_policy import (
     EmailKind,
     department_required_kinds,
@@ -32,13 +38,11 @@ from app.services.email_policy import (
 )
 from app.services.email_service import EmailService, wrap_email_body
 from app.services.email_theme import ACCENT_AMBER, action
-from app.services.google_workspace_provisioning_service import (
-    AttentionIssue,
-    AttentionItem,
-    GoogleWorkspaceProvisioningService,
-)
+from app.services.integration_services.directory_common import DirectoryProviderInfo
 from app.utils.org_timezone import org_today
 
+# Stored under the Google-era key whichever directory is connected: renaming it
+# would forget the day a digest last went out and send a second one.
 SETTINGS_KEY = "google_workspace"
 LAST_DIGEST_KEY = "attention_digest_last_sent"
 DIGEST_ROWS_SHOWN = 50
@@ -90,7 +94,7 @@ async def _administrators(db: AsyncSession, organization_id: str) -> list[User]:
     return [m for m in members if user_has_permission(m, RECIPIENT_PERMISSION)]
 
 
-def _body(items: list[AttentionItem]) -> str:
+def _body(info: DirectoryProviderInfo, items: list[AttentionItem]) -> str:
     base = app_settings.FRONTEND_URL.rstrip("/")
     shown = items[:DIGEST_ROWS_SHOWN]
     more = len(items) - len(shown)
@@ -106,19 +110,18 @@ def _body(items: list[AttentionItem]) -> str:
     departed = sum(1 for i in items if i.issue == AttentionIssue.NOT_SUSPENDED)
     lead = (
         f"<p><strong>{departed} member(s) who have left still have a working "
-        "Google account.</strong> The Logbook has been retrying for over a "
-        "day.</p>"
+        f"{info.vendor} account.</strong> The Logbook has been retrying for over "
+        "a day.</p>"
         if departed
         else ""
     )
     return (
-        lead + f"<p>{len(items)} Google Workspace account(s) have been waiting over "
-        "a day for something The Logbook could not finish on its own.</p>"
+        lead + f"<p>{len(items)} {info.product} account(s) have been waiting "
+        "over a day for something The Logbook could not finish on its own.</p>"
         f"<ul>{rows}</ul>"
         + (f"<p>…and {more} more.</p>" if more > 0 else "")
         + "<p>Each member's profile shows the reason and a <strong>Retry</strong>."
-        " A suspension can also be applied directly in the Google Admin "
-        "console.</p>"
+        f" A suspension can also be applied directly in {info.admin_console}.</p>"
         + action(html.escape(f"{base}/integrations"), "Open Integrations")
     )
 
@@ -126,8 +129,8 @@ def _body(items: list[AttentionItem]) -> str:
 async def send_google_workspace_attention_digest(
     db: AsyncSession, organization: Organization
 ) -> int:
-    """Email this department's administrators the overdue Google Workspace
-    accounts, at most once a day. Returns the number of emails sent.
+    """Email this department's administrators the overdue directory accounts,
+    at most once a day. Returns the number of emails sent.
 
     Nothing is recorded unless at least one email went out, so a department
     whose mail is failing is tried again on the next run.
@@ -136,8 +139,9 @@ async def send_google_workspace_attention_digest(
     today = org_today(organization)
     if _last_digest_day(organization) == today:
         return 0
-    service = GoogleWorkspaceProvisioningService(db)
-    if not await service.is_connected(org_id):
+    service = DirectoryAccountService(db)
+    info = await service.connected_provider(org_id)
+    if info is None:
         return 0
     overdue = [i for i in await service.attention_items(org_id) if i.overdue]
     if not overdue:
@@ -152,12 +156,12 @@ async def send_google_workspace_attention_digest(
 
     html_body = wrap_email_body(
         organization,
-        "Google Workspace accounts need attention",
-        _body(overdue),
+        f"{info.product} accounts need attention",
+        _body(info, overdue),
         header_color=ACCENT_AMBER,
-        chip="Google Workspace",
+        chip=info.product,
     )
-    subject = f"{len(overdue)} Google Workspace account(s) need attention"
+    subject = f"{len(overdue)} {info.product} account(s) need attention"
     sent_total = 0
     for member in recipients:
         try:
@@ -167,12 +171,12 @@ async def send_google_workspace_attention_digest(
                 subject=subject,
                 html_body=html_body,
                 db=db,
-                template_type="google_workspace_attention_digest",
+                template_type=f"{info.audit_prefix}_attention_digest",
             )
             sent_total += sent
         except Exception as exc:
             logger.warning(
-                "Google Workspace attention digest to member {} failed: {}",
+                "Directory account attention digest to member {} failed: {}",
                 member.id,
                 type(exc).__name__,
             )

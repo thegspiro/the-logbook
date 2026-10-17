@@ -9,7 +9,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft,
+  Settings,
   RefreshCw,
   Search,
   ChevronUp,
@@ -79,7 +79,7 @@ import { asArray } from '../../../utils/asArray';
 import { buildLabelFilterPath, MAX_LABEL_BATCH, MAX_LABEL_ITEMS_TOTAL } from '../utils/labelPrintQuery';
 import type { LabelFilterParams } from '../utils/labelPrintQuery';
 import { useConfirm } from '../../../contexts/ConfirmContext';
-import { Breadcrumbs } from '../../../components/ux';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 const PAGE_SIZE = 50;
 
@@ -1719,98 +1719,95 @@ const InventoryItemsPage: React.FC = () => {
   /* ================================================================ */
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <Breadcrumbs />
-
-      <Link
-        to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-[44px] mb-6 flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Admin
-      </Link>
-
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Inventory Items</h1>
-          {/* The counts, not just the object: a malformed summary rendered
+      <OperationsPageHeader
+        icon={Package}
+        title="Inventory Items"
+        subtitle={
+          <>
+            {/* The counts, not just the object: a malformed summary rendered
               "items · overdue · maint. due" with every figure blank. */}
-          {summary &&
-            typeof summary.non_medical_items === 'number' &&
-            typeof summary.overdue_checkouts === 'number' &&
-            typeof summary.maintenance_due_count === 'number' && (
-              <div className="text-theme-text-muted mt-2 flex flex-wrap gap-4 text-sm">
-                <span className="flex items-center gap-1.5">
-                  {/* non_medical_items, not total_items: the latter sums
+            {summary &&
+              typeof summary.non_medical_items === 'number' &&
+              typeof summary.overdue_checkouts === 'number' &&
+              typeof summary.maintenance_due_count === 'number' && (
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <span className="flex items-center gap-1.5">
+                    {/* non_medical_items, not total_items: the latter sums
                     quantities across every domain including medical, while
                     the list below counts rows and excludes it. A header of 82
                     over a list of 6 reads as a bug in the list. */}
-                  <Package className="h-4 w-4" /> {summary.non_medical_items} items
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <AlertTriangle className="h-4 w-4" /> {summary.overdue_checkouts} overdue
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Wrench className="h-4 w-4" /> {summary.maintenance_due_count} maint. due
-                </span>
-                {summary.total_value > 0 && <span>${formatNumber(summary.total_value)}</span>}
-              </div>
-            )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={refresh} className="btn-secondary btn-icon-sm" title="Refresh">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            onClick={() => void exportCsv()}
-            // Until the first load lands there is no list to export, and a
-            // button that silently does nothing is worse than one that says so.
-            disabled={!loadedParams}
-            className="btn-secondary btn-md hidden items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-flex"
-          >
-            <Download className="h-4 w-4" /> Export
-          </button>
-          {canManage && (
-            <button
-              onClick={() => setMemberPickerOpen(true)}
-              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
-            >
-              <UserPlus className="h-4 w-4" /> Assign
-            </button>
-          )}
-          {canManage && (
-            <button
-              onClick={() => setReceiveOpen(true)}
-              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
-            >
-              <PackagePlus className="h-4 w-4" /> Receive Stock
-            </button>
-          )}
-          {canManage && (
-            <button
-              onClick={() => setBulkAddOpen(true)}
-              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
-              title="Paste a list of item names"
-            >
-              <ListPlus className="h-4 w-4" /> Add Several
-            </button>
-          )}
-          {canManage && (
-            <Link
-              to="/inventory/import"
-              className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
-              title="Import items from a CSV file"
-            >
-              <Upload className="h-4 w-4" /> Import CSV
+                    <Package className="h-4 w-4" /> {summary.non_medical_items} items
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4" /> {summary.overdue_checkouts} overdue
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Wrench className="h-4 w-4" /> {summary.maintenance_due_count} maint. due
+                  </span>
+                  {summary.total_value > 0 && <span>${formatNumber(summary.total_value)}</span>}
+                </div>
+              )}
+          </>
+        }
+        actions={
+          <>
+            <Link to="/inventory/admin" className="btn-secondary btn-md inline-flex items-center gap-2">
+              <Settings className="h-4 w-4" aria-hidden="true" /> Administration
             </Link>
-          )}
-          {canManage && (
-            <button onClick={openAdd} className="btn-info btn-md hidden items-center gap-2 sm:inline-flex">
-              <Plus className="h-4 w-4" /> Add Item
+            <button onClick={refresh} className="btn-secondary btn-icon-sm" title="Refresh">
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
-          )}
-        </div>
-      </div>
+            <button
+              onClick={() => void exportCsv()}
+              // Until the first load lands there is no list to export, and a
+              // button that silently does nothing is worse than one that says so.
+              disabled={!loadedParams}
+              className="btn-secondary btn-md hidden items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-flex"
+            >
+              <Download className="h-4 w-4" /> Export
+            </button>
+            {canManage && (
+              <button
+                onClick={() => setMemberPickerOpen(true)}
+                className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+              >
+                <UserPlus className="h-4 w-4" /> Assign
+              </button>
+            )}
+            {canManage && (
+              <button
+                onClick={() => setReceiveOpen(true)}
+                className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+              >
+                <PackagePlus className="h-4 w-4" /> Receive Stock
+              </button>
+            )}
+            {canManage && (
+              <button
+                onClick={() => setBulkAddOpen(true)}
+                className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+                title="Paste a list of item names"
+              >
+                <ListPlus className="h-4 w-4" /> Add Several
+              </button>
+            )}
+            {canManage && (
+              <Link
+                to="/inventory/import"
+                className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+                title="Import items from a CSV file"
+              >
+                <Upload className="h-4 w-4" /> Import CSV
+              </Link>
+            )}
+            {canManage && (
+              <button onClick={openAdd} className="btn-primary btn-md hidden items-center gap-2 sm:inline-flex">
+                <Plus className="h-4 w-4" /> Add Item
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* Location summary */}
       {locSummary.length > 0 && (

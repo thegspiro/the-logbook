@@ -132,10 +132,11 @@ Integration](Integration-Salesforce#service-account-client-credentials).
 
 ### Calendar Publishing
 
-| Variable                       | Description                                                                                                                            | Default |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `CALENDAR_SYNC_ENABLED`        | Lets the Google Calendar and Microsoft Outlook integration cards be connected; off, both read "Coming Soon"                            | `false` |
-| `GOOGLE_CALENDAR_REDIRECT_URI` | Callback URL for **Connect with Google** (`.../api/v1/integrations/google-calendar/oauth/callback`); blank derives it from the request | —       |
+| Variable                          | Description                                                                                                                            | Default |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `CALENDAR_SYNC_ENABLED`           | Lets the Google Calendar and Microsoft Outlook integration cards be connected; off, both read "Coming Soon"                            | `false` |
+| `GOOGLE_CALENDAR_REDIRECT_URI`    | Callback URL for **Connect with Google** (`.../api/v1/integrations/google-calendar/oauth/callback`); blank derives it from the request | —       |
+| `MICROSOFT_CALENDAR_REDIRECT_URI` | Callback URL for **Connect with Microsoft** (`.../api/v1/integrations/outlook/oauth/callback`); blank derives it from the request      | —       |
 
 With it on, an administrator connects **Google Calendar** with **Connect with
 Google**: The Logbook creates a "<Department> Events" calendar in that Google
@@ -144,9 +145,17 @@ five minutes, one way. The sign-in uses `GOOGLE_CLIENT_ID` /
 `GOOGLE_CLIENT_SECRET` (below) unless the department saved its own client ID
 and secret on the integration; the OAuth client needs the Google Calendar API
 enabled and the callback URL registered as an authorized redirect URI.
-Microsoft Outlook has no sign-in yet, so nothing publishes to it. The
-department iCalendar (ICS) feed does not depend on this setting. See
-[Integrations guide › Google Calendar](../docs/training/16-integrations.md#google-calendar).
+**Microsoft Outlook** connects the same way with **Connect with Microsoft**,
+using the `AZURE_AD_CLIENT_ID` / `AZURE_AD_CLIENT_SECRET` app (below) and
+`AZURE_AD_TENANT_ID` (any work or school account when unset), unless the
+department saved its own client ID, secret and tenant ID on the integration.
+The app needs the delegated Microsoft Graph permission `Calendars.ReadWrite`
+and the callback URL registered as a **Web** redirect URI; `AZURE_AD_ENABLED`
+is not required. The department iCalendar (ICS) feed does not depend on this
+setting. See the Integrations guide's
+[Google Calendar](../docs/training/16-integrations.md#google-calendar) and
+[Microsoft Outlook](../docs/training/16-integrations.md#microsoft-outlook)
+sections.
 
 ---
 

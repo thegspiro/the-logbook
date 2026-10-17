@@ -20,6 +20,10 @@ const mockReorderItemPins = vi.fn();
 const mockExportItemsCsv = vi.fn();
 
 vi.mock('../../../services/api', () => ({
+  // Read by the Operations section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   inventoryService: {
     getItems: (...a: unknown[]) => mockGetItems(...a) as unknown,
     getSummary: (...a: unknown[]) => mockGetSummary(...a) as unknown,
