@@ -1,5 +1,36 @@
 # Screenshot currency
 
+## Guides 00, 06, 10 and 11 re-shot or added 2026-10-17
+
+Rows elsewhere in this file that these resolve are marked **CURRENT**
+2026-10-17 in place. `seed_guide11_finance_states` gives the demo a Treasurer
+(Amara Osei), an expense report and a check request waiting on that position,
+one purchase request with no approval steps, an Email approver step on the
+unused Major Purchase chain, and two sub-lines under Personal Protective
+Equipment.
+
+| Image | Disposition | Notes |
+| ----- | ----------- | ----- |
+| `00-04`, `00-07`, `00-09`, `00-16`, `00-17`, `00-19`, `00-20`, `00-22`, `00-24`, `00-25` (re-shot) | **CURRENT** 2026-10-17 | Taken as the administrator (all permissions). `00-24` no longer claims issued gear: the administrator holds none, so that card is absent; alt text for `00-09` and `00-24` reworded. `00-22` now unpins its notification afterwards |
+| `00-27-login-password-changed` | **CURRENT** 2026-10-17 | New. The sign-in page reached with the router state the password change navigates with (`reason: password_changed`); no password was changed |
+| `00-28-top-bar-more-menu` | **CURRENT** 2026-10-17 | New. Navigation Layout is department-wide and the demo is shared, so the branding answer is mocked to `top` for this page only; the bar and its More menu are the live app at 1280px |
+| `00-29-notification-stacks`, `00-30-notification-stack-expanded` | **CURRENT** 2026-10-17 | New. Nothing pinned; the attendance-validation stack collapsed, then expanded. Mark all read not pressed |
+| `00-31-mfa-recovery-codes` | **CURRENT** 2026-10-17 | New. The setup and verify answers are mocked, so no account was enrolled and the ten codes pictured are made up; the panel is the live page |
+| Guide 00 Multi-Signer sign-off on the dashboard | **Not captured** | No seeded pipeline has a Multi-Signer Approval stage; adding one puts a new column on every guide-15 board. Placeholder left open |
+| `06-01` to `06-04`, `06-06`, `06-08`, `06-09` (1280px), `06-15`, `06-24`, `06-28` (re-shot) | **CURRENT** 2026-10-17 | Current labels throughout |
+| `06-29-add-apparatus-form`, `06-30-apparatus-status-reason`, `06-31-create-shift-apparatus` | **CURRENT** 2026-10-17 | New, placed by hand. The form with CNG chosen and the NFPA help text; Out of Service with a Reason on Engine 2; Create Shift with Engine 1 picked. None saved |
+| `06-32-room-checkin-chooser` | **CURRENT** 2026-10-17 | New. The Volunteer Office's back-to-back pair; the shot makes its own two events when the room is free and deletes them afterwards |
+| Guide 06 empty fleet, vehicle Deficiency, member Locations page | **Not captured** | The demo always has vehicles; no vehicle carries a deficiency, and making one fails an equipment check that guide 03's reports and the fleet list picture; the demo's Locations page has no station holding a room. Placeholders left open |
+| `10-04`, `10-06`, `10-13` (re-shot) | **CURRENT** 2026-10-17 | `10-13` alt text says there is no menu button |
+| `10-25-drawer-open-scroll-hint`, `10-26-drawer-more-chevron` | **CURRENT** 2026-10-17 | New. The phone drawer from More, unscrolled, and the list clipped to its fade and More pill |
+| `10-27-phone-nav-bar-setting` | **CURRENT** 2026-10-17 | New. The demo member's Right of Add set to Training, restored afterwards |
+| `10-28-held-offline-notice`, `10-29-held-offline-confirm` | **CURRENT** 2026-10-17 | New. Three untagged entries written into the member's offline queue in IndexedDB for the shot and removed afterwards; the confirmation is never accepted |
+| `11-01`, `11-03` (as a tree), `11-06` (Major Purchase expanded, with the Email step), `11-08`, `11-10`, `11-12-create-check-request`, `11-15` (re-shot) | **CURRENT** 2026-10-17 | `11-01` as the Treasurer |
+| `11-12-purchase-request-detail`, `11-14`, `11-16` (re-shot) | **CURRENT** 2026-10-17 | As the Treasurer: the purchase request waits on the Captain position, so its panel shows Not assigned to you and the override buttons; the expense report and check request wait on the Treasurer and show Approve and Deny |
+| `11-18` to `11-23` | **CURRENT** 2026-10-17 | New: Add step with an Email approver and with the Treasurer position; the unreachable-step banner and chip; Approvals as an approvals administrator; the override dialog; a purchase request no chain applies to. None submitted |
+| Guide 11 Approvals as the Treasurer with mixed types | **Not captured** | The Treasurer also holds the approvals-administrator permission, so their queue is `11-21`. Seeded purchase requests wait on the Captain position, which nobody holds |
+| `11-05-budget-detail` | **REPLACE** (open) | No guide shows it, and no seeded request is approved, so its transactions panel is empty |
+
 ## Re-shot or added 2026-10-17
 
 Screens changed by merged work, and most of the October 15 – 16 queue below.
@@ -189,21 +220,21 @@ unchanged.
 
 | Image | Disposition | Why |
 | ----- | ----------- | --- |
-| `10-13-mobile-header-menu.png` | **REPLACE** | The phone top bar has no menu button: it shows the department logo and name only, and **More** on the bottom bar opens the menu. The alt text still describes a menu button at the left edge |
+| `10-13-mobile-header-menu.png` | **CURRENT** 2026-10-17 | The phone top bar has no menu button: it shows the department logo and name only, and **More** on the bottom bar opens the menu. The alt text still describes a menu button at the left edge — re-shot 2026-10-17 |
 | `10-12-mobile-bottom-nav.png` | **CHECK** | If the frame shows an administrator's bar with a **Settings** tab, that tab opens My Account; the frame itself is unchanged unless it predates the centre **Add** button |
 | `10-15-mobile-menu-notifications.png` | **CHECK** | The menu is opened from **More** on the bottom bar, not a header button; replace if the frame shows a ☰ in the top bar |
 | Any phone capture of a settings screen | **REPLACE** | Settings screens show their sections as a sideways-scrolling row across the top; the sidebar idiom they show no longer exists |
 | Any Administration hub frame taken before 2026-10-05 (including `10-06-mobile-inventory-admin.png`) | **REPLACE** | Shows the doubled side margin; on a phone a hub's sections are now a chip row with an edge fade and arrow |
 | Phone and tablet shots of Settings, Training Setup, compliance rules, event roster and the Members Admin / Admin Hours / Eligibility Roster / Supply Expiring / My Checklists / Check Log / Compliance Requirements / Elections filters | **CHECK** | Taken before the 2026-10-03/04 layout pass (16px gutter, 44px roster controls, red selected state, shared card border) |
 
-| `06-01-apparatus-list.png` | **REPLACE** | The stat tile above the list reads **Maintenance Due** (was "Maint. Due"), and an empty fleet reads "No apparatus have been added yet." Re-shoot the list with the stat tiles in frame |
-| `06-03-apparatus-detail.png` | **REPLACE** | The Overview's dates card is **Expiration Dates** (was "Important Dates"). Re-shoot the Overview tab with that card in frame; check also that the header's **Edit** / **Archive** buttons sit as they now wrap |
+| `06-01-apparatus-list.png` | **CURRENT** 2026-10-17 | The stat tile above the list reads **Maintenance Due** (was "Maint. Due"), and an empty fleet reads "No apparatus have been added yet." Re-shoot the list with the stat tiles in frame — re-shot 2026-10-17 |
+| `06-03-apparatus-detail.png` | **CURRENT** 2026-10-17 | The Overview's dates card is **Expiration Dates** (was "Important Dates"). Re-shoot the Overview tab with that card in frame; check also that the header's **Edit** / **Archive** buttons sit as they now wrap — re-shot 2026-10-17 |
 | `06-05-apparatus-fuel-tab.png` | **CHECK** | The alt text says "calculated efficiency", but the tab calculates no miles per gallon (columns: Date, Fuel Type, Gallons, Price/Gal, Cost, Mileage, Full Tank). The alt text is kept for `manifest.mjs`; confirm the frame shows no efficiency figure |
 | `06-06-apparatus-equipment-tab.png` | **CHECK** | The alt text says "with condition"; the tab shows quantity, location and Required / Mounted / Present badges, with no condition field |
-| `06-09-facilities-dashboard.png` | **REPLACE** | The header button reads **Print Labels** (was "Print Page Labels"), and the facility cards size by the grid's own width (`card-grid`, 2026-10-03/04), so a laptop frame with the sidebar open shows fewer, wider cards. An empty dashboard reads "No facilities yet. Select Add Facility to add one." Re-shoot at laptop width |
+| `06-09-facilities-dashboard.png` | **CURRENT** 2026-10-17 | The header button reads **Print Labels** (was "Print Page Labels"), and the facility cards size by the grid's own width (`card-grid`, 2026-10-03/04), so a laptop frame with the sidebar open shows fewer, wider cards. An empty dashboard reads "No facilities yet. Select Add Facility to add one." Re-shoot at laptop width — re-shot 2026-10-17 |
 | Facility detail **Files** tab | **REPLACE** | The folder structure is visible, and the audience is different (photos for every facilities role, documents for the sensitive tier only) |
 | Any navigation capture showing **Facilities** in a regular member's menu | **REPLACE** | It is not there any more |
-| `06-28-facility-settings.png` | **REPLACE** | The subtitle reads "Choose the types and statuses offered on facility and maintenance record forms.", each list's line says where its values are offered ("Offered …") instead of "Ordered as shown in facility forms.", and the add button names the value ("Add facility type" rather than "Add"). Re-shoot the same frame |
+| `06-28-facility-settings.png` | **CURRENT** 2026-10-17 | The subtitle reads "Choose the types and statuses offered on facility and maintenance record forms.", each list's line says where its values are offered ("Offered …") instead of "Ordered as shown in facility forms.", and the add button names the value ("Add facility type" rather than "Add"). Re-shoot the same frame — re-shot 2026-10-17 |
 | **Write NFC tag** on the Check-In QR Codes cards | **NOT PICTURED** | Web NFC is Chrome-on-Android over HTTPS only, and the compact action renders nothing where unsupported. The harness runs headless Chromium over `http://localhost`, so it cannot produce the button; staging one would picture a control the reader's browser may correctly not have |
 
 ## Moved out of 07-documents-forms.md by the plain-language rewrite, 2026-10-14
@@ -230,14 +261,14 @@ placeholders, image file names and alt text are unchanged.
 
 | Image | Disposition | Why |
 | ----- | ----------- | --- |
-| `11-01-finance-dashboard.png` | **REPLACE** | The header subtitle now reads "Budgets, spending, and requests at a glance"; the Quick Links begin with **Approvals** for a `finance.approve` holder, and the dues link is titled **Dues** ("Track member dues and payments"). Capture as the Treasurer so the Approvals link and the linked Pending Approvals card both show. |
-| `11-06-approval-chains.png` | **REPLACE** | The page subtitle now reads "Set who approves purchase requests, expense reports, and check requests", and an expanded chain now carries an **Add step** button, a pencil (**Edit chain**) beside the trash icon in its header, and on each step **Move up** / **Move down**, **Edit step** and **Delete step** controls. Capture one chain expanded with two or three steps, one of them an Email approver. |
-| `11-08-create-purchase-request.png` | **REPLACE** | The subtitle now reads "Saved as a draft. Submit it for approval from the next page.", the budget field is labelled **Budget** (was Budget Category), the description placeholder reads "What you're buying and why", and the button is **Create Request**. |
-| `11-12-purchase-request-detail.png` | **REPLACE** | The action buttons read **Submit for Approval** / **Cancel Request**, a pending request now shows the yellow "Waiting on … You can approve or deny this step." panel with **Approve** and **Deny** to a `finance.approve` holder, and a draft's timeline reads "Approval steps are added when you submit this request." Capture a pending request as the Treasurer (not the requester). |
-| `11-10-create-expense-report.png` | **REPLACE** | The subtitle now reads "Saved as a draft. Submit it for approval from the next page." and the empty line-item list reads "No line items yet. Use “Add Item” to add each expense."; the expense type list is unchanged. |
-| `11-14-expense-report-detail.png` | **REPLACE** | **Submit for Approval** replaces Submit, line items show their expense type by name ("Mileage", not `mileage`), and a pending report shows the Approve / Deny panel to a `finance.approve` holder. |
-| `11-12-create-check-request.png` | **REPLACE** | The budget field is labelled **Budget** (was "Budget (Optional)"). |
-| `11-16-check-request-detail.png` | **REPLACE** | **Submit for Approval** and **Void Request** replace Submit and Void, and a pending request shows the Approve / Deny panel to a `finance.approve` holder. |
+| `11-01-finance-dashboard.png` | **CURRENT** 2026-10-17 | The header subtitle now reads "Budgets, spending, and requests at a glance"; the Quick Links begin with **Approvals** for a `finance.approve` holder, and the dues link is titled **Dues** ("Track member dues and payments"). Capture as the Treasurer so the Approvals link and the linked Pending Approvals card both show. — re-shot 2026-10-17 |
+| `11-06-approval-chains.png` | **CURRENT** 2026-10-17 | The page subtitle now reads "Set who approves purchase requests, expense reports, and check requests", and an expanded chain now carries an **Add step** button, a pencil (**Edit chain**) beside the trash icon in its header, and on each step **Move up** / **Move down**, **Edit step** and **Delete step** controls. Capture one chain expanded with two or three steps, one of them an Email approver. — re-shot 2026-10-17 |
+| `11-08-create-purchase-request.png` | **CURRENT** 2026-10-17 | The subtitle now reads "Saved as a draft. Submit it for approval from the next page.", the budget field is labelled **Budget** (was Budget Category), the description placeholder reads "What you're buying and why", and the button is **Create Request**. — re-shot 2026-10-17 |
+| `11-12-purchase-request-detail.png` | **CURRENT** 2026-10-17 | The action buttons read **Submit for Approval** / **Cancel Request**, a pending request now shows the yellow "Waiting on … You can approve or deny this step." panel with **Approve** and **Deny** to a `finance.approve` holder, and a draft's timeline reads "Approval steps are added when you submit this request." Capture a pending request as the Treasurer (not the requester). — re-shot 2026-10-17 |
+| `11-10-create-expense-report.png` | **CURRENT** 2026-10-17 | The subtitle now reads "Saved as a draft. Submit it for approval from the next page." and the empty line-item list reads "No line items yet. Use “Add Item” to add each expense."; the expense type list is unchanged. — re-shot 2026-10-17 |
+| `11-14-expense-report-detail.png` | **CURRENT** 2026-10-17 | **Submit for Approval** replaces Submit, line items show their expense type by name ("Mileage", not `mileage`), and a pending report shows the Approve / Deny panel to a `finance.approve` holder. — re-shot 2026-10-17 |
+| `11-12-create-check-request.png` | **CURRENT** 2026-10-17 | The budget field is labelled **Budget** (was "Budget (Optional)"). — re-shot 2026-10-17 |
+| `11-16-check-request-detail.png` | **CURRENT** 2026-10-17 | **Submit for Approval** and **Void Request** replace Submit and Void, and a pending request shows the Approve / Deny panel to a `finance.approve` holder. — re-shot 2026-10-17 |
 
 ## Moved out of 17-privacy-data-rights.md by the plain-language rewrite, 2026-10-14
 
@@ -378,7 +409,7 @@ images (`01-35`, `20-13`) were recaptured on 2026-10-14 and are current.
 
 | Guide / image                                                           | Disposition       | Why                                                                                                                                   |
 | ----------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 11 Finance, category settings                                           | **NEW + REPLACE** | Parent picker, tree list and **Who can charge these lines** with positions ticked; re-shoot `11-03-budget-categories.png` as a tree     |
+| 11 Finance, category settings                                           | **CURRENT** 2026-10-17, in part | Parent picker, tree list and **Who can charge these lines** with positions ticked; re-shoot `11-03-budget-categories.png` as a tree — 2026-10-17: `11-03` re-shot as a tree with a restricted Officer brass line; the **Who can charge these lines** dialog was not captured |
 | 11 Finance, My Budgets                                                  | **NEW**           | **Who can charge your lines** card and its dialog (needs a user who owns a category)                                                  |
 | 11 Finance, Budgets page                                                | **CHECK**         | Sub-lines grouped under a top-level category with a subtotal                                                                          |
 | 11 Finance, request forms                                               | **CHECK**         | Budget picker labels lines by category path and hides restricted ones                                                                  |
@@ -386,7 +417,7 @@ images (`01-35`, `20-13`) were recaptured on 2026-10-14 and are current.
 | 11 Finance, QuickBooks Export                                           | **REPLACE**       | The page now has a Run export section, **From …** labels, a **Dues** section and **Cash advances** accounts                           |
 | 07 Documents, Manage folder                                             | **NEW**           | The administrators-only confirmation                                                                                                  |
 | 07 Documents, suggestion box editor                                     | **REPLACE**       | **Questions** is directly under Description                                                                                           |
-| 06 Facilities, New Record / New Inspection                              | **REPLACE**       | Dialogs are centred, **Maintenance Type** marked required                                                                             |
+| 06 Facilities, New Record / New Inspection                              | **CURRENT** 2026-10-17, in part | Dialogs are centred, **Maintenance Type** marked required — 2026-10-17: `06-15` re-shot (New Maintenance Record, centred, Maintenance Type required); New Inspection not captured |
 | 06 Facilities, maintenance list                                         | **REPLACE**       | Rows read **Overdue · due …**, **Due …**, **Completed …**                                                                             |
 | 03 Scheduling, `03-95-apparatus-inventory.png`                          | **REPLACE**       | Phone layout: stacked rows, filter chips, pinned heading, no Save button, status line                                                |
 | 03 Scheduling, history import review                                    | **CHECK**         | Any shot of the Shifts or Positions tabs showing `ems` or "a 85% match"                                                               |
@@ -485,10 +516,10 @@ names and alt text are unchanged, so `manifest.mjs` entries still match.
 | Image | Disposition | Why |
 | ----- | ----------- | --- |
 | `00-01-login-page.png` | **CHECK** | The page is unchanged; replace only if the frame shows a lockout or session-expired message, whose wording changed on 2026-09-29 |
-| `00-19-change-password.png` | **REPLACE** | The requirements list is visible before typing and has seven rules: "At least 12 characters", the four character classes, "No runs like 123 or abc" and "No character three times in a row" |
-| `00-04-dashboard-overview.png`, `00-07-dashboard-panels.png` | **REPLACE** | The Scheduling Operations tiles are new. Caption which permissions the capturing account held — what a reader sees depends on their own grants |
-| `00-09-account-settings.png` | **REPLACE** | The page title reads **My Account** (was User Settings), and the Appearance tab's description reads "Theme and phone navigation bar" |
-| `00-24-dashboard-my-department.png`, `00-25-dashboard-organization.png` | **REPLACE** | Both still show the pre-2026-08-24 tab strip (**My Department** / **Organization**); the tabs now read **Personal** / **My Department** |
+| `00-19-change-password.png` | **CURRENT** 2026-10-17 | The requirements list is visible before typing and has seven rules: "At least 12 characters", the four character classes, "No runs like 123 or abc" and "No character three times in a row" — re-shot 2026-10-17 |
+| `00-04-dashboard-overview.png`, `00-07-dashboard-panels.png` | **CURRENT** 2026-10-17 | The Scheduling Operations tiles are new. Caption which permissions the capturing account held — what a reader sees depends on their own grants — re-shot 2026-10-17 |
+| `00-09-account-settings.png` | **CURRENT** 2026-10-17 | The page title reads **My Account** (was User Settings), and the Appearance tab's description reads "Theme and phone navigation bar" — re-shot 2026-10-17 |
+| `00-24-dashboard-my-department.png`, `00-25-dashboard-organization.png` | **CURRENT** 2026-10-17 | Both still show the pre-2026-08-24 tab strip (**My Department** / **Organization**); the tabs now read **Personal** / **My Department** — re-shot 2026-10-17 |
 
 ## Moved out of 03-scheduling.md by the plain-language rewrite, 2026-10-11
 
@@ -548,8 +579,8 @@ Compliance box.
 | Equipment-check template builder (desktop and phone) | **REPLACE** | Header, location rows and the overflow menu changed under 640px |
 | Pending Review, All Entries and My Admin Hours frames | **CHECK** | The method now reads **QR Scan** or **ID Card Station** |
 | Compliance suggestion box submit form | **REPLACE** | It now asks a required question first |
-| Apparatus status in the edit form | **REPLACE** | New **Reason** field |
-| Create Shift (any frame showing the apparatus picker) | **CHECK** | Lists Apparatus-module rigs |
+| Apparatus status in the edit form | **CURRENT** 2026-10-17 | New **Reason** field — captured 2026-10-17 as `06-30-apparatus-status-reason` |
+| Create Shift (any frame showing the apparatus picker) | **CURRENT** 2026-10-17 | Lists Apparatus-module rigs — captured 2026-10-17 as `06-31-create-shift-apparatus` |
 | Every desktop shot of the scheduling page (`03-01`, `03-04`, `03-61`, `03-62` among them) | **REPLACE** | The subtitle reads "See the schedule, sign up for shifts, and request swaps and time off" (was "Manage schedules, sign up for shifts, and handle trades") |
 | `03-05-open-shifts.png`, `03-100-open-shifts-member.png`, `03-105-open-shifts-admin.png` | **REPLACE** | The intro reads "Shifts with open seats. Sign up for one and it goes straight onto your schedule."; the old one promised an officer would confirm the signup |
 | `03-02-shift-detail-panel.png`, `03-05-assignment-form.png` | **CHECK** | Taken of the older right-hand drawer; may show the old **Add Assignment** form. Compare with `03-102` / `03-58` |
@@ -604,8 +635,8 @@ capture a real key, secret or Transcript ID.
 | Image | Disposition | Why |
 | ----- | ----------- | --- |
 | `06-*` apparatus list rows | **REPLACE** | Row **Archive** removed; the wrench opens Maintenance; badge text colour changed |
-| `06-*` Add Apparatus and `06-03-apparatus-detail.png` | **REPLACE** | Intro line, NFPA help text, CNG label; status and type badges |
-| `06-04-apparatus-maintenance-tab.png`, `06-06-apparatus-equipment-tab.png` | **REPLACE** | New guidance text above the lists and form |
+| `06-*` Add Apparatus and `06-03-apparatus-detail.png` | **CURRENT** 2026-10-17 | Intro line, NFPA help text, CNG label; status and type badges — re-shot 2026-10-17 |
+| `06-04-apparatus-maintenance-tab.png`, `06-06-apparatus-equipment-tab.png` | **CURRENT** 2026-10-17 | New guidance text above the lists and form — re-shot 2026-10-17 |
 | `02-*` Member Visibility Settings | **REPLACE** | Grouped cards, two columns, pinned Save bar |
 | `02-*` Training Admin **More** menu and equipment-check builder menus in dark mode | **REPLACE** | Opaque surface |
 | `02-*` requirement template picker (HIPAA, Bloodborne, Hazmat) and any requirement card for them | **CHECK** | Now Courses requirements; the old ones can show a warning |
@@ -712,7 +743,7 @@ grades. Never capture a real badge code; use a throwaway demo member.
 
 | Image | Disposition | Why |
 | ----- | ----------- | --- |
-| `11-12-purchase-request-detail`, `11-14-expense-report-detail`, `11-16-check-request-detail` | **REPLACE** | Pending-approval panel now always says "Waiting on <who>" and shows the **Not assigned to you** / override buttons for an approvals admin |
+| `11-12-purchase-request-detail`, `11-14-expense-report-detail`, `11-16-check-request-detail` | **CURRENT** 2026-10-17 | Pending-approval panel now always says "Waiting on <who>" and shows the **Not assigned to you** / override buttons for an approvals admin — re-shot 2026-10-17 |
 | the Approvals screen placeholder in guide 11 | **REPLACE** when captured | Gains the **Waiting on** column and admin rows; heading reads "Requests waiting on you." |
 | `11-06-approval-chains` | **CHECK** | Step help text changed to "Only the approver chosen here can approve or deny this step…"; chain cards gain coverage warnings when a step has no one who can act |
 | `02-73-compliance-attestations` | **REPLACE** | Form lost the Compliance % box and gained the Quarter picker; entries show "as of" |
@@ -862,14 +893,14 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 
 | Shot | Disposition | Why | PR(s) |
 | ---- | ----------- | --- | ----- |
-| `00-04-dashboard-overview` | **REPLACE** | Shot 2026-09-25; Log Training tile subtitle now 'Record a course or hours', My Updates may show stacked rows, admin sidebar may show the new More scroll pill | #2807, #2775, #2824 |
-| `00-07-dashboard-panels` | **REPLACE** | Shot 2026-09-25; Log Training tile subtitle changed and My Updates can show stacked notification rows | #2807, #2775 |
-| `00-09-account-settings` | **REPLACE** (also queued below) | Shot 2026-09-25; page title now 'My Account' and the Security section description reads 'Two-factor authentication'. Manifest alt ('the tab row leads to password, security, emergency contacts, appearance and notifications') also omits the Privacy and App sections and should be revised | #2759, #2807 |
-| `00-16-sidebar-admin` | **REPLACE** | Shot 2026-09-25; Forms & Comms now lists Member Emails & Texts between Email Templates and Messages, and the scrolled sidebar now shows the top fade and More scroll pill | #2772, #2824 |
-| `00-17-account-settings` | **REPLACE** (also queued below) | Shot 2026-09-25; full-page /account title now 'My Account' and Security sidebar description changed | #2759, #2807 |
-| `00-19-change-password` | **REPLACE** (also queued below) | Shot 2026-09-25; the Password section's checklist is now the seven-rule list (12 characters, no runs, no triple repeats) shown before typing, and the page title reads My Account (was User Settings) | #2759, #2807 |
-| `00-20-member-dashboard` | **REPLACE** | Shot 2026-09-25; Log Training subtitle changed; Next 30 Days event rows past their RSVP deadline show Open instead of Going / Can't; My Updates may stack | #2807, #2828, #2775 |
-| `00-22-notification-card-expanded` | **REPLACE** | Shot 2026-09-25 full-page; inbox subtitle changed to 'Your in-app notifications. Pinned ones stay at the top.' and same-category rows now stack. The manifest prepare step clicks the first aria-expanded=false button in the first div.card containing 'New Shift Assignment', which may now be a stack header — check the prepare step before re-capturing | #2791, #2775 |
+| `00-04-dashboard-overview` | **CURRENT** 2026-10-17 | Shot 2026-09-25; Log Training tile subtitle now 'Record a course or hours', My Updates may show stacked rows, admin sidebar may show the new More scroll pill — re-shot 2026-10-17 | #2807, #2775, #2824 |
+| `00-07-dashboard-panels` | **CURRENT** 2026-10-17 | Shot 2026-09-25; Log Training tile subtitle changed and My Updates can show stacked notification rows — re-shot 2026-10-17 | #2807, #2775 |
+| `00-09-account-settings` | **CURRENT** 2026-10-17 | Shot 2026-09-25; page title now 'My Account' and the Security section description reads 'Two-factor authentication'. Manifest alt ('the tab row leads to password, security, emergency contacts, appearance and notifications') also omits the Privacy and App sections and should be revised — re-shot 2026-10-17 | #2759, #2807 |
+| `00-16-sidebar-admin` | **CURRENT** 2026-10-17 | Shot 2026-09-25; Forms & Comms now lists Member Emails & Texts between Email Templates and Messages, and the scrolled sidebar now shows the top fade and More scroll pill — re-shot 2026-10-17 | #2772, #2824 |
+| `00-17-account-settings` | **CURRENT** 2026-10-17 | Shot 2026-09-25; full-page /account title now 'My Account' and Security sidebar description changed — re-shot 2026-10-17 | #2759, #2807 |
+| `00-19-change-password` | **CURRENT** 2026-10-17 | Shot 2026-09-25; the Password section's checklist is now the seven-rule list (12 characters, no runs, no triple repeats) shown before typing, and the page title reads My Account (was User Settings) — re-shot 2026-10-17 | #2759, #2807 |
+| `00-20-member-dashboard` | **CURRENT** 2026-10-17 | Shot 2026-09-25; Log Training subtitle changed; Next 30 Days event rows past their RSVP deadline show Open instead of Going / Can't; My Updates may stack — re-shot 2026-10-17 | #2807, #2828, #2775 |
+| `00-22-notification-card-expanded` | **CURRENT** 2026-10-17 | Shot 2026-09-25 full-page; inbox subtitle changed to 'Your in-app notifications. Pinned ones stay at the top.' and same-category rows now stack. The manifest prepare step clicks the first aria-expanded=false button in the first div.card containing 'New Shift Assignment', which may now be a stack header — check the prepare step before re-capturing — re-shot 2026-10-17 | #2791, #2775 |
 | `01-01-member-directory` | **REPLACE** (also queued below) | Closed status select displays its selected option, now 'All Statuses' (was 'All Status'); privacy notice reworded | #2784, #2669 |
 | `01-05-add-member-form` | **REPLACE** (also queued below) | Status and Preferred Contact selects removed, separate Membership ID override box removed, Membership Number loses its asterisk and shows next-number placeholder/hint under auto-generation, Set initial password hint changed, subtitle 'Add someone to the roster' | #2759, #2819, #2823, #2751, #2784 |
 | `01-06-import-members` | **REPLACE** | Subtitle now 'Add many members at once from a spreadsheet' and drop zone 'Choose a CSV file to upload' | #2784 |
@@ -932,14 +963,14 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | `05-68-equipment-request-states` | **REPLACE** (also queued below) | The badges now read Awaiting review / Approved / Issued instead of raw pending / fulfilled. The alt text still says 'a pending request … a fulfilled one'. | #2761 |
 | `05-69-label-print-page` | **REPLACE** | The alt and frame show the old extra-detail toggles, which are now What Prints on the Label. The saved-setup row and the preview identifier line have also changed. | #2663 |
 | `05-85-label-print-confirm` | **REPLACE** | The saved-setup row was added above the printer card and the preview now reads 'Asset: …'. The alt names only Mark and Not yet, but the prompt now also has Scan labels to confirm. | #2651, #2663 |
-| `06-01-apparatus-list` | **REPLACE** (also queued below) | Stat tile 'Maint. Due' is now 'Maintenance Due'; the pagination footer reads 'Page X of Y · N apparatus' | #2782 |
-| `06-02-apparatus-label-print` | **REPLACE** | Label page buttons renamed (Print in browser, Download test label) and a Start at label picker added for Letter Paper (Grid); captured 2026-09-25, before #2663/#2804 | #2663, #2804 |
-| `06-04-apparatus-maintenance-tab` | **REPLACE** | The add button and modal submit read 'Add Record' / 'Save Changes', and the empty-state text changed | #2782 |
-| `06-08-facility-label-print` | **REPLACE** | Same shared label page, with the renamed header and test-label buttons | #2663, #2804 |
-| `06-09-facilities-dashboard` | **REPLACE** (also queued below) | Header button 'Print Page Labels' is now 'Print Labels' | #2793 |
-| `06-15-facility-maintenance-form` | **REPLACE** | Submit button 'Create' is now 'Create Record' | #2793 |
-| `06-24-rooms-nested-tree` | **REPLACE** | Rooms show 'Capacity N' instead of 'Cap: N' | #2793 |
-| `06-28-facility-settings` | **REPLACE** (also queued below) | The subtitle and per-list descriptions were reworded, and the add button now reads 'Add facility type' | #2793 |
+| `06-01-apparatus-list` | **CURRENT** 2026-10-17 | Stat tile 'Maint. Due' is now 'Maintenance Due'; the pagination footer reads 'Page X of Y · N apparatus' — re-shot 2026-10-17 | #2782 |
+| `06-02-apparatus-label-print` | **CURRENT** 2026-10-17 | Label page buttons renamed (Print in browser, Download test label) and a Start at label picker added for Letter Paper (Grid); captured 2026-09-25, before #2663/#2804 — re-shot 2026-10-17 | #2663, #2804 |
+| `06-04-apparatus-maintenance-tab` | **CURRENT** 2026-10-17 | The add button and modal submit read 'Add Record' / 'Save Changes', and the empty-state text changed — re-shot 2026-10-17 | #2782 |
+| `06-08-facility-label-print` | **CURRENT** 2026-10-17 | Same shared label page, with the renamed header and test-label buttons — re-shot 2026-10-17 | #2663, #2804 |
+| `06-09-facilities-dashboard` | **CURRENT** 2026-10-17 | Header button 'Print Page Labels' is now 'Print Labels' — re-shot 2026-10-17 | #2793 |
+| `06-15-facility-maintenance-form` | **CURRENT** 2026-10-17 | Submit button 'Create' is now 'Create Record' — re-shot 2026-10-17 | #2793 |
+| `06-24-rooms-nested-tree` | **CURRENT** 2026-10-17 | Rooms show 'Capacity N' instead of 'Cap: N' — re-shot 2026-10-17 | #2793 |
+| `06-28-facility-settings` | **CURRENT** 2026-10-17 | The subtitle and per-list descriptions were reworded, and the add button now reads 'Add facility type' — re-shot 2026-10-17 | #2793 |
 | `07-01-documents` | **REPLACE** (also queued below) | The subtitle, the 'This Month' stat (now 'Added This Month') and the search placeholder changed | #2785 |
 | `07-02-new-folder-dialog` | **REPLACE** (also queued below) | The 'Parent:' label now reads 'Location:'. The manifest alt ('parent folder selector') is wrong: the dialog has no parent selector, and the location is the open folder. Update the alt when re-capturing | #2785 |
 | `07-03-upload-documents` | **REPLACE** (also queued below) | The dialog box text 'Drag and drop your file here / or click to browse' is now 'Choose the file to upload', and the placeholders changed. The manifest alt still says 'drag-and-drop zone'; suggested alt: 'Upload Document dialog with its file chooser, name and description fields'. The guide's image line was left untouched per the rules | #2785 |
@@ -963,14 +994,14 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | `09-02-create-template` | **REPLACE** | The back link reads 'Back to Templates'. | #2777 |
 | `09-04-template-builder` | **REPLACE** | The back link reads 'Back to Templates'. | #2777 |
 | `09-09-member-skills-testing` | **REPLACE** | The subtitle is now 'Start a skills test or review your results', and the empty-state lines changed. | #2777 |
-| `10-04-mobile-dashboard` | **REPLACE** | Shot 2026-09-25; Log Training tile subtitle now 'Record a course or hours' | #2807 |
-| `11-01-finance-dashboard` | **REPLACE** (also queued below) | New subtitle; quick-link 'Dues Management' is now 'Dues'; descriptions reworded | #2797 |
+| `10-04-mobile-dashboard` | **CURRENT** 2026-10-17 | Shot 2026-09-25; Log Training tile subtitle now 'Record a course or hours' — re-shot 2026-10-17 | #2807 |
+| `11-01-finance-dashboard` | **CURRENT** 2026-10-17 | New subtitle; quick-link 'Dues Management' is now 'Dues'; descriptions reworded — re-shot 2026-10-17 | #2797 |
 | `11-05-budget-detail` | **REPLACE** | Available→Remaining, % utilized→% used, transactions panel now 'Not available yet' | #2797 |
-| `11-06-approval-chains` | **REPLACE** (also queued below) | The page now shows Edit chain pencils, a new subtitle, per-step Move up/Move down/Edit step/Delete step controls, an Add step button and the step-timing note. Capture with one chain expanded | #2839 |
-| `11-08-create-purchase-request` | **REPLACE** (also queued below) | New subtitle ('Saved as a draft…'), Budget Category label now Budget, Create Request button | #2797 |
-| `11-10-create-expense-report` | **REPLACE** (also queued below) | Subtitle now 'Saved as a draft. Submit it for approval from the next page.' | #2797 |
-| `11-12-create-check-request` | **REPLACE** (also queued below) | 'Budget (Optional)' is now 'Budget' | #2797 |
-| `11-15-dues-management` | **REPLACE** | The heading is now 'Dues' with a new subtitle | #2797 |
+| `11-06-approval-chains` | **CURRENT** 2026-10-17 | The page now shows Edit chain pencils, a new subtitle, per-step Move up/Move down/Edit step/Delete step controls, an Add step button and the step-timing note. Capture with one chain expanded — re-shot 2026-10-17 | #2839 |
+| `11-08-create-purchase-request` | **CURRENT** 2026-10-17 | New subtitle ('Saved as a draft…'), Budget Category label now Budget, Create Request button — re-shot 2026-10-17 | #2797 |
+| `11-10-create-expense-report` | **CURRENT** 2026-10-17 | Subtitle now 'Saved as a draft. Submit it for approval from the next page.' — re-shot 2026-10-17 | #2797 |
+| `11-12-create-check-request` | **CURRENT** 2026-10-17 | 'Budget (Optional)' is now 'Budget' — re-shot 2026-10-17 | #2797 |
+| `11-15-dues-management` | **CURRENT** 2026-10-17 | The heading is now 'Dues' with a new subtitle — re-shot 2026-10-17 | #2797 |
 | `12-03-opportunities` | **REPLACE** (also queued below) | 'Apply' is now 'Start Application', and the subtitle changed | #2798 |
 | `12-04-create-application` | **REPLACE** (also queued below) | 'Opportunity ID' is now 'Grant Opportunity', with a new subtitle and placeholders | #2798 |
 | `12-06-application-budget-tab` | **REPLACE** (also queued below) | 'Add Item' is now 'Add Budget Item' | #2798 |
@@ -1293,8 +1324,8 @@ and this file cannot disagree.
 
 | Disposition | Image | What the new frame must show |
 | --- | --- | --- |
-| **REPLACE** | `00-19-change-password.png` | The requirements list is visible before typing and now has seven rules — "At least 12 characters", the four character classes, "No runs like 123 or abc" and "No character three times in a row". |
-| **REPLACE** | `00-09-account-settings.png` | The page title reads **My Account** (was User Settings), and the Appearance tab's description reads "Theme and phone navigation bar". |
+| **CURRENT** 2026-10-17 | `00-19-change-password.png` | The requirements list is visible before typing and now has seven rules — "At least 12 characters", the four character classes, "No runs like 123 or abc" and "No character three times in a row". — re-shot 2026-10-17 |
+| **CURRENT** 2026-10-17 | `00-09-account-settings.png` | The page title reads **My Account** (was User Settings), and the Appearance tab's description reads "Theme and phone navigation bar". — re-shot 2026-10-17 |
 
 ### [01 — membership](./01-membership.md)
 
@@ -1381,11 +1412,11 @@ and this file cannot disagree.
 
 | Disposition | Image | What the new frame must show |
 | --- | --- | --- |
-| **REPLACE** | `06-01-apparatus-list.png` | The stat tile above the list reads **Maintenance Due** (was "Maint. Due"), and an empty fleet reads "No apparatus have been added yet." Re-shoot the list with the stat tiles in frame. |
-| **REPLACE** | `06-03-apparatus-detail.png` | The Overview's dates card is now **Expiration Dates** (was "Important Dates"). Re-shoot the Overview tab with that card in frame; check also that the header's **Edit** / **Archive** buttons sit as they now wrap. |
-| **REPLACE** | `06-09-facilities-dashboard.png` | The header button reads **Print Labels** (was "Print Page Labels"), and the facility cards now size by the grid's own width (`card-grid`, 2026-10-03/04), so a laptop frame with the sidebar open shows fewer, wider cards. An empty dashboard reads "No facilities yet. Select Add Facility to add one." Re-shoot at laptop width. |
-| **NEW** | — | Signed in as a member, open `/locations/<room id>/check-in` for a room with two events in their check-in window → the "Which event are you here for?" page listing both events. |
-| **REPLACE** | `06-28-facility-settings.png` | The subtitle now reads "Choose the types and statuses offered on facility and maintenance record forms.", each list's line says where its values are offered ("Offered …") instead of "Ordered as shown in facility forms.", and the add button names the value ("Add facility type" rather than "Add"). Re-shoot the same frame. |
+| **CURRENT** 2026-10-17 | `06-01-apparatus-list.png` | The stat tile above the list reads **Maintenance Due** (was "Maint. Due"), and an empty fleet reads "No apparatus have been added yet." Re-shoot the list with the stat tiles in frame. — re-shot 2026-10-17 |
+| **CURRENT** 2026-10-17 | `06-03-apparatus-detail.png` | The Overview's dates card is now **Expiration Dates** (was "Important Dates"). Re-shoot the Overview tab with that card in frame; check also that the header's **Edit** / **Archive** buttons sit as they now wrap. — re-shot 2026-10-17 |
+| **CURRENT** 2026-10-17 | `06-09-facilities-dashboard.png` | The header button reads **Print Labels** (was "Print Page Labels"), and the facility cards now size by the grid's own width (`card-grid`, 2026-10-03/04), so a laptop frame with the sidebar open shows fewer, wider cards. An empty dashboard reads "No facilities yet. Select Add Facility to add one." Re-shoot at laptop width. — re-shot 2026-10-17 |
+| **CURRENT** 2026-10-17 | — | Signed in as a member, open `/locations/<room id>/check-in` for a room with two events in their check-in window → the "Which event are you here for?" page listing both events. — captured 2026-10-17 as `06-32-room-checkin-chooser` |
+| **CURRENT** 2026-10-17 | `06-28-facility-settings.png` | The subtitle now reads "Choose the types and statuses offered on facility and maintenance record forms.", each list's line says where its values are offered ("Offered …") instead of "Ordered as shown in facility forms.", and the add button names the value ("Add facility type" rather than "Add"). Re-shoot the same frame. — re-shot 2026-10-17 |
 
 ### [07 — documents-forms](./07-documents-forms.md)
 
@@ -1433,17 +1464,17 @@ and this file cannot disagree.
 
 | Disposition | Image | What the new frame must show |
 | --- | --- | --- |
-| **REPLACE** | `11-01-finance-dashboard.png` | The header subtitle now reads "Budgets, spending, and requests at a glance"; the Quick Links begin with **Approvals** for a `finance.approve` holder, and the dues link is titled **Dues** ("Track member dues and payments"). Capture as the Treasurer so the Approvals link and the linked Pending Approvals card both show. |
-| **REPLACE** | `11-06-approval-chains.png` | The page subtitle now reads "Set who approves purchase requests, expense reports, and check requests", and an expanded chain now carries an **Add step** button, a pencil (**Edit chain**) beside the trash icon in its header, and on each step **Move up** / **Move down**, **Edit step** and **Delete step** controls. Capture one chain expanded with two or three steps, one of them an Email approver. |
-| **NEW** | — | Finance → Settings → Approval Chains → expand a chain → **Add step**, with Step type **Approval**, Approver type **Email**, an approver email filled in, the **Allow self-approval by email** box and the **Auto-approve under ($)** field visible, and the help text under Approver type readable. |
-| **NEW** | — | Finance → Approvals as the Treasurer, with three or four waiting requests of mixed types (purchase request, expense report, check request) showing the Request, Type, Requested by, Amount, Step and Submitted columns and the Approve / Deny buttons on each row. |
+| **CURRENT** 2026-10-17 | `11-01-finance-dashboard.png` | The header subtitle now reads "Budgets, spending, and requests at a glance"; the Quick Links begin with **Approvals** for a `finance.approve` holder, and the dues link is titled **Dues** ("Track member dues and payments"). Capture as the Treasurer so the Approvals link and the linked Pending Approvals card both show. — re-shot 2026-10-17 |
+| **CURRENT** 2026-10-17 | `11-06-approval-chains.png` | The page subtitle now reads "Set who approves purchase requests, expense reports, and check requests", and an expanded chain now carries an **Add step** button, a pencil (**Edit chain**) beside the trash icon in its header, and on each step **Move up** / **Move down**, **Edit step** and **Delete step** controls. Capture one chain expanded with two or three steps, one of them an Email approver. — re-shot 2026-10-17 |
+| **CURRENT** 2026-10-17 | — | Finance → Settings → Approval Chains → expand a chain → **Add step**, with Step type **Approval**, Approver type **Email**, an approver email filled in, the **Allow self-approval by email** box and the **Auto-approve under ($)** field visible, and the help text under Approver type readable. — captured 2026-10-17 as `11-18-approval-step-email` |
+| **CURRENT** 2026-10-17, in part | — | Finance → Approvals as the Treasurer, with three or four waiting requests of mixed types (purchase request, expense report, check request) showing the Request, Type, Requested by, Amount, Step and Submitted columns and the Approve / Deny buttons on each row. — 2026-10-17: `11-21-approvals-admin-view` pictures the Treasurer's queue; see the batch table at the top for why this placeholder stays open |
 | **NEW** | — | A purchase request detail page in Pending Approval with no approval chain configured, viewed by the Treasurer: the "No approval chain applies to this request. Approve or deny it here." panel with its Approve and Deny buttons, and the approval timeline reading "This request has no approval steps." |
-| **REPLACE** | `11-08-create-purchase-request.png` | The subtitle now reads "Saved as a draft. Submit it for approval from the next page.", the budget field is labelled **Budget** (was Budget Category), the description placeholder reads "What you're buying and why", and the button is **Create Request**. |
-| **REPLACE** | `11-12-purchase-request-detail.png` | The action buttons read **Submit for Approval** / **Cancel Request**, a pending request now shows the yellow "Waiting on … You can approve or deny this step." panel with **Approve** and **Deny** to a `finance.approve` holder, and a draft's timeline reads "Approval steps are added when you submit this request." Capture a pending request as the Treasurer (not the requester). |
-| **REPLACE** | `11-10-create-expense-report.png` | The subtitle now reads "Saved as a draft. Submit it for approval from the next page." and the empty line-item list reads "No line items yet. Use “Add Item” to add each expense."; the expense type list is unchanged. |
-| **REPLACE** | `11-14-expense-report-detail.png` | **Submit for Approval** replaces Submit, line items show their expense type by name ("Mileage", not `mileage`), and a pending report shows the Approve / Deny panel to a `finance.approve` holder. |
-| **REPLACE** | `11-12-create-check-request.png` | The budget field is labelled **Budget** (was "Budget (Optional)"). |
-| **REPLACE** | `11-16-check-request-detail.png` | **Submit for Approval** and **Void Request** replace Submit and Void, and a pending request shows the Approve / Deny panel to a `finance.approve` holder. |
+| **CURRENT** 2026-10-17 | `11-08-create-purchase-request.png` | The subtitle now reads "Saved as a draft. Submit it for approval from the next page.", the budget field is labelled **Budget** (was Budget Category), the description placeholder reads "What you're buying and why", and the button is **Create Request**. — re-shot 2026-10-17 |
+| **CURRENT** 2026-10-17 | `11-12-purchase-request-detail.png` | The action buttons read **Submit for Approval** / **Cancel Request**, a pending request now shows the yellow "Waiting on … You can approve or deny this step." panel with **Approve** and **Deny** to a `finance.approve` holder, and a draft's timeline reads "Approval steps are added when you submit this request." Capture a pending request as the Treasurer (not the requester). — re-shot 2026-10-17 |
+| **CURRENT** 2026-10-17 | `11-10-create-expense-report.png` | The subtitle now reads "Saved as a draft. Submit it for approval from the next page." and the empty line-item list reads "No line items yet. Use “Add Item” to add each expense."; the expense type list is unchanged. — re-shot 2026-10-17 |
+| **CURRENT** 2026-10-17 | `11-14-expense-report-detail.png` | **Submit for Approval** replaces Submit, line items show their expense type by name ("Mileage", not `mileage`), and a pending report shows the Approve / Deny panel to a `finance.approve` holder. — re-shot 2026-10-17 |
+| **CURRENT** 2026-10-17 | `11-12-create-check-request.png` | The budget field is labelled **Budget** (was "Budget (Optional)"). — re-shot 2026-10-17 |
+| **CURRENT** 2026-10-17 | `11-16-check-request-detail.png` | **Submit for Approval** and **Void Request** replace Submit and Void, and a pending request shows the Approve / Deny panel to a `finance.approve` holder. — re-shot 2026-10-17 |
 
 ### [12 — grants-fundraising](./12-grants-fundraising.md)
 
