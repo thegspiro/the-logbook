@@ -499,6 +499,26 @@ describe('Dashboard', () => {
         expect(await screen.findByRole('button', { name: /Take a Shift/ })).toBeInTheDocument();
       });
 
+      it('hides Take a Shift when the open shifts listed have no seat for them', async () => {
+        // A scheduling manager is sent the department-wide gap list, which is
+        // full of shifts they cannot take; per-shift eligibility is the truth.
+        mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: true });
+        mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 0 } });
+        mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'gap', shift_date: inWindow(4) })]);
+        mockGetEligiblePositionsBulk.mockImplementation((ids: string[]) =>
+          Promise.resolve(Object.fromEntries(ids.map((id) => [id, []])))
+        );
+
+        renderWithRouter(<Dashboard />);
+
+        await waitFor(() => {
+          expect(mockGetEligiblePositionsBulk).toHaveBeenCalledWith(['gap']);
+        });
+        await waitFor(() => {
+          expect(screen.queryByRole('button', { name: /Take a Shift/ })).not.toBeInTheDocument();
+        });
+      });
+
       it('keeps the Standby row when hours were credited to them anyway', async () => {
         // A position changed after the shifts were worked: dropping the row
         // would leave the month total larger than the figures beside it.
