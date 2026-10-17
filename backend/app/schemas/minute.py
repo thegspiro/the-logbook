@@ -65,6 +65,13 @@ def _clean_rich_text(value: str, what: str) -> str:
     return cleaned
 
 
+class SectionDocument(BaseModel):
+    """A Documents-library file linked from an agenda item."""
+
+    id: str = Field(..., min_length=1, max_length=36)
+    name: str = Field(default="", max_length=255)
+
+
 class SectionEntry(BaseModel):
     """A single content section within minutes or a template"""
 
@@ -92,6 +99,29 @@ class SectionEntry(BaseModel):
         default="",
         max_length=MAX_MOTION_TEXT,
         description="Copied from the outline; the wording the motion starts with",
+    )
+
+    presenter: str = Field(
+        default="",
+        max_length=200,
+        description="Who reports on this item; set from the agenda item",
+    )
+    not_taken_up: bool = Field(
+        default=False,
+        description="The meeting never reached this item. It stays in the "
+        "record, marked so, rather than disappearing as an empty section",
+    )
+    agenda_key: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="The agenda item this section was made from. Server-set: "
+        "a value sent by a client is replaced from the stored section",
+    )
+    documents: List[SectionDocument] = Field(
+        default_factory=list,
+        max_length=10,
+        description="Documents-library files linked from the agenda item. "
+        "Server-set, like agenda_key",
     )
 
     @model_validator(mode="after")
@@ -629,6 +659,7 @@ class MinutesResponse(UTCResponseBase):
     attendees: Optional[List[AttendeeEntry]] = None
     quorum_met: Optional[bool] = None
     quorum_count: Optional[int] = None
+    meeting_id: Optional[str] = None
     event_id: Optional[str] = None
     template_id: Optional[str] = None
     sections: List[SectionEntry] = []
@@ -713,6 +744,39 @@ class ApplyOutline(BaseModel):
     """Which outline to lay over draft minutes"""
 
     template_id: str = Field(..., min_length=1, max_length=36)
+
+
+class AgendaSyncField(BaseModel):
+    """One field an agenda item would change on its section."""
+
+    field: str
+    before: Any = None
+    after: Any = None
+
+
+class AgendaSyncChange(BaseModel):
+    """A difference between the meeting's agenda and the minutes' sections."""
+
+    id: str
+    type: Literal["add", "update", "remove", "reorder"]
+    key: str
+    title: str
+    has_content: bool = Field(
+        description="The section already holds text; a removal detaches it "
+        "instead of deleting it"
+    )
+    fields: List[AgendaSyncField] = []
+
+
+class AgendaSyncPreview(BaseModel):
+    meeting_id: str
+    changes: List[AgendaSyncChange]
+
+
+class AgendaSyncApply(BaseModel):
+    """The changes the secretary chose, by the ids the preview gave."""
+
+    accept: List[str] = Field(default_factory=list, max_length=200)
 
 
 class SignatureSlotResponse(BaseModel):

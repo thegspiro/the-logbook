@@ -10,6 +10,7 @@ from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Date,
     DateTime,
@@ -117,6 +118,9 @@ class Meeting(Base):
 
     # Minutes Content
     agenda: Mapped[Optional[str]] = mapped_column(Text)
+    # The agenda as structured items (app/utils/agenda_items.py). The free-text
+    # ``agenda`` above is kept untouched for departments that never adopt them.
+    agenda_items: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text)
     motions: Mapped[Optional[str]] = mapped_column(Text)
 

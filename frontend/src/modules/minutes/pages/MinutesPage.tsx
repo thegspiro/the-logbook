@@ -29,6 +29,7 @@ import { Link, useNavigate } from 'react-router';
 import { meetingsService } from '../../../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../../../services/api';
 import { minutesService } from '../services/api';
+import { AgendaEditorDialog } from '../components/AgendaEditorDialog';
 import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
 import { ReminderSettingsDialog } from '../components/ReminderSettingsDialog';
@@ -108,6 +109,7 @@ const MinutesPage: React.FC = () => {
   const [minutesStats, setMinutesStats] = useState<MinutesStats | null>(null);
   const [openingMeetingId, setOpeningMeetingId] = useState<string | null>(null);
   const [pickingFor, setPickingFor] = useState<{ id: string; type: string } | null>(null);
+  const [agendaFor, setAgendaFor] = useState<MeetingRecord | null>(null);
 
   // Loading / error state
   const [loading, setLoading] = useState(true);
@@ -243,6 +245,13 @@ const MinutesPage: React.FC = () => {
       return;
     }
     if (openingMeetingId) return;
+    // A meeting with agenda items is minuted against them, so there is no
+    // outline to choose between.
+    const hasAgenda = (meetings.find((m) => m.id === meetingId)?.agenda_items ?? []).length > 0;
+    if (hasAgenda) {
+      await createMinutesFor(meetingId);
+      return;
+    }
     // A department with one outline for this kind of meeting has nothing to
     // choose; the server starts from its default. With several, ask.
     let choices: number;
@@ -577,6 +586,14 @@ const MinutesPage: React.FC = () => {
                     {canManage && (
                       <div className="ml-4 flex items-center gap-1">
                         <button
+                          onClick={() => setAgendaFor(meeting)}
+                          className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-cyan-500/10 hover:text-cyan-800 dark:hover:text-cyan-400"
+                          title="Edit the agenda"
+                          aria-label={`Edit the agenda of ${meeting.title}`}
+                        >
+                          <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
                           onClick={() => {
                             void handleOpenMinutes(meeting.id, String(meeting.meeting_type));
                           }}
@@ -742,6 +759,13 @@ const MinutesPage: React.FC = () => {
           onChoose={(outlineId) => {
             if (pickingFor) void createMinutesFor(pickingFor.id, outlineId);
           }}
+        />
+
+        <AgendaEditorDialog
+          meeting={agendaFor}
+          hasMinutes={agendaFor !== null && minutesByMeeting.has(agendaFor.id)}
+          onClose={() => setAgendaFor(null)}
+          onSaved={fetchData}
         />
 
         {/* Create Minutes Modal */}
