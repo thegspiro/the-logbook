@@ -18,6 +18,14 @@ from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 from loguru import logger
 
+from app.models.directory_account import GOOGLE_WORKSPACE_INTEGRATION, DirectoryProvider
+from app.services.integration_services.directory_common import (
+    DirectoryAccount,
+    DirectoryAccountExistsError,
+    DirectoryAccountNotFoundError,
+    DirectoryError,
+    DirectoryProviderInfo,
+)
 from app.services.integration_services.google_calendar_service import _BoundedHttp
 
 if TYPE_CHECKING:
@@ -28,6 +36,17 @@ if TYPE_CHECKING:
 # 409 on a retry -- an account an earlier attempt created whose answer never
 # arrived -- from somebody else's account at the same address.
 LOGBOOK_EXTERNAL_ID_TYPE = "the-logbook-member"
+
+
+def to_directory_account(account: dict[str, Any]) -> DirectoryAccount:
+    """A Directory API user resource, as the engine reads accounts."""
+    google_id = account.get("id")
+    return DirectoryAccount(
+        id=google_id if isinstance(google_id, str) else "",
+        primary_email=str(account.get("primaryEmail", "")).strip().lower(),
+        suspended=bool(account.get("suspended")),
+        member_id=logbook_member_id(account),
+    )
 
 
 def logbook_member_id(account: dict[str, Any]) -> Optional[str]:
@@ -55,7 +74,7 @@ DIRECTORY_SCOPES = (
 ORG_UNIT_SCOPE = "https://www.googleapis.com/auth/admin.directory.orgunit.readonly"
 
 
-class GoogleWorkspaceError(Exception):
+class GoogleWorkspaceError(DirectoryError):
     """A failure whose message is safe to show an officer.
 
     Messages are written here, never copied from Google's response, which can
@@ -63,11 +82,11 @@ class GoogleWorkspaceError(Exception):
     """
 
 
-class GoogleAccountExistsError(GoogleWorkspaceError):
+class GoogleAccountExistsError(GoogleWorkspaceError, DirectoryAccountExistsError):
     """The address already belongs to a user, alias or group in the domain."""
 
 
-class GoogleAccountNotFoundError(GoogleWorkspaceError):
+class GoogleAccountNotFoundError(GoogleWorkspaceError, DirectoryAccountNotFoundError):
     """The account a per-user call names no longer exists in Google."""
 
 
@@ -133,9 +152,15 @@ def _translate(
 
 
 class GoogleWorkspaceDirectory:
-    def __init__(self, service_account_info: dict[str, Any], admin_email: str):
+    def __init__(
+        self,
+        service_account_info: dict[str, Any],
+        admin_email: str,
+        org_unit_path: str = "/",
+    ):
         self._info = service_account_info
         self._admin_email = admin_email
+        self._org_unit_path = org_unit_path or "/"
         self._credentials: dict[tuple[str, ...], Any] = {}
 
     def _service(self, scopes: tuple[str, ...] = DIRECTORY_SCOPES) -> Any:
@@ -173,16 +198,16 @@ class GoogleWorkspaceDirectory:
         given_name: str,
         family_name: str,
         password: str,
-        org_unit_path: str,
         member_id: str,
     ) -> Optional[str]:
-        """Create the account, tagged with *member_id*; returns Google's id."""
+        """Create the account in the configured org unit, tagged with
+        *member_id*; returns Google's id."""
         body = {
             "primaryEmail": primary_email,
             "name": {"givenName": given_name, "familyName": family_name},
             "password": password,
             "changePasswordAtNextLogin": True,
-            "orgUnitPath": org_unit_path or "/",
+            "orgUnitPath": self._org_unit_path,
             "externalIds": [
                 {
                     "type": "custom",
@@ -199,14 +224,14 @@ class GoogleWorkspaceDirectory:
         google_id = created.get("id") if isinstance(created, dict) else None
         return google_id if isinstance(google_id, str) else None
 
-    async def list_users(self, domain: str) -> list[dict[str, Any]]:
+    async def list_users(self, domain: str) -> list[DirectoryAccount]:
         """Every user in *domain*: id and primary address.
 
         Paged at Google's maximum of 500, so a department-sized domain takes a
         call or two rather than one per member. Aliases are not users and are
         not listed.
         """
-        users: list[dict[str, Any]] = []
+        users: list[DirectoryAccount] = []
         page_token: Optional[str] = None
         while True:
 
@@ -227,12 +252,16 @@ class GoogleWorkspaceDirectory:
             page = await self._run("account listing", call)
             if not isinstance(page, dict):
                 return users
-            users.extend(u for u in page.get("users") or [] if isinstance(u, dict))
+            users.extend(
+                to_directory_account(u)
+                for u in page.get("users") or []
+                if isinstance(u, dict)
+            )
             page_token = page.get("nextPageToken")
             if not page_token:
                 return users
 
-    async def get_user(self, user_key: str) -> dict[str, Any]:
+    async def get_user(self, user_key: str) -> DirectoryAccount:
         """The account *user_key* resolves to. An alias resolves to the account
         that owns it, which is why callers compare ``primaryEmail``."""
 
@@ -245,10 +274,10 @@ class GoogleWorkspaceDirectory:
             )
 
         user = await self._run("account lookup", call, user_scoped=True)
-        return user if isinstance(user, dict) else {}
+        return to_directory_account(user if isinstance(user, dict) else {})
 
     async def is_suspended(self, user_key: str) -> bool:
-        return bool((await self.get_user(user_key)).get("suspended"))
+        return (await self.get_user(user_key)).suspended
 
     async def set_suspended(self, user_key: str, suspended: bool) -> None:
         body = {"suspended": suspended}
@@ -259,35 +288,28 @@ class GoogleWorkspaceDirectory:
         action = "account suspension" if suspended else "account unsuspension"
         await self._run(action, call, user_scoped=True)
 
-    async def reset_password(self, primary_email: str, password: str) -> None:
+    async def reset_password(self, user_key: str, password: str) -> None:
         body = {"password": password, "changePasswordAtNextLogin": True}
 
         def call() -> Any:
-            return (
-                self._service()
-                .users()
-                .update(userKey=primary_email, body=body)
-                .execute()
-            )
+            return self._service().users().update(userKey=user_key, body=body).execute()
 
         await self._run("password reset", call)
 
-    async def add_to_group(self, group_email: str, member_email: str) -> None:
+    async def add_to_group(self, group: str, member_email: str) -> None:
         """Add a member to a group; already being a member counts as success."""
         body = {"email": member_email, "role": "MEMBER"}
 
         def call() -> Any:
-            return (
-                self._service()
-                .members()
-                .insert(groupKey=group_email, body=body)
-                .execute()
-            )
+            return self._service().members().insert(groupKey=group, body=body).execute()
 
         try:
             await self._run("group membership", call)
         except GoogleAccountExistsError:
             return
+
+    async def ensure_licensed(self, user_key: str) -> None:
+        """Google licenses an account when it is created; nothing to do."""
 
     async def test_connection(
         self, domain: str, group_emails: Sequence[str], org_unit_path: str
@@ -380,4 +402,17 @@ def directory_for(integration: "Integration") -> GoogleWorkspaceDirectory:
         raise GoogleWorkspaceError("The stored service-account key is unreadable.")
     if not isinstance(info, dict):
         raise GoogleWorkspaceError("The stored service-account key is unreadable.")
-    return GoogleWorkspaceDirectory(info, admin_email)
+    org_unit_path = str((integration.config or {}).get("org_unit_path") or "/")
+    return GoogleWorkspaceDirectory(info, admin_email, org_unit_path)
+
+
+GOOGLE_WORKSPACE_PROVIDER = DirectoryProviderInfo(
+    provider=DirectoryProvider.GOOGLE.value,
+    integration_type=GOOGLE_WORKSPACE_INTEGRATION,
+    product="Google Workspace",
+    vendor="Google",
+    admin_console="the Google Admin console",
+    sign_in_url="https://accounts.google.com/",
+    audit_prefix="google_workspace",
+    client_for=directory_for,
+)

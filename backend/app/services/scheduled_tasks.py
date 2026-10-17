@@ -6567,14 +6567,13 @@ async def run_google_workspace_attention_digest(db: AsyncSession) -> Dict[str, A
 
 async def run_google_workspace_suspension_sync(db: AsyncSession) -> Dict[str, Any]:
     """Backstop for the departure hook's after-commit sync (see
-    app/models/google_workspace_departure.py). Each row is org-scoped and
+    app/models/directory_account_departure.py). Each row is org-scoped and
     locked while it is reconciled, so a run that overlaps the after-commit
-    task finds it settled and does nothing."""
-    from app.services.google_workspace_provisioning_service import (
-        GoogleWorkspaceProvisioningService,
-    )
+    task finds it settled and does nothing. The task keeps its Google-era
+    name: it is the identifier schedules and run history already use."""
+    from app.services.directory_account_service import DirectoryAccountService
 
-    attempted = await GoogleWorkspaceProvisioningService(db).sync_pending_suspensions()
+    attempted = await DirectoryAccountService(db).sync_pending_suspensions()
     return {"task": "google_workspace_suspension_sync", "attempted": attempted}
 
 

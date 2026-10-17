@@ -7,7 +7,7 @@ Endpoints for managing external integration configurations.
 import re
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, NotRequired, TypedDict
+from typing import Any, NotRequired, Optional, TypedDict
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import ValidationError
@@ -28,7 +28,6 @@ from app.core.utils import sanitize_connector_error
 from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
 from app.mcp.keys import McpKeyService
 from app.mcp.oauth import McpOAuthService
-from app.models.google_workspace import GOOGLE_WORKSPACE_INTEGRATION
 from app.models.integration import (
     CalendarSyncMapping,
     Integration,
@@ -43,6 +42,7 @@ from app.schemas.integration import (
     IntegrationUpdateRequest,
 )
 from app.services.calendar_sync_service import has_credentials
+from app.services.directory_account_service import PROVIDERS as DIRECTORY_PROVIDERS
 from app.services.integration_health import (
     finish_integration_run,
     health_state,
@@ -51,9 +51,11 @@ from app.services.integration_health import (
     start_integration_run,
     sync_log_to_dict,
 )
+from app.services.integration_services import calendar_oauth_common as calendar_oauth
 from app.services.integration_services import (
     google_calendar_oauth_service as gcal_oauth,
 )
+from app.services.integration_services.directory_common import DirectoryProviderInfo
 from app.services.integration_services.ical_service import (
     ICAL_INTEGRATION_TYPE,
     ORG_FEED_TOKEN_HASH_KEY,
@@ -255,6 +257,20 @@ INTEGRATION_CATALOG: list[_CatalogEntry] = [
         "status": "available",
     },
     {
+        "integration_type": "microsoft-365",
+        "name": "Microsoft 365",
+        "description": (
+            "Create a Microsoft 365 account for each applicant the department "
+            "converts to a member, at their department email address, license "
+            "it and add it to the groups you choose. Uses an Entra ID "
+            "application with Microsoft Graph permissions. Only an "
+            "organization administrator can connect or change it, and only "
+            "one of Google Workspace and Microsoft 365 can be connected."
+        ),
+        "category": "Access Control",
+        "status": "available",
+    },
+    {
         "integration_type": "documenso",
         "name": "Documenso",
         "description": "Send documents for electronic signature via Documenso, the open-source DocuSign alternative. Works with Documenso Cloud or a self-hosted instance.",
@@ -375,6 +391,12 @@ _CATALOG_BY_TYPE: dict[str, _CatalogEntry] = {
 # an empty config, and such a row never published anything.
 CALENDAR_PUBLISH_TYPES = frozenset({"google-calendar", "outlook"})
 
+# The button that connects each calendar card; the generic connect refuses them.
+_CALENDAR_SIGN_IN_LABELS = {
+    gcal_oauth.GOOGLE_CALENDAR_INTEGRATION_TYPE: "Connect with Google",
+    "outlook": "Connect with Microsoft",
+}
+
 # Config keys only the server writes. A client-supplied value is refused by
 # the type's schema (extra="forbid"); the stored value is left out of the
 # PATCH validation merge so it does not trip that same check.
@@ -493,10 +515,10 @@ async def _clear_calendar_connection(
     grant = integration.get_secret("refresh_token") or integration.get_secret(
         "access_token"
     )
-    for key in gcal_oauth.TOKEN_SECRETS:
+    for key in calendar_oauth.TOKEN_SECRETS:
         integration.clear_secret(key)
     config = dict(integration.config or {})
-    for key in gcal_oauth.CONNECTION_CONFIG_KEYS:
+    for key in calendar_oauth.CONNECTION_CONFIG_KEYS:
         config.pop(key, None)
     integration.config = config
     result = await db.execute(
@@ -725,40 +747,82 @@ def _apply_type_specific_flags(integration: Integration) -> None:
         )
 
 
-def _require_google_workspace_admin(integration: Integration, user: User) -> None:
-    """Google Workspace changes need an organization administrator.
+# The integrations that provision member accounts, by integration type.
+DIRECTORY_INTEGRATIONS: dict[str, DirectoryProviderInfo] = {
+    info.integration_type: info for info in DIRECTORY_PROVIDERS.values()
+}
+# Each directory's stored credential, and what to ask for when it is missing.
+_DIRECTORY_CREDENTIAL = {
+    "google": ("service_account_key", "Upload the service account's JSON key file"),
+    "microsoft": ("client_secret", "Enter the application's client secret"),
+}
 
-    Its service-account key can create accounts anywhere in the department's
-    Google domain, so ``integrations.manage`` alone is not enough to connect,
-    change or disconnect it (owner decision, 2026-10-15). ``admin.access`` is
-    what the Fire Chief, President and IT Manager positions hold by default.
+
+def _directory_provider(integration: Integration) -> Optional[DirectoryProviderInfo]:
+    """The directory an integration provisions accounts into, if it is one."""
+    return DIRECTORY_INTEGRATIONS.get(integration.integration_type)
+
+
+def _require_directory_admin(integration: Integration, user: User) -> None:
+    """Directory integration changes need an organization administrator.
+
+    A Google Workspace service-account key or a Microsoft 365 application can
+    create and suspend accounts anywhere in the department's domain, so
+    ``integrations.manage`` alone is not enough to connect, change or
+    disconnect one (owner decision, 2026-10-15). ``admin.access`` is what the
+    Fire Chief, President and IT Manager positions hold by default.
     """
-    if integration.integration_type != GOOGLE_WORKSPACE_INTEGRATION:
+    info = _directory_provider(integration)
+    if info is None:
         return
     if not user_has_permission(user, "admin.access"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only an organization administrator can change Google Workspace",
+            detail=f"Only an organization administrator can change {info.product}",
         )
 
 
-async def _check_google_workspace_ready(
+async def _check_directory_ready(
     db: AsyncSession, integration: Integration, config: dict[str, Any]
 ) -> None:
-    """Refuse a Google Workspace setup that could never create an account.
+    """Refuse a directory setup that could never create an account.
 
     Accounts are created at the member's department email address, so the
-    department email setting has to be on and on the same domain; and a
-    first connection has to bring its key.
+    department email setting has to be on and on the same domain; a first
+    connection has to bring its credential; and only one directory may be
+    connected at a time, since each member has one account record and a
+    conversion creates it in whichever directory is connected (owner
+    decision, 2026-10-16).
     """
-    if integration.integration_type != GOOGLE_WORKSPACE_INTEGRATION:
+    info = _directory_provider(integration)
+    if info is None:
         return
-    if not config.get("service_account_key") and not integration.get_secret(
-        "service_account_key"
-    ):
+    secret_key, secret_prompt = _DIRECTORY_CREDENTIAL[info.provider]
+    if not config.get(secret_key) and not integration.get_secret(secret_key):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Upload the service account's JSON key file",
+            detail=secret_prompt,
+        )
+    other = (
+        await db.execute(
+            select(Integration).where(
+                Integration.organization_id == integration.organization_id,
+                Integration.id != integration.id,
+                Integration.integration_type.in_(list(DIRECTORY_INTEGRATIONS)),
+                Integration.status == "connected",
+                Integration.enabled.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+    if other is not None:
+        other_info = DIRECTORY_INTEGRATIONS[other.integration_type]
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"{other_info.product} is connected. Disconnect it before "
+                f"connecting {info.product}: a department provisions accounts "
+                "in one directory at a time."
+            ),
         )
     from app.services.organization_service import OrganizationService
 
@@ -772,8 +836,8 @@ async def _check_google_workspace_ready(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 "Turn on department email addresses for the domain "
-                f"{domain} in Organization Settings first; Google accounts are "
-                "created at those addresses."
+                f"{domain} in Organization Settings first; {info.vendor} "
+                "accounts are created at those addresses."
             ),
         )
 
@@ -904,14 +968,17 @@ async def connect_integration(
             status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
         )
     _require_available(integration)
-    _require_google_workspace_admin(integration, current_user)
+    _require_directory_admin(integration, current_user)
     _reject_oauth_managed_keys(integration, body.config)
-    if integration.integration_type == gcal_oauth.GOOGLE_CALENDAR_INTEGRATION_TYPE:
-        # Connected means a Google grant and a calendar to publish into, and
-        # only the sign-in produces those. Settings go through PATCH.
+    if integration.integration_type in _CALENDAR_SIGN_IN_LABELS:
+        # Connected means a provider grant and a calendar to publish into,
+        # and only the sign-in produces those. Settings go through PATCH.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Use Connect with Google to connect Google Calendar",
+            detail=(
+                f"Use {_CALENDAR_SIGN_IN_LABELS[integration.integration_type]} "
+                f"to connect {integration.name}"
+            ),
         )
     was_connected = integration.status == "connected" and bool(integration.enabled)
 
@@ -925,7 +992,7 @@ async def connect_integration(
     # Validate config schema
     config = _validate_config(integration.integration_type, config)
     _require_destination(integration, config)
-    await _check_google_workspace_ready(db, integration, config)
+    await _check_directory_ready(db, integration, config)
     # Validate URLs for SSRF
     _validate_urls_in_config(config)
     # Split secrets from public config
@@ -1008,7 +1075,7 @@ async def disconnect_integration(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This integration is not yet available",
         )
-    _require_google_workspace_admin(integration, current_user)
+    _require_directory_admin(integration, current_user)
 
     integration.status = "available"
     integration.enabled = False
@@ -1077,6 +1144,10 @@ async def disconnect_integration(
     if integration.integration_type in CALENDAR_PUBLISH_TYPES:
         # After the commit, so a slow or failing provider cannot hold the
         # disconnect open or undo it: the tokens are already gone from here.
+        # Outlook is never revoked: the Microsoft identity platform has no
+        # endpoint for an app to revoke one grant (see
+        # outlook_calendar_oauth_service), so forgetting it here is all an
+        # app can do.
         revoked = False
         if integration.integration_type == gcal_oauth.GOOGLE_CALENDAR_INTEGRATION_TYPE:
             revoked = await gcal_oauth.revoke_token(calendar_grant)
@@ -1140,13 +1211,13 @@ async def update_integration(
     # PATCH validation includes stored public settings so callers can update or
     # clear one secret without resending unrelated required configuration.
     _require_available(integration)
-    _require_google_workspace_admin(integration, current_user)
+    _require_directory_admin(integration, current_user)
     _reject_oauth_managed_keys(integration, config)
     validation_config = {**_stored_config_for_validation(integration), **config}
     config = _validate_config(integration.integration_type, validation_config)
     if integration.status == "connected":
         _require_destination(integration, config)
-    await _check_google_workspace_ready(db, integration, config)
+    await _check_directory_ready(db, integration, config)
     # Validate URLs for SSRF
     _validate_urls_in_config(config)
     # Split secrets from public config

@@ -633,6 +633,12 @@ member gets a fresh voting link; the previous link is stamped `superseded_at`.
 The vote dedup hash guarantees at most one vote per member regardless of how
 many links they hold.
 
+Like ballot sends, a reminder runs in the background
+(`POST /elections/{id}/reminder-send-jobs`), so many non-voters no longer hit
+the browser's 30-second timeout, and leaving the page does not stop it. A
+reminder cannot start while a ballot send or another reminder for the same
+election is still running.
+
 ---
 
 ## Pre-Meeting Package

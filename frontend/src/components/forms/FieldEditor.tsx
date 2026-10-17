@@ -221,6 +221,13 @@ const FieldEditor = ({
       errs.condition = 'Enter the answer this condition compares against';
     }
 
+    // The API stores min_value / max_value as integers and answers 2.5 with a
+    // 422, so a fraction is refused here where it can be explained.
+    if (isNumeric) {
+      const fractional = [minValue, maxValue].some((v) => v !== undefined && !Number.isInteger(v));
+      if (fractional) errs.range = 'Min and max values must be whole numbers';
+    }
+
     if (validationPattern) {
       try {
         new RegExp(validationPattern);
@@ -534,8 +541,11 @@ const FieldEditor = ({
                     <input
                       id="field-min-value"
                       type="number"
+                      step="1"
                       value={minValue ?? ''}
                       onChange={(e) => setMinValue(e.target.value ? Number(e.target.value) : undefined)}
+                      aria-invalid={errors.range ? 'true' : undefined}
+                      aria-describedby={errors.range ? 'field-range-error' : undefined}
                       className="form-input"
                       placeholder="No minimum"
                     />
@@ -547,13 +557,21 @@ const FieldEditor = ({
                     <input
                       id="field-max-value"
                       type="number"
+                      step="1"
                       value={maxValue ?? ''}
                       onChange={(e) => setMaxValue(e.target.value ? Number(e.target.value) : undefined)}
+                      aria-invalid={errors.range ? 'true' : undefined}
+                      aria-describedby={errors.range ? 'field-range-error' : undefined}
                       className="form-input"
                       placeholder="No maximum"
                     />
                   </div>
                 </div>
+              )}
+              {isNumeric && errors.range && (
+                <p id="field-range-error" role="alert" className="text-xs text-red-700 dark:text-red-400">
+                  {errors.range}
+                </p>
               )}
 
               {/* Options editor (select, multiselect, checkbox, radio) */}

@@ -109,6 +109,18 @@ export const ComplianceTaskType = {
 } as const;
 export type ComplianceTaskType = (typeof ComplianceTaskType)[keyof typeof ComplianceTaskType];
 
+/** Mirrors `GrantNoteTypeLiteral` on the backend, which refuses anything else. */
+export const GrantNoteType = {
+  GENERAL: 'general',
+  STATUS_CHANGE: 'status_change',
+  DOCUMENT_ADDED: 'document_added',
+  CONTACT_MADE: 'contact_made',
+  MILESTONE: 'milestone',
+  FINANCIAL: 'financial',
+  COMPLIANCE: 'compliance',
+} as const;
+export type GrantNoteType = (typeof GrantNoteType)[keyof typeof GrantNoteType];
+
 export const CampaignStatus = {
   DRAFT: 'draft',
   ACTIVE: 'active',
@@ -448,7 +460,7 @@ export interface GrantComplianceTask {
 export interface GrantNote {
   id: string;
   applicationId: string;
-  noteType: string;
+  noteType: GrantNoteType;
   content: string;
   metadata: Record<string, unknown> | null;
   createdBy: string | null;

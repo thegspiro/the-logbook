@@ -26,6 +26,13 @@ def _uid() -> str:
 _NOW = datetime.now(timezone.utc)
 
 
+def _today() -> date:
+    # The department's calendar, not the machine's: these orgs are on UTC and
+    # the service reads its date there, so a local date.today() is a day off
+    # on any developer machine whose local date differs from the UTC one.
+    return datetime.now(timezone.utc).date()
+
+
 @pytest.fixture
 async def setup_org_and_user(db_session: AsyncSession):
     """Insert a minimal organization and user via raw SQL."""
@@ -156,7 +163,7 @@ async def _insert_cert_requirement(
             "ddt": "certification_period",
             "due_date": due_date,
             "recency_days": recency_days,
-            "name_match_until": name_match_until or date.today(),
+            "name_match_until": name_match_until or _today(),
             "now": _NOW,
         },
     )
@@ -245,7 +252,7 @@ class TestHoursRequirementCompliance:
         reviewing TR-17 pass 3.
         """
         org_id, user_id = setup_org_and_user
-        due = date.today() + timedelta(days=10)
+        due = _today() + timedelta(days=10)
         req_id = await _insert_hours_requirement(
             db_session,
             org_id,
@@ -267,7 +274,7 @@ class TestHoursRequirementCompliance:
     ):
         """An already-passed due date must report a negative day count."""
         org_id, user_id = setup_org_and_user
-        due = date.today() - timedelta(days=5)
+        due = _today() - timedelta(days=5)
         req_id = await _insert_hours_requirement(
             db_session,
             org_id,
@@ -306,9 +313,9 @@ class TestHoursRequirementCompliance:
             UUID(user_id), UUID(req_id), UUID(org_id)
         )
 
-        year_end = date(date.today().year, 12, 31)
+        year_end = date(_today().year, 12, 31)
         assert progress.due_date == year_end
-        assert progress.days_until_due == (year_end - date.today()).days
+        assert progress.days_until_due == (year_end - _today()).days
 
     async def test_calendar_period_ignores_a_stale_fixed_due_date(
         self, db_session: AsyncSession, setup_org_and_user
@@ -325,7 +332,7 @@ class TestHoursRequirementCompliance:
         overdue/at-risk reporting for a plain annual requirement.
         """
         org_id, user_id = setup_org_and_user
-        stale_due = date.today() + timedelta(days=9999)
+        stale_due = _today() + timedelta(days=9999)
         req_id = await _insert_hours_requirement(
             db_session,
             org_id,
@@ -339,7 +346,7 @@ class TestHoursRequirementCompliance:
             UUID(user_id), UUID(req_id), UUID(org_id)
         )
 
-        year_end = date(date.today().year, 12, 31)
+        year_end = date(_today().year, 12, 31)
         assert progress.due_date == year_end
         assert progress.due_date != stale_due
 
@@ -362,7 +369,7 @@ class TestHoursRequirementCompliance:
             requirement_type="calls",
             rolling_period_months=24,
         )
-        completion = date.today() - timedelta(days=365)
+        completion = _today() - timedelta(days=365)
         await _insert_training_record(
             db_session,
             org_id,
@@ -380,7 +387,7 @@ class TestHoursRequirementCompliance:
 
         expected_due = completion + relativedelta(months=24)
         assert progress.due_date == expected_due
-        assert progress.days_until_due == (expected_due - date.today()).days
+        assert progress.days_until_due == (expected_due - _today()).days
 
     async def test_days_until_due_for_rolling_requirement_with_no_completion_is_none(
         self, db_session: AsyncSession, setup_org_and_user
@@ -418,7 +425,7 @@ class TestHoursRequirementCompliance:
         just-added rolling anchor.
         """
         org_id, user_id = setup_org_and_user
-        stale_due = date.today() - timedelta(days=1000)
+        stale_due = _today() - timedelta(days=1000)
         req_id = await _insert_hours_requirement(
             db_session,
             org_id,
@@ -428,7 +435,7 @@ class TestHoursRequirementCompliance:
             rolling_period_months=24,
             due_date=stale_due,
         )
-        completion = date.today() - timedelta(days=365)
+        completion = _today() - timedelta(days=365)
         await _insert_training_record(
             db_session,
             org_id,
@@ -461,14 +468,14 @@ class TestHoursRequirementCompliance:
             org_id,
             user_id,
             hours_completed=10.0,
-            completion_date=date(date.today().year, 3, 15),
+            completion_date=date(_today().year, 3, 15),
         )
         await _insert_training_record(
             db_session,
             org_id,
             user_id,
             hours_completed=6.0,
-            completion_date=date(date.today().year, 5, 10),
+            completion_date=date(_today().year, 5, 10),
         )
 
         svc = TrainingService(db_session)
@@ -493,14 +500,14 @@ class TestHoursRequirementCompliance:
             org_id,
             user_id,
             hours_completed=18.0,
-            completion_date=date(date.today().year, 2, 1),
+            completion_date=date(_today().year, 2, 1),
         )
         await _insert_training_record(
             db_session,
             org_id,
             user_id,
             hours_completed=12.0,
-            completion_date=date(date.today().year, 6, 1),
+            completion_date=date(_today().year, 6, 1),
         )
 
         svc = TrainingService(db_session)
@@ -527,7 +534,7 @@ class TestHoursRequirementCompliance:
             user_id,
             hours_completed=20.0,
             status="completed",
-            completion_date=date(date.today().year, 4, 1),
+            completion_date=date(_today().year, 4, 1),
         )
         await _insert_training_record(
             db_session,
@@ -535,7 +542,7 @@ class TestHoursRequirementCompliance:
             user_id,
             hours_completed=10.0,
             status="cancelled",
-            completion_date=date(date.today().year, 5, 1),
+            completion_date=date(_today().year, 5, 1),
         )
 
         svc = TrainingService(db_session)
@@ -564,7 +571,7 @@ class TestCertificationCompliance:
             db_session, org_id, name="EMT Certification"
         )
 
-        future_exp = date.today() + timedelta(days=180)
+        future_exp = _today() + timedelta(days=180)
         await _insert_training_record(
             db_session,
             org_id,
@@ -572,7 +579,7 @@ class TestCertificationCompliance:
             course_name="EMT Certification",
             training_type="certification",
             hours_completed=0.0,
-            completion_date=date.today() - timedelta(days=365),
+            completion_date=_today() - timedelta(days=365),
             expiration_date=future_exp,
         )
 
@@ -600,7 +607,7 @@ class TestCertificationCompliance:
         req_id = await _insert_cert_requirement(
             db_session, org_id, name="EMT Certification"
         )
-        future_exp = date.today() + timedelta(days=180)
+        future_exp = _today() + timedelta(days=180)
         await _insert_training_record(
             db_session,
             org_id,
@@ -608,7 +615,7 @@ class TestCertificationCompliance:
             course_name="EMT Certification",
             training_type="certification",
             hours_completed=0.0,
-            completion_date=date.today() - timedelta(days=365),
+            completion_date=_today() - timedelta(days=365),
             expiration_date=future_exp,
         )
 
@@ -636,7 +643,7 @@ class TestCertificationCompliance:
         req_id = await _insert_cert_requirement(
             db_session, org_id, name="EMT Certification"
         )
-        future_exp = date.today() + timedelta(days=180)
+        future_exp = _today() + timedelta(days=180)
         await _insert_training_record(
             db_session,
             org_id,
@@ -669,11 +676,11 @@ class TestCertificationCompliance:
         round 4's certification-period anchor with this stale value.
         """
         org_id, user_id = setup_org_and_user
-        stale_due = date.today() + timedelta(days=9999)
+        stale_due = _today() + timedelta(days=9999)
         req_id = await _insert_cert_requirement(
             db_session, org_id, name="EMT Certification", due_date=stale_due
         )
-        future_exp = date.today() + timedelta(days=180)
+        future_exp = _today() + timedelta(days=180)
         await _insert_training_record(
             db_session,
             org_id,
@@ -681,7 +688,7 @@ class TestCertificationCompliance:
             course_name="EMT Certification",
             training_type="certification",
             hours_completed=0.0,
-            completion_date=date.today() - timedelta(days=365),
+            completion_date=_today() - timedelta(days=365),
             expiration_date=future_exp,
         )
 
@@ -716,7 +723,7 @@ class TestCertificationCompliance:
             training_type="certification",
             hours_completed=0.0,
             completion_date=None,
-            expiration_date=date.today() + timedelta(days=180),
+            expiration_date=_today() + timedelta(days=180),
         )
 
         svc = TrainingService(db_session)
@@ -775,7 +782,7 @@ class TestCertificationCompliance:
         await db_session.flush()
 
         # The record that actually satisfies the requirement (older).
-        satisfying_completion = date.today() - timedelta(days=400)
+        satisfying_completion = _today() - timedelta(days=400)
         await db_session.execute(
             text(
                 "INSERT INTO training_records "
@@ -805,7 +812,7 @@ class TestCertificationCompliance:
             course_name="Unrelated Training",
             training_type="continuing_education",
             hours_completed=4.0,
-            completion_date=date.today() - timedelta(days=5),
+            completion_date=_today() - timedelta(days=5),
         )
         await db_session.flush()
 
@@ -828,7 +835,7 @@ class TestCertificationCompliance:
             db_session, org_id, name="Paramedic Certification"
         )
 
-        past_exp = date.today() - timedelta(days=30)
+        past_exp = _today() - timedelta(days=30)
         await _insert_training_record(
             db_session,
             org_id,
@@ -836,7 +843,7 @@ class TestCertificationCompliance:
             course_name="Paramedic Certification",
             training_type="certification",
             hours_completed=0.0,
-            completion_date=date.today() - timedelta(days=730),
+            completion_date=_today() - timedelta(days=730),
             expiration_date=past_exp,
         )
 
@@ -853,7 +860,7 @@ class TestCertificationCompliance:
         """get_expiring_certifications should return only certs within the lookahead window."""
         org_id, user_id = setup_org_and_user
 
-        exp_30 = date.today() + timedelta(days=30)
+        exp_30 = _today() + timedelta(days=30)
         await _insert_training_record(
             db_session,
             org_id,
@@ -861,11 +868,11 @@ class TestCertificationCompliance:
             course_name="Hazmat Ops",
             training_type="certification",
             hours_completed=0.0,
-            completion_date=date.today() - timedelta(days=300),
+            completion_date=_today() - timedelta(days=300),
             expiration_date=exp_30,
         )
 
-        exp_120 = date.today() + timedelta(days=120)
+        exp_120 = _today() + timedelta(days=120)
         await _insert_training_record(
             db_session,
             org_id,
@@ -873,7 +880,7 @@ class TestCertificationCompliance:
             course_name="Rope Rescue Tech",
             training_type="certification",
             hours_completed=0.0,
-            completion_date=date.today() - timedelta(days=200),
+            completion_date=_today() - timedelta(days=200),
             expiration_date=exp_120,
         )
 
@@ -914,7 +921,7 @@ class TestMultipleRequirements:
             user_id,
             course_name="Pump Ops Drill",
             hours_completed=12.0,
-            completion_date=date(date.today().year, 2, 15),
+            completion_date=date(_today().year, 2, 15),
         )
 
         # Do NOT add a matching certification record — cert is unmet
@@ -956,7 +963,7 @@ class TestMultipleRequirements:
             requirement_type="calls",
             rolling_period_months=24,
         )
-        old_completion = date.today() - timedelta(days=800)  # ~26 months
+        old_completion = _today() - timedelta(days=800)  # ~26 months
         await _insert_training_record(
             db_session,
             org_id,
@@ -975,7 +982,7 @@ class TestMultipleRequirements:
 
         expected_due = old_completion + relativedelta(months=24)
         assert progress.due_date == expected_due
-        assert progress.days_until_due == (expected_due - date.today()).days
+        assert progress.days_until_due == (expected_due - _today()).days
         assert progress.days_until_due < 0  # overdue
 
 
@@ -992,7 +999,7 @@ class TestUserTrainingStats:
     ):
         """Stats should reflect total hours, current-year hours, and cert counts."""
         org_id, user_id = setup_org_and_user
-        current_year = date.today().year
+        current_year = _today().year
 
         # Two completed records this year
         await _insert_training_record(
