@@ -16,21 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3379](https://github.com/thegspiro/the-logbook/pull/3379)** (branch
-`claude/security-review-reports-analytics`):
-Feature 29 (Reports & analytics), pass 9. PR #3376 (Feature 28,
-Security/audit & IP, pass 7) merged with no next-feature PR open; this pass
-picked it up. 0 fixed in this feature's own code, 0 new findings. Diffed all
-ten files this doc covers plus the four frontend surfaces against pass 8's
-own merge commit (`b40475bd`). The main item: **RPT2-29-2** (saved-report
-scheduling had no reader) is now resolved by regular engineering work —
-verified by reading `app/services/saved_report_schedule.py` in full against
-current code, not taken on the doc's own say-so. A second real change,
-Department pulse card customization, reviewed and found clean. Also fixed
-an unrelated forked Alembic chain that was blocking the completion gate (a
-merge revision, `fccdac60063f`). See
-`RPT6-29-reports-analytics.md`'s **Pass 9** section. Row 29 → ✅ (pending
-this PR's merge); next is Feature 30 (Onboarding).
+None. PR #3379 (Feature 29, Reports & analytics, pass 9) merged — it hit a
+merge conflict (a forked Alembic chain against the meeting-agenda-items
+feature that landed on `main` while it sat open) and a watchdog session
+resolved it (regenerated `docs/DATABASE_SCHEMA.md`, added merge revision
+`1117b642643b`) and merged it once CI was green; already recorded in that
+PR's own history above.
+
+This iteration (a watchdog pickup — no `claude/security-review-*` PR was
+open, confirmed via `list_pull_requests`) reviewed Feature 30 (Onboarding),
+pass 7. 0 fixes needed, 0 new findings: the real delta since pass 6
+(`16766f61`) is a new required onboarding step (encryption-key custody
+confirmation, `encryption_key_custody` table + its own authenticated
+counterpart under `/system-notices`), malware scanning added to all three
+onboarding logo-upload paths, and three independently-landed, already
+owner-decided fixes (ONB-7's permission allowlist/priority clamp, ONB2-30-8's
+24-hour session ceiling, ONB-30-3's uniform SMTP failure messages) — all
+re-verified against current code rather than taken on `KNOWN_LIMITATIONS.md`'s
+own say-so. See `ONB5-30-onboarding.md`'s **Pass 7** section. Row 30 → ✅
+(pending this PR's merge); next is Feature 31 (Scheduled tasks).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security audit & IP, pass 7, PR #3376, merged), preserved for history</summary>
@@ -19771,7 +19775,7 @@ here.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
@@ -19783,6 +19787,58 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-17 — Feature 30 (Onboarding, pass 7) — watchdog pickup, 0 fixed, 0 new findings
+
+**Step 0.** `list_pull_requests` confirmed PR #3379 (Feature 29, Reports &
+analytics, pass 9) had merged — a watchdog session hit its merge conflict
+(a forked Alembic chain against the meeting-agenda-items feature that
+landed on `main` while the PR sat open) and resolved it, then merged once
+CI was green. No `claude/security-review-*` PR was open afterward, and row
+30 (Onboarding) was the first `⬜`.
+
+**Scope check.** Pass 6 landed as `16766f61` (2026-10-08). Since then, this
+feature's files gained real new functionality: a required encryption-key
+custody confirmation step (new `/session/key-custody` GET/POST routes, a
+new `encryption_key_custody` table, and an authenticated counterpart under
+`/system-notices` gated on `settings.manage`), malware scanning added to
+all three onboarding logo-upload call sites (`scan_and_validate_logo`
+replacing the bare `validate_logo_image`), and three fixes
+`KNOWN_LIMITATIONS.md` already records as owner decisions resolved
+2026-10-11 by regular engineering work: ONB-7 (the role/position editor now
+allowlists `permissions` keys to a defined module set excluding `users`/
+`audit`/any wildcard, and clamps priority/`is_system` so a client can no
+longer mint a high-priority or undeletable row), ONB2-30-8 (a 24-hour
+absolute session-lifetime ceiling on top of the sliding 30-minute window),
+and ONB-30-3 (the self-hosted SMTP test's connection-stage failures are now
+uniform, closing the internal-network fingerprinting oracle while keeping
+on-premises relays working). All three re-verified against current code,
+not taken on the doc's own say-so — see `ONB5-30-onboarding.md`. One
+residual noted but not re-flagged: the SMTP test's implicit-SSL branch can
+still report bare TLS-reachability (not specifically SMTP) for a
+credential-less probe, unchanged by the fix and strictly weaker than the
+fingerprinting the fix closes — same accepted tradeoff already on record.
+Route count: 24 → 26 (both new, correctly gated: `validate_session` +
+`needs_onboarding()` + owner-existence + fingerprint-match-or-409). Every
+other prior finding (ONB-1 through ONB4-30-2, the duplicate-`role.id`
+500, `POST /organization`'s missing `except Exception`,
+`ITTeamMemberRequest.email` being `str`) re-confirmed unchanged, not
+re-litigated.
+
+**Gate:** `flake8`/`black --check`/`isort --check-only` clean over `app/
+tests/ alembic/`; `validate_migrations.py --strict` — single head
+`1117b642643b`, 618 revisions; `pytest tests/ -q -k "onboard or
+org_template or template_service or key_custody or system_notices"` — 320
+passed, 1 skipped (environment-only); frontend `npm run typecheck`/`npm run
+lint` both clean.
+
+Findings doc: [`ONB5-30-onboarding.md`](./ONB5-30-onboarding.md) (no
+**Findings** section entries — every real change was already-landed,
+independently-verified hardening or a non-security correctness fix). No
+`KNOWN_LIMITATIONS.md` change needed — its three onboarding rows already
+correctly describe the 2026-10-11 resolutions this pass re-verified.
+Rotation row 30 → ✅ (pending this PR's merge). Next: Feature 31
+(Scheduled tasks).
 
 ### 2026-10-17 — Feature 23 (Medical supplies, pass 14) — watchdog pickup, 0 fixed, 0 new findings, 1 stale-finding correction
 
