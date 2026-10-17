@@ -949,9 +949,7 @@ Split it into three boxes rather than pasting it whole:
 | API Key      | the part after `key=`                        |
 | API Secret   | the part after `secret=`                     |
 
-<!-- Screenshot needed:
-_[Training Officer or admin (training.manage) at /training/admin?page=setup&tab=integrations → Add Provider → Target Solutions, details step: API Base URL with its helper text, API Key and API Secret \* holding only obviously fake values (demo-key / demo-secret) or empty, Enable Auto-Sync switched on (it starts off) with Pull new completions: Every hour and Daily 30-day review at 02:00 with its timezone helper. Never save, and never type a real key or secret.]_
--->
+![Configure Provider for Target Solutions: Display Name, API Base URL empty with its helper text giving the Training Records API address, API Key and API Secret holding demo values, and under Sync Settings Enable Auto-Sync on, Pull new completions Every hour and Daily 30-day review at 02:00 with the department-timezone note](./images/16-17-target-solutions-details.png)
 
 The key and secret are stored securely and never shown again. A base address
 that still contains a key, secret or other sign-in code is refused, because the
@@ -1003,9 +1001,7 @@ the same policy twice in a day appears twice. The second one that day is kept in
 the **Import Queue** marked **duplicate** and never becomes a training record.
 An acknowledgment on a later day, such as next year's, is recorded as usual.
 
-<!-- Screenshot needed:
-_[Training Admin → Settings & Data → Integrations → add a Target Solutions provider: the form with **API Base URL** `https://app.targetsolutions.com/tsapp/api/`, **API Key** and **API Secret \*** filled with placeholder values, and under **Sync Settings** **Enable Auto-Sync** on, **Pull new completions** set to **Every hour** and **Daily 30-day review at** 02:00. Use a demo key, never a real one.]_
--->
+![The Target Solutions provider form filled in: API Base URL https://app.targetsolutions.com/tsapp/api/, API Key and API Secret with placeholder values, and Enable Auto-Sync on with Pull new completions Every hour and Daily 30-day review at 02:00](./images/16-18-target-solutions-filled.png)
 
 ### Syncing on a schedule
 

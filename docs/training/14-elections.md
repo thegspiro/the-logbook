@@ -709,9 +709,7 @@ up to N", or a ranking).
 **An item you abstain on stays open** in the app, so you can vote on it later.
 An item you have already voted on is shown as done.
 
-<!-- Screenshot needed:
-_[A member voting in-app on an open demo election: the "Vote submitted for <position>" block with the receipt hash and the line "Save this receipt to verify your vote was counted. It cannot reveal how you voted." Demo data only.]_
--->
+![Cast Vote after voting in the app: You have already voted in this election, then the Vote Receipt with its line about saving the receipt to verify the vote was counted without revealing how you voted, and the receipt code](./images/14-27-vote-receipt.png)
 
 ### From the Ballot Email
 
@@ -1226,7 +1224,7 @@ rule.
 There are no department-wide election defaults. The voting method, winning
 rule, anonymity and write-ins are chosen on each election's own form.
 
-![Election settings page with the default rule toggles](./images/14-16-election-settings.png)
+![Election Settings open on Proxy Voting, with the Features, Test Ballot and Security sections beside it](./images/14-16-election-settings.png)
 
 ---
 
