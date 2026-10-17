@@ -6973,7 +6973,7 @@ export const SHOTS = [
     line: 305,
     anchor:
       "Screenshot of the Public Portal configuration page showing the enable toggle, domain",
-    alt: "Public Portal configuration page with the enable toggle and domain settings",
+    alt: "Public Portal page on the Configuration tab, with the Enable Portal button and the default rate limit",
     route: "/admin/public-portal",
     fullPage: true,
   },
@@ -7227,7 +7227,7 @@ export const SHOTS = [
     line: 1600,
     anchor:
       "Screenshot of the email preview pane showing the new white-card-on-grey design",
-    alt: "The rendered preview: a white card on grey, its centred masthead, fact panel and footer",
+    alt: "The rendered Shift Assignment preview: the accent tab naming the category with its right-hand note, the title on a tinted card, and the message card",
     route: "/communications/email-templates",
     // The Preview tab, not the editor: the two are alternate views of the same
     // panel and cannot both be on screen.
@@ -13975,7 +13975,7 @@ export const SHOTS = [
     doc: "08-admin-reports.md",
     line: 2121,
     anchor: "the revision editor captured under an account holding",
-    alt: "The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish to members — beside the administrator's draft, which offers them nothing",
+    alt: "The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish — beside the administrator's draft, which offers them nothing",
     route: "/governance/legal",
     auth: "secretary",
     prepare: openOwnLegalProposal,

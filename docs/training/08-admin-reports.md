@@ -1127,7 +1127,7 @@ created, and the fields turned on under Data Control.
 
 Only officers with **settings.manage** can change any of it.
 
-![Public Portal configuration page with the enable toggle and domain settings](./images/08-08-public-portal.png)
+![Public Portal page on the Configuration tab, with the Enable Portal button and the default rate limit](./images/08-08-public-portal.png)
 
 <!-- Screenshot needed:
 _[Administrator (settings.manage) at `/admin/public-portal`, API Keys tab → Create API Key: the dialog with "Department website" typed into Key Name and the other fields blank. Never submit it, and never capture the API Key Created dialog — it shows a live, full key.]_
@@ -1722,7 +1722,7 @@ button reports the failure and the reason instead of claiming success.
 
 ![Send Test to Me, under the rendered preview it sends](./images/08-58-template-send-test.png)
 
-![The rendered preview: the white card on grey, its centred masthead and fact panel](./images/08-67-email-preview-design.png)
+![The rendered Shift Assignment preview: the accent tab naming the category with its right-hand note, the title on a tinted card, and the message card](./images/08-67-email-preview-design.png)
 
 <!-- Screenshot needed:
 _[Administrator with settings.manage at `/communications/email-templates`, with the backend's FRONTEND_URL set to a LAN address (e.g. http://192.168.1.50:7880) and EMAIL_ENABLED=true, then restarted: the yellow notice "Emails link to http://192.168.1.50:7880, which only works on your station's network…" with its Change the email link address link, and the Save bar beneath. Crop to the notice and the bar; no credentials in frame.]_
@@ -2274,7 +2274,7 @@ included. The difference shows on the saved draft: its writer gets **Edit** and
 draft. Publishing asks first: "Everyone who visits (page) sees this text
 immediately. The version published now is archived, not deleted."
 
-![The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish to members — beside the administrator's draft, which offers them nothing](./images/08-77-legal-proposal-as-proposer.png)
+![The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish — beside the administrator's draft, which offers them nothing](./images/08-77-legal-proposal-as-proposer.png)
 
 ### What gets recorded
 
