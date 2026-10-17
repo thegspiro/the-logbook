@@ -444,3 +444,86 @@ class TestProxyBallot(TestElectionSetup):
             proxy_authorization_id=auth_id,
         )
         assert err == "You are not the designated proxy for this authorization"
+
+
+@pytest.mark.integration
+class TestNoWriteInOnApproveDeny(TestElectionSetup):
+    """``allow_write_ins`` is election-wide, but a write-in names a person
+    for a seat. An Approve/Deny item takes only Approve or Deny on either
+    ballot, as the printed ballot already did; the candidate race in the same
+    election keeps its write-in."""
+
+    async def _allow_write_ins(self, db: AsyncSession, data: dict) -> None:
+        await _mixed(db, data)
+        await db.execute(
+            text("UPDATE elections SET allow_write_ins = 1 WHERE id = :id"),
+            {"id": data["election_id"]},
+        )
+        await db.flush()
+
+    async def test_the_link_refuses_a_write_in_on_a_motion(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = setup_election
+        await self._allow_write_ins(db_session, data)
+        raw = await _token(db_session, data, "user3_id", eligible_item_ids=["budget"])
+
+        result, err = await ElectionService(db_session).submit_ballot_with_token(
+            token=raw,
+            votes=[
+                {
+                    "ballot_item_id": "budget",
+                    "choice": "write_in",
+                    "write_in_name": "Table it",
+                }
+            ],
+        )
+
+        assert result is None
+        assert err == f"Write-in votes are not allowed for: {MOTION['title']}"
+        assert await _votes(db_session, data["election_id"]) == []
+
+    async def test_the_in_app_ballot_refuses_a_write_in_on_a_motion(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = setup_election
+        await self._allow_write_ins(db_session, data)
+
+        result, err = await ElectionService(db_session).submit_member_ballot(
+            user_id=uuid.UUID(data["user3_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            organization_id=uuid.UUID(data["org_id"]),
+            votes=[
+                {
+                    "ballot_item_id": "budget",
+                    "choice": "write_in",
+                    "write_in_name": "Table it",
+                }
+            ],
+        )
+
+        assert result is None
+        assert err == f"Write-in votes are not allowed for: {MOTION['title']}"
+        assert await _votes(db_session, data["election_id"]) == []
+
+    async def test_the_position_in_the_same_election_keeps_its_write_in(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = setup_election
+        await self._allow_write_ins(db_session, data)
+
+        result, err = await ElectionService(db_session).submit_member_ballot(
+            user_id=uuid.UUID(data["user3_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            organization_id=uuid.UUID(data["org_id"]),
+            votes=[
+                {
+                    "ballot_item_id": CHIEF_ITEM_ID,
+                    "choice": "write_in",
+                    "write_in_name": "Carol Write",
+                }
+            ],
+        )
+
+        assert err is None, err
+        assert result["votes_cast"] == 1
