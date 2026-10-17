@@ -16,7 +16,43 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this pass)** (branch `claude/security-review-medical-supplies-p14`):
+**PR (this pass)** (branch `claude/security-review-meetings-minutes-p7`):
+Feature 24 (Meetings & minutes), pass 7. PR #3339 (Feature 23, Medical
+supplies, pass 14) had merged with nothing started for the next feature
+since; this pass picked it up. **Substantial real feature growth since pass
+6** (2026-10-07): e-signatures on adopted minutes, motion roll-call/
+threshold/recusals, action-item assignment with assignee self-service
+status updates, member suggestions with tracked changes on rich-text (TipTap)
+sections, review-and-adoption, closed sessions, motion ballots/election
+results, attachments, revisions, carry-forward, outlines, and reminder
+emails — reviewed file-by-file and commit-by-commit against every
+CHECKLIST.md dimension (this repository's grafted/squashed history made a
+byte-diff against pass 6's state unreliable; see the findings doc's Scope
+section). **0 new findings** — every new surface already follows this
+codebase's established org-scoping, finalization-guard, and
+password-confirmed-identity patterns. **Both standing findings now
+RESOLVED**, confirmed by reading the live code rather than trusting
+`KNOWN_LIMITATIONS.md`'s own say-so: **MM-9** (`approve_meeting` had no
+state machine or separation of duties) now refuses approval outside
+`PENDING_APPROVAL` and blocks a `PATCH`-based bypass to `approved`, with
+separation of duties deliberately _not_ added (an explicit, documented
+single-actor product choice). **MM-17** (`set_meeting_quorum_config` had no
+finalization guard) now locks on `APPROVED` with a `reopen_minutes`
+correction path, consistent with every sibling mutation; the "MM-17
+residual" commit the task brief named is confirmed to be a separate,
+narrower fix (a published-document correction notice) layered on top, not
+the fix that closed the core concern. Route surface re-enumerated: 42 → 73
+(17 + 28 + 28), every route permission-gated or an explicitly documented
+self-scoped exception. Two app-review items (MM5-4, MM2-3) re-checked and
+left as that track's own open/flagged items, not re-fixed. See
+`MM-24-meetings-minutes.md`'s **Pass 7** section. Row 24 → ✅ (pending this
+PR's merge); next is Feature 25 (Messaging & notifications).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 14, PR #3352, merged), preserved for history</summary>
+
+**PR [#3352](https://github.com/thegspiro/the-logbook/pull/3352)** (branch
+`claude/security-review-medical-supplies-p14`):
 Feature 23 (Medical supplies), pass 14. Watchdog pickup: PR #3339 (Feature
 22, Grants & fundraising, pass 8) merged (`128f1e93`'s commit, `1199d849`)
 with nothing started for the next feature in the ~2.5 hours since; this
@@ -33,6 +69,8 @@ their current line numbers. Route surface re-enumerated: 15 → 25
 (`require_permission(` count agrees with `@router.` count, 25/25). See
 `MSUP-23-medical-supplies.md`'s **Pass 14** section. Row 23 → ✅ (pending
 this PR's merge); next is Feature 24 (Meetings & minutes).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 8, PR #3339, merged), preserved for history</summary>
@@ -19583,7 +19621,7 @@ here.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
@@ -33094,3 +33132,65 @@ standing cross-feature entry this feature filed in pass 7
 Feature 17/18 to pick up, re-confirmed still accurate and not touched here.
 Rotation row 19 → ✅ (pending this PR's merge). Next: Feature 20
 (Compliance).
+
+### 2026-10-17 — Feature 24 (Meetings & minutes, pass 7) — 0 fixed, 0 new findings; both standing findings (MM-9, MM-17) confirmed RESOLVED
+
+PR #3352 (Feature 23, Medical supplies, pass 14) had merged with nothing
+started for the next feature since; this pass picked up Feature 24.
+Substantial real feature growth since pass 6 (2026-10-07): e-signatures,
+motion roll-call/threshold/recusals, action-item assignment with assignee
+self-service, member suggestions with tracked changes on rich-text (TipTap)
+sections, review-and-adoption, closed sessions, motion ballots/election
+results, attachments, revisions, carry-forward, outlines, and reminder
+emails. This repository's history contains squashed/grafted megacommits
+with no resolvable parent, which made a byte-diff against pass 6's reviewed
+state unreliable, so every file in scope (`meetings.py`, `minutes.py`,
+**`minutes_records.py`** — a file pass 6's own scope table omitted despite
+it already carrying real routes, now reviewed for the first time —, both
+services, the four genuinely new services, schemas, models, 8 new
+migrations, and the full 15,318-line frontend module) was read in full at
+its current state and every commit since pass 6 attributed individually
+with `git show` rather than inferred from a diff. **0 new findings**: every
+new surface — tracked-change application, closed-session visibility,
+e-signature identity proof (typed name + password re-verification, not a
+client-asserted name), new-assignee org/active validation, motion mutation
+after adoption, MCP exposure of the new vote-detail fields — already
+follows this codebase's established org-scoping, finalization-guard and
+password-confirmation patterns; each was checked and found correct, not
+assumed. **Both of pass 6's standing findings are now RESOLVED** by
+non-rotation work, verified by reading the live code rather than trusting
+`KNOWN_LIMITATIONS.md`'s own say-so: MM-9 (`approve_meeting`'s missing
+state machine) now requires `PENDING_APPROVAL` first and blocks a
+`PATCH`-based bypass to `approved`, with separation of duties explicitly,
+deliberately not added (a documented single-actor product choice — unlike
+`MeetingMinutes`). MM-17 (`set_meeting_quorum_config`'s missing finalization
+guard) now locks on `APPROVED` with a `reopen_minutes` correction path,
+matching every sibling mutation; the "MM-17 residual" commit the task named
+is confirmed to be a separate, narrower fix (the published-document
+"Being corrected" notice) layered on top of — not the cause of — the core
+fix. Route surface re-enumerated: 42 → 73 total (17 `meetings.py` + 28
+`minutes.py` + 28 `minutes_records.py`), every route permission-gated or an
+explicitly documented self-scoped exception (`/action-items/mine`, and the
+assignee's own narrow update path on `PUT /minutes/{id}/action-items/{id}`).
+Two app-review items (MM5-4, MM2-3) re-checked per the task brief and left
+as that track's own open/flagged items — correctness/UX, not security,
+under this checklist's seven dimensions.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
+alembic/` (all three reinstalled to CI's pinned versions);
+`validate_migrations.py --strict` — single head `c87efd81c5aa`, 612
+revisions; `check_route_permissions.py --strict` — 270 routes, 0
+errors/warnings; `pytest tests/ -q -k "meeting or minute or quorum or
+attendance_dashboard or motion or roll_call or election_result"` — 875
+passed, 1 pre-existing skip (`pywebpush`), up from pass 6's 330; frontend
+`npm run typecheck`/`npm run lint` both clean (`npm ci` run first from the
+repo root — this sandbox's `node_modules` predated the `@tiptap/*`
+dependencies the rich-text editor needs); `npx vitest run
+src/modules/minutes` — 337 passed, 40 test files.
+
+Findings doc: [`MM-24-meetings-minutes.md`](./MM-24-meetings-minutes.md)'s
+**Pass 7** section. No `KNOWN_LIMITATIONS.md` change needed — its MM-9 and
+MM-17 entries already accurately document both resolutions (dated
+2026-10-11/12 by the commits that made them), re-confirmed rather than
+rewritten. Rotation row 24 → ✅ (pending this PR's merge). Next: Feature 25
+(Messaging & notifications).
