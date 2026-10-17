@@ -8475,6 +8475,15 @@ class ElectionService:
                 }
             )
 
+        # Save the tokens before any mail leaves. While they were committed
+        # only after the batch, a restart mid-send or a failed final commit
+        # left members holding emailed links whose tokens were never stored,
+        # and the link answered "Invalid voting token". A token saved for a
+        # message that then fails was never delivered, so storing it is
+        # harmless.
+        if pending_emails:
+            await self.db.commit()
+
         # ---- Phase 2: Render, then send the whole batch at once ----
         # Render each email using the pre-loaded template (or default), then
         # hand the batch to the service: SMTP departments get one connection

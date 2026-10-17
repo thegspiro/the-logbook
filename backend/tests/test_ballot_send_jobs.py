@@ -44,6 +44,7 @@ from app.services.ballot_send_jobs import (
     ReminderSend,
     run_ballot_send_job,
 )
+from app.services.election_service import ElectionService
 
 pytestmark = [pytest.mark.integration]
 
@@ -521,3 +522,28 @@ async def test_the_synchronous_reminder_reports_as_before(db_session: AsyncSessi
     assert response.success is True
     assert response.recipients_count == 2
     assert response.message == "Reminder sent to 2 non-voter(s)"
+
+
+async def test_tokens_are_saved_before_any_ballot_mail_goes_out(
+    db_session: AsyncSession,
+):
+    # A send that dies mid-batch must not leave mailed links with no stored
+    # token behind them: the tokens are committed before the batch starts.
+    data = await _make_election(db_session)
+    send_batch = AsyncMock(side_effect=RuntimeError("worker restarted mid-send"))
+
+    with patch(SEND_BATCH, new=send_batch), pytest.raises(RuntimeError):
+        await ElectionService(db_session).send_ballot_emails(
+            election_id=uuid.UUID(data["election_id"]),
+            organization_id=data["org_id"],
+            base_ballot_url="https://example.test/ballot",
+        )
+    await db_session.rollback()
+
+    count = (
+        await db_session.execute(
+            text("SELECT COUNT(*) FROM voting_tokens WHERE election_id = :id"),
+            {"id": data["election_id"]},
+        )
+    ).scalar_one()
+    assert count == 2

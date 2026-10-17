@@ -2218,7 +2218,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **BallotSendJob** · `app/models/election.py`
 
-> One request to email ballots, run in the background. A department-sized send takes longer than any HTTP client or proxy will wait, so the request only records this row and returns; the send runs after the response and writes its outcome here for the page to poll. The row lives in the database rather than Redis so a poll answered by a different uvicorn worker sees it, and so it outlives a restart that interrupts the send. A queued or running row also blocks a second send for the same election: each send mints new voting tokens, so two overlapping sends mail every member two links of which only the later one works.
+> One request to email ballots, run in the background. A department-sized send takes longer than any HTTP client or proxy will wait, so the request only records this row and returns; the send runs after the response and writes its outcome here for the page to poll. The row lives in the database rather than Redis so a poll answered by a different uvicorn worker sees it, and so it outlives a restart that interrupts the send. A queued or running row also blocks a second send for the same election: two overlapping sends mail every member twice, and each writes the election's record of who was sent a ballot from what it read when it started, so whichever finishes last overwrites the other's.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
