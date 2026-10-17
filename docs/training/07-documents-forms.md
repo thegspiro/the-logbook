@@ -91,7 +91,7 @@ do those things. Everyone else just sees that a folder is empty. If your
 permission to upload, create folders or delete is taken away while one of
 those windows is open, the window closes.
 
-![Documents page with the folder tree, file list, and search bar](./images/07-01-documents.png)
+![Documents & Files with its four totals, the search bar and the folder cards](./images/07-01-documents.png)
 
 ---
 
@@ -135,7 +135,7 @@ the positions chosen for it.
 4. Under **Who can open it**, choose who may open the folder (see below).
 5. Select **Create Folder**.
 
-![The Create Folder dialog with its Location, Folder Name and description fields](./images/07-02-new-folder-dialog.png)
+![The Create Folder dialog with its Location, Folder Name and Description fields, the Who can open it choices (Organization, Leadership, Specific positions) and the Also require a permission list](./images/07-02-new-folder-dialog.png)
 
 ### Who can open it
 
@@ -360,7 +360,7 @@ Logbook saves the answers.
   **Needs setup** when something is missing (for example, a dropdown with no
   options). Select the field to fix it.
 
-![Form builder with the field palette, canvas, and field settings](./images/07-06-form-builder.png)
+![The form builder with the One submission per person setting above the field list; each field shows its type and Required badge, and the field under the pointer shows its move up, move down, duplicate, edit and delete buttons](./images/07-06-form-builder.png)
 
 ### Form Templates
 
@@ -380,12 +380,7 @@ Some templates are marked **Public**, and some say where they send responses
 
 ---
 
-<!-- Screenshot needed:
-_[Forms manager (`forms.manage`) at `/forms`, **Starter Templates** tab: the
-template grid showing the **Public** badge and the orange "Sends responses to
-Membership" / "Sends responses to Events" hints on the two public templates.
-Do not press **Use Template**, which creates a form.]_
--->
+![Custom Forms, Starter Templates tab: the template cards with their category badges and Use Template buttons; Membership Interest Form is badged Public and says it sends responses to Membership, and Community Event Request, also Public, says it sends responses to Events](./images/07-26-starter-templates.png)
 
 ## Publishing and Sharing Forms
 
@@ -423,12 +418,7 @@ and the visitor is not signed in, the page shows **Sign in to submit this
 form** above the questions. Its **Sign in** button brings them back to the
 form afterwards.
 
-<!-- Screenshot needed:
-_[A public form at `/f/<slug>` opened in a signed-out browser, for a form
-whose **Allow submissions without signing in** is off: the **Sign in to
-submit this form** notice above the first question, naming the department,
-with its **Sign in** button.]_
--->
+![A public form opened without signing in, for a form that does not allow submissions without signing in: the Sign in to submit this form notice above the first question names the department and carries a Sign in button](./images/07-27-public-form-sign-in.png)
 
 > **What if publishing warns me?** A public form that files event requests
 > does nothing if the department has turned off accepting public requests in
@@ -548,12 +538,9 @@ the newest one's subject as **Latest:** and an **unread** count.
 - On the dashboard's **My Updates** card, a stack is one row that opens this
   inbox.
 
-<!-- Screenshot needed:
-_[Notifications → **My Notifications** with a collapsed stack (for example
-"3 attendance validations", **Latest:** line, **3 unread** badge and **Mark
-all read**) above single notifications, then the same stack expanded showing
-its individual rows.]_
--->
+![Notifications → My Notifications: a collapsed stack of attendance validations with its Latest line, unread badge and Mark all read, among single notifications and other stacks](./images/07-28-notification-stack.png)
+
+![The same attendance-validations stack expanded, showing each of its notifications as its own row](./images/07-29-notification-stack-expanded.png)
 
 ![Notification rules and logs page with summary cards and the rules list](./images/07-08-notification-rules.png)
 
@@ -595,14 +582,9 @@ default settings.
 
 Each rule has its own on/off switch. A switched-off rule keeps its settings.
 
-![Create notification rule modal with its trigger and channel fields](./images/07-10-create-rule-modal.png)
+![Create Notification Rule with Rule Name, Trigger Event set to Event Reminder, Description, and the note under the trigger about switching off every rule for it](./images/07-10-create-rule-modal.png)
 
-<!-- Screenshot needed:
-_[Administrator with `notifications.manage` at `/notifications?tab=rules`:
-press **Add Rule**, name it "Gear request notices" and choose the trigger
-**Equipment Request Update**, so its note is visible at the bottom of the dialog. Do
-not press **Create Rule**.]_
--->
+![Create Notification Rule named Gear request notices with the trigger Equipment Request Update, and the note under it about switching off every rule for that trigger](./images/07-30-rule-equipment-request.png)
 
 ### Send Log
 
@@ -827,18 +809,9 @@ Members then see it under **Always emailed to you**, and it is sent whatever
 their own switches say. It works one way only: an email The Logbook itself
 requires cannot be made optional. Each change is recorded in the audit log.
 
-<!-- Screenshot needed:
-_[Communications → **Member Emails & Texts** as an administrator: the **Always
-sent** cards, then **Members can turn off** with one card's **Require for every
-member** switch on and badged **Required by your department**, and the top of
-the **Text messages** section.]_
--->
+![Member Emails & Texts as an administrator: the Always sent cards, then Members can turn off, where Quartermaster duties has Require for every member switched on and reads Required by your department beside cards reading On unless turned off, then the Text messages section](./images/07-31-member-emails-required.png)
 
-<!-- Screenshot needed:
-_[Settings → **Notifications** as a member: **Email Notifications** on, the
-**Emails you can turn off** list with **Event reminders** switched off, and
-**Always emailed to you** below it.]_
--->
+![My Account, Notifications tab, as a member: Email Notifications on, Event reminders switched off in the Emails you can turn off list, and Always emailed to you below it](./images/07-32-member-notification-preferences.png)
 
 <!-- Screenshot needed:
 _[Administrator with `settings.manage` at `/communications/member-emails`:
@@ -933,21 +906,12 @@ anonymous, and follow-up is allowed.
    something arrives (see [Reviewing submissions](#reviewing-submissions)).
 9. Leave **Accepting submissions** ticked, and select **Save box**.
 
-![The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below](./images/07-14-suggestion-box-dialog.png)
-
-_[Screenshot needed: the Suggestion Box editor with Questions directly under Description; REPLACE the box-dialog Questions shot.]_
+![The New suggestion box dialog filled in: name, description, the Questions section with Add question directly under the description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below](./images/07-14-suggestion-box-dialog.png)
 
 To close a box, untick **Accepting submissions**. Its reviewers can still read
 what it holds.
 
-<!-- Screenshot needed:
-_[Holder of `suggestions.manage` (e.g. the demo chief) at
-`/communications/suggestion-boxes` after a fresh demo seed: the **Suggestion
-boxes** list showing the default **Compliance** box (submitter chooses,
-follow-up allowed, its submission count, "Reviewers: Compliance Officer"),
-**Training ideas** with its reviewers and any "Also notified:" line, and the
-**Edit** and **Delete** buttons on each row. Nothing saved or deleted.]_
--->
+![Suggestion boxes as a holder of suggestions.manage: each box with its description, anonymity and follow-up settings, submission count and reviewers (Compliance reviewed by the Compliance Officer, Training ideas by the Secretary and the Training Officer), and Edit and Delete on every row](./images/07-33-suggestion-boxes-list.png)
 
 To remove a box, select **Delete** on it:
 
@@ -1002,11 +966,15 @@ a second step, with a **Back** button that keeps your answers. The answers
 decide where the submission goes and whether it can be anonymous, so you see
 that before writing anything. A box with no questions keeps its single page.
 
-_[Screenshot needed: the question step of the Compliance box ("What kind of concern is this?") with Continue; and step two with Back.]_
+![Suggestions → Submit as a member with the Compliance box chosen: Step 1 of 2, A few questions, with the box's description, the question What kind of concern is this? and its five answers, and the Continue button](./images/07-35-compliance-question-step.png)
 
-> **Screenshot needed:** the box dialog's **Questions** section with one routed
-> dropdown; the member's submit form showing a follow-up question; a reviewer's
-> view of a submission with its intake answers.
+![Step 2 of 2, Your suggestion, for the Compliance box: the anonymity and follow-up hints, Submit anonymously, empty Title and Details, the screenshots box, and Back to the questions beside Submit. Nothing is submitted](./images/07-36-compliance-details-step.png)
+
+![The Questions section of a new suggestion box: one required Dropdown question, What is this about?, whose third option, Compliance or safety, is set to Send to Compliance while the other two keep it in this box](./images/07-34-box-questions-routed.png)
+
+![The Compliance box's question step with Safety chosen, which shows the follow-up question Is anyone at immediate risk? with its help text that the box is not watched around the clock](./images/07-37-compliance-follow-up-question.png)
+
+![Suggestions → Review as the Compliance Officer with a Compliance submission open: its answers to What kind of concern is this? (Safety) and Is anyone at immediate risk? (No) above the details, then the Disposition, response and internal note fields, Status history, Forwarded to and Follow-up](./images/07-38-compliance-review-intake-answers.png)
 
 ### Submitting a suggestion (every member)
 
