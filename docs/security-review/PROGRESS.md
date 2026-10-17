@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this pass)** (branch `claude/security-review-meetings-minutes-p7`):
+**PR [#3365](https://github.com/thegspiro/the-logbook/pull/3365)** (branch
+`claude/security-review-meetings-minutes-p7`):
 Feature 24 (Meetings & minutes), pass 7. PR #3339 (Feature 23, Medical
 supplies, pass 14) had merged with nothing started for the next feature
 since; this pass picked it up. **Substantial real feature growth since pass
