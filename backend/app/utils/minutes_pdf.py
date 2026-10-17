@@ -34,7 +34,7 @@ from app.utils.rich_text import (
     FORMAT_HTML,
     html_to_pdf_blocks,
     normalize_format,
-    section_is_blank,
+    section_is_printed,
 )
 
 _HEADER_BG = colors.HexColor("#1f2937")
@@ -288,9 +288,15 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
 
     # ── Content sections ─────────────────────────────────────────────
     for section in data.get("sections") or []:
-        if section_is_blank(section):
+        if not section_is_printed(section):
             continue
         story.append(Paragraph(_esc(section.get("title")), section_style))
+        if section.get("presenter"):
+            story.append(
+                Paragraph(f"Presented by {_esc(section['presenter'])}", body_style)
+            )
+        if section.get("not_taken_up"):
+            story.append(Paragraph("<i>Not taken up.</i>", body_style))
         if normalize_format(section.get("format")) == FORMAT_HTML:
             for kind, markup in html_to_pdf_blocks(section.get("content")):
                 story.append(Paragraph(markup, block_styles[kind]))

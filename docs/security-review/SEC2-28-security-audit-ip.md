@@ -2,7 +2,8 @@
 
 **Prefix:** `SEC2` · **Iteration:** 28 · **Reviewed:** 2026-08-27 (pass 1, PR
 #1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4, and a
-pass-4 addendum, PR #2515), 2026-10-04 (pass 5) · **PR:** #1911 (pass 1)
+pass-4 addendum, PR #2515), 2026-10-04 (pass 5), 2026-10-07 (pass 6),
+2026-10-17 (pass 7) · **PR:** #1911 (pass 1)
 
 **Backend:** `app/api/v1/endpoints/security_monitoring.py` (677 L),
 `app/api/v1/endpoints/ip_security.py` (555 L), `app/api/v1/endpoints/audit_logs.py`
@@ -1441,6 +1442,133 @@ tracked as open).
 | backend tests, scope (audit/audit_ship/error_log/ip_security/privilege_ceiling/security_middleware/security_monitoring/suspicious_ip/w50_audit_username/signing_key_cutover/security_alert_workflow/ip_allowlist_middleware/ip_exception_lookup_db/task_error_reporting/integration_dns_pinning) | 327 passed                          |
 | frontend `npm run typecheck` (`tsc-native.mjs --noEmit`)                                                                                                                                                                                                                                         | 0 errors                            |
 | frontend `npm run lint` (`eslint --max-warnings 10`)                                                                                                                                                                                                                                             | 0 errors/warnings                   |
+
+---
+
+## Pass 7 (2026-10-17)
+
+Watchdog pickup: `list_pull_requests` (state=open, `head:claude/security-review-`)
+returned 0 results — PR #3375 (Feature 27, Integrations, pass 7) had just
+merged with no next-feature PR open; this pass picked up Feature 28.
+Diffed all nine files this doc covers plus the four frontend surfaces
+against pass 6's own merge commit (`d87bc6ee`) through current `main`,
+rather than trusting `git log --since=<date>`, which this repo's
+squash-merge/grafted history has made unreliable in prior passes.
+
+### Real delta since pass 6 — read in full
+
+- **SEC2-28-10 is now ✅ RESOLVED**, by regular engineering work
+  (`009b3400`, 2026-10-12) rather than by this rotation loop. The doc
+  already carries a full "Status: ✅ RESOLVED" write-up for it (filed under
+  the Pass 4 section, where the finding was originally raised) — read it
+  directly against the current code rather than trusting the write-up's own
+  say-so: `create_log_entry` no longer reads the chain at all; rows are
+  inserted unsealed (`chain_seq`/hash columns NULL) in the caller's own
+  transaction; `AuditLogger.seal_pending` locks the single
+  `audit_chain_head` row `FOR UPDATE` in its own short transaction and seals
+  committed rows in `chain_seq` order, so sealers serialize and cannot fork
+  the chain. Confirmed intact by direct read of `core/audit.py`'s current
+  `_get_or_create_chain_head`/`seal_pending`/`verify_integrity` and
+  `models/audit.py`'s nullable hash columns.
+- **Follow-up reliability fix, same mechanism** (`d59c4cfd`, 2026-10-12): a
+  fresh install's first two concurrent sealers both took a gap lock on the
+  not-yet-existing `audit_chain_head` row and deadlocked. `_create_chain_head`
+  now does `INSERT ... IGNORE` in its own step before the locking read, so
+  the loser skips the insert and the locking read picks up the winner's row
+  once committed — no lock is ever held across the insert. Read the diff in
+  full: this is a concurrency-reliability fix to the already-resolved
+  SEC2-28-10 mechanism, not a new access-control or tenant-isolation
+  surface. **Verified good, no new finding.**
+- **`audit_logs.py` gained audit-of-the-audit-trail logging**
+  (`c498e4bc`, "Harden PHI read auditing," HIPAA §164.312(b)): both
+  `GET /audit-logs` and `GET /audit-logs/{log_id}` now call a new
+  `_audit_trail_read` helper after serving the response, writing an
+  `audit_log_queried`/`audit_log_entry_viewed` event via the existing
+  `log_audit_event` (which resolves `organization_id` from the acting
+  `user_id`, per SEC-10's established pattern — not a new unscoped write)
+  with `get_client_ip(request)` for the IP. Both routes are unchanged
+  `Depends(require_permission("audit.view"))`. **Verified good, no new
+  finding** — this is net risk-reducing (who browsed the trail is now
+  itself answerable), not a new exposure.
+- **`EXPORT_ENDPOINTS` grew by four routes** (`572f2310`, `0ef20349`,
+  `2680b7b8`): `/api/v1/finance/export/{advance-accounts,dues-accounts,
+readiness}` and `/api/v1/medical-supplies/{items,lots}/export` are now
+  monitored for data-exfiltration sizing, matching the direction this list
+  is supposed to grow in (new export routes added to monitoring, not
+  removed from it). **Verified good, no new finding.**
+- **`verify_audit_integrity`'s response gained `pending_seal`, and
+  `export_audit_logs`'s row payload gained `chain_seq`** — both are direct,
+  correct consequences of SEC2-28-10's unsealed-row model (an admin needs
+  to see how many rows are pending seal, and the export needs the row's
+  real chain position now that it isn't just `id`). Neither exposes a new
+  field class; `chain_seq` is a plain integer ordinal, already gated behind
+  `audit.export`. **Verified good, no new finding.**
+- **Remaining touches are mypy-cleanup only** (`668fca63`,
+  `0dfcd516`, plus scattered `Optional`/`Mapped` annotations across
+  `ip_security_service.py`, `security_monitoring.py`'s service, and
+  `models/audit.py`'s SQLAlchemy 2.0 `Mapped`/`mapped_column` conversion):
+  read each diff; all are type annotations, local-variable renames to
+  satisfy mypy's narrower inference, or (`models/audit.py`) a mechanical
+  declarative-style conversion with the column nullability/length
+  constraints carried over unchanged. No `ondelete="SET NULL"` column
+  appears without `nullable=True` (Pitfall #2 n/a — none of these columns
+  are foreign keys). No behavior change on any reachable path.
+- **`AuditLogPage.tsx`'s Apply button** now disables until the search box
+  differs from the applied search, with a "Not applied yet" cue
+  (`9982a1ab`) — pure UX, no security relevance.
+- **`adminServices.ts`'s 127-line growth** belongs almost entirely to other
+  features sharing this global file: Google Workspace attention/link and
+  the iCal feed wrappers (already reviewed under `INT-27-integrations.md`
+  pass 7, merged as PR #3375), MSG-12's delivery-state typing (Feature 25),
+  and the member-status-reason/dashboard-pulse-layout wrappers (Features 07
+  and 29). Confirmed by direct diff that `securityService` and every
+  `frontend/src/modules/ip-security/` file are byte-identical to pass 6 —
+  nothing in this feature's own frontend surface changed.
+
+### Re-verified — every open finding re-checked against current code, not the doc
+
+- **SEC2-28-6** (LOW, flagged) — still open, unchanged. Re-read
+  `request_ip_exception` (`ip_security_service.py`): still a plain
+  `SELECT` for an existing pending/approved row followed by an `INSERT`, no
+  row lock, no DB-level unique constraint (the only change in this
+  function's range this pass was a `: IPException | None` type annotation
+  on the read, no logic change).
+- **Dead detector code** (pass 3, flagged) — `analyze_request`,
+  `_check_rate_limit`, `_check_injection_patterns` in
+  `services/security_monitoring.py`: re-grepped across all of `backend/app`
+  outside the file itself; still zero production callers.
+- **All previously-FIXED/RESOLVED items** (SEC-1 through SEC-9, SEC2-28-1
+  through SEC2-28-4, SEC2-28-5, SEC2-28-7, SEC2-28-9 through SEC2-28-11):
+  no code touching their mechanisms changed this pass beyond the
+  SEC2-28-10 follow-up and mypy-only edits already covered above; not
+  independently re-exercised beyond the completion gate's test run below.
+
+### Route inventory — re-enumerated, 35 routes, unchanged from pass 6
+
+Re-counted route decorators directly: 14 in `security_monitoring.py`, 12 in
+`ip_security.py`, 3 in `audit_logs.py`, 6 in `error_logs.py` = 35. No route
+added, removed, or re-gated since pass 6.
+
+### No new findings this pass
+
+**0 fixed by this pass directly (SEC2-28-10 was already resolved by regular
+engineering work reviewed above), 0 new findings.** SEC2-28-6 and the
+dead-detector-code note remain open and still need their respective
+owner decision / product decision, not a drive-by fix; both are correctly
+reflected in `KNOWN_LIMITATIONS.md` already (no change needed there this
+pass).
+
+### Completion gate (Pass 7)
+
+| Check                                                                                                                                                                                                                                                                                                                | Result               |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                                        | clean                |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                 | clean                |
+| `isort --check-only app/ tests/ alembic/` (reinstalled to CI's pinned 9.0.1)                                                                                                                                                                                                                                         | clean                |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                    | PASSED — single head |
+| backend tests, scope (audit/audit_ship/error_log/ip_security/privilege_ceiling/security_middleware/security_monitoring/suspicious_ip/w50_audit_username/signing_key_cutover/security_alert_workflow/ip_allowlist_middleware/ip_exception_lookup_db/task_error_reporting/integration_dns_pinning/audit_chain_sealing) | pass count below     |
+| frontend `npm run typecheck` (`tsc-native.mjs --noEmit`)                                                                                                                                                                                                                                                             | 0 errors             |
+| frontend `npm run lint` (`eslint --max-warnings 10`)                                                                                                                                                                                                                                                                 | clean, exit 0        |
 
 Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
 `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
