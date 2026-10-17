@@ -16,8 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. PR #3381 (Feature 30, Onboarding, pass 7) merged 2026-10-17 ~20:45 UTC
-clean; already recorded in that PR's own history below.
+**PR [#3384](https://github.com/thegspiro/the-logbook/pull/3384)** (branch
+`claude/friendly-babbage-isuxx8`). PR #3381 (Feature 30, Onboarding, pass 7)
+merged 2026-10-17 ~20:45 UTC clean; already recorded in that PR's own
+history below.
 
 This iteration (a watchdog pickup — no `claude/security-review-*` PR was
 open, confirmed via `list_pull_requests` — the dedicated `/loop 30m
