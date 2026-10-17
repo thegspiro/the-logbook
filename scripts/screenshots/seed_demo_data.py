@@ -2637,6 +2637,264 @@ class Seeder:
             ):
                 raise
 
+    # -- guide 04: attendance requests, handovers and room tags -------
+
+    GUIDE04_PETITION_EVENT_TITLE = "Pump Panel Practice"
+    GUIDE04_PETITIONER_USERNAME = "okittredge"
+    GUIDE04_PETITION_REASON = (
+        "My phone died before I could scan the code. I ran the second pump "
+        "panel with Engine 2 for the whole session."
+    )
+    GUIDE04_FINALIZED_EVENT_TITLE = "Apparatus Committee Meeting"
+    GUIDE04_ATTENDEES = ("rduarte", "ecaldwell", "vbrennan", "cfrazier")
+    GUIDE04_ALTERNATE_USERNAME = "lnakamura"
+    GUIDE04_TAG_ROOM_PREFIX = "Volunteer Office"
+    GUIDE04_TAG_ROOM_EVENTS = (
+        "Driver Training Classroom",
+        "Officer Candidate Study Group",
+    )
+
+    def seed_guide04_event_states(self) -> dict[str, Any]:
+        """States guide 04 pictures that nothing else in the demo produces.
+
+        * An event that ended a few hours ago with a pending attendance
+          request from one member, and no check-in for the demo member, so
+          the same event shows the organizer's request card and the member's
+          "I was there" prompt. A request is one per member per event and
+          cannot be re-dated, so once the event is older than a day it is
+          deleted (which takes the request with it) and rebuilt.
+        * One past meeting with its attendance finalized, for the edit form's
+          locked-fields notice. A business meeting, so finalizing writes no
+          training records into the demo members' histories.
+        * An alternate organizer on the recurring series, for the details
+          card's "Organized by" row.
+        * Two events in one room whose check-in windows overlap right now,
+          for the room tag's "Which event are you here for?" chooser. A room
+          refuses overlapping bookings, so they are back to back: the first
+          is in progress, and the second starts when it ends and is already
+          open on a four-hour Flexible lead. (An event that has ended but is
+          still open on a Window check-in would not do: the room lookup drops
+          every event past its scheduled end.)
+        """
+        result: dict[str, Any] = {}
+        users = {
+            str(pick(u, "username")): u
+            for u in items(self.api.get("/users?limit=200"), "users")
+        }
+        events = items(self.api.get("/events?limit=200"), "events")
+        by_title = {str(e.get("title")): e for e in events}
+
+        result["petition"] = self._guide04_petition_event(users, by_title)
+        result["finalized"] = self._guide04_finalized_event(users, by_title)
+        result["alternate"] = self._guide04_series_alternate(users, events)
+        result["room pair"] = self._guide04_room_pair(by_title)
+        return result
+
+    def _guide04_add_attendees(self, event_id: str, users: dict) -> None:
+        for username in self.GUIDE04_ATTENDEES:
+            user = users.get(username)
+            if not user:
+                continue
+            try:
+                self.api.post(
+                    f"/events/{event_id}/add-attendee",
+                    {"user_id": pick(user, "id"), "checked_in": True},
+                )
+            except ApiError as exc:
+                # Already on the roster from an earlier run.
+                if exc.code not in (400, 409):
+                    raise
+
+    def _guide04_petition_event(self, users: dict, by_title: dict) -> str:
+        existing = by_title.get(self.GUIDE04_PETITION_EVENT_TITLE)
+        if existing and pick(existing, "id"):
+            ends = str(pick(existing, "end_datetime", "endDatetime") or "")
+            if ends and ends < iso(NOW - timedelta(hours=20)):
+                self.api.delete(f"/events/{pick(existing, 'id')}")
+                existing = None
+        if existing and pick(existing, "id"):
+            event_id = str(pick(existing, "id"))
+        else:
+            end = (NOW - timedelta(hours=3)).replace(minute=0, second=0, microsecond=0)
+            event = self.api.post(
+                "/events",
+                {
+                    "title": self.GUIDE04_PETITION_EVENT_TITLE,
+                    "description": (
+                        "Hands-on pump panel operation for engine company "
+                        "drivers, at the drafting pit behind Station 1."
+                    ),
+                    "event_type": "training",
+                    "location": "Station 1 - Headquarters",
+                    "start_datetime": iso(end - timedelta(hours=2)),
+                    "end_datetime": iso(end),
+                    "requires_rsvp": False,
+                    "is_mandatory": False,
+                    "send_reminders": False,
+                    "is_draft": False,
+                },
+            )
+            event_id = str(pick(event, "id"))
+        self._guide04_add_attendees(event_id, users)
+
+        petitioner = users.get(self.GUIDE04_PETITIONER_USERNAME)
+        if not petitioner:
+            return "petitioner not found"
+        current = self.api.get(f"/events/{event_id}")
+        start = datetime.fromisoformat(
+            str(pick(current, "start_datetime", "startDatetime")).replace("Z", "+00:00")
+        )
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        session = self.member_session(
+            self.base_url, str(pick(petitioner, "id")), self.GUIDE04_PETITIONER_USERNAME
+        )
+        standing = session.get(f"/events/{event_id}/attendance-petitions/mine")
+        if pick(standing, "petition"):
+            return "request already pending"
+        session.post(
+            f"/events/{event_id}/attendance-petitions",
+            {
+                "reason": self.GUIDE04_PETITION_REASON,
+                "requested_check_in_at": iso(start + timedelta(minutes=10)),
+                "requested_check_out_at": iso(start + timedelta(hours=2)),
+            },
+        )
+        return "request raised"
+
+    def _guide04_finalized_event(self, users: dict, by_title: dict) -> str:
+        existing = by_title.get(self.GUIDE04_FINALIZED_EVENT_TITLE)
+        if existing and pick(existing, "id"):
+            event_id = str(pick(existing, "id"))
+        else:
+            start = (NOW - timedelta(days=4)).replace(
+                hour=23, minute=0, second=0, microsecond=0
+            )
+            event = self.api.post(
+                "/events",
+                {
+                    "title": self.GUIDE04_FINALIZED_EVENT_TITLE,
+                    "description": (
+                        "Review of the engine replacement specification and "
+                        "the ladder truck's annual service findings."
+                    ),
+                    "event_type": "business_meeting",
+                    "location": "Station 1 - Headquarters",
+                    "start_datetime": iso(start),
+                    "end_datetime": iso(start + timedelta(hours=2)),
+                    "requires_rsvp": False,
+                    "is_mandatory": False,
+                    "send_reminders": False,
+                    "is_draft": False,
+                },
+            )
+            event_id = str(pick(event, "id"))
+        # The list carries no finalized marker; only the detail does.
+        detail = self.api.get(f"/events/{event_id}")
+        if pick(detail, "attendance_finalized_at", "attendanceFinalizedAt"):
+            return "already finalized"
+        self._guide04_add_attendees(event_id, users)
+        self.api.post(f"/events/{event_id}/finalize-attendance", {})
+        return "finalized"
+
+    def _guide04_series_alternate(self, users: dict, events: list[dict]) -> str:
+        alternate = users.get(self.GUIDE04_ALTERNATE_USERNAME)
+        admin = users.get(DEMO_ADMIN_USERNAME)
+        if not (alternate and admin):
+            return "alternate or administrator not found"
+        upcoming = sorted(
+            (
+                e
+                for e in events
+                if e.get("title") == self.RECURRING_SERIES_TITLE
+                and str(pick(e, "start_datetime", "startDatetime") or "") > iso(NOW)
+            ),
+            key=lambda e: str(pick(e, "start_datetime", "startDatetime")),
+        )
+        if not upcoming:
+            return "no upcoming occurrence"
+        event_id = pick(upcoming[0], "id")
+        detail = self.api.get(f"/events/{event_id}")
+        if pick(detail, "alternate_organizer_id", "alternateOrganizerId"):
+            return "alternate already set"
+        self.api.post(
+            f"/events/{event_id}/transfer",
+            {
+                "organizer_id": pick(admin, "id"),
+                "alternate_organizer_id": pick(alternate, "id"),
+                "scope": "future",
+            },
+        )
+        return "alternate set"
+
+    def _guide04_room_pair(self, by_title: dict) -> str:
+        room = next(
+            (
+                loc
+                for loc in items(self.api.get("/locations?limit=100"), "locations")
+                if str(pick(loc, "name") or "").startswith(self.GUIDE04_TAG_ROOM_PREFIX)
+            ),
+            None,
+        )
+        if not room:
+            return "room not found"
+        first_title, second_title = self.GUIDE04_TAG_ROOM_EVENTS
+        first = by_title.get(first_title)
+        second = by_title.get(second_title)
+        # Re-dated together once the first one is within half an hour of its
+        # end, which is when the pair stops being open at the same time.
+        first_end = str(pick(first or {}, "end_datetime", "endDatetime") or "")
+        stale = not first_end or first_end < iso(NOW + timedelta(minutes=30))
+        if first and second and not stale:
+            return "windows still open"
+        anchor = NOW.replace(second=0, microsecond=0)
+        handover = anchor + timedelta(hours=3)
+        second_window = {
+            "start_datetime": iso(handover + timedelta(minutes=1)),
+            "end_datetime": iso(handover + timedelta(hours=2)),
+            "check_in_window_type": "flexible",
+            "check_in_minutes_before": 240,
+        }
+        first_window = {
+            "start_datetime": iso(anchor - timedelta(hours=1)),
+            "end_datetime": iso(handover),
+            "check_in_window_type": "flexible",
+            "check_in_minutes_before": 60,
+        }
+        common = {
+            "event_type": "training",
+            "location_id": pick(room, "id"),
+            "location": None,
+            "requires_rsvp": False,
+            "is_mandatory": False,
+            "send_reminders": False,
+            "is_draft": False,
+        }
+        # The second event moves first: its old dates are behind the new ones,
+        # so the first event's new dates cannot collide with them.
+        for title, event, window, description in (
+            (
+                second_title,
+                second,
+                second_window,
+                "Study session for the company officer written exam.",
+            ),
+            (
+                first_title,
+                first,
+                first_window,
+                "Classroom portion of the driver operator course.",
+            ),
+        ):
+            if event and pick(event, "id"):
+                self.api.patch(f"/events/{pick(event, 'id')}", window)
+            else:
+                self.api.post(
+                    "/events",
+                    {"title": title, "description": description, **common, **window},
+                )
+        return "windows opened"
+
     # -- scheduling --------------------------------------------------
 
     SHIFT_TEMPLATES = [
@@ -17040,6 +17298,7 @@ class Seeder:
             self.seed_event_validation_notification,
         )
         self.step("early check-in event", self.seed_early_checkin_event)
+        self.step("guide 04 event states", self.seed_guide04_event_states)
         if self.bulk_prospects:
             pipelines = prospect_data.get("pipelines") or []
             self.step(

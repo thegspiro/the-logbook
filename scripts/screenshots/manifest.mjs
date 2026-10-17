@@ -390,6 +390,53 @@ export const isUpcoming = (event) => {
   return start > new Date().toISOString();
 };
 
+/** The administrator page 04-54 borrowed, kept for its cleanup step. */
+let drillCheckInAdmin = null;
+
+/**
+ * Remove ("DELETE") or restore ("POST") the demo member's check-in on the
+ * in-progress drill, as the administrator. Resolves to the drill's id, or a
+ * short reason when the call was refused. A 400 is accepted both ways: there
+ * is no RSVP to remove, or she is already checked in.
+ */
+async function drillMemberCheckIn(admin, method) {
+  return await admin.evaluate(
+    async ([verb, title, username]) => {
+      const get = async (path) =>
+        (await fetch(`/api/v1${path}`, { credentials: "include" })).json();
+      const list = await get("/events?limit=200");
+      const event = (Array.isArray(list) ? list : list.events || []).find(
+        (e) => e.title === title,
+      );
+      const users = await get("/users?limit=200");
+      const member = (
+        Array.isArray(users) ? users : users.users || users.items || []
+      ).find((u) => u.username === username);
+      if (!event || !member) return "drill or member not found";
+      const csrf =
+        (document.cookie.match(/(?:^|; )csrf_token=([^;]+)/) || [])[1] || "";
+      const response = await fetch(
+        verb === "DELETE"
+          ? `/api/v1/events/${event.id}/rsvps/${member.id}`
+          : `/api/v1/events/${event.id}/check-in`,
+        {
+          method: verb,
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": decodeURIComponent(csrf),
+          },
+          body: verb === "POST" ? JSON.stringify({ user_id: member.id }) : null,
+        },
+      );
+      return response.ok || response.status === 400
+        ? event.id
+        : `${verb} answered ${response.status}`;
+    },
+    [method, "Company Drill — In Progress", DEMO_MEMBER_CREDENTIALS.username],
+  );
+}
+
 /**
  * True for an event still open for RSVPs.
  *
@@ -6811,6 +6858,429 @@ export const SHOTS = [
       "Screenshot of the Action Items page showing a filterable list of tasks",
     alt: "Action Items page listing tasks with assignee, due date, and status",
     route: "/action-items",
+  },
+  {
+    // A department with no events is the state this pictures, and the demo
+    // department has dozens. The member's event list and missed-mandatory
+    // list are answered empty, which is exactly what a new department's API
+    // returns; nothing else on the page is mocked.
+    id: "04-51-events-empty-member",
+    doc: "04-events-meetings.md",
+    line: 120,
+    anchor: "Events page as a regular member on a department with no upcoming",
+    alt: 'The Events page as a member when nothing is scheduled: "No upcoming events yet", what appears there once events are scheduled, and the link to the Learning Center walkthrough',
+    route: "/events",
+    auth: "member",
+    beforeNavigate: async (page) => {
+      await page.route(
+        (url) =>
+          url.pathname === "/api/v1/events" ||
+          url.pathname === "/api/v1/events/missed-mandatory",
+        (route) =>
+          route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: "[]",
+          }),
+      );
+    },
+    expect: "Take the short walkthrough in the Learning Center",
+    allowEmptyState:
+      "The empty state is the subject: the placeholder asks for the page a " +
+      "member sees before the department has scheduled anything.",
+    fullPage: false,
+  },
+  {
+    // Pump Panel Practice is seeded ended a few hours ago with no check-in for
+    // the demo member, so the server offers her a request.
+    id: "04-52-attendance-request-prompt",
+    doc: "04-events-meetings.md",
+    line: 335,
+    anchor: "for an event whose check-in window closed today and with no",
+    alt: 'An ended event as a member with no check-in: "Were you at this event but never checked in?" with the I was there button',
+    route: "/events",
+    auth: "member",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Pump Panel Practice",
+      )(page);
+      const prompt = page.getByText(
+        "Were you at this event but never checked in?",
+      );
+      await prompt.waitFor({ timeout: 20_000 });
+      await prompt.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+    expect: { selector: "button:has-text('I was there')" },
+    fullPage: false,
+  },
+  {
+    // The same event as the organizer: Owen Kittredge's request is seeded
+    // pending, with the times he says he was there.
+    id: "04-53-attendance-requests-card",
+    doc: "04-events-meetings.md",
+    line: 339,
+    anchor:
+      "Event detail as the event's organizer → the Attendance Requests card",
+    alt: "The Attendance Requests card on an ended event, as its organizer: one pending request with the member's name, when they asked, their reason and the times they say they were there, with Approve and Decline",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Pump Panel Practice",
+      )(page);
+      await page
+        .getByRole("heading", { name: "Attendance Requests" })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div.card:has(> h2:has-text('Attendance Requests'))",
+    expect: "Says they were there from",
+  },
+  {
+    // A real check-in by the demo member on the in-progress drill. She is
+    // seeded checked in there, so the prepare step removes her RSVP first and
+    // the tap puts it back: the drill ends the shot as it started, apart from
+    // her check-in time.
+    id: "04-54-training-check-in-confirmation",
+    doc: "04-events-meetings.md",
+    line: 387,
+    anchor:
+      "Member at /events/:id/check-in on a Training-type demo event inside",
+    alt: "A member's check-in confirmation on a Training event: You're Checked In, the event name, and the Training Record panel saying the attendance is added to their training record when the event's attendance is finalized",
+    route: "/events",
+    auth: "member",
+    prepare: async (page, { lookupPage }) => {
+      drillCheckInAdmin = await lookupPage();
+      const removed = await drillMemberCheckIn(drillCheckInAdmin, "DELETE");
+      if (!/^[0-9a-f-]{36}$/.test(removed)) {
+        throw new Error(`04-54: could not reset the check-in (${removed})`);
+      }
+      await page.goto(
+        new URL(`/events/${removed}/check-in`, page.url()).toString(),
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
+      await page
+        .getByRole("button", { name: /^Check In to This Event$/ })
+        .click({ timeout: 15_000 });
+      await page.getByText("You're Checked In").waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    expect:
+      "Your attendance will be added to your training record when the event's attendance is finalized.",
+    // Puts her back on the roster if the shot failed after removing her.
+    // A manager check-in of a member already checked in is refused with a
+    // 400, which is the ordinary case after a successful shot.
+    cleanup: async () => {
+      if (!drillCheckInAdmin) return;
+      const outcome = await drillMemberCheckIn(drillCheckInAdmin, "POST");
+      drillCheckInAdmin = null;
+      if (!/^[0-9a-f-]{36}$/.test(outcome)) {
+        throw new Error(`04-54: could not restore the check-in (${outcome})`);
+      }
+    },
+    // Not flagged `mutatesSeedData`: the drill ends the shot with her checked
+    // in, as the seeder left it, so nothing captured after it can tell.
+    fullPage: false,
+  },
+  {
+    // Write NFC tag renders only where the browser offers Web NFC, which is
+    // Chrome on Android, so this is shot at phone width with that one browser
+    // capability present. Nothing is written: the button is not pressed. The
+    // stub is switched on by a sessionStorage flag so it does not reach any
+    // later shot on this reused page, and the cleanup clears it.
+    id: "04-55-qr-codes-badge-switch",
+    doc: "04-events-meetings.md",
+    line: 557,
+    anchor:
+      "Check-In QR Codes (`/locations/qr-codes`) as an administrator with the NFC",
+    alt: "A room's card on Check-In QR Codes on an Android phone with ID cards turned on: its QR code, Write NFC tag and the Badge check-in switch",
+    route: "/locations/qr-codes",
+    viewport: "mobile",
+    beforeNavigate: async (page) => {
+      await page.addInitScript(() => {
+        if (sessionStorage.getItem("shots:web-nfc") === "on") {
+          window.NDEFReader = class {
+            async write() {}
+            async scan() {}
+            addEventListener() {}
+          };
+        }
+      });
+    },
+    prepare: async (page) => {
+      await page.evaluate(() => sessionStorage.setItem("shots:web-nfc", "on"));
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const card = page
+        .locator(".qr-card")
+        .filter({ hasText: "Training & Administration Center" })
+        .filter({ has: page.getByRole("switch") })
+        .first();
+      await card.waitFor({ timeout: 20_000 });
+      // Centred, so the phone's bottom navigation bar does not cover the
+      // card's action row in the element capture.
+      await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      await page.evaluate(() => sessionStorage.removeItem("shots:web-nfc"));
+    },
+    selector:
+      ".qr-card:has([role='switch']):has-text('Training & Administration Center')",
+    expect: {
+      selector:
+        ".qr-card:has-text('Training & Administration Center') button:has-text('Write NFC tag')",
+    },
+  },
+  {
+    // Two seeded events in the Volunteer Office: one ended minutes before the
+    // seed and stays open on a Window check-in, the other starts shortly and
+    // is open on its Flexible lead time. A room cannot hold overlapping
+    // bookings, so that is the only way two can be open there at once.
+    id: "04-56-room-tag-event-chooser",
+    doc: "04-events-meetings.md",
+    line: 561,
+    anchor: "A phone after tapping a room tag while two events are in their",
+    alt: 'A phone after tapping a room tag while two events are open for check-in there: "Which event are you here for?" listing both with their times',
+    route: "/events",
+    auth: "member",
+    viewport: "mobile",
+    prepare: async (page) => {
+      const roomId = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/locations?limit=100", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const rows = Array.isArray(body)
+          ? body
+          : body.locations || body.items || [];
+        return (
+          rows.find((row) =>
+            String(row.name || "").startsWith("Volunteer Office"),
+          )?.id ?? null
+        );
+      });
+      if (!roomId)
+        throw new Error("04-56: the Volunteer Office room was not found");
+      await page.goto(
+        new URL(`/locations/${roomId}/check-in`, page.url()).toString(),
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
+      await page
+        .getByText("Officer Candidate Study Group")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    expect: "Which event are you here for?",
+    fullPage: false,
+  },
+  {
+    // The next occurrence of the seeded monthly series, whose organizer and
+    // alternate the seeder sets with a real transfer.
+    id: "04-57-organized-by-row",
+    doc: "04-events-meetings.md",
+    line: 906,
+    anchor: "the details card's \"Organized by\" row with the alternate's name",
+    alt: "The event's details card as an administrator: the Organized by row naming the organizer and the alternate, with the Transfer event link",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) =>
+          event.title === "Monthly Officers Meeting" && isUpcoming(event),
+      )(page);
+      await page
+        .getByText("Alternate: Lila Nakamura")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div.card:has(button:text-is('Transfer event'))",
+    expect: "Transfer event",
+  },
+  {
+    // Paired with 04-57 under one placeholder. Opened and left on "This and
+    // all future events in the series"; Keep as is closes it unsaved.
+    id: "04-58-transfer-event-series",
+    allowEmptyState:
+      '"No alternate" is the Alternate picker\'s empty option, in the DOM whatever is selected.',
+    doc: "04-events-meetings.md",
+    line: 906,
+    anchor: "__paired-with-04-57__",
+    alt: "The Transfer Event dialog on a recurring meeting: the organizer and alternate pickers and Apply to with This and all future events in the series selected",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) =>
+          event.title === "Monthly Officers Meeting" && isUpcoming(event),
+      )(page);
+      await page
+        .getByRole("button", { name: "Transfer event" })
+        .click({ timeout: 20_000 });
+      const dialog = page.getByRole("dialog");
+      await dialog.waitFor({ timeout: 10_000 });
+      await dialog
+        .getByLabel(/This and all future events in the series/)
+        .check();
+      await page.waitForTimeout(600);
+    },
+    selector: "[role='dialog']",
+    expect: "Past events keep the organizer who ran them.",
+  },
+  {
+    id: "04-59-attendance-request-routing",
+    doc: "04-events-meetings.md",
+    line: 910,
+    anchor:
+      'Manage Events → Event settings → Attendance → the "Attendance requests" block',
+    alt: "Event settings, Attendance: the Attendance requests block with one position select per event type, each on Default (Secretary)",
+    route: "/events/admin?tab=settings",
+    prepare: async (page) => {
+      await clickByName(/^Attendance/)(page);
+      const heading = page.getByRole("heading", {
+        name: "Attendance requests",
+      });
+      await heading.waitFor({ timeout: 15_000 });
+      await page
+        .locator("#fallback-position-training")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div.border-t:has(> h3:has-text('Attendance requests'))",
+    // Not the "Default (Secretary)" text: it is a native <option>, which
+    // Playwright never reports visible.
+    expect: { selector: "#fallback-position-training" },
+  },
+  {
+    // A seeded business meeting finalized four days ago. Nothing is saved.
+    id: "04-60-finalized-event-edit",
+    allowEmptyState:
+      '"No reminders" is an option of the reminder audience select on every event form.',
+    doc: "04-events-meetings.md",
+    line: 1000,
+    anchor: "Event organizer at /events/:id/edit on a finalized demo event",
+    alt: 'Editing a finalized event: the "Attendance for this event is finalized" notice at the top, the type, schedule and check-in controls greyed out, and the title still editable',
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}/edit`,
+        "events",
+        (event) => event.title === "Apparatus Committee Meeting",
+      )(page);
+      await page
+        .getByText("Attendance for this event is finalized")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    selector: "form",
+    expect: "Attendance for this event is finalized",
+  },
+  {
+    // Not submitted. The first course in the picker fills Training Type and
+    // Category, which is what the placeholder asks to see.
+    id: "04-61-training-details-create",
+    allowEmptyState:
+      '"No category" is the Training Category select\'s empty option.',
+    doc: "04-events-meetings.md",
+    line: 1025,
+    anchor:
+      "Admin with events.manage and training.manage at /events/admin?tab=create",
+    alt: "Create Event with the type set to Training: the Training details (optional) group with a course picked, its training type and category filled in, and the Create Training Session link",
+    route: "/events/admin?tab=create",
+    prepare: async (page) => {
+      await page
+        .locator("#event-type")
+        .selectOption("training", { timeout: 15_000 });
+      const group = page.getByRole("group", {
+        name: "Training details (optional)",
+      });
+      await group.waitFor({ timeout: 10_000 });
+      const course = group.locator("select").first();
+      await course
+        .locator("option:nth-child(2)")
+        .waitFor({ state: "attached", timeout: 15_000 });
+      const value = await course
+        .locator("option:nth-child(2)")
+        .getAttribute("value");
+      await course.selectOption(value ?? "");
+      await page.waitForTimeout(600);
+    },
+    selector: "[role='group'][aria-labelledby='training-details-heading']",
+    expect: "Create Training Session",
+  },
+  {
+    // Opened and dismissed with Keep it open: the confirmation is the subject,
+    // and finalizing would close the seeded event for every later shot.
+    id: "04-62-finalize-training-confirm",
+    doc: "04-events-meetings.md",
+    line: 1047,
+    anchor:
+      'on an ended Training event with attendance still open: the "Finalize',
+    alt: "The Finalize attendance? confirmation on an ended Training event: how each member's time is decided, that members with no credited time get no record, that earlier admin-hours entries are removed, and Finalize and close beside Keep it open",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Pump Panel Practice",
+      )(page);
+      await page
+        .getByRole("button", { name: "Finalize Attendance" })
+        .click({ timeout: 20_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep it open" });
+      if (await keep.isVisible()) await keep.click();
+    },
+    selector: "[role='dialog']",
+    expect: "Earlier admin-hours entries for this event are removed.",
+  },
+  {
+    // The next occurrence of the seeded series. The panel reads the same for
+    // any recurrence pattern; the demo's series is monthly. Never saved.
+    id: "04-63-recurring-edit-scope",
+    allowEmptyState:
+      '"No reminders" is an option of the reminder audience select on every event form.',
+    doc: "04-events-meetings.md",
+    line: 1203,
+    anchor:
+      "Event organizer (events.manage) at /events/:id/edit on an occurrence",
+    alt: 'Editing one event of a recurring series: the "This event is part of a recurring series." panel above the form with This and all future events selected',
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}/edit`,
+        "events",
+        (event) =>
+          event.title === "Monthly Officers Meeting" && isUpcoming(event),
+      )(page);
+      await page
+        .getByText("This event is part of a recurring series.")
+        .waitFor({ timeout: 20_000 });
+      await page.locator("input[name='updateScope'][value='future']").check();
+      await page.waitForTimeout(500);
+    },
+    fullPage: false,
+    expect: "This event is part of a recurring series.",
   },
 
   // ── 05 Inventory ────────────────────────────────────────────────────
