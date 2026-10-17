@@ -645,11 +645,18 @@ export const EventForm: React.FC<EventFormProps> = ({
       submitData.training_details = toTrainingDetailsPayload(trainingDetails);
     }
 
-    // Clear location fields based on mode
+    // What a blank or inapplicable field becomes. A create omits it; an edit
+    // sends null, because the update path reads an omitted key as "leave
+    // alone" and the old value came back behind a success toast (CLAUDE.md
+    // pitfall #1). Only an event ID means edit mode: templates prefill too.
+    const cleared = editingEventId ? null : undefined;
+
+    // Clear location fields based on mode. On an edit, switching between a
+    // listed location and "Other" must clear the one no longer in use.
     if (locationMode === 'select') {
-      submitData.location = undefined;
+      submitData.location = cleared;
     } else {
-      submitData.location_id = undefined;
+      submitData.location_id = cleared;
     }
 
     // Only the deadline is cleared when a response is not required. Capacity,
@@ -659,15 +666,20 @@ export const EventForm: React.FC<EventFormProps> = ({
     // A deadline is the one field that genuinely has no meaning without an
     // expectation to be late for.
     if (!submitData.requires_rsvp) {
-      submitData.rsvp_deadline = undefined;
+      submitData.rsvp_deadline = cleared;
     }
 
     // Clear empty strings
-    if (!submitData.description) submitData.description = undefined;
-    if (!submitData.location) submitData.location = undefined;
-    if (!submitData.location_details) submitData.location_details = undefined;
-    if (!submitData.rsvp_deadline) submitData.rsvp_deadline = undefined;
-    if (!submitData.custom_category) submitData.custom_category = undefined;
+    if (!submitData.description) submitData.description = cleared;
+    if (!submitData.location_id) submitData.location_id = cleared;
+    if (!submitData.location) submitData.location = cleared;
+    if (!submitData.location_details) submitData.location_details = cleared;
+    if (!submitData.rsvp_deadline) submitData.rsvp_deadline = cleared;
+    if (!submitData.custom_category) submitData.custom_category = cleared;
+    // An emptied capacity box is undefined in form state; it means unlimited.
+    if (typeof submitData.max_attendees !== 'number' || Number.isNaN(submitData.max_attendees)) {
+      submitData.max_attendees = cleared;
+    }
 
     // Convert local datetime-local values to UTC before sending to backend
     submitData.start_datetime = localToUTC(submitData.start_datetime, tz);

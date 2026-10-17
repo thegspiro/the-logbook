@@ -7,11 +7,23 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { ArrowLeft, Save, X } from 'lucide-react';
+import { ArrowLeft, Plus, Save, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { grantsService } from '../services/api';
 import type { GrantApplication, GrantOpportunity } from '../types';
-import { ApplicationStatus, GrantPriority } from '../types';
+import { ApplicationStatus, BUDGET_ITEM_CATEGORY_LABELS, GrantPriority } from '../types';
+import {
+  BUDGET_CATEGORY_ORDER,
+  EMPTY_CONTACT_ROW,
+  buildBudgetSummary,
+  buildKeyContacts,
+  budgetSummaryErrors,
+  emptyBudgetAmounts,
+  keyContactErrors,
+  readBudgetSummary,
+  readKeyContacts,
+} from '../utils/applicationStructuredFields';
+import type { BudgetAmounts, ContactRow } from '../utils/applicationStructuredFields';
 import { toAppError } from '@/utils/errorHandling';
 import { formCoercions } from '@/utils/formValues';
 
@@ -61,8 +73,6 @@ interface FormData {
   grantEndDate: string;
   projectDescription: string;
   narrativeSummary: string;
-  budgetSummary: string;
-  keyContacts: string;
   federalAwardId: string;
   performancePeriodMonths: string;
   reportingFrequency: string;
@@ -85,8 +95,6 @@ const EMPTY_FORM: FormData = {
   grantEndDate: '',
   projectDescription: '',
   narrativeSummary: '',
-  budgetSummary: '',
-  keyContacts: '',
   federalAwardId: '',
   performancePeriodMonths: '',
   reportingFrequency: '',
@@ -121,6 +129,11 @@ export const GrantApplicationFormPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Kept beside formData rather than in it: both are structured values, not
+  // a single text box each (see utils/applicationStructuredFields).
+  const [budgetAmounts, setBudgetAmounts] = useState<BudgetAmounts>(emptyBudgetAmounts);
+  const [budgetNotes, setBudgetNotes] = useState('');
+  const [contactRows, setContactRows] = useState<ContactRow[]>([]);
 
   // Load opportunities for the select dropdown
   useEffect(() => {
@@ -187,8 +200,6 @@ export const GrantApplicationFormPage: React.FC = () => {
             grantEndDate: app.grantEndDate?.split('T')[0] ?? '',
             projectDescription: app.projectDescription ?? '',
             narrativeSummary: app.narrativeSummary ?? '',
-            budgetSummary: app.budgetSummary ?? '',
-            keyContacts: app.keyContacts ?? '',
             federalAwardId: app.federalAwardId ?? '',
             performancePeriodMonths: app.performancePeriodMonths != null ? String(app.performancePeriodMonths) : '',
             reportingFrequency: app.reportingFrequency ?? '',
@@ -196,6 +207,10 @@ export const GrantApplicationFormPage: React.FC = () => {
             priority: app.priority,
             notes: app.notes ?? '',
           });
+          const budget = readBudgetSummary(app.budgetSummary);
+          setBudgetAmounts(budget.amounts);
+          setBudgetNotes(budget.notes);
+          setContactRows(readKeyContacts(app.keyContacts));
         } catch {
           toast.error('Failed to load application.');
         } finally {
@@ -226,6 +241,10 @@ export const GrantApplicationFormPage: React.FC = () => {
     if (!formData.grantAgency.trim()) {
       newErrors.grantAgency = 'Enter the grant agency';
     }
+    const budgetError = budgetSummaryErrors(budgetAmounts);
+    if (budgetError) newErrors.budgetSummary = budgetError;
+    const contactError = keyContactErrors(contactRows);
+    if (contactError) newErrors.keyContacts = contactError;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -256,8 +275,8 @@ export const GrantApplicationFormPage: React.FC = () => {
       grantEndDate: formData.grantEndDate || null,
       projectDescription: formData.projectDescription || null,
       narrativeSummary: formData.narrativeSummary || null,
-      budgetSummary: formData.budgetSummary || null,
-      keyContacts: formData.keyContacts || null,
+      budgetSummary: buildBudgetSummary(budgetAmounts, budgetNotes),
+      keyContacts: buildKeyContacts(contactRows),
       federalAwardId: formData.federalAwardId || null,
       performancePeriodMonths: formData.performancePeriodMonths ? Number(formData.performancePeriodMonths) : null,
       reportingFrequency: formData.reportingFrequency || null,
@@ -632,34 +651,109 @@ export const GrantApplicationFormPage: React.FC = () => {
                 placeholder="Executive summary of the grant narrative..."
               />
             </div>
-            <div>
-              <label htmlFor="budgetSummary" className={labelClass}>
-                Budget Summary
+            <fieldset>
+              <legend className={labelClass}>Budget Summary</legend>
+              <p className="text-theme-text-muted mb-2 text-xs">
+                How much of the request goes to each budget category. Leave a category blank if it does not apply.
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {BUDGET_CATEGORY_ORDER.map((category) => (
+                  <div key={category}>
+                    <label htmlFor={`budget-${category}`} className="text-theme-text-secondary mb-1 block text-xs">
+                      {BUDGET_ITEM_CATEGORY_LABELS[category]} ($)
+                    </label>
+                    <input
+                      id={`budget-${category}`}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={budgetAmounts[category]}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setBudgetAmounts((prev) => ({ ...prev, [category]: value }));
+                      }}
+                      className={inputClass}
+                    />
+                  </div>
+                ))}
+              </div>
+              <label htmlFor="budgetNotes" className="text-theme-text-secondary mt-3 mb-1 block text-xs">
+                Budget notes
               </label>
               <textarea
-                id="budgetSummary"
-                name="budgetSummary"
-                rows={3}
-                value={formData.budgetSummary}
-                onChange={handleChange}
+                id="budgetNotes"
+                rows={2}
+                value={budgetNotes}
+                onChange={(e) => setBudgetNotes(e.target.value)}
                 className={inputClass}
-                placeholder="How the grant money will be spent..."
               />
-            </div>
-            <div>
-              <label htmlFor="keyContacts" className={labelClass}>
-                Key Contacts
-              </label>
-              <textarea
-                id="keyContacts"
-                name="keyContacts"
-                rows={3}
-                value={formData.keyContacts}
-                onChange={handleChange}
-                className={inputClass}
-                placeholder="Names, roles, and phone or email..."
-              />
-            </div>
+              {errors.budgetSummary && <p className="mt-1 text-xs text-red-500">{errors.budgetSummary}</p>}
+            </fieldset>
+            <fieldset>
+              <legend className={labelClass}>Key Contacts</legend>
+              {contactRows.length === 0 && <p className="text-theme-text-muted mb-2 text-xs">No contacts added.</p>}
+              <div className="space-y-3">
+                {contactRows.map((row, index) => {
+                  const update = (field: keyof ContactRow, value: string) =>
+                    setContactRows((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
+                  return (
+                    <div
+                      key={index}
+                      className="border-theme-surface-border grid grid-cols-1 gap-2 rounded-lg border p-3 sm:grid-cols-[repeat(4,minmax(0,1fr))_auto]"
+                    >
+                      <input
+                        aria-label={`Contact ${index + 1} name`}
+                        placeholder="Name"
+                        value={row.name}
+                        onChange={(e) => update('name', e.target.value)}
+                        className={inputClass}
+                      />
+                      <input
+                        aria-label={`Contact ${index + 1} role`}
+                        placeholder="Role"
+                        value={row.role}
+                        onChange={(e) => update('role', e.target.value)}
+                        className={inputClass}
+                      />
+                      <input
+                        aria-label={`Contact ${index + 1} phone`}
+                        placeholder="Phone"
+                        type="tel"
+                        value={row.phone}
+                        onChange={(e) => update('phone', e.target.value)}
+                        className={inputClass}
+                      />
+                      <input
+                        aria-label={`Contact ${index + 1} email`}
+                        placeholder="Email"
+                        type="email"
+                        value={row.email}
+                        onChange={(e) => update('email', e.target.value)}
+                        className={inputClass}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setContactRows((prev) => prev.filter((_, i) => i !== index))}
+                        aria-label={`Remove contact ${index + 1}`}
+                        className="btn-icon text-theme-text-muted hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setContactRows((prev) => [...prev, { ...EMPTY_CONTACT_ROW }])}
+                className="text-theme-text-secondary hover:text-theme-text-primary mt-2 inline-flex items-center gap-1 text-sm font-medium"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add contact
+              </button>
+              {errors.keyContacts && <p className="mt-1 text-xs text-red-500">{errors.keyContacts}</p>}
+            </fieldset>
             <div>
               <label htmlFor="notes" className={labelClass}>
                 Notes

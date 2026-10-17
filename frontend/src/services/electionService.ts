@@ -3,6 +3,8 @@
  */
 
 import api from './apiClient';
+import { BALLOT_SEND_POLL_INTERVAL_MS, BALLOT_SEND_POLL_MAX_FAILURES } from '../constants/config';
+import { BallotSendJobStatus } from '../constants/enums';
 import type {
   Attendee,
   AttendeeCheckInResponse,
@@ -28,6 +30,7 @@ import type {
   ElectionStats,
   ElectionUpdate,
   EligibilityRoster,
+  BallotSendJob,
   EmailBallot,
   EmailBallotResponse,
   ForensicsReport,
@@ -209,11 +212,55 @@ export const electionService = {
   },
 
   /**
-   * Send ballot notification emails
+   * Queue ballot notification emails. The send runs on the server after this
+   * returns; follow it with {@link waitForBallotSendJob}. Answers 409 while
+   * another send for the election is still running.
    */
-  async sendBallotEmail(electionId: string, emailData: EmailBallot): Promise<EmailBallotResponse> {
-    const response = await api.post<EmailBallotResponse>(`/elections/${electionId}/send-ballot`, emailData);
+  async startBallotSendJob(electionId: string, emailData: EmailBallot): Promise<BallotSendJob> {
+    const response = await api.post<BallotSendJob>(`/elections/${electionId}/ballot-send-jobs`, emailData);
     return response.data;
+  },
+
+  async getBallotSendJob(electionId: string, jobId: string): Promise<BallotSendJob> {
+    const response = await api.get<BallotSendJob>(`/elections/${electionId}/ballot-send-jobs/${jobId}`);
+    return response.data;
+  },
+
+  /**
+   * Poll a queued ballot send until it finishes, resolving with its outcome.
+   *
+   * Rejects with the server's reason when the send failed, and after
+   * BALLOT_SEND_POLL_MAX_FAILURES status checks in a row could not be made.
+   * Resolves `null` once `isCancelled()` turns true (the page unmounted); the
+   * send itself carries on regardless.
+   */
+  async waitForBallotSendJob(
+    electionId: string,
+    jobId: string,
+    isCancelled: () => boolean = () => false
+  ): Promise<EmailBallotResponse | null> {
+    let consecutiveFailures = 0;
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, BALLOT_SEND_POLL_INTERVAL_MS));
+      if (isCancelled()) return null;
+      let job: BallotSendJob;
+      try {
+        job = await electionService.getBallotSendJob(electionId, jobId);
+        consecutiveFailures = 0;
+      } catch {
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= BALLOT_SEND_POLL_MAX_FAILURES) {
+          throw new Error(
+            'Could not check on the ballot send. It may still be running: refresh the page to see who has received a ballot before sending again.'
+          );
+        }
+        continue;
+      }
+      if (job.status === BallotSendJobStatus.COMPLETED && job.result) return job.result;
+      if (job.status === BallotSendJobStatus.FAILED) {
+        throw new Error(job.error || 'The ballot send failed.');
+      }
+    }
   },
 
   /**

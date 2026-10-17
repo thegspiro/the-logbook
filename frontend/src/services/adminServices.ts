@@ -1413,6 +1413,20 @@ export interface McpKeyCreateResult {
   endpoint_path: string;
 }
 
+/** A member's Google Workspace account that needs a person to act. */
+export interface GoogleWorkspaceAttentionItem {
+  user_id: string;
+  member_name: string;
+  primary_email: string;
+  issue: string;
+  /** The backend's wording of the issue, the same as the email uses. */
+  label: string;
+  detail: string | null;
+  since: string | null;
+  /** Waiting long enough that the daily alert email reports it. */
+  overdue: boolean;
+}
+
 /** What linking the existing roster to Google did, or (previewed) would do. */
 export interface GoogleWorkspaceLinkResult {
   applied: boolean;
@@ -1516,6 +1530,14 @@ export const integrationsService = {
     return response.data;
   },
 
+  // Starts the Google Calendar sign-in and returns Google's consent URL for
+  // the browser to navigate to. A POST rather than a link: it records the
+  // attempt and sets its nonce cookie, so it carries the CSRF header.
+  async startGoogleCalendarConnect(): Promise<string> {
+    const response = await api.post<{ authorization_url: string }>('/integrations/google-calendar/oauth/start');
+    return response.data.authorization_url;
+  },
+
   // Full-page navigation target for the one-click OAuth connect flow. Not an
   // axios call — the browser navigates here and the backend 302s to Salesforce.
   getSalesforceOAuthUrl(): string {
@@ -1545,6 +1567,13 @@ export const integrationsService = {
   async revokeMcpKey(keyId: string): Promise<McpServiceKey> {
     const response = await api.delete<{ key: McpServiceKey }>(`/integrations/claude-mcp/keys/${keyId}`);
     return response.data.key;
+  },
+
+  async getGoogleWorkspaceAttention(): Promise<GoogleWorkspaceAttentionItem[]> {
+    const response = await api.get<{ items: GoogleWorkspaceAttentionItem[] }>(
+      '/integrations/google-workspace/attention'
+    );
+    return asArray(response.data.items);
   },
 
   // Google is only read. Called without `expected` it previews the counts;

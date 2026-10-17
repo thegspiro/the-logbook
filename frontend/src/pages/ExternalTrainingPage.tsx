@@ -28,6 +28,7 @@ import {
   PlayCircle,
   Upload,
   GraduationCap,
+  History,
 } from 'lucide-react';
 import { Tooltip } from '../components/ux';
 import { externalTrainingService, trainingService, userService } from '../services/api';
@@ -44,8 +45,9 @@ import type {
 } from '../types/training';
 import type { User } from '../types/user';
 import { useTablist } from '../hooks/useTablist';
+import ExternalSyncHistoryPanel from '../components/training/ExternalSyncHistoryPanel';
 
-type TabView = 'providers' | 'imports' | 'mappings';
+type TabView = 'providers' | 'imports' | 'history' | 'mappings';
 
 const PROVIDER_TYPES: { value: ExternalProviderType; label: string; description: string }[] = [
   {
@@ -1888,6 +1890,19 @@ const ExternalTrainingPage: React.FC = () => {
             Import Queue
           </button>
           <button
+            onClick={() => setActiveTab('history')}
+            role="tab"
+            aria-selected={activeTab === 'history'}
+            className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${
+              activeTab === 'history'
+                ? 'border-b-2 border-red-500 text-red-500'
+                : 'text-theme-text-muted hover:text-theme-text-primary'
+            }`}
+          >
+            <History className="mr-2 inline-block h-4 w-4" aria-hidden="true" />
+            Sync History
+          </button>
+          <button
             onClick={() => setActiveTab('mappings')}
             role="tab"
             aria-selected={activeTab === 'mappings'}
@@ -1954,6 +1969,8 @@ const ExternalTrainingPage: React.FC = () => {
           </div>
         ) : activeTab === 'imports' ? (
           <ImportQueuePanel providers={providers} refreshKey={mappingsRefreshKey} onOpenMappings={handleViewMappings} />
+        ) : activeTab === 'history' ? (
+          <ExternalSyncHistoryPanel providers={providers} />
         ) : (
           <AllMappingsPanel providers={providers} refreshKey={mappingsRefreshKey} onOpenMappings={handleViewMappings} />
         )}

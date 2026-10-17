@@ -308,6 +308,18 @@ class TestGoogleErrors:
         )
         assert "/users/me/calendarList" in http.calls[0].uri
 
+    async def test_test_connection_checks_the_department_calendar(self):
+        service, http = _google(
+            [(200, {"id": "dept-cal", "summary": "Oakville Fire Department Events"})],
+            creds={"token": "access-1", "calendar_id": "dept-cal"},
+        )
+        assert await service.test_connection() == (
+            "Connected to Google Calendar "
+            "(publishing to Oakville Fire Department Events)"
+        )
+        assert "/calendars/dept-cal" in http.calls[0].uri
+        assert "calendarList" not in http.calls[0].uri
+
 
 class TestGoogleTokens:
     CREDS = {

@@ -11,7 +11,7 @@ from typing import Any, NotRequired, TypedDict
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -29,14 +29,20 @@ from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
 from app.mcp.keys import McpKeyService
 from app.mcp.oauth import McpOAuthService
 from app.models.google_workspace import GOOGLE_WORKSPACE_INTEGRATION
-from app.models.integration import Integration, IntegrationSyncLog
+from app.models.integration import (
+    CalendarSyncMapping,
+    Integration,
+    IntegrationSyncLog,
+)
 from app.models.user import User
 from app.schemas.integration import (
+    CALENDAR_OAUTH_MANAGED_KEYS,
     INTEGRATION_CONFIG_SCHEMAS,
     SECRET_CONFIG_KEYS,
     IntegrationConnectRequest,
     IntegrationUpdateRequest,
 )
+from app.services.calendar_sync_service import has_credentials
 from app.services.integration_health import (
     finish_integration_run,
     health_state,
@@ -44,6 +50,9 @@ from app.services.integration_health import (
     sanitize_integration_error,
     start_integration_run,
     sync_log_to_dict,
+)
+from app.services.integration_services import (
+    google_calendar_oauth_service as gcal_oauth,
 )
 from app.services.integration_services.ical_service import (
     ICAL_INTEGRATION_TYPE,
@@ -359,10 +368,11 @@ _CATALOG_BY_TYPE: dict[str, _CatalogEntry] = {
     item["integration_type"]: item for item in INTEGRATION_CATALOG
 }
 
-# One-way publishing to Google/Outlook is not built. Until it is, these two are
-# reported as coming soon whatever their stored row says: an older release let
-# them be "connected" with an empty config, and such a row holds no tokens and
-# never published anything.
+# One-way publishing to Google/Outlook. While CALENDAR_SYNC_ENABLED is off
+# these two are reported as coming soon whatever their stored row says. With
+# it on, a row only counts as connected once the provider sign-in has left
+# tokens and a calendar on it: an older release let these be "connected" with
+# an empty config, and such a row never published anything.
 CALENDAR_PUBLISH_TYPES = frozenset({"google-calendar", "outlook"})
 
 # Config keys only the server writes. A client-supplied value is refused by
@@ -370,6 +380,7 @@ CALENDAR_PUBLISH_TYPES = frozenset({"google-calendar", "outlook"})
 # PATCH validation merge so it does not trip that same check.
 _SERVER_MANAGED_CONFIG_KEYS: dict[str, frozenset[str]] = {
     ICAL_INTEGRATION_TYPE: frozenset({ORG_FEED_TOKEN_HASH_KEY}),
+    **{itype: CALENDAR_OAUTH_MANAGED_KEYS for itype in CALENDAR_PUBLISH_TYPES},
 }
 
 
@@ -385,16 +396,54 @@ def _calendar_publish_unavailable(integration: Integration) -> bool:
     )
 
 
+def _calendar_connected_without_grant(integration: Integration) -> bool:
+    if (
+        integration.integration_type not in CALENDAR_PUBLISH_TYPES
+        or integration.status != "connected"
+    ):
+        return False
+    return not (
+        (integration.config or {}).get("calendar_id") and has_credentials(integration)
+    )
+
+
 def _effective_status(integration: Integration) -> str:
     if _calendar_publish_unavailable(integration):
         return "coming_soon"
+    if _calendar_connected_without_grant(integration):
+        return "available"
     return str(integration.status)
 
 
 def _effective_enabled(integration: Integration) -> bool:
-    if _calendar_publish_unavailable(integration):
+    if _calendar_publish_unavailable(integration) or _calendar_connected_without_grant(
+        integration
+    ):
         return False
     return bool(integration.enabled)
+
+
+def _reject_oauth_managed_keys(
+    integration: Integration, config: dict[str, Any]
+) -> None:
+    """Refuse a hand-typed token, calendar or account on a calendar integration.
+
+    Those come only from the provider sign-in. A typed refresh token would
+    publish into whatever account it belongs to, and a typed calendar id into
+    whatever calendar it names — the department's own primary calendar
+    included.
+    """
+    if integration.integration_type not in CALENDAR_PUBLISH_TYPES:
+        return
+    supplied = sorted(CALENDAR_OAUTH_MANAGED_KEYS.intersection(config))
+    if supplied:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                f"{', '.join(supplied)} cannot be entered: {integration.name} "
+                "sets it when an administrator signs in with the provider"
+            ),
+        )
 
 
 def _require_available(integration: Integration) -> None:
@@ -429,9 +478,48 @@ def _clear_ical_feed_token(integration: Integration) -> None:
     integration.config = config
 
 
+async def _clear_calendar_connection(
+    db: AsyncSession, integration: Integration
+) -> tuple[str | None, int]:
+    """Forget a calendar integration's grant, calendar and sync history.
+
+    Returns the grant to revoke with the provider (the refresh token, else
+    the access token) and how many mapping rows were deleted. The mappings
+    point at a calendar the next connect will not use — it creates a new
+    one — so keeping them would leave every unchanged event unpublished
+    there. The external calendar itself is left alone: members may still be
+    subscribed to it, and it is the department's to delete.
+    """
+    grant = integration.get_secret("refresh_token") or integration.get_secret(
+        "access_token"
+    )
+    for key in gcal_oauth.TOKEN_SECRETS:
+        integration.clear_secret(key)
+    config = dict(integration.config or {})
+    for key in gcal_oauth.CONNECTION_CONFIG_KEYS:
+        config.pop(key, None)
+    integration.config = config
+    result = await db.execute(
+        delete(CalendarSyncMapping).where(
+            CalendarSyncMapping.organization_id == str(integration.organization_id),
+            CalendarSyncMapping.integration_id == str(integration.id),
+        )
+    )
+    return grant, int(getattr(result, "rowcount", 0) or 0)
+
+
 def _stored_config_for_validation(integration: Integration) -> dict[str, Any]:
     managed = _SERVER_MANAGED_CONFIG_KEYS.get(integration.integration_type, ())
-    return {k: v for k, v in (integration.config or {}).items() if k not in managed}
+    stored = {k: v for k, v in (integration.config or {}).items() if k not in managed}
+    if (
+        integration.integration_type in CALENDAR_PUBLISH_TYPES
+        and stored.get("sync_direction", "push") != "push"
+    ):
+        # Rows saved before publishing became push-only may hold "pull" or
+        # "both". Nothing reads it — the reconciler only pushes — so the old
+        # value must not make every later settings change fail validation.
+        stored.pop("sync_direction")
+    return stored
 
 
 def _sanitize_config(config: dict[str, Any] | None) -> dict[str, Any]:
@@ -817,6 +905,14 @@ async def connect_integration(
         )
     _require_available(integration)
     _require_google_workspace_admin(integration, current_user)
+    _reject_oauth_managed_keys(integration, body.config)
+    if integration.integration_type == gcal_oauth.GOOGLE_CALENDAR_INTEGRATION_TYPE:
+        # Connected means a Google grant and a calendar to publish into, and
+        # only the sign-in produces those. Settings go through PATCH.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use Connect with Google to connect Google Calendar",
+        )
     was_connected = integration.status == "connected" and bool(integration.enabled)
 
     config = body.config
@@ -916,6 +1012,12 @@ async def disconnect_integration(
 
     integration.status = "available"
     integration.enabled = False
+    calendar_grant: str | None = None
+    calendar_mappings_removed = 0
+    if integration.integration_type in CALENDAR_PUBLISH_TYPES:
+        calendar_grant, calendar_mappings_removed = await _clear_calendar_connection(
+            db, integration
+        )
     if integration.integration_type == ICAL_INTEGRATION_TYPE:
         # Every calendar app subscribed to the feed stops receiving it now,
         # not merely while the row reads disconnected.
@@ -971,6 +1073,18 @@ async def disconnect_integration(
             )
     await db.commit()
 
+    disconnect_details: dict[str, Any] = {}
+    if integration.integration_type in CALENDAR_PUBLISH_TYPES:
+        # After the commit, so a slow or failing provider cannot hold the
+        # disconnect open or undo it: the tokens are already gone from here.
+        revoked = False
+        if integration.integration_type == gcal_oauth.GOOGLE_CALENDAR_INTEGRATION_TYPE:
+            revoked = await gcal_oauth.revoke_token(calendar_grant)
+        disconnect_details = {
+            "grant_revoked": revoked,
+            "calendar_mappings_removed": calendar_mappings_removed,
+        }
+
     # Audit log
     await log_audit_event(
         db,
@@ -983,6 +1097,7 @@ async def disconnect_integration(
             "integration_type": integration.integration_type,
             "integration_name": integration.name,
             "integration_id": integration.id,
+            **disconnect_details,
         },
         # Attribution columns, not only payload keys: the audit endpoints
         # filter on AuditLog.organization_id, so an entry stamped only inside
@@ -1026,6 +1141,7 @@ async def update_integration(
     # clear one secret without resending unrelated required configuration.
     _require_available(integration)
     _require_google_workspace_admin(integration, current_user)
+    _reject_oauth_managed_keys(integration, config)
     validation_config = {**_stored_config_for_validation(integration), **config}
     config = _validate_config(integration.integration_type, validation_config)
     if integration.status == "connected":

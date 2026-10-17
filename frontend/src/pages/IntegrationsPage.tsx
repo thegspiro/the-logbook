@@ -3,6 +3,7 @@ import { DialogPanel } from '../components/ux/DialogPanel';
 import { McpServiceKeyPanel } from '../components/integrations/McpServiceKeyPanel';
 import { McpOAuthPanel } from '../components/integrations/McpOAuthPanel';
 import { IcalFeedPanel } from '../components/integrations/IcalFeedPanel';
+import { GoogleCalendarPanel } from '../components/integrations/GoogleCalendarPanel';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import {
   Plug,
@@ -57,6 +58,7 @@ import {
   type SalesforcePreviewResult,
   type CalcomBooking,
   type GoogleWorkspaceLinkResult,
+  type GoogleWorkspaceAttentionItem,
 } from '../services/api';
 import type { McpStatus } from '../services/adminServices';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -316,6 +318,27 @@ const CONFIG_TYPES = new Set([
   'google-workspace',
 ]);
 
+// Connected by a provider sign-in rather than a form: the card body
+// (GoogleCalendarPanel) carries its own Connect and Disconnect buttons.
+const GOOGLE_CALENDAR_TYPE = 'google-calendar';
+const OAUTH_PANEL_TYPES = new Set([GOOGLE_CALENDAR_TYPE]);
+
+// What each Google Calendar connect failure code means to the person who
+// just came back from Google's consent screen.
+const GOOGLE_CALENDAR_ERRORS: Record<string, string> = {
+  access_denied: 'Google sign-in was cancelled.',
+  invalid_state: 'The sign-in link was already used or came from another browser. Start again.',
+  expired_state: 'The sign-in took longer than ten minutes. Start again.',
+  integration_not_found: 'Google Calendar is not set up for this department.',
+  unavailable: 'Calendar publishing is turned off on this server.',
+  not_authorized: 'You no longer have permission to manage integrations.',
+  missing_client_credentials: 'No Google OAuth client is configured.',
+  token_exchange_failed: 'Google did not accept the sign-in. Check the OAuth client and try again.',
+  no_refresh_token: 'Google did not grant offline access. Try connecting again.',
+  calendar_scope_not_granted: 'The calendar permission was not granted on the consent screen.',
+  calendar_create_failed: 'Signed in, but the department calendar could not be created.',
+};
+
 // Its service-account key can create accounts anywhere in the department's
 // Google domain, so the backend requires admin.access on top of
 // integrations.manage to connect, change or disconnect it.
@@ -524,6 +547,24 @@ const IntegrationsPage: React.FC = () => {
       void navigate('/integrations', { replace: true });
     }
   }, [location.search, navigate, loadIntegrations]);
+
+  // The same return leg for Google Calendar: ?google_calendar=connected or
+  // ?google_calendar_error=<code>. The list loads on mount, so it already
+  // shows the new connection.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const connected = params.get('google_calendar');
+    const gcalError = params.get('google_calendar_error');
+    if (connected === 'connected') {
+      toast.success('Google Calendar connected. Events will appear in the new calendar within a few minutes.');
+      void navigate('/integrations', { replace: true });
+    } else if (gcalError) {
+      toast.error(
+        `Google Calendar was not connected. ${GOOGLE_CALENDAR_ERRORS[gcalError] ?? 'Something went wrong; try again.'}`
+      );
+      void navigate('/integrations', { replace: true });
+    }
+  }, [location.search, navigate]);
 
   const getUI = (type: string) => INTEGRATION_UI[type] ?? DEFAULT_UI;
 
@@ -807,6 +848,30 @@ const IntegrationsPage: React.FC = () => {
   };
 
   const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [googleAttention, setGoogleAttention] = useState<GoogleWorkspaceAttentionItem[]>([]);
+  const [showGoogleAttention, setShowGoogleAttention] = useState(false);
+  const googleWorkspaceConnected = integrations.some(
+    (i) => i.integration_type === 'google-workspace' && i.status === ConnectionStatus.CONNECTED
+  );
+
+  useEffect(() => {
+    if (!canManage || !googleWorkspaceConnected) {
+      setGoogleAttention([]);
+      return;
+    }
+    let cancelled = false;
+    integrationsService
+      .getGoogleWorkspaceAttention()
+      .then((items) => {
+        if (!cancelled) setGoogleAttention(items);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) toast.error(getErrorMessage(err, 'Could not load Google Workspace accounts needing attention'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, googleWorkspaceConnected]);
 
   const handleLinkExistingGoogle = async () => {
     setLinkingGoogle(true);
@@ -1388,8 +1453,10 @@ const IntegrationsPage: React.FC = () => {
             <p className="text-theme-text-muted text-xs">
               In the Google Admin console, open Security &rarr; API controls &rarr; Domain-wide delegation and authorize
               the service account&apos;s client ID for <code>https://www.googleapis.com/auth/admin.directory.user</code>{' '}
-              and <code>https://www.googleapis.com/auth/admin.directory.group.member</code>. Each account created uses a
-              Workspace license.
+              and <code>https://www.googleapis.com/auth/admin.directory.group.member</code>. Also authorize the
+              read-only <code>https://www.googleapis.com/auth/admin.directory.orgunit.readonly</code> so{' '}
+              <strong>Test</strong> can confirm the organizational unit exists; only Test uses it. Each account created
+              uses a Workspace license.
             </p>
           </div>
         );
@@ -1883,6 +1950,19 @@ const IntegrationsPage: React.FC = () => {
                 {integration.integration_type === 'ical' &&
                   integration.status === ConnectionStatus.CONNECTED &&
                   canManage && <IcalFeedPanel integrationId={integration.id} />}
+                {integration.integration_type === GOOGLE_CALENDAR_TYPE &&
+                  integration.status !== 'coming_soon' &&
+                  canManage && (
+                    <GoogleCalendarPanel
+                      integration={integration}
+                      onUpdated={(updated) =>
+                        setIntegrations((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+                      }
+                      onDisconnected={() => {
+                        void loadIntegrations();
+                      }}
+                    />
+                  )}
                 <div className="flex flex-wrap justify-end gap-2">
                   {integration.status !== 'coming_soon' && canManage && (
                     <RouterLink
@@ -1923,6 +2003,16 @@ const IntegrationsPage: React.FC = () => {
                         >
                           <Settings className="h-3.5 w-3.5" aria-hidden="true" />
                           <span>Settings</span>
+                        </button>
+                      )}
+                      {integration.integration_type === 'google-workspace' && googleAttention.length > 0 && (
+                        <button
+                          onClick={() => setShowGoogleAttention(!showGoogleAttention)}
+                          aria-expanded={showGoogleAttention}
+                          className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-amber-500/10 px-3 py-1.5 text-sm text-amber-800 transition-colors hover:bg-amber-500/20 dark:text-amber-300"
+                        >
+                          <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>{googleAttention.length} need attention</span>
                         </button>
                       )}
                       {integration.integration_type === 'google-workspace' &&
@@ -1974,44 +2064,47 @@ const IntegrationsPage: React.FC = () => {
                           <span>Test</span>
                         </button>
                       )}
-                      {canChange(integration.integration_type) && (
-                        <button
-                          onClick={() => {
-                            void handleDisconnect(integration.id);
-                          }}
-                          // Disconnecting the Claude integration unmounts the key
-                          // panel; mid-issue that would lose the one-time plaintext.
-                          disabled={mcpBusy && integration.integration_type === 'claude-mcp'}
-                          title={
-                            mcpBusy && integration.integration_type === 'claude-mcp'
-                              ? 'Wait for the current key request to finish'
-                              : undefined
-                          }
-                          className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
-                        >
-                          <Settings className="h-3.5 w-3.5" />
-                          <span>{activation ? 'Deactivate' : 'Disconnect'}</span>
-                        </button>
-                      )}
+                      {canChange(integration.integration_type) &&
+                        !OAUTH_PANEL_TYPES.has(integration.integration_type) && (
+                          <button
+                            onClick={() => {
+                              void handleDisconnect(integration.id);
+                            }}
+                            // Disconnecting the Claude integration unmounts the key
+                            // panel; mid-issue that would lose the one-time plaintext.
+                            disabled={mcpBusy && integration.integration_type === 'claude-mcp'}
+                            title={
+                              mcpBusy && integration.integration_type === 'claude-mcp'
+                                ? 'Wait for the current key request to finish'
+                                : undefined
+                            }
+                            className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                          >
+                            <Settings className="h-3.5 w-3.5" />
+                            <span>{activation ? 'Deactivate' : 'Disconnect'}</span>
+                          </button>
+                        )}
                     </>
                   )}
                   {integration.status === 'available' && canManage && !canChange(integration.integration_type) && (
                     <span className="text-theme-text-muted text-xs">An organization administrator connects this</span>
                   )}
-                  {integration.status === 'available' && canChange(integration.integration_type) && (
-                    <button
-                      type="button"
-                      data-integration-connect={integration.id}
-                      onClick={() => {
-                        resetFormState(integration);
-                        setShowConnectModal(integration.id);
-                      }}
-                      className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-indigo-600/20 px-4 py-1.5 text-sm text-indigo-700 transition-colors hover:bg-indigo-600/30"
-                    >
-                      {activation ? <Check className="h-3.5 w-3.5" /> : <Plug className="h-3.5 w-3.5" />}
-                      <span>{activation ? 'Activate' : 'Connect'}</span>
-                    </button>
-                  )}
+                  {integration.status === 'available' &&
+                    canChange(integration.integration_type) &&
+                    !OAUTH_PANEL_TYPES.has(integration.integration_type) && (
+                      <button
+                        type="button"
+                        data-integration-connect={integration.id}
+                        onClick={() => {
+                          resetFormState(integration);
+                          setShowConnectModal(integration.id);
+                        }}
+                        className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-indigo-600/20 px-4 py-1.5 text-sm text-indigo-700 transition-colors hover:bg-indigo-600/30"
+                      >
+                        {activation ? <Check className="h-3.5 w-3.5" /> : <Plug className="h-3.5 w-3.5" />}
+                        <span>{activation ? 'Activate' : 'Connect'}</span>
+                      </button>
+                    )}
                 </div>
               </div>
             );
@@ -2029,6 +2122,64 @@ const IntegrationsPage: React.FC = () => {
               <McpOAuthPanel onBusyChange={setMcpOAuthBusy} configVersion={mcpConfigVersion} />
             </>
           )}
+
+        {/* Google Workspace accounts needing attention */}
+        {showGoogleAttention && googleWorkspaceConnected && googleAttention.length > 0 && (
+          <div className="card mt-6 p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="rounded-lg bg-amber-500/10 p-2 text-amber-800 dark:text-amber-300">
+                  <AlertCircle className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="text-theme-text-primary font-semibold">Google Workspace accounts needing attention</h3>
+                  <p className="text-theme-text-muted text-xs">
+                    Open a member to see the reason and retry. Anything waiting over a day is also emailed to
+                    administrators each morning.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowGoogleAttention(false)}
+                className="text-theme-text-muted hover:text-theme-text-primary"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <ul
+              className="divide-theme-surface-border divide-y"
+              aria-label="Google Workspace accounts needing attention"
+            >
+              {googleAttention.map((item) => (
+                <li key={item.user_id} className="py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <RouterLink
+                        to={`/members/${item.user_id}`}
+                        className="text-theme-text-primary text-sm font-medium underline"
+                      >
+                        {item.member_name}
+                      </RouterLink>
+                      <p className="text-theme-text-secondary text-xs">
+                        {item.label} · {item.primary_email}
+                      </p>
+                      {item.detail && <p className="text-theme-text-muted text-xs">{item.detail}</p>}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      {item.overdue && (
+                        <span className="badge bg-amber-500/10 text-amber-800 dark:text-amber-300">Over a day</span>
+                      )}
+                      {item.since && (
+                        <p className="text-theme-text-muted text-xs">Since {formatDateTime(item.since, tz)}</p>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Cal.com Bookings Panel */}
         {showBookingsPanel &&

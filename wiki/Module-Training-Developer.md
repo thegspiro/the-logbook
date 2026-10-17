@@ -55,7 +55,7 @@ destination; the areas are declared in
 | **Evaluations** (`evaluations`)         | Skill Evaluations, Knowledge Tests, Skills Test Templates (`templates`), Skills Test Records (`tests`) |
 | **Program Management** (`enhancements`) | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports                         |
 | **Compliance Reporting** (`compliance`) | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast                                   |
-| **Settings & Data** (`settings`)        | Manual Entry Rules, Integrations, Import History, Headline Metrics (`metrics`)                         |
+| **Settings & Data** (`settings`)        | Manual Entry Rules, Integrations, Import Past Training, Headline Metrics (`metrics`)                   |
 
 Destination ids are unique across the hub, so a link is resolved by its
 `&tab=` first. Links that name the `setup` and `skills-testing` section ids, or

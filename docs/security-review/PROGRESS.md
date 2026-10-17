@@ -16,6 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this pass)** (branch `claude/security-review-medical-supplies-p14`):
+Feature 23 (Medical supplies), pass 14. Watchdog pickup: PR #3339 (Feature
+22, Grants & fundraising, pass 8) merged (`128f1e93`'s commit, `1199d849`)
+with nothing started for the next feature in the ~2.5 hours since; this
+pass is that pickup. **0 new findings** across substantial real delta since
+pass 13 — apparatus-only stock, CSV import/export, permanent category
+delete, bulk retire, and an opt-in MCP read-only sharing switch, all
+reviewed against every CHECKLIST.md dimension rather than assumed clean.
+**One stale-finding correction**: MSUP-15 (general inventory
+`ItemFormModal.tsx` had no lot-stocked awareness) is now FIXED — the file
+has since gained the same `is_lot_stocked`-aware read-only Quantity display
+`MedicalItemFormModal.tsx` already had. MSUP-4 and MSUP-11 (no row cap on
+`get_expiring_lots`/`list_lots`) remain open, unchanged, re-confirmed at
+their current line numbers. Route surface re-enumerated: 15 → 25
+(`require_permission(` count agrees with `@router.` count, 25/25). See
+`MSUP-23-medical-supplies.md`'s **Pass 14** section. Row 23 → ✅ (pending
+this PR's merge); next is Feature 24 (Meetings & minutes).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 8, PR #3339, merged), preserved for history</summary>
+
 **PR [#3339](https://github.com/thegspiro/the-logbook/pull/3339)** (branch
 `claude/security-review-grants-fundraising`): Feature 22 (Grants &
 fundraising), pass 8. Watchdog pickup: PR #3336
@@ -31,6 +52,8 @@ money fields, donor-PII gate breadth) remain open, unchanged. Route surface
 re-enumerated (45/45, unchanged). See `GF-22-grants-fundraising.md`'s
 **Pass 8** section. Row 22 → ✅ (pending this PR's merge); next is Feature
 23 (Medical supplies).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 8, PR #3336, merged), preserved for history</summary>
@@ -19559,7 +19582,7 @@ here.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
@@ -19578,6 +19601,57 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-17 — Feature 23 (Medical supplies, pass 14) — watchdog pickup, 0 fixed, 0 new findings, 1 stale-finding correction
+
+**Step 0.** `search_pull_requests`/`list_pull_requests` (`is:open
+head:claude/security-review-`) returned 0 results — PR #3339 (Feature 22,
+Grants & fundraising, pass 8) had merged (`1199d849`, 2026-10-16T23:11:05Z)
+with nothing started for the next feature in the ~2.5 hours since (first
+observed by this watchdog check at 2026-10-17T01:45Z). Row 22 was already
+✅; row 23 (Medical supplies) was the first `⬜`.
+
+**Scope check.** Pass 13 landed as `df5f0b3c` (2026-10-07). Since then, this
+feature's own files gained real new functionality: apparatus-only stock
+tracking with a combined shelf+truck low-stock figure, CSV import/export
+and an import template, permanent category delete (with an optional
+items-move), bulk retire, sort/filter/list-by-category, a storage-options
+read for medical-only officers, fuzzy catalog matching plus an "also
+called" aliases field, and a new opt-in MCP read-only sharing switch
+(`backend/app/mcp/tools/medical_supplies.py`). Route count: 15 → 25, all
+25 individually confirmed to carry `Depends(require_permission(...))`, kept
+domain-first (`inventory.manage_medical`/`inventory.view_medical` OR'd
+against the broad `inventory.manage`/`inventory.view`). Every new by-id
+write re-validates the medical domain (`_require_medical_category`/
+`_require_medical_item`/`items_in_domain`) before mutating, the permanent
+category delete locks both category rows in id order with locking-read
+counts (Pitfall #27), bulk requests are capped at 200 entries, the CSV
+import is read through `read_upload_limited` + `reject_if_malicious`, every
+CSV export/template route uses `SafeCsvWriter`, and the new MCP tools are
+read-only and triple-gated (module enablement, the connected member's own
+view permission, and the org's `expose_medical_supplies` switch — all
+three required, not an OR). Every new service helper the page and the MCP
+tools call filters `organization_id` on every join, read directly rather
+than assumed. **0 new findings.**
+
+**Stale-finding correction.** MSUP-15 ("general inventory `ItemFormModal.tsx`
+has no lot-stocked awareness," open since pass 11) is now FIXED — the file
+has since gained the same `is_lot_stocked`-aware read-only Quantity display
+`MedicalItemFormModal.tsx` already had. MSUP-4 and MSUP-11 (no row cap on
+`get_expiring_lots`/`list_lots`) were re-checked at their current line
+numbers and remain open, unchanged.
+
+**Gate**: `flake8`/`black --check`/`isort --check-only` clean over `app/
+tests/ alembic/`; `validate_migrations.py --strict` — single head
+`64bf75298e89`, 611 revisions; `pytest tests/ -q -k "medical_supplies or
+medical_supply or inventory"` — 1484 passed, 1 pre-existing skip; frontend
+`npm run typecheck`/`npm run lint` both clean (`npm ci` first — this
+sandbox's `node_modules/` was missing unrelated packages; no
+`package-lock.json` change).
+
+Findings doc: [`MSUP-23-medical-supplies.md`](./MSUP-23-medical-supplies.md)'s
+**Pass 14** section. No `KNOWN_LIMITATIONS.md` change needed. Rotation row
+23 → ✅ (pending this PR's merge). Next: Feature 24 (Meetings & minutes).
 
 ### 2026-10-16 — Feature 22 (Grants & fundraising, pass 8) — watchdog pickup, 5 standing findings closed by non-rotation commits (verified), 0 new findings
 

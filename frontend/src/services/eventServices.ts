@@ -1913,6 +1913,8 @@ export interface ReorderRequestCreate {
 export interface ReorderRequestUpdate {
   /** Refused by the server once stock has been received against the link. */
   item_id?: string | null | undefined;
+  /** Null clears the category; the server refuses one from another org. */
+  category_id?: string | null | undefined;
   item_name?: string | undefined;
   quantity_requested?: number | undefined;
   quantity_received?: number | undefined;
