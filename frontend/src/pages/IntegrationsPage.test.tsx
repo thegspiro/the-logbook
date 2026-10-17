@@ -28,8 +28,11 @@ const mockGetMcpStatus = vi.fn();
 const mockCreateMcpKey = vi.fn();
 const mockRevokeMcpKey = vi.fn();
 const mockLinkExistingGoogleMembers = vi.fn();
+const mockGetGoogleWorkspaceAttention = vi.fn().mockResolvedValue([]);
 const mockGetIcalFeed = vi.fn();
 const mockRotateIcalFeed = vi.fn();
+const mockStartGoogleCalendarConnect = vi.fn();
+const mockStartOutlookCalendarConnect = vi.fn();
 
 vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
@@ -50,8 +53,11 @@ vi.mock('../services/api', () => ({
     createMcpKey: (...args: unknown[]) => mockCreateMcpKey(...args) as unknown,
     revokeMcpKey: (...args: unknown[]) => mockRevokeMcpKey(...args) as unknown,
     linkExistingGoogleMembers: (...args: unknown[]) => mockLinkExistingGoogleMembers(...args) as unknown,
+    getGoogleWorkspaceAttention: (...args: unknown[]) => mockGetGoogleWorkspaceAttention(...args) as unknown,
     getIcalFeed: (...args: unknown[]) => mockGetIcalFeed(...args) as unknown,
     rotateIcalFeed: (...args: unknown[]) => mockRotateIcalFeed(...args) as unknown,
+    startGoogleCalendarConnect: (...args: unknown[]) => mockStartGoogleCalendarConnect(...args) as unknown,
+    startOutlookCalendarConnect: (...args: unknown[]) => mockStartOutlookCalendarConnect(...args) as unknown,
   },
 }));
 
@@ -688,6 +694,356 @@ describe('IntegrationsPage', () => {
     });
   });
 
+  describe('Google Calendar connect', () => {
+    const gcal = (overrides: Record<string, unknown> = {}) => ({
+      id: 'gcal-1',
+      organization_id: 'org-1',
+      integration_type: 'google-calendar',
+      name: 'Google Calendar',
+      description: 'Publish department events one way',
+      category: 'Calendar',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      last_sync_at: null,
+      last_error: null,
+      last_error_at: null,
+      consecutive_error_count: 0,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      ...overrides,
+    });
+    const connected = gcal({
+      status: 'connected' as const,
+      enabled: true,
+      config: {
+        account_email: 'calendar@dept.org',
+        calendar_name: 'Falls Station Events',
+        calendar_id: 'cal-1',
+        sync_descriptions: false,
+      },
+      last_sync_at: '2026-10-15T14:00:00Z',
+    });
+
+    beforeEach(() => {
+      mockStartGoogleCalendarConnect.mockReset();
+      mockStartGoogleCalendarConnect.mockResolvedValue('https://accounts.google.com/o/oauth2/v2/auth?state=s');
+      mockUpdateIntegration.mockReset();
+      mockDisconnectIntegration.mockReset();
+      mockDisconnectIntegration.mockResolvedValue(undefined);
+    });
+
+    it('offers Connect with Google instead of the connect form, and hands off to Google', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([gcal()]);
+      const originalLocation = window.location;
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: { ...originalLocation, href: '' },
+      });
+      try {
+        renderPage();
+        const card = await screen.findByTestId('integration-card-google-calendar');
+        expect(within(card).queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+        await user.click(within(card).getByRole('button', { name: /Connect with Google/ }));
+        await waitFor(() => {
+          expect(window.location.href).toBe('https://accounts.google.com/o/oauth2/v2/auth?state=s');
+        });
+        expect(mockStartGoogleCalendarConnect).toHaveBeenCalled();
+        expect(mockConnectIntegration).not.toHaveBeenCalled();
+      } finally {
+        Object.defineProperty(window, 'location', {
+          configurable: true,
+          writable: true,
+          value: originalLocation,
+        });
+      }
+    });
+
+    it('shows the account, the calendar and when events were last published', async () => {
+      mockGetIntegrations.mockResolvedValue([connected]);
+      renderPage();
+      const card = await screen.findByTestId('integration-card-google-calendar');
+      expect(within(card).getByText('calendar@dept.org')).toBeInTheDocument();
+      expect(within(card).getByText('Falls Station Events')).toBeInTheDocument();
+      expect(within(card).getByText(/October 15, 2026/)).toBeInTheDocument();
+      expect(within(card).getByRole('switch', { name: 'Sync event descriptions' })).toHaveAttribute(
+        'aria-checked',
+        'false'
+      );
+      // One Disconnect, from the panel, not a second generic one.
+      expect(within(card).getAllByRole('button', { name: 'Disconnect' })).toHaveLength(1);
+    });
+
+    it('shows the last error and how many runs in a row failed', async () => {
+      mockGetIntegrations.mockResolvedValue([
+        {
+          ...connected,
+          last_error: 'Google Calendar is rate limiting requests',
+          last_error_at: '2026-10-15T15:00:00Z',
+          consecutive_error_count: 3,
+        },
+      ]);
+      renderPage();
+      const card = await screen.findByTestId('integration-card-google-calendar');
+      expect(within(card).getByText(/rate limiting requests/)).toBeInTheDocument();
+      expect(within(card).getByText(/3 failed runs in a row/)).toBeInTheDocument();
+    });
+
+    it('says Reconnect required when the grant stopped working', async () => {
+      mockGetIntegrations.mockResolvedValue([
+        gcal({
+          status: 'error' as const,
+          config: { account_email: 'calendar@dept.org', calendar_name: 'Falls Station Events' },
+          last_error: 'Reconnect required: the calendar provider no longer accepts the stored authorization.',
+          consecutive_error_count: 1,
+        }),
+      ]);
+      renderPage();
+      const card = await screen.findByTestId('integration-card-google-calendar');
+      expect(within(card).getByRole('alert')).toHaveTextContent('Reconnect required');
+      expect(within(card).getByRole('button', { name: /Reconnect with Google/ })).toBeInTheDocument();
+      expect(within(card).getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+    });
+
+    it('turns description publishing on through a settings update', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([connected]);
+      mockUpdateIntegration.mockResolvedValue({
+        ...connected,
+        config: { ...connected.config, sync_descriptions: true },
+      });
+      renderPage();
+      const card = await screen.findByTestId('integration-card-google-calendar');
+      await user.click(within(card).getByRole('switch', { name: 'Sync event descriptions' }));
+      await waitFor(() => {
+        expect(within(card).getByRole('switch', { name: 'Sync event descriptions' })).toHaveAttribute(
+          'aria-checked',
+          'true'
+        );
+      });
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('gcal-1', { sync_descriptions: true });
+    });
+
+    it('disconnects only after confirmation', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([connected]);
+      renderPage();
+      const card = await screen.findByTestId('integration-card-google-calendar');
+
+      await user.click(within(card).getByRole('button', { name: 'Disconnect' }));
+      await user.click(await screen.findByRole('button', { name: 'Stay connected' }));
+      expect(mockDisconnectIntegration).not.toHaveBeenCalled();
+
+      mockGetIntegrations.mockResolvedValue([gcal()]);
+      await user.click(within(card).getByRole('button', { name: 'Disconnect' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
+      expect(mockDisconnectIntegration).toHaveBeenCalledWith('gcal-1');
+      expect(await screen.findByRole('button', { name: /Connect with Google/ })).toBeInTheDocument();
+    });
+
+    it('reports the outcome of the return from Google', async () => {
+      mockGetIntegrations.mockResolvedValue([connected]);
+      const { unmount } = render(
+        <MemoryRouter initialEntries={['/integrations?google_calendar=connected']}>
+          <ConfirmProvider>
+            <IntegrationsPage />
+          </ConfirmProvider>
+        </MemoryRouter>
+      );
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Google Calendar connected'));
+      });
+      unmount();
+
+      render(
+        <MemoryRouter initialEntries={['/integrations?google_calendar_error=calendar_create_failed']}>
+          <ConfirmProvider>
+            <IntegrationsPage />
+          </ConfirmProvider>
+        </MemoryRouter>
+      );
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('could not be created'));
+      });
+    });
+  });
+
+  describe('Outlook connect', () => {
+    const outlook = (overrides: Record<string, unknown> = {}) => ({
+      id: 'outlook-1',
+      organization_id: 'org-1',
+      integration_type: 'outlook',
+      name: 'Microsoft Outlook',
+      description: 'Publish department events one way',
+      category: 'Calendar',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      last_sync_at: null,
+      last_error: null,
+      last_error_at: null,
+      consecutive_error_count: 0,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      ...overrides,
+    });
+    const connected = outlook({
+      status: 'connected' as const,
+      enabled: true,
+      config: {
+        account_email: 'calendar@dept.org',
+        calendar_name: 'Falls Station Events',
+        calendar_id: 'AAMk=',
+        sync_descriptions: false,
+      },
+      last_sync_at: '2026-10-15T14:00:00Z',
+    });
+
+    beforeEach(() => {
+      mockStartOutlookCalendarConnect.mockReset();
+      mockStartOutlookCalendarConnect.mockResolvedValue(
+        'https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize?state=s'
+      );
+      mockStartGoogleCalendarConnect.mockReset();
+      mockUpdateIntegration.mockReset();
+      mockDisconnectIntegration.mockReset();
+      mockDisconnectIntegration.mockResolvedValue(undefined);
+    });
+
+    it('offers Connect with Microsoft instead of the connect form, and hands off to Microsoft', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([outlook()]);
+      const originalLocation = window.location;
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: { ...originalLocation, href: '' },
+      });
+      try {
+        renderPage();
+        const card = await screen.findByTestId('integration-card-outlook');
+        expect(within(card).queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+        await user.click(within(card).getByRole('button', { name: /Connect with Microsoft/ }));
+        await waitFor(() => {
+          expect(window.location.href).toBe(
+            'https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize?state=s'
+          );
+        });
+        expect(mockStartOutlookCalendarConnect).toHaveBeenCalled();
+        expect(mockStartGoogleCalendarConnect).not.toHaveBeenCalled();
+        expect(mockConnectIntegration).not.toHaveBeenCalled();
+      } finally {
+        Object.defineProperty(window, 'location', {
+          configurable: true,
+          writable: true,
+          value: originalLocation,
+        });
+      }
+    });
+
+    it('shows the account, the calendar, the description switch and one Disconnect', async () => {
+      mockGetIntegrations.mockResolvedValue([connected]);
+      renderPage();
+      const card = await screen.findByTestId('integration-card-outlook');
+      expect(within(card).getByText('calendar@dept.org')).toBeInTheDocument();
+      expect(within(card).getByText('Falls Station Events')).toBeInTheDocument();
+      expect(within(card).getByText(/October 15, 2026/)).toBeInTheDocument();
+      expect(within(card).getByRole('switch', { name: 'Sync event descriptions' })).toHaveAttribute(
+        'aria-checked',
+        'false'
+      );
+      expect(within(card).getAllByRole('button', { name: 'Disconnect' })).toHaveLength(1);
+    });
+
+    it('says Reconnect required and offers Reconnect with Microsoft', async () => {
+      mockGetIntegrations.mockResolvedValue([
+        outlook({
+          status: 'error' as const,
+          config: { account_email: 'calendar@dept.org', calendar_name: 'Falls Station Events' },
+          last_error: 'Reconnect required: the calendar provider no longer accepts the stored authorization.',
+          consecutive_error_count: 1,
+        }),
+      ]);
+      renderPage();
+      const card = await screen.findByTestId('integration-card-outlook');
+      expect(within(card).getByRole('alert')).toHaveTextContent('Reconnect required');
+      expect(within(card).getByRole('button', { name: /Reconnect with Microsoft/ })).toBeInTheDocument();
+    });
+
+    it('turns description publishing on through a settings update', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([connected]);
+      mockUpdateIntegration.mockResolvedValue({
+        ...connected,
+        config: { ...connected.config, sync_descriptions: true },
+      });
+      renderPage();
+      const card = await screen.findByTestId('integration-card-outlook');
+      await user.click(within(card).getByRole('switch', { name: 'Sync event descriptions' }));
+      await waitFor(() => {
+        expect(within(card).getByRole('switch', { name: 'Sync event descriptions' })).toHaveAttribute(
+          'aria-checked',
+          'true'
+        );
+      });
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('outlook-1', { sync_descriptions: true });
+    });
+
+    it('disconnects only after a confirmation that says the access is not handed back', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([connected]);
+      renderPage();
+      const card = await screen.findByTestId('integration-card-outlook');
+
+      await user.click(within(card).getByRole('button', { name: 'Disconnect' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toHaveTextContent('Disconnect Microsoft Outlook?');
+      expect(dialog).toHaveTextContent('My Apps');
+      await user.click(within(dialog).getByRole('button', { name: 'Stay connected' }));
+      expect(mockDisconnectIntegration).not.toHaveBeenCalled();
+
+      mockGetIntegrations.mockResolvedValue([outlook()]);
+      await user.click(within(card).getByRole('button', { name: 'Disconnect' }));
+      const again = await screen.findByRole('dialog');
+      await user.click(within(again).getByRole('button', { name: 'Disconnect' }));
+      expect(mockDisconnectIntegration).toHaveBeenCalledWith('outlook-1');
+      expect(await screen.findByRole('button', { name: /Connect with Microsoft/ })).toBeInTheDocument();
+    });
+
+    it('reports the outcome of the return from Microsoft', async () => {
+      mockGetIntegrations.mockResolvedValue([connected]);
+      const { unmount } = render(
+        <MemoryRouter initialEntries={['/integrations?outlook_calendar=connected']}>
+          <ConfirmProvider>
+            <IntegrationsPage />
+          </ConfirmProvider>
+        </MemoryRouter>
+      );
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Microsoft Outlook connected'));
+      });
+      unmount();
+
+      render(
+        <MemoryRouter initialEntries={['/integrations?outlook_calendar_error=access_denied']}>
+          <ConfirmProvider>
+            <IntegrationsPage />
+          </ConfirmProvider>
+        </MemoryRouter>
+      );
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(
+          'Microsoft Outlook was not connected. Microsoft sign-in was cancelled.'
+        );
+      });
+    });
+  });
+
   describe('Claude (MCP)', () => {
     const mcpAvailable = {
       id: 'mcp-1',
@@ -1033,6 +1389,119 @@ describe('IntegrationsPage', () => {
     });
   });
 
+  describe('Microsoft 365', () => {
+    const tenant = '11111111-2222-3333-4444-555555555555';
+    const client = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    const microsoftAvailable = {
+      id: 'ms-1',
+      organization_id: 'org-1',
+      integration_type: 'microsoft-365',
+      name: 'Microsoft 365',
+      description: 'Create a Microsoft 365 account for each new member',
+      category: 'Access Control',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const microsoftConnected = {
+      ...microsoftAvailable,
+      status: 'connected' as const,
+      enabled: true,
+      config: {
+        tenant_id: tenant,
+        client_id: client,
+        domain: 'firedept.org',
+        usage_location: 'CA',
+        license_sku_id: '',
+        groups: ['members@firedept.org'],
+      },
+    };
+
+    beforeEach(() => {
+      mockCheckPermission.mockReset();
+      mockCheckPermission.mockReturnValue(true);
+      mockGetIntegrations.mockReset();
+      mockGetIntegrations.mockResolvedValue([microsoftAvailable]);
+      mockConnectIntegration.mockReset();
+      mockConnectIntegration.mockResolvedValue(microsoftConnected);
+      mockUpdateIntegration.mockReset();
+      mockUpdateIntegration.mockResolvedValue(microsoftConnected);
+    });
+
+    it('connects with the app registration, usage location, license and groups', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Microsoft 365');
+      const card = screen.getByTestId('integration-card-microsoft-365');
+      await user.click(within(card).getByText('Connect'));
+
+      expect(screen.getByLabelText('Usage location')).toHaveValue('US');
+      await user.type(screen.getByLabelText('Directory (tenant) ID'), tenant);
+      await user.type(screen.getByLabelText('Application (client) ID'), client);
+      await user.type(screen.getByLabelText('Client secret value'), ' s3cret ');
+      await user.type(screen.getByLabelText('Domain'), 'firedept.org');
+      await user.type(screen.getByLabelText('License SKU ID (optional)'), 'c42b9cae-ea4f-4ab7-9717-81576235ccac');
+      await user.type(
+        screen.getByLabelText('Add new members to these groups (optional)'),
+        'members@firedept.org{enter}99999999-8888-7777-6666-555555555555'
+      );
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('ms-1', {
+        tenant_id: tenant,
+        client_id: client,
+        client_secret: 's3cret',
+        domain: 'firedept.org',
+        usage_location: 'US',
+        license_sku_id: 'c42b9cae-ea4f-4ab7-9717-81576235ccac',
+        groups: ['members@firedept.org', '99999999-8888-7777-6666-555555555555'],
+      });
+    });
+
+    it('keeps the stored secret when settings are saved without a new one', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([microsoftConnected]);
+      renderPage();
+      await screen.findByText('Microsoft 365');
+      await user.click(screen.getByRole('button', { name: 'Microsoft 365 settings' }));
+
+      expect(screen.getByLabelText('Usage location')).toHaveValue('CA');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('ms-1', {
+        tenant_id: tenant,
+        client_id: client,
+        client_secret: undefined,
+        domain: 'firedept.org',
+        usage_location: 'CA',
+        license_sku_id: '',
+        groups: ['members@firedept.org'],
+      });
+    });
+
+    it('leaves connecting to an organization administrator', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission !== 'admin.access');
+      renderPage();
+      await screen.findByText('Microsoft 365');
+      const card = screen.getByTestId('integration-card-microsoft-365');
+
+      expect(within(card).queryByText('Connect')).not.toBeInTheDocument();
+      expect(within(card).getByText('An organization administrator connects this')).toBeInTheDocument();
+    });
+
+    it('offers linking existing members once connected', async () => {
+      mockGetIntegrations.mockResolvedValue([microsoftConnected]);
+      renderPage();
+      await screen.findByText('Microsoft 365');
+      const card = screen.getByTestId('integration-card-microsoft-365');
+
+      expect(within(card).getByText('Link existing members')).toBeInTheDocument();
+    });
+  });
+
   describe('Google Workspace', () => {
     const workspaceAvailable = {
       id: 'gws-1',
@@ -1140,6 +1609,78 @@ describe('IntegrationsPage', () => {
       expect(within(card).queryByRole('button', { name: 'Google Workspace settings' })).not.toBeInTheDocument();
       expect(within(card).getByText('Test')).toBeInTheDocument();
       expect(within(card).queryByText('Link existing members')).not.toBeInTheDocument();
+    });
+
+    describe('Accounts needing attention', () => {
+      const items = [
+        {
+          user_id: 'u-gone',
+          member_name: 'Gone Member',
+          primary_email: 'gone@firedept.org',
+          issue: 'not_suspended',
+          label: 'Left, but the account is not suspended',
+          detail: 'Google Workspace is busy or unavailable.',
+          since: '2026-10-14T08:00:00Z',
+          overdue: true,
+        },
+        {
+          user_id: 'u-new',
+          member_name: 'New Member',
+          primary_email: 'new@firedept.org',
+          issue: 'setup_unfinished',
+          label: 'Account setup unfinished',
+          detail: null,
+          since: null,
+          overdue: false,
+        },
+      ];
+
+      beforeEach(() => {
+        vi.mocked(toast.error).mockClear();
+        mockGetGoogleWorkspaceAttention.mockReset();
+        mockGetGoogleWorkspaceAttention.mockResolvedValue(items);
+      });
+
+      it('lists each account with its reason and a link to the member', async () => {
+        const user = userEvent.setup();
+        mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+        renderPage();
+        const card = await screen.findByTestId('integration-card-google-workspace');
+        await user.click(await within(card).findByRole('button', { name: '2 need attention' }));
+
+        const list = screen.getByRole('list', { name: 'Google Workspace accounts needing attention' });
+        const [gone, fresh] = within(list).getAllByRole('listitem');
+        expect(within(list).getByRole('link', { name: 'Gone Member' })).toHaveAttribute('href', '/members/u-gone');
+        expect(gone).toHaveTextContent('Left, but the account is not suspended');
+        expect(gone).toHaveTextContent('Google Workspace is busy or unavailable.');
+        expect(gone).toHaveTextContent('Over a day');
+        expect(fresh).toHaveTextContent('Account setup unfinished');
+        expect(fresh).not.toHaveTextContent('Over a day');
+      });
+
+      it('shows nothing when every account is in order', async () => {
+        mockGetGoogleWorkspaceAttention.mockResolvedValue([]);
+        mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+        renderPage();
+        await screen.findByText('Google Workspace');
+        await waitFor(() => expect(mockGetGoogleWorkspaceAttention).toHaveBeenCalledTimes(1));
+        expect(screen.queryByRole('button', { name: /need attention/ })).not.toBeInTheDocument();
+      });
+
+      it('does not ask before the integration is connected', async () => {
+        renderPage();
+        await screen.findByText('Google Workspace');
+        expect(mockGetGoogleWorkspaceAttention).not.toHaveBeenCalled();
+      });
+
+      it('reports a list that could not be loaded', async () => {
+        mockGetGoogleWorkspaceAttention.mockRejectedValue(new Error('boom'));
+        mockGetIntegrations.mockResolvedValue([workspaceConnected]);
+        renderPage();
+        await waitFor(() =>
+          expect(toast.error).toHaveBeenCalledWith('Could not load Google Workspace accounts needing attention')
+        );
+      });
     });
 
     describe('Link existing members', () => {

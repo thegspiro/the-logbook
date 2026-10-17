@@ -133,7 +133,7 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // severity badges already sit. Call sites are held to AA by policy.
   '/admin/audit-log': 2,
   '/events/1/monitoring': 1,
-  // Training Setup's Import History tab, measured the first time it went on the
+  // Training Setup's Import Past Training tab, measured the first time it went on the
   // pass. Every node sits on the selected match-strategy card, a red-600/10
   // tint: the option's red-700 title and its muted hint (light), and the
   // required-column names in red-800 (light and high-contrast). All AA-clean,

@@ -238,6 +238,43 @@ describe('MedicalSuppliesPage', () => {
       expect(screen.getByRole('row', { name: /Shears/ })).toHaveTextContent('—');
     });
 
+    it('says where the soonest-expiring units are, on a truck or on the shelf', async () => {
+      mockGetItems.mockResolvedValue({
+        items: [
+          {
+            id: 'item-1',
+            name: 'Gauze Pads',
+            quantity: 4,
+            next_expiration_date: '2026-11-02',
+            days_until_next_expiration: 16,
+            next_expiration_location: 'apparatus',
+            next_expiration_where: 'Medic 1 › Main Compartment › Jump Bag',
+          },
+          {
+            id: 'item-2',
+            name: 'Cannula',
+            quantity: 3,
+            next_expiration_date: '2027-01-15',
+            days_until_next_expiration: 90,
+            next_expiration_location: 'shelf',
+            next_expiration_where: null,
+          },
+        ],
+        total: 2,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      const gauze = await screen.findByRole('cell', { name: /16d left/ });
+      expect(gauze).toHaveTextContent('Medic 1 › Main Compartment › Jump Bag');
+      expect(within(gauze).getByLabelText('On an apparatus')).toBeInTheDocument();
+      const cannula = screen.getByRole('cell', { name: /90d left/ });
+      expect(cannula).toHaveTextContent('In storage');
+      expect(within(cannula).getByLabelText('In storage')).toBeInTheDocument();
+    });
+
     it('marks the views up as tabs and moves between them with the arrow keys', async () => {
       renderWithRouter(<MedicalSuppliesPage />);
 
@@ -521,8 +558,10 @@ describe('MedicalSuppliesPage', () => {
 
     renderWithRouter(<MedicalSuppliesPage />);
 
-    const gearLink = await screen.findByRole('link', { name: /Inventory/i });
-    expect(gearLink).toHaveAttribute('href', '/inventory');
+    // Within the sentence: the Operations section strip carries an Inventory
+    // link of its own for the same viewer.
+    const aside = await screen.findByText(/It shares one catalog with gear and uniforms/i);
+    expect(within(aside).getByRole('link', { name: /Inventory/i })).toHaveAttribute('href', '/inventory');
   });
 
   it('states the separation without linking it for someone who cannot open the catalogue', async () => {
@@ -535,8 +574,8 @@ describe('MedicalSuppliesPage', () => {
     renderWithRouter(<MedicalSuppliesPage />);
     await screen.findByRole('heading', { name: /Medical Supplies/i });
 
-    expect(screen.getByText(/It shares one catalog with gear and uniforms/i)).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Inventory/i })).not.toBeInTheDocument();
+    const aside = screen.getByText(/It shares one catalog with gear and uniforms/i);
+    expect(within(aside).queryByRole('link', { name: /Inventory/i })).not.toBeInTheDocument();
   });
 
   it('opens on expiring stock, which is what goes wrong quietly', async () => {

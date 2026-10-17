@@ -361,6 +361,12 @@ eligible member a unique voting token and emails a "Vote Now" link. It is
 available only while the election is **open**; drafts are previewed with a
 test ballot instead. The button shows in text why it is disabled when it is.
 
+The send runs in the background (`POST /elections/{id}/ballot-send-jobs`),
+so a large roster no longer hits the browser's 30-second timeout. The dialog
+stays in its sending state until it finishes. Leaving the page does not stop
+the send. A second send for the same election is refused while one is still
+running, because each send issues new tokens and voids the earlier links.
+
 - Tokens are stored as SHA-256 hashes; the raw token exists only in the
   emailed link, and always travels in a POST body, never a query string or
   path.
@@ -626,6 +632,12 @@ reminder sends. The mail is titled "Reminder: vote in …" and each reminded
 member gets a fresh voting link; the previous link is stamped `superseded_at`.
 The vote dedup hash guarantees at most one vote per member regardless of how
 many links they hold.
+
+Like ballot sends, a reminder runs in the background
+(`POST /elections/{id}/reminder-send-jobs`), so many non-voters no longer hit
+the browser's 30-second timeout, and leaving the page does not stop it. A
+reminder cannot start while a ballot send or another reminder for the same
+election is still running.
 
 ---
 

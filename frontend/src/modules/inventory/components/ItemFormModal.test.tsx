@@ -468,6 +468,43 @@ describe('ItemFormModal', () => {
       await user.click(screen.getByRole('switch', { name: /Generate Sizes & Styles/i }));
     };
 
+    it('sends the chosen tracking type with the variants', async () => {
+      // SizeVariantCreate defaults tracking_type to pool; the select stayed on
+      // screen but its choice never left the browser.
+      const user = userEvent.setup();
+      await openGenerator(user);
+
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Tracking Type' }), 'individual');
+      await user.click(screen.getByRole('button', { name: 'M' }));
+      await user.click(screen.getByRole('button', { name: /Create 1 Item/ }));
+
+      await waitFor(() => expect(mockCreateSizeVariants).toHaveBeenCalledTimes(1));
+      expect(mockCreateSizeVariants.mock.calls[0]?.[0]).toMatchObject({ sizes: ['m'], tracking_type: 'individual' });
+    });
+
+    it('hides the fields variant generation cannot save, and keeps them for one item', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen />);
+      await user.click(screen.getByRole('button', { name: /Financial/ }));
+
+      const unsupported = [
+        'Also called',
+        'Description',
+        'Current Value',
+        'Purchase Date',
+        'Vendor',
+        'Warranty Expiration',
+      ];
+      for (const label of unsupported) expect(screen.getByLabelText(label)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('switch', { name: /Generate Sizes & Styles/i }));
+
+      for (const label of unsupported) expect(screen.queryByLabelText(label)).not.toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'Tracking Type' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Purchase Price')).toBeInTheDocument();
+      expect(screen.getByLabelText('Replacement Cost')).toBeInTheDocument();
+    });
+
     it('creates one item for one pick per axis', async () => {
       // The reported bug: a sleeve, a fit and a neckline describe ONE men's
       // long-sleeve polo. This read "Create 3 Items" before the axes existed.

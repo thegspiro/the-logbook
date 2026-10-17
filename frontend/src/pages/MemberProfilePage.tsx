@@ -59,7 +59,7 @@ import { useOverlaySurface } from '../hooks/useOverlaySurface';
 import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
 import { GoogleAccountPanel } from '../modules/membership/components/GoogleAccountPanel';
-import { GOOGLE_WORKSPACE_INTEGRATION } from '../modules/membership/constants/googleAccount';
+import { DIRECTORY_INTEGRATIONS } from '../modules/membership/constants/googleAccount';
 import { useMemberGoogleAccount } from '../modules/membership/hooks/useMemberGoogleAccount';
 import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
 import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
@@ -364,7 +364,8 @@ export const MemberProfilePage: React.FC = () => {
   // on that basis alone.
   const { isConnected: isIntegrationConnected, loading: integrationsLoading } = useConnectedIntegrations();
   const idCardsEnabled = !integrationsLoading && isIntegrationConnected(NFC_ID_CARDS_INTEGRATION);
-  const googleWorkspaceEnabled = !integrationsLoading && isIntegrationConnected(GOOGLE_WORKSPACE_INTEGRATION);
+  const googleWorkspaceEnabled =
+    !integrationsLoading && DIRECTORY_INTEGRATIONS.some((type) => isIntegrationConnected(type));
   const googleAccount = useMemberGoogleAccount(userId, canManageMembers && googleWorkspaceEnabled);
 
   const handleOpenStatusModal = () => {

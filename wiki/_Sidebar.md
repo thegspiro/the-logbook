@@ -67,6 +67,7 @@
 - [Cal.com Integration](Integration-Calcom)
 - [Claude (MCP) Integration](Integration-Claude-MCP)
 - [Google Workspace Integration](Integration-Google-Workspace)
+- [Microsoft 365 Integration](Integration-Microsoft-365)
 
 ### 🔐 Security
 

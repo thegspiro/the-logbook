@@ -37,6 +37,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from bootstrap_demo import (
+    DEMO_ADMIN_EMAIL,
     DEMO_ADMIN_USERNAME,
     admin_password,
     require_safe_base_url,
@@ -3396,6 +3397,11 @@ class Seeder:
                     self.api.get("/admin-hours/entries?limit=200"), "entries"
                 )
                 if str(pick(e, "status")) == "pending"
+                # The guide-08 correction entries stay pending on purpose and
+                # must not take one of the queue's slots, or each re-run would
+                # approve one more of the entries counted above.
+                and str(pick(e, "description") or "")
+                not in {d for _, d, _ in self.GUIDE08_HOURS_CORRECTIONS}
             ),
             key=lambda e: str(pick(e, "clock_in_at", "clockInAt") or ""),
             reverse=True,
@@ -4902,6 +4908,354 @@ class Seeder:
             "linked_positions": len(positions),
         }
 
+    # -- medical supply inventory (the Medical Supplies page) --
+
+    # The supply-tracking catalog above is filed as consumable gear, so the
+    # Medical Supplies page -- which lists medical categories only -- was an
+    # empty state. These are medical categories and supplies in their own
+    # right, shaped for guide 05's Medical Supplies section: two masks that
+    # differ only by size, one supply below its reorder point, a supply with a
+    # lot inside the expiring window, supplies filed under a room and a nested
+    # storage area, and one carried on two apparatus.
+    MEDICAL_CATEGORIES = [
+        ("Airway & Oxygen", "Masks, cannulas and ventilation."),
+        ("Bleeding Control", "Tourniquets and hemostatic dressings."),
+        ("Immobilization", "Collars and splints."),
+    ]
+    MEDICAL_ROOM = "Station 1 - Headquarters"
+    MEDICAL_CABINET = "EMS Supply Cabinet"
+    MEDICAL_SHELF = "Shelf 2"
+
+    # name, category, size, unit, reorder point, also called, filed on the
+    # shelf (else the room only), lots (lot number, days to expiry, quantity)
+    MEDICAL_ITEMS = [
+        (
+            "Oxygen Mask, Non-Rebreather",
+            "Airway & Oxygen",
+            "Adult",
+            "Each",
+            10,
+            [],
+            True,
+            [("NRB-A-2603", 410, 18), ("NRB-A-2511", 240, 6)],
+        ),
+        (
+            "Oxygen Mask, Non-Rebreather",
+            "Airway & Oxygen",
+            "Pediatric",
+            "Each",
+            6,
+            [],
+            True,
+            [("NRB-P-2509", 200, 4)],
+        ),
+        (
+            "Bag Valve Mask",
+            "Airway & Oxygen",
+            "Adult",
+            "Each",
+            4,
+            ["BVM", "Ambu bag"],
+            True,
+            [("BVM-2604", 700, 6)],
+        ),
+        (
+            "Nasal Cannula",
+            "Airway & Oxygen",
+            "Adult",
+            "Each",
+            10,
+            [],
+            True,
+            [("NC-2602", 380, 30)],
+        ),
+        (
+            "Tourniquet, CAT",
+            "Bleeding Control",
+            None,
+            "Each",
+            8,
+            [],
+            False,
+            [("CAT-2512", 520, 12)],
+        ),
+        (
+            "Hemostatic Gauze",
+            "Bleeding Control",
+            None,
+            "Each",
+            6,
+            [],
+            True,
+            [("HG-2511", 21, 4), ("HG-2607", 600, 8)],
+        ),
+        (
+            "Cervical Collar, Adjustable",
+            "Immobilization",
+            "Adult",
+            "Each",
+            4,
+            [],
+            False,
+            [],
+        ),
+    ]
+
+    # The apparatus checklists that carry medical supplies. Tourniquet is on
+    # both, so its Where cell shows two apparatus. On Rescue 7, BVM, Nasal
+    # Cannula and Oxygen Mask stay unlinked for Catalog Links to find: BVM
+    # matches by an "also called" name (a strong match, marked "check this"),
+    # Nasal Cannula exactly, and Oxygen Mask ties between the adult and the
+    # pediatric mask, so the automatic pass skips it.
+    MEDICAL_CHECKLISTS = [
+        (
+            "R-7",
+            "Rescue 7 EMS Bag Check",
+            "Jump Bag",
+            [
+                ("Tourniquet, CAT", "Tourniquet, CAT", 2),
+                ("BVM", None, None),
+                ("Nasal Cannula", None, None),
+                ("Oxygen Mask", None, None),
+            ],
+        ),
+        (
+            "B-5",
+            "Brush 5 Trauma Kit Check",
+            "Trauma Kit",
+            [
+                ("Tourniquet, CAT", "Tourniquet, CAT", 2),
+                ("Trauma dressings sealed", None, None),
+            ],
+        ),
+    ]
+
+    def seed_medical_supplies(self, apparatus: list[dict]) -> dict[str, Any]:
+        """Medical categories, supplies, lots, storage and two checklists."""
+        categories = {
+            str(pick(c, "name")): pick(c, "id")
+            for c in items(
+                self.api.get("/medical-supplies/categories?active_only=false"),
+                "categories",
+            )
+        }
+        for name, description in self.MEDICAL_CATEGORIES:
+            if name not in categories:
+                created = self.api.post(
+                    "/medical-supplies/categories",
+                    # The router files it as medical whatever this says; the
+                    # schema still requires the field.
+                    {"name": name, "description": description, "item_type": "medical"},
+                )
+                categories[name] = pick(created, "id")
+
+        room_id, shelf_id = self._medical_storage()
+
+        existing = {
+            (str(pick(i, "name")), pick(i, "size")): i
+            for i in items(self.api.get("/medical-supplies/items?limit=200"), "items")
+        }
+        catalog: dict[str, dict] = {}
+        created = 0
+        for (
+            name,
+            category,
+            size,
+            unit,
+            reorder,
+            also_called,
+            on_shelf,
+            lots,
+        ) in self.MEDICAL_ITEMS:
+            item = existing.get((name, size))
+            if item is None:
+                payload: dict[str, Any] = {
+                    "name": name,
+                    "category_id": categories.get(category),
+                    "unit_of_measure": unit,
+                    "condition": "good",
+                    "status": "available",
+                    "tracking_type": "pool",
+                    # Below the reorder point when it has no dated lots, so
+                    # the Low stock tile counts something undated too.
+                    "quantity": 1 if lots else 3,
+                    "reorder_point": reorder,
+                }
+                if size:
+                    payload["size"] = size
+                if also_called:
+                    payload["also_called"] = also_called
+                if room_id:
+                    payload["location_id"] = room_id
+                if on_shelf and shelf_id:
+                    payload["storage_area_id"] = shelf_id
+                item = self.api.post("/medical-supplies/items", payload)
+                created += 1
+            catalog.setdefault(name, item)
+            item_id = pick(item, "id")
+            have = {
+                pick(lot, "lot_number", "lotNumber")
+                for lot in items(
+                    self.api.get(f"/medical-supplies/items/{item_id}/lots"), "lots"
+                )
+            }
+            for lot_number, days, quantity in lots:
+                if lot_number in have:
+                    continue
+                self.api.post(
+                    f"/medical-supplies/items/{item_id}/lots",
+                    {
+                        "lot_number": lot_number,
+                        "expiration_date": str(TODAY + timedelta(days=days)),
+                        "quantity": quantity,
+                        "received_date": str(TODAY - timedelta(days=45)),
+                    },
+                )
+            if lots:
+                # A pool item cannot be created with a quantity below 1, and
+                # that unit lands as an undated, unnumbered lot. A supply
+                # stocked entirely from dated lots should not carry it.
+                for lot in items(
+                    self.api.get(f"/medical-supplies/items/{item_id}/lots"), "lots"
+                ):
+                    if not pick(lot, "lot_number", "lotNumber") and not pick(
+                        lot, "expiration_date", "expirationDate"
+                    ):
+                        self.api.delete(f"/medical-supplies/lots/{pick(lot, 'id')}")
+
+        templates = self._medical_checklists(apparatus, catalog)
+        self._publish_seeded_templates()
+        return {"created": created, "templates": templates}
+
+    def _medical_storage(self) -> tuple[str | None, str | None]:
+        """A cabinet with a shelf nested in it, in the station's own room."""
+        options = self.api.get("/medical-supplies/storage-options")
+        room_id = next(
+            (
+                pick(r, "id")
+                for r in items(options, "rooms")
+                if pick(r, "name") == self.MEDICAL_ROOM
+            ),
+            None,
+        )
+        if not room_id:
+            return None, None
+        areas = items(self.api.get("/inventory/storage-areas"), "storage_areas")
+
+        def find(name: str) -> str | None:
+            return next((pick(a, "id") for a in areas if pick(a, "name") == name), None)
+
+        cabinet_id = find(self.MEDICAL_CABINET)
+        if not cabinet_id:
+            cabinet_id = pick(
+                self.api.post(
+                    "/inventory/storage-areas",
+                    {
+                        "name": self.MEDICAL_CABINET,
+                        "label": "EMS-01",
+                        "storage_type": "cabinet",
+                        "location_id": room_id,
+                        "sort_order": 10,
+                    },
+                ),
+                "id",
+            )
+        shelf_id = find(self.MEDICAL_SHELF)
+        if not shelf_id:
+            shelf_id = pick(
+                self.api.post(
+                    "/inventory/storage-areas",
+                    {
+                        "name": self.MEDICAL_SHELF,
+                        "label": "EMS-01-2",
+                        "storage_type": "shelf",
+                        "parent_id": cabinet_id,
+                        "location_id": room_id,
+                    },
+                ),
+                "id",
+            )
+        return room_id, shelf_id
+
+    def _medical_checklists(
+        self, apparatus: list[dict], catalog: dict[str, dict]
+    ) -> list[str]:
+        by_unit = {
+            str(pick(a, "unit_number", "unitNumber") or ""): pick(a, "id")
+            for a in apparatus
+        }
+        existing = {
+            str(pick(t, "name")): t
+            for t in items(self.api.get("/equipment-checks/templates"), "templates")
+        }
+        names: list[str] = []
+        for unit, name, compartment, contents in self.MEDICAL_CHECKLISTS:
+            apparatus_id = by_unit.get(unit)
+            if not apparatus_id:
+                continue
+            names.append(name)
+            template = existing.get(name)
+            if template is None:
+                self.api.post(
+                    "/equipment-checks/templates",
+                    {
+                        "name": name,
+                        "description": "Medical supplies carried on this unit.",
+                        "check_timing": "start_of_shift",
+                        "apparatus_id": apparatus_id,
+                        "is_active": True,
+                        "compartments": [
+                            {
+                                "name": compartment,
+                                "sort_order": 0,
+                                "items": [
+                                    {
+                                        "name": position,
+                                        "sort_order": order,
+                                        "check_type": (
+                                            "quantity" if target else "pass_fail"
+                                        ),
+                                        "is_required": True,
+                                        "required_quantity": target,
+                                        "expected_quantity": target,
+                                        "has_expiration": bool(linked),
+                                        "expiration_warning_days": 30,
+                                        **(
+                                            {
+                                                "inventory_item_id": pick(
+                                                    catalog[linked], "id"
+                                                )
+                                            }
+                                            if linked and linked in catalog
+                                            else {}
+                                        ),
+                                    }
+                                    for order, (position, linked, target) in enumerate(
+                                        contents
+                                    )
+                                ],
+                            }
+                        ],
+                    },
+                )
+                continue
+            # Re-seeding puts the Catalog Links lines back: the automatic pass
+            # that `05-` pictures links them, and its Undo is the shot's own
+            # cleanup, but a capture that died half way must not leave the
+            # next one with nothing to link.
+            detail = self.api.get(f"/equipment-checks/templates/{pick(template, 'id')}")
+            meant_unlinked = {p for p, linked, _ in contents if not linked}
+            for comp in items(detail, "compartments"):
+                for line in items(comp, "items"):
+                    if pick(line, "name") in meant_unlinked and pick(
+                        line, "inventory_item_id", "inventoryItemId"
+                    ):
+                        self.api.put(
+                            f"/equipment-checks/items/{pick(line, 'id')}",
+                            {"inventory_item_id": None},
+                        )
+        return names
+
     def _supply_category(self) -> str | None:
         """A consumable category, created if the department has none."""
         categories = items(self.api.get("/inventory/categories"), "categories")
@@ -5449,6 +5803,47 @@ class Seeder:
                 )
             )
         return chains
+
+    UNUSED_CHAIN_NAME = "Major Purchase Approval"
+
+    def seed_unused_approval_chain(self) -> dict[str, Any]:
+        """A three-step chain no request has been routed through.
+
+        Guide 11 pictures the Delete step confirmation over a chain whose steps
+        can actually be deleted. Every seeded default chain has routed
+        requests, so deleting one of their steps is refused; this chain sits
+        above every seeded request's amount and is never the default, so it
+        stays unused.
+        """
+        chains = items(self.api.get("/finance/approval-chains"), "approval_chains")
+        if any(pick(c, "name") == self.UNUSED_CHAIN_NAME for c in chains):
+            return {"created": False}
+        self.api.post(
+            "/finance/approval-chains",
+            {
+                "name": self.UNUSED_CHAIN_NAME,
+                "description": "Purchases of $25,000 or more.",
+                "applies_to": "purchase_request",
+                "min_amount": 25000,
+                "is_default": False,
+                "steps": [
+                    {
+                        "step_order": order,
+                        "name": step_name,
+                        "step_type": "approval",
+                        "approver_type": "position",
+                        "approver_value": position,
+                        "required": True,
+                    }
+                    for order, step_name, position in (
+                        (1, "Company officer review", "captain"),
+                        (2, "Treasurer review", "treasurer"),
+                        (3, "Chief approval", "fire_chief"),
+                    )
+                ],
+            },
+        )
+        return {"created": True}
 
     def seed_expense_reports(self, finance: dict) -> list[dict]:
         """Reimbursement claims, which the expense report detail pictures."""
@@ -6917,6 +7312,392 @@ class Seeder:
             self.blocked.append(
                 f"time-off history: {raised} of {self.TIME_OFF_HISTORY_MIN} raised"
             )
+
+    # ------------------------------------------------------------------
+    # Guide 03 (scheduling): outside apparatus, exchanges, history import
+    # ------------------------------------------------------------------
+
+    #: Placeholder departments. The guide asks for invented names, never a real
+    #: neighbouring department, so these name no actual fire company.
+    OUTSIDE_AGENCIES = (
+        (
+            "Township Fire Company",
+            (("Engine 21", "engine", True), ("Tanker 23", "tanker", False)),
+        ),
+        ("Lakeside Volunteer Rescue", (("Ambulance 58", "ambulance", True),)),
+    )
+
+    #: The ordinary member the guide-03 member-view shots sign in as, beside
+    #: the demo member: they file no shift reports and have one approved
+    #: exchange, so their Requests and Shift Reports tabs are the "nothing
+    #: pending" states the guide pictures. Mirrors
+    #: ``DEMO_SECOND_MEMBER_CREDENTIALS`` in manifest.mjs.
+    SECOND_MEMBER_USERNAME = "snolan"
+
+    #: The member who raises the pending exchange the officer's Requests tab
+    #: reviews. Not the demo member, whose own Requests tab several shots
+    #: photograph in a known state.
+    EXCHANGE_REQUESTER_USERNAME = "rduarte"
+
+    HISTORY_IMPORT_FILENAME = "station-log-august-2026.csv"
+
+    def seed_guide03_scheduling(self) -> None:
+        """State the scheduling guide pictures that nothing else seeds."""
+        self._seed_outside_apparatus()
+        self._seed_member_exchanges()
+        self._seed_history_import_draft()
+        self._seed_earlier_month_report()
+
+    def _user_ids_by_username(self) -> dict[str, str]:
+        return {
+            str(pick(u, "username")): str(pick(u, "id"))
+            for u in items(self.api.get("/users?limit=200"), "users")
+            if pick(u, "id")
+        }
+
+    def _seed_outside_apparatus(self) -> None:
+        """Two outside departments, and shifts members logged on their units.
+
+        The Outside Apparatus settings section, the member's "Shifts with
+        other departments" card and the Member Hours report's outside tables
+        all read these. One unit is turned off, which the settings shot shows,
+        and one of the demo member's entries is rejected, so the card carries a
+        **Not counted** row with its reason. Entries are logged before the unit
+        is turned off: a member cannot pick an inactive unit, and the history
+        a department keeps from before it retired one is the realistic case.
+        """
+        agencies = {
+            str(pick(a, "name")): a
+            for a in items(
+                self.api.get("/scheduling/external-hours/agencies"), "agencies"
+            )
+        }
+        units: dict[str, str] = {}
+        retire: list[str] = []
+        for agency_name, apparatus in self.OUTSIDE_AGENCIES:
+            agency = agencies.get(agency_name) or self.api.post(
+                "/scheduling/external-hours/agencies", {"name": agency_name}
+            )
+            have = {str(pick(u, "name")): u for u in (pick(agency, "apparatus") or [])}
+            for unit_name, unit_type, active in apparatus:
+                unit = have.get(unit_name) or self.api.post(
+                    f"/scheduling/external-hours/agencies/{pick(agency, 'id')}"
+                    "/apparatus",
+                    {"name": unit_name, "apparatus_type": unit_type},
+                )
+                units[unit_name] = str(pick(unit, "id"))
+                if not active and pick(unit, "is_active") is not False:
+                    retire.append(units[unit_name])
+
+        existing = items(self.api.get("/scheduling/external-hours?limit=100"), "items")
+        if not existing:
+            ids = self._user_ids_by_username()
+            demo = Api(self.base_url)
+            demo.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
+
+            def log(
+                session: Api,
+                days_ago: int,
+                start_hour: int,
+                hours: int,
+                unit: str,
+                role: str,
+                notes: str = "",
+            ) -> dict:
+                day = TODAY - timedelta(days=days_ago)
+                start = datetime.combine(
+                    day, time(start_hour), tzinfo=ORG_TIMEZONE
+                ).astimezone(timezone.utc)
+                end = start + timedelta(hours=hours)
+                return session.post(
+                    "/scheduling/external-hours",
+                    {
+                        "start_at": start.isoformat().replace("+00:00", "Z"),
+                        "end_at": end.isoformat().replace("+00:00", "Z"),
+                        "external_apparatus_id": units[unit],
+                        "role": role,
+                        **({"notes": notes} if notes else {}),
+                    },
+                )
+
+            log(demo, 6, 7, 12, "Engine 21", "Firefighter")
+            log(demo, 13, 19, 12, "Ambulance 58", "EMT", "Covered their night car.")
+            rejected = log(demo, 20, 8, 10, "Tanker 23", "Driver")
+            other_name = "vbrennan"
+            if ids.get(other_name):
+                other = self.member_session(self.base_url, ids[other_name], other_name)
+                log(other, 9, 7, 24, "Engine 21", "Firefighter")
+                log(other, 24, 18, 12, "Tanker 23", "Firefighter")
+            self.api.post(
+                f"/scheduling/external-hours/{pick(rejected, 'id')}/reject",
+                {
+                    "reason": (
+                        "Township's roster has you on standby that day, not "
+                        "on the tanker. See Lt. Vance if that is wrong."
+                    )
+                },
+            )
+        for unit_id in retire:
+            self.api.patch(
+                f"/scheduling/external-hours/apparatus/{unit_id}",
+                {"is_active": False},
+            )
+
+    def _seed_member_exchanges(self) -> None:
+        """One approved exchange, and one pending exchange for the officer.
+
+        The approved one belongs to the second member, whose Requests tab then
+        shows the default Pending view empty with its "Showing pending requests
+        only" line. The pending one is what the officer's Requests tab reviews.
+        Both trade seats on shifts weeks out, so the near-term rosters other
+        shots photograph keep their crews.
+        """
+        ids = self._user_ids_by_username()
+        swaps = items(
+            self.api.get("/scheduling/swap-requests?limit=200"),
+            "requests",
+            "swap_requests",
+        )
+        avoid = {ids.get(DEMO_MEMBER_USERNAME), ids.get(DEMO_ADMIN_USERNAME)}
+
+        def raise_exchange(username: str, reason: str) -> dict | None:
+            user_id = ids.get(username)
+            if not user_id:
+                self.blocked.append(f"guide 03 exchanges: no member {username}")
+                return None
+            if any(
+                str(pick(s, "requesting_user_id", "requestingUserId")) == user_id
+                for s in swaps
+            ):
+                return None
+            session = self.member_session(self.base_url, user_id, username)
+            horizon = str(TODAY + timedelta(days=21))
+            mine = sorted(
+                (
+                    s
+                    for s in items(
+                        session.get("/scheduling/my-shifts?limit=50"), "shifts"
+                    )
+                    if str(pick(s, "shift_date", "shiftDate") or "") >= horizon
+                ),
+                key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""),
+            )
+            for shift in mine:
+                candidates = [
+                    c
+                    for c in session.get(
+                        f"/scheduling/shifts/{pick(shift, 'id')}/exchange-candidates"
+                    )
+                    or []
+                    if str(pick(c, "shift_date") or "") >= horizon
+                    and str(pick(c, "user_id")) not in avoid
+                ]
+                if candidates:
+                    pair = candidates[0]
+                    return session.post(
+                        "/scheduling/swap-requests",
+                        {
+                            "offering_shift_id": pick(shift, "id"),
+                            "requesting_shift_id": pick(pair, "shift_id"),
+                            "target_user_id": pick(pair, "user_id"),
+                            "reason": reason,
+                        },
+                    )
+            self.blocked.append(
+                f"guide 03 exchanges: {username} has no seat to exchange"
+            )
+            return None
+
+        approved = raise_exchange(
+            self.SECOND_MEMBER_USERNAME,
+            "Daughter's recital is that evening; this keeps both crews whole.",
+        )
+        if approved and pick(approved, "id"):
+            self.api.post(
+                f"/scheduling/swap-requests/{pick(approved, 'id')}/review",
+                {"status": "approved", "reviewer_notes": "Both seats covered."},
+            )
+        raise_exchange(
+            self.EXCHANGE_REQUESTER_USERNAME,
+            "Swapping so I can make the county EMS refresher that day.",
+        )
+
+    EARLIER_REPORT_NOTE = "Guide 03: last month's engine shift"
+
+    def _seed_earlier_month_report(self) -> None:
+        """One shift report about a shift in the previous calendar month.
+
+        "Reports written per month" draws only when the officer's reports span
+        more than one month, and every report ``seed_shift_reports`` files is
+        against the rolling roster, which mid-month lies wholly in the current
+        one. So the chart never rendered. The roster has no crewed shift last
+        month, so this creates one, records a member's attendance (a report can
+        only be about someone who was on the shift) and files the report.
+        Never about the demo member or the second member, whose report views
+        other shots photograph.
+        """
+        analytics = self.api.get("/training/shift-reports/officer-analytics") or {}
+        if len(pick(analytics, "monthly") or []) > 1:
+            return
+        ids = self._user_ids_by_username()
+        trainee_id = ids.get("mbell")
+        if not trainee_id:
+            self.blocked.append("guide 03: no member to report on last month")
+            return
+        day = TODAY.replace(day=1) - timedelta(days=10)
+        existing = [
+            sh
+            for sh in items(
+                self.api.get(f"/scheduling/shifts?start_date={day}&end_date={day}"),
+                "shifts",
+            )
+            if pick(sh, "notes") == self.EARLIER_REPORT_NOTE
+        ]
+        start = datetime.combine(day, time(7), tzinfo=ORG_TIMEZONE)
+        end = start + timedelta(hours=12)
+        if existing:
+            shift_id = str(pick(existing[0], "id"))
+        else:
+            shift = self.api.post(
+                "/scheduling/shifts",
+                {
+                    "shift_date": str(day),
+                    "start_time": iso(start.astimezone(timezone.utc)),
+                    "end_time": iso(end.astimezone(timezone.utc)),
+                    "notes": self.EARLIER_REPORT_NOTE,
+                },
+            )
+            shift_id = str(pick(shift, "id"))
+            self.api.post(
+                f"/scheduling/shifts/{shift_id}/attendance",
+                {
+                    "user_id": trainee_id,
+                    "checked_in_at": iso(start.astimezone(timezone.utc)),
+                    "checked_out_at": iso(end.astimezone(timezone.utc)),
+                },
+            )
+        self.api.post(
+            "/training/shift-reports",
+            {
+                "shift_id": shift_id,
+                "shift_date": str(day),
+                "trainee_id": trainee_id,
+                "hours_on_shift": 12.0,
+                "calls_responded": 2,
+                "performance_rating": 4,
+                "officer_narrative": (
+                    "Solid shift on the engine. Ran the pump on the alarm "
+                    "call and kept the crew informed."
+                ),
+            },
+        )
+
+    def _seed_history_import_draft(self) -> None:
+        """A draft shift-history import, never committed.
+
+        The import screens show what a department's old records look like
+        before they reach the schedule: exact and approximate name matches, a
+        member no longer on the roster, and a shift on another department's
+        unit. Committing would write past shifts into every hours figure other
+        guides photograph, so the draft stays a draft.
+        """
+        drafts = items(self.api.get("/scheduling/history-import"), "imports")
+        if any(
+            pick(d, "source_filename", "sourceFilename") == self.HISTORY_IMPORT_FILENAME
+            for d in drafts
+        ):
+            return
+        rows = [
+            (
+                "member_name",
+                "unit",
+                "agency",
+                "position",
+                "date",
+                "start_time",
+                "end_time",
+                "call_count",
+            ),
+            ("Marcus Bell", "E-1", "", "Driver", "2026-08-03", "07:00", "19:00", "3"),
+            (
+                "Priya Raman",
+                "E-1",
+                "",
+                "Firefighter",
+                "2026-08-03",
+                "07:00",
+                "19:00",
+                "3",
+            ),
+            ("Ruiz, Dana", "E-1", "", "Officer", "2026-08-03", "07:00", "19:00", "3"),
+            (
+                "Tobias Lindqvist",
+                "L-4",
+                "",
+                "Officer",
+                "2026-08-04",
+                "08:00",
+                "20:00",
+                "1",
+            ),
+            ("H. Vance", "L-4", "", "Firefighter", "2026-08-04", "08:00", "20:00", "1"),
+            (
+                "Nadia Belhaj",
+                "L-4",
+                "",
+                "Firefighter",
+                "2026-08-04",
+                "08:00",
+                "20:00",
+                "1",
+            ),
+            (
+                "Sofia Marchetti",
+                "E-2",
+                "",
+                "Driver",
+                "2026-08-05",
+                "19:00",
+                "07:00",
+                "2",
+            ),
+            (
+                "Owen Kitteridge",
+                "E-2",
+                "",
+                "Officer",
+                "2026-08-05",
+                "19:00",
+                "07:00",
+                "2",
+            ),
+            (
+                "Gary Whitmore",
+                "E-2",
+                "",
+                "Firefighter",
+                "2026-08-05",
+                "19:00",
+                "07:00",
+                "2",
+            ),
+            (
+                "Emeka Adeyemi",
+                "Engine 21",
+                "Township Fire Company",
+                "Firefighter",
+                "2026-08-09",
+                "07:00",
+                "19:00",
+                "4",
+            ),
+        ]
+        text = "".join(",".join(f'"{cell}"' for cell in row) + "\r\n" for row in rows)
+        self.api.post_multipart(
+            "/scheduling/history-import",
+            {"timezone": "America/New_York"},
+            [("file", self.HISTORY_IMPORT_FILENAME, text.encode(), "text/csv")],
+        )
 
     def seed_shift_reports(self, members: list[dict]) -> list[dict]:
         """Filed, draft, pending-review and flagged shift completion reports.
@@ -15914,6 +16695,185 @@ class Seeder:
     # carries 4 approved hours, so the bar sits at half.
     MEMBER_HOURS_REQUIREMENT = ("Fundraising", 8)
 
+    #: The demo member's two entries that guide 08's "My Hours" shots picture:
+    #: (category, description, rejection reason or None). One stays pending, so
+    #: it shows Edit and Withdraw; the other is returned with a reason, so it
+    #: shows the red "Rejected: …" line and Edit & resubmit.
+    GUIDE08_HOURS_CORRECTIONS = [
+        ("Station Maintenance", "Hose tower light replacement", None),
+        (
+            "Administrative Work",
+            "Pre-plan walk-through at Oakville Mall",
+            "Pre-plan walk-throughs are logged as training, not administrative"
+            " hours",
+        ),
+    ]
+
+    #: Documentation-range address (RFC 5737), so the IP Security shots can
+    #: never picture a real client address.
+    GUIDE08_IP_EXCEPTION = "203.0.113.24"
+
+    def seed_guide08_admin_states(self) -> dict[str, Any]:
+        """States guide 08 pictures that nothing else in the demo produces.
+
+        * The demo member's My Hours list with a pending manual entry and a
+          returned one, both inside the current month because the page opens
+          on This month. Raised by the member (an entry credits its caller)
+          and the second rejected by the administrator with a reason.
+        * One pending IP exception request, raised by an ordinary member from a
+          documentation-range address, for the Pending Requests tab.
+        """
+        result: dict[str, Any] = {}
+        users = items(self.api.get("/users?limit=200"), "users")
+        member = next(
+            (u for u in users if pick(u, "username") == DEMO_MEMBER_USERNAME), None
+        )
+        categories = {
+            str(pick(c, "name")): str(pick(c, "id"))
+            for c in items(self.api.get("/admin-hours/categories"), "categories")
+        }
+        if member and categories:
+            existing = {
+                str(pick(e, "description") or ""): e
+                for e in items(
+                    self.api.get("/admin-hours/entries?limit=300"), "entries"
+                )
+            }
+            session = self.member_session(
+                self.base_url, str(pick(member, "id")), DEMO_MEMBER_USERNAME
+            )
+            first_of_month = TODAY.replace(day=1)
+            for index, (name, description, reason) in enumerate(
+                self.GUIDE08_HOURS_CORRECTIONS
+            ):
+                entry = existing.get(description)
+                category_id = categories.get(name)
+                if entry is None and category_id:
+                    day = max(first_of_month, TODAY - timedelta(days=2 + index))
+                    start = datetime.combine(
+                        day, time(hour=13 + index), tzinfo=ORG_TIMEZONE
+                    )
+                    try:
+                        entry = session.post(
+                            "/admin-hours/entries",
+                            {
+                                "category_id": category_id,
+                                "clock_in_at": iso(start.astimezone(timezone.utc)),
+                                "clock_out_at": iso(
+                                    (start + timedelta(hours=2)).astimezone(
+                                        timezone.utc
+                                    )
+                                ),
+                                "description": description,
+                            },
+                        )
+                    except ApiError as exc:
+                        self.blocked.append(f"guide 08 hours: entry refused ({exc})")
+                        continue
+                if (
+                    entry is not None
+                    and reason
+                    and str(pick(entry, "status")) == "pending"
+                ):
+                    try:
+                        self.api.post(
+                            f"/admin-hours/entries/{pick(entry, 'id')}/review",
+                            {"action": "reject", "rejection_reason": reason},
+                        )
+                    except ApiError as exc:
+                        self.blocked.append(f"guide 08 hours: reject refused ({exc})")
+            result["hours"] = "ok"
+
+        requester = next(
+            (u for u in users if pick(u, "username") == DEMO_PEER_EXAMINER_USERNAME),
+            None,
+        )
+        if requester:
+            pending = items(
+                self.api.get("/ip-security/exceptions/pending"), "exceptions"
+            )
+            if not any(
+                pick(x, "ipAddress", "ip_address") == self.GUIDE08_IP_EXCEPTION
+                for x in pending
+            ):
+                session = self.member_session(
+                    self.base_url,
+                    str(pick(requester, "id")),
+                    DEMO_PEER_EXAMINER_USERNAME,
+                )
+                try:
+                    session.post(
+                        "/ip-security/exceptions",
+                        {
+                            "ip_address": self.GUIDE08_IP_EXCEPTION,
+                            "reason": "Signing in from the hotel during the state"
+                            " fire school conference.",
+                            "requested_duration_days": 5,
+                            "use_case": "travel",
+                        },
+                    )
+                except ApiError as exc:
+                    self.blocked.append(f"guide 08 IP exception: refused ({exc})")
+            result["ip_exception"] = "ok"
+
+        result["saved_reports"] = self._seed_guide08_saved_reports(users)
+        return result
+
+    #: (name, report type, period, frequency or None, day, recipient usernames).
+    #: None of the three is PII-gated, so any active member may receive them.
+    GUIDE08_SAVED_REPORTS = [
+        (
+            "Monthly call volume",
+            "call_volume",
+            "previous_month",
+            "monthly",
+            1,
+            [DEMO_ADMIN_USERNAME],
+        ),
+        (
+            "Quarterly apparatus status",
+            "apparatus_status",
+            "previous_quarter",
+            "quarterly",
+            5,
+            [DEMO_ADMIN_USERNAME, TWO_FACTOR_USERNAME],
+        ),
+        ("Year-to-date training", "training_summary", "year_to_date", None, 1, []),
+    ]
+
+    def _seed_guide08_saved_reports(self, users: list[dict]) -> str:
+        """Saved reports for the Saved Reports list and its schedule form."""
+        existing = {str(pick(r, "name")) for r in items(self.api.get("/reports/saved"))}
+        # The member list withholds email addresses, so they are rebuilt the
+        # way seed_members and bootstrap_demo wrote them.
+        emails = {
+            str(pick(u, "username")): f"{pick(u, 'username')}@oakvillefd.example.org"
+            for u in users
+        }
+        emails[DEMO_ADMIN_USERNAME] = DEMO_ADMIN_EMAIL
+        for name, report_type, period, frequency, day, to in self.GUIDE08_SAVED_REPORTS:
+            if name in existing:
+                continue
+            payload: dict[str, Any] = {
+                "name": name,
+                "report_type": report_type,
+                "filters": {"period": period},
+                "is_scheduled": frequency is not None,
+            }
+            if frequency:
+                payload.update(
+                    {
+                        "schedule_frequency": frequency,
+                        "schedule_day": day,
+                        "email_recipients": [emails[u] for u in to if emails.get(u)],
+                    }
+                )
+            try:
+                self.api.post("/reports/saved", payload)
+            except ApiError as exc:
+                self.blocked.append(f"guide 08 saved report {name!r}: {exc}")
+        return "ok"
+
     def seed_member_admin_hours(self) -> dict[str, Any]:
         """Give the demo member a spread of approved hours and a requirement.
 
@@ -16260,6 +17220,33 @@ class Seeder:
             )
         return {"issued": issued, "member_id": member_id}
 
+    ICAL_INTEGRATION_TYPE = "ical"
+
+    def seed_ical_feed(self) -> dict[str, Any]:
+        """Connect the iCalendar card so it shows the department events feed.
+
+        Guide 16 pictures the feed link, its copy button and Reset link on the
+        card, and the panel renders only on a connected iCalendar integration.
+        Connecting is what mints the feed token; a re-seed leaves a connected
+        card alone so the link does not change between runs.
+        """
+        integration = next(
+            (
+                i
+                for i in items(self.api.get("/integrations"), "integrations")
+                if pick(i, "integration_type") == self.ICAL_INTEGRATION_TYPE
+            ),
+            None,
+        )
+        if not integration:
+            return {"blocked": "no ical integration row"}
+        if pick(integration, "status") == "connected" and pick(integration, "enabled"):
+            return {"connected": "already"}
+        self.api.post(
+            f"/integrations/{pick(integration, 'id')}/connect", {"config": {}}
+        )
+        return {"connected": "now"}
+
     def seed_label_printers(self) -> int:
         """Two registered printers, one per command language, one default.
 
@@ -16474,6 +17461,7 @@ class Seeder:
         # Daily Check first — it selects by name now, but ordering that does not
         # depend on that fix is one less thing to get wrong later.
         self.step("supply tracking", lambda: self.seed_supply_tracking(apparatus))
+        self.step("medical supplies", lambda: self.seed_medical_supplies(apparatus))
         self.step("shift reports", lambda: self.seed_shift_reports(members))
         # After the reports: the pair-picker above skips recruits, so crewing
         # one onto the ladder now leaves their Evaluate control live.
@@ -16490,11 +17478,15 @@ class Seeder:
             "close-out wizard fixture",
             lambda: self.seed_call_tracking_closeout(members),
         )
+        self.step("guide 03 scheduling states", self.seed_guide03_scheduling)
         self.step("label printers", self.seed_label_printers)
         self.step("id cards", self.seed_id_cards)
+        self.step("ical feed", self.seed_ical_feed)
+        self.step("unused approval chain", self.seed_unused_approval_chain)
         self.step("unsized shift", self.seed_unsized_shift)
         self.step("sealed compartments", self.seed_sealed_compartments)
         self.step("member admin hours", self.seed_member_admin_hours)
+        self.step("guide 08 admin states", self.seed_guide08_admin_states)
         self.step("profile visibility mix", self.seed_profile_visibility_mix)
         self.step("retired call type", self.seed_retired_call_type)
         self.step("long department message", self.seed_long_department_message)

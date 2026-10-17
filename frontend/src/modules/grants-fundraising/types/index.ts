@@ -109,6 +109,18 @@ export const ComplianceTaskType = {
 } as const;
 export type ComplianceTaskType = (typeof ComplianceTaskType)[keyof typeof ComplianceTaskType];
 
+/** Mirrors `GrantNoteTypeLiteral` on the backend, which refuses anything else. */
+export const GrantNoteType = {
+  GENERAL: 'general',
+  STATUS_CHANGE: 'status_change',
+  DOCUMENT_ADDED: 'document_added',
+  CONTACT_MADE: 'contact_made',
+  MILESTONE: 'milestone',
+  FINANCIAL: 'financial',
+  COMPLIANCE: 'compliance',
+} as const;
+export type GrantNoteType = (typeof GrantNoteType)[keyof typeof GrantNoteType];
+
 export const CampaignStatus = {
   DRAFT: 'draft',
   ACTIVE: 'active',
@@ -117,6 +129,53 @@ export const CampaignStatus = {
   CANCELLED: 'cancelled',
 } as const;
 export type CampaignStatus = (typeof CampaignStatus)[keyof typeof CampaignStatus];
+
+/** A grant budget line's category — the backend's `BudgetItemCategory`. */
+export const BudgetItemCategory = {
+  PERSONNEL: 'personnel',
+  EQUIPMENT: 'equipment',
+  SUPPLIES: 'supplies',
+  TRAVEL: 'travel',
+  TRAINING: 'training',
+  CONTRACTUAL: 'contractual',
+  CONSTRUCTION: 'construction',
+  INDIRECT: 'indirect',
+  OTHER: 'other',
+} as const;
+export type BudgetItemCategory = (typeof BudgetItemCategory)[keyof typeof BudgetItemCategory];
+
+export const BUDGET_ITEM_CATEGORY_LABELS: Record<BudgetItemCategory, string> = {
+  personnel: 'Personnel',
+  equipment: 'Equipment',
+  supplies: 'Supplies',
+  travel: 'Travel',
+  training: 'Training',
+  contractual: 'Contractual',
+  construction: 'Construction',
+  indirect: 'Indirect Costs',
+  other: 'Other',
+};
+
+/** An application's budget at a glance: an amount per budget category. */
+export interface GrantBudgetSummary {
+  personnel?: number | undefined;
+  equipment?: number | undefined;
+  supplies?: number | undefined;
+  travel?: number | undefined;
+  training?: number | undefined;
+  contractual?: number | undefined;
+  construction?: number | undefined;
+  indirect?: number | undefined;
+  other?: number | undefined;
+  notes?: string | null | undefined;
+}
+
+export interface GrantKeyContact {
+  name: string;
+  role?: string | null | undefined;
+  phone?: string | null | undefined;
+  email?: string | null | undefined;
+}
 
 export const CampaignType = {
   GENERAL: 'general',
@@ -295,8 +354,8 @@ export interface GrantApplication {
   grantEndDate: string | null;
   projectDescription: string | null;
   narrativeSummary: string | null;
-  budgetSummary: string | null;
-  keyContacts: string | null;
+  budgetSummary: GrantBudgetSummary | null;
+  keyContacts: GrantKeyContact[] | null;
   federalAwardId: string | null;
   nfirsCompliant: boolean | null;
   performancePeriodMonths: number | null;
@@ -401,7 +460,7 @@ export interface GrantComplianceTask {
 export interface GrantNote {
   id: string;
   applicationId: string;
-  noteType: string;
+  noteType: GrantNoteType;
   content: string;
   metadata: Record<string, unknown> | null;
   createdBy: string | null;

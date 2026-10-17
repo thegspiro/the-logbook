@@ -243,7 +243,6 @@ class TestExpenditureEndpointWarns:
         out = await endpoint.create_expenditure(
             app_id=uuid.uuid4(),
             data=GrantExpenditureCreate(
-                application_id=uuid.uuid4(),
                 description="Hose",
                 amount=Decimal("1200"),
                 expenditure_date=date.today(),

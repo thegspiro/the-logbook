@@ -19,13 +19,15 @@ import { renderWithRouter, mockNavigate } from '../test/utils';
 
 const getElection = vi.fn();
 const rollbackElection = vi.fn();
-const sendBallotEmail = vi.fn();
+const startBallotSendJob = vi.fn();
+const waitForBallotSendJob = vi.fn();
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../services/api', () => ({
   electionService: {
     getElection: (...a: unknown[]) => getElection(...a) as unknown,
     rollbackElection: (...a: unknown[]) => rollbackElection(...a) as unknown,
-    sendBallotEmail: (...a: unknown[]) => sendBallotEmail(...a) as unknown,
+    startBallotSendJob: (...a: unknown[]) => startBallotSendJob(...a) as unknown,
+    waitForBallotSendJob: (...a: unknown[]) => waitForBallotSendJob(...a) as unknown,
     getSettings: vi.fn().mockResolvedValue({}),
     getCandidates: vi.fn().mockResolvedValue([]),
   },
@@ -127,7 +129,9 @@ describe('ElectionDetailPage rollback resend banner (W50-36)', () => {
   beforeEach(() => {
     getElection.mockReset();
     rollbackElection.mockReset();
-    sendBallotEmail.mockReset();
+    startBallotSendJob.mockReset();
+    startBallotSendJob.mockResolvedValue({ id: 'job-1', status: 'queued' });
+    waitForBallotSendJob.mockReset();
     mockNavigate.mockReset();
     window.history.replaceState({}, '', '/elections/e-1');
   });
@@ -168,7 +172,7 @@ describe('ElectionDetailPage rollback resend banner (W50-36)', () => {
       message: 'ok',
       notifications_sent: 0,
     });
-    sendBallotEmail.mockResolvedValue({
+    waitForBallotSendJob.mockResolvedValue({
       success: true,
       recipients_count: 21,
       failed_count: 0,
@@ -187,7 +191,7 @@ describe('ElectionDetailPage rollback resend banner (W50-36)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Send Ballot Emails' });
     await user.click(within(dialog).getByRole('button', { name: 'Send now' }));
 
-    await waitFor(() => expect(sendBallotEmail).toHaveBeenCalled());
+    await waitFor(() => expect(waitForBallotSendJob).toHaveBeenCalledWith('e-1', 'job-1', expect.any(Function)));
     await waitFor(() => expect(screen.queryByText(BANNER)).not.toBeInTheDocument());
   });
 
@@ -199,7 +203,7 @@ describe('ElectionDetailPage rollback resend banner (W50-36)', () => {
       message: 'ok',
       notifications_sent: 0,
     });
-    sendBallotEmail.mockResolvedValue({
+    waitForBallotSendJob.mockResolvedValue({
       success: false,
       recipients_count: 0,
       failed_count: 0,
@@ -221,7 +225,7 @@ describe('ElectionDetailPage rollback resend banner (W50-36)', () => {
       })
     );
 
-    await waitFor(() => expect(sendBallotEmail).toHaveBeenCalled());
+    await waitFor(() => expect(waitForBallotSendJob).toHaveBeenCalledWith('e-1', 'job-1', expect.any(Function)));
     expect(screen.getByText(BANNER)).toBeInTheDocument();
   });
 

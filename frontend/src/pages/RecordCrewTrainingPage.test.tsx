@@ -155,4 +155,20 @@ describe('RecordCrewTrainingPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Hours exceed maximum of 2 per submission');
   });
+
+  it('refuses to send without a date, in plain words', async () => {
+    // A cleared date reached the API as completion_date "" and came back as a
+    // Pydantic 422 the officer could not act on.
+    const user = userEvent.setup();
+    renderWithRouter(<RecordCrewTrainingPage />);
+
+    await user.type(await screen.findByLabelText(/Topic/), 'Ladder Throws');
+    const date = screen.getByLabelText(/^Date/);
+    expect(date).toBeRequired();
+    await user.clear(date);
+    await user.click(screen.getByRole('button', { name: 'Send for review' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter the date the training took place.');
+    expect(recordCrewTraining).not.toHaveBeenCalled();
+  });
 });

@@ -15,6 +15,7 @@ export interface ShiftCreate {
   shift_date: string; // ISO date
   start_time: string; // ISO datetime
   end_time?: string | undefined;
+  template_id?: string | undefined;
   apparatus_id?: string | undefined;
   station_id?: string | undefined;
   shift_officer_id?: string | undefined;
@@ -71,7 +72,8 @@ export interface AssignmentCreate {
 export interface AssignmentUpdate {
   position?: string;
   assignment_status?: AssignmentStatus;
-  notes?: string | undefined;
+  /** `null` clears the note; an omitted key leaves it alone (update reads exclude_unset). */
+  notes?: string | null | undefined;
   is_training?: boolean;
   training_program_id?: string | undefined;
   training_evaluator_id?: string | undefined;
@@ -642,4 +644,16 @@ export interface ShiftCallCreate {
   notes?: string | undefined;
 }
 
-export type ShiftCallUpdate = Partial<ShiftCallCreate>;
+/**
+ * The update endpoint reads exclude_unset, so an omitted key keeps the stored
+ * value and `null` is how a cleared optional field reaches the database.
+ */
+export interface ShiftCallUpdate extends Partial<
+  Omit<ShiftCallCreate, 'incident_number' | 'dispatched_at' | 'on_scene_at' | 'cleared_at' | 'notes'>
+> {
+  incident_number?: string | null | undefined;
+  dispatched_at?: string | null | undefined;
+  on_scene_at?: string | null | undefined;
+  cleared_at?: string | null | undefined;
+  notes?: string | null | undefined;
+}
