@@ -12,27 +12,20 @@ Kept separate from the service so the layout logic lives in one place and
 can be unit-tested without a database (same convention as
 ``pre_meeting_package_pdf``).
 
-The page is grayscale throughout: ballots are run off on whatever office
-printer or copier the department has, often in black and white, and a
-colour tint that looks fine on screen can turn into a muddy block or
-vanish entirely on a copy.
+The page shares its letterhead, palette and heading band with the certified
+results (``election_pdf_style``), so the two documents read as one set.
 """
 
-import html
 from io import BytesIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from PIL import Image
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     Flowable,
     HRFlowable,
-)
-from reportlab.platypus import Image as PdfImage
-from reportlab.platypus import (
     KeepTogether,
     Paragraph,
     SimpleDocTemplate,
@@ -41,19 +34,20 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from app.utils.app_icons import decode_logo
+from app.utils.election_pdf_style import (
+    CONTENT_WIDTH,
+    GRID,
+    INK,
+    SIDE_MARGIN,
+    VERTICAL_MARGIN,
+    base_styles,
+    esc,
+    heading_band,
+    letterhead,
+    panel,
+)
 
-_INK = colors.HexColor("#111827")
-_GRID = colors.HexColor("#9ca3af")
-_MUTED = colors.HexColor("#4b5563")
-# Light enough to stay a pale band on a copier, dark enough to survive one.
-_BAND = colors.HexColor("#e5e7eb")
-_PANEL = colors.HexColor("#f3f4f6")
-
-# Page width less the side margins and the frame's own 6pt padding each side.
-_CONTENT_WIDTH = letter[0] - 1.4 * inch - 12
 _MARK_COL = 0.6 * inch
-_LOGO_BOX = 0.9 * inch
 
 # One instruction line per voting method; {n} = max votes per position.
 _INSTRUCTIONS = {
@@ -84,41 +78,12 @@ class _MarkBox(Flowable):
         return self.box_width, self.box_height
 
     def draw(self) -> None:
-        self.canv.setStrokeColor(_INK)
+        self.canv.setStrokeColor(INK)
         self.canv.setFillColor(colors.white)
         self.canv.setLineWidth(1.2)
         self.canv.roundRect(
             0, 0, self.box_width, self.box_height, radius=2, stroke=1, fill=1
         )
-
-
-def _esc(value: Any) -> str:
-    return html.escape(str(value)) if value is not None else ""
-
-
-def _logo_flowable(stored: Optional[str]) -> Optional[PdfImage]:
-    """The department logo sized for the ballot header, or ``None``.
-
-    ``decode_logo`` reads only ``data:`` URIs (never fetches a URL) and
-    returns ``None`` for anything it cannot render, so a missing or broken
-    logo leaves a text-only header rather than failing the print.
-    """
-    logo = decode_logo(stored)
-    if logo is None:
-        return None
-    # Transparent pixels are composited onto white: left transparent they
-    # print black on some PDF viewers and drivers.
-    flat = Image.new("RGB", logo.size, (255, 255, 255))
-    flat.paste(logo, mask=logo.split()[-1])
-    scale = _LOGO_BOX / max(flat.width, flat.height)
-    png = BytesIO()
-    flat.save(png, format="PNG")
-    png.seek(0)
-    return PdfImage(
-        png,
-        width=flat.width * scale,
-        height=flat.height * scale,
-    )
 
 
 def _contest(
@@ -132,35 +97,19 @@ def _contest(
     Kept together so a contest never starts at the bottom of one page and
     finishes on the next, where a voter can miss the remaining choices.
     """
-    head_cells: List[List[Any]] = [[Paragraph(heading, styles["contest"])]]
-    head_cells.extend([[Paragraph(note, styles["note"])] for note in notes])
-    head = Table(
-        head_cells,
-        colWidths=[_CONTENT_WIDTH],
-        style=TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), _BAND),
-                ("LINEABOVE", (0, 0), (-1, 0), 1.5, _INK),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, 0), 6),
-                ("TOPPADDING", (0, 1), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-                ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
-            ]
-        ),
-    )
+    head = heading_band(heading, notes, styles)
     parts: List[Any] = [head]
     if rows:
         parts.append(
             Table(
                 rows,
-                colWidths=[_MARK_COL, _CONTENT_WIDTH - _MARK_COL],
+                colWidths=[_MARK_COL, CONTENT_WIDTH - _MARK_COL],
                 style=TableStyle(
                     [
                         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                         ("ALIGN", (0, 0), (0, -1), "CENTER"),
-                        ("LINEBELOW", (0, 0), (-1, -2), 0.5, _GRID),
-                        ("LINEBELOW", (0, -1), (-1, -1), 1, _INK),
+                        ("LINEBELOW", (0, 0), (-1, -2), 0.5, GRID),
+                        ("LINEBELOW", (0, -1), (-1, -1), 1, INK),
                         ("TOPPADDING", (0, 0), (-1, -1), 8),
                         ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
                     ]
@@ -190,132 +139,42 @@ def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> B
     doc = SimpleDocTemplate(
         buf,
         pagesize=letter,
-        topMargin=0.6 * inch,
-        bottomMargin=0.6 * inch,
-        leftMargin=0.7 * inch,
-        rightMargin=0.7 * inch,
+        topMargin=VERTICAL_MARGIN,
+        bottomMargin=VERTICAL_MARGIN,
+        leftMargin=SIDE_MARGIN,
+        rightMargin=SIDE_MARGIN,
         title="Official Ballot",
     )
 
-    base = getSampleStyleSheet()
-    styles = {
-        "org": ParagraphStyle(
-            "BallotOrg",
-            parent=base["Title"],
-            fontSize=17,
-            leading=21,
-            alignment=0,
-            spaceAfter=0,
-            textColor=_INK,
-        ),
-        "kicker": ParagraphStyle(
-            "BallotKicker",
-            parent=base["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=11,
-            leading=14,
-            textColor=_INK,
-        ),
-        "election": ParagraphStyle(
-            "BallotElection",
-            parent=base["Normal"],
-            fontSize=12,
-            leading=15,
-            textColor=_MUTED,
-        ),
-        "contest": ParagraphStyle(
-            "BallotContest",
-            parent=base["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=13,
-            leading=16,
-            textColor=_INK,
-        ),
-        "note": ParagraphStyle(
-            "BallotNote",
-            parent=base["Normal"],
-            fontName="Helvetica-Oblique",
-            fontSize=9,
-            leading=12,
-            textColor=_INK,
-        ),
-        "choice": ParagraphStyle(
-            "BallotChoice",
-            parent=base["Normal"],
-            fontSize=12,
-            leading=15,
-            textColor=_INK,
-        ),
-        "panel": ParagraphStyle(
-            "BallotPanel",
-            parent=base["Normal"],
-            fontSize=9.5,
-            leading=13,
-            textColor=_INK,
-        ),
-        "footer": ParagraphStyle(
-            "BallotFooter",
-            parent=base["Normal"],
-            fontSize=8,
-            leading=11,
-            textColor=_MUTED,
-            alignment=1,
-        ),
-    }
-
-    heading_text = [
-        Paragraph(_esc(meta.get("org_name")) or "Official Ballot", styles["org"]),
-        Spacer(1, 3),
-        Paragraph("OFFICIAL BALLOT", styles["kicker"]),
-        Paragraph(_esc(election.get("title")), styles["election"]),
-    ]
-    logo = _logo_flowable(meta.get("logo"))
-    if logo is not None:
-        header = Table(
-            [[logo, heading_text]],
-            colWidths=[_LOGO_BOX + 0.2 * inch, _CONTENT_WIDTH - _LOGO_BOX - 0.2 * inch],
-            style=TableStyle(
-                [
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ]
-            ),
-        )
-    else:
-        header = Table(
-            [[heading_text]],
-            colWidths=[_CONTENT_WIDTH],
-            style=TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0)]),
-        )
+    styles = base_styles("Ballot")
+    styles["choice"] = ParagraphStyle(
+        "BallotChoice",
+        parent=styles["panel"],
+        fontSize=12,
+        leading=15,
+    )
 
     story: List[Any] = [
-        header,
+        letterhead(
+            meta.get("org_name"),
+            "OFFICIAL BALLOT",
+            [Paragraph(esc(election.get("title")), styles["election"])],
+            meta.get("logo"),
+            styles,
+            "Official Ballot",
+        ),
         Spacer(1, 8),
-        HRFlowable(width="100%", thickness=2, color=_INK),
+        HRFlowable(width="100%", thickness=2, color=INK),
         Spacer(1, 8),
-        Table(
+        panel(
             [
-                [
-                    Paragraph(
-                        "<b>Instructions:</b> Use a pen with dark ink. Follow "
-                        "the instruction under each heading. Do not sign or "
-                        "otherwise identify yourself on this ballot.",
-                        styles["panel"],
-                    )
-                ]
-            ],
-            colWidths=[_CONTENT_WIDTH],
-            style=TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, -1), _PANEL),
-                    ("BOX", (0, 0), (-1, -1), 0.75, _GRID),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 10),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-                    ("TOPPADDING", (0, 0), (-1, -1), 7),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-                ]
-            ),
+                Paragraph(
+                    "<b>Instructions:</b> Use a pen with dark ink. Follow "
+                    "the instruction under each heading. Do not sign or "
+                    "otherwise identify yourself on this ballot.",
+                    styles["panel"],
+                )
+            ]
         ),
         Spacer(1, 16),
     ]
@@ -332,7 +191,7 @@ def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> B
 
     for position in data.get("positions", []):
         rows: List[List[Any]] = [
-            [mark(), Paragraph(_esc(name), styles["choice"])]
+            [mark(), Paragraph(esc(name), styles["choice"])]
             for name in position.get("candidates", [])
         ]
         if election.get("allow_write_ins"):
@@ -346,7 +205,7 @@ def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> B
                         ),
                     ]
                 )
-        story.append(_contest(_esc(position.get("name")), [instruction], rows, styles))
+        story.append(_contest(esc(position.get("name")), [instruction], rows, styles))
 
     # Approval items are yes/no questions, so they take a fixed Approve /
     # Deny pair regardless of the election's voting method: a ranked or
@@ -354,7 +213,7 @@ def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> B
     for item in data.get("approval_items", []):
         notes = []
         if item.get("description"):
-            notes.append(_esc(item.get("description")))
+            notes.append(esc(item.get("description")))
         notes.append("Mark ONE box.")
         rows = [
             [
@@ -366,14 +225,14 @@ def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> B
                 Paragraph("Deny", styles["choice"]),
             ],
         ]
-        story.append(_contest(_esc(item.get("title")), notes, rows, styles))
+        story.append(_contest(esc(item.get("title")), notes, rows, styles))
 
     story.append(Spacer(1, 4))
-    story.append(HRFlowable(width="100%", thickness=0.75, color=_GRID))
+    story.append(HRFlowable(width="100%", thickness=0.75, color=GRID))
     story.append(Spacer(1, 4))
     story.append(
         Paragraph(
-            f"Generated {_esc(meta.get('generated_at'))} — fold and place "
+            f"Generated {esc(meta.get('generated_at'))} — fold and place "
             f"this ballot in the ballot box. Do not sign your name.",
             styles["footer"],
         )
