@@ -59,7 +59,33 @@ export interface MonitoredExport {
   bytes: number | null;
 }
 
+/** The weekly security report's switch, schedule and recipients (admin). */
+export interface WeeklySecurityReportSettings {
+  enabled: boolean;
+  /** 0 = Monday, matching Python's `weekday()`. */
+  weekday: number;
+  /** Hour of day on the department's clock, 0-23. */
+  hour: number;
+  last_sent_at: string | null;
+  timezone: string;
+  recipient_count: number;
+  /** True when nobody holds the IT Manager position and administrators receive it instead. */
+  recipients_are_fallback: boolean;
+}
+
 export const securityAlertsService = {
+  async getWeeklyReport(): Promise<WeeklySecurityReportSettings> {
+    const response = await api.get<WeeklySecurityReportSettings>('/security/weekly-report');
+    return response.data;
+  },
+
+  async setWeeklyReport(
+    settings: Pick<WeeklySecurityReportSettings, 'enabled' | 'weekday' | 'hour'>
+  ): Promise<WeeklySecurityReportSettings> {
+    const response = await api.put<WeeklySecurityReportSettings>('/security/weekly-report', settings);
+    return response.data;
+  },
+
   async getAlerts(params?: {
     limit?: number;
     threat_level?: string;

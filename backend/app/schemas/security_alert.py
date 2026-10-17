@@ -25,3 +25,13 @@ class SecurityAlertResolveRequest(BaseModel):
             return None
         value = value.strip()
         return value or None
+
+
+class WeeklyReportSettings(BaseModel):
+    """When the weekly security report is emailed, and whether it is."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    weekday: int = Field(ge=0, le=6, description="0 = Monday")
+    hour: int = Field(ge=0, le=23, description="Hour of day, department time")
