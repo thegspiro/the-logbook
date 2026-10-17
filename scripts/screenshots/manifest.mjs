@@ -3982,6 +3982,13 @@ export const SHOTS = [
             event.recurrencePattern,
           ),
       )(page);
+      // The detail page renders its actions after the event loads; asked
+      // straight after navigation, clickByName found no visible match and the
+      // fallback below clicked the wrong icon button.
+      await page
+        .getByRole("button", { name: /^More$|^Actions$/ })
+        .first()
+        .waitFor({ timeout: 20_000 });
       await clickByName(/^More$|^Actions$/)(page).catch(async () => {
         // The menu button has no label of its own — it is an icon — so fall
         // back to the control that sits beside End Event / Edit.
@@ -4846,6 +4853,12 @@ export const SHOTS = [
       await page
         .locator("#recurrence-pattern")
         .selectOption("monthly_weekday", { timeout: 10_000 });
+      // "2nd Tuesday", the guide's own example, and a series end date, which
+      // the caption names. Nothing is submitted.
+      await page.locator("#recurrence-ordinal").selectOption("2");
+      await page.locator("#recurrence-weekday").selectOption("1");
+      await page.locator("#recurrence-end-date").fill("2027-06-30");
+      await page.locator("#recurrence-end-date").evaluate((el) => el.blur());
       await page.waitForTimeout(600);
     },
     // Clipped to the form: the sidebar is position:fixed, so a full-page
@@ -6847,7 +6860,7 @@ export const SHOTS = [
     line: 423,
     anchor:
       "Screenshot of the minutes creation/editing page showing the meeting type selector, date,",
-    alt: "Meeting minutes page with the meeting type selector and attendee list",
+    alt: "The Meeting Minutes page: the Outlines button, the summary tiles, and each meeting card listing its minutes with their state, one Circulated for review and one Adopted",
     route: "/minutes",
   },
   {
@@ -6858,6 +6871,171 @@ export const SHOTS = [
       "Screenshot of the Action Items page showing a filterable list of tasks",
     alt: "Action Items page listing tasks with assignee, due date, and status",
     route: "/action-items",
+  },
+  {
+    // The seeded officer-meeting minutes are circulated, so the demo member
+    // can read them and suggest a change. The comment is typed, never sent.
+    id: "04-64-minutes-suggest-change",
+    doc: "04-events-meetings.md",
+    line: 1583,
+    anchor: "A member on circulated minutes with Suggest a change open under",
+    alt: "Circulated minutes as a member: Suggest a change open under the Roll Call section, with a comment typed in",
+    route: "/minutes",
+    auth: "member",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Officer Meeting — Budget Review",
+      )(page);
+      await page
+        .getByRole("button", {
+          name: "Suggest a change to Roll Call / Attendance",
+        })
+        .click({ timeout: 20_000 });
+      const form = page.getByRole("form", {
+        name: "Suggest a change to Roll Call / Attendance",
+      });
+      await form
+        .locator("textarea")
+        .first()
+        .fill(
+          "Viktor Brennan arrived after the treasurer's report, so he should be recorded as late.",
+        );
+      await page.waitForTimeout(500);
+    },
+    selector: "div.card:has(h3:has-text('Roll Call / Attendance'))",
+    expect: {
+      selector: "form[aria-label='Suggest a change to Roll Call / Attendance']",
+    },
+  },
+  {
+    // As the Secretary: the administrator circulated these minutes, and the
+    // one who circulates them cannot adopt them. Closed with Cancel.
+    id: "04-65-minutes-adopt-dialog",
+    doc: "04-events-meetings.md",
+    line: 1587,
+    anchor: "A second officer (not the one who circulated them) on circulated",
+    alt: "The Adopt these minutes dialog: When the body voted, the minutes of the meeting that adopted them, and the as-amended tick",
+    route: "/minutes",
+    auth: "secretary",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Officer Meeting — Budget Review",
+      )(page);
+      await page
+        .getByRole("button", { name: "Adopt Minutes" })
+        .click({ timeout: 20_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      // The dialog focuses its first field; a caret and a selected date
+      // segment read as a half-finished edit.
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(600);
+    },
+    selector: "[role='dialog']",
+    expect: "When the body voted",
+  },
+  {
+    id: "04-66-minutes-folded-panels",
+    doc: "04-events-meetings.md",
+    line: 1612,
+    anchor:
+      "Circulated minutes below the sections: the folded panels, each with",
+    alt: "Below the sections of circulated minutes, the folded panels with their counts: Motions (1), Closed sessions (1), Election results (0) and Action Items (0)",
+    route: "/minutes",
+    allowEmptyState:
+      '"No suggestions yet" is the suggestions panel at the top of the page, out of this frame.',
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Officer Meeting — Budget Review",
+      )(page);
+      const first = page.locator("section[aria-labelledby]").filter({
+        hasText: "Motions (",
+      });
+      await first.waitFor({ timeout: 20_000 });
+      await first.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    expect: { selector: "#closed-sessions-heading" },
+    fullPage: false,
+  },
+  {
+    id: "04-67-minutes-closed-session",
+    doc: "04-events-meetings.md",
+    line: 1616,
+    anchor: "The Closed sessions panel opened on minutes with one recorded",
+    alt: "The Closed sessions panel opened: the reason, start and end times, legal basis, who was in the room with the member who stepped out, and the summary",
+    route: "/minutes",
+    allowEmptyState:
+      '"No action was taken." is the closed session\'s recorded summary, not an empty list.',
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Officer Meeting — Budget Review",
+      )(page);
+      const panel = page.locator(
+        "section[aria-labelledby='closed-sessions-heading']",
+      );
+      await panel.getByRole("button").first().click({ timeout: 20_000 });
+      await panel
+        .getByText("No action was taken.")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "section[aria-labelledby='closed-sessions-heading']",
+    expect: "Department bylaws, Article VI, Section 3",
+  },
+  {
+    // The seeder adds a second, non-default business outline; every outline
+    // a department starts with is its type's default.
+    id: "04-68-minutes-outlines",
+    doc: "04-events-meetings.md",
+    line: 1633,
+    anchor: "Minutes > Outlines with a second business outline that is not the",
+    alt: "Minutes > Outlines: each meeting type's outlines, with Make default beside Edit and Duplicate on the business outline that is not the default",
+    route: "/minutes/outlines",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Make .* the default$/ })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    expect: {
+      selector: "button[aria-label^='Make '][aria-label$=' the default']",
+    },
+    fullPage: false,
+  },
+  {
+    // Opened on the short-form outline the seeder adds; closed unsaved.
+    id: "04-69-minutes-outline-editor",
+    doc: "04-events-meetings.md",
+    line: 1637,
+    anchor:
+      "An outline open in the outline editor: its sections with the Required",
+    alt: "The outline editor on a short business outline: its name, kind of meeting and default switch, then the order of business with Required ticked on Call to Order",
+    route: "/minutes/outlines",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit Business Meeting — Short Form" })
+        .click({ timeout: 20_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      // The dialog focuses its first field; a caret and a selected date
+      // segment read as a half-finished edit.
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(800);
+    },
+    selector: "[role='dialog']",
+    expect: "Required: needs text before the minutes can be circulated",
   },
   {
     // A department with no events is the state this pictures, and the demo
@@ -9753,6 +9931,8 @@ export const SHOTS = [
       "events",
       isInProgress,
     ),
+    // Full page, so the Instructions steps under the code are in frame.
+    fullPage: true,
   },
   {
     id: "04-06-check-in-monitoring",

@@ -1434,7 +1434,7 @@ approval** and **Approved**; see
 Who sees which minutes is decided for you: members see circulated and adopted minutes, never drafts or executive sessions.
 The **Pending Approval** tile counts minutes awaiting approval.
 
-![Meeting minutes page with the meeting type selector and attendee list](./images/04-14-meeting-minutes.png)
+![The Meeting Minutes page: the Outlines button, the summary tiles, and each meeting card listing its minutes with their state, one Circulated for review and one Adopted](./images/04-14-meeting-minutes.png)
 
 ### Creating Minutes
 
@@ -1580,6 +1580,10 @@ and adopt them at the next meeting. The screen now follows that order:
 - **Adopted minutes are locked.** **Reopen for Correction** works as described
   above; it clears the adoption details but keeps the earlier version.
 
+![Circulated minutes as a member: Suggest a change open under the Roll Call section, with a comment typed in](./images/04-64-minutes-suggest-change.png)
+
+![The Adopt these minutes dialog: When the body voted, the minutes of the meeting that adopted them, and the as-amended tick](./images/04-65-minutes-adopt-dialog.png)
+
 **Writing sections with formatting.** A section's text now has a small editor:
 bold, italic, underline, two heading levels, bulleted and numbered lists, block
 quotes and links. Nothing else (no tables, pictures or colours) is accepted, and
@@ -1601,6 +1605,10 @@ suggestions and the sections stay open.
 | **Attachments**      | Reports, handouts and the signed copy. Files are scanned and stored encrypted; members see them only once the minutes are adopted. The scanned **signed copy** can be added after adoption and cannot be removed |
 | **Approved versions**| One entry per adoption, with a SHA-256 fingerprint. It opens itself and says **Needs attention** if the record no longer matches the adopted version |
 
+![Below the sections of circulated minutes, the folded panels with their counts: Motions (1), Closed sessions (1), Election results (0) and Action Items (0)](./images/04-66-minutes-folded-panels.png)
+
+![The Closed sessions panel opened: the reason, start and end times, legal basis, who was in the room with the member who stepped out, and the summary](./images/04-67-minutes-closed-session.png)
+
 **Print the minutes** for the signature lines. The printed copy shows
 attendance by status, quorum, sections, motions, action items, filed election
 results and the attachment list, and — once adopted — the approver, version and
@@ -1614,12 +1622,12 @@ starting minutes asks which; **Apply outline** on a draft lays an outline over
 it, keeping every section that already has text. Deleting an outline does not
 change minutes already written from it.
 
+![Minutes > Outlines: each meeting type's outlines, with Make default beside Edit and Duplicate on the business outline that is not the default](./images/04-68-minutes-outlines.png)
+
+![The outline editor on a short business outline: its name, kind of meeting and default switch, then the order of business with Required ticked on Call to Order](./images/04-69-minutes-outline-editor.png)
+
 **Upgrading?** Minutes' rich-text editor needs the `nh3` package on the
 server; rebuild the backend image (see [`UPGRADING.md`](../UPGRADING.md)).
-
-<!-- Screenshots needed (queued in SCREENSHOT_CURRENCY.md): circulated minutes
-with Suggest a change open under a section; Adopt these minutes dialog; the
-Outlines page; the detail page with folded panels; the Closed sessions panel. -->
 
 ---
 

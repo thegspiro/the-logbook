@@ -2658,7 +2658,7 @@ class Seeder:
         """States guide 04 pictures that nothing else in the demo produces.
 
         * An event that ended a few hours ago with a pending attendance
-          request from one member, and no check-in for the demo member, so
+          request from one member and no check-in for the demo member, so
           the same event shows the organizer's request card and the member's
           "I was there" prompt. A request is one per member per event and
           cannot be re-dated, so once the event is older than a day it is
@@ -2688,9 +2688,183 @@ class Seeder:
         result["finalized"] = self._guide04_finalized_event(users, by_title)
         result["alternate"] = self._guide04_series_alternate(users, events)
         result["room pair"] = self._guide04_room_pair(by_title)
+        result["meeting minutes"] = self._guide04_meeting_minutes()
+        result["short outline"] = self._guide04_short_outline()
         return result
 
+    GUIDE04_SHORT_OUTLINE_NAME = "Business Meeting — Short Form"
+
+    def _guide04_short_outline(self) -> str:
+        """A second, non-default business outline, so Make default shows.
+
+        Every outline the department starts with is its type's default, and
+        the Outlines page offers Make default only on one that is not.
+        """
+        outlines = items(self.api.get("/minutes-records/templates"), "templates")
+        if any(pick(o, "name") == self.GUIDE04_SHORT_OUTLINE_NAME for o in outlines):
+            return "already there"
+        sections = [
+            ("call_to_order", "Call to Order", True, False),
+            ("roll_call", "Roll Call / Attendance", True, False),
+            ("approval_of_previous", "Approval of Previous Minutes", False, True),
+            ("chief_report", "Chief's Report", False, False),
+            ("new_business", "New Business", False, False),
+            ("adjournment", "Adjournment", True, True),
+        ]
+        self.api.post(
+            "/minutes-records/templates",
+            {
+                "name": self.GUIDE04_SHORT_OUTLINE_NAME,
+                "description": "For a business meeting with no committee reports.",
+                "meeting_type": "business",
+                "is_default": False,
+                "sections": [
+                    {
+                        "order": order,
+                        "key": key,
+                        "title": title,
+                        "required": required,
+                        "needs_motion": needs_motion,
+                    }
+                    for order, (key, title, required, needs_motion) in enumerate(
+                        sections
+                    )
+                ],
+            },
+        )
+        return "created"
+
+    # Meeting title -> whether its minutes are carried through to adoption.
+    # The other is left circulated for review, so the Minutes page shows a
+    # set in each state under the meeting it was written from.
+    GUIDE04_MINUTES_FOR_MEETINGS = {
+        "July Business Meeting": True,
+        "Officer Meeting — Budget Review": False,
+    }
+
+    # What the secretary wrote in the sections an outline marks required;
+    # submitting refuses minutes with a required section left empty.
+    GUIDE04_SECTION_TEXT = {
+        "call_to_order": "Called to order by the presiding officer.",
+        "roll_call": "Members present as recorded in the attendance list. Quorum met.",
+        "adjournment": "Moved and seconded to adjourn. Carried without objection.",
+    }
+
+    def _guide04_fill_required_sections(self, minutes: dict) -> dict:
+        if str(pick(minutes, "status") or "") != "draft":
+            return minutes
+        minutes_id = pick(minutes, "id")
+        detail = self.api.get(f"/minutes-records/{minutes_id}")
+        sections = list(pick(detail, "sections") or [])
+        changed = False
+        for section in sections:
+            if section.get("required") and not str(section.get("content") or ""):
+                section["content"] = self.GUIDE04_SECTION_TEXT.get(
+                    str(section.get("key")), "Recorded as presented."
+                )
+                changed = True
+        if not changed:
+            return detail
+        return self.api.put(f"/minutes-records/{minutes_id}", {"sections": sections})
+
+    def _guide04_circulate_with_closed_session(self, minutes: dict) -> dict:
+        """Circulate these minutes with one recorded closed session.
+
+        A closed session can be recorded only on a draft, so minutes an
+        earlier run circulated without one are recalled, given it, and
+        circulated again.
+        """
+        minutes_id = pick(minutes, "id")
+        sessions = items(
+            self.api.get(f"/minutes-records/{minutes_id}/closed-sessions"),
+            "closed_sessions",
+        )
+        status = str(pick(minutes, "status") or "")
+        if sessions and status == "submitted":
+            return minutes
+        if status == "submitted":
+            minutes = self.api.post(f"/minutes-records/{minutes_id}/recall")
+        if not sessions:
+            detail = self.api.get(f"/minutes-records/{minutes_id}")
+            meeting_start = datetime.fromisoformat(
+                str(pick(detail, "meeting_date")).replace("Z", "+00:00")
+            )
+            if meeting_start.tzinfo is None:
+                meeting_start = meeting_start.replace(tzinfo=timezone.utc)
+            motion = self.api.post(
+                f"/minutes-records/{minutes_id}/motions",
+                {
+                    "motion_text": (
+                        "Motion to enter closed session to discuss a personnel "
+                        "matter."
+                    ),
+                    "moved_by": "Rafael Duarte",
+                    "seconded_by": "Esme Caldwell",
+                    "status": "passed",
+                    "votes_for": 4,
+                    "votes_against": 0,
+                },
+            )
+            entered = meeting_start + timedelta(minutes=48)
+            self.api.post(
+                f"/minutes-records/{minutes_id}/closed-sessions",
+                {
+                    "reason": "Personnel matter: a member's return-to-duty plan",
+                    "legal_basis": "Department bylaws, Article VI, Section 3",
+                    "started_at": iso(entered),
+                    "ended_at": iso(entered + timedelta(minutes=22)),
+                    "motion_id": pick(motion, "id"),
+                    "participants": [
+                        {"name": "Dana Ruiz"},
+                        {"name": "Rafael Duarte"},
+                        {"name": "Esme Caldwell"},
+                        {
+                            "name": "Callum Frazier",
+                            "joined_at": iso(entered),
+                            "left_at": iso(entered + timedelta(minutes=10)),
+                        },
+                    ],
+                    "summary": "No action was taken.",
+                },
+            )
+        return self.api.post(f"/minutes-records/{minutes_id}/submit")
+
+    def _guide04_meeting_minutes(self) -> str:
+        meetings = {
+            str(pick(m, "title")): m
+            for m in items(self.api.get("/meetings?limit=100"), "meetings")
+        }
+        linked = {
+            str(pick(m, "meeting_id", "meetingId")): m
+            for m in items(self.api.get("/minutes-records?limit=100"), "minutes")
+            if pick(m, "meeting_id", "meetingId")
+        }
+        done = []
+        for title, adopt in self.GUIDE04_MINUTES_FOR_MEETINGS.items():
+            meeting = meetings.get(title)
+            if not meeting:
+                continue
+            meeting_id = str(pick(meeting, "id"))
+            minutes = linked.get(meeting_id) or self.api.post(
+                f"/minutes-records/from-meeting/{meeting_id}"
+            )
+            minutes = self._guide04_fill_required_sections(minutes)
+            if adopt:
+                minutes = self._finish_minutes(minutes)
+            else:
+                minutes = self._guide04_circulate_with_closed_session(minutes)
+            done.append(f"{title}: {pick(minutes, 'status')}")
+        return "; ".join(done) or "no seeded meetings"
+
     def _guide04_add_attendees(self, event_id: str, users: dict) -> None:
+        """Put a few members on the roster as going, without checking them in.
+
+        A manager's check-in is stamped with the moment it is made, and these
+        events are already over when the seeder reaches them. Checked in
+        here, every one of them would read as arriving hours (or days) after
+        the start and drag the analytics page's average check-in time with
+        it.
+        """
         for username in self.GUIDE04_ATTENDEES:
             user = users.get(username)
             if not user:
@@ -2698,7 +2872,7 @@ class Seeder:
             try:
                 self.api.post(
                     f"/events/{event_id}/add-attendee",
-                    {"user_id": pick(user, "id"), "checked_in": True},
+                    {"user_id": pick(user, "id"), "checked_in": False},
                 )
             except ApiError as exc:
                 # Already on the roster from an earlier run.
