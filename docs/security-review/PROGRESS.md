@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR** (branch `claude/security-review-security-audit-ip`):
+Feature 28 (Security, audit & IP), pass 7. PR #3375 (Feature 27,
+Integrations, pass 7) merged with no next-feature PR open; this pass
+picked it up. 0 fixed by this pass directly, 0 new findings. Diffed all
+nine files this doc covers plus the four frontend surfaces against pass
+6's own merge commit (`d87bc6ee`) rather than `git log --since`, which
+this repo's squash-merge history has made unreliable before. The one
+significant item in the real delta — **SEC2-28-10** (the audit chain's
+unlocked "last row" read, HIGH/flagged since pass 4) — turns out to have
+already been resolved by regular engineering work on 2026-10-12
+(`009b3400`, sealing the chain apart from the write under its own
+`audit_chain_head` lock) plus a same-day deadlock fix (`d59c4cfd`); both
+verified directly against current code, not taken on the doc's own
+pre-existing "RESOLVED" write-up. New audit-of-the-audit-trail logging
+(HIPAA §164.312(b), `audit_logs.py`) and four new `EXPORT_ENDPOINTS`
+entries (finance + medical-supplies exports) both reviewed clean. Route
+surface re-enumerated: 35/35 unchanged. **SEC2-28-6** (LOW, TOCTOU on the
+duplicate IP-exception check) and the dead-detector-code note both
+re-verified still open, unchanged. See
+`SEC2-28-security-audit-ip.md`'s **Pass 7** section. Row 28 → ✅ (pending
+this PR's merge); next is Feature 29 (Reports & analytics).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 7, PR #3375, merged), preserved for history</summary>
+
 **PR [#3375](https://github.com/thegspiro/the-logbook/pull/3375)** (branch
 `claude/security-review-integrations`):
 Feature 27 (Integrations), pass 7. PR #3374 (Feature 26, Forms, pass 7)
@@ -19721,8 +19746,8 @@ here.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | 🔄     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
