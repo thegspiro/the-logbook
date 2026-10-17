@@ -100,23 +100,23 @@ The page shows:
 These cards carry a **Coming Soon** badge and have no **Connect** button.
 Nothing can be set up for them yet.
 
-| Integration                   | Planned for                                                        |
-| ----------------------------- | ------------------------------------------------------------------ |
-| Active911                     | Dispatch alerts and mapping                                        |
-| CSV Import/Export             | Member import, training export                                     |
-| ESO Solutions                 | ePCR data exchange                                                 |
-| FirstWatch                    | Dispatch analytics                                                 |
-| Generic ePCR Import           | CSV or NEMSIS XML from any vendor                                  |
-| Google Calendar               | One-way event publishing (see [Google Calendar](#google-calendar)) |
-| Google Maps                   | Hydrant mapping and pre-plans                                      |
-| ImageTrend                    | ePCR sync and run reports                                          |
-| Microsoft Outlook             | One-way event publishing                                           |
-| NEMSIS Response Module Export | NEMSIS 3.5 for state EMS                                           |
-| NFIRS Export                  | NFIRS 5.0 for state fire marshal                                   |
-| NREMT Verification            | Certification status verification                                  |
-| PulsePoint                    | CPR alerts and AED locations                                       |
-| WhatsApp Business             | Notifications and group messages                                   |
-| Zapier                        | Connect to 5,000+ apps                                             |
+| Integration                   | Planned for                                                            |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| Active911                     | Dispatch alerts and mapping                                            |
+| CSV Import/Export             | Member import, training export                                         |
+| ESO Solutions                 | ePCR data exchange                                                     |
+| FirstWatch                    | Dispatch analytics                                                     |
+| Generic ePCR Import           | CSV or NEMSIS XML from any vendor                                      |
+| Google Calendar               | One-way event publishing (see [Google Calendar](#google-calendar))     |
+| Google Maps                   | Hydrant mapping and pre-plans                                          |
+| ImageTrend                    | ePCR sync and run reports                                              |
+| Microsoft Outlook             | One-way event publishing (see [Microsoft Outlook](#microsoft-outlook)) |
+| NEMSIS Response Module Export | NEMSIS 3.5 for state EMS                                               |
+| NFIRS Export                  | NFIRS 5.0 for state fire marshal                                       |
+| NREMT Verification            | Certification status verification                                      |
+| PulsePoint                    | CPR alerts and AED locations                                           |
+| WhatsApp Business             | Notifications and group messages                                       |
+| Zapier                        | Connect to 5,000+ apps                                                 |
 
 Several modules already have their own CSV exports on their own pages, such as
 members, admin hours, finance and compliance reports.
@@ -600,11 +600,48 @@ calendar, which members must subscribe to again.
 
 ### Microsoft Outlook
 
-Microsoft Outlook cannot be connected yet. It reads **Coming Soon** while
-`CALENDAR_SYNC_ENABLED` is off, and with it on there is still no sign-in
-screen for it. It is planned as one-way publishing to a calendar The Logbook
-creates in the department's Microsoft 365 account. Until then, use the
-[department events feed](#icalendar-ics-feed).
+Outlook works the same way as Google Calendar. The Logbook creates one
+calendar for the department, named after it, in a Microsoft 365 (work or
+school) account an administrator signs in with, and publishes the
+department's events to it, **one way**. Share that calendar with members from
+Outlook so they can add it. Nothing is read back from Outlook, and no contacts
+or emails are exchanged.
+
+**Before you start (server operator).** The card reads **Coming Soon** until
+the server's `CALENDAR_SYNC_ENABLED` setting is turned on; it is off by
+default. The sign-in uses the server's Microsoft (Azure AD) app — the same
+`AZURE_AD_CLIENT_ID` and `AZURE_AD_CLIENT_SECRET` as "Sign in with
+Microsoft", though that sign-in does not have to be turned on. The app needs
+the delegated Microsoft Graph permission **Calendars.ReadWrite** and the
+callback address
+`https://<your site>/api/v1/integrations/outlook/oauth/callback` added as a
+**Web** redirect URI (or set `MICROSOFT_CALENDAR_REDIRECT_URI` to the exact
+address). The sign-in goes to the server's `AZURE_AD_TENANT_ID` tenant, or to
+any work or school account when that is not set; personal Outlook.com
+accounts are not offered. A department can use its own app instead by saving
+its client ID, client secret and tenant ID on the integration.
+
+**Connecting** (needs the integrations management permission):
+
+1. On the Microsoft Outlook card, select **Connect with Microsoft**.
+2. Choose the Microsoft 365 account that should own the department calendar
+   (it needs an Exchange Online mailbox), and accept the permissions.
+3. You come back to the Integrations page. The card shows the account, the
+   new calendar's name and **Last published**.
+
+The sign-in must be finished within ten minutes, in the same browser, by the
+person who started it. **What is published**, **Sync event descriptions** and
+**Reconnect required** work exactly as for
+[Google Calendar](#google-calendar); select **Reconnect with Microsoft** to
+sign in again.
+
+**Disconnecting** stops publishing and removes the sign-in from The Logbook.
+Microsoft has no way for an app to hand back a single sign-in, so the access
+ends when it expires; to end it at once, remove The Logbook under **My Apps**
+in the Microsoft account (or in Entra ID). The calendar stays in the account
+with the events already on it; delete it in Outlook if the department no
+longer wants it. Connecting again creates a new calendar, which must be shared
+with members again.
 
 ### iCalendar (ICS) Feed
 

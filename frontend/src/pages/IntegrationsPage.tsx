@@ -3,7 +3,12 @@ import { DialogPanel } from '../components/ux/DialogPanel';
 import { McpServiceKeyPanel } from '../components/integrations/McpServiceKeyPanel';
 import { McpOAuthPanel } from '../components/integrations/McpOAuthPanel';
 import { IcalFeedPanel } from '../components/integrations/IcalFeedPanel';
-import { GoogleCalendarPanel } from '../components/integrations/GoogleCalendarPanel';
+import { CalendarPublishPanel } from '../components/integrations/CalendarPublishPanel';
+import {
+  CALENDAR_PROVIDERS,
+  calendarConnectError,
+  calendarProviderFor,
+} from '../components/integrations/calendarProviders';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import {
   Plug,
@@ -319,25 +324,8 @@ const CONFIG_TYPES = new Set([
 ]);
 
 // Connected by a provider sign-in rather than a form: the card body
-// (GoogleCalendarPanel) carries its own Connect and Disconnect buttons.
-const GOOGLE_CALENDAR_TYPE = 'google-calendar';
-const OAUTH_PANEL_TYPES = new Set([GOOGLE_CALENDAR_TYPE]);
-
-// What each Google Calendar connect failure code means to the person who
-// just came back from Google's consent screen.
-const GOOGLE_CALENDAR_ERRORS: Record<string, string> = {
-  access_denied: 'Google sign-in was cancelled.',
-  invalid_state: 'The sign-in link was already used or came from another browser. Start again.',
-  expired_state: 'The sign-in took longer than ten minutes. Start again.',
-  integration_not_found: 'Google Calendar is not set up for this department.',
-  unavailable: 'Calendar publishing is turned off on this server.',
-  not_authorized: 'You no longer have permission to manage integrations.',
-  missing_client_credentials: 'No Google OAuth client is configured.',
-  token_exchange_failed: 'Google did not accept the sign-in. Check the OAuth client and try again.',
-  no_refresh_token: 'Google did not grant offline access. Try connecting again.',
-  calendar_scope_not_granted: 'The calendar permission was not granted on the consent screen.',
-  calendar_create_failed: 'Signed in, but the department calendar could not be created.',
-};
+// (CalendarPublishPanel) carries its own Connect and Disconnect buttons.
+const OAUTH_PANEL_TYPES = new Set(CALENDAR_PROVIDERS.map((p) => p.integrationType));
 
 // Its service-account key can create accounts anywhere in the department's
 // Google domain, so the backend requires admin.access on top of
@@ -548,21 +536,22 @@ const IntegrationsPage: React.FC = () => {
     }
   }, [location.search, navigate, loadIntegrations]);
 
-  // The same return leg for Google Calendar: ?google_calendar=connected or
-  // ?google_calendar_error=<code>. The list loads on mount, so it already
-  // shows the new connection.
+  // The same return leg for the calendar cards: ?google_calendar=connected,
+  // ?outlook_calendar_error=<code> and so on. The list loads on mount, so it
+  // already shows the new connection.
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const connected = params.get('google_calendar');
-    const gcalError = params.get('google_calendar_error');
-    if (connected === 'connected') {
-      toast.success('Google Calendar connected. Events will appear in the new calendar within a few minutes.');
+    for (const provider of CALENDAR_PROVIDERS) {
+      const errorCode = params.get(`${provider.queryKey}_error`);
+      if (params.get(provider.queryKey) === 'connected') {
+        toast.success(`${provider.name} connected. Events will appear in the new calendar within a few minutes.`);
+      } else if (errorCode) {
+        toast.error(`${provider.name} was not connected. ${calendarConnectError(provider, errorCode)}`);
+      } else {
+        continue;
+      }
       void navigate('/integrations', { replace: true });
-    } else if (gcalError) {
-      toast.error(
-        `Google Calendar was not connected. ${GOOGLE_CALENDAR_ERRORS[gcalError] ?? 'Something went wrong; try again.'}`
-      );
-      void navigate('/integrations', { replace: true });
+      return;
     }
   }, [location.search, navigate]);
 
@@ -1906,6 +1895,7 @@ const IntegrationsPage: React.FC = () => {
           {filteredIntegrations.map((integration) => {
             const ui = getUI(integration.integration_type);
             const activation = isActivation(integration.integration_type);
+            const calendarProvider = calendarProviderFor(integration.integration_type);
             return (
               <div
                 key={integration.id}
@@ -1950,19 +1940,18 @@ const IntegrationsPage: React.FC = () => {
                 {integration.integration_type === 'ical' &&
                   integration.status === ConnectionStatus.CONNECTED &&
                   canManage && <IcalFeedPanel integrationId={integration.id} />}
-                {integration.integration_type === GOOGLE_CALENDAR_TYPE &&
-                  integration.status !== 'coming_soon' &&
-                  canManage && (
-                    <GoogleCalendarPanel
-                      integration={integration}
-                      onUpdated={(updated) =>
-                        setIntegrations((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
-                      }
-                      onDisconnected={() => {
-                        void loadIntegrations();
-                      }}
-                    />
-                  )}
+                {calendarProvider && integration.status !== 'coming_soon' && canManage && (
+                  <CalendarPublishPanel
+                    provider={calendarProvider}
+                    integration={integration}
+                    onUpdated={(updated) =>
+                      setIntegrations((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+                    }
+                    onDisconnected={() => {
+                      void loadIntegrations();
+                    }}
+                  />
+                )}
                 <div className="flex flex-wrap justify-end gap-2">
                   {integration.status !== 'coming_soon' && canManage && (
                     <RouterLink
