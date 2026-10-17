@@ -16,7 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR** (branch TBD):
+**PR [#3379](https://github.com/thegspiro/the-logbook/pull/3379)** (branch
+`claude/security-review-reports-analytics`):
+Feature 29 (Reports & analytics), pass 9. PR #3376 (Feature 28,
+Security/audit & IP, pass 7) merged with no next-feature PR open; this pass
+picked it up. 0 fixed in this feature's own code, 0 new findings. Diffed all
+ten files this doc covers plus the four frontend surfaces against pass 8's
+own merge commit (`b40475bd`). The main item: **RPT2-29-2** (saved-report
+scheduling had no reader) is now resolved by regular engineering work —
+verified by reading `app/services/saved_report_schedule.py` in full against
+current code, not taken on the doc's own say-so. A second real change,
+Department pulse card customization, reviewed and found clean. Also fixed
+an unrelated forked Alembic chain that was blocking the completion gate (a
+merge revision, `fccdac60063f`). See
+`RPT6-29-reports-analytics.md`'s **Pass 9** section. Row 29 → ✅ (pending
+this PR's merge); next is Feature 30 (Onboarding).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security audit & IP, pass 7, PR #3376, merged), preserved for history</summary>
