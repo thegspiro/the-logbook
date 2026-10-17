@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { Link, useLocation } from 'react-router';
 import { Breadcrumbs } from '../ux/Breadcrumbs';
 import type { BreadcrumbItem } from '../ux/Breadcrumbs';
@@ -44,15 +44,27 @@ interface OperationsSectionNavProps {
  * bookmarked, refreshed into and reached with the back button.
  */
 const OperationsSectionNav: React.FC<OperationsSectionNavProps> = ({ items, active }) => {
+  const labelId = useId();
   // One section is no navigation: the strip would be a single selected link
   // to the page already open.
   if (items.length < 2) return null;
 
   return (
-    <nav aria-label="Operations sections" className="card mb-6 overflow-hidden">
+    <nav aria-labelledby={labelId} className="card mb-6 overflow-hidden">
+      {/* One name for the landmark and its scrolling row: the mobile sweep
+          requires a declared scroll region to carry a label of its own, and
+          pointing both at one heading names it without saying it twice. */}
+      <span id={labelId} className="sr-only">
+        Operations sections
+      </span>
       {/* The border sits on a wrapper so the edge fade does not erase it. */}
       <div className="border-theme-surface-border border-b">
-        <ScrollCueRow className="flex gap-1 px-2" revealKey={active?.path} data-mobile-scroll-region>
+        <ScrollCueRow
+          className="flex gap-1 px-2"
+          revealKey={active?.path}
+          aria-labelledby={labelId}
+          data-mobile-scroll-region
+        >
           {items.map((item) => {
             const Icon = item.icon;
             const isActive = item === active;
