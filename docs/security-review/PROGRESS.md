@@ -16,6 +16,11 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR** (branch TBD):
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security audit & IP, pass 7, PR #3376, merged), preserved for history</summary>
+
 **PR [#3376](https://github.com/thegspiro/the-logbook/pull/3376)** (branch
 `claude/security-review-security-audit-ip`):
 Feature 28 (Security, audit & IP), pass 7. PR #3375 (Feature 27,
@@ -36,8 +41,10 @@ entries (finance + medical-supplies exports) both reviewed clean. Route
 surface re-enumerated: 35/35 unchanged. **SEC2-28-6** (LOW, TOCTOU on the
 duplicate IP-exception check) and the dead-detector-code note both
 re-verified still open, unchanged. See
-`SEC2-28-security-audit-ip.md`'s **Pass 7** section. Row 28 → ✅ (pending
-this PR's merge); next is Feature 29 (Reports & analytics).
+`SEC2-28-security-audit-ip.md`'s **Pass 7** section. Row 28 → ✅; next is
+Feature 29 (Reports & analytics).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 7, PR #3375, merged), preserved for history</summary>
@@ -19748,8 +19755,8 @@ here.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | 🔄     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
@@ -33514,3 +33521,112 @@ Findings doc: [`INT-27-integrations.md`](./INT-27-integrations.md)'s
 correctly documents this sub-feature's owner-decided scope and needed no
 correction. Rotation row 27 → ✅ (pending this PR's merge). Next: Feature
 28 (Security audit & IP).
+
+### 2026-10-17 — Feature 28 (Security, audit & IP, pass 7) — 0 fixed, 0 new findings; HIGH finding SEC2-28-10 confirmed resolved by other work
+
+PR #3375 (Feature 27, Integrations, pass 7) merged with no next-feature PR
+open; this pass picked up Feature 28. Diffed all nine files this doc
+covers plus the four frontend surfaces against pass 6's own merge commit
+(`d87bc6ee`) rather than `git log --since`, which this repo's squash-merge
+history has made unreliable before. The one significant item in the real
+delta — **SEC2-28-10** (the audit chain's unlocked "last row" read,
+HIGH, flagged since pass 4) — turns out to have already been resolved by
+regular engineering work on 2026-10-12 (`009b3400`, sealing the chain
+apart from the write under its own `audit_chain_head` row lock) plus a
+same-day deadlock fix (`d59c4cfd`); both verified directly against
+current `core/audit.py`/`models/audit.py`, not taken on the doc's own
+prior write-up. New audit-of-the-audit-trail logging (HIPAA
+§164.312(b), `audit_logs.py`) and four new `EXPORT_ENDPOINTS` entries
+(finance advance-accounts/dues-accounts/readiness, medical-supplies
+items/lots export) both reviewed clean. Remaining backend touches are
+mypy-cleanup only (no behavior change). Route surface re-enumerated:
+35/35 unchanged. **SEC2-28-6** (LOW, TOCTOU race in
+`request_ip_exception`'s duplicate-pending-exception check) and the
+dead-detector-code note (`security_monitoring.py`'s unused analyzer
+functions) both re-verified still open, unchanged.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
+alembic/` (isort matched CI's pinned 9.0.1); `validate_migrations.py
+--strict` — single head, no migration this pass; `pytest tests/ -q -k
+"audit or security_monitoring or ip_security or privilege_ceiling or
+suspicious_ip or w50_audit_username or signing_key_cutover or
+security_alert_workflow or ip_allowlist_middleware or
+ip_exception_lookup_db or task_error_reporting or
+integration_dns_pinning"` — 509 passed, 1 pre-existing skip (`pywebpush`);
+frontend `npm run typecheck`/`npm run lint` both clean.
+
+Findings doc: [`SEC2-28-security-audit-ip.md`](./SEC2-28-security-audit-ip.md)'s
+**Pass 7** section. No `KNOWN_LIMITATIONS.md` change needed. Also corrected
+this tracker's own rotation-table marker for row 27 (Integrations) to ✅,
+which the prior pass's commit had left at 🔄 despite PR #3375 already
+having merged. Rotation row 28 → ✅. Next: Feature 29 (Reports &
+analytics).
+
+### 2026-10-17 — Feature 29 (Reports & analytics, pass 9) — 0 fixed in-feature, 0 new findings; RPT2-29-2 confirmed resolved; an unrelated Alembic head fork fixed to pass the gate
+
+PR #3376 (Feature 28, Security/audit/IP, pass 7) merged with no next-feature
+PR open; this pass picked up Feature 29. Real delta since pass 8 (PR #2994,
+`b40475bd`, 2026-10-08) diffed directly against that commit across all ten
+scope files plus `frontend/src/modules/reports`.
+
+**RPT2-29-2 (saved-report scheduling had no reader) is now resolved** by
+regular engineering work (`871ed7d0`, 2026-10-11): a new daily task
+`saved_report_delivery` (`app/services/saved_report_schedule.py`) sends each
+organization's due reports. Read the module in full: the PII gate is
+enforced both at save time (`_settle_schedule` in `reports.py`) and at send
+time (`_owner_may_run` re-checks the owner still holds the permission;
+`disallowed_pii_recipients` re-checks every recipient is an active,
+org-scoped member holding it); only a numeric top-level summary and a link
+ever reach the email body, every interpolated value `html.escape`d, no
+per-member row emailed; `email_recipients` is now `List[EmailStr]`; the
+by-id update/delete endpoints stay org-scoped. No new finding — this closes
+a standing one. A second real change, **Department pulse card
+customization** (`14fcf0b9`), adds self-scoped `GET/PUT/DELETE
+/dashboard/pulse-layout` and settings.manage-gated
+`/dashboard/pulse-layout/default` routes; verified the commit's claim that
+`GET /dashboard/widgets` remains the sole gate on which cards a caller's
+data can populate (the new layout is order/visibility preference only), and
+the new schema (`schemas/dashboard_pulse.py`) uses a `Literal` card-id
+allowlist, `extra="forbid"`, a title length cap with control-character
+rejection, and degrades a malformed stored value to "not set" rather than
+raising. New `users.dashboard_pulse` column is nullable JSON, migration
+guards table/column existence (Pitfall #26). No finding. Four smaller real
+changes (GF-24a timezone fix, SCHED-14/15 additive report fields, W47-6's
+additive `exclude_item_types` kwarg, a frontend `asArray()` defensive fix)
+and six mypy-cleanup commits all reviewed and clean — none drops an
+`organization_id` filter or changes a query's shape. Four accessibility-only
+commits confirmed to carry no security relevance. `f460cd48` (FORM-10) is
+the same squash/rebase history-boundary artifact prior passes have already
+documented (a full-tree "every file added" diff with no resolvable parent)
+and belongs to Feature 26 (Forms), already reviewed there — not a real
+touch to this feature. `RPT6-29-1` (pipeline_overview self-exposure,
+pass 8's own fix) re-confirmed fixed by direct read. Every other still-flagged
+item from pass 8 re-confirmed unchanged, none re-litigated. Route surface:
+30 → 34 (+4 pulse-layout routes).
+
+**Also discovered and fixed, unrelated to this feature's own code but
+blocking the completion gate:** the Alembic chain had forked into two heads
+(`244b0fd07205` ballot send jobs, `d3bb8f81ed07` directory account license
+flags — two different pull requests that each merged without seeing the
+other's branch, the same shape this tracker's migration-fork precedents
+describe). Resolved with a merge revision (`fccdac60063f`). The sandbox
+database was then behind both branches' new columns; `alembic upgrade head`
+plus `scripts/repair_schema.py` brought it current, after which four tests
+that had failed only on the missing `ballot_send_jobs.kind` column (none in
+this feature's files) passed with no code change.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
+alembic/` (CI's pinned 7.3.0/26.5.1/9.0.1); `validate_migrations.py
+--strict` — 616 revisions, single head `fccdac60063f` (post-fix);
+`pytest tests/ -q -k "reports or label or analytics or dashboard or
+attendance_dashboard or pipeline or prospect_privacy or
+membership_pipeline"` — 1291 passed, 1 pre-existing skip (`pywebpush`);
+`pytest tests/` (full unit suite) — **15472 passed, 4 skipped
+(environment-only), 0 failed**; frontend `npm run typecheck`/`npm run lint`
+both clean; `npx vitest run src/modules/reports` — 73 passed (8 files).
+
+Findings doc: [`RPT6-29-reports-analytics.md`](./RPT6-29-reports-analytics.md)'s
+**Pass 9** section. No `KNOWN_LIMITATIONS.md` change needed — its RPT2-29-2
+entry already carries an accurate "✅ Resolved 2026-10-11" note, re-checked
+against current code rather than taken on its own say-so. Rotation row 29 →
+✅. Next: Feature 30 (Onboarding).

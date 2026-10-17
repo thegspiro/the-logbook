@@ -368,3 +368,143 @@ engine, which added the 12 missing columns; all 25 then passed. This is an
 environment-setup action, not an application or migration fix, and is not
 part of this PR's diff — recorded here per CLAUDE.md's "no silent pass-over"
 rule rather than quietly working around it.
+
+---
+
+## Pass 9 (2026-10-17)
+
+**Prefix:** `RPT6` (unchanged) · **Rotation pass:** 9 · **Reviewed:** 2026-10-17 · **PR:** (this PR)
+
+PR #2994 (pass 8, `b40475bd`) merged with nothing started for the next
+feature since; this pass picked up Feature 29. Real delta since pass 8
+diffed directly against `b40475bd` across all ten scope files plus
+`frontend/src/modules/reports`:
+
+- **`feat(reports): send scheduled saved reports and add the saved-reports
+screen` (RPT2-29-2, resolved).** `RPT2-29-2` — `SavedReport` scheduling
+  fields stored and API-writable with no reader — is now fixed: a new daily
+  task `saved_report_delivery` (`app/services/saved_report_schedule.py`,
+  registered in `SCHEDULE`/`TASK_RUNNERS`/`TASK_INTERVALS_SECONDS`) sends
+  each organization's due reports via the existing `_for_each_org` helper.
+  Read the new module in full: the PII gate
+  (`PII_REPORT_PERMISSIONS`) is enforced at both save time
+  (`_settle_schedule` in `reports.py`, calling `disallowed_pii_recipients`)
+  and send time (`_owner_may_run` re-checks the schedule's owner still holds
+  the report type's permission; `disallowed_pii_recipients` re-checks every
+  recipient is an active, non-deleted member of the _same organization_
+  holding that permission — both queries filter `organization_id`). Only a
+  numeric top-level summary (`_numeric_summary`) and a link ever reach the
+  email body; every interpolated value is `html.escape`d; no per-member row
+  is emailed. `email_recipients` is now `List[EmailStr]` on both
+  create/update schemas. `POST/PATCH /saved/{id}` and `DELETE /saved/{id}`
+  remain org-scoped by-id (checklist 14a, re-verified at
+  `reports.py:282-325`). External recipients are run through the existing
+  `audit_external_recipients` helper before sending. No new finding — this
+  closes RPT2-29-2 rather than opening anything.
+- **`Let members and departments customize the Department pulse cards`
+  (new surface, reviewed clean).** New `GET/PUT/DELETE
+/dashboard/pulse-layout` (self-scoped: no id in the path, reads/writes
+  only `current_user`'s own row) and `PUT/DELETE
+/dashboard/pulse-layout/default` (`settings.manage` OR
+  `organization.update_settings`, writing
+  `Organization.settings["dashboard_pulse"]` through the existing
+  `OrganizationService.update_organization_settings`, which already
+  `copy.deepcopy()`s before mutating — pitfall #12 satisfied). Verified the
+  commit message's central claim by reading `get_main_dashboard_widgets`
+  (unchanged by this commit): the pulse layout is read-order preference
+  only, and `GET /dashboard/widgets` is the sole gate on which cards a
+  caller's data can populate — a layout cannot make a card appear whose
+  block that endpoint did not return. `schemas/dashboard_pulse.py`'s
+  `PulseCardPreference`/`DashboardPulseLayout` use `extra="forbid"`, a
+  `Literal` allowlist of 8 card ids (unknown ids are dropped, not stored),
+  a 40-character title cap with a control-character rejection, and a
+  duplicate-card-id rejection; `normalize_pulse_layout` degrades any
+  malformed stored value to "not set" rather than raising (read on every
+  dashboard load). New `users.dashboard_pulse` column
+  (`a51a4e1d2443_add_user_dashboard_pulse.py`): nullable JSON, no FK
+  (pitfall #2 n/a), guards `_has_table`/`_has_column` (pitfall #26). Both
+  write handlers assign a fresh dict from `stored_layout()` rather than
+  mutating an existing one in place, so the plain JSON column change is
+  seen by SQLAlchemy without needing `flag_modified`. Department-level
+  writes are audit-logged (`log_audit_event`,
+  `organization_settings_updated`). No finding.
+- **Four smaller real changes, each reviewed and clean:** `fix(reports):
+read report date ranges on the department's calendar` (GF-24a) —
+  timezone-correctness only, org id already resolved by the caller before
+  reaching the changed date-math helpers, no query org-filter touched;
+  `feat(reports): warn on a range predating the tracking mode` (SCHED-14,
+  SCHED-15) — two additive, non-sensitive keys on the call-volume report
+  payload and a JSON-setting timestamp stamped from the existing
+  `update_scheduling_settings` write path, already org-scoped; `fix(inventory):
+low stock sums lots...` (W47-6) — the dashboard's low-stock widget gained
+  one additive `exclude_item_types` keyword on an already org-scoped call,
+  no new query; `fix(reports): keep the available-reports list an array on
+a malformed response` (RPT2-29-2, frontend) — a defensive `asArray()` on
+  the store, no backend change.
+- **mypy-cleanup commits** (`51c77a9c`, `c926b687`, `0d4d7c5a`, `0dfcd516`,
+  `f5ad6018`, `265a26be`) touching `dashboard.py`, `platform_analytics.py`,
+  `reports_service.py`, `attendance_dashboard_service.py`,
+  `dashboard_widget_service.py`: type annotations and `hasattr(...,
+"value") else str(...)` → `str(getattr(..., "value", ...))` rewrites,
+  each mechanically equivalent; spot-checked several for a dropped
+  `organization_id` filter or changed query shape — none found.
+- **Accessibility-only commits** (`fb70c06a`, `7770b180`, `b5c5f90e`,
+  `e8425b6e`) touching `ReportsPage.tsx`/`SavedReportsPage.tsx`: dialog
+  `aria-modal`/role/name, `aria-disabled` on busy buttons, heading levels —
+  no security relevance, confirmed by reading each diff.
+- **`f460cd48` (FORM-10) is the squash/rebase history-boundary artifact**
+  prior passes have already documented (its diff is "every file in this
+  feature added at once," 11226 insertions across 40 files, with no
+  resolvable parent) — not a real touch to this feature's scope, and its
+  actual subject (one-submission-per-person on forms) belongs to Feature 26
+  (Forms), already reviewed there.
+
+**Re-verification, not re-citation.** `RPT6-29-1` (pipeline_overview
+self-exposure) re-confirmed fixed by direct read of
+`_generate_pipeline_overview` and both `reports.py` endpoints that pass
+`hidden_prospect_ids` through. `RPT2-29-2` is now RESOLVED (above), so it
+moves out of "still flagged." Every other still-flagged item from pass 8
+(`LBL-29-2`, `LBL-29-4`, `RPT-5c`/`RPT-6`/`RPT-7`, `DASH-2`,
+`RPT5-29-1`/`RPT5-29-5`) re-confirmed unchanged by direct read — none
+re-litigated here. Route surface re-enumerated: 30 → 34 (+4:
+`/dashboard/pulse-layout` × 2 verbs self-scoped, `/dashboard/pulse-layout/default`
+× 2 verbs `settings.manage`-OR-gated); every route carries a recognized
+auth dependency.
+
+**Also discovered and fixed (unrelated to this feature's own code, but
+blocking the completion gate):** the Alembic chain had forked into two
+heads — `244b0fd07205` (ballot send jobs, a different pull request) and
+`d3bb8f81ed07` (directory account license flags, another). Neither
+revision's branch had seen the other when it merged, which is the same
+shape CLAUDE.md's migration-fork precedents describe. Resolved with a merge
+revision (`fccdac60063f`, `20261017_1330_fccdac60063f_merge_heads.py`),
+clean per `validate_migrations.py --strict`. The sandbox database was then
+behind both branches' new columns (`ballot_send_jobs.kind`, two
+`directory_account_provisions` flags); `alembic upgrade head` plus
+`scripts/repair_schema.py` brought it current, after which the four tests
+that had failed only on the missing `ballot_send_jobs.kind` column
+(`test_ballot_send_jobs.py` ×3, `test_w50_roster_frozen_roll.py` ×1 — none
+in this feature's own files) passed with no code change. This is an
+environment/migration-graph fix, not part of this feature's own diff, and
+is recorded per CLAUDE.md's "no silent pass-over" rule.
+
+## Completion gate (pass 9)
+
+| Check                                                                                                                                             | Result                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.3.0`, pinned)                                                                                           | ✅ 0 violations                                                                   |
+| `black --check app/ tests/ alembic/` (`black==26.5.1`, pinned)                                                                                    | ✅ 2416 files unchanged                                                           |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.1`, pinned, matches CI)                                                                    | ✅ clean                                                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                 | ✅ 616 revisions, single head `fccdac60063f` (after the merge-revision fix above) |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline"` | ✅ **1291 passed**, 1 skipped (`pywebpush`, env-only)                             |
+| `pytest tests/` (full unit suite, `-m "not integration and not slow and not docker"`)                                                             | ✅ **15472 passed**, 4 skipped (env-only), 0 failed                               |
+| `cd frontend && npm run typecheck`                                                                                                                | ✅ 0 errors                                                                       |
+| `cd frontend && npm run lint`                                                                                                                     | ✅ 0 errors, 0 warnings                                                           |
+| `cd frontend && npx vitest run src/modules/reports`                                                                                               | ✅ **73 passed** (8 files)                                                        |
+
+Findings: 0 fixed in this feature's own code, 0 new, 1 standing finding
+(RPT2-29-2) resolved by regular engineering work and verified. No
+`KNOWN_LIMITATIONS.md` change needed — its RPT2-29-2 entry already carries
+a "✅ Resolved 2026-10-11" note matching the fix described above, checked
+against current code rather than taken on its own say-so, and needed no
+correction. Rotation row 29 → ✅. Next: Feature 30 (Onboarding).
