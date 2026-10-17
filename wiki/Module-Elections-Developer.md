@@ -120,7 +120,9 @@ GET    /elections/{id}/forensics                    # Forensic report (manage)
 DELETE /elections/{id}/votes/{vote_id}              # Void a vote; ?reason= 3-500 chars (manage)
 
 # Ballot email and communication
-POST   /elections/{id}/send-ballot                  # Email ballots with unique tokens; open elections only (manage)
+POST   /elections/{id}/send-ballot                  # Email ballots with unique tokens; open elections only synchronous, kept for API callers (manage)
+POST   /elections/{id}/ballot-send-jobs             # Queue the same send in the background; 202, 409 while one runs (manage)
+GET    /elections/{id}/ballot-send-jobs/{job_id}    # Status of a queued send and, once finished, its outcome (manage)
 POST   /elections/{id}/send-test-ballot             # Test ballot to yourself; excluded from results (manage)
 GET    /elections/{id}/non-voters                   # Eligible voters who haven't voted (manage)
 POST   /elections/{id}/remind-non-voters            # Reminder with fresh link to non-voters only (manage)

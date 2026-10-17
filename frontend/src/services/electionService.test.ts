@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock apiClient BEFORE importing the service
 const mockGet = vi.fn();
@@ -265,17 +265,94 @@ describe('electionService', () => {
     });
   });
 
-  // --- sendBallotEmail ---
-  describe('sendBallotEmail', () => {
-    it('should POST email data to /elections/:id/send-ballot', async () => {
-      const emailData = { subject: 'Vote Now', recipients: ['u1', 'u2'] };
-      const response = { sent: 2, failed: 0 };
-      mockPost.mockResolvedValueOnce({ data: response });
+  // --- ballot send jobs ---
+  describe('startBallotSendJob', () => {
+    it('should POST email data to /elections/:id/ballot-send-jobs', async () => {
+      const emailData = { subject: 'Vote Now', send_eligibility_summary: true };
+      const job = { id: 'job-1', status: 'queued' };
+      mockPost.mockResolvedValueOnce({ data: job });
 
-      const result = await electionService.sendBallotEmail('el1', emailData);
+      const result = await electionService.startBallotSendJob('el1', emailData);
 
-      expect(mockPost).toHaveBeenCalledWith('/elections/el1/send-ballot', emailData);
-      expect(result).toEqual(response);
+      expect(mockPost).toHaveBeenCalledWith('/elections/el1/ballot-send-jobs', emailData);
+      expect(result).toEqual(job);
+    });
+  });
+
+  describe('waitForBallotSendJob', () => {
+    const outcome = {
+      success: true,
+      recipients_count: 42,
+      failed_count: 0,
+      skipped_count: 0,
+      skipped_details: [],
+      message: 'Ballot emails sent to 42 recipient(s)',
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      mockGet.mockReset();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('polls until the send completes and resolves with its outcome', async () => {
+      mockGet
+        .mockResolvedValueOnce({ data: { id: 'job-1', status: 'running', result: null, error: null } })
+        .mockResolvedValueOnce({ data: { id: 'job-1', status: 'completed', result: outcome, error: null } });
+
+      const pending = electionService.waitForBallotSendJob('el1', 'job-1');
+      await vi.runAllTimersAsync();
+
+      await expect(pending).resolves.toEqual(outcome);
+      expect(mockGet).toHaveBeenCalledTimes(2);
+      expect(mockGet).toHaveBeenCalledWith('/elections/el1/ballot-send-jobs/job-1');
+    });
+
+    it("rejects with the server's reason when the send failed", async () => {
+      mockGet.mockResolvedValueOnce({
+        data: {
+          id: 'job-1',
+          status: 'failed',
+          result: null,
+          error: 'Ballot emails cannot be sent for a closed election',
+        },
+      });
+
+      const pending = electionService.waitForBallotSendJob('el1', 'job-1');
+      const assertion = expect(pending).rejects.toThrow('Ballot emails cannot be sent for a closed election');
+      await vi.runAllTimersAsync();
+      await assertion;
+    });
+
+    it('rides out a dropped status check rather than reporting the send as failed', async () => {
+      mockGet
+        .mockRejectedValueOnce(new Error('Network Error'))
+        .mockResolvedValueOnce({ data: { id: 'job-1', status: 'completed', result: outcome, error: null } });
+
+      const pending = electionService.waitForBallotSendJob('el1', 'job-1');
+      await vi.runAllTimersAsync();
+
+      await expect(pending).resolves.toEqual(outcome);
+    });
+
+    it('gives up, saying the send may still be running, after repeated failed checks', async () => {
+      mockGet.mockRejectedValue(new Error('Network Error'));
+
+      const pending = electionService.waitForBallotSendJob('el1', 'job-1');
+      const assertion = expect(pending).rejects.toThrow(/may still be running/);
+      await vi.runAllTimersAsync();
+      await assertion;
+    });
+
+    it('stops polling and resolves null once cancelled', async () => {
+      const pending = electionService.waitForBallotSendJob('el1', 'job-1', () => true);
+      await vi.runAllTimersAsync();
+
+      await expect(pending).resolves.toBeNull();
+      expect(mockGet).not.toHaveBeenCalled();
     });
   });
 

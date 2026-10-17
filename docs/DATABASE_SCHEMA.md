@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**314 tables · 5190 columns · 1059 foreign keys**
+**315 tables · 5205 columns · 1062 foreign keys**
 
 ---
 
@@ -157,6 +157,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`ballot_send_jobs`](#ballot_send_jobs) | `BallotSendJob` | 15 | One request to email ballots, run in the background. |
 | [`candidates`](#candidates) | `Candidate` | 17 | Candidate model for election candidates |
 | [`elections`](#elections) | `Election` | 55 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
@@ -2173,6 +2174,35 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_documents_source` (`source_type`, `source_id`)
 
 ## Elections
+
+### `ballot_send_jobs`
+
+**BallotSendJob** · `app/models/election.py`
+
+> One request to email ballots, run in the background. A department-sized send takes longer than any HTTP client or proxy will wait, so the request only records this row and returns; the send runs after the response and writes its outcome here for the page to poll. The row lives in the database rather than Redis so a poll answered by a different uvicorn worker sees it, and so it outlives a restart that interrupts the send. A queued or running row also blocks a second send for the same election: each send mints new voting tokens, so two overlapping sends mail every member two links of which only the later one works.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `election_id` | VARCHAR(36) | no | FK, IDX |  | → `elections.id` ON DELETE CASCADE |
+| `requested_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `status` | VARCHAR(20) | no |  | `queued` |  |
+| `success` | BOOL | yes |  |  |  |
+| `recipients_count` | INTEGER | no |  | `0` |  |
+| `failed_count` | INTEGER | no |  | `0` |  |
+| `skipped_count` | INTEGER | no |  | `0` |  |
+| `skipped_details` | JSON | yes |  |  |  |
+| `message` | TEXT | yes |  |  |  |
+| `error` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `started_at` | DATETIME | yes |  |  |  |
+| `finished_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `ix_ballot_send_jobs_election_status` (`election_id`, `status`)
+- `ix_ballot_send_jobs_organization_id` (`organization_id`)
 
 ### `candidates`
 
@@ -10945,7 +10975,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (388 references)
+### → `users` (389 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10982,6 +11012,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `approval_chains` | `created_by` | RESTRICT | no |
 | `approval_step_records` | `acted_by` | SET NULL | yes |
 | `approval_step_records` | `assigned_to` | SET NULL | yes |
+| `ballot_send_jobs` | `requested_by` | SET NULL | yes |
 | `blocked_access_attempts` | `user_id` | RESTRICT | yes |
 | `budget_amendments` | `created_by` | SET NULL | yes |
 | `budget_amendments` | `decided_by` | SET NULL | yes |
@@ -11338,7 +11369,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (257 references)
+### → `organizations` (258 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11365,6 +11396,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_statuses` | `organization_id` | CASCADE | yes |
 | `apparatus_types` | `organization_id` | CASCADE | yes |
 | `approval_chains` | `organization_id` | CASCADE | no |
+| `ballot_send_jobs` | `organization_id` | CASCADE | no |
 | `basic_apparatus` | `organization_id` | CASCADE | no |
 | `budget_amendments` | `organization_id` | CASCADE | no |
 | `budget_categories` | `organization_id` | CASCADE | no |
@@ -11772,6 +11804,20 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_tests` | `requirement_id` | SET NULL | yes |
 | `training_sessions` | `requirement_id` | SET NULL | yes |
 
+### → `elections` (9 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `ballot_send_jobs` | `election_id` | CASCADE | no |
+| `candidates` | `election_id` | CASCADE | no |
+| `elections` | `parent_election_id` | RESTRICT | yes |
+| `manual_ballot_batches` | `election_id` | CASCADE | no |
+| `meeting_motions` | `election_id` | SET NULL | yes |
+| `minutes_election_results` | `election_id` | SET NULL | yes |
+| `prospect_election_packages` | `election_id` | SET NULL | yes |
+| `votes` | `election_id` | CASCADE | no |
+| `voting_tokens` | `election_id` | CASCADE | no |
+
 ### → `meeting_minutes` (9 references)
 
 | From table | Column | On delete | Nullable |
@@ -11813,19 +11859,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_assignments` | `training_program_id` | SET NULL | yes |
 | `training_courses` | `program_id` | SET NULL | yes |
 | `training_sessions` | `program_id` | SET NULL | yes |
-
-### → `elections` (8 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `candidates` | `election_id` | CASCADE | no |
-| `elections` | `parent_election_id` | RESTRICT | yes |
-| `manual_ballot_batches` | `election_id` | CASCADE | no |
-| `meeting_motions` | `election_id` | SET NULL | yes |
-| `minutes_election_results` | `election_id` | SET NULL | yes |
-| `prospect_election_packages` | `election_id` | SET NULL | yes |
-| `votes` | `election_id` | CASCADE | no |
-| `voting_tokens` | `election_id` | CASCADE | no |
 
 ### → `prospective_members` (8 references)
 
