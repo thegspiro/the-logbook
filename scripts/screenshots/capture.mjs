@@ -27,6 +27,7 @@ import {
   DEMO_CREDENTIALS,
   DEMO_FORWARDEE_CREDENTIALS,
   DEMO_GEARLESS_CREDENTIALS,
+  DEMO_TRAINING_OFFICER_CREDENTIALS,
   DEMO_MEMBER_CREDENTIALS,
   DEMO_SECOND_MEMBER_CREDENTIALS,
   DEMO_SECRETARY_CREDENTIALS,
@@ -509,6 +510,10 @@ function makeSessions(browser, baseOptions) {
         // Issued Gear shows a member's empty page rather than the demo
         // member's full one.
         await login(page, DEMO_GEARLESS_CREDENTIALS);
+      } else if (auth === "trainingofficer") {
+        // Holds the Training Officer position, which is what a new training
+        // submission prompts in the inbox.
+        await login(page, DEMO_TRAINING_OFFICER_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }

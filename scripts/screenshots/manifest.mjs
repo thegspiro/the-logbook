@@ -145,6 +145,23 @@ export const DEMO_GEARLESS_CREDENTIALS = {
 };
 
 /**
+ * The member holding the Training Officer position.
+ *
+ * Shots marked `auth: "trainingofficer"` sign in as this account. The position
+ * is who a new training submission prompts in the inbox, and nobody else in
+ * the demo department holds it: the administrator is not in it, and the
+ * secretary is the Training Officer *office* holder without the position.
+ *
+ * Must match TRAINING_OFFICER_USERNAME in seed_demo_data.py, whose
+ * `_guide02_training_officer` grants the position and clears the account's
+ * forced password change.
+ */
+export const DEMO_TRAINING_OFFICER_CREDENTIALS = {
+  username: "hvance",
+  password: "DemoMember!2026",
+};
+
+/**
  * The one account enrolled in TOTP, used to photograph the login page's
  * authentication-code step.
  *
@@ -2702,6 +2719,65 @@ function openItemNamed(name) {
   );
 }
 
+/**
+ * Open the requirement editor on a named requirement from Training Admin ›
+ * Setup › Requirements. Each row's button is named for its requirement
+ * ("Edit <name>"). Nothing here saves: the guide-02 shots that use it stop at
+ * the form or at the dialog a save would open.
+ */
+async function openRequirementEditor(page, name) {
+  await page.waitForTimeout(3000);
+  await page
+    .getByPlaceholder(/Search requirements/)
+    .first()
+    .fill(name);
+  await page.waitForTimeout(1500);
+  await page
+    .getByRole("button", { name: new RegExp(`^Edit ${name}`) })
+    .first()
+    .click({ timeout: 20_000 });
+  await page.locator("#req-required-hours").waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(800);
+}
+
+/** Scroll an element inside a scrolling dialog to the middle of the frame. */
+async function centre(locator) {
+  await locator.waitFor({ timeout: 20_000 });
+  await locator.evaluate((el) => el.scrollIntoView({ block: "center" }));
+}
+
+/**
+ * Scroll a Training Administration page's own heading to the top of the
+ * frame. The hub's metrics, attention list and area cards fill the first
+ * screen, so a viewport shot of a tab otherwise pictures only the hub.
+ */
+function scrollHeadingToTop(text) {
+  return async (page) => {
+    const heading = page
+      .getByRole("heading", { name: text, exact: true })
+      .first();
+    await heading.waitFor({ timeout: 20_000 });
+    await heading.evaluate((el) => {
+      el.scrollIntoView({ block: "start" });
+      window.scrollBy(0, -175);
+    });
+    await page.waitForTimeout(600);
+  };
+}
+
+/** A date `days` from today, as a date input wants it. */
+const PROGRAM_REQUIREMENT_DIALOG = "div[role='dialog'] div.modal-panel";
+
+const PIPELINE_CARD =
+  "div.rounded-lg.p-4:has(> h3:text-is('Recruit School Pipeline'))";
+
+function isoDaysFromToday(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 // ── Guide 08 helpers ────────────────────────────────────────────────
 // Shots below that have to write to the database undo it in `cleanup`, so
 // a `--only` run leaves the demo as the seeder made it.
@@ -4326,6 +4402,7 @@ export const SHOTS = [
   },
   {
     id: "02-100-checklist-steps-editor",
+    expect: "Checklist steps",
     doc: "02-training.md",
     line: 365,
     anchor:
@@ -4354,6 +4431,353 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     selector: "div:has(> span:text-is('Checklist steps'))",
+  },
+  // ── Guide 02: shots that need the guide-02 seeder states ───────────
+  //
+  // `seed_guide02_states` in seed_demo_data.py makes the submissions, the
+  // pending approval and the leave month these picture. The requirement-form
+  // shots below drive the form and stop before anything is saved.
+  {
+    id: "02-107-my-training-history-tab",
+    doc: "02-training.md",
+    line: 238,
+    anchor: "My Training → History tab: the three totals, the search and Type",
+    alt: "The History tab on My Training: all-time totals, the course search and Type filter with the export buttons, a record awaiting approval, this year's records open and last year closed with its count and hours",
+    auth: "member",
+    route: "/training/my-training",
+    prepare: async (page) => {
+      await clickByName(/^History$/)(page);
+      await page.locator("#history-search").waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(1500);
+    },
+    expect: "Search courses",
+    fullPage: true,
+  },
+  {
+    id: "02-108-monthly-hours-leave",
+    doc: "02-training.md",
+    line: 246,
+    anchor:
+      "an hours requirement with Show monthly hours open: the twelve-month",
+    alt: "Annual Minimum Training Hours with Show monthly hours open: a bar for each month, the month of leave marked and left out of the average",
+    auth: "member",
+    route: "/training/my-training",
+    prepare: async (page) => {
+      const toggle = page
+        .locator("div")
+        .filter({
+          has: page.getByText("Annual Minimum Training Hours", { exact: true }),
+        })
+        .getByRole("button", { name: /Show monthly hours/ })
+        .last();
+      await toggle.click({ timeout: 20_000 });
+      await page
+        .getByText(/of leave not counted/)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await centre(page.getByText(/of leave not counted/).first());
+      await page.waitForTimeout(500);
+    },
+    expect: "of leave not counted",
+  },
+  {
+    id: "02-109-approved-with-changes-notice",
+    doc: "02-training.md",
+    line: 320,
+    anchor:
+      'Member (the submitter) at /notifications?tab=inbox: a "Training submission approved with changes',
+    alt: "The member's inbox with the training-submission stack open: \"Training submission approved with changes\", the Hours 3 → 2 line, the officer's notes and View My Submissions",
+    auth: "member",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /updates to your training submissions/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", {
+          name: /Training submission approved with changes/,
+        })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByText(/Hours: 3 → 2/)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    expect: "Hours: 3 → 2",
+    selector:
+      "div.card:has(button:has-text('updates to your training submissions'))",
+  },
+  {
+    id: "02-110-returned-submission",
+    doc: "02-training.md",
+    line: 324,
+    anchor:
+      "Member at /training/submit with one of their submissions in revision_requested",
+    alt: 'Submit External Training with a returned submission at the top: the officer\'s note, "Returned … · Your hours are not counted yet", and Fix and Resubmit / Withdraw',
+    auth: "member",
+    route: "/training/submit",
+    expect: "Your hours are not counted yet",
+  },
+  {
+    id: "02-111-program-requirement-settings",
+    doc: "02-training.md",
+    line: 1028,
+    anchor:
+      "Program page → Edit requirement on a requirement in a phase: the modal",
+    alt: "Edit requirement on a program: the In this program section with Due after enrollment (days) set to 30, the description members see and the message sent when it is completed",
+    route: "/training/programs",
+    prepare: async (page) => {
+      const programId = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/training/programs/programs", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const rows = await response.json();
+        const list = Array.isArray(rows) ? rows : [];
+        const wanted =
+          list.find((row) => /Probationary/.test(row.name || "")) || list[0];
+        return wanted ? wanted.id : null;
+      });
+      if (!programId) throw new Error("02-111: no training program to open");
+      await page.goto(
+        new URL(`/training/programs/${programId}`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page
+        .getByRole("button", { name: "Edit requirement" })
+        .first()
+        .click({ timeout: 30_000 });
+      const dialog = page.locator(PROGRAM_REQUIREMENT_DIALOG);
+      // Typed, never saved: the program keeps its own settings.
+      await page.locator("#rq-deadline-days").fill("30");
+      await page
+        .locator("#rq-member-description")
+        .fill(
+          "Complete within your first month. Your company officer signs it off on a drill night.",
+        );
+      await page
+        .locator("#rq-completion-message")
+        .fill(
+          "Nice work. Bring your signed card to Station 1 so we can file a copy.",
+        );
+      await centre(dialog.locator("legend:text-is('In this program')"));
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(500);
+    },
+    expect: "Due after enrollment (days)",
+    selector: PROGRAM_REQUIREMENT_DIALOG,
+    viewport: { width: 1440, height: 1100 },
+  },
+  {
+    id: "02-112-pipeline-progress-card",
+    doc: "02-training.md",
+    line: 1075,
+    anchor: "Member enrolled in one program with at least two requirements, at",
+    alt: 'One program on the Pipeline Progress card of My Training: Recruit School Pipeline with its status chip and 60%, each requirement as "name · N%" with its status, and View full progress',
+    auth: "member",
+    route: "/training/my-training",
+    // The demo member is enrolled in three programs; the frame is the first.
+    prepare: async (page) => {
+      await centre(page.locator(PIPELINE_CARD));
+      await page.waitForTimeout(500);
+    },
+    expect: "View full progress",
+    selector: PIPELINE_CARD,
+  },
+  {
+    id: "02-113-requirement-existing-members",
+    doc: "02-training.md",
+    line: 1396,
+    anchor:
+      "Training Admin → Setup → Requirements → edit a requirement → the **Existing Members**",
+    alt: "The Existing Members section of a requirement: Give a catch-up deadline selected, with the joined-before date, the catch-up deadline and the note beneath",
+    route: "/training/admin?page=setup&tab=requirements",
+    prepare: async (page) => {
+      await openRequirementEditor(page, "Annual Minimum Training Hours");
+      await page
+        .getByRole("radio", { name: /Give a catch-up deadline/ })
+        .click();
+      await page.locator("#req-cutoff-date").fill(isoDaysFromToday(0));
+      await page.locator("#req-catch-up-deadline").fill(isoDaysFromToday(180));
+      await centre(page.locator("h4:text-is('Existing Members')"));
+      await page.waitForTimeout(500);
+    },
+    expect: "Existing members must meet it by",
+    selector: "div.space-y-4:has(> h4:text-is('Existing Members'))",
+  },
+  {
+    id: "02-114-change-scope-dialog",
+    doc: "02-training.md",
+    line: 1435,
+    anchor:
+      "Training Admin → Setup → Requirements → edit a requirement, change its hours",
+    alt: "Who does this change apply to? with New members only selected, the date the new standard starts from, and Keep editing / Save for new members",
+    route: "/training/admin?page=setup&tab=requirements",
+    prepare: async (page) => {
+      await openRequirementEditor(page, "Annual Minimum Training Hours");
+      await page.locator("#req-required-hours").fill("36");
+      await page.getByRole("button", { name: "Update Requirement" }).click();
+      const dialog = page.locator('[data-testid="modal-panel"]');
+      await dialog.getByText("New members only").click({ timeout: 15_000 });
+      await page.locator("#change-scope-date").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+      // The dialog is the shot; Save for new members is never pressed.
+    },
+    expect: "Save for new members",
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "02-115-shift-credit-box",
+    doc: "02-training.md",
+    line: 1454,
+    anchor:
+      "Training Admin → Setup → Requirements → edit an Hours requirement: the",
+    alt: "Shift Credit on an Hours requirement: Shift attendance satisfies this requirement, unticked, with its help text",
+    route: "/training/admin?page=setup&tab=requirements",
+    prepare: async (page) => {
+      await openRequirementEditor(page, "Annual Minimum Training Hours");
+      await centre(page.locator("h4:text-is('Shift Credit')"));
+      await page.waitForTimeout(500);
+    },
+    expect: "Shift attendance satisfies this requirement",
+    selector: "div.space-y-3:has(> h4:text-is('Shift Credit'))",
+  },
+  {
+    id: "02-116-officer-review-prompts",
+    doc: "02-training.md",
+    line: 1638,
+    anchor:
+      "Member holding the Training Officer position at /notifications?tab=inbox",
+    alt: "The Training Officer's inbox: training submissions awaiting approval stacked, one opened to its message and Review Submission",
+    auth: "trainingofficer",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /training submissions awaiting approval/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /Training submission awaiting approval/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /Review Submission/ })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    expect: "Review Submission",
+    selector:
+      "div.card:has(button:has-text('training submissions awaiting approval'))",
+  },
+  {
+    id: "02-117-approve-training-credit",
+    doc: "02-training.md",
+    line: 1727,
+    anchor:
+      "Training Officer (training.manage) at `/training/approve/<token>` for a",
+    alt: "Approve training credit for the Ventilation Drill: course, event date and approve-by date, the roster with credited and approved minutes (one member set to 0 with a note), the approval notes and Approve and record",
+    route: "/training/admin",
+    prepare: async (page) => {
+      // The token comes from the event's approval summary, which hands it to a
+      // caller with training.manage while the approval is pending. Nothing is
+      // approved: the fields are typed and the page is photographed.
+      const token = await page.evaluate(async () => {
+        const res = await fetch(
+          "/api/v1/events?event_type=training&include_drafts=true&limit=500",
+          { credentials: "include" },
+        );
+        const body = await res.json();
+        const events = Array.isArray(body)
+          ? body
+          : body.events || body.items || [];
+        const event = events.find((e) => e.title === "Ventilation Drill");
+        if (!event) return null;
+        const summary = await fetch(
+          `/api/v1/training/sessions/by-event/${event.id}/approval`,
+          { credentials: "include" },
+        );
+        return summary.ok ? (await summary.json()).token : null;
+      });
+      if (!token)
+        throw new Error(
+          "02-117: no pending Ventilation Drill approval; re-run the seeder",
+        );
+      await page.goto(
+        new URL(`/training/approve/${token}`, page.url()).toString(),
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
+      const minutes = page.locator("input[aria-label^='Approved minutes for']");
+      await minutes.last().waitFor({ timeout: 20_000 });
+      await minutes.last().fill("0");
+      await page
+        .locator("input[aria-label^='Note for']")
+        .last()
+        .fill("Left before the roof evolution");
+      await page
+        .locator("#approval-notes")
+        .fill("Roster checked against the sign-in sheet.");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(500);
+    },
+    landsOn: "/training/approve/",
+    expect: "Approve training credit",
+    fullPage: true,
+  },
+  {
+    id: "02-118-compliance-card-and-matrix",
+    doc: "02-training.md",
+    line: 1855,
+    anchor:
+      "Training officer on the Training dashboard Overview: the Department Compliance",
+    alt: "The Training dashboard Overview: the Compliance figure in the header and the Department Compliance card both read 91%, with the Compliance Matrix tab beside the Dashboard tab",
+    route: "/training/admin?page=dashboard&tab=overview",
+    expect: "Department Compliance",
+    viewport: { width: 1440, height: 1400 },
+    // "No capacity-limited sessions are upcoming." is one widget lower on the
+    // page; the subject is the compliance figures.
+    allowEmptyState: true,
+  },
+  {
+    id: "02-119-no-shift-reports-member",
+    doc: "02-training.md",
+    line: 2316,
+    anchor: "Member without training.manage, no shift reports yet, at",
+    alt: "Shift reports about you, for a member with none yet: No shift reports yet, what a report will hold, and no view toggle",
+    auth: "gearless",
+    route: "/scheduling?tab=shift-reports",
+    expect: "No shift reports yet",
+    // The empty state is the subject.
+    allowEmptyState: true,
+  },
+  {
+    id: "02-120-practical-skills-confirm",
+    doc: "02-training.md",
+    line: 3403,
+    anchor:
+      "Training Administration > Settings & Data > Practical Skills, both options",
+    alt: "Practical Skills under Settings & Data: Skills Testing marked Current, Shift report sign-offs chosen, and the confirmation saying nothing is deleted",
+    route: "/training/admin?page=settings&tab=practical-skills",
+    prepare: async (page) => {
+      await page
+        .locator("input[name='practical-skills-method']:not(:checked)")
+        .first()
+        .check({ timeout: 20_000 });
+      await page.getByRole("button", { name: /^Save$/ }).click();
+      // "Keep current setting" is the way out; the switch is never confirmed.
+      await page
+        .getByText("Nothing is deleted.", { exact: false })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    expect: "Keep current setting",
+    fullPage: false,
   },
   {
     id: "02-101-expired-enrollment-reopen",
@@ -4692,6 +5116,7 @@ export const SHOTS = [
   },
   {
     id: "02-91-session-confirmation-toggle",
+    expect: "Start an in-progress training record when members check in",
     doc: "02-training.md",
     line: 715,
     anchor: "The Create Training Session form (Step 3)",
@@ -6665,10 +7090,15 @@ export const SHOTS = [
   // ── 02 Training ─────────────────────────────────────────────────────
   {
     id: "02-01-my-training",
+    expect: "Required Training",
     doc: "02-training.md",
     line: 53,
     anchor: "Screenshot of the My Training page showing stat cards at the top",
-    alt: "My Training page with stat cards and the personal training record list",
+    alt: 'My Training as a member: this year\'s course and hour tiles, Required Training with its "3 of 4 requirements met" line, upcoming expirations, the requirements and the sections below them',
+    // As the demo member, who has requirements, programs and shift reports
+    // behind every section the guide lists; the administrator has none of the
+    // latter.
+    auth: "member",
     route: "/training/my-training",
     fullPage: true,
   },
@@ -6685,7 +7115,10 @@ export const SHOTS = [
   },
   {
     id: "02-16-requirements",
-    expect: "Requirements",
+    expect: "Training Requirements",
+    // The hub's metrics and area cards fill the first screen; scroll the
+    // page's own heading to the top so the table is what is pictured.
+    prepare: scrollHeadingToTop("Training Requirements"),
     doc: "02-training.md",
     line: 438,
     anchor:
@@ -6703,10 +7136,13 @@ export const SHOTS = [
     alt: "Training Officer Dashboard with summary cards and pending review queue",
     route: "/training/admin?page=dashboard&tab=overview",
     fullPage: true,
+    // "No capacity-limited sessions are upcoming." is one widget among many.
+    allowEmptyState: true,
   },
   {
     id: "02-18-review-submissions",
-    expect: "Submissions",
+    expect: "Review Submissions",
+    prepare: scrollHeadingToTop("Review Submissions"),
     doc: "02-training.md",
     line: 480,
     anchor:
@@ -9887,11 +10323,12 @@ export const SHOTS = [
   },
   {
     id: "02-03-submit-training",
+    expect: "Course / Class Name",
     doc: "02-training.md",
     line: 86,
     anchor:
       "Screenshot of the Submit Training form showing the course dropdown with search",
-    alt: "Submit Training form with course, date, hours, and attachment fields",
+    alt: "Submit External Training: the class, when and details sections beside the This Submission panel, where the certificate attaches",
     route: "/training/my-training",
     prepare: clickByName(/submit training/i),
     fullPage: true,
@@ -10019,6 +10456,7 @@ export const SHOTS = [
   },
   {
     id: "02-65-print-compliance",
+    expect: "Non-Compliant",
     doc: "02-training.md",
     line: 1573,
     anchor:
@@ -10029,6 +10467,7 @@ export const SHOTS = [
   },
   {
     id: "02-40-member-training-history",
+    expect: "Export CSV",
     doc: "02-training.md",
     line: 947,
     anchor:
@@ -10056,6 +10495,7 @@ export const SHOTS = [
   // seeder switches it on).
   {
     id: "02-30-shift-reports",
+    expect: "Approve Selected",
     doc: "02-training.md",
     line: 962,
     anchor:
@@ -10077,6 +10517,7 @@ export const SHOTS = [
   },
   {
     id: "02-31-shift-reports-filed",
+    expect: "Reports you've written",
     doc: "02-training.md",
     line: 900,
     anchor:
@@ -10114,6 +10555,7 @@ export const SHOTS = [
   },
   {
     id: "02-34-shift-report-analytics",
+    expect: "Your reporting summary",
     doc: "02-training.md",
     line: 1002,
     anchor:
@@ -10128,6 +10570,7 @@ export const SHOTS = [
   },
   {
     id: "02-35-shift-reports-my-reports",
+    expect: "Shift reports about you",
     doc: "02-training.md",
     line: 978,
     anchor:
@@ -13026,8 +13469,19 @@ export const SHOTS = [
     line: 1353,
     anchor:
       "Screenshot of the Compliance Attestations page showing a table of submitted",
-    alt: "Compliance attestations listing period, percentage and attesting officer",
+    alt: "New Attestation open with Quarterly chosen and the Quarter picker, the sentence saying the percentage is calculated on submit, and the history with each entry's figure as of its date",
     route: "/training/admin?page=compliance&tab=attestations",
+    // The form open on Quarterly, so the Quarter picker shows. Nothing is
+    // submitted.
+    prepare: async (page) => {
+      await clickByName(/New Attestation/)(page);
+      await page
+        .locator("#attestation-period-type")
+        .selectOption("quarterly", { timeout: 15_000 });
+      await page.locator("#attestation-quarter").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    expect: "calculated when you submit",
     fullPage: true,
   },
   {
