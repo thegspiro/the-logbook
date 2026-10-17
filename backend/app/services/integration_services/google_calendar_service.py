@@ -419,7 +419,14 @@ class GoogleCalendarService(CalendarSyncInterface):
             return
 
     async def test_connection(self) -> str:
+        calendar_id = self._credentials.get("calendar_id")
         try:
+            if calendar_id:
+                calendar = await self._execute(
+                    lambda s: s.calendars().get(calendarId=calendar_id)
+                )
+                name = calendar.get("summary") or "the department calendar"
+                return f"Connected to Google Calendar (publishing to {name})"
             calendar_list = await self._execute(
                 lambda s: s.calendarList().list(maxResults=1)
             )
