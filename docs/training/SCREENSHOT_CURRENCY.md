@@ -52,6 +52,38 @@ Rows elsewhere in this file that these resolve are marked **CURRENT**
 | Setup wizard step 7 (IT & Backup Contacts) and the apparatus seat chips | **NOT POSSIBLE** on the shared stack | Both need the wizard run against an empty database (`wizard-walk.mjs`), which means dropping and re-bootstrapping the demo database the other batches capture from. Placeholders left open |
 | Organization profile with the Timezone select open | **NOT POSSIBLE** as described | The timezone is a native `<select>`; an open native dropdown is drawn by the browser outside the page and never appears in a screenshot. The closed field is already in `08-02-organization-settings`. Placeholder left open |
 
+## Guide 01 re-shot or added 2026-10-17
+
+Every image the membership guide embeds was re-captured on 2026-10-16. This
+pass checked those against the rows queued for them, re-shot the three that
+still missed what was asked, and filled all ten open placeholders. Rows
+elsewhere in this file that these resolve are marked **CURRENT** 2026-10-17 in
+place; rows in tables without a disposition column (the placeholder lists, the
+Preferred Name and #2857 lists) are resolved here.
+
+| Image | Disposition | Notes |
+| ----- | ----------- | ----- |
+| `01-05-add-member-form` (re-shot) | **CURRENT** 2026-10-17 | Auto-numbering switched on for the shot and restored afterwards, so the hint reads "Leave blank to assign 0001 automatically". The pattern's own sequence starts at 0001 because the demo's numbers were typed by hand. Status (Active, Inactive, On Leave), Preferred Name and the rank and position help lines are in frame |
+| `01-08-member-audit-history` (re-shot) | **CURRENT** 2026-10-17 | `seed_guide01_member_states` gives Callum Frazier a station edit and a platoon edit on the same day, each saving the value he already holds, so two entries share a date with different times beside the earlier rank change |
+| `01-19-create-waiver` (re-shot) | **CURRENT** 2026-10-17 | Only Training Requirements ticked, with "Creates a standalone training waiver without a leave of absence" |
+| `01-01`, `01-06`, `01-07`, `01-10`, `01-11`, `01-22`, `01-23`, `01-26`, `01-29`, `01-33`, `01-40`, `01-41` | **CURRENT** 2026-10-17 (checked) | The 2026-10-16 captures already show what their rows ask: Rank and Member # columns, Advance/Hold/Reject Selected (three applicants ticked, not two), both Applies To boxes ticked, Active badges on kanban cards, My Account, "Send welcome emails now" with the Unavailable note. `01-40`'s alt text now names the Rank column. `01-05` and `01-07` show Preferred Name |
+| `01-42-archived-member-row` | **CURRENT** 2026-10-17 | New. The Members table on Archived with the Reactivate icon |
+| `01-43-print-id-cards` | **CURRENT** 2026-10-17 | New. Front and back is picked (never saved), because Save as department layout replaces the "Department layout" note only when the choices differ from the saved layout |
+| `01-44-member-id-card`, `01-45-reissue-badge-confirm` | **CURRENT** 2026-10-17 | New. Nadia Belhaj's card; the confirmation is closed with Keep current badge. One placeholder asked for both, so `01-45` was placed by hand |
+| `01-46-add-member-password-no-email` | **CURRENT** 2026-10-17 | New. The demo backend has no email configured, so this is the live page |
+| `01-47-membership-id-fiscal-year` | **CURRENT** 2026-10-17 | New. Same state as `08-88`, written through the API and restored afterwards |
+| `01-48-reset-password-rules` | **CURRENT** 2026-10-17 | New. "Abcdefgh1234!" typed into the masked field; never submitted |
+| `01-49-anonymize-member` | **CURRENT** 2026-10-17 | New. Never typed or confirmed |
+| `01-50-status-page-stage` | **CURRENT** 2026-10-17 | New. Add Stage with Enable Status Page and a welcome line; never saved |
+| `01-51-rejoin-status-dialog` | **CURRENT** 2026-10-17, in part | New. Earlier service (department default marked) and Return date. **Last day of previous service** is not in frame: it is asked only for a member with no recorded stints, and a member dropped through the app always has one. Clearing it leaves the estimate reading the day of the drop, which no real member shows, so that state was not manufactured. Never submitted |
+| `01-52-service-history-restart` | **CURRENT** 2026-10-17 | New. Credited and prior service tiles, the 2014–2019 stint marked Dropped (voluntary) and Not counted, and the current stint |
+| `01-02-member-profile`, `01-27-stage-type-picker`, `01-28-stage-email-config` | **Not checked** | Their rows stay open |
+
+The former members in `01-42`, `01-49`, `01-51` and `01-52` exist only for one
+shot. Each is created, taken through the real drop, archive and rejoin
+endpoints, pictured, and permanently deleted afterwards, so the roster count
+every other guide pictures stays at 22.
+
 ## Queued by the October 15 – 16 documentation pass
 
 Nothing was captured by this pass. The prospective-members set (`15-*`,
@@ -462,14 +494,14 @@ unchanged.
 
 | Image | Disposition | Why |
 | ----- | ----------- | --- |
-| `01-01-member-directory.png` | **REPLACE** | The table gained a **Rank** column between the name and **Member #**. Re-shoot as an officer so **Member #** is present, with at least one member whose rank is set |
+| `01-01-member-directory.png` | **CURRENT** 2026-10-17 (checked) | The table gained a **Rank** column between the name and **Member #**. Re-shoot as an officer so **Member #** is present, with at least one member whose rank is set |
 | `01-02-member-profile.png` | **REPLACE** | Assigned Inventory is absent for a viewer without permission to manage equipment. Caption the capturing account's grants — the page differs by viewer |
-| `01-05-add-member-form.png` | **REPLACE** | One **Membership Number** field whose hint reads "Leave blank to assign … automatically" (the separate Membership ID box is gone); **Preferred Contact** is gone and **Status** offers Active, Inactive and On Leave; **Rank** and **Position** carry help lines; with **Set initial password** ticked a rules checklist sits under the password fields. Shoot with auto-numbering on |
-| `01-08-member-audit-history.png` | **REPLACE** | Each entry shows the time beside the date. Re-shoot filtered to profile updates, on a member with two edits on the same day |
-| `01-40-member-directory-member.png` | **CHECK** | Alt text says "name, member number and status only"; the member view also has a **Rank** column, and **Member #** is hidden until someone in the department is numbered |
-| `01-26-print-applicant-badges.png` | **REPLACE** | Bulk buttons read **Advance Selected**, **Hold Selected**, **Reject Selected**. Re-shoot the bar with two applicants selected (alt text still says "Advance All") |
-| `01-11-create-waiver.png` | **REPLACE** | **Applies To** has two checkboxes — **Training Requirements** and **Meeting Attendance & Shift Requirements**. Re-shoot with both ticked, so the line under them reads "Creates a leave of absence that automatically generates a training waiver" |
-| `01-19-create-waiver.png` | **REPLACE** | Same change as `01-11`. Re-shoot with only **Training Requirements** ticked, showing "Creates a standalone training waiver without a leave of absence" |
+| `01-05-add-member-form.png` | **CURRENT** 2026-10-17 (re-shot) | One **Membership Number** field whose hint reads "Leave blank to assign … automatically" (the separate Membership ID box is gone); **Preferred Contact** is gone and **Status** offers Active, Inactive and On Leave; **Rank** and **Position** carry help lines; with **Set initial password** ticked a rules checklist sits under the password fields. Shoot with auto-numbering on |
+| `01-08-member-audit-history.png` | **CURRENT** 2026-10-17 (re-shot) | Each entry shows the time beside the date. Re-shoot filtered to profile updates, on a member with two edits on the same day |
+| `01-40-member-directory-member.png` | **CURRENT** 2026-10-17 (alt text reworded) | Alt text says "name, member number and status only"; the member view also has a **Rank** column, and **Member #** is hidden until someone in the department is numbered |
+| `01-26-print-applicant-badges.png` | **CURRENT** 2026-10-17 (checked) | Bulk buttons read **Advance Selected**, **Hold Selected**, **Reject Selected**. Re-shoot the bar with two applicants selected (alt text still says "Advance All") |
+| `01-11-create-waiver.png` | **CURRENT** 2026-10-17 (checked) | **Applies To** has two checkboxes — **Training Requirements** and **Meeting Attendance & Shift Requirements**. Re-shoot with both ticked, so the line under them reads "Creates a leave of absence that automatically generates a training waiver" |
+| `01-19-create-waiver.png` | **CURRENT** 2026-10-17 (re-shot) | Same change as `01-11`. Re-shoot with only **Training Requirements** ticked, showing "Creates a standalone training waiver without a leave of absence" |
 | `19-37-member-id-cards.png` | **CHECK** | The frame shows a card in a "revoked" state, but the ID Cards panel offers no Revoke action (Suspend, Lost, Reactivate, delete). Confirm what the frame shows, or re-shoot with a suspended card |
 | Applicant conversion dialog; administrative member's ID card | **CHECK** | Both now show **Member class** (the conversion dialog asks for **Member class** and **Starting status**; an administrative member's card shows **Member Class** where others show **Rank**) |
 
@@ -669,7 +701,7 @@ client secret; use a throwaway demo client.
 | `03-*` swap request dialog and Requests tab | **CHECK** | Open swaps are picked up, not officer-approved |
 | `03-*` close-out wizard step 2 | **REPLACE** | Gained the shared-calls picker |
 | `14-*` Results tab, Cast Vote tab and Send Ballot Emails shots | **REPLACE** | One ballot model; results released on close; revised mark |
-| `01-*` Members page as a non-manager | **CHECK** | Directory hides archived members and opens on Active |
+| `01-*` Members page as a non-manager | **CURRENT** 2026-10-17 (checked `01-40`) | Directory hides archived members and opens on Active |
 | `02-*` Compliance Matrix, Shift Compliance and program enrollment progress | **CHECK** | Shift counts and linked requirements now read shift attendance / live compliance |
 | `13-*` Add Record dialog | **REPLACE** | Member/Prospect picker |
 
@@ -721,7 +753,7 @@ grades. Never capture a real badge code; use a throwaway demo member.
 | `03-14-scheduling-reports` | **REPLACE** | Shift Compliance cards are **Requirement Checks**, **Checks Met**, **Checks Not Met** (were Total Members, Compliant, Non-Compliant) |
 | `03-67-swap-request-dialog`, `03-11-swap-requests-tab` | **REPLACE** | Exchange With a Member picker; exchange cards name the other member |
 | `03-60-dashboard-my-shifts`, `00-04-dashboard-overview` | **CHECK** | Open slots the member cannot take read "Not eligible" instead of Sign Up |
-| `01-23-print-member-badges`, `19-37-member-id-cards` | **CHECK** | Badge now encodes the server badge code; Print Badges needs `members.manage` or `members.manage_id_cards` |
+| `01-23-print-member-badges`, `19-37-member-id-cards` | **CHECK** (`01-23` **CURRENT** 2026-10-17: the selection bar, no badge in frame; `19-37` not checked) | Badge now encodes the server badge code; Print Badges needs `members.manage` or `members.manage_id_cards` |
 | `15-10-pipeline-settings`, `15-14-applicant-drawer-overview` | **CHECK** | Automatic Transfer card; checklist items as tickboxes in the drawer |
 | `08-11-error-monitor` | **CHECK** | Rows from scheduled tasks carry the source **Scheduled task** |
 | `05-01-inventory-items`, `05-25-admin-hub`, `05-60-admin-hub-groups` | **REPLACE at phone width** | Below 640px the nine Items filters sit behind a **Filters** toggle; eight admin pages lost their doubled side padding; hub metric labels wrap to two lines |
@@ -870,18 +902,18 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | `00-19-change-password` | **REPLACE** (also queued below) | Shot 2026-09-25; the Password section's checklist is now the seven-rule list (12 characters, no runs, no triple repeats) shown before typing, and the page title reads My Account (was User Settings) | #2759, #2807 |
 | `00-20-member-dashboard` | **REPLACE** | Shot 2026-09-25; Log Training subtitle changed; Next 30 Days event rows past their RSVP deadline show Open instead of Going / Can't; My Updates may stack | #2807, #2828, #2775 |
 | `00-22-notification-card-expanded` | **REPLACE** | Shot 2026-09-25 full-page; inbox subtitle changed to 'Your in-app notifications. Pinned ones stay at the top.' and same-category rows now stack. The manifest prepare step clicks the first aria-expanded=false button in the first div.card containing 'New Shift Assignment', which may now be a stack header — check the prepare step before re-capturing | #2791, #2775 |
-| `01-01-member-directory` | **REPLACE** (also queued below) | Closed status select displays its selected option, now 'All Statuses' (was 'All Status'); privacy notice reworded | #2784, #2669 |
-| `01-05-add-member-form` | **REPLACE** (also queued below) | Status and Preferred Contact selects removed, separate Membership ID override box removed, Membership Number loses its asterisk and shows next-number placeholder/hint under auto-generation, Set initial password hint changed, subtitle 'Add someone to the roster' | #2759, #2819, #2823, #2751, #2784 |
-| `01-06-import-members` | **REPLACE** | Subtitle now 'Add many members at once from a spreadsheet' and drop zone 'Choose a CSV file to upload' | #2784 |
-| `01-07-admin-member-edit` | **REPLACE** (also queued below) | Back link now 'Back to Members Administration', email help text and compliance-exemption helper reworded | #2784, #2764 |
-| `01-08-member-audit-history` | **REPLACE** (also queued below) | Entries now show date and time; also did not run in the 2026-09-25 sweep (filter rendered no events) — reseed audit events first | #2764, #2728 |
-| `01-11-create-waiver` | **REPLACE** (also queued below) | Same Create Waiver tab as 01-19: Applies To changed to two boxes, subtitle changed, member picker shows rank names | #2765, #2784 |
-| `01-19-create-waiver` | **REPLACE** (also queued below) | Applies To now shows two checkboxes (Training Requirements; Meeting Attendance & Shift Requirements) instead of three; page subtitle changed | #2765, #2784 |
-| `01-22-member-lifecycle` | **REPLACE** | Member Management tab heading changed to 'Member Management' with new subtitle; filter 'All Statuses'; hub description changed | #2784 |
-| `01-26-print-applicant-badges` | **REPLACE** (also queued below) | Bulk bar labels are now Advance Selected / Hold Selected / Reject Selected; manifest alt (manifest.mjs ~5838) still says 'Advance All' — the guide's alt was updated to 'Advance Selected' | #2783, #2653 |
-| `01-33-import-review-rejected-rows` | **REPLACE** | Welcome-email option now 'Send welcome emails now' with temporary-password wording (and an Unavailable note when email is off); button pluralisation | #2751, #2759 |
-| `01-40-member-directory-member` | **REPLACE** (also queued below) | As an ordinary member with emails hidden the search placeholder now reads 'Search by name or membership number...' | #2759 |
-| `01-41-profile-visibility` | **REPLACE** | Full-page /account: title now 'My Account' and Security sidebar description changed | #2807, #2759 |
+| `01-01-member-directory` | **CURRENT** 2026-10-17 (checked) | Closed status select displays its selected option, now 'All Statuses' (was 'All Status'); privacy notice reworded | #2784, #2669 |
+| `01-05-add-member-form` | **CURRENT** 2026-10-17 (re-shot) | Status and Preferred Contact selects removed, separate Membership ID override box removed, Membership Number loses its asterisk and shows next-number placeholder/hint under auto-generation, Set initial password hint changed, subtitle 'Add someone to the roster' | #2759, #2819, #2823, #2751, #2784 |
+| `01-06-import-members` | **CURRENT** 2026-10-17 (checked) | Subtitle now 'Add many members at once from a spreadsheet' and drop zone 'Choose a CSV file to upload' | #2784 |
+| `01-07-admin-member-edit` | **CURRENT** 2026-10-17 (checked) | Back link now 'Back to Members Administration', email help text and compliance-exemption helper reworded | #2784, #2764 |
+| `01-08-member-audit-history` | **CURRENT** 2026-10-17 (re-shot) | Entries now show date and time; also did not run in the 2026-09-25 sweep (filter rendered no events) — reseed audit events first | #2764, #2728 |
+| `01-11-create-waiver` | **CURRENT** 2026-10-17 (checked) | Same Create Waiver tab as 01-19: Applies To changed to two boxes, subtitle changed, member picker shows rank names | #2765, #2784 |
+| `01-19-create-waiver` | **CURRENT** 2026-10-17 (re-shot) | Applies To now shows two checkboxes (Training Requirements; Meeting Attendance & Shift Requirements) instead of three; page subtitle changed | #2765, #2784 |
+| `01-22-member-lifecycle` | **CURRENT** 2026-10-17 (checked) | Member Management tab heading changed to 'Member Management' with new subtitle; filter 'All Statuses'; hub description changed | #2784 |
+| `01-26-print-applicant-badges` | **CURRENT** 2026-10-17 (checked) | Bulk bar labels are now Advance Selected / Hold Selected / Reject Selected; manifest alt (manifest.mjs ~5838) still says 'Advance All' — the guide's alt was updated to 'Advance Selected' | #2783, #2653 |
+| `01-33-import-review-rejected-rows` | **CURRENT** 2026-10-17 (checked) | Welcome-email option now 'Send welcome emails now' with temporary-password wording (and an Unavailable note when email is off); button pluralisation | #2751, #2759 |
+| `01-40-member-directory-member` | **CURRENT** 2026-10-17 (checked) | As an ordinary member with emails hidden the search placeholder now reads 'Search by name or membership number...' | #2759 |
+| `01-41-profile-visibility` | **CURRENT** 2026-10-17 (checked) | Full-page /account: title now 'My Account' and Security sidebar description changed | #2807, #2759 |
 | `02-01-my-training` | **REPLACE** (also queued below) | The subtitle was rewritten and the 'Requirements' stat is now 'Required Training' with an 'X of Y requirements met' hint. The Pipeline Progress card now carries the program name. | #2827, #2788 |
 | `02-100-checklist-steps-editor` | **REPLACE** | The manifest prepare clicks the button named 'Edit requirement', which is now 'Edit <requirement name>', so re-capture times out until the selector is updated. The pictured UI is unchanged. | #2788 |
 | `02-17-officer-dashboard` | **REPLACE** (also queued below) | Subtitle changed to 'Compliance, expiring certifications, hours, and what needs your attention'. | #2777 |
@@ -1001,10 +1033,10 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | `00-23-login-two-factor` | **CHECK** | Only the recovery-code placeholder changed, visible after 'Use a recovery code'; the pictured 6-digit state is likely unchanged | |
 | `00-26-sidebar-officer-operations` | **CHECK** | Tall viewport, probably no overflow; confirm no scroll pill | |
 | `01-02-member-profile` | **CHECK** | Recaptured 2026-09-25 with Service History card; inventory panel gained empty state 'No equipment is assigned to this member.' (#2784) | |
-| `01-10-prospective-pipeline` | **CHECK** | Kanban card status badges now read 'Active'/'On Hold' instead of raw values | |
+| `01-10-prospective-pipeline` | **CURRENT** 2026-10-17 (checked) | Kanban card status badges now read 'Active'/'On Hold' instead of raw values | |
 | `01-27-stage-type-picker` | **CHECK** | Manual Approval tile description now 'A pipeline manager approves the applicant before they advance.' — visible if the tile text is in frame | |
 | `01-28-stage-email-config` | **CHECK** | Application Tracker Link hint reworded and email preview restyled; probably invisible if the section is unticked and Show Preview collapsed | |
-| `01-29-status-change-modal` | **CHECK** | Archived removed from New Status and fields labelled; captured closed on an active member so likely unchanged | |
+| `01-29-status-change-modal` | **CURRENT** 2026-10-17 (checked) | Archived removed from New Status and fields labelled; captured closed on an active member so likely unchanged | |
 | `02-04-course-library` | **CHECK** | Subtitle now 'The classes your department runs or recognizes (N courses)'. | |
 | `02-102-shift-report-crew-form` | **CHECK** | Reached via view=create; the strip no longer carries a 'New' segment. | |
 | `02-106-course-library-member` | **CHECK** | Same Course Library subtitle change. | |
@@ -1300,13 +1332,13 @@ and this file cannot disagree.
 
 | Disposition | Image | What the new frame must show |
 | --- | --- | --- |
-| **REPLACE** | `01-01-member-directory.png` | The table gained a **Rank** column between the name and **Member #** (2026-09-30). Re-shoot as an officer so **Member #** is present, with at least one member whose rank is set. |
-| **REPLACE** | `01-05-add-member-form.png` | Four visible changes since the frame was taken: one **Membership Number** field whose hint reads "Leave blank to assign … automatically" (the separate Membership ID override box is gone); the **Status** and **Preferred Contact** controls are gone from Department Information; **Rank** and **Position** each carry a help line under the dropdown; and with **Set initial password** ticked, a password-rules checklist sits under the two password fields. Shoot on a department with auto-numbering on, so the hint shows a real next number. |
-| **REPLACE** | `01-08-member-audit-history.png` | Each entry now shows the time beside the date (2026-09-28). Re-shoot filtered to profile updates, on a member with at least two edits on the same day so the times differ. |
-| **REPLACE** | `01-26-print-applicant-badges.png` | The bulk buttons were renamed on 2026-09-29 — **Advance Selected**, **Hold Selected**, **Reject Selected** (they act on the selection, not on everyone). Re-shoot the same bar with two applicants selected. |
-| **REPLACE** | `01-11-create-waiver.png` | **Applies To** now holds two checkboxes — **Training Requirements** and **Meeting Attendance & Shift Requirements** — where it held three (2026-09-28). Re-shoot the Create Waiver tab with both ticked, so the line under them reads "Creates a leave of absence that automatically generates a training waiver". |
-| **REPLACE** | `01-19-create-waiver.png` | Same change as `01-11`: **Applies To** has two checkboxes, not three. Re-shoot with only **Training Requirements** ticked so the frame differs from `01-11` and shows "Creates a standalone training waiver without a leave of absence". |
-| **NEW** | — | Members Admin → Settings → Membership IDs with numbering and auto-generation on → the **Year and number** preset applied: Number pattern `{YYYY}-{SEQ}`, Minimum digits 3, **Restart the count each year** on, **The year follows** set to **Our fiscal year** starting in July and named by **The year it ends in**, and the line "The next member will be numbered 2027-001." with "Next: 2027-001" in the panel header. |
+| **CURRENT** 2026-10-17 (checked) | `01-01-member-directory.png` | The table gained a **Rank** column between the name and **Member #** (2026-09-30). Re-shoot as an officer so **Member #** is present, with at least one member whose rank is set. |
+| **CURRENT** 2026-10-17 (re-shot) | `01-05-add-member-form.png` | Four visible changes since the frame was taken: one **Membership Number** field whose hint reads "Leave blank to assign … automatically" (the separate Membership ID override box is gone); the **Status** and **Preferred Contact** controls are gone from Department Information; **Rank** and **Position** each carry a help line under the dropdown; and with **Set initial password** ticked, a password-rules checklist sits under the two password fields. Shoot on a department with auto-numbering on, so the hint shows a real next number. |
+| **CURRENT** 2026-10-17 (re-shot) | `01-08-member-audit-history.png` | Each entry now shows the time beside the date (2026-09-28). Re-shoot filtered to profile updates, on a member with at least two edits on the same day so the times differ. |
+| **CURRENT** 2026-10-17 (checked) | `01-26-print-applicant-badges.png` | The bulk buttons were renamed on 2026-09-29 — **Advance Selected**, **Hold Selected**, **Reject Selected** (they act on the selection, not on everyone). Re-shoot the same bar with two applicants selected. |
+| **CURRENT** 2026-10-17 (checked) | `01-11-create-waiver.png` | **Applies To** now holds two checkboxes — **Training Requirements** and **Meeting Attendance & Shift Requirements** — where it held three (2026-09-28). Re-shoot the Create Waiver tab with both ticked, so the line under them reads "Creates a leave of absence that automatically generates a training waiver". |
+| **CURRENT** 2026-10-17 (re-shot) | `01-19-create-waiver.png` | Same change as `01-11`: **Applies To** has two checkboxes, not three. Re-shoot with only **Training Requirements** ticked so the frame differs from `01-11` and shows "Creates a standalone training waiver without a leave of absence". |
+| **CURRENT** 2026-10-17 as `01-47` | — | Members Admin → Settings → Membership IDs with numbering and auto-generation on → the **Year and number** preset applied: Number pattern `{YYYY}-{SEQ}`, Minimum digits 3, **Restart the count each year** on, **The year follows** set to **Our fiscal year** starting in July and named by **The year it ends in**, and the line "The next member will be numbered 2027-001." with "Next: 2027-001" in the panel header. |
 
 ### [02 — training](./02-training.md)
 
