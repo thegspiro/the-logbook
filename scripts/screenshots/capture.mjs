@@ -24,6 +24,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  DEMO_COMPLIANCE_CREDENTIALS,
   DEMO_CREDENTIALS,
   DEMO_FORWARDEE_CREDENTIALS,
   DEMO_MEMBER_CREDENTIALS,
@@ -374,7 +375,7 @@ async function detectSubjectOutOfFrame(page, shot) {
       };
 }
 
-/** The document-space rectangle the screenshot will cover. */
+/** The rectangle the screenshot will cover, in boundingBox() coordinates. */
 async function captureFrame(page, shot) {
   if (shot.selector) {
     return await page.locator(shot.selector).first().boundingBox();
@@ -388,10 +389,14 @@ async function captureFrame(page, shot) {
         height: document.documentElement.scrollHeight,
       };
     }
-    // boundingBox() is document-space, so the viewport rect has to be too.
+    // boundingBox() is relative to the viewport, not the document, so the
+    // viewport rect starts at 0,0 however far the page is scrolled. Measuring
+    // it from scrollX/scrollY failed every scrolled viewport shot whose
+    // subject was plainly in the picture (05-64: subject at y=431 of a frame
+    // said to start at y=984).
     return {
-      x: window.scrollX,
-      y: window.scrollY,
+      x: 0,
+      y: 0,
       width: window.innerWidth,
       height: window.innerHeight,
     };
@@ -495,6 +500,10 @@ function makeSessions(browser, baseOptions) {
         // Reaches one suggestion through a forward and reviews no box, so the
         // Review tab shows what a forward recipient sees and nothing more.
         await login(page, DEMO_FORWARDEE_CREDENTIALS);
+      } else if (auth === "compliance") {
+        // The Compliance box's only reviewer. The secretary reviews every
+        // other seeded box but not this one.
+        await login(page, DEMO_COMPLIANCE_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }

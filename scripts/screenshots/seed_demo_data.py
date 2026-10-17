@@ -16327,6 +16327,76 @@ class Seeder:
     #: never picture a real client address.
     GUIDE08_IP_EXCEPTION = "203.0.113.24"
 
+    #: Raised in the default Compliance box by an ordinary member, answering
+    #: its intake questions, so the box's reviewer has a submission whose
+    #: answers show. Not the demo member: their My submissions list is
+    #: pictured, and this would join it.
+    COMPLIANCE_SUBMITTER_USERNAME = "snolan"
+    COMPLIANCE_SUBMISSION_TITLE = "Bay door sensor on Engine 1 is not reversing"
+
+    def seed_guide07_states(self) -> dict[str, Any]:
+        """States guide 07 pictures that nothing else in the demo produces.
+
+        * One submission in the default Compliance box, answering both of its
+          intake questions (Safety, which opens the follow-up "Is anyone at
+          immediate risk?", then No), for the reviewer's view of intake
+          answers. Raised named, by an ordinary member. Its reviewer, the
+          Compliance Officer, is signed in once through ``member_session`` so
+          the capture harness can sign in as them without meeting a forced
+          password change.
+        """
+        result: dict[str, Any] = {}
+        reviewer_id = self._user_id(COMPLIANCE_OFFICER_USERNAME)
+        submitter_id = self._user_id(self.COMPLIANCE_SUBMITTER_USERNAME)
+        if not reviewer_id or not submitter_id:
+            self.blocked.append("guide 07: compliance reviewer or submitter missing")
+            return result
+        reviewer = self.member_session(
+            self.base_url, reviewer_id, COMPLIANCE_OFFICER_USERNAME
+        )
+        titles = {
+            pick(s, "title")
+            for s in items(reviewer.get("/suggestions/review?limit=200"), "items")
+        }
+        if self.COMPLIANCE_SUBMISSION_TITLE in titles:
+            return result
+        submitter = self.member_session(
+            self.base_url, submitter_id, self.COMPLIANCE_SUBMITTER_USERNAME
+        )
+        box_id = next(
+            (
+                str(pick(b, "id"))
+                for b in items(submitter.get("/suggestions/boxes"), "boxes")
+                if pick(b, "name") == "Compliance"
+            ),
+            "",
+        )
+        if not box_id:
+            self.blocked.append("guide 07: the default Compliance box is not open")
+            return result
+        submitter.post_multipart(
+            f"/suggestions/boxes/{box_id}/submissions",
+            {
+                "title": self.COMPLIANCE_SUBMISSION_TITLE,
+                "details": (
+                    "The safety reverse on bay 1 did not trip when I walked "
+                    "under the door during this morning's check. I stopped it "
+                    "by hand and taped off the bay. The door contractor has "
+                    "not been called yet."
+                ),
+                "anonymous": "false",
+                "answers": json.dumps(
+                    {
+                        "compliance_concern_type": "safety",
+                        "compliance_immediate_risk": "no",
+                    }
+                ),
+            },
+            [],
+        )
+        result["compliance_submission"] = "created"
+        return result
+
     def seed_guide08_admin_states(self) -> dict[str, Any]:
         """States guide 08 pictures that nothing else in the demo produces.
 
@@ -17099,6 +17169,7 @@ class Seeder:
         self.step("unsized shift", self.seed_unsized_shift)
         self.step("sealed compartments", self.seed_sealed_compartments)
         self.step("member admin hours", self.seed_member_admin_hours)
+        self.step("guide 07 states", self.seed_guide07_states)
         self.step("guide 08 admin states", self.seed_guide08_admin_states)
         self.step("profile visibility mix", self.seed_profile_visibility_mix)
         self.step("retired call type", self.seed_retired_call_type)
