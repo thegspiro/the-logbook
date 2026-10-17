@@ -30,10 +30,8 @@
 01-01-member-directory
 01-02-member-profile
 01-07-admin-member-edit
-01-08-member-audit-history
 01-10-prospective-pipeline
 01-11-create-waiver
-01-19-create-waiver
 01-22-member-lifecycle
 01-23-print-member-badges
 01-24-delete-member-modal

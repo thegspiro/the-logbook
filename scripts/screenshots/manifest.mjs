@@ -1289,6 +1289,85 @@ async function openIdCardsProfile(page) {
   await page.waitForTimeout(500);
 }
 
+// ── Guide 01 helpers ────────────────────────────────────────────────
+// The former-member shots need a member who has left, and the demo roster
+// has none: every seeded member is pictured as current across the guides,
+// and a dropped member would move the Members page's Total Members. So a
+// former member exists only for the length of one shot -- created, taken
+// through the real status endpoints, pictured, and permanently deleted in
+// `cleanup`. Uses guide08Api, which is declared further down and hoisted.
+
+let guide01MembershipIdBefore = null;
+
+const GUIDE01_FORMER_MEMBERS = {
+  archived: {
+    first_name: "Harlan",
+    last_name: "Pryce",
+    username: "hpryce",
+    membership_number: "091",
+  },
+  dropped: {
+    first_name: "Wesley",
+    last_name: "Brandt",
+    username: "wbrandt",
+    membership_number: "092",
+  },
+  rejoined: {
+    first_name: "Corinne",
+    last_name: "Mabry",
+    username: "cmabry",
+    membership_number: "093",
+  },
+};
+
+/** Permanently delete any member left over under this username. */
+async function guide01RemoveFormerMember(page, kind) {
+  const { username } = GUIDE01_FORMER_MEMBERS[kind];
+  const users = await guide08Api(page, "GET", "/users?limit=200");
+  const list = Array.isArray(users) ? users : users.users || users.items || [];
+  for (const user of list.filter((u) => u.username === username)) {
+    await guide08Api(page, "DELETE", `/users/${user.id}?hard=true`);
+  }
+}
+
+/**
+ * Create a member who joined in 2014 and left voluntarily in 2019, then take
+ * them on to the state `kind` names: still dropped, archived, or back since
+ * 2023 under Restart at zero. Returns their id.
+ */
+async function guide01MakeFormerMember(page, kind) {
+  await guide01RemoveFormerMember(page, kind);
+  const person = GUIDE01_FORMER_MEMBERS[kind];
+  const created = await guide08Api(page, "POST", "/users", {
+    ...person,
+    email: `${person.username}@oakvillefd.example.org`,
+    rank: "firefighter",
+    hire_date: "2014-04-07",
+    send_welcome_email: false,
+    password: DEMO_MEMBER_CREDENTIALS.password,
+  });
+  const id = created.id;
+  await guide08Api(page, "PATCH", `/users/${id}/status`, {
+    new_status: "dropped_voluntary",
+    reason: "Moved out of the district",
+    separation_date: "2019-08-31",
+    send_property_return_email: false,
+  });
+  if (kind === "archived") {
+    await guide08Api(page, "POST", `/users/${id}/archive`, {
+      reason: "No property outstanding",
+    });
+  }
+  if (kind === "rejoined") {
+    await guide08Api(page, "PATCH", `/users/${id}/status`, {
+      new_status: "active",
+      service_credit: "restart",
+      rejoin_date: "2023-03-06",
+    });
+  }
+  return id;
+}
+
 /**
  * Open a Medic 3 check and leave the two sealed bags in opposite states.
  *
@@ -6475,6 +6554,37 @@ export const SHOTS = [
       "Screenshot of the Add Member form showing the personal information fields, role",
     alt: "Add Member form with personal information and role assignment fields",
     route: "/members/admin?tab=add",
+    // With auto-numbering on, so the Membership Number hint shows the real
+    // next number. The demo ships with numbering off; the setting is written
+    // through the API and put back afterwards.
+    prepare: async (page) => {
+      guide01MembershipIdBefore = await guide08Api(
+        page,
+        "GET",
+        "/organization/settings/membership-id",
+      );
+      await guide08Api(page, "PATCH", "/organization/settings/membership-id", {
+        ...guide01MembershipIdBefore,
+        enabled: true,
+        auto_generate: true,
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByText(/Leave blank to assign/)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      if (!guide01MembershipIdBefore) return;
+      await guide08Api(
+        page,
+        "PATCH",
+        "/organization/settings/membership-id",
+        guide01MembershipIdBefore,
+      );
+      guide01MembershipIdBefore = null;
+    },
     fullPage: true,
   },
   {
@@ -7085,6 +7195,330 @@ export const SHOTS = [
     // "No EVOC level" is this select's placeholder option — in the DOM on
     // every operator, including this one, which has Level 1 selected.
     allowEmptyState: true,
+  },
+
+  // ── 01 placeholders filled 2026-10-17 ──
+  {
+    id: "01-42-archived-member-row",
+    doc: "01-membership.md",
+    line: 106,
+    anchor:
+      "As an administrator (members.manage) at /members on a desktop width: the Members table with the status filter set to Archived",
+    alt: "The Members table filtered to Archived: a former member's row with the green Reactivate icon beside Edit and Delete",
+    route: "/members",
+    expect: {
+      selector: 'button[aria-label="Reactivate Harlan Pryce"]:visible',
+    },
+    prepare: async (page) => {
+      await guide01MakeFormerMember(page, "archived");
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByRole("combobox", { name: "Filter by status" })
+        .selectOption("archived", { timeout: 15_000 });
+      // :visible -- the phone card list renders the same row, hidden.
+      await page
+        .locator('button[aria-label="Reactivate Harlan Pryce"]:visible')
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: (page) => guide01RemoveFormerMember(page, "archived"),
+  },
+  {
+    id: "01-43-print-id-cards",
+    doc: "01-membership.md",
+    line: 238,
+    anchor:
+      "Administrator (members.manage) at /members/print-id-cards with two demo members selected",
+    alt: "Print ID Cards for two members with Front and back chosen: the Orientation, Sides and Code choices, Test card and Save as department layout, the duplex printing note, and the Accept old badges switch at the bottom",
+    route: "/members/print-id-cards",
+    expect: "Accept old badges",
+    prepare: async (page) => {
+      await withIdsFromApi("/users?limit=2", "users", 2)(page);
+      await page
+        .getByText("Accept old badges")
+        .first()
+        .waitFor({ timeout: 15_000 });
+      // Save as department layout replaces the "Department layout" note only
+      // once the choices differ from the saved layout. Picked, never saved.
+      await page.getByRole("radio", { name: /Front and back/ }).check();
+      await page
+        .getByRole("button", { name: "Save as department layout" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+  },
+  {
+    id: "01-44-member-id-card",
+    doc: "01-membership.md",
+    line: 273,
+    anchor:
+      "Administrator at /members/<demo member id>/id-card: the badge with its QR code",
+    alt: "A member's digital ID card: membership number as text, the badge code under its barcode, the QR code, and the Print ID Card and Reissue badge buttons",
+    route: "/members",
+    expect: { selector: '[data-testid="badge-code"]' },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/users?limit=200",
+        (id) => `/members/${id}/id-card`,
+        "users",
+        (user) => user.username === "nbelhaj",
+      )(page);
+      await page
+        .getByRole("button", { name: "Reissue badge" })
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
+    id: "01-45-reissue-badge-confirm",
+    doc: "01-membership.md",
+    line: 273,
+    // Applied by hand beside 01-44: the one marker asked for both frames,
+    // and the applier consumes a marker with a single image.
+    anchor: "__paired-with-01-44__",
+    alt: "The Reissue this badge? confirmation: every printed badge and the phone card stop scanning, with Keep current badge and Reissue badge",
+    route: "/members",
+    expect: "Reissue this badge?",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/users?limit=200",
+        (id) => `/members/${id}/id-card`,
+        "users",
+        (user) => user.username === "nbelhaj",
+      )(page);
+      const reissue = page.getByRole("button", { name: "Reissue badge" });
+      await reissue.waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+      await reissue.click();
+      await page.getByText("Reissue this badge?").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    // Never confirmed: the confirmation is dismissed with its own button.
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep current badge" });
+      if (await keep.count()) await keep.click();
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "01-46-add-member-password-no-email",
+    doc: "01-membership.md",
+    line: 522,
+    anchor:
+      "As an administrator (users.create + members.manage) on an install with email not configured",
+    alt: "Add Member's Account Password block on a department without email: Set initial password ticked and locked, the note saying why, and the empty password fields with their rules",
+    route: "/members/admin?tab=add",
+    expect: "Required: email isn't set up for this department",
+    selector: 'div.card:has(> div > h2:text-is("Account Password"))',
+  },
+  {
+    id: "01-47-membership-id-fiscal-year",
+    doc: "01-membership.md",
+    line: 642,
+    anchor:
+      "Members Admin → Settings → Membership IDs with numbering and auto-generation on",
+    alt: "Membership ID Number settings with the Year and number preset: pattern {YYYY}-{SEQ}, three digits, the count restarting each year on a fiscal year from July named by the year it ends in, and the next member numbered 2027-001",
+    route: "/members/admin/settings/ids",
+    expect: "The next member will be numbered 2027-001",
+    // The section autosaves, so the state is written through the API and put
+    // back afterwards; the demo ships with numbering off.
+    prepare: async (page) => {
+      guide01MembershipIdBefore = await guide08Api(
+        page,
+        "GET",
+        "/organization/settings/membership-id",
+      );
+      await guide08Api(page, "PATCH", "/organization/settings/membership-id", {
+        ...guide01MembershipIdBefore,
+        enabled: true,
+        auto_generate: true,
+        pattern: "{YYYY}-{SEQ}",
+        padding: 3,
+        reset_yearly: true,
+        year_basis: "fiscal",
+        fiscal_year_start_month: 7,
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByText(/The next member will be numbered/)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      if (!guide01MembershipIdBefore) return;
+      await guide08Api(
+        page,
+        "PATCH",
+        "/organization/settings/membership-id",
+        guide01MembershipIdBefore,
+      );
+      guide01MembershipIdBefore = null;
+    },
+    fullPage: true,
+  },
+  {
+    id: "01-48-reset-password-rules",
+    doc: "01-membership.md",
+    line: 924,
+    anchor:
+      "As an administrator (members.manage) at /members/admin, Member Management tab: a demo member's Reset Password dialog",
+    alt: "Reset Password for a member with a weak password typed (masked): the Password rules list ticks the length and character rules and leaves No runs like 123 or abc unmet",
+    route: "/members/admin",
+    expect: "No runs like 123 or abc",
+    prepare: async (page) => {
+      const row = page.locator("tr").filter({ hasText: "Esme Caldwell" });
+      await row.first().waitFor({ timeout: 15_000 });
+      await row
+        .getByRole("button", { name: /Reset Password/i })
+        .first()
+        .click();
+      // The placeholder's own example, typed into a masked field and never
+      // submitted. "1234" is the run the rules list flags.
+      await page.locator("#reset-new-password").fill("Abcdefgh1234!");
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      const cancel = page
+        .locator('[data-testid="modal-panel"]')
+        .getByRole("button", { name: "Cancel" });
+      if (await cancel.count()) await cancel.click();
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "01-49-anonymize-member",
+    doc: "01-membership.md",
+    line: 1068,
+    anchor:
+      "As an administrator (members.manage) at /members/:userId for a Dropped or Archived demo member: the Anonymize Member dialog",
+    alt: "The Anonymize Member dialog for an archived former member: the warning, what is removed, what is kept under Former Member, and the typed confirmation with Anonymize still disabled",
+    route: "/members",
+    expect: "Former Member",
+    prepare: async (page) => {
+      const id = await guide01MakeFormerMember(page, "archived");
+      await page.goto(new URL(`/members/${id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      await page
+        .getByRole("button", { name: "Anonymize member" })
+        .click({ timeout: 15_000 });
+      await page
+        .locator('[data-testid="modal-panel"]')
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    // Never confirmed; the member is deleted outright afterwards.
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await guide01RemoveFormerMember(page, "archived");
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "01-50-status-page-stage",
+    doc: "01-membership.md",
+    line: 1420,
+    anchor:
+      "As a Membership Coordinator (prospective_members.manage) at /prospective-members/settings: a pipeline selected and Add Stage open",
+    alt: "Add Stage with Enable Status Page chosen: the panel saying it enables the public status page and overrides the pipeline setting, Enable public status page at this stage ticked, and a welcome line in the link email message",
+    route: "/prospective-members/settings",
+    expect: "Enables the public status page",
+    prepare: async (page) => {
+      const pipeline = page
+        .locator("button, li, div[role='button']")
+        .filter({ hasText: /stages · \d+ applicants/ })
+        .first();
+      await pipeline.waitFor({ timeout: 15_000 });
+      await pipeline.click();
+      await page.waitForTimeout(1000);
+      const add = page.getByRole("button", { name: /Add Stage/i }).first();
+      await add.scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await add.click({ timeout: 15_000 });
+      await page.waitForTimeout(700);
+      await page
+        .locator("button")
+        .filter({ hasText: "Enable Status Page" })
+        .first()
+        .click({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+      const enable = page.getByLabel("Enable public status page at this stage");
+      if (!(await enable.isChecked())) await enable.check();
+      await page
+        .locator("#stage-status-page-message")
+        .fill(
+          "Welcome to Oakville Fire! Use this link to follow your application as it moves through each stage.",
+        );
+      await page.waitForTimeout(400);
+    },
+    // Never saved: the next shot navigates away with the modal still open.
+    selector: "div:has(> h3:text-is('Stage Configuration'))",
+    viewport: { width: 1440, height: 1200 },
+  },
+  {
+    id: "01-51-rejoin-status-dialog",
+    doc: "01-membership.md",
+    line: 1724,
+    anchor:
+      "As an administrator (members.manage) at /members/:userId for a Dropped (Voluntary) demo member: the Change Member Status dialog with Active selected",
+    alt: "Change Member Status for a member who left voluntarily, with Active selected: Earlier service with its recorded length, Continue prior service (marked as the department default) and Restart at zero, and the Return date",
+    route: "/members",
+    expect: "Restart at zero",
+    // Last day of previous service is asked only for a member whose earlier
+    // service was never recorded -- one who left before The Logbook kept
+    // stints. A drop made today records the stint, and clearing it afterwards
+    // leaves the estimate reading today's date (the drop's own status change)
+    // against seven years away, which no real member shows. So the shot
+    // pictures a member whose service is on record, and the field is absent.
+    prepare: async (page) => {
+      const id = await guide01MakeFormerMember(page, "dropped");
+      await page.goto(new URL(`/members/${id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      const badge = page
+        .locator('button[title="Change status"]:visible')
+        .first();
+      await badge.waitFor({ timeout: 15_000 });
+      await badge.click();
+      await page.waitForTimeout(600);
+      await page
+        .locator("select")
+        .filter({ hasText: "Dropped Voluntary" })
+        .first()
+        .selectOption({ label: "Active" });
+      await page.getByText("Restart at zero").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    // Never submitted; the member is deleted outright afterwards.
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await guide01RemoveFormerMember(page, "dropped");
+    },
+    selector: "div.modal-overlay > div",
+  },
+  {
+    id: "01-52-service-history-restart",
+    doc: "01-membership.md",
+    line: 2142,
+    anchor:
+      "As an administrator (members.manage) at /members/:userId for a demo member who rejoined under Restart at zero",
+    alt: "The Service History card of a member who rejoined under Restart at zero: Credited service and Prior service (not counted) tiles, an earlier stint marked Dropped (voluntary) and Not counted, and the current stint ending present",
+    route: "/members",
+    expect: "Prior service (not counted)",
+    prepare: async (page) => {
+      const id = await guide01MakeFormerMember(page, "rejoined");
+      await page.goto(new URL(`/members/${id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      await page
+        .getByText("Prior service (not counted)")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: (page) => guide01RemoveFormerMember(page, "rejoined"),
+    selector: 'div.card:has(> div > h2:text-is("Service History"))',
   },
 
   // ── 02 Training ─────────────────────────────────────────────────────
@@ -10312,13 +10746,26 @@ export const SHOTS = [
   },
   {
     id: "01-19-create-waiver",
+    expect: "Creates a standalone training waiver without a leave of absence",
     doc: "01-membership.md",
     line: 485,
     anchor:
       "Screenshot of the Create Waiver form showing the member dropdown, 'Applies To'",
     alt: "Create waiver form with member, scope, and date range",
     route: "/members/admin/waivers",
-    prepare: clickByName(/^create waiver$/i),
+    // Only Training Requirements ticked, so the frame differs from 01-11
+    // (both ticked) and shows the standalone-waiver line.
+    prepare: async (page) => {
+      await clickByName(/^create waiver$/i)(page);
+      await page
+        .getByLabel("Meeting Attendance & Shift Requirements")
+        .uncheck({ timeout: 10_000 });
+      await page
+        .getByText(
+          "Creates a standalone training waiver without a leave of absence",
+        )
+        .waitFor({ timeout: 10_000 });
+    },
     fullPage: true,
   },
   {
@@ -11582,6 +12029,7 @@ export const SHOTS = [
   },
   {
     id: "01-08-member-audit-history",
+    expect: "Member profile updated: platoon",
     doc: "01-membership.md",
     line: 215,
     anchor:
@@ -15587,7 +16035,7 @@ export const SHOTS = [
     doc: "01-membership.md",
     line: 1674,
     anchor: "`/members` as a member without `members.manage`",
-    alt: "The Member Directory as an ordinary member: name, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes",
+    alt: "The Member Directory as an ordinary member: name, rank, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes",
     route: "/members",
     auth: "member",
     expect: "Member Directory",
