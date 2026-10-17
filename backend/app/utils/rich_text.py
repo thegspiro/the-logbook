@@ -84,6 +84,16 @@ def section_is_blank(section: dict) -> bool:
     return not section_text(section)
 
 
+def section_is_printed(section: dict) -> bool:
+    """Whether a copy of the minutes shows the section.
+
+    A blank section is left out, except one marked not taken up: an agenda item
+    the meeting never reached is part of the record, and dropping it would make
+    an omission look like it never was on the agenda.
+    """
+    return bool(section.get("not_taken_up")) or not section_is_blank(section)
+
+
 class _PdfBlocks(HTMLParser):
     """Turn sanitized HTML into (kind, inline-markup) blocks for ReportLab.
 
