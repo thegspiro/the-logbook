@@ -1018,6 +1018,194 @@ export function openPipelineSettings() {
   };
 }
 
+/**
+ * Pick a pipeline on the applicant board's Active tab.
+ *
+ * The picker renders on the Active tab only, and the archive tabs list the
+ * pipeline picked there, so a Withdrawn or Inactive shot picks first and then
+ * switches tab.
+ */
+export function selectBoardPipeline(name) {
+  return async (page) => {
+    const picker = page.getByRole("combobox", { name: "Pipeline" });
+    await picker.waitFor({ timeout: 15_000 });
+    await picker.selectOption({ label: name });
+    await page.waitForTimeout(800);
+  };
+}
+
+/**
+ * Open one applicant's drawer on the guide-15 Reinstatement Pipeline, by name,
+ * from the table view. The seeder (`seed_guide15_states`) parks each applicant
+ * these shots name on a stage of that pipeline and nowhere else.
+ */
+function openReinstatementApplicant(name) {
+  return async (page) => {
+    await selectBoardPipeline("Reinstatement Pipeline")(page);
+    await clickByName(/^table$/i)(page);
+    const row = page.locator("tbody tr").filter({ hasText: name }).first();
+    await row.waitFor({ timeout: 15_000 });
+    await row.click({ timeout: 10_000 });
+    await page
+      .getByRole("dialog", { name: "Applicant details" })
+      .waitFor({ timeout: 15_000 });
+    await page.waitForTimeout(800);
+  };
+}
+
+/** A same-origin API call from the signed-in page, with its CSRF header. */
+async function apiFromPage(page, method, path, body) {
+  return await page.evaluate(
+    async ({ method, path, body }) => {
+      const csrf =
+        document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+      const response = await fetch(`/api/v1${path}`, {
+        method,
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": decodeURIComponent(csrf),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const text = await response.text();
+      return { status: response.status, body: text ? JSON.parse(text) : null };
+    },
+    { method, path, body },
+  );
+}
+
+/** The administrator's id and the Chief position's, for the sign-off shots. */
+async function adminAndChiefIds(page) {
+  const me = await apiFromPage(page, "GET", "/auth/me");
+  const roles = await apiFromPage(page, "GET", "/roles");
+  const list = Array.isArray(roles.body)
+    ? roles.body
+    : (roles.body?.roles ?? roles.body?.items ?? []);
+  const chief = list.find((role) => role.slug === "fire_chief");
+  if (!me.body?.id || !chief?.id) {
+    throw new Error(
+      "could not resolve the administrator or the Chief position",
+    );
+  }
+  return { userId: me.body.id, roleId: chief.id };
+}
+
+/**
+ * Seat the administrator in the Chief position for a sign-off shot.
+ *
+ * Sign-offs list the stages asking for a role the viewer's positions answer
+ * to, and nobody in the demo holds the Chief position: the administrator
+ * holds the Chief *office*, which the sign-off does not read. Held only for
+ * the shot — left in place, it would put a "Needs you" row on every later
+ * dashboard capture. `releaseChiefPosition` is the matching cleanup.
+ */
+async function openSignOffsAsChief(page) {
+  const { userId, roleId } = await adminAndChiefIds(page);
+  const granted = await apiFromPage(
+    page,
+    "POST",
+    `/users/${userId}/roles/${roleId}`,
+    {},
+  );
+  // 400 is "already holds it", left by a run whose cleanup did not finish.
+  if (granted.status !== 200 && granted.status !== 400) {
+    throw new Error(`granting the Chief position returned ${granted.status}`);
+  }
+  await page.goto(
+    new URL("/prospective-members/sign-offs", page.url()).toString(),
+    { waitUntil: "domcontentloaded" },
+  );
+  await page
+    .getByRole("button", { name: "Sign as Chief" })
+    .waitFor({ timeout: 15_000 });
+}
+
+async function releaseChiefPosition(page) {
+  const { userId, roleId } = await adminAndChiefIds(page);
+  const released = await apiFromPage(
+    page,
+    "DELETE",
+    `/users/${userId}/roles/${roleId}`,
+  );
+  if (released.status !== 200) {
+    throw new Error(`releasing the Chief position returned ${released.status}`);
+  }
+}
+
+/**
+ * Open the public status page for a real applicant, with the token lookup
+ * answered from a fixture.
+ *
+ * The page is addressed by the applicant's emailed status token, and no
+ * interface hands one out (see the note where `15-13` would sit). The fixture
+ * is built from the applicant's own record, read through the administrator's
+ * API — name, pipeline, stage progress and dates — in the shape
+ * `get_prospect_by_token` returns, so the picture is that applicant's page.
+ * The withdraw POST is refused outright so a slip cannot reach the backend.
+ */
+async function openStatusPageWithdrawDialog(page, { lookupPage }) {
+  const admin = await lookupPage();
+  const email = "elena.vasquez@example.com";
+  const found = await apiFromPage(
+    admin,
+    "GET",
+    `/prospective-members/prospects?limit=5&search=${encodeURIComponent(email)}`,
+  );
+  const rows = found.body?.items ?? found.body?.prospects ?? [];
+  const row = rows.find((p) => p.email === email);
+  if (!row) throw new Error(`no applicant ${email} to picture`);
+  const detail = (
+    await apiFromPage(admin, "GET", `/prospective-members/prospects/${row.id}`)
+  ).body;
+  const progress = [...(detail.step_progress ?? [])]
+    .filter((p) => p.step?.public_visible)
+    .sort((a, b) => (a.step.sort_order ?? 0) - (b.step.sort_order ?? 0));
+  const fixture = {
+    first_name: detail.first_name,
+    last_name: detail.last_name,
+    status: detail.status,
+    current_stage_name: detail.current_step?.name ?? null,
+    current_stage_action: null,
+    pipeline_name: row.pipeline_name ?? null,
+    total_stages: progress.length,
+    stage_timeline: progress.map((p) => ({
+      stage_name: p.step.name,
+      status: p.status,
+      completed_at: p.completed_at,
+    })),
+    applied_at: detail.created_at,
+    can_withdraw: true,
+  };
+  const token = "demo-status-link-fixture-only";
+  await page.route(
+    `**/api/public/v1/application-status/${token}/withdraw`,
+    (route) => route.abort(),
+  );
+  await page.route(`**/api/public/v1/application-status/${token}`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(fixture),
+    }),
+  );
+  await page.goto(
+    new URL(`/application-status/${token}`, page.url()).toString(),
+    { waitUntil: "domcontentloaded" },
+  );
+  await page
+    .getByRole("button", { name: "Withdraw Application" })
+    .click({ timeout: 15_000 });
+  const dialog = page.getByRole("dialog");
+  await dialog.waitFor({ timeout: 10_000 });
+  await dialog
+    .getByLabel(/reason/i)
+    .fill(
+      "I've started a paramedic course that runs every weekend until June. I'd like to apply again after that.",
+    );
+  await page.waitForTimeout(400);
+}
+
 export const isNominatingElection = (election) =>
   (election.status ?? "") === "nominations";
 
@@ -5113,7 +5301,7 @@ export const SHOTS = [
     line: 295,
     anchor:
       "Screenshot of the applicant detail drawer showing contact information",
-    alt: "Applicant detail drawer on its overview tab, with the stage indicator and tab row",
+    alt: "Applicant detail drawer with contact details, current stage, progress, stage history and the action bar",
     route: "/prospective-members",
     // The drawer is component state, not a route — the same reason 04-34 opens
     // it by clicking a card rather than navigating.
@@ -9655,7 +9843,7 @@ export const SHOTS = [
     line: 150,
     anchor:
       "Screenshot of the Create Applicant form showing name, email, phone fields, membership",
-    alt: "Create applicant form with contact fields and membership type",
+    alt: "Add Applicant dialog with contact fields, membership type and the Target Role picker",
     route: "/prospective-members",
     prepare: clickByName(/add applicant/i),
     // The viewport, as the other modal shots in this guide are: a full-page
@@ -12211,13 +12399,187 @@ export const SHOTS = [
     selector: "div[aria-label='Applicant details'] div.modal-panel",
     allowEmptyState: true,
   },
+  // ── 15: settings cards, the Reinstatement Pipeline states, labels ──
+  //
+  // 15-22 to 15-27 are built on the Reinstatement Pipeline that
+  // `seed_guide15_states` creates, which keeps the default pipeline (and every
+  // other 15-* image) as it was. None of them saves anything.
+  {
+    id: "15-20-auto-transfer-card",
+    doc: "15-prospective-members.md",
+    line: 100,
+    anchor:
+      'with a pipeline selected, clipped to the "Automatic Transfer to Membership" card',
+    alt: "The Automatic Transfer to Membership card on Pipeline Settings, with its tickbox unticked",
+    route: "/prospective-members/settings",
+    prepare: openPipelineSettings(),
+    selector:
+      'div.card:has(> div > h3:text-is("Automatic Transfer to Membership"))',
+    expect:
+      "Make applicants members automatically when they complete the final stage",
+  },
+  {
+    id: "15-21-conversion-settings-card",
+    doc: "15-prospective-members.md",
+    line: 106,
+    anchor:
+      'clipped to the "When an Applicant Becomes a Member" card: Operational applicants',
+    alt: "When an Applicant Becomes a Member: Operational applicants become Operational / Probationary, Administrative applicants Administrative / Regular, with Save Conversion Settings",
+    route: "/prospective-members/settings",
+    prepare: openPipelineSettings(),
+    selector:
+      'div.card:has(> div > h3:text-is("When an Applicant Becomes a Member"))',
+    expect: "Save Conversion Settings",
+  },
+  {
+    id: "15-22-checklist-stage-drawer",
+    doc: "15-prospective-members.md",
+    line: 350,
+    anchor: "with a demo applicant on a Checklist stage that has two items",
+    alt: "The applicant drawer's Checklist block on a two-item stage, one item ticked: 1 of 2 items done — tick every item to advance",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      await openReinstatementApplicant("Nadia Ferreira")(page);
+      // Ticked in the browser only: the drawer holds ticks until the Advance
+      // that completes the stage, so nothing is written.
+      await page
+        .getByRole("dialog", { name: "Applicant details" })
+        .getByRole("checkbox", { name: "Turnout gear fitted and issued" })
+        .check({ timeout: 10_000 });
+      await page.waitForTimeout(300);
+    },
+    selector:
+      "div[aria-label='Applicant details'] div.p-4:has(> h3:text-is('Checklist'))",
+    expect: "1 of 2 items done — tick every item to advance",
+  },
+  {
+    id: "15-23-withdrawn-tab",
+    doc: "15-prospective-members.md",
+    line: 408,
+    anchor: "at /prospective-members, Withdrawn tab, with at least two rows",
+    alt: "The Withdrawn tab for the Reinstatement Pipeline: two applicants with their Withdrawn Date and Reason",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      await selectBoardPipeline("Reinstatement Pipeline")(page);
+      await page.getByRole("tab", { name: /^Withdrawn/ }).click();
+      await page
+        .locator("tbody tr")
+        .filter({ hasText: "Kofi Mensah" })
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+    fullPage: true,
+    expect: "Accepted a job out of state and moves in December.",
+  },
+  {
+    id: "15-24-approval-status-drawer",
+    doc: "15-prospective-members.md",
+    line: 499,
+    anchor: "drawer of a demo applicant on a Multi-Signer Approval stage",
+    alt: "The applicant drawer's Approval Status on a Chief and President approval stage: Chief pending, President approved",
+    route: "/prospective-members",
+    prepare: openReinstatementApplicant("Dana Whitcomb"),
+    selector:
+      "div[aria-label='Applicant details'] div.p-4:has(> h3:text-is('Approval Status'))",
+    expect: { selector: "ul[aria-label='Approval status']" },
+  },
+  {
+    id: "15-25-sign-offs-chief",
+    doc: "15-prospective-members.md",
+    line: 679,
+    anchor:
+      "Sign-offs page as an officer holding the Chief position → one applicant card",
+    alt: "Sign-offs for an officer in the Chief position: one applicant on the Chief and President approval stage, pills Chief: waiting and President: signed, and Sign as Chief",
+    route: "/dashboard",
+    prepare: openSignOffsAsChief,
+    cleanup: releaseChiefPosition,
+    expect: "President: signed",
+  },
+  {
+    id: "15-26-sign-off-dialog",
+    doc: "15-prospective-members.md",
+    line: 689,
+    anchor: 'Same member and state with the "Sign as Chief" dialog open',
+    alt: "The Sign as Chief dialog naming the applicant and stage, with an optional Note and the Sign and Not now buttons",
+    route: "/dashboard",
+    prepare: async (page) => {
+      await openSignOffsAsChief(page);
+      await page.getByRole("button", { name: "Sign as Chief" }).click();
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      // Not now, as the placeholder asks, so Dana Whitcomb stays waiting.
+      const notNow = page.getByRole("button", { name: "Not now" });
+      if (await notNow.isVisible()) await notNow.click();
+      await releaseChiefPosition(page);
+    },
+    expect: "Your name and role are recorded with the approval.",
+  },
+  {
+    id: "15-27-purge-dialog",
+    doc: "15-prospective-members.md",
+    line: 951,
+    anchor:
+      "Inactive Applications tab with two demo rows selected and the Purge",
+    alt: "The Purge Applications confirmation over two selected inactive applications, with Cancel and Permanently Delete",
+    route: "/prospective-members",
+    prepare: async (page) => {
+      await selectBoardPipeline("Reinstatement Pipeline")(page);
+      await page.getByRole("tab", { name: /^Inactive Applications/ }).click();
+      await page
+        .getByRole("checkbox", {
+          name: "Select all inactive applications on this page",
+        })
+        .check({ timeout: 15_000 });
+      await page.getByRole("button", { name: /purge selected/i }).click();
+      await page
+        .getByText("Purge Applications", { exact: true })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      // Cancel, never Permanently Delete: the two applicants are seed data.
+      const cancel = page.getByRole("button", { name: "Cancel", exact: true });
+      if (await cancel.isVisible()) await cancel.click();
+    },
+    expect: "inactive application(s) and all of the personal data in them.",
+  },
+  {
+    id: "15-28-status-page-withdraw",
+    doc: "15-prospective-members.md",
+    line: 1036,
+    anchor:
+      'the "Withdraw your application?" dialog open over the "No longer interested?" card',
+    alt: "An applicant's public status page with the Withdraw your application? dialog open, a reason typed, and Withdraw Application and Keep My Application",
+    // Resolved in prepare: the status lookup is answered from a fixture built
+    // from Elena Vasquez's record, since no interface hands out a token.
+    route: "/login",
+    auth: "anonymous",
+    prepare: openStatusPageWithdrawDialog,
+    expect: "Keep My Application",
+  },
+  {
+    id: "15-29-print-labels",
+    doc: "15-prospective-members.md",
+    line: 1075,
+    anchor: "at /prospective-members/print-labels?ids=",
+    alt: "Print Applicant Badges with three demo applicants' labels, each with the name and a short-id barcode",
+    route: "/prospective-members/print-labels",
+    prepare: withIdsFromApi(
+      "/prospective-members/prospects?open_only=true&limit=3",
+      "items",
+      3,
+    ),
+    expect: "Print Applicant Badges",
+  },
   {
     id: "15-09-convert-modal",
     doc: "15-prospective-members.md",
     line: 389,
     anchor:
       "Screenshot of the Convert to Member modal showing membership type selector",
-    alt: "Step 2 of the Convert to Member modal — membership type, rank, station and hire date",
+    alt: "Step 2 of the Convert to Member modal — member class and starting status, rank, station, target role, hire date and how they get their password",
     route: "/prospective-members",
     prepare: async (page) => {
       // Conversion is not its own button: Advance on the *last* stage opens
