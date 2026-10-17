@@ -617,6 +617,73 @@ class TestApprovalChainService:
         assert large_chain is not None
         assert large_chain.name == "Large Purchase"
 
+    async def test_chain_resolution_only_uses_chains_for_the_request_type(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """An expense report or check request never borrows a purchase chain.
+
+        The purchase chain here is the default, category-scoped and
+        amount-scoped, so it would outscore the plain expense chain if the
+        lookup let purchase chains compete for other request types.
+        """
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+        category = await service.create_budget_category(org_id=org_id, name="Apparatus")
+        step = {
+            "step_order": 1,
+            "name": "Officer Review",
+            "step_type": ApprovalStepType.APPROVAL,
+            "approver_type": ApproverType.PERMISSION,
+            "approver_value": "finance.approve",
+        }
+        await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Apparatus Purchases",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            budget_category_id=category.id,
+            min_amount=0,
+            max_amount=10000,
+            is_default=True,
+            steps=[dict(step)],
+        )
+
+        # No chain for check requests: nothing applies, so the request is
+        # decided by hand rather than routed through the purchase chain.
+        assert (
+            await service.resolve_approval_chain(
+                org_id, ApprovalEntityType.CHECK_REQUEST, 300, category.id
+            )
+            is None
+        )
+        assert (
+            await service.preview_approval_chain(
+                org_id, "expense_report", 300, category.id
+            )
+            is None
+        )
+
+        await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Expense Reimbursement",
+            applies_to=ApprovalEntityType.EXPENSE_REPORT,
+            is_default=False,
+            steps=[dict(step)],
+        )
+        expense_chain = await service.resolve_approval_chain(
+            org_id, ApprovalEntityType.EXPENSE_REPORT, 300, category.id
+        )
+        assert expense_chain is not None
+        assert expense_chain.name == "Expense Reimbursement"
+
+        purchase_chain = await service.resolve_approval_chain(
+            org_id, ApprovalEntityType.PURCHASE_REQUEST, 300, category.id
+        )
+        assert purchase_chain is not None
+        assert purchase_chain.name == "Apparatus Purchases"
+
     async def test_approval_step_progression(
         self, db_session: AsyncSession, sample_org_data
     ):
