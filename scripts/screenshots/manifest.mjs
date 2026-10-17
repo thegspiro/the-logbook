@@ -32,6 +32,9 @@
  *   selector optional CSS/locator to clip to instead of the full viewport
  *   fullPage capture the whole scroll height rather than the viewport
  *   viewport 'mobile' to shoot at phone width instead of desktop
+ *   allowPageError one exact phrase on the screen that capture.mjs's in-page
+ *            error pattern mistakes for an error (a label, not a failed load);
+ *            any other match still fails the shot
  *   holdBack why the shot must not be applied yet, even though it captures
  *            cleanly — for a page that renders a misleading picture rather than
  *            an empty one, which the empty-state check cannot see
@@ -125,6 +128,56 @@ export const DEMO_FORWARDEE_CREDENTIALS = {
 };
 
 /**
+ * The Compliance Officer: the only reviewer of the default Compliance
+ * suggestion box, which the Secretary does not review.
+ *
+ * Shots marked `auth: "compliance"` sign in as this account, to picture a
+ * Compliance submission as its reviewer sees it, intake answers included.
+ *
+ * Must match COMPLIANCE_OFFICER_USERNAME in seed_demo_data.py, whose
+ * `seed_guide07_states` signs the account in once so its forced password
+ * change is already cleared.
+ */
+export const DEMO_COMPLIANCE_CREDENTIALS = {
+  username: "lnakamura",
+  password: "DemoMember!2026",
+};
+
+/**
+ * A member with no gear issued, nothing on loan and no requests.
+ *
+ * Shots marked `auth: "gearless"` sign in as this account, for the empty My
+ * Issued Gear page. Their shirt size on file is one the department never
+ * stocks the polo in, which is how the request form's "not stocked" size is
+ * photographed without anyone submitting a request.
+ *
+ * Must match GEARLESS_MEMBER_USERNAME in seed_demo_data.py, whose
+ * `_guide05_gearless_member` clears the account's forced password change and
+ * records that size.
+ */
+export const DEMO_GEARLESS_CREDENTIALS = {
+  username: "dokonkwo",
+  password: "DemoMember!2026",
+};
+
+/**
+ * The member holding the Training Officer position.
+ *
+ * Shots marked `auth: "trainingofficer"` sign in as this account. The position
+ * is who a new training submission prompts in the inbox, and nobody else in
+ * the demo department holds it: the administrator is not in it, and the
+ * secretary is the Training Officer *office* holder without the position.
+ *
+ * Must match TRAINING_OFFICER_USERNAME in seed_demo_data.py, whose
+ * `_guide02_training_officer` grants the position and clears the account's
+ * forced password change.
+ */
+export const DEMO_TRAINING_OFFICER_CREDENTIALS = {
+  username: "hvance",
+  password: "DemoMember!2026",
+};
+
+/**
  * The one account enrolled in TOTP, used to photograph the login page's
  * authentication-code step.
  *
@@ -139,6 +192,23 @@ export const DEMO_FORWARDEE_CREDENTIALS = {
  */
 export const DEMO_TWO_FACTOR_CREDENTIALS = {
   username: "whalloway",
+  password: "DemoMember!2026",
+};
+
+/**
+ * The department treasurer: holds `finance.approve` and
+ * `finance.configure_approvals`, and raised none of the seeded requests.
+ *
+ * Shots marked `auth: "treasurer"` sign in as this account. Guide 11 pictures
+ * the approvals screens as the person they are for, and the administrator
+ * cannot stand in: every seeded request is theirs, so separation of duties
+ * hides the Approve button the pictures are about.
+ *
+ * Must match TREASURER_USERNAME in seed_demo_data.py, whose
+ * `seed_guide11_finance_states` grants the Treasurer position.
+ */
+export const DEMO_TREASURER_CREDENTIALS = {
+  username: "aosei",
   password: "DemoMember!2026",
 };
 
@@ -295,6 +365,135 @@ export function clickSettingsSection(label) {
  * and emptied a screenshot that had been correct for weeks. A shot that needs a
  * record in a particular state should say so.
  */
+/** Unpin every notification of the signed-in member's own inbox. */
+async function unpinAllNotifications(page) {
+  await page.evaluate(async () => {
+    const listed = await fetch("/api/v1/notifications/my?limit=100", {
+      credentials: "include",
+    });
+    const logs = (await listed.json()).logs ?? [];
+    const csrf =
+      document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+    for (const log of logs.filter((l) => l.pinned)) {
+      await fetch(`/api/v1/notifications/my/${log.id}/pin?pinned=false`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
+      });
+    }
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+}
+
+/** Open the phone navigation drawer from **More** on the bottom bar. */
+async function openPhoneDrawer(page) {
+  await page
+    .getByRole("button", { name: "More: open full navigation menu" })
+    .click({ timeout: 20_000 });
+  await page
+    .locator('[data-testid="side-nav-scroll-hint"] button')
+    .waitFor({ state: "visible", timeout: 10_000 });
+  await page.waitForTimeout(800);
+}
+
+/** The member's own phone-bar slots, read before `10-27` changes them. */
+const phoneNavFixture = { before: null };
+
+/**
+ * Put three untagged entries in the generic offline queue, as a device that
+ * queued them before entries recorded their owner would hold, and reload so
+ * the app shell counts them.
+ *
+ * Untagged entries are never sent on their own, so nothing reaches the
+ * server; `clearHeldOfflineItems` removes them after the shot. The URLs are
+ * ones nothing would accept, in case a later change ever did send them.
+ */
+async function seedHeldOfflineItems(page) {
+  await page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("logbook-offline-generic", 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains("pendingMutations")) {
+          request.result.createObjectStore("pendingMutations", {
+            keyPath: "id",
+          });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const hour = 3_600_000;
+    const now = Date.now();
+    const entries = [
+      ["training-submission", "Pump operations drill, 2 hours", 30],
+      ["training-submission", "EVOC refresher, 4 hours", 29],
+      ["event-rsvp", "RSVP: Monthly business meeting", 28],
+    ].map(([kind, label, daysAgo], index) => ({
+      id: `g-screenshot-held-${index}`,
+      kind,
+      url: "/screenshot-fixture/held-item",
+      body: {},
+      label,
+      queuedAt: now - daysAgo * 24 * hour,
+      retries: 0,
+    }));
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction("pendingMutations", "readwrite");
+      for (const entry of entries)
+        tx.objectStore("pendingMutations").put(entry);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+}
+
+async function clearHeldOfflineItems(page) {
+  await page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("logbook-offline-generic", 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction("pendingMutations", "readwrite");
+      for (let index = 0; index < 3; index += 1) {
+        tx.objectStore("pendingMutations").delete(`g-screenshot-held-${index}`);
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+}
+
+/**
+ * The two events `06-32-room-checkin-chooser` makes, and the administrator
+ * page that made them: its cleanup receives only the member's page, which
+ * cannot delete events.
+ */
+const roomCheckInFixture = { admin: null, ids: [] };
+
+/**
+ * Expand an approval chain on Finance → Settings → Approval Chains and open
+ * its **Add step** dialog.
+ */
+async function openApprovalStepDialog(page, chainName) {
+  await page
+    .locator("button[aria-expanded]")
+    .filter({ hasText: chainName })
+    .first()
+    .click({ timeout: 15_000 });
+  const chain = page
+    .locator("div")
+    .filter({ has: page.getByRole("list", { name: `Steps in ${chainName}` }) })
+    .last();
+  await chain.getByRole("button", { name: "Add step" }).click();
+  await page.locator("#step-name").waitFor({ timeout: 10_000 });
+}
+
 export function openFirstFromApi(apiPath, routeFor, listKey, match) {
   return async (page) => {
     const records = await page.evaluate(
@@ -404,6 +603,53 @@ export const isUpcoming = (event) => {
   const start = event.start_datetime ?? event.startDatetime ?? "";
   return start > new Date().toISOString();
 };
+
+/** The administrator page 04-54 borrowed, kept for its cleanup step. */
+let drillCheckInAdmin = null;
+
+/**
+ * Remove ("DELETE") or restore ("POST") the demo member's check-in on the
+ * in-progress drill, as the administrator. Resolves to the drill's id, or a
+ * short reason when the call was refused. A 400 is accepted both ways: there
+ * is no RSVP to remove, or she is already checked in.
+ */
+async function drillMemberCheckIn(admin, method) {
+  return await admin.evaluate(
+    async ([verb, title, username]) => {
+      const get = async (path) =>
+        (await fetch(`/api/v1${path}`, { credentials: "include" })).json();
+      const list = await get("/events?limit=200");
+      const event = (Array.isArray(list) ? list : list.events || []).find(
+        (e) => e.title === title,
+      );
+      const users = await get("/users?limit=200");
+      const member = (
+        Array.isArray(users) ? users : users.users || users.items || []
+      ).find((u) => u.username === username);
+      if (!event || !member) return "drill or member not found";
+      const csrf =
+        (document.cookie.match(/(?:^|; )csrf_token=([^;]+)/) || [])[1] || "";
+      const response = await fetch(
+        verb === "DELETE"
+          ? `/api/v1/events/${event.id}/rsvps/${member.id}`
+          : `/api/v1/events/${event.id}/check-in`,
+        {
+          method: verb,
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": decodeURIComponent(csrf),
+          },
+          body: verb === "POST" ? JSON.stringify({ user_id: member.id }) : null,
+        },
+      );
+      return response.ok || response.status === 400
+        ? event.id
+        : `${verb} answered ${response.status}`;
+    },
+    [method, "Company Drill — In Progress", DEMO_MEMBER_CREDENTIALS.username],
+  );
+}
 
 /**
  * True for an event still open for RSVPs.
@@ -1004,6 +1250,35 @@ export function openIntegrationConnect(providerName) {
 }
 
 /**
+ * Open Add Provider on Training Admin's integrations tab and fill in a Target
+ * Solutions provider with obviously fake credentials, auto-sync on.
+ *
+ * Never saved: the shots picture the form, and a saved provider would start
+ * syncing against a Target Solutions account the demo does not have. Picking
+ * Target Solutions sets the hourly pull and the 02:00 review itself.
+ */
+async function openTargetSolutionsProvider(page, { baseUrl }) {
+  await page
+    .getByRole("button", { name: "Add Provider" })
+    .locator("visible=true")
+    .first()
+    .click({ timeout: 15_000 });
+  await page
+    .getByRole("button", { name: /^Target Solutions/ })
+    .click({ timeout: 10_000 });
+  await page.locator("#provider-api-key").waitFor({ timeout: 10_000 });
+  if (baseUrl) await page.locator("#provider-api-url").fill(baseUrl);
+  await page.locator("#provider-api-key").fill("demo-key");
+  await page.locator("#provider-api-secret").fill("demo-secret");
+  await page.getByRole("switch", { name: "Enable auto-sync" }).click();
+  await page.getByText("Daily 30-day review at").waitFor({ timeout: 10_000 });
+  await page.evaluate(() => {
+    const el = document.activeElement;
+    if (el instanceof HTMLElement) el.blur();
+  });
+}
+
+/**
  * Open the drawer of whichever applicant is currently at `stage`.
  *
  * Naming the applicant instead ties the shot to one seeding order: the
@@ -1438,6 +1713,85 @@ async function openIdCardsProfile(page) {
     .locator("h2", { hasText: /^ID Cards$/ })
     .waitFor({ timeout: 20_000 });
   await page.waitForTimeout(500);
+}
+
+// ── Guide 01 helpers ────────────────────────────────────────────────
+// The former-member shots need a member who has left, and the demo roster
+// has none: every seeded member is pictured as current across the guides,
+// and a dropped member would move the Members page's Total Members. So a
+// former member exists only for the length of one shot -- created, taken
+// through the real status endpoints, pictured, and permanently deleted in
+// `cleanup`. Uses guide08Api, which is declared further down and hoisted.
+
+let guide01MembershipIdBefore = null;
+
+const GUIDE01_FORMER_MEMBERS = {
+  archived: {
+    first_name: "Harlan",
+    last_name: "Pryce",
+    username: "hpryce",
+    membership_number: "091",
+  },
+  dropped: {
+    first_name: "Wesley",
+    last_name: "Brandt",
+    username: "wbrandt",
+    membership_number: "092",
+  },
+  rejoined: {
+    first_name: "Corinne",
+    last_name: "Mabry",
+    username: "cmabry",
+    membership_number: "093",
+  },
+};
+
+/** Permanently delete any member left over under this username. */
+async function guide01RemoveFormerMember(page, kind) {
+  const { username } = GUIDE01_FORMER_MEMBERS[kind];
+  const users = await guide08Api(page, "GET", "/users?limit=200");
+  const list = Array.isArray(users) ? users : users.users || users.items || [];
+  for (const user of list.filter((u) => u.username === username)) {
+    await guide08Api(page, "DELETE", `/users/${user.id}?hard=true`);
+  }
+}
+
+/**
+ * Create a member who joined in 2014 and left voluntarily in 2019, then take
+ * them on to the state `kind` names: still dropped, archived, or back since
+ * 2023 under Restart at zero. Returns their id.
+ */
+async function guide01MakeFormerMember(page, kind) {
+  await guide01RemoveFormerMember(page, kind);
+  const person = GUIDE01_FORMER_MEMBERS[kind];
+  const created = await guide08Api(page, "POST", "/users", {
+    ...person,
+    email: `${person.username}@oakvillefd.example.org`,
+    rank: "firefighter",
+    hire_date: "2014-04-07",
+    send_welcome_email: false,
+    password: DEMO_MEMBER_CREDENTIALS.password,
+  });
+  const id = created.id;
+  await guide08Api(page, "PATCH", `/users/${id}/status`, {
+    new_status: "dropped_voluntary",
+    reason: "Moved out of the district",
+    separation_date: "2019-08-31",
+    send_property_return_email: false,
+  });
+  if (kind === "archived") {
+    await guide08Api(page, "POST", `/users/${id}/archive`, {
+      reason: "No property outstanding",
+    });
+  }
+  if (kind === "rejoined") {
+    await guide08Api(page, "PATCH", `/users/${id}/status`, {
+      new_status: "active",
+      service_credit: "restart",
+      rejoin_date: "2023-03-06",
+    });
+  }
+  return id;
 }
 
 /**
@@ -2535,6 +2889,13 @@ const DEMO_OAUTH_CLIENT_SECRET = "lbmcs_DEMO-not-a-real-credential-0000000000";
 
 let memberSignInAdminPage = null;
 
+// What 07-04, 07-27 and 07-31 change for the length of their shot, and how to put it
+// back. Kept here because a cleanup receives only its own page: 07-27's is the
+// signed-out one, which cannot write.
+let publicFormSignInRestore = null;
+let memberEmailsRestore = null;
+let draftFormCleanup = null;
+
 async function apiCall(page, method, path, body) {
   return page.evaluate(
     async ({ method, path, body }) => {
@@ -2821,6 +3182,113 @@ function withTestingModule(then) {
 }
 
 const disableTestingModule = (page) => setTestingModule(page, false);
+
+/**
+ * Switch the department's NFC inventory tracking on or off.
+ *
+ * Off is how the demo department ships, matching the guide ("NFC tags are off
+ * until an administrator turns them on"), so every NFC shot switches it on in
+ * its prepare and back off in its cleanup. The organization settings endpoint
+ * deep-merges, so this writes only the one key, as the NFC Tags screen does.
+ */
+async function setInventoryNfc(page, enabled) {
+  const result = await apiCall(page, "PATCH", "organization/settings", {
+    inventory: { nfc_tracking_enabled: enabled },
+  });
+  if (result.status !== 200) {
+    throw new Error(`switching NFC tracking returned ${result.status}`);
+  }
+}
+
+function withInventoryNfc(then) {
+  return async (page, helpers) => {
+    await setInventoryNfc(page, true);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    if (then) await then(page, helpers);
+  };
+}
+
+const disableInventoryNfc = (page) => setInventoryNfc(page, false);
+
+// Tag serials `seed_guide05_states` links (GUIDE05_TAGS there). Invented, and
+// shown on screen only as their last four characters. The enroll shot links
+// its own, and its cleanup removes it.
+const GUIDE05_COAT_S_TAG = "04A9C3E5F70B12";
+const GUIDE05_CYLINDER_TAG = "04E1186C3D9A57";
+const GUIDE05_ENROLL_TAG = "04B5D7F91A3C6E";
+
+// State a prepare step hands to its own cleanup.
+let enrolledItemId = null;
+let catalogConflictUndo = null;
+
+/** Open an inventory item's page by its exact name. */
+function openItemNamed(name) {
+  return openFirstFromApi(
+    "/inventory/items?limit=500",
+    (id) => `/inventory/items/${id}`,
+    "items",
+    (item) => item.name === name,
+  );
+}
+
+/**
+ * Open the requirement editor on a named requirement from Training Admin ›
+ * Setup › Requirements. Each row's button is named for its requirement
+ * ("Edit <name>"). Nothing here saves: the guide-02 shots that use it stop at
+ * the form or at the dialog a save would open.
+ */
+async function openRequirementEditor(page, name) {
+  await page.waitForTimeout(3000);
+  await page
+    .getByPlaceholder(/Search requirements/)
+    .first()
+    .fill(name);
+  await page.waitForTimeout(1500);
+  await page
+    .getByRole("button", { name: new RegExp(`^Edit ${name}`) })
+    .first()
+    .click({ timeout: 20_000 });
+  await page.locator("#req-required-hours").waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(800);
+}
+
+/** Scroll an element inside a scrolling dialog to the middle of the frame. */
+async function centre(locator) {
+  await locator.waitFor({ timeout: 20_000 });
+  await locator.evaluate((el) => el.scrollIntoView({ block: "center" }));
+}
+
+/**
+ * Scroll a Training Administration page's own heading to the top of the
+ * frame. The hub's metrics, attention list and area cards fill the first
+ * screen, so a viewport shot of a tab otherwise pictures only the hub.
+ */
+function scrollHeadingToTop(text) {
+  return async (page) => {
+    const heading = page
+      .getByRole("heading", { name: text, exact: true })
+      .first();
+    await heading.waitFor({ timeout: 20_000 });
+    await heading.evaluate((el) => {
+      el.scrollIntoView({ block: "start" });
+      window.scrollBy(0, -175);
+    });
+    await page.waitForTimeout(600);
+  };
+}
+
+/** A date `days` from today, as a date input wants it. */
+const PROGRAM_REQUIREMENT_DIALOG = "div[role='dialog'] div.modal-panel";
+
+const PIPELINE_CARD =
+  "div.rounded-lg.p-4:has(> h3:text-is('Recruit School Pipeline'))";
+
+function isoDaysFromToday(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 // ── Guide 08 helpers ────────────────────────────────────────────────
 // Shots below that have to write to the database undo it in `cleanup`, so
@@ -3626,6 +4094,9 @@ export const SHOTS = [
     anchor: "Screenshot of the label settings panel's orientation block",
     alt: "The label settings panel — size presets, auto-rotate, and the test-label download",
     route: "/inventory/print-labels",
+    // Scrolled to the orientation block and the test-label button, which sit
+    // below What Prints on the Label.
+    expect: "Test Label",
     prepare: async (page) => {
       await withIdsFromApi("/inventory/items?limit=6", "items", 6)(page);
       await page
@@ -4230,6 +4701,13 @@ export const SHOTS = [
             event.recurrencePattern,
           ),
       )(page);
+      // The detail page renders its actions after the event loads; asked
+      // straight after navigation, clickByName found no visible match and the
+      // fallback below clicked the wrong icon button.
+      await page
+        .getByRole("button", { name: /^More$|^Actions$/ })
+        .first()
+        .waitFor({ timeout: 20_000 });
       await clickByName(/^More$|^Actions$/)(page).catch(async () => {
         // The menu button has no label of its own — it is an icon — so fall
         // back to the control that sits beside End Event / Edit.
@@ -4443,6 +4921,7 @@ export const SHOTS = [
   },
   {
     id: "02-100-checklist-steps-editor",
+    expect: "Checklist steps",
     doc: "02-training.md",
     line: 365,
     anchor:
@@ -4471,6 +4950,353 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     selector: "div:has(> span:text-is('Checklist steps'))",
+  },
+  // ── Guide 02: shots that need the guide-02 seeder states ───────────
+  //
+  // `seed_guide02_states` in seed_demo_data.py makes the submissions, the
+  // pending approval and the leave month these picture. The requirement-form
+  // shots below drive the form and stop before anything is saved.
+  {
+    id: "02-107-my-training-history-tab",
+    doc: "02-training.md",
+    line: 238,
+    anchor: "My Training → History tab: the three totals, the search and Type",
+    alt: "The History tab on My Training: all-time totals, the course search and Type filter with the export buttons, a record awaiting approval, this year's records open and last year closed with its count and hours",
+    auth: "member",
+    route: "/training/my-training",
+    prepare: async (page) => {
+      await clickByName(/^History$/)(page);
+      await page.locator("#history-search").waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(1500);
+    },
+    expect: "Search courses",
+    fullPage: true,
+  },
+  {
+    id: "02-108-monthly-hours-leave",
+    doc: "02-training.md",
+    line: 246,
+    anchor:
+      "an hours requirement with Show monthly hours open: the twelve-month",
+    alt: "Annual Minimum Training Hours with Show monthly hours open: a bar for each month, the month of leave marked and left out of the average",
+    auth: "member",
+    route: "/training/my-training",
+    prepare: async (page) => {
+      const toggle = page
+        .locator("div")
+        .filter({
+          has: page.getByText("Annual Minimum Training Hours", { exact: true }),
+        })
+        .getByRole("button", { name: /Show monthly hours/ })
+        .last();
+      await toggle.click({ timeout: 20_000 });
+      await page
+        .getByText(/of leave not counted/)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await centre(page.getByText(/of leave not counted/).first());
+      await page.waitForTimeout(500);
+    },
+    expect: "of leave not counted",
+  },
+  {
+    id: "02-109-approved-with-changes-notice",
+    doc: "02-training.md",
+    line: 320,
+    anchor:
+      'Member (the submitter) at /notifications?tab=inbox: a "Training submission approved with changes',
+    alt: "The member's inbox with the training-submission stack open: \"Training submission approved with changes\", the Hours 3 → 2 line, the officer's notes and View My Submissions",
+    auth: "member",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /updates to your training submissions/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", {
+          name: /Training submission approved with changes/,
+        })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByText(/Hours: 3 → 2/)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    expect: "Hours: 3 → 2",
+    selector:
+      "div.card:has(button:has-text('updates to your training submissions'))",
+  },
+  {
+    id: "02-110-returned-submission",
+    doc: "02-training.md",
+    line: 324,
+    anchor:
+      "Member at /training/submit with one of their submissions in revision_requested",
+    alt: 'Submit External Training with a returned submission at the top: the officer\'s note, "Returned … · Your hours are not counted yet", and Fix and Resubmit / Withdraw',
+    auth: "member",
+    route: "/training/submit",
+    expect: "Your hours are not counted yet",
+  },
+  {
+    id: "02-111-program-requirement-settings",
+    doc: "02-training.md",
+    line: 1028,
+    anchor:
+      "Program page → Edit requirement on a requirement in a phase: the modal",
+    alt: "Edit requirement on a program: the In this program section with Due after enrollment (days) set to 30, the description members see and the message sent when it is completed",
+    route: "/training/programs",
+    prepare: async (page) => {
+      const programId = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/training/programs/programs", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const rows = await response.json();
+        const list = Array.isArray(rows) ? rows : [];
+        const wanted =
+          list.find((row) => /Probationary/.test(row.name || "")) || list[0];
+        return wanted ? wanted.id : null;
+      });
+      if (!programId) throw new Error("02-111: no training program to open");
+      await page.goto(
+        new URL(`/training/programs/${programId}`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page
+        .getByRole("button", { name: "Edit requirement" })
+        .first()
+        .click({ timeout: 30_000 });
+      const dialog = page.locator(PROGRAM_REQUIREMENT_DIALOG);
+      // Typed, never saved: the program keeps its own settings.
+      await page.locator("#rq-deadline-days").fill("30");
+      await page
+        .locator("#rq-member-description")
+        .fill(
+          "Complete within your first month. Your company officer signs it off on a drill night.",
+        );
+      await page
+        .locator("#rq-completion-message")
+        .fill(
+          "Nice work. Bring your signed card to Station 1 so we can file a copy.",
+        );
+      await centre(dialog.locator("legend:text-is('In this program')"));
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(500);
+    },
+    expect: "Due after enrollment (days)",
+    selector: PROGRAM_REQUIREMENT_DIALOG,
+    viewport: { width: 1440, height: 1100 },
+  },
+  {
+    id: "02-112-pipeline-progress-card",
+    doc: "02-training.md",
+    line: 1075,
+    anchor: "Member enrolled in one program with at least two requirements, at",
+    alt: 'One program on the Pipeline Progress card of My Training: Recruit School Pipeline with its status chip and 60%, each requirement as "name · N%" with its status, and View full progress',
+    auth: "member",
+    route: "/training/my-training",
+    // The demo member is enrolled in three programs; the frame is the first.
+    prepare: async (page) => {
+      await centre(page.locator(PIPELINE_CARD));
+      await page.waitForTimeout(500);
+    },
+    expect: "View full progress",
+    selector: PIPELINE_CARD,
+  },
+  {
+    id: "02-113-requirement-existing-members",
+    doc: "02-training.md",
+    line: 1396,
+    anchor:
+      "Training Admin → Setup → Requirements → edit a requirement → the **Existing Members**",
+    alt: "The Existing Members section of a requirement: Give a catch-up deadline selected, with the joined-before date, the catch-up deadline and the note beneath",
+    route: "/training/admin?page=setup&tab=requirements",
+    prepare: async (page) => {
+      await openRequirementEditor(page, "Annual Minimum Training Hours");
+      await page
+        .getByRole("radio", { name: /Give a catch-up deadline/ })
+        .click();
+      await page.locator("#req-cutoff-date").fill(isoDaysFromToday(0));
+      await page.locator("#req-catch-up-deadline").fill(isoDaysFromToday(180));
+      await centre(page.locator("h4:text-is('Existing Members')"));
+      await page.waitForTimeout(500);
+    },
+    expect: "Existing members must meet it by",
+    selector: "div.space-y-4:has(> h4:text-is('Existing Members'))",
+  },
+  {
+    id: "02-114-change-scope-dialog",
+    doc: "02-training.md",
+    line: 1435,
+    anchor:
+      "Training Admin → Setup → Requirements → edit a requirement, change its hours",
+    alt: "Who does this change apply to? with New members only selected, the date the new standard starts from, and Keep editing / Save for new members",
+    route: "/training/admin?page=setup&tab=requirements",
+    prepare: async (page) => {
+      await openRequirementEditor(page, "Annual Minimum Training Hours");
+      await page.locator("#req-required-hours").fill("36");
+      await page.getByRole("button", { name: "Update Requirement" }).click();
+      const dialog = page.locator('[data-testid="modal-panel"]');
+      await dialog.getByText("New members only").click({ timeout: 15_000 });
+      await page.locator("#change-scope-date").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+      // The dialog is the shot; Save for new members is never pressed.
+    },
+    expect: "Save for new members",
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "02-115-shift-credit-box",
+    doc: "02-training.md",
+    line: 1454,
+    anchor:
+      "Training Admin → Setup → Requirements → edit an Hours requirement: the",
+    alt: "Shift Credit on an Hours requirement: Shift attendance satisfies this requirement, unticked, with its help text",
+    route: "/training/admin?page=setup&tab=requirements",
+    prepare: async (page) => {
+      await openRequirementEditor(page, "Annual Minimum Training Hours");
+      await centre(page.locator("h4:text-is('Shift Credit')"));
+      await page.waitForTimeout(500);
+    },
+    expect: "Shift attendance satisfies this requirement",
+    selector: "div.space-y-3:has(> h4:text-is('Shift Credit'))",
+  },
+  {
+    id: "02-116-officer-review-prompts",
+    doc: "02-training.md",
+    line: 1638,
+    anchor:
+      "Member holding the Training Officer position at /notifications?tab=inbox",
+    alt: "The Training Officer's inbox: training submissions awaiting approval stacked, one opened to its message and Review Submission",
+    auth: "trainingofficer",
+    route: "/notifications?tab=inbox",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /training submissions awaiting approval/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /Training submission awaiting approval/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: /Review Submission/ })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    expect: "Review Submission",
+    selector:
+      "div.card:has(button:has-text('training submissions awaiting approval'))",
+  },
+  {
+    id: "02-117-approve-training-credit",
+    doc: "02-training.md",
+    line: 1727,
+    anchor:
+      "Training Officer (training.manage) at `/training/approve/<token>` for a",
+    alt: "Approve training credit for the Ventilation Drill: course, event date and approve-by date, the roster with credited and approved minutes (one member set to 0 with a note), the approval notes and Approve and record",
+    route: "/training/admin",
+    prepare: async (page) => {
+      // The token comes from the event's approval summary, which hands it to a
+      // caller with training.manage while the approval is pending. Nothing is
+      // approved: the fields are typed and the page is photographed.
+      const token = await page.evaluate(async () => {
+        const res = await fetch(
+          "/api/v1/events?event_type=training&include_drafts=true&limit=500",
+          { credentials: "include" },
+        );
+        const body = await res.json();
+        const events = Array.isArray(body)
+          ? body
+          : body.events || body.items || [];
+        const event = events.find((e) => e.title === "Ventilation Drill");
+        if (!event) return null;
+        const summary = await fetch(
+          `/api/v1/training/sessions/by-event/${event.id}/approval`,
+          { credentials: "include" },
+        );
+        return summary.ok ? (await summary.json()).token : null;
+      });
+      if (!token)
+        throw new Error(
+          "02-117: no pending Ventilation Drill approval; re-run the seeder",
+        );
+      await page.goto(
+        new URL(`/training/approve/${token}`, page.url()).toString(),
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
+      const minutes = page.locator("input[aria-label^='Approved minutes for']");
+      await minutes.last().waitFor({ timeout: 20_000 });
+      await minutes.last().fill("0");
+      await page
+        .locator("input[aria-label^='Note for']")
+        .last()
+        .fill("Left before the roof evolution");
+      await page
+        .locator("#approval-notes")
+        .fill("Roster checked against the sign-in sheet.");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(500);
+    },
+    landsOn: "/training/approve/",
+    expect: "Approve training credit",
+    fullPage: true,
+  },
+  {
+    id: "02-118-compliance-card-and-matrix",
+    doc: "02-training.md",
+    line: 1855,
+    anchor:
+      "Training officer on the Training dashboard Overview: the Department Compliance",
+    alt: "The Training dashboard Overview: the Compliance figure in the header and the Department Compliance card both read 91%, with the Compliance Matrix tab beside the Dashboard tab",
+    route: "/training/admin?page=dashboard&tab=overview",
+    expect: "Department Compliance",
+    viewport: { width: 1440, height: 1400 },
+    // "No capacity-limited sessions are upcoming." is one widget lower on the
+    // page; the subject is the compliance figures.
+    allowEmptyState: true,
+  },
+  {
+    id: "02-119-no-shift-reports-member",
+    doc: "02-training.md",
+    line: 2316,
+    anchor: "Member without training.manage, no shift reports yet, at",
+    alt: "Shift reports about you, for a member with none yet: No shift reports yet, what a report will hold, and no view toggle",
+    auth: "gearless",
+    route: "/scheduling?tab=shift-reports",
+    expect: "No shift reports yet",
+    // The empty state is the subject.
+    allowEmptyState: true,
+  },
+  {
+    id: "02-120-practical-skills-confirm",
+    doc: "02-training.md",
+    line: 3403,
+    anchor:
+      "Training Administration > Settings & Data > Practical Skills, both options",
+    alt: "Practical Skills under Settings & Data: Skills Testing marked Current, Shift report sign-offs chosen, and the confirmation saying nothing is deleted",
+    route: "/training/admin?page=settings&tab=practical-skills",
+    prepare: async (page) => {
+      await page
+        .locator("input[name='practical-skills-method']:not(:checked)")
+        .first()
+        .check({ timeout: 20_000 });
+      await page.getByRole("button", { name: /^Save$/ }).click();
+      // "Keep current setting" is the way out; the switch is never confirmed.
+      await page
+        .getByText("Nothing is deleted.", { exact: false })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    expect: "Keep current setting",
+    fullPage: false,
   },
   {
     id: "02-101-expired-enrollment-reopen",
@@ -4809,6 +5635,7 @@ export const SHOTS = [
   },
   {
     id: "02-91-session-confirmation-toggle",
+    expect: "Start an in-progress training record when members check in",
     doc: "02-training.md",
     line: 715,
     anchor: "The Create Training Session form (Step 3)",
@@ -4883,6 +5710,7 @@ export const SHOTS = [
     // wording is what broke it.
     auth: "member",
     route: "/inventory/my-equipment",
+    expect: "Pending requests",
     prepare: async (page) => {
       await page
         .getByRole("heading", { name: /My Issued Gear/i })
@@ -4927,6 +5755,7 @@ export const SHOTS = [
     anchor: "Screenshot of the analysis results showing the four summary cards",
     alt: "Impact planner results with its summary cards, size breakdown and cost estimate",
     route: "/inventory/admin/impact-planner",
+    expect: "Back to Admin",
     prepare: async (page) => {
       await runImpactAnalysis(page);
       // Analysing scrolls the results into view; the summary cards and the
@@ -5094,6 +5923,12 @@ export const SHOTS = [
       await page
         .locator("#recurrence-pattern")
         .selectOption("monthly_weekday", { timeout: 10_000 });
+      // "2nd Tuesday", the guide's own example, and a series end date, which
+      // the caption names. Nothing is submitted.
+      await page.locator("#recurrence-ordinal").selectOption("2");
+      await page.locator("#recurrence-weekday").selectOption("1");
+      await page.locator("#recurrence-end-date").fill("2027-06-30");
+      await page.locator("#recurrence-end-date").evaluate((el) => el.blur());
       await page.waitForTimeout(600);
     },
     // Clipped to the form: the sidebar is position:fixed, so a full-page
@@ -5185,13 +6020,12 @@ export const SHOTS = [
       await page.waitForTimeout(500);
       // Typed rather than left blank: the requirement checklist only tells you
       // anything once there is something to check it against.
-      await page
-        .locator('input[type="password"]')
-        .nth(1)
-        .fill("Oakville!2026")
-        .catch(() => {});
+      await page.locator('input[type="password"]').nth(1).fill("Oakville!2026");
       await page.waitForTimeout(400);
     },
+    expect: "No character three times in a row",
+    // "No runs like 123 or abc" is a requirement line, not an empty page.
+    allowEmptyState: true,
     fullPage: true,
   },
   {
@@ -5349,14 +6183,17 @@ export const SHOTS = [
     route: "/facilities/maintenance",
     prepare: clickByName(/^New Record$/),
     fullPage: false,
+    expect: "New Maintenance Record",
   },
   {
     id: "05-57-assign-scan-modal",
     doc: "05-inventory.md",
     line: 464,
     anchor: "Screenshot of the Assign Items modal showing the member it is",
-    alt: "Assigning items to a member by scanning or searching, with two items staged",
+    alt: "Distribute Items for a member: the intro about scanning or typing each item, two items staged, Ongoing assignment chosen under Intended duration with each option's one-line description, and Review 2 Items enabled",
     route: "/inventory/admin/members",
+    allowEmptyState:
+      '"Former members still holding property" is correctly empty: no demo member has been dropped.',
     prepare: async (page) => {
       // "Assign items to <member>" since #2821; the visible text is still Assign.
       await clickByName(/^Assign items to /)(page);
@@ -5372,7 +6209,15 @@ export const SHOTS = [
         await page.keyboard.press("Enter");
         await page.waitForTimeout(900);
       }
+      // A duration is what enables Review; until one is chosen the dialog
+      // says to pick one.
+      await page.getByRole("radio", { name: "Ongoing assignment" }).check();
+      await page
+        .getByRole("button", { name: /^Review 2 Items/ })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
     },
+    expect: { selector: 'button:has-text("Review 2 Items"):not([disabled])' },
     fullPage: false,
   },
   {
@@ -5383,6 +6228,8 @@ export const SHOTS = [
       "Screenshot of the Return Items modal listing everything one member",
     alt: "Returning several items at once, each with its own condition",
     route: "/inventory/admin/members",
+    allowEmptyState:
+      '"Former members still holding property" is correctly empty: no demo member has been dropped.',
     prepare: async (page) => {
       // The member the seeder issues a full kit to. Any other row holds one
       // item, and a "batch" return of one row shows none of the mechanism.
@@ -6080,6 +6927,9 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
     fullPage: true,
+    // The pin is written to the database; take it off again so no other
+    // shot of the inbox or the dashboard inherits it.
+    cleanup: unpinAllNotifications,
   },
   {
     id: "00-04-dashboard-overview",
@@ -6111,7 +6961,7 @@ export const SHOTS = [
     line: 206,
     anchor:
       "Screenshot of the Account Settings page showing the profile section, notification preferences",
-    alt: "Account Settings on its Account tab — the tab row leads to password, security, emergency contacts, appearance and notifications",
+    alt: "My Account on its Account tab — the tab row leads to Password, Security, Privacy, Emergency Contacts, Appearance, Notifications and App",
     route: "/account",
     fullPage: true,
   },
@@ -6153,6 +7003,37 @@ export const SHOTS = [
       "Screenshot of the Add Member form showing the personal information fields, role",
     alt: "Add Member form with personal information and role assignment fields",
     route: "/members/admin?tab=add",
+    // With auto-numbering on, so the Membership Number hint shows the real
+    // next number. The demo ships with numbering off; the setting is written
+    // through the API and put back afterwards.
+    prepare: async (page) => {
+      guide01MembershipIdBefore = await guide08Api(
+        page,
+        "GET",
+        "/organization/settings/membership-id",
+      );
+      await guide08Api(page, "PATCH", "/organization/settings/membership-id", {
+        ...guide01MembershipIdBefore,
+        enabled: true,
+        auto_generate: true,
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByText(/Leave blank to assign/)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      if (!guide01MembershipIdBefore) return;
+      await guide08Api(
+        page,
+        "PATCH",
+        "/organization/settings/membership-id",
+        guide01MembershipIdBefore,
+      );
+      guide01MembershipIdBefore = null;
+    },
     fullPage: true,
   },
   {
@@ -6765,13 +7646,342 @@ export const SHOTS = [
     allowEmptyState: true,
   },
 
+  // ── 01 placeholders filled 2026-10-17 ──
+  {
+    id: "01-42-archived-member-row",
+    doc: "01-membership.md",
+    line: 106,
+    anchor:
+      "As an administrator (members.manage) at /members on a desktop width: the Members table with the status filter set to Archived",
+    alt: "The Members table filtered to Archived: a former member's row with the green Reactivate icon beside Edit and Delete",
+    route: "/members",
+    expect: {
+      selector: 'button[aria-label="Reactivate Harlan Pryce"]:visible',
+    },
+    prepare: async (page) => {
+      await guide01MakeFormerMember(page, "archived");
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByRole("combobox", { name: "Filter by status" })
+        .selectOption("archived", { timeout: 15_000 });
+      // :visible -- the phone card list renders the same row, hidden.
+      await page
+        .locator('button[aria-label="Reactivate Harlan Pryce"]:visible')
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: (page) => guide01RemoveFormerMember(page, "archived"),
+  },
+  {
+    id: "01-43-print-id-cards",
+    doc: "01-membership.md",
+    line: 238,
+    anchor:
+      "Administrator (members.manage) at /members/print-id-cards with two demo members selected",
+    alt: "Print ID Cards for two members with Front and back chosen: the Orientation, Sides and Code choices, Test card and Save as department layout, the duplex printing note, and the Accept old badges switch at the bottom",
+    route: "/members/print-id-cards",
+    expect: "Accept old badges",
+    prepare: async (page) => {
+      await withIdsFromApi("/users?limit=2", "users", 2)(page);
+      await page
+        .getByText("Accept old badges")
+        .first()
+        .waitFor({ timeout: 15_000 });
+      // Save as department layout replaces the "Department layout" note only
+      // once the choices differ from the saved layout. Picked, never saved.
+      await page.getByRole("radio", { name: /Front and back/ }).check();
+      await page
+        .getByRole("button", { name: "Save as department layout" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+  },
+  {
+    id: "01-44-member-id-card",
+    doc: "01-membership.md",
+    line: 273,
+    anchor:
+      "Administrator at /members/<demo member id>/id-card: the badge with its QR code",
+    alt: "A member's digital ID card: membership number as text, the badge code under its barcode, the QR code, and the Print ID Card and Reissue badge buttons",
+    route: "/members",
+    expect: { selector: '[data-testid="badge-code"]' },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/users?limit=200",
+        (id) => `/members/${id}/id-card`,
+        "users",
+        (user) => user.username === "nbelhaj",
+      )(page);
+      await page
+        .getByRole("button", { name: "Reissue badge" })
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
+    id: "01-45-reissue-badge-confirm",
+    doc: "01-membership.md",
+    line: 273,
+    // Applied by hand beside 01-44: the one marker asked for both frames,
+    // and the applier consumes a marker with a single image.
+    anchor: "__paired-with-01-44__",
+    alt: "The Reissue this badge? confirmation: every printed badge and the phone card stop scanning, with Keep current badge and Reissue badge",
+    route: "/members",
+    expect: "Reissue this badge?",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/users?limit=200",
+        (id) => `/members/${id}/id-card`,
+        "users",
+        (user) => user.username === "nbelhaj",
+      )(page);
+      const reissue = page.getByRole("button", { name: "Reissue badge" });
+      await reissue.waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+      await reissue.click();
+      await page.getByText("Reissue this badge?").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    // Never confirmed: the confirmation is dismissed with its own button.
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep current badge" });
+      if (await keep.count()) await keep.click();
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "01-46-add-member-password-no-email",
+    doc: "01-membership.md",
+    line: 522,
+    anchor:
+      "As an administrator (users.create + members.manage) on an install with email not configured",
+    alt: "Add Member's Account Password block on a department without email: Set initial password ticked and locked, the note saying why, and the empty password fields with their rules",
+    route: "/members/admin?tab=add",
+    expect: "Required: email isn't set up for this department",
+    selector: 'div.card:has(> div > h2:text-is("Account Password"))',
+  },
+  {
+    id: "01-47-membership-id-fiscal-year",
+    doc: "01-membership.md",
+    line: 642,
+    anchor:
+      "Members Admin → Settings → Membership IDs with numbering and auto-generation on",
+    alt: "Membership ID Number settings with the Year and number preset: pattern {YYYY}-{SEQ}, three digits, the count restarting each year on a fiscal year from July named by the year it ends in, and the next member numbered 2027-001",
+    route: "/members/admin/settings/ids",
+    expect: "The next member will be numbered 2027-001",
+    // The section autosaves, so the state is written through the API and put
+    // back afterwards; the demo ships with numbering off.
+    prepare: async (page) => {
+      guide01MembershipIdBefore = await guide08Api(
+        page,
+        "GET",
+        "/organization/settings/membership-id",
+      );
+      await guide08Api(page, "PATCH", "/organization/settings/membership-id", {
+        ...guide01MembershipIdBefore,
+        enabled: true,
+        auto_generate: true,
+        pattern: "{YYYY}-{SEQ}",
+        padding: 3,
+        reset_yearly: true,
+        year_basis: "fiscal",
+        fiscal_year_start_month: 7,
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByText(/The next member will be numbered/)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      if (!guide01MembershipIdBefore) return;
+      await guide08Api(
+        page,
+        "PATCH",
+        "/organization/settings/membership-id",
+        guide01MembershipIdBefore,
+      );
+      guide01MembershipIdBefore = null;
+    },
+    fullPage: true,
+  },
+  {
+    id: "01-48-reset-password-rules",
+    doc: "01-membership.md",
+    line: 924,
+    anchor:
+      "As an administrator (members.manage) at /members/admin, Member Management tab: a demo member's Reset Password dialog",
+    alt: "Reset Password for a member with a weak password typed (masked): the Password rules list ticks the length and character rules and leaves No runs like 123 or abc unmet",
+    route: "/members/admin",
+    expect: "No runs like 123 or abc",
+    prepare: async (page) => {
+      const row = page.locator("tr").filter({ hasText: "Esme Caldwell" });
+      await row.first().waitFor({ timeout: 15_000 });
+      await row
+        .getByRole("button", { name: /Reset Password/i })
+        .first()
+        .click();
+      // The placeholder's own example, typed into a masked field and never
+      // submitted. "1234" is the run the rules list flags.
+      await page.locator("#reset-new-password").fill("Abcdefgh1234!");
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      const cancel = page
+        .locator('[data-testid="modal-panel"]')
+        .getByRole("button", { name: "Cancel" });
+      if (await cancel.count()) await cancel.click();
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "01-49-anonymize-member",
+    doc: "01-membership.md",
+    line: 1068,
+    anchor:
+      "As an administrator (members.manage) at /members/:userId for a Dropped or Archived demo member: the Anonymize Member dialog",
+    alt: "The Anonymize Member dialog for an archived former member: the warning, what is removed, what is kept under Former Member, and the typed confirmation with Anonymize still disabled",
+    route: "/members",
+    expect: "Former Member",
+    prepare: async (page) => {
+      const id = await guide01MakeFormerMember(page, "archived");
+      await page.goto(new URL(`/members/${id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      await page
+        .getByRole("button", { name: "Anonymize member" })
+        .click({ timeout: 15_000 });
+      await page
+        .locator('[data-testid="modal-panel"]')
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    // Never confirmed; the member is deleted outright afterwards.
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await guide01RemoveFormerMember(page, "archived");
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "01-50-status-page-stage",
+    doc: "01-membership.md",
+    line: 1420,
+    anchor:
+      "As a Membership Coordinator (prospective_members.manage) at /prospective-members/settings: a pipeline selected and Add Stage open",
+    alt: "Add Stage with Enable Status Page chosen: the panel saying it enables the public status page and overrides the pipeline setting, Enable public status page at this stage ticked, and a welcome line in the link email message",
+    route: "/prospective-members/settings",
+    expect: "Enables the public status page",
+    prepare: async (page) => {
+      const pipeline = page
+        .locator("button, li, div[role='button']")
+        .filter({ hasText: /stages · \d+ applicants/ })
+        .first();
+      await pipeline.waitFor({ timeout: 15_000 });
+      await pipeline.click();
+      await page.waitForTimeout(1000);
+      const add = page.getByRole("button", { name: /Add Stage/i }).first();
+      await add.scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await add.click({ timeout: 15_000 });
+      await page.waitForTimeout(700);
+      await page
+        .locator("button")
+        .filter({ hasText: "Enable Status Page" })
+        .first()
+        .click({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+      const enable = page.getByLabel("Enable public status page at this stage");
+      if (!(await enable.isChecked())) await enable.check();
+      await page
+        .locator("#stage-status-page-message")
+        .fill(
+          "Welcome to Oakville Fire! Use this link to follow your application as it moves through each stage.",
+        );
+      await page.waitForTimeout(400);
+    },
+    // Never saved: the next shot navigates away with the modal still open.
+    selector: "div:has(> h3:text-is('Stage Configuration'))",
+    viewport: { width: 1440, height: 1200 },
+  },
+  {
+    id: "01-51-rejoin-status-dialog",
+    doc: "01-membership.md",
+    line: 1724,
+    anchor:
+      "As an administrator (members.manage) at /members/:userId for a Dropped (Voluntary) demo member: the Change Member Status dialog with Active selected",
+    alt: "Change Member Status for a member who left voluntarily, with Active selected: Earlier service with its recorded length, Continue prior service (marked as the department default) and Restart at zero, and the Return date",
+    route: "/members",
+    expect: "Restart at zero",
+    // Last day of previous service is asked only for a member whose earlier
+    // service was never recorded -- one who left before The Logbook kept
+    // stints. A drop made today records the stint, and clearing it afterwards
+    // leaves the estimate reading today's date (the drop's own status change)
+    // against seven years away, which no real member shows. So the shot
+    // pictures a member whose service is on record, and the field is absent.
+    prepare: async (page) => {
+      const id = await guide01MakeFormerMember(page, "dropped");
+      await page.goto(new URL(`/members/${id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      const badge = page
+        .locator('button[title="Change status"]:visible')
+        .first();
+      await badge.waitFor({ timeout: 15_000 });
+      await badge.click();
+      await page.waitForTimeout(600);
+      await page
+        .locator("select")
+        .filter({ hasText: "Dropped Voluntary" })
+        .first()
+        .selectOption({ label: "Active" });
+      await page.getByText("Restart at zero").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    // Never submitted; the member is deleted outright afterwards.
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await guide01RemoveFormerMember(page, "dropped");
+    },
+    selector: "div.modal-overlay > div",
+  },
+  {
+    id: "01-52-service-history-restart",
+    doc: "01-membership.md",
+    line: 2142,
+    anchor:
+      "As an administrator (members.manage) at /members/:userId for a demo member who rejoined under Restart at zero",
+    alt: "The Service History card of a member who rejoined under Restart at zero: Credited service and Prior service (not counted) tiles, an earlier stint marked Dropped (voluntary) and Not counted, and the current stint ending present",
+    route: "/members",
+    expect: "Prior service (not counted)",
+    prepare: async (page) => {
+      const id = await guide01MakeFormerMember(page, "rejoined");
+      await page.goto(new URL(`/members/${id}`, page.url()).toString(), {
+        waitUntil: "domcontentloaded",
+      });
+      await page
+        .getByText("Prior service (not counted)")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: (page) => guide01RemoveFormerMember(page, "rejoined"),
+    selector: 'div.card:has(> div > h2:text-is("Service History"))',
+  },
+
   // ── 02 Training ─────────────────────────────────────────────────────
   {
     id: "02-01-my-training",
+    expect: "Required Training",
     doc: "02-training.md",
     line: 53,
     anchor: "Screenshot of the My Training page showing stat cards at the top",
-    alt: "My Training page with stat cards and the personal training record list",
+    alt: 'My Training as a member: this year\'s course and hour tiles, Required Training with its "3 of 4 requirements met" line, upcoming expirations, the requirements and the sections below them',
+    // As the demo member, who has requirements, programs and shift reports
+    // behind every section the guide lists; the administrator has none of the
+    // latter.
+    auth: "member",
     route: "/training/my-training",
     fullPage: true,
   },
@@ -6788,7 +7998,10 @@ export const SHOTS = [
   },
   {
     id: "02-16-requirements",
-    expect: "Requirements",
+    expect: "Training Requirements",
+    // The hub's metrics and area cards fill the first screen; scroll the
+    // page's own heading to the top so the table is what is pictured.
+    prepare: scrollHeadingToTop("Training Requirements"),
     doc: "02-training.md",
     line: 438,
     anchor:
@@ -6806,10 +8019,13 @@ export const SHOTS = [
     alt: "Training Officer Dashboard with summary cards and pending review queue",
     route: "/training/admin?page=dashboard&tab=overview",
     fullPage: true,
+    // "No capacity-limited sessions are upcoming." is one widget among many.
+    allowEmptyState: true,
   },
   {
     id: "02-18-review-submissions",
-    expect: "Submissions",
+    expect: "Review Submissions",
+    prepare: scrollHeadingToTop("Review Submissions"),
     doc: "02-training.md",
     line: 480,
     anchor:
@@ -7095,7 +8311,7 @@ export const SHOTS = [
     line: 423,
     anchor:
       "Screenshot of the minutes creation/editing page showing the meeting type selector, date,",
-    alt: "Meeting minutes page with the meeting type selector and attendee list",
+    alt: "The Meeting Minutes page: the Outlines button, the summary tiles, and each meeting card listing its minutes with their state, one Circulated for review and one Adopted",
     route: "/minutes",
   },
   {
@@ -7107,6 +8323,594 @@ export const SHOTS = [
     alt: "Action Items page listing tasks with assignee, due date, and status",
     route: "/action-items",
   },
+  {
+    // The seeded officer-meeting minutes are circulated, so the demo member
+    // can read them and suggest a change. The comment is typed, never sent.
+    id: "04-64-minutes-suggest-change",
+    doc: "04-events-meetings.md",
+    line: 1583,
+    anchor: "A member on circulated minutes with Suggest a change open under",
+    alt: "Circulated minutes as a member: Suggest a change open under the Roll Call section, with a comment typed in",
+    route: "/minutes",
+    auth: "member",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Officer Meeting — Budget Review",
+      )(page);
+      await page
+        .getByRole("button", {
+          name: "Suggest a change to Roll Call / Attendance",
+        })
+        .click({ timeout: 20_000 });
+      const form = page.getByRole("form", {
+        name: "Suggest a change to Roll Call / Attendance",
+      });
+      await form
+        .locator("textarea")
+        .first()
+        .fill(
+          "Viktor Brennan arrived after the treasurer's report, so he should be recorded as late.",
+        );
+      await page.waitForTimeout(500);
+    },
+    selector: "div.card:has(h3:has-text('Roll Call / Attendance'))",
+    expect: {
+      selector: "form[aria-label='Suggest a change to Roll Call / Attendance']",
+    },
+  },
+  {
+    // As the Secretary: the administrator circulated these minutes, and the
+    // one who circulates them cannot adopt them. Closed with Cancel.
+    id: "04-65-minutes-adopt-dialog",
+    doc: "04-events-meetings.md",
+    line: 1587,
+    anchor: "A second officer (not the one who circulated them) on circulated",
+    alt: "The Adopt these minutes dialog: When the body voted, the minutes of the meeting that adopted them, and the as-amended tick",
+    route: "/minutes",
+    auth: "secretary",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Officer Meeting — Budget Review",
+      )(page);
+      await page
+        .getByRole("button", { name: "Adopt Minutes" })
+        .click({ timeout: 20_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      // The dialog focuses its first field; a caret and a selected date
+      // segment read as a half-finished edit.
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(600);
+    },
+    selector: "[role='dialog']",
+    expect: "When the body voted",
+  },
+  {
+    id: "04-66-minutes-folded-panels",
+    doc: "04-events-meetings.md",
+    line: 1612,
+    anchor:
+      "Circulated minutes below the sections: the folded panels, each with",
+    alt: "Below the sections of circulated minutes, the folded panels with their counts: Motions (1), Closed sessions (1), Election results (0) and Action Items (0)",
+    route: "/minutes",
+    allowEmptyState:
+      '"No suggestions yet" is the suggestions panel at the top of the page, out of this frame.',
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Officer Meeting — Budget Review",
+      )(page);
+      const first = page.locator("section[aria-labelledby]").filter({
+        hasText: "Motions (",
+      });
+      await first.waitFor({ timeout: 20_000 });
+      await first.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    expect: { selector: "#closed-sessions-heading" },
+    fullPage: false,
+  },
+  {
+    id: "04-67-minutes-closed-session",
+    doc: "04-events-meetings.md",
+    line: 1616,
+    anchor: "The Closed sessions panel opened on minutes with one recorded",
+    alt: "The Closed sessions panel opened: the reason, start and end times, legal basis, who was in the room with the member who stepped out, and the summary",
+    route: "/minutes",
+    allowEmptyState:
+      '"No action was taken." is the closed session\'s recorded summary, not an empty list.',
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Officer Meeting — Budget Review",
+      )(page);
+      const panel = page.locator(
+        "section[aria-labelledby='closed-sessions-heading']",
+      );
+      await panel.getByRole("button").first().click({ timeout: 20_000 });
+      await panel
+        .getByText("No action was taken.")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "section[aria-labelledby='closed-sessions-heading']",
+    expect: "Department bylaws, Article VI, Section 3",
+  },
+  {
+    // The seeder adds a second, non-default business outline; every outline
+    // a department starts with is its type's default.
+    id: "04-68-minutes-outlines",
+    doc: "04-events-meetings.md",
+    line: 1633,
+    anchor: "Minutes > Outlines with a second business outline that is not the",
+    alt: "Minutes > Outlines: each meeting type's outlines, with Make default beside Edit and Duplicate on the business outline that is not the default",
+    route: "/minutes/outlines",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Make .* the default$/ })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    expect: {
+      selector: "button[aria-label^='Make '][aria-label$=' the default']",
+    },
+    fullPage: false,
+  },
+  {
+    // Opened on the short-form outline the seeder adds; closed unsaved.
+    id: "04-69-minutes-outline-editor",
+    doc: "04-events-meetings.md",
+    line: 1637,
+    anchor:
+      "An outline open in the outline editor: its sections with the Required",
+    alt: "The outline editor on a short business outline: its name, kind of meeting and default switch, then the order of business with Required ticked on Call to Order",
+    route: "/minutes/outlines",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit Business Meeting — Short Form" })
+        .click({ timeout: 20_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      // The dialog focuses its first field; a caret and a selected date
+      // segment read as a half-finished edit.
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(800);
+    },
+    selector: "[role='dialog']",
+    expect: "Required: needs text before the minutes can be circulated",
+  },
+  {
+    // A department with no events is the state this pictures, and the demo
+    // department has dozens. The member's event list and missed-mandatory
+    // list are answered empty, which is exactly what a new department's API
+    // returns; nothing else on the page is mocked.
+    id: "04-51-events-empty-member",
+    doc: "04-events-meetings.md",
+    line: 120,
+    anchor: "Events page as a regular member on a department with no upcoming",
+    alt: 'The Events page as a member when nothing is scheduled: "No upcoming events yet", what appears there once events are scheduled, and the link to the Learning Center walkthrough',
+    route: "/events",
+    auth: "member",
+    beforeNavigate: async (page) => {
+      await page.route(
+        (url) =>
+          url.pathname === "/api/v1/events" ||
+          url.pathname === "/api/v1/events/missed-mandatory",
+        (route) =>
+          route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: "[]",
+          }),
+      );
+    },
+    expect: "Take the short walkthrough in the Learning Center",
+    allowEmptyState:
+      "The empty state is the subject: the placeholder asks for the page a " +
+      "member sees before the department has scheduled anything.",
+    fullPage: false,
+  },
+  {
+    // Pump Panel Practice is seeded ended a few hours ago with no check-in for
+    // the demo member, so the server offers her a request.
+    id: "04-52-attendance-request-prompt",
+    doc: "04-events-meetings.md",
+    line: 335,
+    anchor: "for an event whose check-in window closed today and with no",
+    alt: 'An ended event as a member with no check-in: "Were you at this event but never checked in?" with the I was there button',
+    route: "/events",
+    auth: "member",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Pump Panel Practice",
+      )(page);
+      const prompt = page.getByText(
+        "Were you at this event but never checked in?",
+      );
+      await prompt.waitFor({ timeout: 20_000 });
+      await prompt.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+    expect: { selector: "button:has-text('I was there')" },
+    fullPage: false,
+  },
+  {
+    // The same event as the organizer: Owen Kittredge's request is seeded
+    // pending, with the times he says he was there.
+    id: "04-53-attendance-requests-card",
+    doc: "04-events-meetings.md",
+    line: 339,
+    anchor:
+      "Event detail as the event's organizer → the Attendance Requests card",
+    alt: "The Attendance Requests card on an ended event, as its organizer: one pending request with the member's name, when they asked, their reason and the times they say they were there, with Approve and Decline",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Pump Panel Practice",
+      )(page);
+      await page
+        .getByRole("heading", { name: "Attendance Requests" })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div.card:has(> h2:has-text('Attendance Requests'))",
+    expect: "Says they were there from",
+  },
+  {
+    // A real check-in by the demo member on the in-progress drill. She is
+    // seeded checked in there, so the prepare step removes her RSVP first and
+    // the tap puts it back: the drill ends the shot as it started, apart from
+    // her check-in time.
+    id: "04-54-training-check-in-confirmation",
+    doc: "04-events-meetings.md",
+    line: 387,
+    anchor:
+      "Member at /events/:id/check-in on a Training-type demo event inside",
+    alt: "A member's check-in confirmation on a Training event: You're Checked In, the event name, and the Training Record panel saying the attendance is added to their training record when the event's attendance is finalized",
+    route: "/events",
+    auth: "member",
+    prepare: async (page, { lookupPage }) => {
+      drillCheckInAdmin = await lookupPage();
+      const removed = await drillMemberCheckIn(drillCheckInAdmin, "DELETE");
+      if (!/^[0-9a-f-]{36}$/.test(removed)) {
+        throw new Error(`04-54: could not reset the check-in (${removed})`);
+      }
+      await page.goto(
+        new URL(`/events/${removed}/check-in`, page.url()).toString(),
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
+      await page
+        .getByRole("button", { name: /^Check In to This Event$/ })
+        .click({ timeout: 15_000 });
+      await page.getByText("You're Checked In").waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    expect:
+      "Your attendance will be added to your training record when the event's attendance is finalized.",
+    // Puts her back on the roster if the shot failed after removing her.
+    // A manager check-in of a member already checked in is refused with a
+    // 400, which is the ordinary case after a successful shot.
+    cleanup: async () => {
+      if (!drillCheckInAdmin) return;
+      const outcome = await drillMemberCheckIn(drillCheckInAdmin, "POST");
+      drillCheckInAdmin = null;
+      if (!/^[0-9a-f-]{36}$/.test(outcome)) {
+        throw new Error(`04-54: could not restore the check-in (${outcome})`);
+      }
+    },
+    // Not flagged `mutatesSeedData`: the drill ends the shot with her checked
+    // in, as the seeder left it, so nothing captured after it can tell.
+    fullPage: false,
+  },
+  {
+    // Write NFC tag renders only where the browser offers Web NFC, which is
+    // Chrome on Android, so this is shot at phone width with that one browser
+    // capability present. Nothing is written: the button is not pressed. The
+    // stub is switched on by a sessionStorage flag so it does not reach any
+    // later shot on this reused page, and the cleanup clears it.
+    id: "04-55-qr-codes-badge-switch",
+    doc: "04-events-meetings.md",
+    line: 557,
+    anchor:
+      "Check-In QR Codes (`/locations/qr-codes`) as an administrator with the NFC",
+    alt: "A room's card on Check-In QR Codes on an Android phone with ID cards turned on: its QR code, Write NFC tag and the Badge check-in switch",
+    route: "/locations/qr-codes",
+    viewport: "mobile",
+    beforeNavigate: async (page) => {
+      await page.addInitScript(() => {
+        if (sessionStorage.getItem("shots:web-nfc") === "on") {
+          window.NDEFReader = class {
+            async write() {}
+            async scan() {}
+            addEventListener() {}
+          };
+        }
+      });
+    },
+    prepare: async (page) => {
+      await page.evaluate(() => sessionStorage.setItem("shots:web-nfc", "on"));
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const card = page
+        .locator(".qr-card")
+        .filter({ hasText: "Training & Administration Center" })
+        .filter({ has: page.getByRole("switch") })
+        .first();
+      await card.waitFor({ timeout: 20_000 });
+      // Centred, so the phone's bottom navigation bar does not cover the
+      // card's action row in the element capture.
+      await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      await page.evaluate(() => sessionStorage.removeItem("shots:web-nfc"));
+    },
+    selector:
+      ".qr-card:has([role='switch']):has-text('Training & Administration Center')",
+    expect: {
+      selector:
+        ".qr-card:has-text('Training & Administration Center') button:has-text('Write NFC tag')",
+    },
+  },
+  {
+    // Two seeded events in the Volunteer Office: one ended minutes before the
+    // seed and stays open on a Window check-in, the other starts shortly and
+    // is open on its Flexible lead time. A room cannot hold overlapping
+    // bookings, so that is the only way two can be open there at once.
+    id: "04-56-room-tag-event-chooser",
+    doc: "04-events-meetings.md",
+    line: 561,
+    anchor: "A phone after tapping a room tag while two events are in their",
+    alt: 'A phone after tapping a room tag while two events are open for check-in there: "Which event are you here for?" listing both with their times',
+    route: "/events",
+    auth: "member",
+    viewport: "mobile",
+    prepare: async (page) => {
+      const roomId = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/locations?limit=100", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const rows = Array.isArray(body)
+          ? body
+          : body.locations || body.items || [];
+        return (
+          rows.find((row) =>
+            String(row.name || "").startsWith("Volunteer Office"),
+          )?.id ?? null
+        );
+      });
+      if (!roomId)
+        throw new Error("04-56: the Volunteer Office room was not found");
+      await page.goto(
+        new URL(`/locations/${roomId}/check-in`, page.url()).toString(),
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
+      await page
+        .getByText("Officer Candidate Study Group")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    expect: "Which event are you here for?",
+    fullPage: false,
+  },
+  {
+    // The next occurrence of the seeded monthly series, whose organizer and
+    // alternate the seeder sets with a real transfer.
+    id: "04-57-organized-by-row",
+    doc: "04-events-meetings.md",
+    line: 906,
+    anchor: "the details card's \"Organized by\" row with the alternate's name",
+    alt: "The event's details card as an administrator: the Organized by row naming the organizer and the alternate, with the Transfer event link",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) =>
+          event.title === "Monthly Officers Meeting" && isUpcoming(event),
+      )(page);
+      await page
+        .getByText("Alternate: Lila Nakamura")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div.card:has(button:text-is('Transfer event'))",
+    expect: "Transfer event",
+  },
+  {
+    // Paired with 04-57 under one placeholder. Opened and left on "This and
+    // all future events in the series"; Keep as is closes it unsaved.
+    id: "04-58-transfer-event-series",
+    allowEmptyState:
+      '"No alternate" is the Alternate picker\'s empty option, in the DOM whatever is selected.',
+    doc: "04-events-meetings.md",
+    line: 906,
+    anchor: "__paired-with-04-57__",
+    alt: "The Transfer Event dialog on a recurring meeting: the organizer and alternate pickers and Apply to with This and all future events in the series selected",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) =>
+          event.title === "Monthly Officers Meeting" && isUpcoming(event),
+      )(page);
+      await page
+        .getByRole("button", { name: "Transfer event" })
+        .click({ timeout: 20_000 });
+      const dialog = page.getByRole("dialog");
+      await dialog.waitFor({ timeout: 10_000 });
+      await dialog
+        .getByLabel(/This and all future events in the series/)
+        .check();
+      await page.waitForTimeout(600);
+    },
+    selector: "[role='dialog']",
+    expect: "Past events keep the organizer who ran them.",
+  },
+  {
+    id: "04-59-attendance-request-routing",
+    doc: "04-events-meetings.md",
+    line: 910,
+    anchor:
+      'Manage Events → Event settings → Attendance → the "Attendance requests" block',
+    alt: "Event settings, Attendance: the Attendance requests block with one position select per event type, each on Default (Secretary)",
+    route: "/events/admin?tab=settings",
+    prepare: async (page) => {
+      await clickByName(/^Attendance/)(page);
+      const heading = page.getByRole("heading", {
+        name: "Attendance requests",
+      });
+      await heading.waitFor({ timeout: 15_000 });
+      await page
+        .locator("#fallback-position-training")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div.border-t:has(> h3:has-text('Attendance requests'))",
+    // Not the "Default (Secretary)" text: it is a native <option>, which
+    // Playwright never reports visible.
+    expect: { selector: "#fallback-position-training" },
+  },
+  {
+    // A seeded business meeting finalized four days ago. Nothing is saved.
+    id: "04-60-finalized-event-edit",
+    allowEmptyState:
+      '"No reminders" is an option of the reminder audience select on every event form.',
+    doc: "04-events-meetings.md",
+    line: 1000,
+    anchor: "Event organizer at /events/:id/edit on a finalized demo event",
+    alt: 'Editing a finalized event: the "Attendance for this event is finalized" notice at the top, the type, schedule and check-in controls greyed out, and the title still editable',
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}/edit`,
+        "events",
+        (event) => event.title === "Apparatus Committee Meeting",
+      )(page);
+      await page
+        .getByText("Attendance for this event is finalized")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    selector: "form",
+    expect: "Attendance for this event is finalized",
+  },
+  {
+    // Not submitted. The first course in the picker fills Training Type and
+    // Category, which is what the placeholder asks to see.
+    id: "04-61-training-details-create",
+    allowEmptyState:
+      '"No category" is the Training Category select\'s empty option.',
+    doc: "04-events-meetings.md",
+    line: 1025,
+    anchor:
+      "Admin with events.manage and training.manage at /events/admin?tab=create",
+    alt: "Create Event with the type set to Training: the Training details (optional) group with a course picked, its training type and category filled in, and the Create Training Session link",
+    route: "/events/admin?tab=create",
+    prepare: async (page) => {
+      await page
+        .locator("#event-type")
+        .selectOption("training", { timeout: 15_000 });
+      const group = page.getByRole("group", {
+        name: "Training details (optional)",
+      });
+      await group.waitFor({ timeout: 10_000 });
+      const course = group.locator("select").first();
+      await course
+        .locator("option:nth-child(2)")
+        .waitFor({ state: "attached", timeout: 15_000 });
+      const value = await course
+        .locator("option:nth-child(2)")
+        .getAttribute("value");
+      await course.selectOption(value ?? "");
+      await page.waitForTimeout(600);
+    },
+    selector: "[role='group'][aria-labelledby='training-details-heading']",
+    expect: "Create Training Session",
+  },
+  {
+    // Opened and dismissed with Keep it open: the confirmation is the subject,
+    // and finalizing would close the seeded event for every later shot.
+    id: "04-62-finalize-training-confirm",
+    doc: "04-events-meetings.md",
+    line: 1047,
+    anchor:
+      'on an ended Training event with attendance still open: the "Finalize',
+    alt: "The Finalize attendance? confirmation on an ended Training event: how each member's time is decided, that members with no credited time get no record, that earlier admin-hours entries are removed, and Finalize and close beside Keep it open",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Pump Panel Practice",
+      )(page);
+      await page
+        .getByRole("button", { name: "Finalize Attendance" })
+        .click({ timeout: 20_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep it open" });
+      if (await keep.isVisible()) await keep.click();
+    },
+    selector: "[role='dialog']",
+    expect: "Earlier admin-hours entries for this event are removed.",
+  },
+  {
+    // The next occurrence of the seeded series. The panel reads the same for
+    // any recurrence pattern; the demo's series is monthly. Never saved.
+    id: "04-63-recurring-edit-scope",
+    allowEmptyState:
+      '"No reminders" is an option of the reminder audience select on every event form.',
+    doc: "04-events-meetings.md",
+    line: 1203,
+    anchor:
+      "Event organizer (events.manage) at /events/:id/edit on an occurrence",
+    alt: 'Editing one event of a recurring series: the "This event is part of a recurring series." panel above the form with This and all future events selected',
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}/edit`,
+        "events",
+        (event) =>
+          event.title === "Monthly Officers Meeting" && isUpcoming(event),
+      )(page);
+      await page
+        .getByText("This event is part of a recurring series.")
+        .waitFor({ timeout: 20_000 });
+      await page.locator("input[name='updateScope'][value='future']").check();
+      await page.waitForTimeout(500);
+    },
+    fullPage: false,
+    expect: "This event is part of a recurring series.",
+  },
 
   // ── 05 Inventory ────────────────────────────────────────────────────
   {
@@ -7117,6 +8921,9 @@ export const SHOTS = [
       "Screenshot of the Inventory Items List page showing the search bar, category",
     alt: "Inventory Items list with search, category filter, and status pills",
     route: "/inventory/items",
+    allowEmptyState:
+      '"No location" is an option in the location filter, not an empty list.',
+    expect: "need a label.",
   },
   {
     id: "05-02-items-pinned",
@@ -7246,6 +9053,7 @@ export const SHOTS = [
       "Screenshot of the Apparatus listing page showing a grid or list of",
     alt: "Apparatus listing with unit numbers, type badges, and status badges",
     route: "/apparatus",
+    expect: "Maintenance Due",
   },
   {
     id: "06-09-facilities-dashboard",
@@ -7256,6 +9064,11 @@ export const SHOTS = [
     alt: "Facilities dashboard with summary cards and facility cards",
     route: "/facilities",
     fullPage: true,
+    expect: "Recent Maintenance Completions",
+    // The two panels read "No overdue maintenance items" and "No inspections
+    // in the next 30 days" on a department that is caught up.
+    allowEmptyState: true,
+    viewport: { width: 1280, height: 900 },
   },
   {
     id: "06-13-facility-maintenance",
@@ -7283,7 +9096,7 @@ export const SHOTS = [
     line: 41,
     anchor:
       "Screenshot of the Documents page showing the folder tree on the left",
-    alt: "Documents page with the folder tree, file list, and search bar",
+    alt: "Documents & Files with its four totals, the search bar and the folder cards",
     route: "/documents",
   },
   {
@@ -7292,8 +9105,53 @@ export const SHOTS = [
     line: 105,
     anchor:
       "Screenshot of the Forms listing page showing created forms with name, status",
-    alt: "Forms listing page with status, submission counts, and actions",
+    alt: "Custom Forms with its five totals and the Forms tab: a new draft form beside published ones, each card showing its status, category and Public badges, field and submission counts, and its actions",
     route: "/forms",
+    expect: "Station Open House Volunteers",
+    // The demo publishes every form it seeds (each is answered, and answering
+    // needs a published form), so the draft is made here and deleted in
+    // cleanup. A seeded draft would be published and answered by the next
+    // seed run.
+    prepare: async (page) => {
+      const created = await apiCall(page, "POST", "forms", {
+        name: "Station Open House Volunteers",
+        description:
+          "Sign up to help at the station open house: tours, the kids' hose line and the pancake breakfast.",
+        category: "other",
+        is_public: false,
+        require_authentication: true,
+        fields: [
+          {
+            label: "Which job would you like?",
+            field_type: "select",
+            required: true,
+            sort_order: 0,
+            options: [
+              { value: "tours", label: "Station tours" },
+              { value: "hose", label: "Kids' hose line" },
+              { value: "breakfast", label: "Pancake breakfast" },
+            ],
+          },
+        ],
+      });
+      if (created.status !== 201 && created.status !== 200) {
+        throw new Error(`could not create the draft form (${created.status})`);
+      }
+      draftFormCleanup = { page, id: created.json?.id };
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByText("Station Open House Volunteers")
+        .waitFor({ timeout: 20_000 });
+    },
+    cleanup: async () => {
+      const draft = draftFormCleanup;
+      draftFormCleanup = null;
+      if (!draft?.id) return;
+      const result = await apiCall(draft.page, "DELETE", `forms/${draft.id}`);
+      if (result.status >= 300) {
+        throw new Error(`could not delete the draft form (${result.status})`);
+      }
+    },
   },
   {
     id: "07-08-notification-rules",
@@ -7954,9 +9812,10 @@ export const SHOTS = [
     doc: "10-mobile-pwa.md",
     line: 140,
     anchor: "Re-shoot of the phone header showing the ☰ button",
-    alt: "Phone header with the menu button at the left edge and the department name beside it",
+    alt: "Phone header with the department logo and name, and no menu button",
     route: "/dashboard",
     viewport: "mobile",
+    expect: { selector: 'header[role="banner"].md\\:hidden' },
     // Clipped to the header: the placeholder is about where one button sits,
     // and a whole-phone shot buries it above a screen of dashboard.
     selector: 'header[role="banner"].md\\:hidden',
@@ -8053,6 +9912,7 @@ export const SHOTS = [
     alt: "Dashboard on a phone in portrait orientation with stacked widget cards",
     route: "/dashboard",
     viewport: "mobile",
+    expect: "Record a course or hours",
     fullPage: true,
   },
   {
@@ -8097,6 +9957,7 @@ export const SHOTS = [
     alt: "Inventory admin hub on a phone with grouped card sections stacked vertically",
     route: "/inventory/admin",
     viewport: "mobile",
+    expect: "Inventory Administration",
     fullPage: true,
   },
 
@@ -8109,6 +9970,10 @@ export const SHOTS = [
       "The Finance Dashboard showing budget health summary cards at the top (total",
     alt: "Finance dashboard with budget health cards and recent transactions",
     route: "/finance",
+    // The Treasurer holds finance.approve, so the Approvals quick link and the
+    // linked Pending Approvals card both show.
+    auth: "treasurer",
+    expect: "Budgets, spending, and requests at a glance",
     fullPage: true,
   },
   {
@@ -8128,6 +9993,20 @@ export const SHOTS = [
       "The Create Approval Chain form showing the name field, applies-to dropdown (Purchase",
     alt: "Approval chain configuration page with the chain list and step builder",
     route: "/finance/settings/approval-chains",
+    expect: "Board sign-off",
+    // The "No active member can act on this step" warnings start "No …",
+    // which the empty-state check reads as an empty page.
+    allowEmptyState: true,
+    // The unused Major Purchase chain carries the seeded Email approver step.
+    prepare: async (page) => {
+      await page
+        .locator("button[aria-expanded]")
+        .filter({ hasText: "Major Purchase Approval" })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.getByText("Board sign-off").first().waitFor();
+      await page.waitForTimeout(400);
+    },
     fullPage: true,
   },
   {
@@ -8138,6 +10017,9 @@ export const SHOTS = [
       "The Create Purchase Request form showing all fields: title, fiscal year dropdown,",
     alt: "Create Purchase Request form with budget, vendor, and priority fields",
     route: "/finance/purchase-requests/new",
+    // "No budget linked" is the Budget picker's first option, not an empty page.
+    allowEmptyState: true,
+    expect: "Saved as a draft. Submit it for approval from the next page.",
     fullPage: true,
   },
   {
@@ -8150,6 +10032,7 @@ export const SHOTS = [
       "The Create Expense Report form showing the header fields at the top",
     alt: "Create Expense Report form with header fields and the line items section",
     route: "/finance/expenses/new",
+    expect: "Saved as a draft. Submit it for approval from the next page.",
     fullPage: true,
   },
   {
@@ -8160,6 +10043,9 @@ export const SHOTS = [
       "The Create Check Request form showing payee name, amount, fiscal year dropdown,",
     alt: "Create Check Request form with payee, amount, and budget fields",
     route: "/finance/check-requests/new",
+    // "No budget linked" is the Budget picker's first option, not an empty page.
+    allowEmptyState: true,
+    expect: "New Check Request",
     fullPage: true,
   },
   {
@@ -8170,6 +10056,139 @@ export const SHOTS = [
       "The Dues Management page showing the summary cards at the top (total",
     alt: "Dues management page with collection summary cards and the member dues table",
     route: "/finance/dues",
+    expect: "What members owe and have paid, by dues schedule",
+    fullPage: true,
+  },
+
+  // ── 11 Finance, approvals placeholders (2026-10-17). The treasurer shots
+  // sign in as the seeded Treasurer: the administrator raised every seeded
+  // request, so separation of duties hides the controls they picture.
+  {
+    id: "11-18-approval-step-email",
+    doc: "11-finance.md",
+    line: 764,
+    anchor:
+      "expand a chain → **Add step**, with Step type **Approval**, Approver type **Email**",
+    alt: "The Add step dialog with Step type Approval and Approver type Email: the help text under Approver type, an approver email filled in, the Allow self-approval by email box and the Auto-approve under ($) field",
+    route: "/finance/settings/approval-chains",
+    expect: "Allow self-approval by email",
+    // Filled in, never saved.
+    prepare: async (page) => {
+      await openApprovalStepDialog(page, "Major Purchase Approval");
+      await page.locator("#step-name").fill("Trustee sign-off");
+      await page.locator("#step-approver-type").selectOption("email");
+      await page
+        .locator("#step-approver-value")
+        .fill("trustee@oakvillefd.example.org");
+      await page.waitForTimeout(300);
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "11-19-approval-step-position",
+    doc: "11-finance.md",
+    line: 768,
+    anchor: "The Add step dialog over an expanded purchase-request chain",
+    alt: "The Add step dialog as the Treasurer, over the Purchase Request Approval chain: Step type Approval, Approver type Position with Treasurer chosen, Auto-approve under ($) set to 250, and the help text naming the finance.approve permission",
+    route: "/finance/settings/approval-chains",
+    auth: "treasurer",
+    expect: "finance.approve",
+    // Filled in, never saved.
+    prepare: async (page) => {
+      await openApprovalStepDialog(page, "Purchase Request Approval");
+      await page.locator("#step-name").fill("Treasurer review");
+      await page.locator("#step-approver-type").selectOption("position");
+      await page
+        .locator("#step-approver-value")
+        .selectOption({ label: "Treasurer" });
+      await page.locator("#step-auto-approve").fill("250");
+      await page.waitForTimeout(300);
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "11-20-approval-step-unreachable",
+    doc: "11-finance.md",
+    line: 790,
+    anchor: "with a demo chain whose step names a position nobody holds",
+    alt: "Approval Chains as the Treasurer: the amber banner counting approval steps no one can act on, and the Purchase Request Approval chain expanded with its Company officer review step warning that no active member can act on it and how many requests are waiting",
+    route: "/finance/settings/approval-chains",
+    auth: "treasurer",
+    expect: "No active member can act on this step",
+    // The warning starts "No …", which the empty-state check reads as an
+    // empty page; the chains around it are populated.
+    allowEmptyState: true,
+    // No seeded member holds the Captain position the purchase-request chain's
+    // first step names, so its warning is the demo's own state.
+    prepare: async (page) => {
+      await page
+        .locator("button[aria-expanded]")
+        .filter({ hasText: "Purchase Request Approval" })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("No active member can act on this step")
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page
+        .getByText(/approval steps? ha(s|ve) no one who can act/)
+        .first()
+        .evaluate((node) => node.scrollIntoView({ block: "start" }));
+      await page.evaluate(() => window.scrollBy(0, -24));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "11-21-approvals-admin-view",
+    doc: "11-finance.md",
+    line: 880,
+    anchor:
+      "Finance → Approvals as an approvals administrator (finance.configure_approvals)",
+    alt: 'Approvals as the Treasurer, an approvals administrator: "Requests waiting on you." and the administrator line above a table whose first rows wait on the Treasurer with Approve and Deny, and whose later rows wait on the Captain position, marked Not assigned to you with Approve as admin and Deny as admin',
+    route: "/finance/approvals",
+    auth: "treasurer",
+    expect: "Not assigned to you",
+  },
+  {
+    id: "11-22-approvals-admin-override",
+    doc: "11-finance.md",
+    line: 884,
+    anchor:
+      'a "Approve as approvals admin" dialog open on a step assigned to another member',
+    alt: "The Approve as approvals admin dialog on a step assigned to the Captain position: the text naming who the step is assigned to, Notes, and the required Override reason box with its help text",
+    route: "/finance/approvals",
+    auth: "treasurer",
+    expect: "Override reason",
+    // Opened and photographed, never submitted.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: "Approve FDIC Conference Expenses as approvals admin",
+        })
+        .click({ timeout: 15_000 });
+      await page.getByText("Override reason").first().waitFor();
+      await page.waitForTimeout(400);
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "11-23-unrouted-request",
+    doc: "11-finance.md",
+    line: 951,
+    anchor:
+      "A purchase request detail page in Pending Approval with no approval chain configured",
+    alt: 'A purchase request pending approval with no approval chain, viewed by the Treasurer: the panel reading "No approval chain applies to this request. Approve or deny it here." with Approve and Deny, above a timeline with no approval steps',
+    route: "/finance/purchase-requests",
+    auth: "treasurer",
+    expect: "No approval chain applies to this request",
+    // `seed_guide11_finance_states` submits this one request while the default
+    // purchase-request chain is switched off.
+    prepare: openFirstFromApi(
+      "/finance/purchase-requests",
+      (id) => `/finance/purchase-requests/${id}`,
+      "purchase_requests",
+      (request) => request.title === "Hose tester calibration",
+    ),
     fullPage: true,
   },
 
@@ -8298,7 +10317,7 @@ export const SHOTS = [
     line: 700,
     anchor:
       "Screenshot of the Election Settings page showing toggle switches for each setting,",
-    alt: "Election settings page with the default rule toggles",
+    alt: "Election Settings open on Proxy Voting, with the Features, Test Ballot and Security sections beside it",
     route: "/elections/settings",
     fullPage: true,
   },
@@ -8462,12 +10481,12 @@ export const SHOTS = [
     line: 43,
     anchor:
       "Screenshot of Settings → Security showing the Privacy Choices section with three",
-    alt: "Account security settings showing the privacy choices section",
-    // Privacy Choices lives on the Security tab; this shot was landing on
-    // Account, byte-identical to 00-09-account-settings. Note the canonical
-    // path: /settings/account is a <Navigate to="/account"> with no query, so
+    alt: "My Account, Privacy tab: Profile visibility for each contact detail, then the Privacy Choices checkboxes for photo use, public roster listing and text message notifications, and Your Data",
+    // Privacy Choices lives on the Privacy tab (it moved off Security). Note
+    // the canonical path: /settings/account is a <Navigate to="/account"> with no query, so
     // React Router drops ?tab= on the redirect and the param never arrives.
-    route: "/account?tab=security",
+    route: "/account?tab=privacy",
+    expect: "Privacy Choices",
     fullPage: true,
   },
 
@@ -8903,6 +10922,7 @@ export const SHOTS = [
       "apparatus",
     ),
     fullPage: true,
+    expect: "Expiration Dates",
   },
   {
     id: "06-11-facility-detail",
@@ -8925,10 +10945,14 @@ export const SHOTS = [
     line: 176,
     anchor:
       "The Budget Categories section on the Settings page showing a hierarchical list",
-    alt: "Budget categories list with QuickBooks account mapping",
+    alt: "Budget categories as a tree: Officer brass and Station boots nested under Personal Protective Equipment, each line with its owner and who can charge it",
     route: "/finance/settings",
-    prepare: clickByName(/categor/i),
-    fullPage: true,
+    // Officer brass and Station boots sit under Personal Protective Equipment
+    // (`seed_guide11_finance_states`), so the list reads as a tree. Lines with
+    // no owner read "No owner", which is not an empty page.
+    allowEmptyState: true,
+    expect: "Officer brass",
+    selector: 'div.card:has(h2:text-is("Budget Categories"))',
   },
   {
     id: "11-05-budget-detail",
@@ -8980,6 +11004,7 @@ export const SHOTS = [
       "Screenshot of the Item Detail page showing the two-column layout. Left sidebar",
     alt: "Inventory item detail with its barcode, quick info, and history panels",
     route: "/inventory/items",
+    expect: { selector: "h1" },
     prepare: openFirstFromApi(
       "/inventory/items?limit=1",
       (id) => `/inventory/items/${id}`,
@@ -9014,6 +11039,7 @@ export const SHOTS = [
       'Screenshot of the pool-item issue dialog showing an "allowance exceeded" warning',
     alt: 'Pool item issue dialog warning that the quantity exceeds the member’s uniform allowance, with the "Override allowance" checkbox',
     route: "/inventory/admin/pool",
+    expect: "Override allowance",
     prepare: async (page) => {
       // Job Shirt is a Uniforms pool item, and the seeder has already spent 2
       // of the demo member's 3 annual uniform allowance — so asking for 2 is
@@ -9058,6 +11084,9 @@ export const SHOTS = [
       "Screenshot of the Reorder Requests page showing a table of reorder requests",
     alt: "Reorder requests table with requested quantities and status",
     route: "/inventory/admin/reorder",
+    // The status filter's closed <option> carries the same word, so the badge
+    // is found inside the table.
+    expect: { selector: 'tbody :text-is("Ordered")' },
   },
   {
     id: "05-24-member-inventory",
@@ -9067,6 +11096,9 @@ export const SHOTS = [
       "Screenshot of the Members inventory tab showing a list of members with",
     alt: "Members inventory tab listing each member and their assigned item count",
     route: "/inventory/admin/members",
+    allowEmptyState:
+      '"Former members still holding property" is correctly empty: no demo member has been dropped.',
+    expect: "Member Equipment",
   },
   {
     id: "05-25-admin-hub",
@@ -9244,7 +11276,7 @@ export const SHOTS = [
     line: 340,
     anchor:
       "Screenshot of the Equipment Requests page showing an approved request with its Fulfill",
-    alt: "Equipment Requests — a pending request, an approved one carrying Fulfill, and a fulfilled one with its terminal badge",
+    alt: "Gear Requests filtered to All: requests awaiting review, an approved one carrying Fulfill, an issued one, and a declined one, each with its status badge",
     route: "/inventory/admin/requests",
     prepare: async (page) => {
       // The page opens on Pending, which is right for a review queue and wrong
@@ -9252,6 +11284,7 @@ export const SHOTS = [
       await page.selectOption("#status-filter", "");
       await page.waitForTimeout(800);
     },
+    expect: "Fulfill",
     fullPage: true,
   },
   {
@@ -9325,6 +11358,7 @@ export const SHOTS = [
       "Screenshot of the label printing page showing the format dropdown (Letter, Dymo",
     alt: "Inventory label printing page with format presets and preview",
     route: "/inventory/print-labels",
+    expect: "Save setup",
     // The page prints whatever ?ids= names and otherwise renders "No items
     // specified" — which is what this shot published until 2026-08-09.
     prepare: withIdsFromApi("/inventory/items?limit=6", "items"),
@@ -9338,7 +11372,9 @@ export const SHOTS = [
       "Screenshot of the Storage Areas page showing an expanded storage area panel",
     alt: "Storage areas page with an expanded area listing its items",
     route: "/inventory/storage-areas",
-    prepare: async (page) => {
+    // NFC on, so the toolbar carries Put Away by NFC beside Put away, Scan
+    // shelf label, Check contents and Print labels.
+    prepare: withInventoryNfc(async (page) => {
       await selectStorageRoom(page);
       // The last area rather than the first, so this and 05-48 — which both
       // want an area expanded — do not publish the same picture twice.
@@ -9346,7 +11382,9 @@ export const SHOTS = [
         .getByRole("button", { name: /^Show \d+ items? in / })
         .last()
         .click({ timeout: 10_000 });
-    },
+    }),
+    cleanup: disableInventoryNfc,
+    expect: "Put Away by NFC",
     fullPage: true,
   },
   {
@@ -9360,6 +11398,7 @@ export const SHOTS = [
       "Screenshot of the Impact Planner page showing the filter panel on the",
     alt: "Inventory impact planner with its filter panel and member analysis",
     route: "/inventory/admin/impact-planner",
+    expect: "Back to Admin",
     fullPage: true,
   },
   {
@@ -9576,6 +11615,8 @@ export const SHOTS = [
       "events",
       isInProgress,
     ),
+    // Full page, so the Instructions steps under the code are in frame.
+    fullPage: true,
   },
   {
     id: "04-06-check-in-monitoring",
@@ -9756,6 +11797,7 @@ export const SHOTS = [
       await clickByName(/maintenance/i)(page);
     },
     fullPage: true,
+    expect: "Maintenance Records",
   },
   {
     id: "06-05-apparatus-fuel-tab",
@@ -9790,6 +11832,7 @@ export const SHOTS = [
       await clickByName(/equipment/i)(page);
     },
     fullPage: true,
+    expect: "Build equipment checklists",
   },
   {
     id: "13-02-requirements-tab",
@@ -9797,7 +11840,7 @@ export const SHOTS = [
     line: 71,
     anchor:
       "The Requirements tab showing a table of requirements with columns: Name, Screening",
-    alt: "Medical screening requirements tab with frequency and grace period",
+    alt: "Medical screening Requirements tab listing each requirement with its screening type, frequency and description",
     route: "/medical-screening",
     prepare: clickByName(/requirements/i),
     fullPage: true,
@@ -9916,7 +11959,7 @@ export const SHOTS = [
     line: 65,
     anchor:
       "Screenshot of the New Folder dialog showing the folder name field and",
-    alt: "New folder dialog with the name field and parent folder selector",
+    alt: "The Create Folder dialog with its Location, Folder Name and Description fields, the Who can open it choices (Organization, Leadership, Specific positions) and the Also require a permission list",
     route: "/documents",
     prepare: clickByName(/new folder/i),
   },
@@ -9961,22 +12004,36 @@ export const SHOTS = [
   },
   {
     id: "01-19-create-waiver",
+    expect: "Creates a standalone training waiver without a leave of absence",
     doc: "01-membership.md",
     line: 485,
     anchor:
       "Screenshot of the Create Waiver form showing the member dropdown, 'Applies To'",
     alt: "Create waiver form with member, scope, and date range",
     route: "/members/admin/waivers",
-    prepare: clickByName(/^create waiver$/i),
+    // Only Training Requirements ticked, so the frame differs from 01-11
+    // (both ticked) and shows the standalone-waiver line.
+    prepare: async (page) => {
+      await clickByName(/^create waiver$/i)(page);
+      await page
+        .getByLabel("Meeting Attendance & Shift Requirements")
+        .uncheck({ timeout: 10_000 });
+      await page
+        .getByText(
+          "Creates a standalone training waiver without a leave of absence",
+        )
+        .waitFor({ timeout: 10_000 });
+    },
     fullPage: true,
   },
   {
     id: "02-03-submit-training",
+    expect: "Course / Class Name",
     doc: "02-training.md",
     line: 86,
     anchor:
       "Screenshot of the Submit Training form showing the course dropdown with search",
-    alt: "Submit Training form with course, date, hours, and attachment fields",
+    alt: "Submit External Training: the class, when and details sections beside the This Submission panel, where the certificate attaches",
     route: "/training/my-training",
     prepare: clickByName(/submit training/i),
     fullPage: true,
@@ -9998,11 +12055,21 @@ export const SHOTS = [
     line: 160,
     anchor:
       "Screenshot of the form builder showing a form being designed with a",
-    alt: "Form builder with the field palette, canvas, and field settings",
+    alt: "The form builder with the One submission per person setting above the field list; each field shows its type and Required badge, and the field under the pointer shows its move up, move down, duplicate, edit and delete buttons",
     route: "/forms",
+    expect: "One submission per person",
     // "Create Form" only opens a name/category dialog; the builder this
     // placeholder describes is behind "Edit Fields" on an existing form.
-    prepare: clickByName(/edit fields/i),
+    prepare: async (page) => {
+      await clickByName(/edit fields/i)(page);
+      // A field shows its move, duplicate, edit and delete buttons only under
+      // the pointer, and the guide's Form Builder Features list is about those
+      // buttons. Hover one on purpose rather than wherever the click left it.
+      await page
+        .getByText("Your Organization", { exact: true })
+        .hover({ timeout: 15_000 });
+      await page.waitForTimeout(300);
+    },
     // Viewport only: the builder opens over the list page, and a full-page
     // capture trails the taller page underneath it below the fold.
     fullPage: false,
@@ -10015,10 +12082,26 @@ export const SHOTS = [
     line: 71,
     anchor:
       "Screenshot of the item edit modal showing form fields for name, description,",
-    alt: "Inventory item form with category, serial, condition and tracking fields",
+    alt: "The Add Item form for a Structural PPE item: Serial # and Inspection Interval (days) marked required by the category, and the line under Tracking Type describing Individual tracking",
     route: "/inventory/admin/items",
-    prepare: clickByName(/add item/i),
-    fullPage: false,
+    // A category that requires serial numbers and maintenance, so Serial # and
+    // Inspection Interval (days) carry their required markers, and Individual
+    // tracking so the help line under Tracking Type describes it. Never saved.
+    prepare: async (page) => {
+      await clickByName(/add item/i)(page);
+      const dialog = page.locator('[data-testid="modal-panel"]');
+      await dialog
+        .locator("#item-category_id")
+        .selectOption({ label: "Structural PPE" });
+      await dialog
+        .getByText("Individual: one record per physical item", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(400);
+    },
+    expect: "Individual: one record per physical item",
+    selector: '[data-testid="modal-panel"]',
+    viewport: { width: 1440, height: 2200 },
   },
   {
     id: "05-12-new-allowance-modal",
@@ -10088,6 +12171,7 @@ export const SHOTS = [
   },
   {
     id: "02-65-print-compliance",
+    expect: "Non-Compliant",
     doc: "02-training.md",
     line: 1573,
     anchor:
@@ -10098,6 +12182,7 @@ export const SHOTS = [
   },
   {
     id: "02-40-member-training-history",
+    expect: "Export CSV",
     doc: "02-training.md",
     line: 947,
     anchor:
@@ -10125,6 +12210,7 @@ export const SHOTS = [
   // seeder switches it on).
   {
     id: "02-30-shift-reports",
+    expect: "Approve Selected",
     doc: "02-training.md",
     line: 962,
     anchor:
@@ -10146,6 +12232,7 @@ export const SHOTS = [
   },
   {
     id: "02-31-shift-reports-filed",
+    expect: "Reports you've written",
     doc: "02-training.md",
     line: 900,
     anchor:
@@ -10183,6 +12270,7 @@ export const SHOTS = [
   },
   {
     id: "02-34-shift-report-analytics",
+    expect: "Your reporting summary",
     doc: "02-training.md",
     line: 1002,
     anchor:
@@ -10197,6 +12285,7 @@ export const SHOTS = [
   },
   {
     id: "02-35-shift-reports-my-reports",
+    expect: "Shift reports about you",
     doc: "02-training.md",
     line: 978,
     anchor:
@@ -10841,8 +12930,9 @@ export const SHOTS = [
     line: 1761,
     anchor:
       "Screenshot of the label print page (any module) showing the label size choices",
-    alt: "The inventory label print page — the nine label size choices with Rollo/Thermal 2x1 selected, copies per item, extra-detail toggles, and a preview of the three barcode labels",
+    alt: "The inventory label print page with Settings open: the saved-setup row, the label size choices, copies per item, What Prints on the Label, and a preview of the three barcode labels",
     route: "/inventory/items",
+    expect: "What Prints on the Label",
     prepare: async (page) => {
       // The page renders from ?ids= and shows "No items specified" without it,
       // so the ids have to be picked up before navigating.
@@ -11207,6 +13297,7 @@ export const SHOTS = [
   },
   {
     id: "01-08-member-audit-history",
+    expect: "Member profile updated: platoon",
     doc: "01-membership.md",
     line: 215,
     anchor:
@@ -11330,8 +13421,10 @@ export const SHOTS = [
     line: 270,
     anchor:
       "Screenshot of the Create Rule modal showing the name field, trigger dropdown",
-    alt: "Create notification rule modal with its trigger and channel fields",
+    alt: "Create Notification Rule with Rule Name, Trigger Event set to Event Reminder, Description, and the note under the trigger about switching off every rule for it",
     route: "/notifications",
+    // Event Reminder is the first trigger, so it is what the dialog opens on.
+    expect: "Sends reminders before scheduled events",
     prepare: clickByName(/add rule/i),
     fullPage: false,
   },
@@ -11388,7 +13481,7 @@ export const SHOTS = [
     doc: "07-documents-forms.md",
     line: 600,
     anchor: 'dialog filled in for a "training ideas" box',
-    alt: "The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below",
+    alt: "The New suggestion box dialog filled in: name, description, the Questions section with Add question directly under the description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below",
     route: "/communications/suggestion-boxes",
     // The sentence the shot exists to carry. It sits between the switches and
     // the reviewer pickers, so a frame cut short above it also fails here.
@@ -11813,6 +13906,7 @@ export const SHOTS = [
       await clickByName(/^settings$/i)(page);
     },
     fullPage: true,
+    expect: "Download test label",
   },
   {
     id: "06-08-facility-label-print",
@@ -11828,6 +13922,7 @@ export const SHOTS = [
       await clickByName(/^settings$/i)(page);
     },
     fullPage: true,
+    expect: "Download test label",
   },
   {
     id: "06-20-apparatus-badges",
@@ -11981,6 +14076,7 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     fullPage: true,
+    expect: "Quartermaster's Storage",
   },
   {
     id: "06-25-room-located-inside",
@@ -12111,12 +14207,16 @@ export const SHOTS = [
     anchor: "A Purchase Request Detail page showing the request header",
     alt: "Purchase request detail with its status and approval chain",
     route: "/finance/purchase-requests",
-    // A draft has no approval chain to picture, so open one that was submitted.
+    // A draft has no approval chain to picture, so open one that was
+    // submitted. As the Treasurer, who did not raise it: its step waits on the
+    // Captain position, so the panel offers the approvals-admin override.
+    auth: "treasurer",
+    expect: "Not assigned to you",
     prepare: openFirstFromApi(
       "/finance/purchase-requests",
       (id) => `/finance/purchase-requests/${id}`,
       "purchase_requests",
-      (request) => (request.status ?? request.Status) !== "draft",
+      (request) => request.title === "Thermal Imaging Camera",
     ),
     fullPage: true,
   },
@@ -12127,11 +14227,15 @@ export const SHOTS = [
     anchor: "An Expense Report Detail page showing the report header",
     alt: "Expense report detail with its line items and approval status",
     route: "/finance/expenses",
+    // The report waiting on the Treasurer, opened as the Treasurer, so the
+    // pending panel offers Approve and Deny.
+    auth: "treasurer",
+    expect: "You can approve or deny this step.",
     prepare: openFirstFromApi(
       "/finance/expense-reports",
       (id) => `/finance/expenses/${id}`,
       "expense_reports",
-      (report) => (report.status ?? "") !== "draft",
+      (report) => report.title === "EMS refresher mileage",
     ),
     fullPage: true,
   },
@@ -12142,11 +14246,14 @@ export const SHOTS = [
     anchor: "A Check Request Detail page showing the request header",
     alt: "Check request detail with payee, amount and approval status",
     route: "/finance/check-requests",
+    // The check request waiting on the Treasurer, opened as the Treasurer.
+    auth: "treasurer",
+    expect: "You can approve or deny this step.",
     prepare: openFirstFromApi(
       "/finance/check-requests",
       (id) => `/finance/check-requests/${id}`,
       "check_requests",
-      (request) => (request.status ?? "") !== "draft",
+      (request) => request.payeeName === "Oakville Hardware Supply",
     ),
     fullPage: true,
   },
@@ -12277,9 +14384,14 @@ export const SHOTS = [
     anchor: "Screenshot of the Eligibility Roster showing a table of members",
     alt: "Eligibility roster listing members with their eligibility status",
     route: "/elections",
+    // The roster opens expanded, so clicking its header (as this shot once
+    // did) folds it shut. The renamed stat proves the table loaded.
+    expect: "Voter Overrides",
     prepare: async (page) => {
       await openElectionTab("eligibility", isNominatingElection)(page);
-      await clickByName(/voter eligibility roster/i)(page);
+      await page.getByText("Voter Overrides").first().waitFor({
+        timeout: 15_000,
+      });
     },
     fullPage: true,
     allowEmptyState: true,
@@ -12326,6 +14438,50 @@ export const SHOTS = [
       "A member is meant to see a shorter list here -- the withheld pending " +
       "nomination is the subject of the shot, so one name on the ballot is " +
       "the result rather than missing demo data.",
+  },
+  {
+    // Real mutation, deliberately unflagged: `mutatesSeedData` would force
+    // this to be the last shot of guide 14, and 14-24 already holds that
+    // place. Placed directly before it instead, which is what the guard
+    // requires: 14-24 sends the Operations Committee ballot and reads nothing
+    // of the Lieutenant Election this votes in.
+    //
+    // The receipt exists only in the page that cast the vote, so the shot has
+    // to cast one, as the demo member, for the one candidate. A vote cannot
+    // be withdrawn: a second run finds "You have already voted" with no
+    // receipt and fails on its `expect` rather than picturing that. A fresh
+    // seed of an empty database makes it repeatable.
+    id: "14-27-vote-receipt",
+    doc: "14-elections.md",
+    line: 712,
+    anchor: "A member voting in-app on an open demo election",
+    alt: "Cast Vote after voting in the app: You have already voted in this election, then the Vote Receipt with its line about saving the receipt to verify the vote was counted without revealing how you voted, and the receipt code",
+    route: "/elections",
+    auth: "member",
+    expect: { selector: '[data-testid="ballot-receipts"]' },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        isPostNominationElection,
+      )(page);
+      await page.getByLabel("Amara Osei").check({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Cast Ballot", exact: true })
+        .click();
+      // The confirmation's button differs from the page's only in case.
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Cast ballot", exact: true })
+        .click({ timeout: 10_000 });
+      await page
+        .locator('[data-testid="ballot-receipts"]')
+        .waitFor({ timeout: 20_000 });
+      // Wait out the success toast.
+      await page.waitForTimeout(4_500);
+    },
+    selector: 'div.rounded-lg:has(> [data-testid="ballot-receipts"])',
   },
   {
     id: "14-24-ballot-send-skipped",
@@ -13081,6 +15237,34 @@ export const SHOTS = [
     },
   },
   {
+    id: "16-17-target-solutions-details",
+    doc: "16-integrations.md",
+    line: 952,
+    anchor: "Add Provider → Target Solutions, details step",
+    alt: "Configure Provider for Target Solutions: Display Name, API Base URL empty with its helper text giving the Training Records API address, API Key and API Secret holding demo values, and under Sync Settings Enable Auto-Sync on, Pull new completions Every hour and Daily 30-day review at 02:00 with the department-timezone note",
+    route: "/training/admin?page=setup&tab=integrations",
+    expect: "Daily 30-day review at",
+    viewport: { width: 1280, height: 1700 },
+    // Filled with obviously fake values and never saved.
+    prepare: (page) => openTargetSolutionsProvider(page, { baseUrl: "" }),
+    selector: '[aria-labelledby="create-provider-title"] .modal-panel',
+  },
+  {
+    id: "16-18-target-solutions-filled",
+    doc: "16-integrations.md",
+    line: 1006,
+    anchor: "add a Target Solutions provider: the form with **API Base URL**",
+    alt: "The Target Solutions provider form filled in: API Base URL https://app.targetsolutions.com/tsapp/api/, API Key and API Secret with placeholder values, and Enable Auto-Sync on with Pull new completions Every hour and Daily 30-day review at 02:00",
+    route: "/training/admin?page=setup&tab=integrations",
+    expect: "Daily 30-day review at",
+    viewport: { width: 1280, height: 1700 },
+    prepare: (page) =>
+      openTargetSolutionsProvider(page, {
+        baseUrl: "https://app.targetsolutions.com/tsapp/api/",
+      }),
+    selector: '[aria-labelledby="create-provider-title"] .modal-panel',
+  },
+  {
     id: "16-04-documenso-connect",
     doc: "16-integrations.md",
     line: 176,
@@ -13088,6 +15272,10 @@ export const SHOTS = [
     alt: "Documenso connect dialog with its API token and webhook fields",
     route: "/integrations",
     prepare: openIntegrationConnect("Documenso"),
+    expect: "Connecting turns this integration on",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
     fullPage: false,
   },
   {
@@ -13099,6 +15287,11 @@ export const SHOTS = [
     alt: "PayPal connect dialog with environment and credential fields",
     route: "/integrations",
     prepare: openIntegrationConnect("PayPal"),
+    expect: "Connecting turns this integration on",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1100 },
     fullPage: false,
   },
   {
@@ -13110,6 +15303,10 @@ export const SHOTS = [
     alt: "Slack connect dialog with its webhook URL field",
     route: "/integrations",
     prepare: openIntegrationConnect("Slack"),
+    expect: "Connecting turns this integration on",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
     fullPage: false,
   },
   {
@@ -13127,12 +15324,11 @@ export const SHOTS = [
     doc: "13-medical-screening.md",
     line: 239,
     anchor: "dialog, showing the amber",
-    alt: "The Add Screening Record dialog with the amber notice at the top: not linked to a member or prospect, so the record will not count toward anyone's compliance",
+    alt: "The Add Screening Record dialog with Record is for set to Member and a member chosen, above Linked Requirement and Screening Type",
     route: "/medical-screening",
-    // The notice's own words, not the dialog title: the Edit dialog shares the
-    // title shape and deliberately has no notice, so only this proves the
-    // create dialog is the one in frame.
-    expect: "Not linked to a member or prospect",
+    // Only the create dialog asks who the record is for; the Edit dialog
+    // shares the title shape and never changes the subject.
+    expect: "Record is for",
     selector: '[aria-labelledby="screening-record-dialog-title"] .modal-panel',
     prepare: async (page) => {
       await clickByName(/records/i)(page);
@@ -13141,8 +15337,41 @@ export const SHOTS = [
         .first()
         .click();
       await page.locator("#screening-record-dialog-title").waitFor();
+      // Member is the default subject; choose the first one listed so the
+      // picker shows a name rather than its placeholder.
+      const subject = page.locator("#rec-subject");
+      await subject.locator("option:not([value=''])").first().waitFor({
+        state: "attached",
+        timeout: 15_000,
+      });
+      const value = await subject.evaluate(
+        (el) => Array.from(el.options).find((o) => o.value)?.value ?? "",
+      );
+      await subject.selectOption(value);
       // Nothing is saved: the dialog is closed by the next shot's navigation.
     },
+  },
+  {
+    id: "13-08-delete-requirement-confirm",
+    doc: "13-medical-screening.md",
+    line: 179,
+    anchor:
+      "Click the delete button on a seeded requirement that has records filed under it",
+    alt: "The Delete Requirement confirmation for Annual NFPA 1582 Physical: screening records filed under it are kept but will no longer be linked to a requirement, and it cannot be undone, with Cancel and Delete Requirement",
+    route: "/medical-screening",
+    expect: "will no longer be linked to a requirement",
+    // Opened and photographed, never confirmed. Clipped to the dialog so no
+    // member's name or result is in frame.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Delete Annual NFPA 1582 Physical" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("will no longer be linked to a requirement")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(300);
+    },
+    selector: '[data-testid="modal-panel"]',
   },
   {
     id: "04-08-calendar-view",
@@ -13268,8 +15497,19 @@ export const SHOTS = [
     line: 1353,
     anchor:
       "Screenshot of the Compliance Attestations page showing a table of submitted",
-    alt: "Compliance attestations listing period, percentage and attesting officer",
+    alt: "New Attestation open with Quarterly chosen and the Quarter picker, the sentence saying the percentage is calculated on submit, and the history with each entry's figure as of its date",
     route: "/training/admin?page=compliance&tab=attestations",
+    // The form open on Quarterly, so the Quarter picker shows. Nothing is
+    // submitted.
+    prepare: async (page) => {
+      await clickByName(/New Attestation/)(page);
+      await page
+        .locator("#attestation-period-type")
+        .selectOption("quarterly", { timeout: 15_000 });
+      await page.locator("#attestation-quarter").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    expect: "calculated when you submit",
     fullPage: true,
   },
   {
@@ -13543,6 +15783,7 @@ export const SHOTS = [
       "Screenshot of the barcode print page Settings panel showing the Label Size grid",
     alt: "Label print settings with the size presets and content options",
     route: "/inventory/print-labels",
+    expect: "What Prints on the Label",
     prepare: async (page) => {
       await withIdsFromApi("/inventory/items?limit=6", "items")(page);
       await clickByName(/^Settings$/)(page);
@@ -13590,6 +15831,7 @@ export const SHOTS = [
       "Screenshot of the Storage Areas page with one area expanded showing",
     alt: "Storage area expanded to show the items stored in it",
     route: "/inventory/storage-areas",
+    expect: "Check contents",
     prepare: async (page) => {
       await selectStorageRoom(page);
       // The count is the control: clicking it opens the inline items panel.
@@ -14245,7 +16487,7 @@ export const SHOTS = [
     doc: "17-privacy-data-rights.md",
     line: 137,
     anchor: "__paired-with-17-03__",
-    alt: "The same profile as an ordinary member: contact details and assigned gear remain, while the compliance summary, training history and emergency contacts are not rendered",
+    alt: "The same profile as an ordinary member: Contact Information reads that no contact details are shared, beside Membership; there is no ID Card button, and the compliance summary, training history and emergency contacts are not rendered",
     route: "/members",
     auth: "member",
     prepare: openMemberProfile,
@@ -14254,6 +16496,48 @@ export const SHOTS = [
       "A member is meant to see fewer panels on a colleague's profile -- the " +
       "missing ones are the subject of the shot, so a thinner page is the " +
       "result rather than a sign of missing demo data.",
+  },
+  {
+    id: "17-05-dropped-member-anonymize",
+    doc: "17-privacy-data-rights.md",
+    line: 451,
+    anchor: "for a Dropped (Voluntary) demo member: the Membership card",
+    alt: "The Membership card on a dropped member's profile, as an administrator: Rank, Member type, Platoon and Member since, then Status reading Dropped Voluntary with the red Anonymize member link beneath it",
+    route: "/members",
+    expect: "Anonymize member",
+    // The demo department has no departed member, and dropping one for real
+    // writes a property-return report into Documents and opens a departure
+    // clearance that other screens list. So the profile response for one
+    // member is answered with `status: "dropped_voluntary"`, a value the app
+    // sets itself when a member is dropped, and every other field is the
+    // real record. Nothing is written; the dialog is never opened.
+    prepare: async (page) => {
+      const id = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/users", {
+          credentials: "include",
+        });
+        const users = response.ok ? await response.json() : [];
+        return users.find((u) => u.username === "tlindqvist")?.id ?? null;
+      });
+      if (!id)
+        throw new Error("the demo member tlindqvist is not on the roster");
+      await page.route(`**/api/v1/users/${id}/with-roles`, async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        await route.fulfill({
+          response,
+          json: { ...body, status: "dropped_voluntary" },
+        });
+      });
+      await page.goto(`${new URL(page.url()).origin}/members/${id}`, {
+        waitUntil: "domcontentloaded",
+      });
+      await page.getByText("Anonymize member").waitFor({ timeout: 20_000 });
+    },
+    cleanup: async (page) => {
+      await page.unroute("**/api/v1/users/*/with-roles");
+    },
+    selector: 'div.card:has(> h2:text-is("Membership"))',
   },
   {
     // The deepest seeded room, chosen so the whole containment chain is in the
@@ -14361,7 +16645,7 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 863,
     anchor: "immediately after pressing **print labels**",
-    alt: "The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark 11 items as labelled and Not yet, above the label preview",
+    alt: "The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark the items as labelled, Scan labels to confirm and Not yet, above the label preview",
     route: "/inventory/print-labels",
     expect: "Did the labels print correctly?",
     // Full page, as 05-33 is: this page renders its label preview well below
@@ -14704,11 +16988,14 @@ export const SHOTS = [
     doc: "00-getting-started.md",
     line: 437,
     anchor: "leader dashboard with Personal and Organization tabs",
-    alt: "The dashboard's personal tab: the member's own attention items, shifts, hours and issued gear, under a tab strip whose other tab is the leadership view",
+    alt: "The dashboard's personal tab: the member's own attention items, shifts and hours, under a tab strip whose other tab is the leadership view",
     route: "/dashboard",
+    // The administrator holds no issued gear, so the My Issued Gear card,
+    // which renders only for a member who does, is not on this tab.
+    expect: "Next 30 Days",
     prepare: async (page) => {
       await page
-        .getByRole("heading", { name: /My Issued Gear/i })
+        .getByRole("heading", { name: /Next 30 Days/i })
         .first()
         .waitFor({ state: "visible", timeout: 20_000 });
       await page.waitForTimeout(500);
@@ -15368,12 +17655,174 @@ export const SHOTS = [
         .waitFor({ timeout: 10_000 });
     },
   },
+
+  // ── 00 Getting Started, placeholders (2026-10-17) ──────────────────
+  {
+    id: "00-27-login-password-changed",
+    doc: "00-getting-started.md",
+    line: 169,
+    anchor: "immediately after changing the password on My Account",
+    alt: 'The sign-in page with the green notice "Your password was changed, and you have been signed out everywhere. Sign in with your new password." above empty username and password fields',
+    route: "/login",
+    auth: "anonymous",
+    expect: "you have been signed out everywhere",
+    // The notice is driven by the router state the password change navigates
+    // with ({ reason: "password_changed" }). Writing that state and reloading
+    // is the same landing without changing any member's password.
+    prepare: async (page) => {
+      await page.evaluate(() => {
+        window.history.replaceState(
+          { usr: { reason: "password_changed" }, key: "pwchange", idx: 0 },
+          "",
+          "/login",
+        );
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByText("you have been signed out everywhere").waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "00-28-top-bar-more-menu",
+    doc: "00-getting-started.md",
+    line: 193,
+    anchor: "with Navigation Layout set to Top bar: the More dropdown open",
+    alt: "The menu as a bar across the top at 1280px: groups that do not fit sit under More at its right-hand end, open here with each overflowed group under its own label and separators between them",
+    route: "/dashboard",
+    viewport: { width: 1280, height: 900 },
+    expect: { selector: '[data-dropdown-trigger][aria-expanded="true"]' },
+    // Navigation Layout is one department-wide setting, and the other batch
+    // captures from the same department, so the branding answer is mocked to
+    // "top" for this page alone rather than switching every member's layout.
+    prepare: async (page) => {
+      await page.route("**/api/v1/auth/branding", async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        await route.fulfill({
+          response,
+          body: JSON.stringify({ ...body, navigation_layout: "top" }),
+        });
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const more = page.locator(
+        'nav[aria-label="Main navigation"] button[data-dropdown-trigger]',
+        {
+          hasText: "More",
+        },
+      );
+      await more.first().click({ timeout: 20_000 });
+      await page
+        .locator('[data-dropdown-trigger][aria-expanded="true"]')
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.unroute("**/api/v1/auth/branding");
+      await page.evaluate(() =>
+        localStorage.setItem("navigationLayout", "left"),
+      );
+      await page.reload({ waitUntil: "domcontentloaded" });
+    },
+  },
+  {
+    id: "00-29-notification-stacks",
+    doc: "00-getting-started.md",
+    line: 399,
+    anchor: 'collapsed into a stack showing "N attendance validations"',
+    alt: 'The notifications inbox with nothing pinned: unread notifications of one kind folded into stacks, such as "5 attendance validations" with its Latest line, unread badge and Mark all read, beside an ordinary single card',
+    route: "/notifications?tab=inbox",
+    expect: "attendance validations",
+    prepare: async (page) => {
+      await unpinAllNotifications(page);
+      await page.getByText("attendance validations").first().waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "00-30-notification-stack-expanded",
+    doc: "00-getting-started.md",
+    line: 399,
+    anchor: "__placed-by-hand-00-30__",
+    alt: "The same inbox with the attendance-validations stack expanded to its individual cards; Mark all read not pressed",
+    route: "/notifications?tab=inbox",
+    expect: "Validate attendance for",
+    prepare: async (page) => {
+      await unpinAllNotifications(page);
+      await page
+        .locator("button[aria-expanded]")
+        .filter({ hasText: "attendance validations" })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
+    id: "00-31-mfa-recovery-codes",
+    doc: "00-getting-started.md",
+    line: 440,
+    anchor: 'right after Verify & enable: the "Save your recovery codes" panel',
+    alt: "My Account, Security, right after Verify & enable: the Save your recovery codes panel with its grid of ten codes, Copy codes and Done. The codes are made up for the picture",
+    route: "/account?tab=security",
+    auth: "member",
+    expect: "Save your recovery codes",
+    // Nobody's two-factor is turned on for this. The setup and verify answers
+    // are mocked, so the demo member stays unenrolled and the codes pictured
+    // were never valid anywhere; the panel around them is the live page.
+    prepare: async (page) => {
+      await page.route("**/api/v1/auth/mfa/setup", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            secret: "DEMODEMODEMODEMO",
+            qr_code_url: "otpauth://totp/Demo?secret=DEMODEMODEMODEMO",
+          }),
+        }),
+      );
+      await page.route("**/api/v1/auth/mfa/verify-setup", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            mfa_enabled: true,
+            recovery_codes: [
+              "3f9a1-c07e2-5b8d4-e61a9",
+              "a24c8-91f03-d7e5b-2c6f0",
+              "7e0d3-b5a92-48c1f-9d07e",
+              "c18f6-2a4e9-0b7d3-f5c21",
+              "59b2e-e7c04-a3f18-6d9b5",
+              "0d6a7-f3b81-c92e4-1a5f8",
+              "e4c19-6b0d5-7f2a3-b8e06",
+              "8a3f0-d1c6e-29b74-c0e5a",
+              "b7e52-4f9a1-e0c38-5d2b7",
+              "16d4b-a8e3f-c5091-7b2d4",
+            ],
+          }),
+        }),
+      );
+      await page
+        .getByRole("button", { name: "Enable two-factor authentication" })
+        .click({ timeout: 15_000 });
+      await page.locator("#mfa-setup-code").fill("123456");
+      await page.getByRole("button", { name: "Verify & enable" }).click();
+      await page.getByText("Save your recovery codes").waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.unroute("**/api/v1/auth/mfa/setup");
+      await page.unroute("**/api/v1/auth/mfa/verify-setup");
+      await page.reload({ waitUntil: "domcontentloaded" });
+    },
+    selector:
+      'div.space-y-4:has(> div > p:text-is("Save your recovery codes"))',
+  },
   {
     id: "01-40-member-directory-member",
     doc: "01-membership.md",
     line: 1674,
     anchor: "`/members` as a member without `members.manage`",
-    alt: "The Member Directory as an ordinary member: name, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes",
+    alt: "The Member Directory as an ordinary member: name, rank, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes",
     route: "/members",
     auth: "member",
     expect: "Member Directory",
@@ -15457,6 +17906,188 @@ export const SHOTS = [
     expect: "Facility Types",
     fullPage: true,
   },
+
+  // ── 06 Apparatus & Facilities, placeholders (2026-10-17). The first three
+  // are placed by hand: each fills part of a placeholder that also asks for a
+  // state the demo cannot reach (an empty fleet, a vehicle with a deficiency).
+  {
+    id: "06-29-add-apparatus-form",
+    doc: "06-apparatus-facilities.md",
+    line: 104,
+    anchor: "__placed-by-hand-06-29__",
+    alt: "The Add Apparatus form: the intro line, the identification and status fields, CNG chosen as the fuel type, and the NFPA compliance tracking help text",
+    route: "/apparatus/new",
+    expect: { selector: "#apparatus-fuelType" },
+    // "No EVOC requirement" is an option in the form, not an empty page.
+    allowEmptyState: true,
+    // Filled in, never saved.
+    prepare: async (page) => {
+      await page.locator("#apparatus-fuelType").selectOption("cng");
+      await page.waitForTimeout(300);
+    },
+    fullPage: true,
+  },
+  {
+    id: "06-30-apparatus-status-reason",
+    doc: "06-apparatus-facilities.md",
+    line: 218,
+    anchor: "__placed-by-hand-06-30__",
+    alt: 'Editing a vehicle\'s status: Out of Service chosen, and the Reason field below it, required for that status, with "Shown next to the status on the apparatus page."',
+    route: "/apparatus",
+    expect: { selector: "#apparatus-statusReason" },
+    // "No EVOC requirement" is an option in the form, not an empty page.
+    allowEmptyState: true,
+    // Changed in the form, never saved.
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}/edit`,
+        "apparatus",
+        (rig) => (rig.unitNumber ?? rig.unit_number) === "E-2",
+      )(page);
+      const status = page.locator("#apparatus-statusId");
+      await status.waitFor({ timeout: 15_000 });
+      await status.selectOption({ label: "Out of Service" });
+      await page
+        .locator("#apparatus-statusReason")
+        .fill("Pump seal leaking, at the shop");
+      await status.evaluate((node) => node.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "06-31-create-shift-apparatus",
+    doc: "06-apparatus-facilities.md",
+    line: 218,
+    anchor: "__placed-by-hand-06-31__",
+    alt: "The Create Shift dialog with its Apparatus picker set to an Apparatus-module vehicle",
+    route: "/scheduling",
+    expect: { selector: "#create-shift-apparatus" },
+    // Opened and filled, never created.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Create Shift" })
+        .first()
+        .click({ timeout: 15_000 });
+      const picker = page.locator("#create-shift-apparatus");
+      await picker.waitFor({ timeout: 10_000 });
+      await picker.selectOption({ label: "E-1 — Engine 1" });
+      await page.waitForTimeout(400);
+    },
+    selector:
+      "#create-shift-apparatus >> xpath=ancestor::div[contains(@class,'modal-panel')]",
+  },
+  {
+    id: "06-32-room-checkin-chooser",
+    doc: "06-apparatus-facilities.md",
+    line: 645,
+    anchor: "for a room with two events in their check-in window",
+    alt: 'A member who tapped the Volunteer Office\'s room tag: "Which event are you here for?" listing the two events open for check-in in that room',
+    route: "/locations",
+    auth: "member",
+    expect: "Which event are you here for?",
+    // A room's events cannot overlap in time, so the two are back to back and
+    // the second opens its check-in early. Both are made for the shot as the
+    // administrator and deleted afterwards, so no event list elsewhere gains
+    // them; where the room is already booked by guide 04's own pair, that
+    // pair is the state pictured and nothing is made.
+    prepare: async (page, { lookupPage }) => {
+      const admin = await lookupPage();
+      roomCheckInFixture.admin = admin;
+      const made = await admin.evaluate(async () => {
+        const csrf =
+          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+        const headers = {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": decodeURIComponent(csrf),
+        };
+        const list = await (
+          await fetch("/api/v1/locations", { credentials: "include" })
+        ).json();
+        const rows = Array.isArray(list) ? list : (list.items ?? []);
+        const room = rows.find((row) =>
+          String(row.name).startsWith("Volunteer Office"),
+        );
+        if (!room) throw new Error("no Volunteer Office room");
+        const hour = 3_600_000;
+        const now = Date.now();
+        const plan = [
+          ["Pump Operations Drill", "training", now - hour / 2, now + hour, 60],
+          [
+            "Volunteer Committee Meeting",
+            "business_meeting",
+            now + hour,
+            now + 3 * hour,
+            120,
+          ],
+        ];
+        const ids = [];
+        for (const [title, type, start, end, early] of plan) {
+          const response = await fetch("/api/v1/events", {
+            method: "POST",
+            credentials: "include",
+            headers,
+            body: JSON.stringify({
+              title,
+              event_type: type,
+              location_id: room.id,
+              start_datetime: new Date(start).toISOString(),
+              end_datetime: new Date(end).toISOString(),
+              check_in_window_type: "flexible",
+              check_in_minutes_before: early,
+            }),
+          });
+          if (response.ok) {
+            ids.push((await response.json()).id);
+            continue;
+          }
+          const detail = await response.text();
+          // Already booked: guide 04's seeder keeps its own back-to-back pair
+          // in this room, which is the same state. Use that and undo ours.
+          if (response.status !== 400 || !detail.includes("already booked")) {
+            throw new Error(`event create ${response.status}: ${detail}`);
+          }
+          for (const id of ids) {
+            await fetch(`/api/v1/events/${id}`, {
+              method: "DELETE",
+              credentials: "include",
+              headers,
+            });
+          }
+          return { roomId: room.id, ids: [] };
+        }
+        return { roomId: room.id, ids };
+      });
+      roomCheckInFixture.ids = made.ids;
+      await page.goto(
+        new URL(`/locations/${made.roomId}/check-in`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page
+        .getByRole("heading", { name: "Which event are you here for?" })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: async () => {
+      const { admin, ids } = roomCheckInFixture;
+      if (!admin || !ids.length) return;
+      await admin.evaluate(async (eventIds) => {
+        const csrf =
+          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+        for (const id of eventIds) {
+          const response = await fetch(`/api/v1/events/${id}`, {
+            method: "DELETE",
+            credentials: "include",
+            headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
+          });
+          if (!response.ok && response.status !== 404) {
+            throw new Error(`event delete ${response.status}`);
+          }
+        }
+      }, ids);
+      roomCheckInFixture.ids = [];
+    },
+  },
   {
     id: "08-87-dashboard-next-30-days",
     doc: "08-admin-reports.md",
@@ -15503,6 +18134,127 @@ export const SHOTS = [
     viewport: { width: 390, height: 844 },
     selector: 'nav[aria-label="Primary"]',
     expect: { selector: 'nav[aria-label="Primary"] button:has-text("Add")' },
+  },
+
+  // ── 10 Mobile & PWA, placeholders (2026-10-17) ─────────────────────
+  {
+    id: "10-25-drawer-open-scroll-hint",
+    doc: "10-mobile-pwa.md",
+    line: 195,
+    anchor:
+      "bottom-bar More tapped so the navigation drawer is open and not yet scrolled",
+    alt: "The administrator's navigation drawer at 390px, opened from More on the bottom bar and not yet scrolled: the list fades at its foot, with the More pill and its down arrow above the theme and logout controls",
+    route: "/dashboard",
+    viewport: "mobile",
+    expect: { selector: '[data-testid="side-nav-scroll-hint"] button' },
+    prepare: openPhoneDrawer,
+  },
+  {
+    id: "10-26-drawer-more-chevron",
+    doc: "10-mobile-pwa.md",
+    line: 205,
+    anchor:
+      "The navigation drawer open on a 390px phone as an officer, with items below the fold",
+    alt: "The menu list in the open drawer, clipped: items continue below the fold, the last visible rows fade out and the floating More button with its bouncing chevron sits over them",
+    route: "/dashboard",
+    viewport: "mobile",
+    expect: { selector: '[data-testid="side-nav-scroll-hint"] button' },
+    prepare: openPhoneDrawer,
+    selector: 'div:has(> [data-testid="side-nav-scroll-hint"])',
+  },
+  {
+    id: "10-27-phone-nav-bar-setting",
+    doc: "10-mobile-pwa.md",
+    line: 277,
+    anchor:
+      "My Account → Appearance on a 390px phone, scrolled to **Phone navigation bar**",
+    alt: "My Account, Appearance, at 390px as a member: Phone navigation bar with Right of Add set to Training, the Use the default tabs link, and the bottom bar beneath carrying the Training tab",
+    route: "/account?tab=appearance",
+    auth: "member",
+    viewport: "mobile",
+    expect: "Use the default tabs",
+    // The choice saves on change, so the member's own slots are read first and
+    // written back in cleanup.
+    prepare: async (page) => {
+      phoneNavFixture.before = await page.evaluate(async () => {
+        const me = await (
+          await fetch("/api/v1/auth/me", { credentials: "include" })
+        ).json();
+        return me.bottom_nav_slots ?? null;
+      });
+      const right = page.locator("#bottom-nav-slot-1");
+      await right.waitFor({ timeout: 15_000 });
+      await right.selectOption({ label: "Training" });
+      await page.getByText("Use the default tabs").waitFor();
+      await page
+        .locator('nav[aria-label="Primary"]')
+        .getByText("Training")
+        .waitFor({ timeout: 10_000 });
+      // The link sits under the selects; centring it keeps the heading above
+      // and the bottom bar below in one frame.
+      await page
+        .getByText("Use the default tabs")
+        .evaluate((node) => node.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      await page.evaluate(async (slots) => {
+        const csrf =
+          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+        const response = await fetch("/api/v1/users/me/bottom-navigation", {
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": decodeURIComponent(csrf),
+          },
+          body: JSON.stringify({ slots }),
+        });
+        if (!response.ok) throw new Error(`restore ${response.status}`);
+      }, phoneNavFixture.before);
+    },
+  },
+  {
+    id: "10-28-held-offline-notice",
+    doc: "10-mobile-pwa.md",
+    line: 708,
+    anchor: "Member signed in on a device with two or three held offline items",
+    alt: "At 390px as a member: the yellow notice at the top of the app saying three offline items are on hold, saved before this device recorded who saved them, with Send as me and Discard",
+    route: "/dashboard",
+    auth: "member",
+    viewport: "mobile",
+    expect: "offline items are on hold",
+    prepare: async (page) => {
+      await seedHeldOfflineItems(page);
+      await page
+        .getByText("offline items are on hold")
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: clearHeldOfflineItems,
+  },
+  {
+    id: "10-29-held-offline-confirm",
+    doc: "10-mobile-pwa.md",
+    line: 708,
+    anchor: "__placed-by-hand-10-29__",
+    alt: "The Send these as yours? confirmation over the held-items notice, warning that the device cannot tell who saved them, with Keep on hold and Send as me",
+    route: "/dashboard",
+    auth: "member",
+    viewport: "mobile",
+    expect: "Send these as yours?",
+    // Opened and photographed, never confirmed.
+    prepare: async (page) => {
+      await seedHeldOfflineItems(page);
+      await page
+        .getByRole("button", { name: "Send as me" })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.getByText("Send these as yours?").first().waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: clearHeldOfflineItems,
   },
   {
     id: "16-08-mcp-connect-form",
@@ -16134,16 +18886,22 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 2738,
     anchor: "__paired-with-05-86__",
-    alt: "The size step for Structural Coat: L preselected from the member's size on file, and XXL labelled none on hand but still selectable",
+    alt: "The size step for Structural Coat with XXL selected: labelled none on hand, the size-on-file line (from your profile), and the notice that none are on hand in XXL right now but the request can still be submitted",
     route: "/inventory/my-equipment",
     auth: "member",
     viewport: { width: 1440, height: 1000 },
     selector: '.modal-panel:has-text("Request Equipment")',
-    expect: "none on hand",
+    expect: "None in XXL on hand right now.",
     prepare: async (page) => {
       await clickByName(/^Request Equipment$/)(page);
       await page.getByText("Structural Coat", { exact: false }).first().click();
       await page.getByText("Your size on file", { exact: false }).waitFor();
+      await page
+        .getByRole("button", { name: /^XXL/ })
+        .first()
+        .click({ timeout: 10_000 });
+      await page.getByText("None in XXL on hand right now.").waitFor();
+      await page.waitForTimeout(300);
     },
   },
   {
@@ -16985,6 +19743,862 @@ export const SHOTS = [
       }
     },
   },
+  // ── Guide 05, second batch: placeholders left after the medical set ──
+  // Several of these need state `seed_guide05_states` makes; the rest drive
+  // the UI into a dialog or panel and leave without saving.
+  {
+    id: "05-93-empty-items",
+    doc: "05-inventory.md",
+    line: 169,
+    anchor:
+      "Quartermaster (inventory.manage) on a department with no inventory items",
+    alt: "The items list of a department with no items: Your department has no inventory items yet, with Open the Setup Guide and Add Item",
+    route: "/inventory/admin/items",
+    expect: "Your department has no inventory items yet",
+    // The seeded department has items, so this is written by the fixture
+    // harness, the way 05-72 and 05-73 are.
+    capturedElsewhere: "scripts/screenshots/inventory-setup.mjs",
+  },
+  {
+    id: "05-95-kit-issue-confirm",
+    doc: "05-inventory.md",
+    line: 570,
+    anchor:
+      'Quartermaster at /inventory/admin/kits: the "Issue <kit>?" confirmation',
+    alt: "The Issue New Recruit PPE Kit? confirmation after picking Rafael Duarte, naming how many items the kit hands out, with Don't issue and Issue to Rafael Duarte",
+    route: "/inventory/admin/kits",
+    expect: "Don't issue",
+    selector: '[data-testid="modal-panel"]',
+    // The confirmation is photographed and answered Don't issue by leaving.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Issue New Recruit PPE Kit to a member" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: /Rafael Duarte/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Don't issue" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-105-put-away-panel",
+    doc: "05-inventory.md",
+    line: 1518,
+    anchor:
+      "Quartermaster at /inventory/storage-areas: press Put away, type a seeded",
+    alt: "Put away on Storage Areas after scanning the Quartermaster Shelving label and two item barcodes: Filing onto Quartermaster Shelving (SA-000003), the two items listed with remove buttons, and File 2 items on Quartermaster Shelving",
+    route: "/inventory/storage-areas",
+    expect: "File 2 items on Quartermaster Shelving",
+    selector: 'div.card-secondary:has(h2:text-is("Put away"))',
+    // Codes are typed, as a handheld scanner would; File is never pressed.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Put away", exact: true })
+        .click({ timeout: 15_000 });
+      const field = page.getByLabel("Scan or type a shelf or item barcode");
+      for (const code of ["SA-000003", "INV-000004", "INV-000006"]) {
+        await field.fill(code);
+        await field.press("Enter");
+        await page.waitForTimeout(900);
+      }
+      await page
+        .getByRole("button", { name: "File 2 items on Quartermaster Shelving" })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: "05-106-check-contents-panel",
+    doc: "05-inventory.md",
+    line: 1542,
+    anchor: "Quartermaster at /inventory/storage-areas: press Check contents",
+    alt: "Check contents on the Uniform Bins: one of its items found, the rest listed under Not scanned yet, and Firefighting Gloves under Doesn't belong here with the rack it is recorded on and File it here",
+    route: "/inventory/storage-areas",
+    expect: "File it here",
+    selector: 'div.card-secondary:has(h2:text-is("Check contents"))',
+    // Checking changes nothing; File it here is never pressed.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Check contents", exact: true })
+        .click({ timeout: 15_000 });
+      const field = page.getByLabel("Scan or type a container or item barcode");
+      for (const code of ["SA-000004", "INV-000009", "INV-000004"]) {
+        await field.fill(code);
+        await field.press("Enter");
+        await page.waitForTimeout(900);
+      }
+      await page
+        .getByText("Doesn’t belong here (1)")
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: "05-107-storage-area-labels",
+    doc: "05-inventory.md",
+    line: 1562,
+    anchor: "Quartermaster at /inventory/storage-areas/print-labels?ids=",
+    alt: "Print Storage Area Labels for four seeded areas with Settings closed: each preview carries the area's label code and name above its SA- barcode",
+    route: "/inventory/storage-areas/print-labels",
+    expect: "Print Storage Area Labels",
+    prepare: async (page) => {
+      await withIdsFromApi("/inventory/storage-areas", "", 4)(page);
+      await page.getByText("SA-000001").first().waitFor({ timeout: 15_000 });
+    },
+  },
+  {
+    id: "05-115-category-kiosk",
+    doc: "05-inventory.md",
+    line: 1806,
+    anchor:
+      "Admin (inventory.manage) at /inventory/admin/categories: edit a loaner",
+    alt: "Editing the Portable Radios category with Allow self-checkout at the kiosk switched on and Kiosk loan period (days) set to 14, its help text saying kiosk loans fall due after that many days",
+    route: "/inventory/admin/categories",
+    expect: "Kiosk loan period (days)",
+    selector: '[data-testid="modal-panel"]',
+    viewport: { width: 1440, height: 1300 },
+    // Switched on in the form and closed without saving.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit Portable Radios" })
+        .click({ timeout: 15_000 });
+      const toggle = page.locator("#cat-self-checkout");
+      if (!(await toggle.isChecked())) {
+        await page.locator('label[for="cat-self-checkout"]').click();
+      }
+      await page.locator("#cat-loan-days").fill("14");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: "05-119-item-added-label-prompt",
+    doc: "05-inventory.md",
+    line: 1972,
+    anchor:
+      "Quartermaster (inventory.manage) at /inventory right after saving Add Item",
+    alt: 'The items list right after Add Item: the green line "1 item added. Label it now?" with Print label and Dismiss',
+    route: "/inventory/admin/items",
+    expect: "Label it now?",
+    selector: 'div[role="status"]:has-text("Label it now?")',
+    // Creates one item to get the prompt; the cleanup retires it, which takes
+    // it off every list.
+    prepare: async (page) => {
+      await clickByName(/add item/i)(page);
+      const dialog = page.locator('[data-testid="modal-panel"]');
+      await dialog.waitFor({ timeout: 10_000 });
+      await dialog.locator("#item-name").fill("Screenshot Spare Flashlight");
+      await dialog
+        .locator("#item-category_id")
+        .selectOption({ label: "Hand Tools" });
+      await page.locator('button[form="item-form"]').click();
+      await page.getByText("Label it now?").waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const listing = await apiCall(
+        page,
+        "GET",
+        "inventory/items?search=Screenshot%20Spare%20Flashlight&limit=50",
+      );
+      const rows = listing.json?.items ?? listing.json ?? [];
+      for (const row of rows) {
+        if (row.name !== "Screenshot Spare Flashlight") continue;
+        const retired = await apiCall(
+          page,
+          "POST",
+          `inventory/items/${row.id}/retire`,
+          { notes: "Created by the documentation screenshot run" },
+        );
+        if (retired.status !== 200) {
+          throw new Error(
+            `retiring the screenshot item returned ${retired.status}`,
+          );
+        }
+      }
+    },
+  },
+  {
+    id: "05-120-needs-label-line",
+    doc: "05-inventory.md",
+    line: 2042,
+    anchor:
+      "Quartermaster (inventory.manage) at /inventory with no filter applied",
+    alt: "The line above the items list counting the items that need a label, with Show them, Print their labels and Not now",
+    route: "/inventory/admin/items",
+    expect: "need a label.",
+    selector: 'div[role="status"]:has-text("need a label.")',
+  },
+  {
+    id: "05-121-log-maintenance-inspection",
+    doc: "05-inventory.md",
+    line: 2294,
+    anchor:
+      "Quartermaster at /inventory/admin/maintenance (or an item's Inspections tab",
+    alt: "Log Maintenance for an item with Record inspection chosen and Pass ticked, the completion date at today, and the note that this records the inspection without changing the item's status",
+    route: "/inventory/admin/maintenance",
+    expect: "This records the inspection without changing the item's status.",
+    selector: '[data-testid="modal-panel"]',
+    viewport: { width: 1440, height: 1300 },
+    // Opened the way an item's "+ Add Record" opens it (`?item=`): nothing in
+    // the demo is due, so the Due Items tab has no row to start from. Filled
+    // in and never saved.
+    prepare: async (page) => {
+      const listing = await apiCall(page, "GET", "inventory/items?limit=200");
+      const coat = (listing.json?.items ?? []).find((item) =>
+        (item.name || "").startsWith("Bunker Coat"),
+      );
+      if (!coat) throw new Error("no Bunker Coat in the demo catalog");
+      await page.goto(
+        new URL(
+          `/inventory/admin/maintenance?item=${coat.id}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page
+        .getByRole("button", { name: "Record inspection" })
+        .click({ timeout: 10_000 });
+      await page.getByRole("radio", { name: /pass/i }).check();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "05-108-nfc-settings",
+    doc: "05-inventory.md",
+    line: 1639,
+    anchor: "Administrator at /inventory/admin/nfc: the NFC Tags page with",
+    alt: "Inventory Administration → NFC Tags with Use NFC tags for inventory items ticked, and the What works on which phone card below it, including the note that this computer cannot read or write tags itself",
+    route: "/inventory/admin/nfc",
+    expect: "What works on which phone",
+    prepare: withInventoryNfc(async (page) => {
+      await page
+        .getByText("Use NFC tags for inventory items")
+        .waitFor({ timeout: 15_000 });
+    }),
+    cleanup: disableInventoryNfc,
+    fullPage: true,
+  },
+  {
+    id: "05-116-put-away-offline",
+    doc: "05-inventory.md",
+    line: 1833,
+    anchor:
+      "Admin (inventory.manage) at /inventory/put-away with NFC on, then the browser",
+    alt: 'Put Away by NFC with the browser offline: the amber "No signal: keep tapping" banner saying taps are saved on this phone and applied when signal returns',
+    route: "/inventory/put-away",
+    expect: "No signal: keep tapping",
+    prepare: withInventoryNfc(async (page) => {
+      await page.getByText("Or pick a shelf").waitFor({ timeout: 15_000 });
+      await page.context().setOffline(true);
+      await page
+        .getByText("No signal: keep tapping")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    }),
+    // Back online before anything else runs on this page: the cleanup itself
+    // needs the network, and the next shot shares the context.
+    cleanup: async (page) => {
+      await page.context().setOffline(false);
+      await disableInventoryNfc(page);
+    },
+    fullPage: false,
+  },
+  {
+    id: "05-117-compartment-nfc-tags",
+    doc: "05-inventory.md",
+    line: 1847,
+    anchor:
+      "Admin (inventory.check_manage) at /inventory/admin/checklists/templates/:templateId",
+    alt: "The NFC tags: Cab dialog opened from the Cab compartment's ⋯ menu in the checklist builder, with the tag serial box, Link serial and the hint about sticking the tag on that compartment; no tag linked",
+    route: "/inventory/admin/checklists",
+    expect: "NFC tags: Cab",
+    allowEmptyState:
+      "No tag linked is the state asked for: the shot must not link one.",
+    selector: '[data-testid="modal-panel"]',
+    // Opened and closed without linking anything.
+    prepare: withInventoryNfc(async (page) => {
+      await openTemplateNamed("Engine Daily Check")(page);
+      // The ⋯ menu is a <details>, so its trigger is a summary, not a button.
+      await page
+        .locator('summary[aria-label="Actions for Cab"]')
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "NFC tags", exact: true })
+        .click({ timeout: 10_000 });
+      await page.getByText("NFC tags: Cab").waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(500);
+    }),
+    cleanup: disableInventoryNfc,
+  },
+  {
+    id: "05-123-builder-medical-picker",
+    doc: "05-inventory.md",
+    line: 2887,
+    anchor: "a builder item picker showing a medical result with its badge",
+    alt: "Linked Inventory Item in the checklist builder, searched for tourniquet: Tourniquet, CAT with its Medical badge, then Create in Medical Supplies and Create as equipment or gear",
+    route: "/inventory/admin/checklists",
+    expect: { selector: 'span.badge:text-is("Medical")' },
+    viewport: { width: 1440, height: 900 },
+    // Typed into the picker and never chosen.
+    prepare: async (page) => {
+      await openTemplateNamed("Engine Daily Check")(page);
+      await page
+        .getByRole("button", { name: "Not linked to inventory — Map book" })
+        .click({ timeout: 15_000 });
+      const input = page.getByPlaceholder("Search inventory to link…").first();
+      await input.click();
+      await input.fill("tourniquet");
+      await page
+        .getByText("in Medical Supplies", { exact: false })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await input.evaluate((el) =>
+        el.scrollIntoView({ block: "center", behavior: "instant" }),
+      );
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "05-124-clone-checklist-dialog",
+    doc: "05-inventory.md",
+    line: 2888,
+    anchor: "__paired-with-05-123__",
+    alt: "Copy checklist to an apparatus, opened from Tools → Clone checklist: the note that the copy starts switched off so it can be reviewed first, and Copy onto set to B-5 — Brush 5",
+    route: "/inventory/admin/checklists",
+    expect: "Copy checklist to an apparatus",
+    selector: '[data-testid="modal-panel"]',
+    // An apparatus is chosen so the picker is not blank; Copy checklist is
+    // never pressed.
+    prepare: async (page) => {
+      await openTemplateNamed("Engine Daily Check")(page);
+      await page.locator('summary[aria-label="Tools"]').click();
+      await page
+        .getByRole("button", { name: "Clone checklist" })
+        .click({ timeout: 10_000 });
+      const select = page.locator('[data-testid="modal-panel"] select');
+      await select.waitFor({ timeout: 15_000 });
+      await page.waitForFunction(
+        () =>
+          document.querySelectorAll('[data-testid="modal-panel"] select option')
+            .length > 1,
+        null,
+        { timeout: 15_000 },
+      );
+      await select.selectOption({ index: 1 });
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "05-94-pool-issuances",
+    doc: "05-inventory.md",
+    line: 380,
+    anchor:
+      "Quartermaster at /inventory/admin/pool: one pool card with Issuances expanded",
+    alt: "The Firefighting Gloves pool card with Issuances open: its on-hand and issued counts, and three members holding pairs, each with the count, the date issued and a Return button",
+    route: "/inventory/admin/pool",
+    expect: { selector: 'button[aria-label^="Return 2 from"]' },
+    selector:
+      'div.card-secondary:has(button[aria-label="Issuances of Firefighting Gloves"])',
+    // `seed_guide05_states` issues the gloves to three demo members.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Issuances of Firefighting Gloves" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: /^Return \d+ from / })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-96-receive-pool-return",
+    doc: "05-inventory.md",
+    line: 867,
+    anchor:
+      "Quartermaster at /inventory/admin/returns: the Receive Item dialog for a multi-unit",
+    alt: "Receive Item for Nadia Belhaj's return of two pairs of Firefighting Gloves: Good chosen as the observed condition, the quantity box empty with the hint that the count must match the 2 the member reported, and Receive disabled",
+    route: "/inventory/admin/returns",
+    expect: "It must match the 2 the member",
+    selector:
+      '[role="dialog"][aria-labelledby="return-review-title"] .max-w-md',
+    // `seed_guide05_states` files the return notice. Never submitted.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: "Receive Firefighting Gloves from Nadia Belhaj",
+        })
+        .click({ timeout: 15_000 });
+      await page.locator("#override-condition").selectOption("good");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-97-needs-attention-pending-return",
+    doc: "05-inventory.md",
+    line: 871,
+    anchor:
+      "Quartermaster (inventory.manage) at /inventory/admin: the Needs attention queue",
+    alt: "The top of Inventory Administration: Needs attention with a Pending return row for Nadia Belhaj's Firefighting Gloves and its Review action, and the Return Requests card under Requests & Approvals carrying its count of one",
+    route: "/inventory/admin",
+    expect: "Pending return",
+    // Tall enough to reach Requests & Approvals, where the Return Requests
+    // card carries its count.
+    viewport: { width: 1440, height: 2000 },
+    fullPage: false,
+  },
+  {
+    id: "05-98-my-equipment-empty",
+    doc: "05-inventory.md",
+    line: 984,
+    anchor: "Member with no gear, loans or requests at /inventory/my-equipment",
+    alt: "My Issued Gear for a member who holds nothing: the subtitle, the Issued to me, Temporary loans and Pending requests tiles at 0, Nothing has been issued to you yet with the link to the Learning Center walkthrough, and the Active Temporary Loans explanation",
+    route: "/inventory/my-equipment",
+    auth: "gearless",
+    expect: "Nothing has been issued to you yet.",
+    allowEmptyState: "An empty page is the subject: the member holds nothing.",
+    fullPage: true,
+  },
+  {
+    id: "05-99-gear-request-not-stocked",
+    doc: "05-inventory.md",
+    line: 1037,
+    anchor:
+      "Member at /inventory/my-equipment: Request Equipment → pick a garment → select",
+    alt: "The size step for the Department Polo, for a member whose shirt size on file is XXL: XXL offered and selected, labelled not stocked, the (from your profile) line, and the notice that the department doesn't stock this item in XXL",
+    route: "/inventory/my-equipment",
+    auth: "gearless",
+    viewport: { width: 1440, height: 1300 },
+    selector: '.modal-panel:has-text("Request Equipment")',
+    expect: "The department doesn't stock this item in XXL.",
+    // Never submitted.
+    prepare: async (page) => {
+      await clickByName(/^Request Equipment$/)(page);
+      await page
+        .getByText("Department Polo", { exact: false })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("The department doesn't stock this item in XXL.")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-100-request-review-unstocked",
+    doc: "05-inventory.md",
+    line: 1070,
+    anchor:
+      "Quartermaster at /inventory/admin/requests: Review on an Awaiting review request",
+    alt: "Review: Department Polo, for Nadia Belhaj's request in XXL: Size requested XXL, not a size the department stocks for this item, so Tracking reads Determined when fulfilled and Availability has no catalog item to count; the Review Notes box, and Decline, Approve for later fulfillment and Approve & fulfill now",
+    route: "/inventory/admin/requests",
+    expect: "not a size the department stocks",
+    // An unstocked size has no catalog row, so the Availability line reads
+    // this instead of a count. It is the label, not a failed load.
+    allowPageError: "No specific catalog item selected",
+    selector: '[data-testid="modal-panel"]',
+    viewport: { width: 1440, height: 1300 },
+    // `seed_guide05_states` files the request. No decision is clicked.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: "Review Department Polo for Nadia Belhaj",
+        })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("not a size the department stocks", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-101-my-requests-states",
+    doc: "05-inventory.md",
+    line: 1125,
+    anchor:
+      "Member at /inventory/my-equipment: My Requests with seeded requests in Awaiting",
+    alt: "My Requests on My Issued Gear: gear requests awaiting review, approved, issued and declined, the declined one with the quartermaster's note beneath it, and the open return notice for two pairs of gloves",
+    route: "/inventory/my-equipment",
+    auth: "member",
+    expect: "Quartermaster: Two pairs are already issued to you.",
+    selector: 'div.card-secondary:has(> h2:text-is("My Requests"))',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "My Requests" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("Quartermaster: Two pairs", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: "05-102-reorder-receive-unlinked",
+    doc: "05-inventory.md",
+    line: 1251,
+    anchor:
+      "Quartermaster at /inventory/admin/reorder: an Ordered request with no linked item",
+    alt: "Receive stock on the ordered Rescue Rope, 150 ft request, which was never linked to an item: the Inventory item search and the note that the order isn't linked to an inventory item yet, with Receive stock disabled",
+    route: "/inventory/admin/reorder",
+    expect: "This order isn't linked to an inventory item yet.",
+    selector: '[data-testid="modal-panel"]',
+    // `seed_guide05_states` places the order. Never submitted.
+    prepare: async (page) => {
+      await page
+        .locator("tr", { hasText: "Rescue Rope, 150 ft" })
+        .getByRole("button", { name: "Receive stock" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("isn't linked to an inventory item yet", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-104-storage-area-delete-blocked",
+    doc: "05-inventory.md",
+    line: 1480,
+    anchor:
+      'Quartermaster at /inventory/storage-areas: the "Delete <area>?" dialog',
+    alt: "Delete Quartermaster Shelving? refused on both counts: it holds items, which must move to another storage area first, and it has an area nested inside it, with Delete greyed out",
+    route: "/inventory/storage-areas",
+    expect: "Move or delete those first.",
+    selector: '[data-testid="modal-panel"]',
+    // `seed_guide05_states` nests Top Shelf inside it. Never deleted.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Delete Quartermaster Shelving" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("Move or delete those first.")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: "05-109-item-nfc-tags",
+    doc: "05-inventory.md",
+    line: 1663,
+    anchor:
+      "Quartermaster at /inventory/items/:id with NFC switched on and two seeded tags",
+    alt: "The NFC Tags card on Structural Coat — M: the Inside left cuff tag linked by serial with Mark lost and Unlink, the Collar tag marked lost with Mark found, and below them the box for where a new tag goes, the serial box and Link serial. On a desktop the card has no Write or Read buttons; those appear only in Chrome on Android",
+    route: "/inventory/admin/items",
+    expect: "Inside left cuff",
+    selector: 'section.card-secondary:has(h3:text-is("NFC Tags"))',
+    // `seed_guide05_states` links both tags; the card shows each serial only as
+    // its last four characters.
+    prepare: withInventoryNfc(async (page) => {
+      await openItemNamed("Structural Coat — M")(page);
+      await page.getByText("Inside left cuff").waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    }),
+    cleanup: disableInventoryNfc,
+  },
+  {
+    id: "05-111-item-last-seen",
+    doc: "05-inventory.md",
+    line: 1707,
+    anchor:
+      "Quartermaster at /inventory/items/:id with NFC on: crop to the Last Seen",
+    alt: "Last Seen (NFC) on Structural Coat — M: moved from Turnout Gear Racks to Top Shelf, and found on Top Shelf during a shelf audit, each with its time and who tapped it",
+    route: "/inventory/admin/items",
+    expect: "during a shelf audit",
+    selector: 'section[aria-labelledby="item-nfc-last-seen-heading"]',
+    prepare: withInventoryNfc(async (page) => {
+      await openItemNamed("Structural Coat — M")(page);
+      await page
+        .getByText("during a shelf audit", { exact: false })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    }),
+    cleanup: disableInventoryNfc,
+  },
+  {
+    id: "05-113-audit-schedule",
+    doc: "05-inventory.md",
+    line: 1758,
+    anchor:
+      'Admin (inventory.manage) at /inventory/shelf-audit with NFC on: the "Audit schedule',
+    alt: "Shelf Audit with NFC on: the Audit schedule card counting what is due, Uniform Bins never audited and due now with Audit now, and Top Shelf last audited with its next due date",
+    route: "/inventory/shelf-audit",
+    expect: { selector: "#audit-schedule-heading" },
+    selector: 'section[aria-labelledby="audit-schedule-heading"]',
+    prepare: withInventoryNfc(async (page) => {
+      await page
+        .locator("#audit-schedule-heading")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    }),
+    cleanup: disableInventoryNfc,
+  },
+  {
+    id: "05-125-catalog-links-matches",
+    doc: "05-inventory.md",
+    line: 2924,
+    anchor:
+      "Catalog Links with a mix of ticked exact matches and unticked likely ones",
+    alt: "Catalog Links before anything is applied: unlinked checklist lines grouped by name under Likely matches, the exact matches already chosen in their pickers, the others left on Don't link for you to confirm, and Link 5 positions counting what is chosen",
+    route: "/inventory/admin/checklists/catalog-links",
+    expect: { selector: 'section[aria-labelledby="likely-matches"]' },
+    viewport: { width: 1440, height: 1300 },
+  },
+  {
+    id: "05-110-nfc-put-away",
+    doc: "05-inventory.md",
+    line: 1697,
+    anchor:
+      "Quartermaster at /inventory/put-away with NFC on: choose a shelf from",
+    alt: "Put Away by NFC with Top Shelf picked from Or pick a shelf, so taps go on Top Shelf, and two typed tag serials under Put away this session: SCBA Spare Cylinder moved onto Top Shelf from the SCBA Cabinet, and Structural Coat — S already on Top Shelf",
+    route: "/inventory/put-away",
+    expect: "already on Top Shelf",
+    // Moves the cylinder for real; the cleanup files it back in the SCBA
+    // Cabinet. The serials are the ones `seed_guide05_states` links.
+    prepare: withInventoryNfc(async (page) => {
+      const shelf = page.locator("#put-away-shelf");
+      await shelf.waitFor({ timeout: 15_000 });
+      const value = await shelf
+        .locator("option", { hasText: "Top Shelf" })
+        .first()
+        .getAttribute("value");
+      await shelf.selectOption(value ?? "");
+      await page
+        .getByText("Items tapped now go on", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      const serial = page.locator("#put-away-serial");
+      for (const tag of [GUIDE05_CYLINDER_TAG, GUIDE05_COAT_S_TAG]) {
+        await serial.fill(tag);
+        await serial.press("Enter");
+        await page.waitForTimeout(1200);
+      }
+      await page
+        .getByText("already on Top Shelf", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(400);
+    }),
+    cleanup: async (page) => {
+      const listing = await apiCall(page, "GET", "inventory/items?limit=500");
+      const areas = await apiCall(page, "GET", "inventory/storage-areas");
+      const cylinder = (listing.json?.items ?? []).find(
+        (item) => item.name === "SCBA Spare Cylinder",
+      );
+      const cabinet = (areas.json ?? []).find(
+        (area) => area.name === "SCBA Cabinet",
+      );
+      if (cylinder && cabinet && cylinder.storage_area_id !== cabinet.id) {
+        const moved = await apiCall(
+          page,
+          "PATCH",
+          `inventory/items/${cylinder.id}`,
+          { storage_area_id: cabinet.id },
+        );
+        if (moved.status !== 200) {
+          throw new Error(`moving the cylinder back returned ${moved.status}`);
+        }
+      }
+      await disableInventoryNfc(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-112-shelf-audit-result",
+    doc: "05-inventory.md",
+    line: 1738,
+    anchor:
+      "Quartermaster at /inventory/shelf-audit with NFC on: pick a seeded shelf",
+    alt: "A finished shelf audit of Top Shelf: 1 of 2 expected found, 1 missing and 1 unexpected; Structural Coat — M under Missing with the note that nothing has been marked lost, SCBA Spare Cylinder under Unexpected with its box ticked and Move 1 selected onto Top Shelf, and Recent audits below",
+    route: "/inventory/shelf-audit",
+    expect: "Nothing has been marked lost",
+    // Finish audit saves an audit of Top Shelf each run; Move is never
+    // pressed, so no item changes place.
+    prepare: withInventoryNfc(async (page) => {
+      const shelf = page.locator("#audit-shelf");
+      await shelf.waitFor({ timeout: 15_000 });
+      const value = await shelf
+        .locator("option", { hasText: "Top Shelf" })
+        .first()
+        .getAttribute("value");
+      await shelf.selectOption(value ?? "");
+      const serial = page.locator("#audit-serial");
+      await serial.waitFor({ timeout: 10_000 });
+      for (const tag of [GUIDE05_COAT_S_TAG, GUIDE05_CYLINDER_TAG]) {
+        await serial.fill(tag);
+        await serial.press("Enter");
+        await page.waitForTimeout(1200);
+      }
+      await page
+        .getByRole("button", { name: "Finish audit" })
+        .click({ timeout: 10_000 });
+      await page
+        .getByText("Nothing has been marked lost", { exact: false })
+        .waitFor({ timeout: 15_000 });
+      const unexpected = page
+        .locator('section[aria-labelledby="audit-result-heading"]')
+        .getByRole("checkbox");
+      await unexpected.first().check();
+      await page
+        .getByRole("button", { name: "Move 1 selected onto Top Shelf" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    }),
+    cleanup: disableInventoryNfc,
+    fullPage: true,
+  },
+  {
+    id: "05-114-nfc-enroll",
+    doc: "05-inventory.md",
+    line: 1779,
+    anchor:
+      "Quartermaster at /inventory/admin/nfc/enroll with NFC on, after one typed serial",
+    alt: "Tag Items in Bulk after one typed serial was linked: 1 tagged this session and how many are left, the next item, Bunker Coat, with its serial number, asset tag, category and storage area, Read serials chosen with Write links greyed out on a desktop, the serial box and Skip this item",
+    route: "/inventory/admin/nfc/enroll",
+    expect: "1 tagged this session",
+    // Links one invented serial to the first untagged item; the cleanup
+    // unlinks it again.
+    prepare: withInventoryNfc(async (page) => {
+      const serial = page.locator("#enroll-serial");
+      await serial.waitFor({ timeout: 15_000 });
+      const readSerials = page.getByRole("button", { name: "Read serials" });
+      if (await readSerials.isEnabled()) await readSerials.click();
+      // The untagged list includes medical supplies, which the gear item
+      // list does not, so the cleanup goes by id rather than by name.
+      const untagged = await apiCall(page, "GET", "inventory/nfc/untagged");
+      const first = untagged.json?.items?.[0];
+      const shown = (
+        await page.locator("p.text-lg.font-semibold").first().innerText()
+      ).trim();
+      if (!first || first.name !== shown) {
+        throw new Error(
+          `the enroll page shows ${shown}, not the first untagged item`,
+        );
+      }
+      enrolledItemId = first.id;
+      await serial.fill(GUIDE05_ENROLL_TAG);
+      await page.getByRole("button", { name: "Link serial" }).click();
+      await page
+        .getByText("1 tagged this session", { exact: false })
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    }),
+    cleanup: async (page) => {
+      if (enrolledItemId) {
+        const tags = await apiCall(
+          page,
+          "GET",
+          `inventory/items/${enrolledItemId}/nfc-tags`,
+        );
+        for (const tag of tags.json?.items ?? []) {
+          if (tag.label) continue;
+          const removed = await apiCall(
+            page,
+            "DELETE",
+            `inventory/nfc-tags/${tag.id}`,
+          );
+          if (removed.status !== 204) {
+            throw new Error(
+              `unlinking the enrolled tag returned ${removed.status}`,
+            );
+          }
+        }
+        enrolledItemId = null;
+      }
+      await disableInventoryNfc(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-126-catalog-links-conflicts",
+    doc: "05-inventory.md",
+    line: 2925,
+    anchor: "__paired-with-05-125__",
+    alt: "After Link positions, the list of lines someone else had linked in the builder after the page loaded: the Portable radio line on Engine Daily Check, its compartment, the item it is linked to and the one chosen here, with a link into the checklist",
+    route: "/inventory/admin/checklists/catalog-links",
+    expect: { selector: 'section[aria-labelledby="skipped-links"]' },
+    selector: 'section[aria-labelledby="skipped-links"]',
+    // Links the exact matches for real and, before that, links one Portable
+    // radio line to a different item behind the page's back, so the apply
+    // finds it taken. The cleanup undoes every one of those links and
+    // dismisses the list, which the page otherwise keeps across reloads.
+    prepare: async (page) => {
+      const report = await apiCall(
+        page,
+        "GET",
+        "equipment-checks/inventory-link-report",
+      );
+      const groups = report.json?.groups ?? [];
+      const exact = (group) =>
+        (group.suggestions ?? []).find((s) => s.confidence === "exact");
+      const radio = groups.find((g) => g.key === "portable radio");
+      const camera = groups.find((g) => g.key === "thermal imaging camera");
+      const taken = radio?.positions.find(
+        (p) => p.templateName === "Engine Daily Check",
+      );
+      if (!radio || !camera || !taken || !exact(radio) || !exact(camera)) {
+        throw new Error("the Portable radio and camera lines are not unlinked");
+      }
+      catalogConflictUndo = {};
+      for (const group of groups) {
+        const match = exact(group);
+        if (!match) continue;
+        for (const position of group.positions) {
+          catalogConflictUndo[position.templateItemId] = match.id;
+        }
+      }
+      catalogConflictUndo[taken.templateItemId] = exact(camera).id;
+      await page
+        .getByRole("button", { name: /^Link \d+ positions?$/ })
+        .waitFor({ timeout: 15_000 });
+      const linked = await apiCall(
+        page,
+        "POST",
+        "equipment-checks/inventory-links",
+        {
+          links: { [taken.templateItemId]: exact(camera).id },
+        },
+      );
+      if (linked.status !== 200) {
+        throw new Error(
+          `linking the line behind the page returned ${linked.status}`,
+        );
+      }
+      await page.getByRole("button", { name: /^Link \d+ positions?$/ }).click();
+      await page
+        .locator('section[aria-labelledby="skipped-links"]')
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(4500);
+    },
+    cleanup: async (page) => {
+      if (catalogConflictUndo) {
+        const undone = await apiCall(
+          page,
+          "POST",
+          "equipment-checks/inventory-links/undo",
+          { links: catalogConflictUndo },
+        );
+        if (undone.status !== 200) {
+          throw new Error(`undoing the links returned ${undone.status}`);
+        }
+        catalogConflictUndo = null;
+      }
+      const dismiss = page.getByRole("button", {
+        name: "Dismiss skipped positions",
+      });
+      if (await dismiss.count()) await dismiss.click();
+    },
+  },
   {
     id: "07-25-folder-admin-only-confirm",
     doc: "07-documents-forms.md",
@@ -17020,6 +20634,388 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
     fullPage: false,
+  },
+  // ── 07 placeholders filled 2026-10-17 ──
+  {
+    id: "07-26-starter-templates",
+    doc: "07-documents-forms.md",
+    line: 383,
+    anchor: "**Starter Templates** tab: the",
+    alt: "Custom Forms, Starter Templates tab: the template cards with their category badges and Use Template buttons; Membership Interest Form is badged Public and says it sends responses to Membership, and Community Event Request, also Public, says it sends responses to Events",
+    route: "/forms",
+    expect: "Sends responses to Membership",
+    // Use Template creates a form, so it is never pressed.
+    prepare: clickByName(/^Starter Templates$/),
+    fullPage: true,
+  },
+  {
+    id: "07-27-public-form-sign-in",
+    doc: "07-documents-forms.md",
+    line: 426,
+    anchor: "A public form at `/f/<slug>` opened in a signed-out browser",
+    alt: "A public form opened without signing in, for a form that does not allow submissions without signing in: the Sign in to submit this form notice above the first question names the department and carries a Sign in button",
+    route: "/login",
+    auth: "anonymous",
+    expect: "Sign in to submit this form",
+    // The one published public form the seeder makes accepts anonymous
+    // submissions, which is what 10-11 pictures. This shot switches its
+    // "Allow submissions without signing in" off for the length of the shot,
+    // as the Share Form checkbox does, and cleanup switches it back.
+    prepare: async (page, helpers) => {
+      const admin = await helpers.lookupPage();
+      const listed = await apiCall(admin, "GET", "forms");
+      const forms = Array.isArray(listed.json)
+        ? listed.json
+        : (listed.json?.forms ?? listed.json?.items ?? []);
+      const form = forms.find(
+        (f) => f.name === "Community Event Request" && f.public_slug,
+      );
+      if (!form) throw new Error("the seeded public form is not published");
+      publicFormSignInRestore = {
+        admin,
+        id: form.id,
+        requireAuthentication: Boolean(form.require_authentication),
+      };
+      const patched = await apiCall(admin, "PATCH", `forms/${form.id}`, {
+        require_authentication: true,
+      });
+      if (patched.status !== 200) {
+        throw new Error(`could not require sign-in (${patched.status})`);
+      }
+      await page.goto(`${new URL(page.url()).origin}/f/${form.public_slug}`, {
+        waitUntil: "domcontentloaded",
+      });
+      await page
+        .getByText("Sign in to submit this form")
+        .waitFor({ timeout: 20_000 });
+    },
+    cleanup: async () => {
+      const restore = publicFormSignInRestore;
+      publicFormSignInRestore = null;
+      if (!restore) return;
+      const result = await apiCall(
+        restore.admin,
+        "PATCH",
+        `forms/${restore.id}`,
+        {
+          require_authentication: restore.requireAuthentication,
+        },
+      );
+      if (result.status !== 200) {
+        throw new Error(`could not restore the form (${result.status})`);
+      }
+    },
+    fullPage: false,
+  },
+  {
+    id: "07-28-notification-stack",
+    doc: "07-documents-forms.md",
+    line: 551,
+    anchor: "Notifications → **My Notifications** with a collapsed stack",
+    alt: "Notifications → My Notifications: a collapsed stack of attendance validations with its Latest line, unread badge and Mark all read, among single notifications and other stacks",
+    route: "/notifications?tab=inbox",
+    expect: { selector: '[data-testid^="notification-stack-"]' },
+    fullPage: false,
+  },
+  {
+    id: "07-29-notification-stack-expanded",
+    doc: "07-documents-forms.md",
+    line: 551,
+    // One placeholder asks for both states; this half is placed by hand
+    // under 07-28.
+    anchor: "__paired-with-07-28__",
+    alt: "The same attendance-validations stack expanded, showing each of its notifications as its own row",
+    route: "/notifications?tab=inbox",
+    expect: {
+      selector:
+        '[data-testid^="notification-stack-"]:has-text("attendance validations") [role="region"]',
+    },
+    // Expanding only opens the stack; nothing is marked read.
+    prepare: async (page) => {
+      // By its subject, not its place: the newest stack on top changes as
+      // other activity arrives.
+      const stack = page
+        .locator('[data-testid^="notification-stack-"]')
+        .filter({ hasText: "attendance validations" })
+        .first();
+      await stack
+        .locator("button[aria-expanded]")
+        .first()
+        .click({ timeout: 15_000 });
+      await stack
+        .locator('[role="region"]')
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    selector:
+      '[data-testid^="notification-stack-"]:has-text("attendance validations")',
+  },
+  {
+    id: "07-30-rule-equipment-request",
+    doc: "07-documents-forms.md",
+    line: 600,
+    anchor: 'press **Add Rule**, name it "Gear request notices"',
+    alt: "Create Notification Rule named Gear request notices with the trigger Equipment Request Update, and the note under it about switching off every rule for that trigger",
+    route: "/notifications?tab=rules",
+    expect: "Create Notification Rule",
+    viewport: { width: 1280, height: 1100 },
+    selector: '[aria-labelledby="create-rule-title"] div.max-w-lg',
+    prepare: async (page) => {
+      // Opened and photographed, never saved.
+      await page.getByRole("button", { name: "Add Rule" }).click();
+      const dialog = page.locator('[aria-labelledby="create-rule-title"]');
+      await dialog.waitFor();
+      await dialog.locator("#rule-name").fill("Gear request notices");
+      await dialog
+        .locator("select")
+        .first()
+        .selectOption({ label: "Equipment Request Update" });
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+    },
+  },
+  {
+    id: "07-31-member-emails-required",
+    doc: "07-documents-forms.md",
+    line: 830,
+    anchor:
+      "Communications → **Member Emails & Texts** as an administrator: the **Always",
+    alt: "Member Emails & Texts as an administrator: the Always sent cards, then Members can turn off, where Quartermaster duties has Require for every member switched on and reads Required by your department beside cards reading On unless turned off, then the Text messages section",
+    route: "/communications/member-emails",
+    expect: "Required by your department",
+    // Switched on through the page's own control, and cleanup puts back
+    // whatever was required before (the demo requires nothing).
+    prepare: async (page) => {
+      const policy = await apiCall(
+        page,
+        "GET",
+        "email-templates/member-email-policy",
+      );
+      if (policy.status !== 200) {
+        throw new Error(`could not read the policy (${policy.status})`);
+      }
+      memberEmailsRestore = {
+        page,
+        required: (policy.json?.emails ?? [])
+          .filter((kind) => kind.department_required)
+          .map((kind) => kind.key),
+      };
+      await page
+        .getByRole("switch", {
+          name: "Require Quartermaster duties for every member",
+        })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("Required by your department")
+        .waitFor({ timeout: 15_000 });
+      // Let the "Now required for every member" toast clear the frame.
+      await page.waitForTimeout(4_500);
+    },
+    cleanup: async () => {
+      const restore = memberEmailsRestore;
+      memberEmailsRestore = null;
+      if (!restore) return;
+      const result = await apiCall(
+        restore.page,
+        "PUT",
+        "email-templates/member-email-policy",
+        { required_kinds: restore.required },
+      );
+      if (result.status !== 200) {
+        throw new Error(`could not restore the policy (${result.status})`);
+      }
+    },
+    fullPage: true,
+  },
+  {
+    id: "07-32-member-notification-preferences",
+    doc: "07-documents-forms.md",
+    line: 837,
+    anchor:
+      "Settings → **Notifications** as a member: **Email Notifications** on",
+    alt: "My Account, Notifications tab, as a member: Email Notifications on, Event reminders switched off in the Emails you can turn off list, and Always emailed to you below it",
+    route: "/account?tab=notifications",
+    auth: "member",
+    expect: "Always emailed to you",
+    // The switches are kept in the page until Save Preferences, which is
+    // never pressed, so the member's stored choices do not change.
+    prepare: async (page) => {
+      const toggle = page.getByRole("switch", {
+        name: "Event reminders",
+        exact: true,
+      });
+      await toggle.waitFor({ timeout: 15_000 });
+      if ((await toggle.getAttribute("aria-checked")) === "true") {
+        await toggle.click();
+      }
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(300);
+    },
+    viewport: { width: 1280, height: 900 },
+    selector:
+      'div.space-y-6:has(> div > h2:text-is("Notification Preferences"))',
+  },
+  {
+    id: "07-33-suggestion-boxes-list",
+    doc: "07-documents-forms.md",
+    line: 943,
+    anchor: "`/communications/suggestion-boxes` after a fresh demo seed",
+    alt: "Suggestion boxes as a holder of suggestions.manage: each box with its description, anonymity and follow-up settings, submission count and reviewers (Compliance reviewed by the Compliance Officer, Training ideas by the Secretary and the Training Officer), and Edit and Delete on every row",
+    route: "/communications/suggestion-boxes",
+    expect: "Reviewers: Compliance Officer",
+    fullPage: true,
+  },
+  {
+    id: "07-34-box-questions-routed",
+    doc: "07-documents-forms.md",
+    line: 1007,
+    anchor: "the box dialog's **Questions** section with one routed",
+    alt: "The Questions section of a new suggestion box: one required Dropdown question, What is this about?, whose third option, Compliance or safety, is set to Send to Compliance while the other two keep it in this box",
+    route: "/communications/suggestion-boxes",
+    // The route's own control: its chosen option is a native <option>,
+    // which Playwright never counts as visible.
+    expect: {
+      selector: 'select[aria-label="Where option 3 sends the submission"]',
+    },
+    viewport: { width: 1280, height: 2000 },
+    // A new box, never saved: Save box is not pressed, so the question and
+    // its route exist only in the dialog.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /New box/ })
+        .first()
+        .click();
+      const dialog = page.locator('[role="dialog"]');
+      await dialog.waitFor({ state: "visible" });
+      await dialog.locator("#box-name").fill("Station feedback");
+      await dialog.getByRole("button", { name: "Add question" }).click();
+      const question = dialog
+        .locator('section[aria-labelledby="box-questions-heading"] fieldset')
+        .first();
+      await question.locator('input[id$="-label"]').fill("What is this about?");
+      await question.locator('select[id$="-type"]').selectOption("select");
+      await question
+        .locator("label", { hasText: "Required when shown" })
+        .locator('input[type="checkbox"]')
+        .check();
+      for (const label of [
+        "Station or equipment",
+        "How we run things",
+        "Compliance or safety",
+      ]) {
+        await question.getByRole("button", { name: "Add option" }).click();
+        await question
+          .locator('input[aria-label^="Option "]')
+          .last()
+          .fill(label);
+      }
+      await question
+        .getByLabel("Where option 3 sends the submission")
+        .selectOption({ label: "Send to Compliance" });
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+    },
+    selector: 'section[aria-labelledby="box-questions-heading"]',
+  },
+  {
+    id: "07-35-compliance-question-step",
+    doc: "07-documents-forms.md",
+    line: 1004,
+    // The inline marker above the blockquote is not a placeholder the
+    // applier reads; placed by hand.
+    anchor: "__inline-marker-07-question-step__",
+    alt: "Suggestions → Submit as a member with the Compliance box chosen: Step 1 of 2, A few questions, with the box's description, the question What kind of concern is this? and its five answers, and the Continue button",
+    route: "/suggestions",
+    auth: "member",
+    expect: "Step 1 of 2",
+    viewport: { width: 1280, height: 1000 },
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Compliance" });
+      await page
+        .getByText("What kind of concern is this?")
+        .waitFor({ timeout: 10_000 });
+    },
+    selector: '[role="tabpanel"]',
+  },
+  {
+    id: "07-36-compliance-details-step",
+    doc: "07-documents-forms.md",
+    line: 1004,
+    anchor: "__paired-with-07-35__",
+    alt: "Step 2 of 2, Your suggestion, for the Compliance box: the anonymity and follow-up hints, Submit anonymously, empty Title and Details, the screenshots box, and Back to the questions beside Submit. Nothing is submitted",
+    route: "/suggestions",
+    auth: "member",
+    expect: "Back to the questions",
+    viewport: { width: 1280, height: 1200 },
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Compliance" });
+      await page
+        .getByLabel("Safety", { exact: true })
+        .check({ timeout: 10_000 });
+      await page.getByLabel("No", { exact: true }).check({ timeout: 10_000 });
+      await page.getByRole("button", { name: /Continue/ }).click();
+      await page.getByText("Step 2 of 2").waitFor({ timeout: 10_000 });
+    },
+    selector: '[role="tabpanel"]',
+  },
+  {
+    id: "07-37-compliance-follow-up-question",
+    doc: "07-documents-forms.md",
+    line: 1007,
+    anchor: "__paired-with-07-34__",
+    alt: "The Compliance box's question step with Safety chosen, which shows the follow-up question Is anyone at immediate risk? with its help text that the box is not watched around the clock",
+    route: "/suggestions",
+    auth: "member",
+    expect: "Is anyone at immediate risk?",
+    viewport: { width: 1280, height: 1000 },
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Compliance" });
+      await page
+        .getByLabel("Safety", { exact: true })
+        .check({ timeout: 10_000 });
+      await page
+        .getByText("Is anyone at immediate risk?")
+        .waitFor({ timeout: 10_000 });
+    },
+    selector: '[role="tabpanel"]',
+  },
+  {
+    id: "07-38-compliance-review-intake-answers",
+    doc: "07-documents-forms.md",
+    line: 1007,
+    anchor: "__paired-with-07-34__",
+    alt: "Suggestions → Review as the Compliance Officer with a Compliance submission open: its answers to What kind of concern is this? (Safety) and Is anyone at immediate risk? (No) above the details, then the Disposition, response and internal note fields, Status history, Forwarded to and Follow-up",
+    route: "/suggestions?tab=review",
+    // The Compliance box's only reviewer; seed_guide07_states files the
+    // submission as an ordinary member.
+    auth: "compliance",
+    expect: "Is anyone at immediate risk?",
+    // "No follow-up messages yet" is the thread of a submission nobody has
+    // replied to, which is what a new one is; the answers are the subject.
+    allowEmptyState: true,
+    viewport: { width: 1280, height: 1700 },
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Bay door sensor on Engine 1/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .locator("article h2", { hasText: "Bay door sensor on Engine 1" })
+        .waitFor({ timeout: 10_000 });
+    },
+    selector: '[role="tabpanel"]',
   },
   {
     id: "11-17-approval-step-delete",

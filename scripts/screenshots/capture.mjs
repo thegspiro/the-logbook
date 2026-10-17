@@ -24,11 +24,15 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  DEMO_COMPLIANCE_CREDENTIALS,
   DEMO_CREDENTIALS,
   DEMO_FORWARDEE_CREDENTIALS,
+  DEMO_GEARLESS_CREDENTIALS,
+  DEMO_TRAINING_OFFICER_CREDENTIALS,
   DEMO_MEMBER_CREDENTIALS,
   DEMO_SECOND_MEMBER_CREDENTIALS,
   DEMO_SECRETARY_CREDENTIALS,
+  DEMO_TREASURER_CREDENTIALS,
   SHOTS,
 } from "./manifest.mjs";
 
@@ -375,7 +379,7 @@ async function detectSubjectOutOfFrame(page, shot) {
       };
 }
 
-/** The document-space rectangle the screenshot will cover. */
+/** The rectangle the screenshot will cover, in boundingBox() coordinates. */
 async function captureFrame(page, shot) {
   if (shot.selector) {
     return await page.locator(shot.selector).first().boundingBox();
@@ -503,6 +507,24 @@ function makeSessions(browser, baseOptions) {
         // Reaches one suggestion through a forward and reviews no box, so the
         // Review tab shows what a forward recipient sees and nothing more.
         await login(page, DEMO_FORWARDEE_CREDENTIALS);
+      } else if (auth === "treasurer") {
+        // Runs the approval chains and raised none of the seeded requests, so
+        // the Approve controls separation of duties hides from the
+        // administrator are on screen.
+        await login(page, DEMO_TREASURER_CREDENTIALS);
+      } else if (auth === "compliance") {
+        // The Compliance box's only reviewer. The secretary reviews every
+        // other seeded box but not this one.
+        await login(page, DEMO_COMPLIANCE_CREDENTIALS);
+      } else if (auth === "gearless") {
+        // Holds nothing, borrows nothing and has asked for nothing, so My
+        // Issued Gear shows a member's empty page rather than the demo
+        // member's full one.
+        await login(page, DEMO_GEARLESS_CREDENTIALS);
+      } else if (auth === "trainingofficer") {
+        // Holds the Training Officer position, which is what a new training
+        // submission prompts in the inbox.
+        await login(page, DEMO_TRAINING_OFFICER_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }
@@ -794,7 +816,9 @@ async function main() {
         throw new Error("page hit the ErrorBoundary — the app crashed here");
       }
       const pageError = await detectPageError(page);
-      if (pageError) {
+      // `allowPageError` names one exact phrase the pattern mistakes for an
+      // error on that screen; anything else it matches still fails the shot.
+      if (pageError && pageError !== shot.allowPageError) {
         throw new Error(`page rendered an error: "${pageError}"`);
       }
       const overflow = await detectHorizontalOverflow(page);
