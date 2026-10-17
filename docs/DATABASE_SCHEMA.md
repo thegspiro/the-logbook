@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**314 tables · 5191 columns · 1059 foreign keys**
+**315 tables · 5211 columns · 1062 foreign keys**
 
 ---
 
@@ -142,6 +142,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`user_consents`](#user_consents) | `UserConsent` | 7 |  |
 
+### Directory_Account
+
+<sub>`app/models/directory_account.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`directory_account_provisions`](#directory_account_provisions) | `DirectoryAccountProvision` | 23 | A member's directory account, as The Logbook created or found it |
+
 ### Documents
 
 <sub>`app/models/document.py`</sub>
@@ -157,6 +165,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`ballot_send_jobs`](#ballot_send_jobs) | `BallotSendJob` | 16 | One request to email ballots, run in the background. |
 | [`candidates`](#candidates) | `Candidate` | 17 | Candidate model for election candidates |
 | [`elections`](#elections) | `Election` | 55 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
@@ -281,14 +290,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`form_integrations`](#form_integrations) | `FormIntegration` | 9 | Form Integration model |
 | [`form_submissions`](#form_submissions) | `FormSubmission` | 15 | Form Submission model |
 | [`forms`](#forms) | `Form` | 19 | Form model |
-
-### Google_Workspace
-
-<sub>`app/models/google_workspace.py`</sub>
-
-| Table | Model | Columns | Purpose |
-|---|---|---|---|
-| [`google_account_provisions`](#google_account_provisions) | `GoogleAccountProvision` | 19 | A member's Google Workspace account, as The Logbook created or found it |
 
 ### Grants & Fundraising
 
@@ -2099,6 +2100,45 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - UNIQUE `idx_user_consent_unique` (`user_id`, `consent_type`)
 - `ix_user_consents_organization_id` (`organization_id`)
 
+## Directory_Account
+
+### `directory_account_provisions`
+
+**DirectoryAccountProvision** · `app/models/directory_account.py`
+
+> A member's directory account, as The Logbook created or found it
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `users.id` ON DELETE CASCADE |
+| `provider` | VARCHAR(20) | no |  | `google` |  |
+| `primary_email` | VARCHAR(255) | no |  |  |  |
+| `status` | VARCHAR(20) | no |  | `'pending'` |  |
+| `external_user_id` | VARCHAR(64) | yes |  |  |  |
+| `credentials_sent` | BOOL | no |  | `0` |  |
+| `pending_groups` | JSON | yes |  |  |  |
+| `license_pending` | BOOL | no |  | `0` |  |
+| `managed_on_premises` | BOOL | no |  | `0` |  |
+| `last_error` | TEXT | yes |  |  |  |
+| `attempts` | INTEGER | no |  | `0` |  |
+| `last_attempt_at` | DATETIME | yes |  |  |  |
+| `suspension_wanted` | BOOL | no |  | `0` |  |
+| `suspension_settled` | BOOL | no |  | `1` |  |
+| `suspended_by_logbook` | BOOL | no |  | `0` |  |
+| `suspended_at` | DATETIME | yes |  |  |  |
+| `suspension_error` | TEXT | yes |  |  |  |
+| `suspension_requested_at` | DATETIME | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_directory_account_provisions_org` (`organization_id`)
+- UNIQUE `ix_directory_account_provisions_user` (`user_id`)
+
 ## Documents
 
 ### `document_folders`
@@ -2173,6 +2213,36 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_documents_source` (`source_type`, `source_id`)
 
 ## Elections
+
+### `ballot_send_jobs`
+
+**BallotSendJob** · `app/models/election.py`
+
+> One request to email ballots, run in the background. A department-sized send takes longer than any HTTP client or proxy will wait, so the request only records this row and returns; the send runs after the response and writes its outcome here for the page to poll. The row lives in the database rather than Redis so a poll answered by a different uvicorn worker sees it, and so it outlives a restart that interrupts the send. A queued or running row also blocks a second send for the same election: each send mints new voting tokens, so two overlapping sends mail every member two links of which only the later one works.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `election_id` | VARCHAR(36) | no | FK, IDX |  | → `elections.id` ON DELETE CASCADE |
+| `requested_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `kind` | VARCHAR(20) | no |  | `ballots` |  |
+| `status` | VARCHAR(20) | no |  | `queued` |  |
+| `success` | BOOL | yes |  |  |  |
+| `recipients_count` | INTEGER | no |  | `0` |  |
+| `failed_count` | INTEGER | no |  | `0` |  |
+| `skipped_count` | INTEGER | no |  | `0` |  |
+| `skipped_details` | JSON | yes |  |  |  |
+| `message` | TEXT | yes |  |  |  |
+| `error` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `started_at` | DATETIME | yes |  |  |  |
+| `finished_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `ix_ballot_send_jobs_election_status` (`election_id`, `status`)
+- `ix_ballot_send_jobs_organization_id` (`organization_id`)
 
 ### `candidates`
 
@@ -4422,41 +4492,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_forms_is_template` (`is_template`)
 - UNIQUE `ix_forms_public_slug` (`public_slug`)
 - `ix_forms_status` (`status`)
-
-## Google_Workspace
-
-### `google_account_provisions`
-
-**GoogleAccountProvision** · `app/models/google_workspace.py`
-
-> A member's Google Workspace account, as The Logbook created or found it
-
-| Column | Type | Null | Key | Default | References |
-|---|---|---|---|---|---|
-| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `user_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `users.id` ON DELETE CASCADE |
-| `primary_email` | VARCHAR(255) | no |  |  |  |
-| `status` | VARCHAR(20) | no |  | `'pending'` |  |
-| `google_user_id` | VARCHAR(64) | yes |  |  |  |
-| `credentials_sent` | BOOL | no |  | `0` |  |
-| `pending_groups` | JSON | yes |  |  |  |
-| `last_error` | TEXT | yes |  |  |  |
-| `attempts` | INTEGER | no |  | `0` |  |
-| `last_attempt_at` | DATETIME | yes |  |  |  |
-| `suspension_wanted` | BOOL | no |  | `0` |  |
-| `suspension_settled` | BOOL | no |  | `1` |  |
-| `suspended_by_logbook` | BOOL | no |  | `0` |  |
-| `suspended_at` | DATETIME | yes |  |  |  |
-| `suspension_error` | TEXT | yes |  |  |  |
-| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `created_at` | DATETIME | yes |  | `now()` |  |
-| `updated_at` | DATETIME | yes |  | `now()` |  |
-
-**Indexes**
-
-- `ix_google_account_provisions_org` (`organization_id`)
-- UNIQUE `ix_google_account_provisions_user` (`user_id`)
 
 ## Grants & Fundraising
 
@@ -10946,7 +10981,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (388 references)
+### → `users` (389 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -10983,6 +11018,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `approval_chains` | `created_by` | RESTRICT | no |
 | `approval_step_records` | `acted_by` | SET NULL | yes |
 | `approval_step_records` | `assigned_to` | SET NULL | yes |
+| `ballot_send_jobs` | `requested_by` | SET NULL | yes |
 | `blocked_access_attempts` | `user_id` | RESTRICT | yes |
 | `budget_amendments` | `created_by` | SET NULL | yes |
 | `budget_amendments` | `decided_by` | SET NULL | yes |
@@ -11022,6 +11058,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `departure_clearances` | `completed_by` | RESTRICT | yes |
 | `departure_clearances` | `initiated_by` | RESTRICT | yes |
 | `departure_clearances` | `user_id` | CASCADE | no |
+| `directory_account_provisions` | `created_by` | SET NULL | yes |
+| `directory_account_provisions` | `user_id` | CASCADE | no |
 | `document_folders` | `admin_only_confirmed_by` | SET NULL | yes |
 | `document_folders` | `created_by` | RESTRICT | yes |
 | `document_folders` | `owner_user_id` | SET NULL | yes |
@@ -11104,8 +11142,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `forms` | `created_by` | RESTRICT | yes |
 | `fundraising_campaigns` | `created_by` | RESTRICT | yes |
 | `fundraising_events` | `created_by` | RESTRICT | yes |
-| `google_account_provisions` | `created_by` | SET NULL | yes |
-| `google_account_provisions` | `user_id` | CASCADE | no |
 | `grant_applications` | `assigned_to` | SET NULL | yes |
 | `grant_applications` | `created_by` | RESTRICT | yes |
 | `grant_compliance_tasks` | `assigned_to` | SET NULL | yes |
@@ -11339,7 +11375,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (257 references)
+### → `organizations` (258 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11366,6 +11402,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_statuses` | `organization_id` | CASCADE | yes |
 | `apparatus_types` | `organization_id` | CASCADE | yes |
 | `approval_chains` | `organization_id` | CASCADE | no |
+| `ballot_send_jobs` | `organization_id` | CASCADE | no |
 | `basic_apparatus` | `organization_id` | CASCADE | no |
 | `budget_amendments` | `organization_id` | CASCADE | no |
 | `budget_categories` | `organization_id` | CASCADE | no |
@@ -11388,6 +11425,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `department_messages` | `organization_id` | CASCADE | no |
 | `departure_clearance_items` | `organization_id` | CASCADE | no |
 | `departure_clearances` | `organization_id` | CASCADE | no |
+| `directory_account_provisions` | `organization_id` | CASCADE | no |
 | `document_folders` | `organization_id` | CASCADE | no |
 | `documents` | `organization_id` | CASCADE | no |
 | `donations` | `organization_id` | CASCADE | no |
@@ -11450,7 +11488,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `forms` | `organization_id` | CASCADE | no |
 | `fundraising_campaigns` | `organization_id` | CASCADE | no |
 | `fundraising_events` | `organization_id` | CASCADE | no |
-| `google_account_provisions` | `organization_id` | CASCADE | no |
 | `grant_applications` | `organization_id` | CASCADE | no |
 | `grant_opportunities` | `organization_id` | CASCADE | no |
 | `instructor_qualifications` | `organization_id` | CASCADE | no |
@@ -11773,6 +11810,20 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_tests` | `requirement_id` | SET NULL | yes |
 | `training_sessions` | `requirement_id` | SET NULL | yes |
 
+### → `elections` (9 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `ballot_send_jobs` | `election_id` | CASCADE | no |
+| `candidates` | `election_id` | CASCADE | no |
+| `elections` | `parent_election_id` | RESTRICT | yes |
+| `manual_ballot_batches` | `election_id` | CASCADE | no |
+| `meeting_motions` | `election_id` | SET NULL | yes |
+| `minutes_election_results` | `election_id` | SET NULL | yes |
+| `prospect_election_packages` | `election_id` | SET NULL | yes |
+| `votes` | `election_id` | CASCADE | no |
+| `voting_tokens` | `election_id` | CASCADE | no |
+
 ### → `meeting_minutes` (9 references)
 
 | From table | Column | On delete | Nullable |
@@ -11814,19 +11865,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_assignments` | `training_program_id` | SET NULL | yes |
 | `training_courses` | `program_id` | SET NULL | yes |
 | `training_sessions` | `program_id` | SET NULL | yes |
-
-### → `elections` (8 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `candidates` | `election_id` | CASCADE | no |
-| `elections` | `parent_election_id` | RESTRICT | yes |
-| `manual_ballot_batches` | `election_id` | CASCADE | no |
-| `meeting_motions` | `election_id` | SET NULL | yes |
-| `minutes_election_results` | `election_id` | SET NULL | yes |
-| `prospect_election_packages` | `election_id` | SET NULL | yes |
-| `votes` | `election_id` | CASCADE | no |
-| `voting_tokens` | `election_id` | CASCADE | no |
 
 ### → `prospective_members` (8 references)
 

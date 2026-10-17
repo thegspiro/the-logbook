@@ -306,7 +306,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
         {!isExpanded && (
           <div className="flex flex-wrap gap-1.5 px-4 pb-3 pl-[4.25rem]">
             <span className="bg-theme-surface-secondary text-theme-text-muted rounded-md px-2 py-0.5 text-[11px]">
-              {item.vote_type === VoteType.APPROVAL ? 'Yes/No Vote' : 'Candidate Selection'}
+              {item.vote_type === VoteType.APPROVAL ? 'Approve/Deny Vote' : 'Candidate Selection'}
             </span>
             <span className="bg-theme-surface-secondary text-theme-text-muted rounded-md px-2 py-0.5 text-[11px]">
               {getVoterTypeLabel(item.eligible_voter_types)}
@@ -401,7 +401,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   onChange={(e) => onUpdateItem(item.id, { vote_type: e.target.value })}
                   disabled={isLocked}
                 >
-                  <option value={VoteType.APPROVAL}>Approval (Yes/No)</option>
+                  <option value={VoteType.APPROVAL}>Approve / Deny</option>
                   <option value={VoteType.CANDIDATE_SELECTION}>Candidate Selection</option>
                 </select>
               </div>
@@ -976,7 +976,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                               <p className="text-theme-text-muted mt-1 text-xs">{template.description}</p>
                               <div className="mt-2 flex flex-wrap gap-2">
                                 <span className="bg-theme-surface text-theme-text-muted rounded-sm px-2 py-0.5 text-[11px]">
-                                  {template.vote_type === VoteType.APPROVAL ? 'Yes/No' : 'Candidates'}
+                                  {template.vote_type === VoteType.APPROVAL ? 'Approve/Deny' : 'Candidates'}
                                 </span>
                                 <span className="bg-theme-surface text-theme-text-muted rounded-sm px-2 py-0.5 text-[11px]">
                                   {getVoterTypeLabel(template.eligible_voter_types)}
@@ -1299,7 +1299,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                       }
                       className={selectClass}
                     >
-                      <option value="approval">Approval (Yes/No)</option>
+                      <option value="approval">Approve / Deny</option>
                       <option value="candidate_selection">Candidate Selection</option>
                     </select>
                   </div>

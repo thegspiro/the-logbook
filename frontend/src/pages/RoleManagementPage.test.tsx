@@ -240,6 +240,39 @@ describe('RoleManagementPage', () => {
     });
   });
 
+  describe('the name sent', () => {
+    beforeEach(() => {
+      vi.mocked(roleService.createRole).mockReset();
+      vi.mocked(roleService.createRole).mockResolvedValue({ ...role, id: 'role-2', name: 'Report Reader' });
+      vi.mocked(roleService.updateRole).mockReset();
+      vi.mocked(roleService.updateRole).mockResolvedValue(role);
+    });
+
+    it('trims the name of a new role', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<RoleManagementPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Create Custom Role' }));
+      await user.type(screen.getByLabelText('Role Name'), '  Report Reader  ');
+      await user.click(screen.getByRole('button', { name: 'Create Role' }));
+
+      await waitFor(() => expect(roleService.createRole).toHaveBeenCalledTimes(1));
+      expect(roleService.createRole).toHaveBeenCalledWith(expect.objectContaining({ name: 'Report Reader' }));
+    });
+
+    it('does not resend an unchanged name that only gained surrounding spaces', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<RoleManagementPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Edit' }));
+      await user.type(screen.getByLabelText('Role Name'), '  ');
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+      await waitFor(() => expect(roleService.updateRole).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(roleService.updateRole).mock.calls[0]?.[1]).toMatchObject({ name: undefined });
+    });
+  });
+
   it('does not describe priority as authority', async () => {
     const user = userEvent.setup();
     renderWithRouter(<RoleManagementPage />);

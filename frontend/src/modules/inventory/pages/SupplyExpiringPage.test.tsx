@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -127,5 +127,98 @@ describe('SupplyExpiringPage — Add stock', () => {
         expect(screen.getByRole('heading', { name: 'Add ready stock' })).toBeInTheDocument();
       });
     });
+  });
+});
+
+describe('SupplyExpiringPage — phone layout', () => {
+  const lot = (id: string, lotNumber: string, quantity: number, isExpired = false) => ({
+    id,
+    lotNumber,
+    quantity,
+    expirationDate: '2027-04-01',
+    isExpired,
+  });
+  const expiredItem = {
+    ...item,
+    templateItemId: 'a',
+    itemName: 'Epinephrine 1mg',
+    apparatusName: 'Medic 1',
+    lotNumber: 'L-OLD',
+    expirationDate: '2026-10-14',
+    daysUntilExpiration: -3,
+    isExpired: true,
+    readyStock: 3,
+    readyLots: [lot('l1', 'L-NEW', 3), lot('l2', 'L-GONE', 1, true)],
+  };
+  const worklist = [
+    expiredItem,
+    { ...item, templateItemId: 'b', itemName: 'Burn sheets', apparatusName: 'Engine 2', restockNeeded: true },
+    { ...item, templateItemId: 'c', itemName: 'Road flares', apparatusName: 'Medic 1', daysUntilExpiration: 20 },
+  ];
+
+  beforeEach(() => {
+    mockGetSupplyExpiringItems.mockReset();
+    mockGetSupplyExpiringItems.mockResolvedValue({ items: worklist });
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockImplementation((p: string) => p === 'inventory.manage');
+  });
+
+  // The counts are the filters, so a chip's number and the list it opens are
+  // one predicate and cannot disagree.
+  it('counts each filter on its own chip and leaves out one with nothing behind it', async () => {
+    await renderPage();
+    const chips = within(screen.getByRole('group', { name: 'Filter items' }));
+    expect(chips.getByRole('button', { name: 'All 3' })).toBeInTheDocument();
+    expect(chips.getByRole('button', { name: 'Needs restock 2' })).toBeInTheDocument();
+    expect(chips.getByRole('button', { name: 'Used or short 1' })).toBeInTheDocument();
+    expect(chips.getByRole('button', { name: 'Expired 1' })).toBeInTheDocument();
+
+    mockGetSupplyExpiringItems.mockResolvedValue({ items: [worklist[2]] });
+    await userEvent.click(screen.getByRole('button', { name: '60d' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /^Expired/ })).not.toBeInTheDocument();
+    });
+  });
+
+  it('narrows to a chip, and a second tap clears it', async () => {
+    await renderPage();
+    await userEvent.click(screen.getByRole('button', { name: 'Used or short 1' }));
+    expect(screen.getByText('Burn sheets')).toBeInTheDocument();
+    expect(screen.queryByText('Road flares')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Used or short 1' }));
+    expect(screen.getByText('Road flares')).toBeInTheDocument();
+  });
+
+  it('groups by apparatus under a heading per rig', async () => {
+    await renderPage();
+    await userEvent.click(screen.getByRole('button', { name: 'By apparatus' }));
+
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
+      'Engine 2 · 1 item',
+      'Medic 1 · 2 items',
+    ]);
+    const medic = screen.getByRole('region', { name: 'Medic 1' });
+    expect(within(medic).getByText('Epinephrine 1mg')).toBeInTheDocument();
+    expect(within(medic).getByText('Road flares')).toBeInTheDocument();
+  });
+
+  it('keeps the ready lots behind a toggle', async () => {
+    await renderPage();
+    expect(screen.queryByText(/L-NEW/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /2 lots/ }));
+    expect(screen.getByText(/L-NEW · 3×/)).toBeInTheDocument();
+    expect(screen.getByText(/L-GONE · 1×.*expired/)).toBeInTheDocument();
+  });
+
+  it('shows what is on the truck now when adding stock', async () => {
+    mockGetSupplyExpiringItems.mockResolvedValue({ items: [expiredItem] });
+    await renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /add stock/i }));
+
+    const sheet = screen.getByRole('dialog', { name: 'Add ready stock' });
+    expect(within(sheet).getByText(/Medic 1 · lot L-OLD · expired Oct 14, 2026/)).toBeInTheDocument();
+    expect(within(sheet).getByLabelText('Quantity')).toHaveValue(1);
   });
 });

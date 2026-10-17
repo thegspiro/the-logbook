@@ -38,7 +38,7 @@ import {
   X,
   ChevronRight,
 } from 'lucide-react';
-import type { ComplianceTaskType, ComplianceTaskStatus, GrantPriority } from '../types';
+import type { ComplianceTaskType, ComplianceTaskStatus, GrantNoteType, GrantPriority } from '../types';
 import {
   APPLICATION_STATUS_COLORS,
   PRIORITY_COLORS,
@@ -46,9 +46,12 @@ import {
   ComplianceTaskType as ComplianceTaskTypeEnum,
   ComplianceTaskStatus as ComplianceTaskStatusEnum,
   GrantPriority as GrantPriorityEnum,
+  GrantNoteType as GrantNoteTypeEnum,
+  BUDGET_ITEM_CATEGORY_LABELS,
 } from '../types';
+import { BUDGET_CATEGORY_ORDER, readBudgetSummary, readKeyContacts } from '../utils/applicationStructuredFields';
 import { useGrantsStore } from '../store/grantsStore';
-import { formatDate } from '../../../utils/dateFormatting';
+import { formatDate, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formatCurrency, formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -100,15 +103,14 @@ const COMPLIANCE_STATUS_LABELS: Record<string, string> = {
   waived: 'Waived',
 };
 
-const NOTE_TYPE_ICONS: Record<string, React.ReactNode> = {
+const NOTE_TYPE_ICONS: Record<GrantNoteType, React.ReactNode> = {
+  general: <MessageSquare className="text-theme-text-secondary h-4 w-4" />,
   status_change: <ChevronRight className="h-4 w-4 text-blue-500" />,
-  document: <FileText className="h-4 w-4 text-indigo-500" />,
-  contact: <Users className="h-4 w-4 text-green-500" />,
+  document_added: <FileText className="h-4 w-4 text-indigo-500" />,
+  contact_made: <Users className="h-4 w-4 text-green-500" />,
   milestone: <Target className="h-4 w-4 text-amber-500" />,
-  comment: <MessageSquare className="text-theme-text-secondary h-4 w-4" />,
-  submission: <Send className="h-4 w-4 text-purple-500" />,
-  review: <Eye className="h-4 w-4 text-cyan-500" />,
   financial: <DollarSign className="h-4 w-4 text-emerald-500" />,
+  compliance: <ClipboardCheck className="h-4 w-4 text-purple-500" />,
 };
 
 const COMPLIANCE_TASK_TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -196,6 +198,10 @@ const getDueDateClasses = (dueDate: string): string => {
 // =============================================================================
 // Main Page Component
 // =============================================================================
+
+// Older rows may hold a free-typed category; show those as stored.
+const budgetCategoryLabel = (category: string): string =>
+  (BUDGET_ITEM_CATEGORY_LABELS as Record<string, string>)[category] ?? category;
 
 export const GrantDetailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -376,7 +382,10 @@ export const GrantDetailPage: React.FC = () => {
     try {
       await updateComplianceTask(id, taskId, {
         status: ComplianceTaskStatusEnum.COMPLETED,
-        completedDate: new Date().toISOString(),
+        // completed_date is a calendar `date` on the backend; a full ISO
+        // timestamp is rejected with a 422, and the UTC date can be a day off
+        // from the department's local date.
+        completedDate: getTodayLocalDate(tz),
       });
       toast.success('Task marked complete');
     } catch {
@@ -399,7 +408,7 @@ export const GrantDetailPage: React.FC = () => {
     setIsSubmittingNote(true);
     try {
       await addGrantNote(id, {
-        noteType: 'comment',
+        noteType: GrantNoteTypeEnum.GENERAL,
         content: newNoteContent.trim(),
       });
       toast.success('Note added');
@@ -446,6 +455,19 @@ export const GrantDetailPage: React.FC = () => {
       </div>
     );
   }
+
+  // Read defensively: both are untyped JSON, and a row written straight
+  // through the API may hold a shape this page cannot render.
+  const storedBudget = readBudgetSummary(application.budgetSummary);
+  const budgetLines = BUDGET_CATEGORY_ORDER.filter((category) => storedBudget.amounts[category] !== '').map(
+    (category) => ({ category, amount: Number(storedBudget.amounts[category]) })
+  );
+  const budgetSummary = {
+    lines: budgetLines,
+    total: budgetLines.reduce((sum, line) => sum + line.amount, 0),
+    notes: storedBudget.notes,
+  };
+  const keyContacts = readKeyContacts(application.keyContacts);
 
   // ---------------------------------------------------------------------------
   // Tab definitions
@@ -640,12 +662,50 @@ export const GrantDetailPage: React.FC = () => {
               </div>
             )}
 
+            {/* Budget summary */}
+            {budgetSummary.lines.length > 0 || budgetSummary.notes ? (
+              <div className="card p-6">
+                <h3 className="text-theme-text-primary text-lg font-semibold">Budget Summary</h3>
+                {budgetSummary.lines.length > 0 && (
+                  <dl className="mt-3 space-y-1 text-sm">
+                    {budgetSummary.lines.map(({ category, amount }) => (
+                      <div key={category} className="flex justify-between gap-4">
+                        <dt className="text-theme-text-secondary">{BUDGET_ITEM_CATEGORY_LABELS[category]}</dt>
+                        <dd className="text-theme-text-primary font-medium">{formatCurrency(amount)}</dd>
+                      </div>
+                    ))}
+                    <div className="border-theme-surface-border flex justify-between gap-4 border-t pt-1">
+                      <dt className="text-theme-text-primary font-semibold">Total</dt>
+                      <dd className="text-theme-text-primary font-semibold">{formatCurrency(budgetSummary.total)}</dd>
+                    </div>
+                  </dl>
+                )}
+                {budgetSummary.notes && (
+                  <p className="text-theme-text-secondary mt-3 text-sm whitespace-pre-wrap">{budgetSummary.notes}</p>
+                )}
+              </div>
+            ) : null}
+
             {/* Key contacts */}
             <div className="card p-6">
               <h3 className="text-theme-text-primary text-lg font-semibold">Key Contacts</h3>
-              <p className="text-theme-text-secondary mt-2 text-sm whitespace-pre-wrap">
-                {application.keyContacts ?? 'No contacts recorded.'}
-              </p>
+              {keyContacts.length === 0 ? (
+                <p className="text-theme-text-secondary mt-2 text-sm">No contacts recorded.</p>
+              ) : (
+                <ul className="mt-2 space-y-2 text-sm">
+                  {keyContacts.map((contact, index) => (
+                    <li key={index}>
+                      <span className="text-theme-text-primary font-medium">{contact.name}</span>
+                      {contact.role && <span className="text-theme-text-secondary">, {contact.role}</span>}
+                      {(contact.phone || contact.email) && (
+                        <div className="text-theme-text-secondary">
+                          {[contact.phone, contact.email].filter(Boolean).join(' · ')}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Key dates timeline */}
@@ -801,7 +861,7 @@ export const GrantDetailPage: React.FC = () => {
                         return (
                           <tr key={item.id}>
                             <td className="text-theme-text-primary px-4 py-3 text-sm font-medium whitespace-nowrap">
-                              {item.category}
+                              {budgetCategoryLabel(item.category)}
                             </td>
                             <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.description}</td>
                             <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
@@ -938,7 +998,7 @@ export const GrantDetailPage: React.FC = () => {
                               {formatCurrency(exp.amount)}
                             </td>
                             <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                              {linkedBudgetItem ? linkedBudgetItem.category : '--'}
+                              {linkedBudgetItem ? budgetCategoryLabel(linkedBudgetItem.category) : '--'}
                             </td>
                             <td className="px-4 py-3 text-sm whitespace-nowrap">
                               {exp.receiptUrl && isSafeExternalUrl(exp.receiptUrl) ? (
@@ -1172,15 +1232,12 @@ export const GrantDetailPage: React.FC = () => {
               className={selectClass}
             >
               <option value="">Select category...</option>
-              <option value="Personnel">Personnel</option>
-              <option value="Equipment">Equipment</option>
-              <option value="Supplies">Supplies</option>
-              <option value="Travel">Travel</option>
-              <option value="Training">Training</option>
-              <option value="Contractual">Contractual</option>
-              <option value="Construction">Construction</option>
-              <option value="Indirect Costs">Indirect Costs</option>
-              <option value="Other">Other</option>
+              {/* The values are the backend's category codes; it refuses the labels. */}
+              {BUDGET_CATEGORY_ORDER.map((category) => (
+                <option key={category} value={category}>
+                  {BUDGET_ITEM_CATEGORY_LABELS[category]}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -1325,7 +1382,7 @@ export const GrantDetailPage: React.FC = () => {
               <option value="">None</option>
               {budgetItems.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.category} - {item.description}
+                  {budgetCategoryLabel(item.category)} - {item.description}
                 </option>
               ))}
             </select>

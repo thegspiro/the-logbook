@@ -159,6 +159,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
     setIsSaving(true);
     try {
       if (isEdit && item) {
+        const quantity = numberOrNull(form.quantity);
         // Update: an emptied box means "clear this", so it must travel as an
         // explicit null. Omitting the key would leave the old value in place
         // behind a success toast. Every field the form owns is sent on every
@@ -171,7 +172,10 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           size: blankToNull(form.size),
           description: blankToNull(form.description),
           manufacturer: blankToNull(form.manufacturer),
-          ...(isLotStocked ? {} : { quantity: numberOrNull(form.quantity) }),
+          // A blank count is omitted, not nulled: a pool item's quantity has
+          // no cleared state (update_item refuses a null one), so an emptied
+          // box keeps the stored count, as ItemFormModal does.
+          ...(isLotStocked || quantity === null ? {} : { quantity }),
           unit_of_measure: blankToNull(form.unit_of_measure),
           reorder_point: numberOrNull(form.reorder_point),
           apparatus_only: form.apparatus_only,

@@ -1,11 +1,20 @@
 /**
- * Google Workspace account helpers for the member profile.
+ * Directory account (Google Workspace, Microsoft 365) helpers for the member
+ * profile.
  */
 
 import { GoogleAccountStatus } from '../../../constants/enums';
 import type { GoogleAccount } from '../types/googleAccount';
 
-export const GOOGLE_WORKSPACE_INTEGRATION = 'google-workspace';
+/** The integrations that give converted members an account; one at a time. */
+export const DIRECTORY_INTEGRATIONS = ['google-workspace', 'microsoft-365'] as const;
+
+const VENDORS: Record<string, string> = { google: 'Google', microsoft: 'Microsoft' };
+
+/** "Google" or "Microsoft", for sentences such as "the Google account". */
+export function directoryVendor(provider: string | undefined): string {
+  return VENDORS[provider ?? ''] ?? 'Google';
+}
 
 const EXISTS_IN_GOOGLE: ReadonlySet<string> = new Set([
   GoogleAccountStatus.CREATED,
@@ -23,7 +32,7 @@ export function retryAction(account: GoogleAccount): 'suspension' | 'create' | '
   }
   if (
     account.status === GoogleAccountStatus.CREATED &&
-    (!account.credentials_sent || account.pending_groups.length > 0)
+    (!account.credentials_sent || account.pending_groups.length > 0 || account.license_pending)
   ) {
     return 'finish';
   }

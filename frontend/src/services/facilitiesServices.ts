@@ -202,16 +202,22 @@ export interface RoomUpdate {
   is_active?: boolean;
 }
 
+/**
+ * Also the update payload (`updateSystem` takes a `Partial` of it). The fields
+ * the edit form owns accept `null` because the backend dumps updates with
+ * `exclude_unset`: omitting a key keeps the stored value, so a clear has to be
+ * sent as `null`.
+ */
 export interface FacilitySystemCreate {
   facility_id: string;
   name: string;
   system_type: string;
-  description?: string;
-  manufacturer?: string;
-  model_number?: string;
-  serial_number?: string;
-  install_date?: string;
-  warranty_expiration?: string;
+  description?: string | null | undefined;
+  manufacturer?: string | null | undefined;
+  model_number?: string | null | undefined;
+  serial_number?: string | null | undefined;
+  install_date?: string | null | undefined;
+  warranty_expiration?: string | null | undefined;
   expected_life_years?: number;
   condition?: string;
   last_tested_date?: string;
@@ -219,8 +225,8 @@ export interface FacilitySystemCreate {
   test_result?: string;
   certification_number?: string;
   certified_by?: string;
-  test_frequency_days?: number;
-  notes?: string;
+  test_frequency_days?: number | null | undefined;
+  notes?: string | null | undefined;
 }
 
 export interface EmergencyContact {

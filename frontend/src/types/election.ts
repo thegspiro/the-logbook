@@ -10,6 +10,8 @@ import type {
   BallotChoice,
   RunoffType,
   QuorumType,
+  BallotSendJobStatus,
+  BallotSendJobKind,
 } from '../constants/enums';
 export type { ElectionStatus, VotingMethod, VictoryCondition, BallotChoice, RunoffType, QuorumType };
 
@@ -443,6 +445,19 @@ export interface EmailBallotResponse {
   skipped_count: number;
   skipped_details: SkippedVoterDetail[];
   message: string;
+}
+
+/** A ballot send or non-voter reminder running in the background; `result` is set once it completes, `error` once it fails. */
+export interface BallotSendJob {
+  id: string;
+  election_id: string;
+  kind: BallotSendJobKind;
+  status: BallotSendJobStatus;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  result: EmailBallotResponse | null;
+  error: string | null;
 }
 
 export interface ElectionDeleteResponse {

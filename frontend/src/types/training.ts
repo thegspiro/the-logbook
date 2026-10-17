@@ -118,6 +118,8 @@ export interface TrainingSessionCreate {
   training_type: TrainingType;
   credit_hours: number;
   instructor?: string | undefined;
+  /** The member teaching it; the backend checks they are in the org and runs qualification checks against them. */
+  instructor_id?: string | undefined;
 
   // Certification
   issues_certification?: boolean | undefined;
@@ -1623,7 +1625,7 @@ export interface ExternalTrainingSyncLog {
   id: string;
   provider_id: string;
   organization_id: string;
-  sync_type: 'full' | 'incremental' | 'manual' | 'review';
+  sync_type: 'full' | 'incremental' | 'manual' | 'review' | 'upload';
   status: SyncStatus;
   started_at: string;
   completed_at?: string;
@@ -1650,6 +1652,7 @@ export interface ExternalTrainingImport {
   course_code?: string;
   description?: string;
   duration_minutes?: number;
+  credit_hours?: number;
   completion_date?: string;
   score?: number;
   passed?: boolean;

@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { PublicPortalAPIKey } from '../types';
 
@@ -128,6 +128,47 @@ describe('APIKeysTab', () => {
       expect(mockCreateAPIKey).toHaveBeenCalledTimes(1);
       const payload = JSON.parse(JSON.stringify(mockCreateAPIKey.mock.calls[0]?.[0])) as Record<string, unknown>;
       expect(payload).toStrictEqual({ name: 'Website two' });
+    });
+
+    it('sends no expiry when a picked expiration date is cleared again', async () => {
+      const user = userEvent.setup();
+      await renderTab();
+
+      const dialog = await openCreateDialog(user);
+      await user.type(within(dialog).getByLabelText(/Key Name/), 'Kiosk two');
+      const dateInput = within(dialog).getByLabelText('Expiration Date');
+      fireEvent.change(dateInput, { target: { value: '2027-01-15' } });
+      fireEvent.change(dateInput, { target: { value: '' } });
+      await user.click(within(dialog).getByRole('button', { name: 'Create API Key' }));
+
+      expect(mockCreateAPIKey).toHaveBeenCalledTimes(1);
+      const payload = JSON.parse(JSON.stringify(mockCreateAPIKey.mock.calls[0]?.[0])) as Record<string, unknown>;
+      expect(payload).toStrictEqual({ name: 'Kiosk two' });
+    });
+
+    it('sends the name trimmed', async () => {
+      const user = userEvent.setup();
+      await renderTab();
+
+      const dialog = await openCreateDialog(user);
+      await user.type(within(dialog).getByLabelText(/Key Name/), '  Station sign  ');
+      await user.click(within(dialog).getByRole('button', { name: 'Create API Key' }));
+
+      expect(mockCreateAPIKey).toHaveBeenCalledTimes(1);
+      const payload = JSON.parse(JSON.stringify(mockCreateAPIKey.mock.calls[0]?.[0])) as Record<string, unknown>;
+      expect(payload).toStrictEqual({ name: 'Station sign' });
+    });
+
+    it('refuses a name made only of spaces', async () => {
+      const user = userEvent.setup();
+      await renderTab();
+
+      const dialog = await openCreateDialog(user);
+      await user.type(within(dialog).getByLabelText(/Key Name/), '   ');
+      await user.click(within(dialog).getByRole('button', { name: 'Create API Key' }));
+
+      expect(mockCreateAPIKey).not.toHaveBeenCalled();
+      expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter a name for the key.');
     });
   });
 });

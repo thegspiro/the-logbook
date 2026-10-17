@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -271,5 +271,91 @@ describe('TemplateFormModal field names', () => {
     expect(screen.getByRole('combobox', { name: 'Position 1' })).toHaveValue('officer');
     expect(screen.getByRole('combobox', { name: 'Position 2' })).toHaveValue('driver');
     expect(screen.getByRole('checkbox', { name: 'Administrative access, position 2' })).not.toBeChecked();
+  });
+});
+
+describe('TemplateFormModal clearing fields on edit', () => {
+  const vehicles = [
+    { id: 'app-1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine', source: 'apparatus' as const },
+  ];
+  const stored = {
+    ...emptyTemplateForm,
+    name: 'Day Shift',
+    description: 'Station 1 day crew',
+    apparatus_type: 'engine',
+    apparatus_id: 'app-1',
+  };
+  const onSubmit = vi.fn<(data: Record<string, unknown>) => Promise<void>>();
+
+  beforeEach(() => {
+    onSubmit.mockReset();
+    onSubmit.mockResolvedValue(undefined);
+  });
+
+  const renderEdit = () =>
+    renderWithRouter(
+      <TemplateFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        title="Edit Template"
+        apparatusOptions={vehicles}
+        apparatusSource="apparatus"
+        initialData={stored}
+      />
+    );
+
+  it('sends null for a cleared description and vehicle, so the clear persists', async () => {
+    // The update endpoint reads exclude_unset: an omitted key keeps the stored
+    // value, so a template unlinked from its rig stayed linked after save.
+    const user = userEvent.setup();
+    renderEdit();
+
+    await user.clear(screen.getByLabelText('Description'));
+    await user.selectOptions(screen.getByLabelText(/^Vehicle/), '');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ description: null, apparatus_type: null, apparatus_id: null })
+    );
+  });
+
+  it('drops the vehicle id as well as the type when the category becomes Event', async () => {
+    // The event category hides the vehicle picker and used to blank only the
+    // type, leaving the event template bound to Engine 1 by id.
+    const user = userEvent.setup();
+    renderEdit();
+
+    await user.click(screen.getByRole('button', { name: /Event \/ Special/ }));
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ category: 'event', apparatus_type: null, apparatus_id: null })
+    );
+  });
+
+  it('omits blank optional fields when creating', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <TemplateFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        title="Create Template"
+        apparatusOptions={vehicles}
+        apparatusSource="apparatus"
+      />
+    );
+
+    await user.type(screen.getByLabelText(/^Name/), 'Night Shift');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const payload = onSubmit.mock.calls[0]?.[0] ?? {};
+    expect(payload.description).toBeUndefined();
+    expect(payload.apparatus_type).toBeUndefined();
+    expect(payload.apparatus_id).toBeUndefined();
   });
 });

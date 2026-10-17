@@ -55,6 +55,13 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
   }, [value]);
 
   const handleDateChange = (newDate: string) => {
+    // Clearing the date clears the value. Keeping the time would emit "T09:00",
+    // which is truthy, so an optional field (an API key's expiry, an attendance
+    // request's arrival time) read as filled and was sent as a 1900 instant.
+    if (!newDate) {
+      onChange('');
+      return;
+    }
     const time = timePart || '09:00';
     onChange(`${newDate}T${time}`);
   };

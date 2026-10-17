@@ -263,4 +263,5 @@ export type {
   SalesforceSyncResult,
   CalcomBooking,
   GoogleWorkspaceLinkResult,
+  GoogleWorkspaceAttentionItem,
 } from './adminServices';

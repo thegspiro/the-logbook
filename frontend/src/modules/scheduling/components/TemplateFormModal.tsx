@@ -3,6 +3,7 @@ import { useDialog } from '../../../hooks/useDialog';
 import toast from 'react-hot-toast';
 import { enumLabel } from '../../../utils/displayValue';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { formCoercions } from '../../../utils/formValues';
 import { X, Truck, Users, Plus, Minus, Copy, PartyPopper, Check, ClipboardCheck } from 'lucide-react';
 import type { ApparatusOption } from '../services/api';
 import { useEnabledModules } from '../../../hooks/useEnabledModules';
@@ -255,10 +256,15 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
         positions: effectivePositions.length > 0 ? effectivePositions : null,
         category: formData.category,
       };
-      if (formData.description) payload.description = formData.description;
+      // On edit (the modal handed a template to start from) a cleared field is
+      // sent as null: the update endpoint reads exclude_unset, so an omitted
+      // key keeps the stored description or vehicle (CLAUDE.md pitfall #1).
+      // Color stays omit-when-blank — the picker has no "none" choice.
+      const { text, pick } = formCoercions(initialData !== undefined);
+      payload.description = text(formData.description);
       if (formData.color) payload.color = formData.color;
-      if (formData.apparatus_type) payload.apparatus_type = formData.apparatus_type;
-      if (formData.apparatus_id) payload.apparatus_id = formData.apparatus_id;
+      payload.apparatus_type = pick(formData.apparatus_type);
+      payload.apparatus_id = pick(formData.apparatus_id);
       // Sent unconditionally, including when empty. This is an update payload
       // read with exclude_unset, so omitting the key means "leave the links
       // alone" — an officer who unticked every checklist would get a success
@@ -367,7 +373,11 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                         setFormData((prev) => ({
                           ...prev,
                           category: cat.value,
+                          // An event template has no vehicle picker, so both
+                          // halves of the vehicle link go — clearing only the
+                          // type left the event still bound to a rig by id.
                           apparatus_type: cat.value === 'event' ? '' : prev.apparatus_type,
+                          apparatus_id: cat.value === 'event' ? '' : prev.apparatus_id,
                         }));
                       }}
                       className={`rounded-lg border p-2.5 text-left transition-colors ${

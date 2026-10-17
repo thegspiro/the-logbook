@@ -132,13 +132,30 @@ Integration](Integration-Salesforce#service-account-client-credentials).
 
 ### Calendar Publishing
 
-| Variable                | Description                                                                                                 | Default |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------- | ------- |
-| `CALENDAR_SYNC_ENABLED` | Lets the Google Calendar and Microsoft Outlook integration cards be connected; off, both read "Coming Soon" | `false` |
+| Variable                          | Description                                                                                                                            | Default |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `CALENDAR_SYNC_ENABLED`           | Lets the Google Calendar and Microsoft Outlook integration cards be connected; off, both read "Coming Soon"                            | `false` |
+| `GOOGLE_CALENDAR_REDIRECT_URI`    | Callback URL for **Connect with Google** (`.../api/v1/integrations/google-calendar/oauth/callback`); blank derives it from the request | —       |
+| `MICROSOFT_CALENDAR_REDIRECT_URI` | Callback URL for **Connect with Microsoft** (`.../api/v1/integrations/outlook/oauth/callback`); blank derives it from the request      | —       |
 
-One-way publishing of events to those calendars is not built yet, so turning
-this on only makes the two cards connectable; leave it off. The department
-iCalendar (ICS) feed does not depend on it.
+With it on, an administrator connects **Google Calendar** with **Connect with
+Google**: The Logbook creates a "<Department> Events" calendar in that Google
+account and the `calendar_sync` task publishes department events to it every
+five minutes, one way. The sign-in uses `GOOGLE_CLIENT_ID` /
+`GOOGLE_CLIENT_SECRET` (below) unless the department saved its own client ID
+and secret on the integration; the OAuth client needs the Google Calendar API
+enabled and the callback URL registered as an authorized redirect URI.
+**Microsoft Outlook** connects the same way with **Connect with Microsoft**,
+using the `AZURE_AD_CLIENT_ID` / `AZURE_AD_CLIENT_SECRET` app (below) and
+`AZURE_AD_TENANT_ID` (any work or school account when unset), unless the
+department saved its own client ID, secret and tenant ID on the integration.
+The app needs the delegated Microsoft Graph permission `Calendars.ReadWrite`
+and the callback URL registered as a **Web** redirect URI; `AZURE_AD_ENABLED`
+is not required. The department iCalendar (ICS) feed does not depend on this
+setting. See the Integrations guide's
+[Google Calendar](../docs/training/16-integrations.md#google-calendar) and
+[Microsoft Outlook](../docs/training/16-integrations.md#microsoft-outlook)
+sections.
 
 ---
 
@@ -383,27 +400,27 @@ Each provider is fully disabled until its `*_ENABLED` flag is
 `/api/v1/auth/oauth/{provider}` routes return `404`. See
 [Authentication > OAuth](Security-Authentication#oauth).
 
-| Variable                    | Description                                                     | Default          |
-| --------------------------- | --------------------------------------------------------------- | ---------------- |
-| `GOOGLE_OAUTH_ENABLED`      | Enable "Sign in with Google"                                    | `false`          |
-| `GOOGLE_CLIENT_ID`          | Google OAuth client ID                                          | —                |
-| `GOOGLE_CLIENT_SECRET`      | Google OAuth client secret                                      | —                |
-| `GOOGLE_REDIRECT_URI`       | Callback URL (`.../api/v1/auth/oauth/google/callback`)          | —                |
-| `GOOGLE_ALLOWED_DOMAINS`    | Comma-separated email domain allowlist (empty = no restriction) | `""`             |
-| `AZURE_AD_ENABLED`          | Enable "Sign in with Microsoft" (Azure AD)                      | `false`          |
-| `AZURE_AD_TENANT_ID`        | Azure AD tenant GUID (single-tenant lock)                       | —                |
-| `AZURE_AD_CLIENT_ID`        | Azure AD application (client) ID                                | —                |
-| `AZURE_AD_CLIENT_SECRET`    | Azure AD client secret                                          | —                |
-| `AZURE_AD_REDIRECT_URI`     | Callback URL (`.../api/v1/auth/oauth/microsoft/callback`)       | —                |
-| `AZURE_AD_ALLOWED_DOMAINS`  | Comma-separated email domain allowlist (empty = no restriction) | `""`             |
-| `AUTHENTIK_ENABLED`         | Enable "Authentik SSO"                                          | `false`          |
-| `AUTHENTIK_ISSUER_URL`      | Provider issuer, e.g. `https://auth.x/application/o/<slug>/`    | —                |
-| `AUTHENTIK_CLIENT_ID`       | Authentik provider client ID                                    | —                |
-| `AUTHENTIK_CLIENT_SECRET`   | Authentik provider client secret                                | —                |
-| `AUTHENTIK_REDIRECT_URI`    | Callback URL (`.../api/v1/auth/oauth/authentik/callback`)       | —                |
-| `AUTHENTIK_ALLOWED_DOMAINS` | Comma-separated email domain allowlist (empty = no restriction) | `""`             |
-| `OAUTH_SUCCESS_REDIRECT`    | SPA landing page after successful sign-in                       | `/auth/callback` |
-| `OAUTH_FAILURE_REDIRECT`    | Redirect (with `?error=<code>`) on sign-in failure              | `/login`         |
+| Variable                    | Description                                                                           | Default          |
+| --------------------------- | ------------------------------------------------------------------------------------- | ---------------- |
+| `GOOGLE_OAUTH_ENABLED`      | Enable "Sign in with Google"                                                          | `false`          |
+| `GOOGLE_CLIENT_ID`          | Google OAuth client ID (also used by Connect with Google on the Google Calendar card) | —                |
+| `GOOGLE_CLIENT_SECRET`      | Google OAuth client secret                                                            | —                |
+| `GOOGLE_REDIRECT_URI`       | Callback URL (`.../api/v1/auth/oauth/google/callback`)                                | —                |
+| `GOOGLE_ALLOWED_DOMAINS`    | Comma-separated email domain allowlist (empty = no restriction)                       | `""`             |
+| `AZURE_AD_ENABLED`          | Enable "Sign in with Microsoft" (Azure AD)                                            | `false`          |
+| `AZURE_AD_TENANT_ID`        | Azure AD tenant GUID (single-tenant lock)                                             | —                |
+| `AZURE_AD_CLIENT_ID`        | Azure AD application (client) ID                                                      | —                |
+| `AZURE_AD_CLIENT_SECRET`    | Azure AD client secret                                                                | —                |
+| `AZURE_AD_REDIRECT_URI`     | Callback URL (`.../api/v1/auth/oauth/microsoft/callback`)                             | —                |
+| `AZURE_AD_ALLOWED_DOMAINS`  | Comma-separated email domain allowlist (empty = no restriction)                       | `""`             |
+| `AUTHENTIK_ENABLED`         | Enable "Authentik SSO"                                                                | `false`          |
+| `AUTHENTIK_ISSUER_URL`      | Provider issuer, e.g. `https://auth.x/application/o/<slug>/`                          | —                |
+| `AUTHENTIK_CLIENT_ID`       | Authentik provider client ID                                                          | —                |
+| `AUTHENTIK_CLIENT_SECRET`   | Authentik provider client secret                                                      | —                |
+| `AUTHENTIK_REDIRECT_URI`    | Callback URL (`.../api/v1/auth/oauth/authentik/callback`)                             | —                |
+| `AUTHENTIK_ALLOWED_DOMAINS` | Comma-separated email domain allowlist (empty = no restriction)                       | `""`             |
+| `OAUTH_SUCCESS_REDIRECT`    | SPA landing page after successful sign-in                                             | `/auth/callback` |
+| `OAUTH_FAILURE_REDIRECT`    | Redirect (with `?error=<code>`) on sign-in failure                                    | `/login`         |
 
 > **Link-existing-only:** OAuth never creates accounts. The verified IdP email
 > must match an existing, active local user.
