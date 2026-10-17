@@ -16,25 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. PR #3379 (Feature 29, Reports & analytics, pass 9) merged — it hit a
-merge conflict (a forked Alembic chain against the meeting-agenda-items
-feature that landed on `main` while it sat open) and a watchdog session
-resolved it (regenerated `docs/DATABASE_SCHEMA.md`, added merge revision
-`1117b642643b`) and merged it once CI was green; already recorded in that
-PR's own history above.
+None. PR #3381 (Feature 30, Onboarding, pass 7) merged 2026-10-17 ~20:45 UTC
+clean; already recorded in that PR's own history below.
 
 This iteration (a watchdog pickup — no `claude/security-review-*` PR was
-open, confirmed via `list_pull_requests`) reviewed Feature 30 (Onboarding),
-pass 7. 0 fixes needed, 0 new findings: the real delta since pass 6
-(`16766f61`) is a new required onboarding step (encryption-key custody
-confirmation, `encryption_key_custody` table + its own authenticated
-counterpart under `/system-notices`), malware scanning added to all three
-onboarding logo-upload paths, and three independently-landed, already
-owner-decided fixes (ONB-7's permission allowlist/priority clamp, ONB2-30-8's
-24-hour session ceiling, ONB-30-3's uniform SMTP failure messages) — all
-re-verified against current code rather than taken on `KNOWN_LIMITATIONS.md`'s
-own say-so. See `ONB5-30-onboarding.md`'s **Pass 7** section. Row 30 → ✅
-(pending this PR's merge); next is Feature 31 (Scheduled tasks).
+open, confirmed via `list_pull_requests` — the dedicated `/loop 30m
+/security-review` session was not reachable) reviewed Feature 31 (Scheduled
+tasks), pass 7. 0 fixes needed, 0 new findings: the real delta since pass 6
+(`c2fc7935`, PR #3005) is 14 new task runners delegating into 10 new service
+modules (training-requirement deadlines, minutes action-item reminders, an
+admin-only-folder digest, a membership auto-purge reader for a setting stored
+since pitfall #19, an audit-chain-seal backstop, a message-delivery retry
+sweep, compliance member notices, scheduled saved-report delivery, budget and
+grant reminder emails, a public-portal access-log pruner, and a calendar-push
+reconciler), plus a correctness fix landing as ordinary engineering work: the
+shared `_for_each_org` org-loop helper (and 9 of the file's inline copies) now
+refresh an `Organization` row a prior org's rollback expired, closing a
+MissingGreenlet class that would otherwise have turned one bad org into every
+later org failing too. One previously-flagged finding (CRON2-31-13, no audit
+trail on admin-hours auto-close, open since pass 2) turned out already fixed
+independently (`265a26be`, 2026-10-14) and was re-verified, not re-applied.
+Three standing flags (CRON-31-8, CRON4-31-2, the app-review CRON-4)
+re-confirmed unchanged. Two of the new runners' service modules
+(`google_workspace_attention_digest.py`, `directory_account_service.py`) were
+already reviewed in INT-27 (Integrations) pass 7, which merged after both
+files' last edit — not re-read. See `CRON7-31-scheduled-tasks.md`. Row 31 → ✅
+(pending this PR's merge); next is Feature 32 (Locations & kiosk).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security audit & IP, pass 7, PR #3376, merged), preserved for history</summary>
@@ -19776,7 +19783,7 @@ here.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
