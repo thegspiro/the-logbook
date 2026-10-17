@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import {
   DEMO_CREDENTIALS,
   DEMO_FORWARDEE_CREDENTIALS,
+  DEMO_GEARLESS_CREDENTIALS,
   DEMO_MEMBER_CREDENTIALS,
   DEMO_SECRETARY_CREDENTIALS,
   SHOTS,
@@ -495,6 +496,11 @@ function makeSessions(browser, baseOptions) {
         // Reaches one suggestion through a forward and reviews no box, so the
         // Review tab shows what a forward recipient sees and nothing more.
         await login(page, DEMO_FORWARDEE_CREDENTIALS);
+      } else if (auth === "gearless") {
+        // Holds nothing, borrows nothing and has asked for nothing, so My
+        // Issued Gear shows a member's empty page rather than the demo
+        // member's full one.
+        await login(page, DEMO_GEARLESS_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }
@@ -774,7 +780,9 @@ async function main() {
         throw new Error("page hit the ErrorBoundary — the app crashed here");
       }
       const pageError = await detectPageError(page);
-      if (pageError) {
+      // `allowPageError` names one exact phrase the pattern mistakes for an
+      // error on that screen; anything else it matches still fails the shot.
+      if (pageError && pageError !== shot.allowPageError) {
         throw new Error(`page rendered an error: "${pageError}"`);
       }
       const overflow = await detectHorizontalOverflow(page);

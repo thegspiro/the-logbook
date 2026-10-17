@@ -569,6 +569,22 @@ def items(result: Any, *keys: str) -> list[dict]:
     return []
 
 
+def flatten_storage_areas(result: Any) -> list[dict]:
+    """Every storage area, nested ones included.
+
+    The list endpoint returns the top level only, with each area's children
+    nested under ``children``; a lookup by name over the bare list misses every
+    shelf inside a cabinet and creates it again on the next run.
+    """
+    flat: list[dict] = []
+    pending = list(items(result, "storage_areas"))
+    while pending:
+        area = pending.pop(0)
+        flat.append(area)
+        pending.extend(area.get("children") or [])
+    return flat
+
+
 def pick(record: dict, *names: str) -> Any:
     for name in names:
         if name in record:
@@ -4690,7 +4706,8 @@ class Seeder:
                 # becomes an issuance, an individual one a checkout — and the
                 # request then carries a reference to whichever it made.
                 self.api.put(
-                    f"/inventory/requests/{request_id}/fulfill", {"quantity": 1}
+                    f"/inventory/requests/{request_id}/fulfill",
+                    {"fulfillment_type": request_type, "quantity": 1},
                 )
             created.append(request)
         return {"requests": created}
@@ -5134,12 +5151,22 @@ class Seeder:
         )
         if not room_id:
             return None, None
-        areas = items(self.api.get("/inventory/storage-areas"), "storage_areas")
+        areas = flatten_storage_areas(self.api.get("/inventory/storage-areas"))
 
         def find(name: str) -> str | None:
             return next((pick(a, "id") for a in areas if pick(a, "name") == name), None)
 
         cabinet_id = find(self.MEDICAL_CABINET)
+        # Earlier runs looked the shelf up over the top level only, missed it
+        # inside the cabinet, and made another each time. Drop the empty
+        # copies; the one holding supplies stays.
+        shelves = [a for a in areas if pick(a, "name") == self.MEDICAL_SHELF]
+        if len(shelves) > 1:
+            keep = max(shelves, key=lambda a: pick(a, "item_count") or 0)
+            for extra in shelves:
+                if extra is not keep and not pick(extra, "item_count"):
+                    self.api.delete(f"/inventory/storage-areas/{pick(extra, 'id')}")
+            areas = [a for a in areas if a is keep or a not in shelves]
         if not cabinet_id:
             cabinet_id = pick(
                 self.api.post(
@@ -14395,6 +14422,352 @@ class Seeder:
             return
         self.api.patch(f"/inventory/items/{pick(coat, 'id')}", {"quantity": 0})
 
+    # -- guide 05: states the inventory guide's later screenshots picture ----
+
+    # A shelf nested inside the Quartermaster Shelving, so that area holds both
+    # items and another area (what the Delete dialog refuses on), and so the
+    # NFC shots have a small shelf with two known items on it.
+    GUIDE05_PARENT_AREA = "Quartermaster Shelving"
+    GUIDE05_SHELF = "Top Shelf"
+    GUIDE05_SHELF_ITEMS = ("Structural Coat — M", "Structural Coat — S")
+    # Tag serials are invented and only ever shown as their last four
+    # characters. The first is the one the NFC shots type.
+    GUIDE05_TAGS = (
+        ("Structural Coat — M", "04C3A91F2B6E80", "Inside left cuff", False),
+        ("Structural Coat — M", "04D7752E8A1F33", "Collar", True),
+        ("Structural Coat — S", "04A9C3E5F70B12", "Inside right cuff", False),
+        ("SCBA Spare Cylinder", "04E1186C3D9A57", "Valve guard", False),
+    )
+    GUIDE05_POOL_ITEM = "Firefighting Gloves"
+    GUIDE05_POOL_HOLDERS = ((DEMO_MEMBER_USERNAME, 2), ("rduarte", 1), ("vbrennan", 2))
+    # The member with nothing issued, lent or requested. Their shirt size on
+    # file is one the department never stocks the polo in, which is what makes
+    # the request form offer it as "not stocked".
+    GEARLESS_MEMBER_USERNAME = "dokonkwo"
+    GUIDE05_UNSTOCKED_PRODUCT = "Department Polo"
+    GUIDE05_UNSTOCKED_SIZE = "XXL"
+    GUIDE05_REORDER_NAME = "Rescue Rope, 150 ft"
+
+    def seed_guide05_states(self) -> None:
+        """Records the second batch of guide-05 screenshots picture.
+
+        Each part is idempotent on the state it makes rather than on a marker,
+        so a re-run adds nothing. NFC tracking has to be on for the tag, tap
+        and audit calls, and is switched back off at the end: the demo ships
+        with it off, as the guide says a department does.
+        """
+        catalog = items(self.api.get("/inventory/items?limit=500"), "items")
+        by_name = {pick(i, "name"): i for i in catalog}
+
+        shelf_id = self._guide05_shelf()
+        self.api.patch(
+            "/organization/settings", {"inventory": {"nfc_tracking_enabled": True}}
+        )
+        try:
+            if shelf_id:
+                self._guide05_nfc(shelf_id, by_name)
+        finally:
+            self.api.patch(
+                "/organization/settings",
+                {"inventory": {"nfc_tracking_enabled": False}},
+            )
+        self._guide05_pool_issuances(by_name)
+        self._guide05_requests(by_name)
+        self._guide05_gearless_member()
+        self._guide05_unlinked_order()
+
+    def _guide05_shelf(self) -> str | None:
+        areas = flatten_storage_areas(self.api.get("/inventory/storage-areas"))
+        parent = next(
+            (a for a in areas if pick(a, "name") == self.GUIDE05_PARENT_AREA), None
+        )
+        if parent is None:
+            return None
+        shelf = next(
+            (
+                a
+                for a in areas
+                if pick(a, "name") == self.GUIDE05_SHELF
+                and pick(a, "parent_id") == pick(parent, "id")
+            ),
+            None,
+        )
+        if shelf is None:
+            shelf = self.api.post(
+                "/inventory/storage-areas",
+                {
+                    "name": self.GUIDE05_SHELF,
+                    "label": "QM-01-T",
+                    "storage_type": "shelf",
+                    "parent_id": pick(parent, "id"),
+                    "location_id": pick(parent, "location_id"),
+                },
+            )
+        return pick(shelf, "id")
+
+    def _guide05_nfc(self, shelf_id: str, by_name: dict[str, dict]) -> None:
+        # Put away by tap, so each coat's Last Seen reads "Moved from Turnout
+        # Gear Racks to Top Shelf" rather than nothing.
+        for name in self.GUIDE05_SHELF_ITEMS:
+            item = by_name.get(name)
+            if item and pick(item, "storage_area_id") != shelf_id:
+                self.api.post(
+                    "/inventory/nfc/put-away",
+                    {"item_id": pick(item, "id"), "storage_area_id": shelf_id},
+                )
+
+        for name, serial, label, lost in self.GUIDE05_TAGS:
+            item = by_name.get(name)
+            if item is None:
+                continue
+            item_id = pick(item, "id")
+            tags = items(self.api.get(f"/inventory/items/{item_id}/nfc-tags"), "items")
+            if any(pick(t, "label") == label for t in tags):
+                continue
+            tag = self.api.post(
+                f"/inventory/items/{item_id}/nfc-tags",
+                {"tag_uid": serial, "credential_type": "serial", "label": label},
+            )
+            if lost:
+                self.api.patch(
+                    f"/inventory/nfc-tags/{pick(tag, 'id')}", {"status": "lost"}
+                )
+
+        # One saved audit of the shelf, so the coat's Last Seen also carries a
+        # "Found on Top Shelf during a shelf audit" row and the shelf reads as
+        # audited on the schedule.
+        audits = items(self.api.get("/inventory/nfc/audits"), "items", "audits")
+        if not any(pick(a, "storage_area_id") == shelf_id for a in audits):
+            coat = by_name.get(self.GUIDE05_SHELF_ITEMS[0])
+            if coat:
+                self.api.post(
+                    "/inventory/nfc/audits",
+                    {
+                        "storage_area_id": shelf_id,
+                        "tapped": [{"item_id": pick(coat, "id")}],
+                    },
+                )
+
+        # On the schedule: the audited shelf monthly (next due in a month), and
+        # the never-audited Uniform Bins quarterly (due now).
+        areas = flatten_storage_areas(self.api.get("/inventory/storage-areas"))
+        bins = next((a for a in areas if pick(a, "name") == "Uniform Bins"), None)
+        for area_id, frequency in (
+            (shelf_id, "monthly"),
+            (pick(bins or {}, "id"), "quarterly"),
+        ):
+            if area_id:
+                self.api.put(
+                    f"/inventory/storage-areas/{area_id}/audit-schedule",
+                    {"audit_frequency": frequency},
+                )
+
+    def _guide05_pool_issuances(self, by_name: dict[str, dict]) -> None:
+        """Gloves issued to three members, and a return notice for two pairs."""
+        gloves = by_name.get(self.GUIDE05_POOL_ITEM)
+        if gloves is None:
+            return
+        item_id = pick(gloves, "id")
+        issuances = self.api.get(f"/inventory/items/{item_id}/issuances") or []
+        holders = {
+            str(pick(i, "user_id")): i for i in issuances if not pick(i, "returned_at")
+        }
+        member_issuance = None
+        for username, quantity in self.GUIDE05_POOL_HOLDERS:
+            user_id = self._user_id(username)
+            if not user_id:
+                continue
+            issuance = holders.get(user_id)
+            if issuance is None:
+                issuance = self.api.post(
+                    f"/inventory/items/{item_id}/issue",
+                    {
+                        "user_id": user_id,
+                        "quantity": quantity,
+                        "issue_reason": "Replacement pairs",
+                        "override_allowance": True,
+                    },
+                )
+            if username == DEMO_MEMBER_USERNAME:
+                member_issuance = issuance
+        if member_issuance is None:
+            return
+
+        open_returns = items(
+            self.api.get("/inventory/return-requests?status=requested"), "items"
+        )
+        if any(pick(r, "item_id") == item_id for r in open_returns):
+            return
+        member = self.member_session(
+            self.base_url, self._user_id(DEMO_MEMBER_USERNAME), DEMO_MEMBER_USERNAME
+        )
+        member.post(
+            "/inventory/return-requests",
+            {
+                "return_type": "issuance",
+                "item_id": item_id,
+                "issuance_id": pick(member_issuance, "id"),
+                "quantity_returning": 2,
+                "reported_condition": "good",
+                "member_notes": "Both pairs are worn through at the palm.",
+            },
+        )
+
+    def _guide05_requests(self, by_name: dict[str, dict]) -> None:
+        """The demo member's requests: one issued, one declined with a note,
+        and one awaiting review for a size the department does not stock."""
+        existing = items(self.api.get("/inventory/requests?limit=200"), "requests")
+        names = {pick(r, "item_name") for r in existing}
+        member = None
+
+        def session() -> Api:
+            nonlocal member
+            if member is None:
+                member = self.member_session(
+                    self.base_url,
+                    self._user_id(DEMO_MEMBER_USERNAME),
+                    DEMO_MEMBER_USERNAME,
+                )
+            return member
+
+        shirt = by_name.get("Job Shirt")
+        if shirt and "Job Shirt" not in names:
+            request = session().post(
+                "/inventory/requests",
+                {
+                    "item_name": "Job Shirt",
+                    "item_id": pick(shirt, "id"),
+                    "quantity": 1,
+                    "requested_duration": "ongoing",
+                    "priority": "normal",
+                    "reason": "My only job shirt tore on the ladder drill.",
+                },
+            )
+            request_id = pick(request, "id")
+            self.api.put(
+                f"/inventory/requests/{request_id}/review",
+                {"status": "approved", "review_notes": "Issued from stock."},
+            )
+            self.api.put(
+                f"/inventory/requests/{request_id}/fulfill",
+                {
+                    "fulfillment_type": "issuance",
+                    "quantity": 1,
+                    "override_allowance": True,
+                },
+            )
+
+        gloves = by_name.get(self.GUIDE05_POOL_ITEM)
+        if gloves and self.GUIDE05_POOL_ITEM not in names:
+            request = session().post(
+                "/inventory/requests",
+                {
+                    "item_name": self.GUIDE05_POOL_ITEM,
+                    "item_id": pick(gloves, "id"),
+                    "quantity": 1,
+                    "requested_duration": "ongoing",
+                    "priority": "normal",
+                    "reason": "A spare pair for the car.",
+                },
+            )
+            self.api.put(
+                f"/inventory/requests/{pick(request, 'id')}/review",
+                {
+                    "status": "denied",
+                    "review_notes": (
+                        "Two pairs are already issued to you. Bring a worn pair "
+                        "in and we will swap it."
+                    ),
+                },
+            )
+
+        polo = next(
+            (
+                i
+                for name, i in by_name.items()
+                if (name or "").startswith(self.GUIDE05_UNSTOCKED_PRODUCT)
+            ),
+            None,
+        )
+        if polo and self.GUIDE05_UNSTOCKED_PRODUCT not in names:
+            session().post(
+                "/inventory/requests",
+                {
+                    "item_name": self.GUIDE05_UNSTOCKED_PRODUCT,
+                    "category_id": pick(polo, "category_id"),
+                    "quantity": 1,
+                    "requested_duration": "ongoing",
+                    "priority": "normal",
+                    "requested_size": self.GUIDE05_UNSTOCKED_SIZE,
+                    "reason": "For the open house next month.",
+                },
+            )
+
+    def _guide05_gearless_member(self) -> None:
+        """Sign the gearless member in once, and give them an unstocked size.
+
+        The session is what clears the must-change-password flag every created
+        account carries, so the capture can sign in as them.
+        """
+        user_id = self._user_id(self.GEARLESS_MEMBER_USERNAME)
+        if not user_id:
+            return
+        self.member_session(self.base_url, user_id, self.GEARLESS_MEMBER_USERNAME)
+        prefs = {}
+        try:
+            prefs = self.api.get(f"/inventory/members/{user_id}/size-preferences") or {}
+        except ApiError as exc:
+            if exc.code != 404:
+                raise
+        if pick(prefs, "shirt_size") == self.GUIDE05_UNSTOCKED_SIZE.lower():
+            return
+        self.api.call(
+            "PUT",
+            f"/inventory/members/{user_id}/size-preferences",
+            {
+                "shirt_size": self.GUIDE05_UNSTOCKED_SIZE.lower(),
+                "shirt_style": "polo",
+                "jacket_size": "m",
+                "glove_size": "m",
+                "boot_size": "8",
+                "boot_width": "D",
+                "hat_size": "7",
+            },
+        )
+
+    def _guide05_unlinked_order(self) -> None:
+        """A reorder placed with the vendor but never linked to an item."""
+        existing = items(self.api.get("/inventory/reorder-requests"), "requests")
+        if any(pick(r, "item_name") == self.GUIDE05_REORDER_NAME for r in existing):
+            return
+        order = self.api.post(
+            "/inventory/reorder-requests",
+            {
+                "item_name": self.GUIDE05_REORDER_NAME,
+                "quantity_requested": 2,
+                "vendor": "Allegheny Rescue Supply",
+                "estimated_unit_cost": "189.00",
+                "urgency": "normal",
+                "notes": "Replacing the two ropes retired after the annual inspection.",
+            },
+        )
+        for action in ("approve", "mark_ordered"):
+            order = self.api.post(
+                f"/inventory/reorder-requests/{pick(order, 'id')}/transition",
+                {
+                    "action": action,
+                    "expected_version": pick(order, "version") or 1,
+                    **(
+                        {
+                            "vendor": "Allegheny Rescue Supply",
+                            "purchase_order_number": "PO-2026-0418",
+                        }
+                        if action == "mark_ordered"
+                        else {}
+                    ),
+                },
+            )
+
     def seed_meeting_stage_applicant(self) -> None:
         pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
         pipeline = next(
@@ -16923,6 +17296,9 @@ class Seeder:
         self.step("photo consent", self.seed_photo_consent)
         self.step("waitlisted event", self.seed_waitlisted_event)
         self.step("out-of-stock size", self.seed_out_of_stock_size)
+        # Last: it parks two coats on a new shelf and issues gloves, which no
+        # earlier step expects to find moved or issued.
+        self.step("guide 05 states", self.seed_guide05_states)
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

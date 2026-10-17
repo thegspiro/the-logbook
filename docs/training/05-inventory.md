@@ -377,9 +377,7 @@ Every item is tracked one of two ways:
 > (pool). The line under **Tracking Type** on the item form describes the one
 > you picked.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/pool: one pool card with Issuances expanded, showing two or three holders by name, each reading "<member> N · issued <date>" with its Return button. Use demo members only.]_
--->
+![The Firefighting Gloves pool card with Issuances open: its on-hand and issued counts, and three members holding pairs, each with the count, the date issued and a Return button](./images/05-94-pool-issuances.png)
 
 ### Reading the stock numbers
 
@@ -862,13 +860,9 @@ Damaged units of a pool return are kept out of the stock you can issue. A
 write-off is not offered for a pool return, because a write-off covers the whole
 item and would end every other member's issuance.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/returns: the Receive Item dialog for a multi-unit pool return, with a condition chosen, the quantity box empty, the hint "Count what came back. It must match the 2 the member reported." visible, and Receive disabled. Do not submit.]_
--->
+![Receive Item for Nadia Belhaj's return of two pairs of Firefighting Gloves: Good chosen as the observed condition, the quantity box empty with the hint that the count must match the 2 the member reported, and Receive disabled](./images/05-96-receive-pool-return.png)
 
-<!-- Screenshot needed:
-_[Quartermaster (inventory.manage) at /inventory/admin: the Needs attention queue with at least one "Pending return" row (member · item, Review action) and the Return Requests card carrying its count badge, with no "Some inventory services did not respond" banner. Needs a seeded return request in status "requested".]_
--->
+![The top of Inventory Administration: Needs attention with a Pending return row for Nadia Belhaj's Firefighting Gloves and its Review action, and the Return Requests card under Requests & Approvals carrying its count of one](./images/05-97-needs-attention-pending-return.png)
 
 > **What if the gear came back another way?** If you take the item back through
 > **Return** on the members page, a pool return or a loan check-in, the
@@ -979,9 +973,7 @@ The gear widget on your dashboard uses the same counts and words as this page.
 
 ![My Issued Gear as an ordinary member — the count tiles and their permanent assignments](./images/05-66-my-equipment.png)
 
-<!-- Screenshot needed:
-_[Member with no gear, loans or requests at /inventory/my-equipment: the header with its subtitle, the three tiles at 0 (Issued to me, Temporary loans, Pending requests), the empty Issued to Me text with the Learning Center link, and the Active Temporary Loans explanation.]_
--->
+![My Issued Gear for a member who holds nothing: the subtitle, the Issued to me, Temporary loans and Pending requests tiles at 0, Nothing has been issued to you yet with the link to the Learning Center walkthrough, and the Active Temporary Loans explanation](./images/05-98-my-equipment-empty.png)
 
 ---
 
@@ -1032,9 +1024,7 @@ You can still ask. Each size button tells you what to expect:
 Your own size is offered even when nothing is stocked in it. The request keeps
 the size you asked for, so the quartermaster knows exactly what you wanted.
 
-<!-- Screenshot needed:
-_[Member at /inventory/my-equipment: Request Equipment → pick a garment → select the member's size on file that the department does not stock, so the chip reads "not stocked" and the "(from your profile)" line and the blue notice "The department doesn't stock this item in <size>." are visible. Do not submit.]_
--->
+![The size step for the Department Polo, for a member whose shirt size on file is XXL: XXL offered and selected, labelled not stocked, the (from your profile) line, and the notice that the department doesn't stock this item in XXL](./images/05-99-gear-request-not-stocked.png)
 
 ### Reviewing Requests (Admin)
 
@@ -1065,9 +1055,7 @@ Members and quartermasters see the same status words:
 | **Declined**        | Turned down                        |
 | **Issued**          | Handed out. This is final          |
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/requests: Review on an Awaiting review request whose size the department does not stock — the dialog with Member asked for, the "not a size the department stocks" line, Tracking in words, Availability "n on hand", the note placeholder, and Decline / Approve for later fulfillment / Approve & fulfill now. Never click a decision.]_
--->
+![Review: Department Polo, for Nadia Belhaj's request in XXL: Size requested XXL, not a size the department stocks for this item, so Tracking reads Determined when fulfilled and Availability has no catalog item to count; the Review Notes box, and Decline, Approve for later fulfillment and Approve & fulfill now](./images/05-100-request-review-unstocked.png)
 
 ### Equipment Request Fulfillment
 
@@ -1120,9 +1108,7 @@ messages are never sent; this is an administrative notice.
 - The email's wording is the **Equipment Request Update** template, under
   **Communications → Email Templates → Inventory & Property**.
 
-<!-- Screenshot needed:
-_[Member at /inventory/my-equipment: My Requests with seeded requests in Awaiting review, Issued and Declined, the declined one carrying "Quartermaster: <note>" beneath it.]_
--->
+![My Requests on My Issued Gear: gear requests awaiting review, approved, issued and declined, the declined one with the quartermaster's note beneath it, and the open return notice for two pairs of gloves](./images/05-101-my-requests-states.png)
 
 ---
 
@@ -1246,9 +1232,7 @@ they can be issued at once.
 - **Restocked another way.** If stock comes back through a return rather than
   the reorder, the request stays open. Close or cancel it yourself.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/reorder: an Ordered request with no linked item, with Receive stock open showing the Inventory item search and the note "This order isn't linked to an inventory item yet…", Receive stock disabled. Do not submit.]_
--->
+![Receive stock on the ordered Rescue Rope, 150 ft request, which was never linked to an item: the Inventory item search and the note that the order isn't linked to an inventory item yet, with Receive stock disabled](./images/05-102-reorder-receive-unlinked.png)
 
 ---
 
@@ -1475,9 +1459,7 @@ have no expand toggle.
 This stops items being left with no place, and stops nested areas being cut
 off.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/storage-areas: the "Delete <area>?" dialog for an area that holds items and has a shelf nested inside it, showing both red reasons and the disabled Delete button. Do not delete.]_
--->
+![Delete Quartermaster Shelving? refused on both counts: it holds items, which must move to another storage area first, and it has an area nested inside it, with Delete greyed out](./images/05-104-storage-area-delete-blocked.png)
 
 ### Finding a shelf by its label
 
@@ -1650,9 +1632,7 @@ lost** takes a missing tag out of use until you select **Mark found**.
 > included. It stops working the moment you unlink it, because the link names
 > the tag, not the item.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/items/:id with NFC switched on and two seeded tags: one labelled "Inside left cuff", linked by serial, and one marked Lost. Crop to the NFC Tags card. Headless capture shows only the typed serial box and Link serial, so the caption must say the Write and Read buttons appear only in Chrome on Android. Only the …last-4 preview may be visible, never a full serial.]_
--->
+![The NFC Tags card on Structural Coat — M: the Inside left cuff tag linked by serial with Mark lost and Unlink, the Collar tag marked lost with Mark found, and below them the box for where a new tag goes, the serial box and Link serial. On a desktop the card has no Write or Read buttons; those appear only in Chrome on Android](./images/05-109-item-nfc-tags.png)
 
 ### Tapping items in the scanner
 
@@ -1684,9 +1664,7 @@ assigned or lent to a member, lost, stolen or retired is refused, and the
 message says why. Without an Android phone, choose the shelf from **Or pick a
 shelf** and type item serials in the box.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/put-away with NFC on: choose a shelf from "Or pick a shelf" so the card reads "Items tapped now go on <shelf>", then enter two seeded item serials in the "Tag serial (or USB reader)" box, so "Put away this session" lists one "→ <shelf> (was <old shelf>)" and one "already on <shelf>". The unavailable-NFC line in place of Start tapping tags is acceptable in the harness.]_
--->
+![Put Away by NFC with Top Shelf picked from Or pick a shelf, so taps go on Top Shelf, and two typed tag serials under Put away this session: SCBA Spare Cylinder moved onto Top Shelf from the SCBA Cabinet, and Structural Coat — S already on Top Shelf](./images/05-110-nfc-put-away.png)
 
 ### Last Seen
 
@@ -1694,9 +1672,7 @@ The item page lists the item's recent NFC taps under **Last Seen (NFC)**: who
 tapped it, and where it was put away. Only quartermaster taps are recorded. A
 member opening a tag from their own phone leaves no record.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/items/:id with NFC on: crop to the Last Seen (NFC) card showing a "Moved from … to …" row and a "Found on … during a shelf audit" row, each with a time and the quartermaster's name. Seed it by driving put-away and one audit with typed serials.]_
--->
+![Last Seen (NFC) on Structural Coat — M: moved from Turnout Gear Racks to Top Shelf, and found on Top Shelf during a shelf audit, each with its time and who tapped it](./images/05-111-item-last-seen.png)
 
 ### Auditing a shelf
 
@@ -1725,9 +1701,7 @@ audits; **View** opens one.
 > **Tip.** Audit one shelf or bin at a time. An audit covers exactly the area you
 > tapped, not the bins inside it.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/shelf-audit with NFC on: pick a seeded shelf, enter the serial of one item recorded there and of one recorded elsewhere, then press Finish audit. Capture the result card "1 of 2 expected found · 1 missing · 1 unexpected", Missing with its "Nothing has been marked lost" note, and the unexpected line ticked with "Move 1 selected onto <shelf>" enabled. Do not press Move. Recent audits should show below.]_
--->
+![A finished shelf audit of Top Shelf: 1 of 2 expected found, 1 missing and 1 unexpected; Structural Coat — M under Missing with the note that nothing has been marked lost, SCBA Spare Cylinder under Unexpected with its box ticked and Move 1 selected onto Top Shelf, and Recent audits below](./images/05-112-shelf-audit-result.png)
 
 ### Scheduling shelf audits
 
@@ -1745,9 +1719,7 @@ straight away if it has never been audited.
 While any scheduled area is overdue, quartermasters get one reminder email a
 week listing them.
 
-<!-- Screenshot needed:
-_[Admin (inventory.manage) at /inventory/shelf-audit with NFC on: the "Audit schedule (N due)" card with at least one never-audited area reading "never audited · due now" with its Audit now button, and one current area reading "next due <date>". The tap button's unavailable line is expected in the harness.]_
--->
+![Shelf Audit with NFC on: the Audit schedule card counting what is due, Uniform Bins never audited and due now with Audit now, and Top Shelf last audited with its next due date](./images/05-113-audit-schedule.png)
 
 ### Tagging many items at once
 
@@ -1766,9 +1738,7 @@ Needs the **Manage gear, uniforms and equipment** permission.
 If NFC is off, the page says an administrator can turn it on under **NFC
 Tags**. Managing inventory alone does not open that setting.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/nfc/enroll with NFC on, after one typed serial has been linked: "1 tagged this session · N of M left", the current item's name and details, Read serials selected (Write links greyed out in the harness), the typed serial box and Skip this item. No full tag serial visible.]_
--->
+![Tag Items in Bulk after one typed serial was linked: 1 tagged this session and how many are left, the next item, Bunker Coat, with its serial number, asset tag, category and storage area, Read serials chosen with Write links greyed out on a desktop, the serial box and Skip this item](./images/05-114-nfc-enroll.png)
 
 ### Identifying a member by their ID card
 
@@ -2901,7 +2871,9 @@ overwrite theirs. The page lists those lines (line, checklist, compartment,
 their item and yours) with a link into each checklist. The list stays until you
 dismiss it, even after a reload.
 
-<!-- Screenshot needed: Catalog Links with a mix of ticked exact matches and unticked likely ones; and the "had been linked by someone else" list after an apply. -->
+![Catalog Links before anything is applied: unlinked checklist lines grouped by name under Likely matches, the exact matches already chosen in their pickers, the others left on Don't link for you to confirm, and Link 5 positions counting what is chosen](./images/05-125-catalog-links-matches.png)
+
+![After Link positions, the list of lines someone else had linked in the builder after the page loaded: the Portable radio line on Engine Daily Check, its compartment, the item it is linked to and the one chosen here, with a link into the checklist](./images/05-126-catalog-links-conflicts.png)
 
 ### When the checklist and the catalog use different names
 
