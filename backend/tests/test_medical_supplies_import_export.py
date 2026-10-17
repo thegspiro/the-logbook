@@ -92,6 +92,7 @@ def _service():
         )
     )
     svc.pool_item_ids_by_name = AsyncMock(return_value={"gauze pads 4x4": "i-old"})
+    svc.item_ids_kept_in_stock = AsyncMock(return_value=["i-old"])
     svc.add_lot = AsyncMock(side_effect=lambda **kw: SimpleNamespace(id="lot-1"))
     svc.create_category = AsyncMock(
         side_effect=lambda **kw: (
@@ -395,6 +396,123 @@ class TestMedicalLotImport:
 
 
 @pytest.mark.unit
+class TestKeptOnApparatusOnlyColumn:
+    """A supply with no stock room (a LUCAS device) round-trips through the
+    file, and the import refuses to give it stock lots."""
+
+    async def test_yes_marks_the_supply_and_allows_a_zero_count(self, svc):
+        result = await _import(
+            _csv(
+                [
+                    "Name",
+                    "Category",
+                    "Quantity",
+                    "Tracking Type",
+                    "Kept on Apparatus Only",
+                ],
+                ["LUCAS device", "Airway", "0", "pool", "Yes"],
+            )
+        )
+
+        assert result["imported"] == 1
+        assert result["errors"] == []
+        stored = svc.create_item.await_args.kwargs["item_data"]
+        assert stored["apparatus_only"] is True
+        assert stored["quantity"] == 0
+
+    @pytest.mark.parametrize("value", ["no", "N", "false", "0"])
+    async def test_no_keeps_it_in_stock(self, svc, value):
+        await _import(
+            _csv(
+                ["Name", "Category", "Quantity", "Kept on Apparatus Only"],
+                ["Gauze", "Airway", "5", value],
+            )
+        )
+
+        assert svc.create_item.await_args.kwargs["item_data"]["apparatus_only"] is False
+
+    async def test_a_blank_leaves_it_unset(self, svc):
+        await _import(
+            _csv(
+                ["Name", "Category", "Quantity", "Kept on Apparatus Only"],
+                ["Gauze", "Airway", "5", ""],
+            )
+        )
+
+        assert "apparatus_only" not in svc.create_item.await_args.kwargs["item_data"]
+
+    async def test_another_value_fails_the_row(self, svc):
+        result = await _import(
+            _csv(
+                ["Name", "Category", "Quantity", "Kept on Apparatus Only"],
+                ["LUCAS device", "Airway", "1", "maybe"],
+            )
+        )
+
+        assert result["failed"] == 1
+        assert "must be Yes or No" in result["errors"][0]["error"]
+        svc.create_item.assert_not_awaited()
+
+    async def test_a_row_marked_yes_may_not_carry_a_lot(self, svc):
+        result = await _import(
+            _csv(
+                LOT_HEADER + ["Kept on Apparatus Only"],
+                ["LUCAS device", "Airway", "1", "LC-1", "2029-01-31", "Yes"],
+            )
+        )
+
+        assert result["failed"] == 1
+        assert "has no stock lots" in result["errors"][0]["error"]
+        svc.create_item.assert_not_awaited()
+        svc.add_lot.assert_not_awaited()
+
+    async def test_a_lot_row_may_not_name_a_supply_kept_on_the_apparatus(self, svc):
+        svc.item_ids_kept_in_stock = AsyncMock(return_value=[])
+
+        result = await _import(
+            _csv(LOT_HEADER, ["Gauze Pads, 4x4", "", "40", "GZ-9", "2028-01-31"])
+        )
+
+        assert result["failed"] == 1
+        assert "kept on the apparatus only" in result["errors"][0]["error"]
+        svc.add_lot.assert_not_awaited()
+
+    def test_the_export_says_yes(self):
+        item = SimpleNamespace(
+            name="LUCAS device",
+            category=None,
+            also_called=None,
+            description=None,
+            size=None,
+            unit_of_measure=None,
+            tracking_type=TrackingType.POOL,
+            quantity=0,
+            reorder_point=None,
+            apparatus_only=True,
+            status=SimpleNamespace(value="available"),
+            condition=SimpleNamespace(value="good"),
+            manufacturer=None,
+            model_number=None,
+            serial_number=None,
+            asset_tag=None,
+            barcode=None,
+            storage_location=None,
+            station=None,
+            vendor=None,
+            purchase_date=None,
+            purchase_price=None,
+            notes=None,
+        )
+
+        record = dict(zip(ms._MEDICAL_EXPORT_COLUMNS, ms._medical_export_row(item)))
+
+        assert record["Kept on Apparatus Only"] == "Yes"
+
+    def test_the_template_offers_the_column(self):
+        assert "Kept on Apparatus Only" in ms._MEDICAL_TEMPLATE_HEADER
+
+
+@pytest.mark.unit
 class TestMedicalExports:
     async def test_the_items_export_is_pinned_to_the_medical_domain(self, svc):
         item = SimpleNamespace(
@@ -409,6 +527,7 @@ class TestMedicalExports:
             is_lot_stocked=True,
             lot_stock=7,
             reorder_point=1,
+            apparatus_only=False,
             status=SimpleNamespace(value="available"),
             condition=SimpleNamespace(value="good"),
             manufacturer=None,
@@ -455,6 +574,7 @@ class TestMedicalExports:
         assert record["Also Called"] == "BVM; Ambu bag"
         assert record["Ready Lot Stock"] == "7"
         assert record["Reorder Point"] == "1"
+        assert record["Kept on Apparatus Only"] == "No"
         # SafeCsvWriter neutralizes a formula-looking cell.
         assert not record["Name"].startswith("=")
 

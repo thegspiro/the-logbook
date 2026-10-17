@@ -1305,6 +1305,21 @@ const MedicalSuppliesPage: React.FC = () => {
                                   <span className="ml-1 text-xs">
                                     ({expiryLabel(item.days_until_next_expiration ?? undefined)})
                                   </span>
+                                  {item.next_expiration_location && (
+                                    <span className="text-theme-text-secondary mt-0.5 flex items-start gap-1 text-xs">
+                                      {item.next_expiration_location === 'apparatus' ? (
+                                        <Truck className="mt-0.5 h-3 w-3 shrink-0" aria-label="On an apparatus" />
+                                      ) : (
+                                        <Package className="mt-0.5 h-3 w-3 shrink-0" aria-label="In storage" />
+                                      )}
+                                      <span>
+                                        {item.next_expiration_where ||
+                                          (item.next_expiration_location === 'apparatus'
+                                            ? 'On an apparatus'
+                                            : 'In storage')}
+                                      </span>
+                                    </span>
+                                  )}
                                 </>
                               ) : (
                                 '—'
