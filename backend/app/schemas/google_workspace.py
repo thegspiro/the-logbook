@@ -53,3 +53,23 @@ class LinkExistingResponse(UTCResponseBase):
     not_in_google: int
     off_domain: int
     account_in_use: int
+
+
+class AttentionItemResponse(UTCResponseBase):
+    """One member's account that needs a person to act."""
+
+    user_id: str
+    member_name: str
+    primary_email: str
+    # not_suspended / not_unsuspended / not_created / setup_unfinished
+    issue: str
+    # How the screen and the email word the issue.
+    label: str
+    detail: Optional[str] = None
+    since: Optional[datetime] = None
+    # Waiting long enough that the daily alert reports it.
+    overdue: bool
+
+
+class AttentionResponse(UTCResponseBase):
+    items: List[AttentionItemResponse]

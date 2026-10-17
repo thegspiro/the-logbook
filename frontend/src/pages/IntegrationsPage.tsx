@@ -57,6 +57,7 @@ import {
   type SalesforcePreviewResult,
   type CalcomBooking,
   type GoogleWorkspaceLinkResult,
+  type GoogleWorkspaceAttentionItem,
 } from '../services/api';
 import type { McpStatus } from '../services/adminServices';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -807,6 +808,30 @@ const IntegrationsPage: React.FC = () => {
   };
 
   const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [googleAttention, setGoogleAttention] = useState<GoogleWorkspaceAttentionItem[]>([]);
+  const [showGoogleAttention, setShowGoogleAttention] = useState(false);
+  const googleWorkspaceConnected = integrations.some(
+    (i) => i.integration_type === 'google-workspace' && i.status === ConnectionStatus.CONNECTED
+  );
+
+  useEffect(() => {
+    if (!canManage || !googleWorkspaceConnected) {
+      setGoogleAttention([]);
+      return;
+    }
+    let cancelled = false;
+    integrationsService
+      .getGoogleWorkspaceAttention()
+      .then((items) => {
+        if (!cancelled) setGoogleAttention(items);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) toast.error(getErrorMessage(err, 'Could not load Google Workspace accounts needing attention'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, googleWorkspaceConnected]);
 
   const handleLinkExistingGoogle = async () => {
     setLinkingGoogle(true);
@@ -1388,8 +1413,10 @@ const IntegrationsPage: React.FC = () => {
             <p className="text-theme-text-muted text-xs">
               In the Google Admin console, open Security &rarr; API controls &rarr; Domain-wide delegation and authorize
               the service account&apos;s client ID for <code>https://www.googleapis.com/auth/admin.directory.user</code>{' '}
-              and <code>https://www.googleapis.com/auth/admin.directory.group.member</code>. Each account created uses a
-              Workspace license.
+              and <code>https://www.googleapis.com/auth/admin.directory.group.member</code>. Also authorize the
+              read-only <code>https://www.googleapis.com/auth/admin.directory.orgunit.readonly</code> so{' '}
+              <strong>Test</strong> can confirm the organizational unit exists; only Test uses it. Each account created
+              uses a Workspace license.
             </p>
           </div>
         );
@@ -1925,6 +1952,16 @@ const IntegrationsPage: React.FC = () => {
                           <span>Settings</span>
                         </button>
                       )}
+                      {integration.integration_type === 'google-workspace' && googleAttention.length > 0 && (
+                        <button
+                          onClick={() => setShowGoogleAttention(!showGoogleAttention)}
+                          aria-expanded={showGoogleAttention}
+                          className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-amber-500/10 px-3 py-1.5 text-sm text-amber-800 transition-colors hover:bg-amber-500/20 dark:text-amber-300"
+                        >
+                          <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>{googleAttention.length} need attention</span>
+                        </button>
+                      )}
                       {integration.integration_type === 'google-workspace' &&
                         canChange(integration.integration_type) && (
                           <button
@@ -2029,6 +2066,64 @@ const IntegrationsPage: React.FC = () => {
               <McpOAuthPanel onBusyChange={setMcpOAuthBusy} configVersion={mcpConfigVersion} />
             </>
           )}
+
+        {/* Google Workspace accounts needing attention */}
+        {showGoogleAttention && googleWorkspaceConnected && googleAttention.length > 0 && (
+          <div className="card mt-6 p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="rounded-lg bg-amber-500/10 p-2 text-amber-800 dark:text-amber-300">
+                  <AlertCircle className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="text-theme-text-primary font-semibold">Google Workspace accounts needing attention</h3>
+                  <p className="text-theme-text-muted text-xs">
+                    Open a member to see the reason and retry. Anything waiting over a day is also emailed to
+                    administrators each morning.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowGoogleAttention(false)}
+                className="text-theme-text-muted hover:text-theme-text-primary"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <ul
+              className="divide-theme-surface-border divide-y"
+              aria-label="Google Workspace accounts needing attention"
+            >
+              {googleAttention.map((item) => (
+                <li key={item.user_id} className="py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <RouterLink
+                        to={`/members/${item.user_id}`}
+                        className="text-theme-text-primary text-sm font-medium underline"
+                      >
+                        {item.member_name}
+                      </RouterLink>
+                      <p className="text-theme-text-secondary text-xs">
+                        {item.label} · {item.primary_email}
+                      </p>
+                      {item.detail && <p className="text-theme-text-muted text-xs">{item.detail}</p>}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      {item.overdue && (
+                        <span className="badge bg-amber-500/10 text-amber-800 dark:text-amber-300">Over a day</span>
+                      )}
+                      {item.since && (
+                        <p className="text-theme-text-muted text-xs">Since {formatDateTime(item.since, tz)}</p>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Cal.com Bookings Panel */}
         {showBookingsPanel &&

@@ -409,6 +409,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "Property return summary",
             "Member archived",
             "New store orders",
+            "Google Workspace accounts needing attention (administrators)",
         ),
         rationale="The same records are kept in Membership and the store.",
     ),

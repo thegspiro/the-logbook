@@ -88,6 +88,11 @@ class GoogleAccountProvision(Base):
         DateTime(timezone=True), nullable=True
     )
     suspension_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # When the departure or return was recorded: how long an account has
+    # been waiting, which ``updated_at`` cannot say -- every retry moves it.
+    suspension_requested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
