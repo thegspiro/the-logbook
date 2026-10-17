@@ -2753,6 +2753,21 @@ it" and "order it" are different jobs, and this shows which each row is.
 
 **Needs restock** shows only rows with no ready stock behind them.
 
+**On a phone** the page is a compact worklist. A single "← parent" link replaces
+the two-line trail, the title and the 30/60/90 switch share a row, and the three
+count pills fold into the filter chips (All 5 · Needs restock 2 · Used or short 1
+· Expired 1; a chip with nothing behind it is left out, and tapping the active
+chip clears it). Sort is a two-option toggle. Each item shows its name and
+Expired or "N d left" badge, then rig · compartment · expiry · lot, the
+reported-used and short badges, and a row with the ready count, a lots toggle and
+full-size **Add** and **Manage** buttons. **By apparatus** gives each rig a
+heading with its item count, pinned under the header. **Add stock** opens a
+sheet with Quantity and Lot side by side, the truck's current count above them,
+and a full-width **Add stock** button pinned at the foot; it traps focus and
+closes on Escape.
+
+_[Screenshot needed, phone width (390px): Expiring on Apparatus with the filter chips and two item rows, and a second of the Add stock sheet.]_
+
 Summary pills sit above the list: how many rows need attention, and how many
 have ready stock. A third, red pill — **_N_ need restock** — appears only when
 something has no ready stock. If you never see it, there is nothing you have to
@@ -3151,6 +3166,13 @@ The four basic pattern types in **Manual Setup**:
 | **Weekly**           | Shifts on the weekdays you pick      | Volunteer departments with set drill nights (for example Tuesdays) |
 | **Platoon Rotation** | Rotates on and off days in a cycle   | Career departments on 24/48, 48/96 or Kelly schedules             |
 | **Custom Dates**     | Only the dates you choose            | One-off details, special events, holiday cover                    |
+
+**Weekly and Custom patterns are built on the Patterns tab.** The pattern
+dialog on the shift-templates screen no longer offers Weekly or Custom for a new
+pattern: it saved them without the days they need, so they created no shifts.
+A shift created by hand from a template now keeps its template link, so it gets
+that template's equipment checklists. A specific-shift swap request cannot go
+out as an open giveaway while the shift list is still loading.
 
 **Weekly patterns can separate day and night shifts** _(2026-10-12)_. In Manual
 Setup, choose **Weekly**, then tick **Separate day and night shifts**. Each weekday

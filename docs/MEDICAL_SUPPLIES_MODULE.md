@@ -132,6 +132,44 @@ involved, walking `parent_compartment_id` with a cycle guard. Migration
 `58522b08f6a7` files existing supplies under the one active area whose name
 matches their text; the downgrade unlinks rows still matching that rule.
 
+**Stock on the apparatus counts too** _(2026-10-16)_. A medical supply's ready
+stock is shelf plus trucks (`InventoryService.stock_breakdown`): in-date
+deployed lots, else the last count, else the position's target (tallied as
+uncounted). The low-stock list, the **Low stock** tile, the daily alert email
+and automatic reorder all read that one figure; `is_low_stock` on the list
+response is the server's verdict and the page no longer recomputes it. Gear
+still judges the shelf alone. Auto-reorder is also checked after a daily check,
+a "report used" and a recount, not only after a swap, because usage on a truck
+is what lowers the total (still one open request per item). The list's **On
+hand** reads "+12 on trucks (1 uncounted position)". `GET
+/medical-supplies/expiring-stock` lists truck stock beside shelf lots with
+where each is; `/lots/expiring` is unchanged. `/summary` adds
+`expiring_soon_on_apparatus` and `expired_on_apparatus` and keeps its existing
+fields. The low-stock email labels medical rows "shelf + apparatus".
+
+**Kept on apparatus only** _(2026-10-16)_. `inventory_items.apparatus_only`
+(default false; migration `0bbf263a5ff0`, guarded, downgrade drops it) marks
+equipment with no stock-room spare, such as a LUCAS device or a cardiac
+monitor. Its shelf counts as 0, so Low stock, the alert email and automatic
+reorder judge it on the trucks alone; the list shows "N on M apparatus" in
+place of a shelf count; the lots dialog shows where it is carried with no
+stock-lot controls; and **Receive delivery** leaves it out (server filter
+`exclude_apparatus_only`). Shelf lots left over from before it was marked are
+excluded from the Expiring list, the tiles and **Next expiry** through one
+filter (`InventoryService._shelf_lots_count`); rows are untouched, so unmarking
+brings them back. Gear ignores the flag.
+
+**Next expiry counts the trucks.** The list's **Next expiry** is the soonest of
+the shelf and the trucks (units still held, expired ones included), with
+`next_expiration_location` (`shelf` or `apparatus`) and `next_expiration_where`
+("Medic 1 > Jump Bag", or the storage path). A tie goes to the shelf.
+
+**CSV carries `Kept on Apparatus Only`.** The export writes Yes or No and the
+template offers the column. The import reads Yes/No (also y/n, true/false,
+1/0) and refuses any other value rather than guessing. An apparatus-only row may
+carry a Quantity of 0, and lot columns on such a row, or a lot row naming a
+supply already kept on the apparatus, are refused.
+
 **Deleting a category moves its supplies first.** A category can be deleted
 permanently (`DELETE /categories/{id}`), and the page asks where its supplies
 should go. This is not left to the database: an item's foreign key to its
@@ -465,6 +503,7 @@ permission **or** the broad equivalent.
 | `PATCH`  | `/lots/{lot_id}`            | manage     |
 | `DELETE` | `/lots/{lot_id}`            | manage     |
 | `GET`    | `/lots/expiring`            | view       |
+| `GET`    | `/expiring-stock`           | view       |
 | `GET`    | `/summary`                  | view       |
 
 `/summary` reports counts for the landing page. **Low stock is judged against

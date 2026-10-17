@@ -2942,13 +2942,13 @@ qualifications.
 
 Each instructor qualification records:
 
-| Field                  | What it holds                                       |
-| ---------------------- | --------------------------------------------------- |
-| **Member**             | The qualified instructor                            |
-| **Qualification type** | Instructor, Evaluator, Lead Instructor or Mentor    |
-| **Course**             | Which course or courses they are qualified to teach |
-| **Certification date** | When the qualification was earned                   |
-| **Expiration date**    | When it expires, if it does                         |
+| Field                  | What it holds                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Member**             | The qualified instructor, picked from a member list (typing a name into the old id box was always refused) |
+| **Qualification type** | Instructor, Evaluator, Lead Instructor or Mentor                                                           |
+| **Course**             | Which course or courses they are qualified to teach                                                        |
+| **Certification date** | When the qualification was earned                                                                          |
+| **Expiration date**    | When it expires, if it does                                                                                |
 
 ![Instructor qualification roster with type, agency and expiry](./images/02-69-instructor-qualifications.png)
 

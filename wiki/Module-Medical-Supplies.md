@@ -82,6 +82,16 @@ The page opens on the expiring tab rather than the catalog because, for a
 consumable with a shelf life, _"what am I about to lose"_ is the question that
 brings someone to the page.
 
+**Stock on the trucks counts** _(2026-10-16)_. Ready stock is the shelf plus what
+is aboard the apparatus; Low stock, the daily alert email and automatic reorder
+all read that figure, and a reorder can also start after a daily check, a "report
+used" or a recount. Tick **Kept on apparatus only** for equipment with no
+stock-room spare (a LUCAS device, a monitor): its shelf counts as 0, it reads "N
+on M apparatus", and it is left out of Receive delivery. **Next expiry** takes
+the soonest of the shelf and the trucks. The CSV has a **Kept on Apparatus Only**
+column. The routes and the rules are in
+[`docs/MEDICAL_SUPPLIES_MODULE.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/MEDICAL_SUPPLIES_MODULE.md).
+
 The headline tiles read **Expiring within 30 days** and **Low stock**
 _(2026-09-29; the second was "Below reorder point", though it counts items at or
 below it)_. A category's threshold reads "Low stock at _N_ or below", and a

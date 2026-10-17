@@ -791,8 +791,10 @@ in the **Documents** area of The Logbook, in a folder for each facility.
 
 **Uploading.** Select **Upload a photo or document** (up to 25 MB). A photo is
 filed into the facility's **Photos** folder. Any other document is filed into
-its **Facility Documents** folder. Uploading also needs **Manage documents and
-folders**; without it, the upload is refused.
+its **Facility Documents** folder. The photo or document is uploaded and
+attached in one step, so facility permission alone is enough: you no longer need
+**Manage documents and folders** as well. If the attach fails, the stored file is
+removed rather than left behind.
 
 **Who can open which folder:**
 

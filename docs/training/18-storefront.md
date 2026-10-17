@@ -463,6 +463,13 @@ you place one bulk order with the vendor.
 | Fulfilled | Everything handed out                                |
 | Cancelled | Called off                                           |
 
+**When the store itself is off.** If **Store is live for members** (Settings)
+is off, an open window does not let anyone order. **Open ordering** now says so
+and links to Settings, the overview card reads that members can't order yet with
+a link to Settings, and the "Store is offline" badge is a button to the same
+place. On the member's window card the days left and "Ordering closes in N days"
+both count whole days, rounded down, so they agree.
+
 **More than one window can be open at once.** Members land on the one that
 closes soonest, because that is their nearest deadline. They get a switcher for
 the others. So an apparel window and a Class B uniform window can run side by
@@ -767,9 +774,11 @@ payment status to see who still owes.
    photo.
 3. **Personalization:** prompt "Name for embroidery", **Embroidered**, maximum
    20 characters, $8.00 upcharge.
-4. Leave it as **Draft** while you check its details in the catalog. Members
-   cannot see a draft item, and there is no member preview of one. Then switch
-   it to **Active (for sale)**.
+4. Leave it as **Draft** while you check its details in the catalog. A new
+   item starts as Draft, and drafts are offered in no window, so the first item
+   never reaches members until you switch it to **Active (for sale)**. The
+   **Status** field says drafts aren't shown to members. There is no member
+   preview of a draft.
 
 **Opening (October 1)**
 

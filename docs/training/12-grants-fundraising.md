@@ -159,7 +159,12 @@ schedule.
    - **Application Deadline** — when it must be submitted
    - **Project Description** — what the grant will pay for
    - **Priority** — Low, Medium, High or Critical
-   - **Assigned To** — the member managing the application
+   - **Assigned To** — the member managing the application, chosen from a
+     member list (it used to be a free-text box, and a typed name was dropped)
+   - **Budget summary** — an amount for each budget category, plus notes
+   - **Key contacts** — a list of contacts, each with name, role, phone and
+     email. Applications saved before this change still open and show what they
+     held
 3. Select **Create Application**. The application starts in **Researching**.
    When you edit it later, save with **Save Changes**.
 
@@ -250,6 +255,10 @@ On the **Budget** tab, select **Add Budget Item** and enter:
 | **Category**    | Personnel, Equipment, Supplies, Travel, Training, Contractual, Construction, Indirect Costs, Other |
 | **Description** | What the money is for                                                                              |
 | **Amount**      | Planned spending on this line                                                                      |
+
+The category list shown is the list above. Adding a budget item, an
+expenditure, a compliance task or a note on a grant's page used to fail every
+time; all four now save.
 
 The tab shows **Total Budgeted**, **Total Spent** and **Remaining**, overall and
 for each line. Spending on a line is added up from the expenditures linked to

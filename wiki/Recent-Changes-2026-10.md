@@ -5,6 +5,68 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 16 – 17, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-16--17-2026).
+Predecessor: [October 15 – 16](#recent-changes-october-15--16-2026).
+
+**The headline:** ballot and reminder emails now send in the background, so a
+large roster no longer times out. Google Calendar and Outlook can connect with a
+sign-in, and **Microsoft 365** can create accounts for new members. Medical
+Supplies count what is on the trucks. Many forms that quietly dropped what you
+typed now save it.
+
+### Read this first
+
+**If you run the server:** the migrations have a new merge revision
+(`9a4c7e21b5d0`); main had two heads and could not migrate until it landed. The
+new `CALENDAR_SYNC_ENABLED` setting (off by default) must be on before Google
+Calendar or Outlook will connect. A department uses Google Workspace or
+Microsoft 365, not both.
+
+**If you administer a department:**
+
+- **Elections.** Send Ballot Emails and Remind Non-Voters show progress and keep
+  going if you leave the page. Do not send again because it seems slow: each send
+  replaces the links. Nominees now get a bell notice. Linking a meeting fills in
+  the voting window. An Approve / Deny item no longer offers a write-in. The
+  ballot, certified results and pre-meeting package print with the same
+  letterhead.
+- **Medical Supplies.** Low stock, the alert email and automatic reorder count
+  shelf plus trucks. Tick **Kept on apparatus only** for equipment with no
+  stock-room spare. **Next expiry** includes the trucks.
+- **Equipment checks.** **Min to Pass** fails a count line; **par** decides the
+  restock. Count lines have a unit.
+- **Integrations.** Training has a **Sync History** tab. Google accounts needing
+  attention are listed and emailed daily. The department calendar feed link is on
+  the iCalendar card.
+- **Forms.** Clearing a date, location, description or similar on an event,
+  template, pattern, storefront window or facility now saves the clear. Grant
+  budget, expenditure, task and note forms save, and an application can be
+  assigned to a member.
+
+**If you are a member:** Operations pages share one header. The apparatus page and
+the supply worklist are laid out for a phone.
+
+### What changed, by area
+
+| Area             | Change                                                                                                                                   |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Integrations     | Google Calendar and Outlook connect with a sign-in; department iCalendar feed; Microsoft 365 accounts                                    |
+| Training         | Sync History tab; Import History renamed Import Past Training                                                                            |
+| Elections        | Background ballot and reminder sending; nominee bell notice; meeting-aligned dates; shared PDF letterhead; no write-in on Approve / Deny |
+| Medical Supplies | Truck stock counted; Kept on apparatus only; Next expiry and CSV                                                                         |
+| Equipment checks | Min to Pass fails a count; par sets the restock; units                                                                                   |
+| Operations       | One shared header; phone layouts for the apparatus page and supply worklist                                                              |
+| Forms            | Cleared fields saved; create forms in grants, training, scheduling, store and locations fixed                                            |
+| Store            | Says when members cannot order; drafts explained                                                                                         |
+| Facilities       | Photos and documents upload in one step                                                                                                  |
+
+Screenshots to capture and video beats to redo are queued in the repository's
+`docs/training/SCREENSHOT_CURRENCY.md` and `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Recent changes: October 15 – 16, 2026
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering
