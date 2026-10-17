@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from app.models.forms import (
     FieldType,
@@ -48,6 +48,25 @@ def _enum_check(valid: set, field: str):
         return normalized
 
     return _check
+
+
+def _reject_null(value: Any, info: ValidationInfo) -> Any:
+    """Refuse an explicit ``null`` for a flag whose column is nullable.
+
+    These columns allow NULL but their response fields are plain ``bool``, so
+    ``apply_updates`` stores the NULL, the commit succeeds, and serializing the
+    row then fails: the form's detail view and list answer 500 until the row is
+    repaired by hand. A NULL ``require_authentication`` is also read as falsy by
+    the submit path. An omitted key still means "leave it alone"; validators do
+    not run for a key that was not sent.
+    """
+
+    if value is None:
+        raise ValueError(
+            f"{info.field_name} cannot be null; leave the field out to keep "
+            "its current value"
+        )
+    return value
 
 
 # ============================================
@@ -126,6 +145,9 @@ class FormFieldUpdate(BaseModel):
     sort_order: Optional[int] = Field(None, ge=0)
     width: Optional[str] = None
 
+    _check_required = field_validator("required")(_reject_null)
+    _check_width = field_validator("width")(_reject_null)
+
 
 class FormFieldResponse(FormFieldBase):
     """Schema for form field response"""
@@ -164,6 +186,8 @@ class FormIntegrationUpdate(BaseModel):
 
     field_mappings: Optional[Dict[str, str]] = None
     is_active: Optional[bool] = None
+
+    _check_is_active = field_validator("is_active")(_reject_null)
 
 
 class FormIntegrationResponse(UTCResponseBase):
@@ -237,6 +261,12 @@ class FormUpdate(BaseModel):
     is_public: Optional[bool] = None
     integration_type: Optional[str] = None
 
+    _check_flags = field_validator(
+        "allow_multiple_submissions",
+        "require_authentication",
+        "notify_on_submission",
+        "is_public",
+    )(_reject_null)
     _check_category = field_validator("category")(
         _enum_check(_FORM_CATEGORIES, "category")
     )

@@ -41,6 +41,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { useAuthStore } from '../stores/authStore';
 import { copyToClipboard } from '../utils/clipboard';
 import { getErrorDetail } from '../utils/errorHandling';
+import { formCoercions } from '../utils/formValues';
 
 // Group locations: top-level = stations (has address, no room_number), children = rooms (have room_number or building)
 function groupLocations(locations: Location[]): { stations: Location[]; rooms: Map<string, Location[]> } {
@@ -1093,15 +1094,26 @@ export default function LocationsPage() {
       toast.error('Station name is required');
       return;
     }
+    // groupLocations decides "station" by the presence of an address. Clearing
+    // it on an existing station would demote it to "Other Locations" and leave
+    // every room filed under its name with no card to render under, so the
+    // page would appear to lose them.
+    if (editingStation && !stationForm.address.trim()) {
+      toast.error('A station needs a street address');
+      return;
+    }
     setIsSavingStation(true);
     try {
+      // On edit, a cleared box is sent as null: the update endpoint treats an
+      // omitted key as "keep the stored value".
+      const { text } = formCoercions(Boolean(editingStation));
       const payload: LocationCreate = {
         name: stationForm.name.trim(),
-        ...(stationForm.address.trim() ? { address: stationForm.address.trim() } : {}),
-        ...(stationForm.city.trim() ? { city: stationForm.city.trim() } : {}),
-        ...(stationForm.state.trim() ? { state: stationForm.state.trim() } : {}),
-        ...(stationForm.zip.trim() ? { zip: stationForm.zip.trim() } : {}),
-        ...(stationForm.description.trim() ? { description: stationForm.description.trim() } : {}),
+        address: text(stationForm.address),
+        city: text(stationForm.city),
+        state: text(stationForm.state),
+        zip: text(stationForm.zip),
+        description: text(stationForm.description),
       };
       if (editingStation) {
         const oldName = editingStation.name;
@@ -1181,13 +1193,16 @@ export default function LocationsPage() {
     }
     setIsSavingRoom(true);
     try {
+      // On edit, a cleared box is sent as null: the update endpoint treats an
+      // omitted key as "keep the stored value".
+      const { text, num } = formCoercions(Boolean(editingRoom));
       const payload: LocationCreate = {
         name: roomForm.name.trim(),
         ...(roomParentStation ? { building: roomParentStation } : {}),
-        ...(roomForm.room_number.trim() ? { room_number: roomForm.room_number.trim() } : {}),
-        ...(roomForm.floor.trim() ? { floor: roomForm.floor.trim() } : {}),
-        ...(roomForm.capacity ? { capacity: Number(roomForm.capacity) } : {}),
-        ...(roomForm.description.trim() ? { description: roomForm.description.trim() } : {}),
+        room_number: text(roomForm.room_number),
+        floor: text(roomForm.floor),
+        capacity: num(roomForm.capacity),
+        description: text(roomForm.description),
       };
       if (editingRoom) {
         await locationsService.updateLocation(editingRoom.id, payload);

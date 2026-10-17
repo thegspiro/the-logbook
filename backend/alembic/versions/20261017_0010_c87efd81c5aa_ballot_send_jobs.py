@@ -16,7 +16,7 @@ outcomes; the election's own ``email_sent`` / ``email_recipients`` record of
 who received a ballot is unaffected.
 
 Revision ID: c87efd81c5aa
-Revises: c869ec90a41b
+Revises: 64bf75298e89
 Create Date: 2026-10-17 00:10:47.413227
 
 """
@@ -28,7 +28,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c87efd81c5aa"
-down_revision: Union[str, None] = "c869ec90a41b"
+down_revision: Union[str, None] = "64bf75298e89"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

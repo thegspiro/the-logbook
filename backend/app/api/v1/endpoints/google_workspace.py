@@ -21,6 +21,8 @@ from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.models.google_workspace import GoogleAccountProvision
 from app.models.user import User
 from app.schemas.google_workspace import (
+    AttentionItemResponse,
+    AttentionResponse,
     GoogleAccountEnvelope,
     GoogleAccountResponse,
     LinkExistingResponse,
@@ -128,6 +130,37 @@ async def retry_member_google_account(
     )
     await db.commit()
     return _to_response(row)
+
+
+@router.get("/attention", response_model=AttentionResponse)
+async def list_attention(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.manage")),
+):
+    """Accounts in this department that need a person to act: a departure's
+    suspension Google has not taken, a return's unsuspension, an account never
+    created, or one left unfinished. Read only; nothing in Google is called.
+
+    **Requires permission: integrations.manage**
+    """
+    items = await GoogleWorkspaceProvisioningService(db).attention_items(
+        str(current_user.organization_id)
+    )
+    return AttentionResponse(
+        items=[
+            AttentionItemResponse(
+                user_id=i.user_id,
+                member_name=i.member_name,
+                primary_email=i.primary_email,
+                issue=i.issue,
+                label=i.label,
+                detail=i.detail,
+                since=i.since,
+                overdue=i.overdue,
+            )
+            for i in items
+        ]
+    )
 
 
 @router.post("/link-existing", response_model=LinkExistingResponse)

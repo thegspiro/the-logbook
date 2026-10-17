@@ -2485,13 +2485,14 @@ async def update_candidate(
             detail="Cannot edit candidates in a closed election",
         )
 
-    # Keyed on update_data rather than the schema attribute so an explicit
-    # null is validated too (exclude_unset keeps "omitted" distinct from
-    # "cleared", per CLAUDE.md pitfall 1).
     update_data = candidate_update.model_dump(exclude_unset=True)
     if update_data.get("accepted") is True and not candidate.accepted:
         await _assert_can_hold_office(service, candidate.user_id, current_user)
-    if "position" in update_data and election.positions:
+    # An explicit null clears the position, which create_candidate allows too
+    # (the candidate list shows such a candidate as unassigned). The edit form
+    # resubmits the position on every save, so refusing null here would also
+    # refuse a statement-only edit of an unassigned candidate.
+    if update_data.get("position") and election.positions:
         if update_data["position"] not in election.positions:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

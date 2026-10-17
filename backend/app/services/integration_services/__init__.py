@@ -127,7 +127,9 @@ async def test_integration_connection(integration: Integration) -> str:
         # endpoint trusts (see sanitize_connector_error).
         try:
             return await directory_for(integration).test_connection(
-                str(config.get("domain", "")), list(config.get("group_emails") or [])
+                str(config.get("domain", "")),
+                list(config.get("group_emails") or []),
+                str(config.get("org_unit_path") or "/"),
             )
         except GoogleWorkspaceError as exc:
             raise Exception(str(exc)) from exc

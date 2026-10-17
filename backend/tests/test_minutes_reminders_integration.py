@@ -28,7 +28,12 @@ from tests.minutes_support import (
 
 pytestmark = [pytest.mark.integration]
 
-TODAY = datetime.now(timezone.utc).date()
+
+def _today() -> date:
+    # Read per call, not frozen at import: collection can finish before
+    # midnight UTC and the test run after it, and the service under test
+    # reads the clock when it runs.
+    return datetime.now(timezone.utc).date()
 
 
 def _midnight(day: date) -> str:
@@ -69,7 +74,7 @@ def _item(description: str, assignee, days_from_today: int | None) -> dict[str, 
         "assignee_id": str(assignee.id),
     }
     if days_from_today is not None:
-        item["due_date"] = _midnight(TODAY + timedelta(days=days_from_today))
+        item["due_date"] = _midnight(_today() + timedelta(days=days_from_today))
     return item
 
 
@@ -324,7 +329,7 @@ class TestOpenItemsDigest:
 
         org = await _org(world)
         stored = dict(org.settings["minutes"])
-        stored["last_open_items_digest_on"] = (TODAY - timedelta(days=7)).isoformat()
+        stored["last_open_items_digest_on"] = (_today() - timedelta(days=7)).isoformat()
         org.settings = {**org.settings, "minutes": stored}
         await world.db.flush()
         assert await self._digest(world) == 2
@@ -342,7 +347,7 @@ class TestOpenItemsDigest:
         world.db.expire_all()
         saved = (await _org(world)).settings["minutes"]
         assert saved["overdue_repeat_days"] == 14
-        assert saved["last_open_items_digest_on"] == TODAY.isoformat()
+        assert saved["last_open_items_digest_on"] == _today().isoformat()
 
     async def test_nothing_is_sent_when_nothing_is_open(self, world, mail):
         await _approved(world, [])

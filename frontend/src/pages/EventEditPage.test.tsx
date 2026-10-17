@@ -220,6 +220,27 @@ describe('EventEditPage', () => {
       });
     });
 
+    // The update path reads an omitted key as "leave alone": an emptied
+    // description or location used to come back after a successful save.
+    it('sends emptied fields as null so the clear is saved', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, max_attendees: 40 });
+      vi.mocked(eventService.updateEvent).mockResolvedValue({} as unknown as Event);
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await user.clear(await screen.findByLabelText(/description/i));
+      await user.clear(screen.getByPlaceholderText(/station 1 conference room/i));
+      await user.clear(screen.getByLabelText(/max attendees/i));
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+      expect(eventService.updateEvent).toHaveBeenCalledWith(
+        'evt-1',
+        expect.objectContaining({ description: null, location: null, location_id: null, max_attendees: null })
+      );
+    });
+
     it('should display error on failed update', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.updateEvent).mockRejectedValue(makeApiError('Location conflict', 409));

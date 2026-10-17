@@ -458,7 +458,7 @@ Requires `training.manage` permission. Tab-based admin interface.
 | `pipelines`         | Pipelines                     |
 | `shift-reports`     | Shift Reports                 |
 | `integrations`      | Integrations                  |
-| `import`            | Import History                |
+| `import`            | Import Past Training          |
 | `enhancements`      | Enhancements                  |
 
 > The two **Skills Testing** tabs were missing from this list. `templates` is the skill-sheet library (create, edit, publish, archive, and the per-template result-disclosure override); `tests` is the records tab, which is where an officer **validates**, **voids**, **releases** and **cancels** results, and where the "awaiting validation" filter lives. Both are officer-only, unlike `/training/skills-testing`, which is the member's entry point.

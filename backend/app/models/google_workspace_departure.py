@@ -23,7 +23,7 @@ and suspended-in-The-Logbook members keep their account (owner decision,
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from loguru import logger
@@ -72,6 +72,7 @@ def _previous(user: User, attribute: str) -> Any:
 def _stage(session: Session, user: User, suspended: bool) -> None:
     organization_id = str(user.organization_id)
     user_id = str(user.id)
+    requested_at = datetime.now(timezone.utc)
     still_to_do = not_(
         and_(
             GoogleAccountProvision.suspension_wanted.is_(suspended),
@@ -90,6 +91,7 @@ def _stage(session: Session, user: User, suspended: bool) -> None:
             suspension_wanted=suspended,
             suspension_settled=False,
             suspension_error=None,
+            suspension_requested_at=requested_at,
         )
     )
     if not result.rowcount:
@@ -101,6 +103,7 @@ def _stage(session: Session, user: User, suspended: bool) -> None:
             set_committed_value(loaded, "suspension_wanted", suspended)
             set_committed_value(loaded, "suspension_settled", False)
             set_committed_value(loaded, "suspension_error", None)
+            set_committed_value(loaded, "suspension_requested_at", requested_at)
     session.info.setdefault(_RECONCILE, set()).add((organization_id, user_id))
 
 

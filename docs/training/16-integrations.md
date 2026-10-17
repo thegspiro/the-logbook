@@ -523,7 +523,7 @@ For the whole store walkthrough, see [Department Store](./18-storefront.md).
 | **Organizational unit** | Where new accounts go, for example `/Members`.                                                                      |
 | **Groups** _(optional)_ | Up to 20 group addresses each new member is added to.                                                               |
 
-Authorize the service account's client ID in the Google Admin console (**Security → API controls → Domain-wide delegation**) for `admin.directory.user` and `admin.directory.group.member`. Each account uses a Workspace license.
+Authorize the service account's client ID in the Google Admin console (**Security → API controls → Domain-wide delegation**) for `admin.directory.user` and `admin.directory.group.member`, plus the read-only `admin.directory.orgunit.readonly` that lets **Test** confirm the organizational unit exists. Each account uses a Workspace license.
 
 ### What Happens at Conversion
 
@@ -532,6 +532,10 @@ The account is created **after** the conversion is saved, so a Google failure ne
 ### When a Member Leaves
 
 Dropping a member (voluntary or involuntary) or deleting them **suspends** their Google account; undoing the drop, a rejoin or reactivating an archived member lifts it again. Retired, on-leave and inactive members keep their account. The Logbook only lifts a suspension it applied itself — an account someone had already suspended in Google stays suspended. If Google cannot be reached, the departure still goes through and the member's profile offers a **Retry**.
+
+### Accounts Needing Attention
+
+When an account is waiting on something The Logbook could not finish — a departed member's suspension, an account never created, a password that never arrived — the Google Workspace card shows **N need attention**. It lists each member with the reason and a link to their profile. Anything waiting over a day is also emailed each morning to administrators (`admin.access`).
 
 ### Members Who Joined Earlier
 
