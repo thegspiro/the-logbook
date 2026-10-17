@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**315 tables · 5209 columns · 1062 foreign keys**
+**315 tables · 5211 columns · 1062 foreign keys**
 
 ---
 
@@ -458,7 +458,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 14 | Meeting Action Item model |
 | [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 10 | Meeting Attendee model |
-| [`meetings`](#meetings) | `Meeting` | 20 | Meeting model |
+| [`meetings`](#meetings) | `Meeting` | 21 | Meeting model |
 
 ### Membership Pipeline
 
@@ -7012,6 +7012,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `called_by` | VARCHAR(255) | yes |  |  |  |
 | `status` | ENUM(`draft`, `pending_approval`, `approved`) | no |  | `draft` |  |
 | `agenda` | TEXT | yes |  |  |  |
+| `agenda_items` | JSON | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `motions` | TEXT | yes |  |  |  |
 | `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |

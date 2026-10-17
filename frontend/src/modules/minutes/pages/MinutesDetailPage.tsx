@@ -40,6 +40,7 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { saveBlob } from '../../../utils/saveBlob';
 import { PanelDisclosure } from '../components/PanelDisclosure';
 import { AdoptDialog } from '../components/AdoptDialog';
+import { AgendaSyncDialog } from '../components/AgendaSyncDialog';
 import { AttachmentsPanel } from '../components/AttachmentsPanel';
 import { AttendancePanel } from '../components/AttendancePanel';
 import { CarryForwardDialog } from '../components/CarryForwardDialog';
@@ -135,6 +136,7 @@ export const MinutesDetailPage: React.FC = () => {
   const [adopting, setAdopting] = useState(false);
   const [hasAcceptedSuggestions, setHasAcceptedSuggestions] = useState(false);
   const [showApplyOutline, setShowApplyOutline] = useState(false);
+  const [showAgendaSync, setShowAgendaSync] = useState(false);
   const [applyingOutline, setApplyingOutline] = useState(false);
 
   // Closed elections a motion can be tied to; loaded when the motion form opens
@@ -290,6 +292,18 @@ export const MinutesDetailPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Failed to save section'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Sent as a full sections list like every other section edit; an omitted
+  // flag would read as "taken up", so the unchecked state is sent explicitly.
+  const handleSetNotTakenUp = async (sectionKey: string, notTakenUp: boolean) => {
+    if (!minutesId || !minutes) return;
+    try {
+      const sections = minutes.sections.map((s) => (s.key === sectionKey ? { ...s, not_taken_up: notTakenUp } : s));
+      setMinutes(await minutesService.updateMinutes(minutesId, { sections }));
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update the section'));
     }
   };
 
@@ -996,6 +1010,15 @@ export const MinutesDetailPage: React.FC = () => {
             <h2 className="text-theme-text-primary text-lg font-semibold">Meeting Sections</h2>
             {canManage && isEditable && (
               <div className="flex flex-wrap gap-2">
+                {minutes.meeting_id && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAgendaSync(true)}
+                    className="btn-secondary touch:min-h-11 text-sm"
+                  >
+                    Sync from agenda
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowApplyOutline(true)}
@@ -1105,6 +1128,11 @@ export const MinutesDetailPage: React.FC = () => {
                               {openSuggestionCount(section.key) === 1 ? 'suggestion' : 'suggestions'}
                             </span>
                           )}
+                          {section.not_taken_up && (
+                            <span className="bg-theme-surface-secondary text-theme-text-primary ml-2 rounded-sm px-2 py-0.5 text-xs font-medium">
+                              Not taken up
+                            </span>
+                          )}
                           {section.required && sectionIsBlank(section) && isEditable && (
                             <span className="ml-2 rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-400">
                               Required
@@ -1152,6 +1180,25 @@ export const MinutesDetailPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {(section.presenter || (section.documents ?? []).length > 0) && (
+                      <div className="text-theme-text-muted mb-2 space-y-1 text-xs">
+                        {section.presenter && <p>Presented by {section.presenter}</p>}
+                        {(section.documents ?? []).length > 0 && (
+                          <p>
+                            Documents:{' '}
+                            {(section.documents ?? []).map((doc, n) => (
+                              <React.Fragment key={doc.id}>
+                                {n > 0 && ', '}
+                                <Link to="/documents" className="text-blue-700 underline dark:text-blue-400">
+                                  {doc.name || 'Document'}
+                                </Link>
+                              </React.Fragment>
+                            ))}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     {isEditing ? (
                       <div>
                         <RichTextEditor
@@ -1185,6 +1232,8 @@ export const MinutesDetailPage: React.FC = () => {
                         format={section.format}
                         className="text-theme-text-secondary text-sm"
                       />
+                    ) : section.not_taken_up ? (
+                      <p className="text-theme-text-muted text-sm italic">Not taken up.</p>
                     ) : (
                       <p className="text-theme-text-muted text-sm italic">
                         No content yet.{' '}
@@ -1200,6 +1249,20 @@ export const MinutesDetailPage: React.FC = () => {
                           </button>
                         )}
                       </p>
+                    )}
+
+                    {canManage && isEditable && sectionIsBlank(section) && (
+                      <label className="mt-2 flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(section.not_taken_up)}
+                          onChange={(e) => {
+                            void handleSetNotTakenUp(section.key, e.target.checked);
+                          }}
+                          className="form-checkbox"
+                        />
+                        <span className="text-theme-text-secondary">The meeting did not take this up</span>
+                      </label>
                     )}
 
                     {(section.key === 'call_to_order' || section.key === 'adjournment') && (
@@ -1668,6 +1731,16 @@ export const MinutesDetailPage: React.FC = () => {
           onClose={() => setShowApplyOutline(false)}
           onChoose={(id) => {
             void handleApplyOutline(id);
+          }}
+        />
+
+        <AgendaSyncDialog
+          isOpen={showAgendaSync}
+          minutesId={minutes.id}
+          onClose={() => setShowAgendaSync(false)}
+          onApplied={async () => {
+            await fetchMinutes();
+            toast.success('Agenda synced. Nothing you had written was changed.');
           }}
         />
 
