@@ -64,7 +64,7 @@ describe('ExternalSyncHistoryPanel', () => {
     ]);
     mockGetImportedRecords.mockResolvedValue([
       staged(),
-      staged({ id: 'imp-2', external_user_id: 'ext-9', course_title: 'Ladder Operations', course_code: undefined }),
+      staged({ id: 'imp-2', external_user_id: 'ext-9', course_title: 'Ladder Operations' }),
     ]);
   });
 
