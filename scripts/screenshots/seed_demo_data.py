@@ -3396,6 +3396,11 @@ class Seeder:
                     self.api.get("/admin-hours/entries?limit=200"), "entries"
                 )
                 if str(pick(e, "status")) == "pending"
+                # The guide-08 correction entries stay pending on purpose and
+                # must not take one of the queue's slots, or each re-run would
+                # approve one more of the entries counted above.
+                and str(pick(e, "description") or "")
+                not in {d for _, d, _ in self.GUIDE08_HOURS_CORRECTIONS}
             ),
             key=lambda e: str(pick(e, "clock_in_at", "clockInAt") or ""),
             reverse=True,
@@ -16303,6 +16308,128 @@ class Seeder:
     # carries 4 approved hours, so the bar sits at half.
     MEMBER_HOURS_REQUIREMENT = ("Fundraising", 8)
 
+    #: The demo member's two entries that guide 08's "My Hours" shots picture:
+    #: (category, description, rejection reason or None). One stays pending, so
+    #: it shows Edit and Withdraw; the other is returned with a reason, so it
+    #: shows the red "Rejected: …" line and Edit & resubmit.
+    GUIDE08_HOURS_CORRECTIONS = [
+        ("Station Maintenance", "Hose tower light replacement", None),
+        (
+            "Administrative Work",
+            "Pre-plan walk-through at Oakville Mall",
+            "Pre-plan walk-throughs are logged as training, not administrative"
+            " hours",
+        ),
+    ]
+
+    #: Documentation-range address (RFC 5737), so the IP Security shots can
+    #: never picture a real client address.
+    GUIDE08_IP_EXCEPTION = "203.0.113.24"
+
+    def seed_guide08_admin_states(self) -> dict[str, Any]:
+        """States guide 08 pictures that nothing else in the demo produces.
+
+        * The demo member's My Hours list with a pending manual entry and a
+          returned one, both inside the current month because the page opens
+          on This month. Raised by the member (an entry credits its caller)
+          and the second rejected by the administrator with a reason.
+        * One pending IP exception request, raised by an ordinary member from a
+          documentation-range address, for the Pending Requests tab.
+        """
+        result: dict[str, Any] = {}
+        users = items(self.api.get("/users?limit=200"), "users")
+        member = next(
+            (u for u in users if pick(u, "username") == DEMO_MEMBER_USERNAME), None
+        )
+        categories = {
+            str(pick(c, "name")): str(pick(c, "id"))
+            for c in items(self.api.get("/admin-hours/categories"), "categories")
+        }
+        if member and categories:
+            existing = {
+                str(pick(e, "description") or ""): e
+                for e in items(
+                    self.api.get("/admin-hours/entries?limit=300"), "entries"
+                )
+            }
+            session = self.member_session(
+                self.base_url, str(pick(member, "id")), DEMO_MEMBER_USERNAME
+            )
+            first_of_month = TODAY.replace(day=1)
+            for index, (name, description, reason) in enumerate(
+                self.GUIDE08_HOURS_CORRECTIONS
+            ):
+                entry = existing.get(description)
+                category_id = categories.get(name)
+                if entry is None and category_id:
+                    day = max(first_of_month, TODAY - timedelta(days=2 + index))
+                    start = datetime.combine(
+                        day, time(hour=13 + index), tzinfo=ORG_TIMEZONE
+                    )
+                    try:
+                        entry = session.post(
+                            "/admin-hours/entries",
+                            {
+                                "category_id": category_id,
+                                "clock_in_at": iso(start.astimezone(timezone.utc)),
+                                "clock_out_at": iso(
+                                    (start + timedelta(hours=2)).astimezone(
+                                        timezone.utc
+                                    )
+                                ),
+                                "description": description,
+                            },
+                        )
+                    except ApiError as exc:
+                        self.blocked.append(f"guide 08 hours: entry refused ({exc})")
+                        continue
+                if (
+                    entry is not None
+                    and reason
+                    and str(pick(entry, "status")) == "pending"
+                ):
+                    try:
+                        self.api.post(
+                            f"/admin-hours/entries/{pick(entry, 'id')}/review",
+                            {"action": "reject", "rejection_reason": reason},
+                        )
+                    except ApiError as exc:
+                        self.blocked.append(f"guide 08 hours: reject refused ({exc})")
+            result["hours"] = "ok"
+
+        requester = next(
+            (u for u in users if pick(u, "username") == DEMO_PEER_EXAMINER_USERNAME),
+            None,
+        )
+        if requester:
+            pending = items(
+                self.api.get("/ip-security/exceptions/pending"), "exceptions"
+            )
+            if not any(
+                pick(x, "ipAddress", "ip_address") == self.GUIDE08_IP_EXCEPTION
+                for x in pending
+            ):
+                session = self.member_session(
+                    self.base_url,
+                    str(pick(requester, "id")),
+                    DEMO_PEER_EXAMINER_USERNAME,
+                )
+                try:
+                    session.post(
+                        "/ip-security/exceptions",
+                        {
+                            "ip_address": self.GUIDE08_IP_EXCEPTION,
+                            "reason": "Signing in from the hotel during the state"
+                            " fire school conference.",
+                            "requested_duration_days": 5,
+                            "use_case": "travel",
+                        },
+                    )
+                except ApiError as exc:
+                    self.blocked.append(f"guide 08 IP exception: refused ({exc})")
+            result["ip_exception"] = "ok"
+        return result
+
     def seed_member_admin_hours(self) -> dict[str, Any]:
         """Give the demo member a spread of approved hours and a requirement.
 
@@ -16914,6 +17041,7 @@ class Seeder:
         self.step("unsized shift", self.seed_unsized_shift)
         self.step("sealed compartments", self.seed_sealed_compartments)
         self.step("member admin hours", self.seed_member_admin_hours)
+        self.step("guide 08 admin states", self.seed_guide08_admin_states)
         self.step("profile visibility mix", self.seed_profile_visibility_mix)
         self.step("retired call type", self.seed_retired_call_type)
         self.step("long department message", self.seed_long_department_message)
