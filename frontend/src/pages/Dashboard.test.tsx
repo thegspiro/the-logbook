@@ -486,6 +486,19 @@ describe('Dashboard', () => {
         expect(screen.getByRole('button', { name: /Clock In/ })).toBeInTheDocument();
       });
 
+      it('still offers Take a Shift while a seat on one shift is open to them', async () => {
+        // The general answer says no seat, but a parade can open a single
+        // seat to administrative members. The open-shifts list is already
+        // limited to seats the member can claim, so a non-empty list wins.
+        mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: true });
+        mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 0 } });
+        mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'parade', shift_date: inWindow(4) })]);
+
+        renderWithRouter(<Dashboard />);
+
+        expect(await screen.findByRole('button', { name: /Take a Shift/ })).toBeInTheDocument();
+      });
+
       it('keeps the Standby row when hours were credited to them anyway', async () => {
         // A position changed after the shifts were worked: dropping the row
         // would leave the month total larger than the figures beside it.
