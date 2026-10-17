@@ -5745,14 +5745,31 @@ class ElectionService:
         if not candidates and not approval_items:
             return None, "The election has no accepted candidates yet", ""
 
+        # Each contest prints the method its votes are accepted under: a
+        # Ballot Builder item may override the election's, and the paper
+        # instruction has to match what the electronic ballot enforces.
+        race_items = [
+            item
+            for item in election.ballot_items or []
+            if isinstance(item, dict) and item.get("vote_type") != "approval"
+        ]
         positions = []
         for position in election.positions or []:
+            matching_item = next(
+                (
+                    item
+                    for item in race_items
+                    if position in ballot_item_candidate_positions(item)
+                ),
+                None,
+            )
             positions.append(
                 {
                     "name": position,
                     "candidates": [
                         c.name for c in candidates if c.position == position
                     ],
+                    "voting_method": _effective_voting_method(election, matching_item),
                 }
             )
         # A candidate-selection item whose race is not a plain position (a
@@ -5760,9 +5777,7 @@ class ElectionService:
         # left off the printout (W50-8). An item colliding with a plain
         # position is already printed above.
         plain = set(election.positions or [])
-        for item in election.ballot_items or []:
-            if not isinstance(item, dict) or item.get("vote_type") == "approval":
-                continue
+        for item in race_items:
             aliases = ballot_item_candidate_positions(item)
             if not aliases or aliases & plain:
                 continue
@@ -5770,6 +5785,7 @@ class ElectionService:
                 {
                     "name": item.get("title") or item.get("position") or "",
                     "candidates": [c.name for c in candidates if c.position in aliases],
+                    "voting_method": _effective_voting_method(election, item),
                 }
             )
 

@@ -1677,9 +1677,12 @@ export const ElectionDetailPage: React.FC = () => {
                     </>
                   )}
 
+                  {/* A ballot built only in the Ballot Builder (motions, membership
+                      votes) has no plain positions but still prints: the server
+                      accepts positions or ballot items, and so does the button. */}
                   {election.status !== ElectionStatus.CLOSED &&
                     election.status !== ElectionStatus.CANCELLED &&
-                    (election.positions?.length ?? 0) > 0 && (
+                    ((election.positions?.length ?? 0) > 0 || (election.ballot_items?.length ?? 0) > 0) && (
                       <button
                         onClick={() => {
                           void handleDownloadPrintableBallot();
