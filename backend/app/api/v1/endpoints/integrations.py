@@ -28,7 +28,7 @@ from app.core.utils import sanitize_connector_error
 from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
 from app.mcp.keys import McpKeyService
 from app.mcp.oauth import McpOAuthService
-from app.models.google_workspace import GOOGLE_WORKSPACE_INTEGRATION
+from app.models.directory_account import GOOGLE_WORKSPACE_INTEGRATION
 from app.models.integration import (
     CalendarSyncMapping,
     Integration,

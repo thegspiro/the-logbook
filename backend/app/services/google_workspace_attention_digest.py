@@ -8,7 +8,7 @@ every active member holding ``admin.access`` (the people who connect and
 change the integration), at most once a day per department, and only while
 something has waited longer than ``ATTENTION_OVERDUE_AFTER``.
 
-The list is :meth:`GoogleWorkspaceProvisioningService.attention_items`, not a
+The list is :meth:`DirectoryAccountService.attention_items`, not a
 re-derivation of it (CLAUDE.md pitfall #29).
 """
 
@@ -25,6 +25,11 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies import user_has_permission
 from app.core.config import settings as app_settings
 from app.models.user import Organization, User
+from app.services.directory_account_service import (
+    AttentionIssue,
+    AttentionItem,
+    DirectoryAccountService,
+)
 from app.services.email_policy import (
     EmailKind,
     department_required_kinds,
@@ -32,11 +37,6 @@ from app.services.email_policy import (
 )
 from app.services.email_service import EmailService, wrap_email_body
 from app.services.email_theme import ACCENT_AMBER, action
-from app.services.google_workspace_provisioning_service import (
-    AttentionIssue,
-    AttentionItem,
-    GoogleWorkspaceProvisioningService,
-)
 from app.utils.org_timezone import org_today
 
 SETTINGS_KEY = "google_workspace"
@@ -136,7 +136,7 @@ async def send_google_workspace_attention_digest(
     today = org_today(organization)
     if _last_digest_day(organization) == today:
         return 0
-    service = GoogleWorkspaceProvisioningService(db)
+    service = DirectoryAccountService(db)
     if not await service.is_connected(org_id):
         return 0
     overdue = [i for i in await service.attention_items(org_id) if i.overdue]

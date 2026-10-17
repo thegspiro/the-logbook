@@ -1,15 +1,16 @@
 """
-Google Workspace account provisioning records.
+Directory account provisioning records (Google Workspace today).
 
-One row per member The Logbook tried to give a Google Workspace account when
-they were converted from an applicant. The row is written in the same
-transaction as the member, before Google is called, so a crash between the
-commit and the Directory API call leaves a ``pending`` record an officer can
-retry rather than no trace at all.
+One row per member The Logbook tried to give an account in the department's
+directory -- the provider named by ``provider`` -- when they were converted
+from an applicant, or linked to an account already at their address. The row
+is written in the same transaction as the member, before the provider is
+called, so a crash between the commit and the provider's API call leaves a
+``pending`` record an officer can retry rather than no trace at all.
 
-The temporary Google password is never stored here: it lives only in memory
-for the one call that creates (or resets) the account and the one email that
-delivers it. A retry generates a new one.
+The temporary password is never stored here: it lives only in memory for the
+one call that creates (or resets) the account and the one email that delivers
+it. A retry generates a new one.
 """
 
 from datetime import datetime
@@ -26,20 +27,24 @@ from app.core.utils import generate_uuid
 GOOGLE_WORKSPACE_INTEGRATION = "google-workspace"
 
 
-class GoogleAccountStatus(str, Enum):
+class DirectoryProvider(str, Enum):
+    GOOGLE = "google"
+
+
+class DirectoryAccountStatus(str, Enum):
     PENDING = "pending"
     CREATED = "created"
-    # The address already belonged to a Google account (a returning member, an
+    # The address already belonged to an account (a returning member, an
     # alias, a group). The Logbook records the link and changes nothing about
     # the account except suspending it when the member leaves.
     LINKED_EXISTING = "linked_existing"
     FAILED = "failed"
 
 
-class GoogleAccountProvision(Base):
-    """A member's Google Workspace account, as The Logbook created or found it"""
+class DirectoryAccountProvision(Base):
+    """A member's directory account, as The Logbook created or found it"""
 
-    __tablename__ = "google_account_provisions"
+    __tablename__ = "directory_account_provisions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     organization_id: Mapped[str] = mapped_column(
@@ -48,12 +53,19 @@ class GoogleAccountProvision(Base):
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+    # Which directory holds the account. Rows written before this column
+    # existed read as Google, which is all they could be; there is no Python
+    # default, so that every writer has to say which directory it means.
+    provider: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=DirectoryProvider.GOOGLE.value
+    )
     primary_email: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default=GoogleAccountStatus.PENDING.value
+        String(20), nullable=False, default=DirectoryAccountStatus.PENDING.value
     )
-    google_user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    # Whether the member has been sent the temporary Google password. False on
+    # The provider's immutable id for the account, once known.
+    external_user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Whether the member has been sent the account's temporary password. False on
     # a created account means nobody knows its password yet, which is the one
     # case where a retry may reset it.
     credentials_sent: Mapped[bool] = mapped_column(
@@ -70,11 +82,11 @@ class GoogleAccountProvision(Base):
         DateTime(timezone=True), nullable=True
     )
     # Suspension follows the member: dropped or deleted wants it suspended, a
-    # return wants it back. ``suspension_settled`` is False until Google has
+    # return wants it back. ``suspension_settled`` is False until the directory has
     # been brought to ``suspension_wanted``; a failure leaves it False for a
     # retry. ``suspended_by_logbook`` records that the suspension is ours, and
     # only ours is ever lifted: an account someone had already suspended in
-    # Google stays suspended when the member returns.
+    # the directory stays suspended when the member returns.
     suspension_wanted: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
     )
@@ -104,6 +116,6 @@ class GoogleAccountProvision(Base):
     )
 
     __table_args__ = (
-        Index("ix_google_account_provisions_user", "user_id", unique=True),
-        Index("ix_google_account_provisions_org", "organization_id"),
+        Index("ix_directory_account_provisions_user", "user_id", unique=True),
+        Index("ix_directory_account_provisions_org", "organization_id"),
     )
