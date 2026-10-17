@@ -138,7 +138,7 @@ The **My Training** tab shows:
 - **Pipeline Progress**, **Shift Statistics**, **Shift Completion Reports**
   and **Self-Reported Training**.
 
-![My Training page with stat cards and the personal training record list](./images/02-01-my-training.png)
+![My Training as a member: this year's course and hour tiles, Required Training with its "3 of 4 requirements met" line, upcoming expirations, the requirements and the sections below them](./images/02-01-my-training.png)
 
 **Required Training** shows the percentage of your requirements that you
 currently meet, with "X of Y requirements met" beneath it. When no requirement
@@ -235,11 +235,13 @@ filtered on screen. That is what an outside audit or a new employer wants.
 > **Member Visibility Settings**. If you do not see them, ask an officer to
 > export your records for you.
 
+![The History tab on My Training: all-time totals, the course search and Type filter, this year's records open and earlier years closed with their counts and hours](./images/02-107-my-training-history-tab.png)
+
 <!-- Screenshot needed:
-_[My Training → History tab: the three totals, the search and Type controls, the newest year open with its table and an older year collapsed with its record count and hours.]_
 _[My Training → the Upcoming Expirations & Due Dates list with one row of each kind, including an hours requirement reading "52.5 hrs to go".]_
-_[My Training → an hours requirement with Show monthly hours open: the twelve-month strip with a leave month marked.]_
 -->
+
+![Annual Minimum Training Hours with Show monthly hours open: a bar for each month, the month of leave marked and left out of the average](./images/02-108-monthly-hours-leave.png)
 
 ### Checking an Hours Requirement Month by Month
 
@@ -285,7 +287,7 @@ else. The page is titled **Submit External Training**.
 Your department decides which fields are required. Required fields are marked
 with a red asterisk.
 
-![Submit Training form with course, date, hours, and attachment fields](./images/02-03-submit-training.png)
+![Submit External Training: the class, when and details sections beside the This Submission panel, where the certificate attaches](./images/02-03-submit-training.png)
 
 **After you submit:**
 
@@ -311,13 +313,9 @@ with a red asterisk.
 class from an evening one. An entry submitted before the form asked for a start
 time shows the start time as blank.
 
-<!-- Screenshot needed:
-_[Member (the submitter) at /notifications?tab=inbox: a "Training submission approved with changes — <course>" notice expanded, showing a "• Hours: 3 → 2" line, the officer's notes and the View My Submissions button. Demo data only.]_
--->
+![The member's inbox with the training-submission stack open: "Training submission approved with changes", the Hours 3 → 2 line, the officer's notes and View My Submissions](./images/02-109-approved-with-changes-notice.png)
 
-<!-- Screenshot needed:
-_[Member at /training/submit with one of their submissions in revision_requested state and a reviewer note: the returned-submission notice at the top of Submit Training showing the officer's note, "Returned <date> · Your hours are not counted yet", and the Fix and Resubmit and Withdraw buttons. Demo data only.]_
--->
+![Submit External Training with a returned submission at the top: the officer's note, "Returned … · Your hours are not counted yet", and Fix and Resubmit / Withdraw](./images/02-110-returned-submission.png)
 
 ### What Records Officers Should Know About Certificate Files
 
@@ -1019,9 +1017,7 @@ page and your **Manage progress** view show each requirement's due date, and
 **Overdue** once it has passed. A requirement that is completed, verified or
 waived is never overdue and gets no reminders.
 
-<!-- Screenshot needed:
-_[Program page → Edit requirement on a requirement in a phase: the modal scrolled to the **In this program** section with **Due after enrollment (days)** = 30, **Description members see** and **Message when completed** filled in. Demo data only.]_
--->
+![Edit requirement on a program: the In this program section with Due after enrollment (days) set to 30, the description members see and the message sent when it is completed](./images/02-111-program-requirement-settings.png)
 
 ### What Automatically Updates Progress
 
@@ -1066,9 +1062,7 @@ select **View full progress**. The full progress page shows:
 
 ![A member's full pipeline progress — the current phase marked You are here, with milestones and every requirement](./images/02-93-member-full-progress.png)
 
-<!-- Screenshot needed:
-_[Member enrolled in one program with at least two requirements, at /training/my-training: crop to the Pipeline Progress card — the program name as the card heading, the status chip and overall percentage, each requirement row as "<name> · N%" with its status, and the View full progress link. Demo data only.]_
--->
+![One program on the Pipeline Progress card of My Training: Recruit School Pipeline with its status chip and 60%, each requirement as "name · N%" with its status, and View full progress](./images/02-112-pipeline-progress-card.png)
 
 ### Attending a session for a phase you have not reached
 
@@ -1387,9 +1381,7 @@ all of these screens too.
 > as new members. Record hire dates first, or choose a cutoff earlier than the
 > import. See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).
 
-<!-- Screenshot needed:
-_[Training Admin → Setup → Requirements → edit a requirement → the **Existing Members** section: the three choices **Apply to everyone**, **Exempt existing members** and **Give a catch-up deadline**, with **Give a catch-up deadline** selected and **Existing members joined before** / **Existing members must meet it by** filled in, and the note beneath them.]_
--->
+![The Existing Members section of a requirement: Give a catch-up deadline selected, with the joined-before date, the catch-up deadline and the note beneath](./images/02-113-requirement-existing-members.png)
 
 #### "Who does this change apply to?" — saving a change for new members only
 
@@ -1426,9 +1418,7 @@ When you add a requirement to a **training program**, a similar question asks
 about **Members already enrolled** — see
 [Adding a requirement to a program members are already in](#adding-a-requirement-to-a-program-members-are-already-in).
 
-<!-- Screenshot needed:
-_[Training Admin → Setup → Requirements → edit a requirement, change its hours, press save → the **Who does this change apply to?** dialog with **New members only** selected, the **New standard applies to members who joined on or after** date showing, and **Keep editing** / **Save for new members**.]_
--->
+![Who does this change apply to? with New members only selected, the date the new standard starts from, and Keep editing / Save for new members](./images/02-114-change-scope-dialog.png)
 
 ### Shift Credit
 
@@ -1445,9 +1435,7 @@ attendance toward the requirement.
 
 See [Shifts & Scheduling](./03-scheduling.md#compliance-report).
 
-<!-- Screenshot needed:
-_[Training Admin → Setup → Requirements → edit an Hours requirement: the "Shift attendance satisfies this requirement" tickbox below the hours fields, unticked, with its help text. Demo requirement.]_
--->
+![Shift Credit on an Hours requirement: Shift attendance satisfies this requirement, unticked, with its help text](./images/02-115-shift-credit-box.png)
 
 ### Rolling Period Requirements and Leave of Absence
 
@@ -1629,9 +1617,7 @@ A plain approval sends nothing — the hours appearing on My Training is the
 answer. Nothing is sent when an officer decides their own submission.
 Withdrawing a submission archives its notifications.
 
-<!-- Screenshot needed:
-_[Member holding the Training Officer position at /notifications?tab=inbox: a "Training submission awaiting approval — <demo member>" card expanded to its body with the Review Submission button, or collapsed into an "N training submissions awaiting approval" stack. Seed the submissions after the upgrade so the prompts exist.]_
--->
+![The Training Officer's inbox: training submissions awaiting approval stacked, one opened to its message and Review Submission](./images/02-116-officer-review-prompts.png)
 
 > **Hint:** Submissions reviewed here are separate from finalizing a training
 > session. Whether a session needs a second officer to confirm depends on its
@@ -1718,13 +1704,7 @@ at the top of Training Administration.
   approved minutes (0 gives that member no credit) before selecting **Approve
   and record**.
 
-<!-- Screenshot needed:
-_[Training Officer (training.manage) at /training/approve/:token for a pending approval: the header (event title, Course, Event date, Approve by), the roster with Credited minutes and Approved minutes (one row edited to 0), and the Approval notes field. Never press Approve and record. Capture the page only — no browser address bar, so the token is not visible.]_
--->
-
-<!-- Screenshot needed:
-_[`/training/approve/<token>` for a Training event that requires confirmation: **Approve training credit** above the session title, the **Course** / **Event date** / **Approve by** details, the roster table (**Member**, **Check-in**, **Check-out**, **Credited minutes**, **Approved minutes**, **Note**) with one member's approved minutes edited, and **Approve and record**.]_
--->
+![Approve training credit for the Ventilation Drill: course, event date and approve-by date, the roster with credited and approved minutes (one member set to 0 with a note), the approval notes and Approve and record](./images/02-117-approve-training-credit.png)
 
 ![Step 3 of the Create Session form — the settings, with Require instructor confirmation among them](./images/02-91-session-confirmation-toggle.png)
 
@@ -1850,9 +1830,7 @@ the same rules, so their figures agree:
 _[Training officer under Training Admin > Compliance Matrix in a demo department with one member no requirement applies to: the rail with the Not applicable group beneath Compliant, and that member's detail panel. Demo data only.]_
 -->
 
-<!-- Screenshot needed:
-_[Training officer on the Training dashboard Overview: the Department Compliance card beside the matrix it links to, showing the same percentage.]_
--->
+![The Training dashboard Overview: the Compliance figure in the header and the Department Compliance card both read 91%, with the Compliance Matrix tab beside the Dashboard tab](./images/02-118-compliance-card-and-matrix.png)
 
 > **Compliance is judged on your department's date.** "Is it expired? Is it
 > this month?" is answered using the date in your department's time zone. A
@@ -2311,9 +2289,7 @@ A shift report moves through these stages:
 
 ![A trainee's own shift reports with the personal statistics card above them](./images/02-35-shift-reports-my-reports.png)
 
-<!-- Screenshot needed:
-_[Member without training.manage, no shift reports yet, at /scheduling?tab=shift-reports: the "Shift reports about you" heading, the "No shift reports yet" explanation and the three tiles (the shift itself / your officer's feedback / a place to acknowledge it). No view toggle should be visible.]_
--->
+![Shift reports about you, for a member with none yet: No shift reports yet, what a report will hold, and no view toggle](./images/02-119-no-shift-reports-member.png)
 
 ### Save as Draft
 
@@ -2347,7 +2323,7 @@ whole department, not only reports you filed:
   flagged;
 - **Monthly trend** — reports, hours and calls per month.
 
-![Shift report analytics with summary cards, per-trainee table and monthly hours](./images/02-34-shift-report-analytics.png)
+![Your reporting summary — reports written, shift hours covered and calls covered, the crew summary table and reports written per month](./images/02-34-shift-report-analytics.png)
 
 ### Trainee Statistics Dashboard
 
@@ -3099,7 +3075,7 @@ category to get credit for it.
 Officers can submit and track compliance attestations — formal statements that
 specific compliance requirements have been checked.
 
-![Compliance attestations listing period, percentage and attesting officer](./images/02-73-compliance-attestations.png)
+![New Attestation open with Quarterly chosen and the Quarter picker, the sentence saying the percentage is calculated on submit, and the history with each entry's figure as of its date](./images/02-73-compliance-attestations.png)
 
 **The Logbook works out the percentage; you do not type it.** Select **New
 Attestation**. Choose **Annual** or **Quarterly** — a **Quarter** picker, Q1
@@ -3113,10 +3089,6 @@ Each entry in the history shows that figure and the date it was measured
 (_"as of …"_). A period that has not started is refused. When no member is
 graded, the entry shows **N/A**. Older attestations keep the figures that were
 typed at the time.
-
-<!-- Screenshot needed (replace `02-73-compliance-attestations.png`):
-_[Compliance Officer at the Attestations section: New Attestation open with Period Type Quarterly and the Quarter picker visible, the "calculated when you submit" sentence, and one history entry showing "as of <date>". Demo data only.]_
--->
 
 ### Annual Compliance Report
 
@@ -3398,7 +3370,7 @@ in **Apparatus Skills**, but they do nothing. Each carries a note saying so,
 with a link to the Practical Skills setting. The lists are kept and apply again
 under sign-offs.
 
-_[Screenshot needed: Training Administration > Settings & Data > Practical Skills, both options visible, Skills Testing selected, with the "Changing this deletes nothing" confirmation open. Replaces nothing; new.]_
+![Practical Skills under Settings & Data: Skills Testing marked Current, Shift report sign-offs chosen, and the confirmation saying nothing is deleted](./images/02-120-practical-skills-confirm.png)
 
 ---
 
