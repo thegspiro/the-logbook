@@ -4,7 +4,7 @@ Training Session Pydantic Schemas
 Request and response schemas for training session endpoints.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -13,6 +13,21 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
 from app.schemas.enum_validation import validate_enum_value
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Convert an aware datetime to UTC; read an offset-less one as UTC.
+
+    These values become the session's Event row, whose DATETIME columns keep
+    no offset: the driver formats a datetime by its wall clock, so
+    ``18:00-04:00`` is written as 18:00, read back as 18:00 UTC and shown four
+    hours early. Converting here means the service only ever stores UTC, and
+    a naive value no longer meets an aware one in a comparison (a TypeError,
+    which Pydantic does not turn into a 422).
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 class TrainingSessionCreate(BaseModel):
@@ -82,6 +97,11 @@ class TrainingSessionCreate(BaseModel):
         None, description="Member teaching this session (enables qualification checks)"
     )
 
+    @field_validator("start_datetime", "end_datetime", "rsvp_deadline")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return None if v is None else _as_utc(v)
+
     @field_validator("training_type")
     @classmethod
     def _validate_training_type(cls, v: str) -> str:
@@ -150,6 +170,11 @@ class RecurringTrainingSessionCreate(TrainingSessionCreate):
         None,
         description="ISO date strings (YYYY-MM-DD) of dates to skip",
     )
+
+    @field_validator("recurrence_end_date")
+    @classmethod
+    def _normalize_recurrence_end_utc(cls, v: datetime) -> datetime:
+        return _as_utc(v)
 
     @model_validator(mode="after")
     def validate_recurrence_fields(self) -> "RecurringTrainingSessionCreate":
