@@ -16488,6 +16488,40 @@ class Seeder:
                 self.blocked.append(f"guide 08 saved report {name!r}: {exc}")
         return "ok"
 
+    def seed_guide01_member_states(self) -> dict[str, Any]:
+        """Give one member two profile edits on the same day (guide 01).
+
+        `01-08-member-audit-history` pictures entries showing the time beside
+        the date, which only reads as a difference when two edits share a day.
+        `seed_member_changes` records one rank change per member, so Callum
+        Frazier gets a station edit and a platoon edit. Each saves the value he
+        already holds: the audit records the fields an edit saved, and nothing
+        any other guide pictures about him moves.
+
+        Skipped once any day already holds two of his profile updates.
+        """
+        users = items(self.api.get("/users?limit=200"), "users")
+        member = next((u for u in users if u.get("username") == "cfrazier"), None)
+        user_id = pick(member or {}, "id")
+        if not user_id:
+            return {"skipped": "cfrazier is not on the roster"}
+        history = items(
+            self.api.get(
+                f"/users/{user_id}/audit-history"
+                "?event_type=profile_update&page_size=100"
+            ),
+            "entries",
+        )
+        per_day: dict[str, int] = {}
+        for entry in history:
+            day = str(entry.get("timestamp") or "")[:10]
+            per_day[day] = per_day.get(day, 0) + 1
+        if any(count >= 2 for day, count in per_day.items() if day):
+            return {"skipped": "two same-day profile updates already on file"}
+        for field in ("station", "platoon"):
+            self.api.patch(f"/users/{user_id}/profile", {field: member.get(field)})
+        return {"profile_updates": 2}
+
     def seed_member_admin_hours(self) -> dict[str, Any]:
         """Give the demo member a spread of approved hours and a requirement.
 
@@ -16888,6 +16922,7 @@ class Seeder:
         self.step("enable all modules", self.enable_all_modules)
         members = self.step("members", self.seed_members) or []
         self.step("member changes", lambda: self.seed_member_changes(members))
+        self.step("guide 01 member states", self.seed_guide01_member_states)
         facilities = self.step("facilities", self.seed_facilities) or []
         stations = self.step("stations", lambda: self.seed_locations(facilities)) or []
         self.step("rooms", lambda: self.seed_rooms(facilities))
