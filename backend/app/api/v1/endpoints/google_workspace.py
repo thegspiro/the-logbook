@@ -18,7 +18,7 @@ from app.api.dependencies import require_all_permissions, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
-from app.models.google_workspace import GoogleAccountProvision
+from app.models.directory_account import DirectoryAccountProvision
 from app.models.user import User
 from app.schemas.google_workspace import (
     AttentionItemResponse,
@@ -27,16 +27,19 @@ from app.schemas.google_workspace import (
     GoogleAccountResponse,
     LinkExistingResponse,
 )
-from app.services.google_workspace_provisioning_service import (
-    GoogleWorkspaceProvisioningService,
+from app.services.directory_account_service import (
+    DirectoryAccountService,
     ProvisionRetryError,
     ProvisionRetryTooSoon,
+)
+from app.services.integration_services.google_workspace_service import (
+    GOOGLE_WORKSPACE_PROVIDER,
 )
 
 router = APIRouter()
 
 
-def _to_response(row: Optional[GoogleAccountProvision]) -> GoogleAccountEnvelope:
+def _to_response(row: Optional[DirectoryAccountProvision]) -> GoogleAccountEnvelope:
     if row is None:
         return GoogleAccountEnvelope(account=None)
     return GoogleAccountEnvelope(
@@ -69,7 +72,7 @@ async def get_member_google_account(
 
     **Requires permission: members.manage**
     """
-    row = await GoogleWorkspaceProvisioningService(db).get_for_user(
+    row = await DirectoryAccountService(db).get_for_user(
         str(user_id), str(current_user.organization_id)
     )
     return _to_response(row)
@@ -100,7 +103,7 @@ async def retry_member_google_account(
         lockout_seconds=300,
         scope="google_workspace_retry",
     )
-    service = GoogleWorkspaceProvisioningService(db)
+    service = DirectoryAccountService(db)
     organization_id = str(current_user.organization_id)
     try:
         row = await service.retry(str(user_id), organization_id)
@@ -143,7 +146,7 @@ async def list_attention(
 
     **Requires permission: integrations.manage**
     """
-    items = await GoogleWorkspaceProvisioningService(db).attention_items(
+    items = await DirectoryAccountService(db).attention_items(
         str(current_user.organization_id)
     )
     return AttentionResponse(
@@ -202,8 +205,9 @@ async def link_existing_members(
     )
     organization_id = str(current_user.organization_id)
     try:
-        counts = await GoogleWorkspaceProvisioningService(db).link_existing_members(
+        counts = await DirectoryAccountService(db).link_existing_members(
             organization_id,
+            GOOGLE_WORKSPACE_PROVIDER,
             apply=apply,
             actor_id=str(current_user.id),
             expected=expected,

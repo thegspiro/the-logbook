@@ -1937,7 +1937,7 @@ async def transfer_prospect(
     # A Google Workspace account is created only once the member is durable,
     # and the welcome email that carries its password waits for it.
     send_after_commit = result.pop("_send_welcome_email", None)
-    provision_after_commit = result.pop("_provision_google", None)
+    provision_after_commit = result.pop("_provision_directory_account", None)
     if send_after_commit is not None or provision_after_commit is not None:
         await db.commit()
         # The member is committed: nothing after this point may turn the
@@ -1948,11 +1948,11 @@ async def transfer_prospect(
                 result["welcome_email_sent"] = bool(await send_after_commit())
             if provision_after_commit is not None:
                 await provision_after_commit()
-            from app.services.google_workspace_provisioning_service import (
-                GoogleWorkspaceProvisioningService,
+            from app.services.directory_account_service import (
+                DirectoryAccountService,
             )
 
-            row = await GoogleWorkspaceProvisioningService(db).get_for_user(
+            row = await DirectoryAccountService(db).get_for_user(
                 str(result["user_id"]), str(current_user.organization_id)
             )
             if row is not None:

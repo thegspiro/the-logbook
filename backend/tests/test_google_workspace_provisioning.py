@@ -20,31 +20,33 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.google_workspace import (
+from app.models.directory_account import (
     GOOGLE_WORKSPACE_INTEGRATION,
-    GoogleAccountProvision,
-    GoogleAccountStatus,
+    DirectoryAccountProvision,
+    DirectoryAccountStatus,
 )
 from app.models.integration import Integration
 from app.models.user import Organization, User, UserStatus
 from app.schemas.integration import GoogleWorkspaceConfig
-from app.services.email_service import append_to_email_html
-from app.services.google_workspace_provisioning_service import (
-    GoogleWorkspaceProvisioningService,
+from app.services.directory_account_service import (
+    DirectoryAccountService,
     ProvisionRetryError,
     ProvisionRetryTooSoon,
-    google_credentials_html,
+    credentials_html,
 )
+from app.services.email_service import append_to_email_html
 from app.services.integration_services.google_workspace_service import (
+    GOOGLE_WORKSPACE_PROVIDER,
     GoogleAccountExistsError,
     GoogleWorkspaceDirectory,
     GoogleWorkspaceError,
     _translate,
     directory_for,
+    to_directory_account,
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 
-SERVICE = "app.services.google_workspace_provisioning_service"
+SERVICE = "app.services.directory_account_service"
 DOMAIN = "firedept.org"
 GROUP = "members@firedept.org"
 
@@ -92,10 +94,10 @@ class FakeDirectory:
         self.member_ids: list[str] = []
         self.domain_users: list[dict] = []
 
-    async def create_user(self, email, given, family, password, org_unit, member_id):
+    async def create_user(self, email, given, family, password, member_id):
         if self.create_error:
             raise self.create_error
-        self.created.append((email, given, family, password, org_unit))
+        self.created.append((email, given, family, password))
         self.member_ids.append(member_id)
         return "google-id-1"
 
@@ -121,7 +123,7 @@ class FakeDirectory:
     keys: list[str]
 
     async def list_users(self, domain):
-        return list(self.domain_users)
+        return [to_directory_account(u) for u in self.domain_users]
 
     async def get_user(self, key):
         self.keys.append(key)
@@ -131,10 +133,10 @@ class FakeDirectory:
             raise self.lookup_error
         account = dict(self.existing or {"id": "google-id-1"})
         account["suspended"] = self.suspended
-        return account
+        return to_directory_account(account)
 
     async def is_suspended(self, key):
-        return bool((await self.get_user(key))["suspended"])
+        return (await self.get_user(key)).suspended
 
     async def set_suspended(self, key, suspended):
         if self.suspend_error:
@@ -248,7 +250,7 @@ class TestErrorTranslation:
 @pytest.mark.unit
 class TestCredentialsBlock:
     def test_values_are_escaped(self):
-        block = google_credentials_html("a@firedept.org", "<b>&pw")
+        block = credentials_html(GOOGLE_WORKSPACE_PROVIDER, "a@firedept.org", "<b>&pw")
         assert "&lt;b&gt;&amp;pw" in block
         assert "<b>&pw" not in block
 
@@ -326,11 +328,11 @@ async def _prospect(db: AsyncSession, org: Organization):
     return svc, await svc.get_prospect(str(prospect.id), org.id)
 
 
-async def _row(db: AsyncSession, user_id: str) -> GoogleAccountProvision:
+async def _row(db: AsyncSession, user_id: str) -> DirectoryAccountProvision:
     row = (
         await db.execute(
-            select(GoogleAccountProvision).where(
-                GoogleAccountProvision.user_id == str(user_id)
+            select(DirectoryAccountProvision).where(
+                DirectoryAccountProvision.user_id == str(user_id)
             )
         )
     ).scalar_one()
@@ -348,7 +350,7 @@ class TestConversion:
 
         assert result["success"] is True
         assert result["google_account"] is None
-        assert "_provision_google" not in result
+        assert "_provision_directory_account" not in result
         assert "_send_welcome_email" not in result
 
     async def test_the_welcome_email_waits_and_carries_the_google_password(
@@ -375,16 +377,19 @@ class TestConversion:
         assert dept.endswith(f"@{DOMAIN}")
         assert fake.created[0][0] == dept
         assert fake.member_ids == [str(result["user_id"])]
-        assert fake.created[0][4] == "/Members"
         assert fake.groups == [(GROUP, dept)]
         kwargs = welcome.call_args.kwargs
         # The new mailbox cannot receive the password that opens it.
         assert kwargs["recipient_email"] == prospect.email
-        assert kwargs["google_account"] == (dept, fake.created[0][3])
+        assert kwargs["directory_account"] == (
+            GOOGLE_WORKSPACE_PROVIDER,
+            dept,
+            fake.created[0][3],
+        )
         assert kwargs["temp_password"] != fake.created[0][3]
 
         row = await _row(db_session, result["user_id"])
-        assert row.status == GoogleAccountStatus.CREATED.value
+        assert row.status == DirectoryAccountStatus.CREATED.value
         assert row.credentials_sent is True
         assert row.pending_groups is None
 
@@ -405,7 +410,7 @@ class TestConversion:
                 AsyncMock(return_value=(1, 0)),
             ) as send,
         ):
-            await result["_provision_google"]()
+            await result["_provision_directory_account"]()
 
         assert send.call_args.kwargs["to_emails"] == [prospect.email]
         assert fake.created[0][3] in send.call_args.kwargs["text_body"]
@@ -425,13 +430,13 @@ class TestConversion:
             result = await svc._do_transfer(prospect, None, send_welcome_email=True)
             await db_session.commit()
             with patch.object(
-                GoogleWorkspaceProvisioningService,
+                DirectoryAccountService,
                 "provision",
                 AsyncMock(side_effect=RuntimeError("boom")),
             ):
                 assert await result["_send_welcome_email"]() is True
 
-        assert welcome.call_args.kwargs["google_account"] is None
+        assert welcome.call_args.kwargs["directory_account"] is None
         assert welcome.call_args.kwargs["prospect"].first_name == "Jordan"
 
     async def _provision_into_existing(self, db_session, **lookup):
@@ -446,12 +451,12 @@ class TestConversion:
                 status=UserStatus.DROPPED_VOLUNTARY,
             )
             db_session.add(
-                GoogleAccountProvision(
+                DirectoryAccountProvision(
                     organization_id=org.id,
                     user_id=former.id,
                     primary_email=f"reused-{_hex()}@{DOMAIN}",
-                    status=GoogleAccountStatus.CREATED.value,
-                    google_user_id=lookup["former_account"],
+                    status=DirectoryAccountStatus.CREATED.value,
+                    external_user_id=lookup["former_account"],
                 )
             )
         svc, prospect = await _prospect(db_session, org)
@@ -469,7 +474,7 @@ class TestConversion:
                 AsyncMock(return_value=(1, 0)),
             ) as send,
         ):
-            await result["_provision_google"]()
+            await result["_provision_directory_account"]()
         return await _row(db_session, result["user_id"]), fake, send
 
     async def test_an_existing_account_is_linked_and_left_alone(self, db_session):
@@ -481,8 +486,8 @@ class TestConversion:
                 "creationTime": "2019-03-01T12:00:00.000Z",
             },
         )
-        assert row.status == GoogleAccountStatus.LINKED_EXISTING.value
-        assert row.google_user_id == "g-other"
+        assert row.status == DirectoryAccountStatus.LINKED_EXISTING.value
+        assert row.external_user_id == "g-other"
         assert fake.groups == []
         assert fake.resets == []
         assert row.credentials_sent is False
@@ -498,8 +503,8 @@ class TestConversion:
                 "creationTime": "2019-03-01T12:00:00.000Z",
             },
         )
-        assert row.status == GoogleAccountStatus.FAILED.value
-        assert row.google_user_id is None
+        assert row.status == DirectoryAccountStatus.FAILED.value
+        assert row.external_user_id is None
         assert "alias" in (row.last_error or "")
         # Nothing of the chief's is ever touched: the member's departure
         # stages no suspension on a record with no account of its own.
@@ -518,7 +523,7 @@ class TestConversion:
         row, _, _ = await self._provision_into_existing(
             db_session, lookup_error=GoogleAccountNotFoundError("group")
         )
-        assert row.status == GoogleAccountStatus.FAILED.value
+        assert row.status == DirectoryAccountStatus.FAILED.value
         assert "group" in (row.last_error or "")
 
     async def test_an_account_an_earlier_attempt_created_is_recognised_as_ours(
@@ -535,8 +540,8 @@ class TestConversion:
                 "externalIds": [_tag(member)],
             },
         )
-        assert row.status == GoogleAccountStatus.CREATED.value
-        assert row.google_user_id == "g-ours"
+        assert row.status == DirectoryAccountStatus.CREATED.value
+        assert row.external_user_id == "g-ours"
         assert fake.keys[-1] == "g-ours"
         assert len(fake.resets) == 1
         assert fake.resets[0] in send.call_args.kwargs["text_body"]
@@ -554,7 +559,7 @@ class TestConversion:
                 "creationTime": datetime.now(timezone.utc).isoformat(),
             },
         )
-        assert row.status == GoogleAccountStatus.LINKED_EXISTING.value
+        assert row.status == DirectoryAccountStatus.LINKED_EXISTING.value
         assert fake.resets == []
 
     async def test_an_account_tagged_for_another_member_is_not_reset(self, db_session):
@@ -566,7 +571,7 @@ class TestConversion:
                 "externalIds": [_tag("someone-else")],
             },
         )
-        assert row.status == GoogleAccountStatus.LINKED_EXISTING.value
+        assert row.status == DirectoryAccountStatus.LINKED_EXISTING.value
         assert fake.resets == []
 
     async def test_an_account_a_former_member_still_holds_is_not_linked_again(
@@ -584,8 +589,8 @@ class TestConversion:
                 "suspended": True,
             },
         )
-        assert row.status == GoogleAccountStatus.FAILED.value
-        assert row.google_user_id is None
+        assert row.status == DirectoryAccountStatus.FAILED.value
+        assert row.external_user_id is None
         assert "still recorded for another member" in (row.last_error or "")
         assert fake.resets == []
 
@@ -598,10 +603,10 @@ class TestConversion:
         result = await svc._do_transfer(prospect, None)
         await db_session.commit()
         with patch(f"{SERVICE}.directory_for", return_value=fake):
-            await result["_provision_google"]()
+            await result["_provision_directory_account"]()
 
         row = await _row(db_session, result["user_id"])
-        assert row.status == GoogleAccountStatus.FAILED.value
+        assert row.status == DirectoryAccountStatus.FAILED.value
         assert row.last_error == "No licenses left."
         await db_session.refresh(prospect)
         assert str(prospect.transferred_user_id) == str(result["user_id"])
@@ -619,14 +624,14 @@ class TestConversion:
             result = await svc._do_transfer(prospect, None, send_welcome_email=True)
 
         row = await _row(db_session, result["user_id"])
-        assert row.status == GoogleAccountStatus.FAILED.value
+        assert row.status == DirectoryAccountStatus.FAILED.value
         # No mailbox is being created, so nothing is deferred or rerouted: the
         # welcome email goes now, to the department address, without a card.
-        assert "_provision_google" not in result
+        assert "_provision_directory_account" not in result
         assert "_send_welcome_email" not in result
         assert result["welcome_email_sent"] is True
         assert welcome.call_args.kwargs["recipient_email"] == result["email"]
-        assert welcome.call_args.kwargs["google_account"] is None
+        assert welcome.call_args.kwargs["directory_account"] is None
 
     async def test_a_failed_group_is_kept_for_retry(self, db_session):
         org = await _org(db_session)
@@ -643,10 +648,10 @@ class TestConversion:
                 AsyncMock(return_value=(1, 0)),
             ),
         ):
-            await result["_provision_google"]()
+            await result["_provision_directory_account"]()
 
         row = await _row(db_session, result["user_id"])
-        assert row.status == GoogleAccountStatus.CREATED.value
+        assert row.status == DirectoryAccountStatus.CREATED.value
         assert row.pending_groups == [GROUP]
         assert GROUP in (row.last_error or "")
 
@@ -666,7 +671,7 @@ class TestRetry:
 
     async def test_a_failed_account_is_created_and_its_password_sent(self, db_session):
         org, user_id = await self._staged(
-            db_session, status=GoogleAccountStatus.FAILED.value
+            db_session, status=DirectoryAccountStatus.FAILED.value
         )
         fake = FakeDirectory()
         with (
@@ -676,17 +681,15 @@ class TestRetry:
                 AsyncMock(return_value=(1, 0)),
             ),
         ):
-            row = await GoogleWorkspaceProvisioningService(db_session).retry(
-                user_id, org.id
-            )
-        assert row.status == GoogleAccountStatus.CREATED.value
+            row = await DirectoryAccountService(db_session).retry(user_id, org.id)
+        assert row.status == DirectoryAccountStatus.CREATED.value
         assert row.credentials_sent is True
         assert row.attempts == 1
 
     async def test_an_undelivered_password_is_reset_and_resent(self, db_session):
         org, user_id = await self._staged(
             db_session,
-            status=GoogleAccountStatus.CREATED.value,
+            status=DirectoryAccountStatus.CREATED.value,
             credentials_sent=False,
             pending_groups=None,
         )
@@ -698,38 +701,34 @@ class TestRetry:
                 AsyncMock(return_value=(1, 0)),
             ) as send,
         ):
-            row = await GoogleWorkspaceProvisioningService(db_session).retry(
-                user_id, org.id
-            )
+            row = await DirectoryAccountService(db_session).retry(user_id, org.id)
         assert len(fake.resets) == 1
         assert fake.resets[0] in send.call_args.kwargs["text_body"]
         assert row.credentials_sent is True
 
     async def test_a_linked_account_is_never_touched(self, db_session):
         org, user_id = await self._staged(
-            db_session, status=GoogleAccountStatus.LINKED_EXISTING.value
+            db_session, status=DirectoryAccountStatus.LINKED_EXISTING.value
         )
         with pytest.raises(ProvisionRetryError):
-            await GoogleWorkspaceProvisioningService(db_session).retry(user_id, org.id)
+            await DirectoryAccountService(db_session).retry(user_id, org.id)
 
     async def test_a_second_retry_inside_a_minute_is_refused(self, db_session):
         org, user_id = await self._staged(
             db_session,
-            status=GoogleAccountStatus.FAILED.value,
+            status=DirectoryAccountStatus.FAILED.value,
             last_attempt_at=datetime.now(timezone.utc) - timedelta(seconds=5),
         )
         with pytest.raises(ProvisionRetryTooSoon):
-            await GoogleWorkspaceProvisioningService(db_session).retry(user_id, org.id)
+            await DirectoryAccountService(db_session).retry(user_id, org.id)
 
     async def test_another_orgs_member_is_not_found(self, db_session):
         _, user_id = await self._staged(
-            db_session, status=GoogleAccountStatus.FAILED.value
+            db_session, status=DirectoryAccountStatus.FAILED.value
         )
         other = await _org(db_session)
         with pytest.raises(LookupError):
-            await GoogleWorkspaceProvisioningService(db_session).retry(
-                user_id, other.id
-            )
+            await DirectoryAccountService(db_session).retry(user_id, other.id)
 
     async def test_the_endpoint_maps_refusals_to_status_codes(self, db_session):
         from app.api.v1.endpoints.google_workspace import (
@@ -738,7 +737,7 @@ class TestRetry:
         )
 
         org, user_id = await self._staged(
-            db_session, status=GoogleAccountStatus.LINKED_EXISTING.value
+            db_session, status=DirectoryAccountStatus.LINKED_EXISTING.value
         )
         caller = SimpleNamespace(id=None, organization_id=org.id)
         envelope = await get_member_google_account(
@@ -857,7 +856,7 @@ class TestTransferEndpointAfterCommit:
             patch.object(pipeline_ep, "_enforce_rank_grant_ceiling", AsyncMock()),
             patch.object(pipeline_ep, "log_audit_event", AsyncMock()),
             patch.object(
-                GoogleWorkspaceProvisioningService,
+                DirectoryAccountService,
                 "get_for_user",
                 AsyncMock(return_value=row),
             ),
@@ -908,16 +907,16 @@ class TestTransferEndpointAfterCommit:
             "user_id": "u-new",
             "message": "ok",
             "google_account": {"status": "pending", "email": "a@firedept.org"},
-            "_provision_google": AsyncMock(side_effect=RuntimeError("boom")),
+            "_provision_directory_account": AsyncMock(side_effect=RuntimeError("boom")),
         }
         result, db_events = await self._run(transfer)
 
         assert db_events == ["commit", "rollback"]
         assert result["success"] is True
-        assert "_provision_google" not in result
+        assert "_provision_directory_account" not in result
 
 
-async def _member_with_account(db_session, status=GoogleAccountStatus.CREATED.value):
+async def _member_with_account(db_session, status=DirectoryAccountStatus.CREATED.value):
     """A converted member whose Google account exists (or was linked)."""
     org = await _org(db_session)
     await _connect(db_session, org)
@@ -968,7 +967,7 @@ async def _backdate_service(db_session, user_id):
 async def _settle(db_session):
     """Run what the departure hook staged. The test session's commits only
     release savepoints, so the after-commit task deliberately does not run."""
-    from app.models.google_workspace_departure import run_staged_now
+    from app.models.directory_account_departure import run_staged_now
 
     await run_staged_now(db_session)
 
@@ -1102,8 +1101,8 @@ class TestSuspension:
         assert fake.suspend_calls == [True]
         gone = (
             await db_session.execute(
-                select(GoogleAccountProvision).where(
-                    GoogleAccountProvision.primary_email == address
+                select(DirectoryAccountProvision).where(
+                    DirectoryAccountProvision.primary_email == address
                 )
             )
         ).scalar_one_or_none()
@@ -1111,7 +1110,7 @@ class TestSuspension:
 
     async def test_a_linked_account_is_suspended_too(self, db_session):
         org, user_id, caller = await _member_with_account(
-            db_session, status=GoogleAccountStatus.LINKED_EXISTING.value
+            db_session, status=DirectoryAccountStatus.LINKED_EXISTING.value
         )
         fake = FakeDirectory()
         with patch(f"{SERVICE}.directory_for", return_value=fake):
@@ -1120,7 +1119,7 @@ class TestSuspension:
 
     async def test_a_suspension_that_was_not_ours_is_never_lifted(self, db_session):
         org, user_id, caller = await _member_with_account(
-            db_session, status=GoogleAccountStatus.LINKED_EXISTING.value
+            db_session, status=DirectoryAccountStatus.LINKED_EXISTING.value
         )
         fake = FakeDirectory()
         fake.suspended = True
@@ -1152,9 +1151,7 @@ class TestSuspension:
         await db_session.commit()
         fake.suspend_error = None
         with patch(f"{SERVICE}.directory_for", return_value=fake):
-            row = await GoogleWorkspaceProvisioningService(db_session).retry(
-                user_id, org.id
-            )
+            row = await DirectoryAccountService(db_session).retry(user_id, org.id)
         assert row.suspension_settled is True
         assert row.suspended_by_logbook is True
 
@@ -1174,12 +1171,12 @@ class TestSuspension:
 
     async def test_no_account_is_created_for_a_member_who_has_left(self, db_session):
         org, user_id, caller = await _member_with_account(
-            db_session, status=GoogleAccountStatus.FAILED.value
+            db_session, status=DirectoryAccountStatus.FAILED.value
         )
         with patch(f"{SERVICE}.directory_for", return_value=FakeDirectory()):
             await _change_status(db_session, user_id, caller, "dropped_voluntary")
         with pytest.raises(ProvisionRetryError):
-            await GoogleWorkspaceProvisioningService(db_session).retry(user_id, org.id)
+            await DirectoryAccountService(db_session).retry(user_id, org.id)
 
     async def test_a_member_without_an_account_record_is_untouched(self, db_session):
         org = await _org(db_session)
@@ -1187,8 +1184,8 @@ class TestSuspension:
         svc, prospect = await _prospect(db_session, org)
         result = await svc._do_transfer(prospect, None)
         await db_session.execute(
-            GoogleAccountProvision.__table__.delete().where(
-                GoogleAccountProvision.user_id == str(result["user_id"])
+            DirectoryAccountProvision.__table__.delete().where(
+                DirectoryAccountProvision.user_id == str(result["user_id"])
             )
         )
         await db_session.commit()
@@ -1217,9 +1214,7 @@ class TestReviewFixes:
             row.last_attempt_at = None
             await db_session.commit()
             with pytest.raises(ProvisionRetryError):
-                await GoogleWorkspaceProvisioningService(db_session).retry(
-                    user_id, org.id
-                )
+                await DirectoryAccountService(db_session).retry(user_id, org.id)
         assert fake.resets == []
 
     async def test_an_unreadable_key_is_recorded_not_raised(self, db_session):
@@ -1231,9 +1226,7 @@ class TestReviewFixes:
             f"{SERVICE}.directory_for",
             side_effect=GoogleWorkspaceError("The stored key is unreadable."),
         ):
-            row = await GoogleWorkspaceProvisioningService(db_session).retry(
-                user_id, org.id
-            )
+            row = await DirectoryAccountService(db_session).retry(user_id, org.id)
         assert row.last_error == "The stored key is unreadable."
         assert row.pending_groups == [GROUP]
 
@@ -1242,7 +1235,7 @@ class TestReviewFixes:
     ):
         org, user_id, caller = await _member_with_account(db_session)
         with patch.object(
-            GoogleWorkspaceProvisioningService,
+            DirectoryAccountService,
             "_reconcile_suspension",
             AsyncMock(side_effect=RuntimeError("boom")),
         ):
@@ -1257,7 +1250,7 @@ class TestReviewFixes:
     async def test_suspension_addresses_the_account_by_its_google_id(self, db_session):
         org, user_id, caller = await _member_with_account(db_session)
         row = await _row(db_session, user_id)
-        row.google_user_id = "g-123"
+        row.external_user_id = "g-123"
         await db_session.commit()
         fake = FakeDirectory()
         with patch(f"{SERVICE}.directory_for", return_value=fake):
@@ -1322,7 +1315,7 @@ class TestCentralDepartureHook:
         assert fake.suspend_calls == [True]
 
     async def test_a_departure_that_rolls_back_leaves_nothing(self, db_session):
-        from app.models.google_workspace_departure import _RECONCILE
+        from app.models.directory_account_departure import _RECONCILE
 
         org, user_id, _ = await _member_with_account(db_session)
         member = await db_session.get(User, user_id)
@@ -1390,9 +1383,7 @@ class TestSuspensionSweep:
             last_attempt_at=datetime.now(timezone.utc) - timedelta(hours=1),
         )
         with patch(f"{SERVICE}.directory_for", return_value=FakeDirectory()):
-            await GoogleWorkspaceProvisioningService(
-                db_session
-            ).sync_pending_suspensions()
+            await DirectoryAccountService(db_session).sync_pending_suspensions()
 
         assert (await _row(db_session, fresh)).suspension_settled is True
         assert (await _row(db_session, due)).suspension_settled is True
@@ -1419,7 +1410,7 @@ class TestSuspensionSweep:
 @pytest.mark.unit
 class TestAfterCommit:
     async def test_a_real_commit_starts_the_sync_in_the_background(self):
-        from app.models import google_workspace_departure as hook
+        from app.models import directory_account_departure as hook
 
         session = SimpleNamespace(
             bind=object(),
@@ -1433,7 +1424,7 @@ class TestAfterCommit:
         assert hook._RECONCILE not in session.info
 
     def test_nothing_staged_starts_nothing(self):
-        from app.models import google_workspace_departure as hook
+        from app.models import directory_account_departure as hook
 
         session = SimpleNamespace(bind=object(), info={})
         with patch.object(hook, "_run_after_commit", AsyncMock()) as run:
@@ -1456,7 +1447,7 @@ class TestCreationTag:
         }
         with patch.object(directory, "_service", return_value=service):
             await directory.create_user(
-                "a@firedept.org", "A", "B", "pw", "/", member_id="member-9"
+                "a@firedept.org", "A", "B", "pw", member_id="member-9"
             )
         body = service.users.return_value.insert.call_args.kwargs["body"]
         assert body["externalIds"] == [
@@ -1471,6 +1462,40 @@ class TestCreationTag:
             logbook_member_id({"externalIds": [{"type": "work", "value": "x"}]}) is None
         )
 
+    async def test_the_account_goes_into_the_configured_org_unit(self):
+        # The org unit is the Google client's own setting, read from the
+        # integration when the client is built; the engine never sees it.
+        integration = Integration(
+            config={"admin_email": "a@firedept.org", "org_unit_path": "/Members"}
+        )
+        integration.set_secret("service_account_key", _key())
+        directory = directory_for(integration)
+        service = MagicMock()
+        service.users.return_value.insert.return_value.execute.return_value = {
+            "id": "g-1"
+        }
+        with patch.object(directory, "_service", return_value=service):
+            await directory.create_user(
+                "a@firedept.org", "A", "B", "pw", member_id="member-9"
+            )
+        body = service.users.return_value.insert.call_args.kwargs["body"]
+        assert body["orgUnitPath"] == "/Members"
+
+    def test_a_user_resource_is_read_as_the_engine_reads_accounts(self):
+        account = to_directory_account(
+            {
+                "id": "g-1",
+                "primaryEmail": "Pat@FireDept.org",
+                "suspended": True,
+                "externalIds": [_tag("member-9")],
+            }
+        )
+        assert account.id == "g-1"
+        assert account.primary_email == "pat@firedept.org"
+        assert account.suspended is True
+        assert account.member_id == "member-9"
+        assert to_directory_account({}).id == ""
+
     async def test_the_domain_listing_follows_every_page(self):
         directory = GoogleWorkspaceDirectory({}, "admin@firedept.org")
         service = MagicMock()
@@ -1480,7 +1505,8 @@ class TestCreationTag:
         ]
         with patch.object(directory, "_service", return_value=service):
             users = await directory.list_users("x.org")
-        assert [u["id"] for u in users] == ["1", "2"]
+        assert [u.id for u in users] == ["1", "2"]
+        assert [u.primary_email for u in users] == ["a@x.org", "b@x.org"]
         tokens = [
             c.kwargs["pageToken"]
             for c in service.users.return_value.list.call_args_list
@@ -1534,9 +1560,9 @@ class TestLinkExistingMembers:
     async def test_a_preview_counts_without_writing(self, db_session):
         org, members, fake = await self._roster(db_session)
         with patch(f"{SERVICE}.directory_for", return_value=fake):
-            counts = await GoogleWorkspaceProvisioningService(
-                db_session
-            ).link_existing_members(org.id, apply=False, actor_id=None)
+            counts = await DirectoryAccountService(db_session).link_existing_members(
+                org.id, GOOGLE_WORKSPACE_PROVIDER, apply=False, actor_id=None
+            )
         assert counts == {
             "linked": 1,
             "already_linked": 0,
@@ -1548,8 +1574,8 @@ class TestLinkExistingMembers:
         }
         rows = (
             await db_session.execute(
-                select(GoogleAccountProvision).where(
-                    GoogleAccountProvision.organization_id == org.id
+                select(DirectoryAccountProvision).where(
+                    DirectoryAccountProvision.organization_id == org.id
                 )
             )
         ).all()
@@ -1557,16 +1583,18 @@ class TestLinkExistingMembers:
 
     async def test_applying_links_only_exact_primary_addresses(self, db_session):
         org, members, fake = await self._roster(db_session)
-        service = GoogleWorkspaceProvisioningService(db_session)
+        service = DirectoryAccountService(db_session)
         with patch(f"{SERVICE}.directory_for", return_value=fake):
-            await service.link_existing_members(org.id, apply=True, actor_id=None)
+            await service.link_existing_members(
+                org.id, GOOGLE_WORKSPACE_PROVIDER, apply=True, actor_id=None
+            )
             again = await service.link_existing_members(
-                org.id, apply=True, actor_id=None
+                org.id, GOOGLE_WORKSPACE_PROVIDER, apply=True, actor_id=None
             )
 
         row = await _row(db_session, str(members["match"].id))
-        assert row.status == GoogleAccountStatus.LINKED_EXISTING.value
-        assert row.google_user_id == "g-match"
+        assert row.status == DirectoryAccountStatus.LINKED_EXISTING.value
+        assert row.external_user_id == "g-match"
         assert again["linked"] == 0
         assert again["already_linked"] == 1
         for key in ("missing", "alias", "personal", "dropped"):
@@ -1577,18 +1605,18 @@ class TestLinkExistingMembers:
         # linked would tell an administrator a departure is covered.
         org, members, fake = await self._roster(db_session)
         db_session.add(
-            GoogleAccountProvision(
+            DirectoryAccountProvision(
                 organization_id=org.id,
                 user_id=members["match"].id,
                 primary_email=members["match"].email,
-                status=GoogleAccountStatus.FAILED.value,
+                status=DirectoryAccountStatus.FAILED.value,
             )
         )
         await db_session.commit()
         with patch(f"{SERVICE}.directory_for", return_value=fake):
-            counts = await GoogleWorkspaceProvisioningService(
-                db_session
-            ).link_existing_members(org.id, apply=False, actor_id=None)
+            counts = await DirectoryAccountService(db_session).link_existing_members(
+                org.id, GOOGLE_WORKSPACE_PROVIDER, apply=False, actor_id=None
+            )
         assert counts["unfinished"] == 1
         assert counts["already_linked"] == 0
         assert counts["linked"] == 0
@@ -1604,20 +1632,20 @@ class TestLinkExistingMembers:
             status=UserStatus.DROPPED_VOLUNTARY,
         )
         db_session.add(
-            GoogleAccountProvision(
+            DirectoryAccountProvision(
                 organization_id=org.id,
                 user_id=former.id,
                 primary_email=members["match"].email,
-                status=GoogleAccountStatus.CREATED.value,
-                google_user_id="g-match",
+                status=DirectoryAccountStatus.CREATED.value,
+                external_user_id="g-match",
                 suspended_by_logbook=True,
             )
         )
         await db_session.commit()
-        service = GoogleWorkspaceProvisioningService(db_session)
+        service = DirectoryAccountService(db_session)
         with patch(f"{SERVICE}.directory_for", return_value=fake):
             counts = await service.link_existing_members(
-                org.id, apply=True, actor_id=None
+                org.id, GOOGLE_WORKSPACE_PROVIDER, apply=True, actor_id=None
             )
         assert counts["account_in_use"] == 1
         assert counts["linked"] == 0
@@ -1627,17 +1655,21 @@ class TestLinkExistingMembers:
         self, db_session
     ):
         org, members, fake = await self._roster(db_session)
-        service = GoogleWorkspaceProvisioningService(db_session)
+        service = DirectoryAccountService(db_session)
         with patch(f"{SERVICE}.directory_for", return_value=fake):
             with pytest.raises(ProvisionRetryError, match="roster changed"):
                 await service.link_existing_members(
-                    org.id, apply=True, actor_id=None, expected=3
+                    org.id,
+                    GOOGLE_WORKSPACE_PROVIDER,
+                    apply=True,
+                    actor_id=None,
+                    expected=3,
                 )
             assert (
                 await service.get_for_user(str(members["match"].id), org.id)
             ) is None
             counts = await service.link_existing_members(
-                org.id, apply=True, actor_id=None, expected=1
+                org.id, GOOGLE_WORKSPACE_PROVIDER, apply=True, actor_id=None, expected=1
             )
         assert counts["linked"] == 1
         assert (
@@ -1660,9 +1692,9 @@ class TestLinkExistingMembers:
         event.listen(target, "before_cursor_execute", record)
         try:
             with patch(f"{SERVICE}.directory_for", return_value=fake):
-                await GoogleWorkspaceProvisioningService(
-                    db_session
-                ).link_existing_members(org.id, apply=True, actor_id=None)
+                await DirectoryAccountService(db_session).link_existing_members(
+                    org.id, GOOGLE_WORKSPACE_PROVIDER, apply=True, actor_id=None
+                )
         finally:
             event.remove(target, "before_cursor_execute", record)
         roster_reads = [
@@ -1676,8 +1708,8 @@ class TestLinkExistingMembers:
     async def test_a_linked_member_who_leaves_is_suspended_by_id(self, db_session):
         org, members, fake = await self._roster(db_session)
         with patch(f"{SERVICE}.directory_for", return_value=fake):
-            await GoogleWorkspaceProvisioningService(db_session).link_existing_members(
-                org.id, apply=True, actor_id=None
+            await DirectoryAccountService(db_session).link_existing_members(
+                org.id, GOOGLE_WORKSPACE_PROVIDER, apply=True, actor_id=None
             )
             member = members["match"]
             member.status = UserStatus.DROPPED_INVOLUNTARY
@@ -1691,12 +1723,12 @@ class TestLinkExistingMembers:
         other = await _org(db_session)
         await _connect(db_session, other)
         with patch(f"{SERVICE}.directory_for", return_value=fake):
-            counts = await GoogleWorkspaceProvisioningService(
-                db_session
-            ).link_existing_members(other.id, apply=True, actor_id=None)
+            counts = await DirectoryAccountService(db_session).link_existing_members(
+                other.id, GOOGLE_WORKSPACE_PROVIDER, apply=True, actor_id=None
+            )
         assert counts["linked"] == 0
         assert (
-            await GoogleWorkspaceProvisioningService(db_session).get_for_user(
+            await DirectoryAccountService(db_session).get_for_user(
                 str(members["match"].id), org.id
             )
         ) is None
@@ -1771,7 +1803,7 @@ class TestDuplicateKeyClassification:
     def test_only_a_duplicate_key_reads_as_a_race(self):
         from sqlalchemy.exc import IntegrityError
 
-        from app.services.google_workspace_provisioning_service import (
+        from app.services.directory_account_service import (
             _is_duplicate_key,
         )
 
