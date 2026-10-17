@@ -7307,6 +7307,392 @@ class Seeder:
                 f"time-off history: {raised} of {self.TIME_OFF_HISTORY_MIN} raised"
             )
 
+    # ------------------------------------------------------------------
+    # Guide 03 (scheduling): outside apparatus, exchanges, history import
+    # ------------------------------------------------------------------
+
+    #: Placeholder departments. The guide asks for invented names, never a real
+    #: neighbouring department, so these name no actual fire company.
+    OUTSIDE_AGENCIES = (
+        (
+            "Township Fire Company",
+            (("Engine 21", "engine", True), ("Tanker 23", "tanker", False)),
+        ),
+        ("Lakeside Volunteer Rescue", (("Ambulance 58", "ambulance", True),)),
+    )
+
+    #: The ordinary member the guide-03 member-view shots sign in as, beside
+    #: the demo member: they file no shift reports and have one approved
+    #: exchange, so their Requests and Shift Reports tabs are the "nothing
+    #: pending" states the guide pictures. Mirrors
+    #: ``DEMO_SECOND_MEMBER_CREDENTIALS`` in manifest.mjs.
+    SECOND_MEMBER_USERNAME = "snolan"
+
+    #: The member who raises the pending exchange the officer's Requests tab
+    #: reviews. Not the demo member, whose own Requests tab several shots
+    #: photograph in a known state.
+    EXCHANGE_REQUESTER_USERNAME = "rduarte"
+
+    HISTORY_IMPORT_FILENAME = "station-log-august-2026.csv"
+
+    def seed_guide03_scheduling(self) -> None:
+        """State the scheduling guide pictures that nothing else seeds."""
+        self._seed_outside_apparatus()
+        self._seed_member_exchanges()
+        self._seed_history_import_draft()
+        self._seed_earlier_month_report()
+
+    def _user_ids_by_username(self) -> dict[str, str]:
+        return {
+            str(pick(u, "username")): str(pick(u, "id"))
+            for u in items(self.api.get("/users?limit=200"), "users")
+            if pick(u, "id")
+        }
+
+    def _seed_outside_apparatus(self) -> None:
+        """Two outside departments, and shifts members logged on their units.
+
+        The Outside Apparatus settings section, the member's "Shifts with
+        other departments" card and the Member Hours report's outside tables
+        all read these. One unit is turned off, which the settings shot shows,
+        and one of the demo member's entries is rejected, so the card carries a
+        **Not counted** row with its reason. Entries are logged before the unit
+        is turned off: a member cannot pick an inactive unit, and the history
+        a department keeps from before it retired one is the realistic case.
+        """
+        agencies = {
+            str(pick(a, "name")): a
+            for a in items(
+                self.api.get("/scheduling/external-hours/agencies"), "agencies"
+            )
+        }
+        units: dict[str, str] = {}
+        retire: list[str] = []
+        for agency_name, apparatus in self.OUTSIDE_AGENCIES:
+            agency = agencies.get(agency_name) or self.api.post(
+                "/scheduling/external-hours/agencies", {"name": agency_name}
+            )
+            have = {str(pick(u, "name")): u for u in (pick(agency, "apparatus") or [])}
+            for unit_name, unit_type, active in apparatus:
+                unit = have.get(unit_name) or self.api.post(
+                    f"/scheduling/external-hours/agencies/{pick(agency, 'id')}"
+                    "/apparatus",
+                    {"name": unit_name, "apparatus_type": unit_type},
+                )
+                units[unit_name] = str(pick(unit, "id"))
+                if not active and pick(unit, "is_active") is not False:
+                    retire.append(units[unit_name])
+
+        existing = items(self.api.get("/scheduling/external-hours?limit=100"), "items")
+        if not existing:
+            ids = self._user_ids_by_username()
+            demo = Api(self.base_url)
+            demo.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
+
+            def log(
+                session: Api,
+                days_ago: int,
+                start_hour: int,
+                hours: int,
+                unit: str,
+                role: str,
+                notes: str = "",
+            ) -> dict:
+                day = TODAY - timedelta(days=days_ago)
+                start = datetime.combine(
+                    day, time(start_hour), tzinfo=ORG_TIMEZONE
+                ).astimezone(timezone.utc)
+                end = start + timedelta(hours=hours)
+                return session.post(
+                    "/scheduling/external-hours",
+                    {
+                        "start_at": start.isoformat().replace("+00:00", "Z"),
+                        "end_at": end.isoformat().replace("+00:00", "Z"),
+                        "external_apparatus_id": units[unit],
+                        "role": role,
+                        **({"notes": notes} if notes else {}),
+                    },
+                )
+
+            log(demo, 6, 7, 12, "Engine 21", "Firefighter")
+            log(demo, 13, 19, 12, "Ambulance 58", "EMT", "Covered their night car.")
+            rejected = log(demo, 20, 8, 10, "Tanker 23", "Driver")
+            other_name = "vbrennan"
+            if ids.get(other_name):
+                other = self.member_session(self.base_url, ids[other_name], other_name)
+                log(other, 9, 7, 24, "Engine 21", "Firefighter")
+                log(other, 24, 18, 12, "Tanker 23", "Firefighter")
+            self.api.post(
+                f"/scheduling/external-hours/{pick(rejected, 'id')}/reject",
+                {
+                    "reason": (
+                        "Township's roster has you on standby that day, not "
+                        "on the tanker. See Lt. Vance if that is wrong."
+                    )
+                },
+            )
+        for unit_id in retire:
+            self.api.patch(
+                f"/scheduling/external-hours/apparatus/{unit_id}",
+                {"is_active": False},
+            )
+
+    def _seed_member_exchanges(self) -> None:
+        """One approved exchange, and one pending exchange for the officer.
+
+        The approved one belongs to the second member, whose Requests tab then
+        shows the default Pending view empty with its "Showing pending requests
+        only" line. The pending one is what the officer's Requests tab reviews.
+        Both trade seats on shifts weeks out, so the near-term rosters other
+        shots photograph keep their crews.
+        """
+        ids = self._user_ids_by_username()
+        swaps = items(
+            self.api.get("/scheduling/swap-requests?limit=200"),
+            "requests",
+            "swap_requests",
+        )
+        avoid = {ids.get(DEMO_MEMBER_USERNAME), ids.get(DEMO_ADMIN_USERNAME)}
+
+        def raise_exchange(username: str, reason: str) -> dict | None:
+            user_id = ids.get(username)
+            if not user_id:
+                self.blocked.append(f"guide 03 exchanges: no member {username}")
+                return None
+            if any(
+                str(pick(s, "requesting_user_id", "requestingUserId")) == user_id
+                for s in swaps
+            ):
+                return None
+            session = self.member_session(self.base_url, user_id, username)
+            horizon = str(TODAY + timedelta(days=21))
+            mine = sorted(
+                (
+                    s
+                    for s in items(
+                        session.get("/scheduling/my-shifts?limit=50"), "shifts"
+                    )
+                    if str(pick(s, "shift_date", "shiftDate") or "") >= horizon
+                ),
+                key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""),
+            )
+            for shift in mine:
+                candidates = [
+                    c
+                    for c in session.get(
+                        f"/scheduling/shifts/{pick(shift, 'id')}/exchange-candidates"
+                    )
+                    or []
+                    if str(pick(c, "shift_date") or "") >= horizon
+                    and str(pick(c, "user_id")) not in avoid
+                ]
+                if candidates:
+                    pair = candidates[0]
+                    return session.post(
+                        "/scheduling/swap-requests",
+                        {
+                            "offering_shift_id": pick(shift, "id"),
+                            "requesting_shift_id": pick(pair, "shift_id"),
+                            "target_user_id": pick(pair, "user_id"),
+                            "reason": reason,
+                        },
+                    )
+            self.blocked.append(
+                f"guide 03 exchanges: {username} has no seat to exchange"
+            )
+            return None
+
+        approved = raise_exchange(
+            self.SECOND_MEMBER_USERNAME,
+            "Daughter's recital is that evening; this keeps both crews whole.",
+        )
+        if approved and pick(approved, "id"):
+            self.api.post(
+                f"/scheduling/swap-requests/{pick(approved, 'id')}/review",
+                {"status": "approved", "reviewer_notes": "Both seats covered."},
+            )
+        raise_exchange(
+            self.EXCHANGE_REQUESTER_USERNAME,
+            "Swapping so I can make the county EMS refresher that day.",
+        )
+
+    EARLIER_REPORT_NOTE = "Guide 03: last month's engine shift"
+
+    def _seed_earlier_month_report(self) -> None:
+        """One shift report about a shift in the previous calendar month.
+
+        "Reports written per month" draws only when the officer's reports span
+        more than one month, and every report ``seed_shift_reports`` files is
+        against the rolling roster, which mid-month lies wholly in the current
+        one. So the chart never rendered. The roster has no crewed shift last
+        month, so this creates one, records a member's attendance (a report can
+        only be about someone who was on the shift) and files the report.
+        Never about the demo member or the second member, whose report views
+        other shots photograph.
+        """
+        analytics = self.api.get("/training/shift-reports/officer-analytics") or {}
+        if len(pick(analytics, "monthly") or []) > 1:
+            return
+        ids = self._user_ids_by_username()
+        trainee_id = ids.get("mbell")
+        if not trainee_id:
+            self.blocked.append("guide 03: no member to report on last month")
+            return
+        day = TODAY.replace(day=1) - timedelta(days=10)
+        existing = [
+            sh
+            for sh in items(
+                self.api.get(f"/scheduling/shifts?start_date={day}&end_date={day}"),
+                "shifts",
+            )
+            if pick(sh, "notes") == self.EARLIER_REPORT_NOTE
+        ]
+        start = datetime.combine(day, time(7), tzinfo=ORG_TIMEZONE)
+        end = start + timedelta(hours=12)
+        if existing:
+            shift_id = str(pick(existing[0], "id"))
+        else:
+            shift = self.api.post(
+                "/scheduling/shifts",
+                {
+                    "shift_date": str(day),
+                    "start_time": iso(start.astimezone(timezone.utc)),
+                    "end_time": iso(end.astimezone(timezone.utc)),
+                    "notes": self.EARLIER_REPORT_NOTE,
+                },
+            )
+            shift_id = str(pick(shift, "id"))
+            self.api.post(
+                f"/scheduling/shifts/{shift_id}/attendance",
+                {
+                    "user_id": trainee_id,
+                    "checked_in_at": iso(start.astimezone(timezone.utc)),
+                    "checked_out_at": iso(end.astimezone(timezone.utc)),
+                },
+            )
+        self.api.post(
+            "/training/shift-reports",
+            {
+                "shift_id": shift_id,
+                "shift_date": str(day),
+                "trainee_id": trainee_id,
+                "hours_on_shift": 12.0,
+                "calls_responded": 2,
+                "performance_rating": 4,
+                "officer_narrative": (
+                    "Solid shift on the engine. Ran the pump on the alarm "
+                    "call and kept the crew informed."
+                ),
+            },
+        )
+
+    def _seed_history_import_draft(self) -> None:
+        """A draft shift-history import, never committed.
+
+        The import screens show what a department's old records look like
+        before they reach the schedule: exact and approximate name matches, a
+        member no longer on the roster, and a shift on another department's
+        unit. Committing would write past shifts into every hours figure other
+        guides photograph, so the draft stays a draft.
+        """
+        drafts = items(self.api.get("/scheduling/history-import"), "imports")
+        if any(
+            pick(d, "source_filename", "sourceFilename") == self.HISTORY_IMPORT_FILENAME
+            for d in drafts
+        ):
+            return
+        rows = [
+            (
+                "member_name",
+                "unit",
+                "agency",
+                "position",
+                "date",
+                "start_time",
+                "end_time",
+                "call_count",
+            ),
+            ("Marcus Bell", "E-1", "", "Driver", "2026-08-03", "07:00", "19:00", "3"),
+            (
+                "Priya Raman",
+                "E-1",
+                "",
+                "Firefighter",
+                "2026-08-03",
+                "07:00",
+                "19:00",
+                "3",
+            ),
+            ("Ruiz, Dana", "E-1", "", "Officer", "2026-08-03", "07:00", "19:00", "3"),
+            (
+                "Tobias Lindqvist",
+                "L-4",
+                "",
+                "Officer",
+                "2026-08-04",
+                "08:00",
+                "20:00",
+                "1",
+            ),
+            ("H. Vance", "L-4", "", "Firefighter", "2026-08-04", "08:00", "20:00", "1"),
+            (
+                "Nadia Belhaj",
+                "L-4",
+                "",
+                "Firefighter",
+                "2026-08-04",
+                "08:00",
+                "20:00",
+                "1",
+            ),
+            (
+                "Sofia Marchetti",
+                "E-2",
+                "",
+                "Driver",
+                "2026-08-05",
+                "19:00",
+                "07:00",
+                "2",
+            ),
+            (
+                "Owen Kitteridge",
+                "E-2",
+                "",
+                "Officer",
+                "2026-08-05",
+                "19:00",
+                "07:00",
+                "2",
+            ),
+            (
+                "Gary Whitmore",
+                "E-2",
+                "",
+                "Firefighter",
+                "2026-08-05",
+                "19:00",
+                "07:00",
+                "2",
+            ),
+            (
+                "Emeka Adeyemi",
+                "Engine 21",
+                "Township Fire Company",
+                "Firefighter",
+                "2026-08-09",
+                "07:00",
+                "19:00",
+                "4",
+            ),
+        ]
+        text = "".join(",".join(f'"{cell}"' for cell in row) + "\r\n" for row in rows)
+        self.api.post_multipart(
+            "/scheduling/history-import",
+            {"timezone": "America/New_York"},
+            [("file", self.HISTORY_IMPORT_FILENAME, text.encode(), "text/csv")],
+        )
+
     def seed_shift_reports(self, members: list[dict]) -> list[dict]:
         """Filed, draft, pending-review and flagged shift completion reports.
 
@@ -16907,6 +17293,7 @@ class Seeder:
             "close-out wizard fixture",
             lambda: self.seed_call_tracking_closeout(members),
         )
+        self.step("guide 03 scheduling states", self.seed_guide03_scheduling)
         self.step("label printers", self.seed_label_printers)
         self.step("id cards", self.seed_id_cards)
         self.step("ical feed", self.seed_ical_feed)
