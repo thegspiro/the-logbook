@@ -229,15 +229,20 @@ def default_service_factory(integration: Integration) -> CalendarSyncInterface:
             creds.setdefault("client_secret", settings.GOOGLE_CLIENT_SECRET)
         return GoogleCalendarService(creds)
 
+    from app.services.integration_services.outlook_calendar_oauth_service import (
+        get_client_credentials as outlook_client_credentials,
+    )
     from app.services.integration_services.outlook_calendar_service import (
         OutlookCalendarService,
     )
 
-    if settings.AZURE_AD_CLIENT_ID and settings.AZURE_AD_CLIENT_SECRET:
-        creds.setdefault("client_id", settings.AZURE_AD_CLIENT_ID)
-        creds.setdefault("client_secret", settings.AZURE_AD_CLIENT_SECRET)
-        if settings.AZURE_AD_TENANT_ID:
-            creds.setdefault("tenant_id", settings.AZURE_AD_TENANT_ID)
+    # The same client and tenant the connect flow signed in with: a refresh
+    # token is redeemed at the authority that issued it, and a department's
+    # tenant_id is saved in public config, not among the secrets.
+    client_id, client_secret, tenant_id = outlook_client_credentials(integration)
+    if client_id and client_secret:
+        creds.update(client_id=client_id, client_secret=client_secret)
+    creds["tenant_id"] = tenant_id
     return OutlookCalendarService(creds)
 
 
