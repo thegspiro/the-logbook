@@ -521,8 +521,10 @@ describe('MedicalSuppliesPage', () => {
 
     renderWithRouter(<MedicalSuppliesPage />);
 
-    const gearLink = await screen.findByRole('link', { name: /Inventory/i });
-    expect(gearLink).toHaveAttribute('href', '/inventory');
+    // Within the sentence: the Operations section strip carries an Inventory
+    // link of its own for the same viewer.
+    const aside = await screen.findByText(/It shares one catalog with gear and uniforms/i);
+    expect(within(aside).getByRole('link', { name: /Inventory/i })).toHaveAttribute('href', '/inventory');
   });
 
   it('states the separation without linking it for someone who cannot open the catalogue', async () => {
@@ -535,8 +537,8 @@ describe('MedicalSuppliesPage', () => {
     renderWithRouter(<MedicalSuppliesPage />);
     await screen.findByRole('heading', { name: /Medical Supplies/i });
 
-    expect(screen.getByText(/It shares one catalog with gear and uniforms/i)).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Inventory/i })).not.toBeInTheDocument();
+    const aside = screen.getByText(/It shares one catalog with gear and uniforms/i);
+    expect(within(aside).queryByRole('link', { name: /Inventory/i })).not.toBeInTheDocument();
   });
 
   it('opens on expiring stock, which is what goes wrong quietly', async () => {

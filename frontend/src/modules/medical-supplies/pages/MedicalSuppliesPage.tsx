@@ -14,7 +14,6 @@ import { Link } from 'react-router';
 import {
   AlertTriangle,
   Archive,
-  ArrowLeft,
   ArrowUpDown,
   CalendarClock,
   Layers,
@@ -50,6 +49,7 @@ import { MedicalImportExportModal } from '../components/MedicalImportExportModal
 import { EXPIRY_WINDOW_DAYS, storageNote, supplyLabel } from '../types';
 import type { MedicalExpiringStockRow, MedicalStorageOptions } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 type Tab = 'expiring' | 'stock';
 
@@ -700,93 +700,84 @@ const MedicalSuppliesPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-      <div className="mb-6">
-        <Link
-          to="/dashboard"
-          className="touch-target-phone text-theme-text-muted hover:text-theme-text-primary mb-3 inline-flex items-center gap-1 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Dashboard
-        </Link>
-
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-semibold">
-              <Stethoscope className="h-6 w-6" />
-              Medical Supplies
-            </h1>
-            <p className="text-theme-text-muted mt-1 text-sm">
-              Track EMS stock by lot number and expiration date. It shares one catalog with gear and uniforms
-              {canManageGear && (
-                <>
-                  {' '}
-                  under{' '}
-                  <Link to="/inventory" className="underline">
-                    Inventory
-                  </Link>
-                </>
-              )}
-              .
-            </p>
-          </div>
-
-          {/* Five actions do not fit across a phone — "Add supply" ran to
-              408px. `hscroll` already scrolls them; the marker is what tells the
-              mobile pass that is deliberate. Buttons inside, so no tabIndex. */}
-          <div
-            className="hscroll flex items-center gap-2"
-            data-mobile-scroll-region
-            aria-label="Medical supply actions"
-          >
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              className="btn-icon"
-              aria-label="Refresh medical supplies"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
-            {canManage && (
+      <OperationsPageHeader
+        icon={Stethoscope}
+        title="Medical Supplies"
+        subtitle={
+          <>
+            Track EMS stock by lot number and expiration date. It shares one catalog with gear and uniforms
+            {canManageGear && (
               <>
-                {/* Labelled, not an icon alone: a supply needs a category
-                    before it can exist, and a bare tag glyph was the only way
-                    to the page that makes one. */}
-                <Link
-                  to="/medical-supplies/categories"
-                  className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium"
-                >
-                  <Tag className="h-4 w-4" aria-hidden="true" />
-                  Categories
+                {' '}
+                under{' '}
+                <Link to="/inventory" className="underline">
+                  Inventory
                 </Link>
-                <button
-                  type="button"
-                  onClick={() => setShowImportExport(true)}
-                  className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium whitespace-nowrap"
-                >
-                  <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
-                  Import / export
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowDeliveryModal(true)}
-                  className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium"
-                >
-                  <PackagePlus className="h-4 w-4" />
-                  Receive delivery
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowItemModal(true)}
-                  className="btn-primary inline-flex items-center gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add supply
-                </button>
               </>
             )}
-          </div>
-        </div>
-      </div>
+            .
+          </>
+        }
+        actions={
+          <>
+            {/* Five actions do not fit across a phone — "Add supply" ran to
+              408px. `hscroll` already scrolls them; the marker is what tells the
+              mobile pass that is deliberate. Buttons inside, so no tabIndex. */}
+            <div
+              className="hscroll flex items-center gap-2 sm:flex-wrap sm:justify-end"
+              data-mobile-scroll-region
+              aria-label="Medical supply actions"
+            >
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                className="btn-icon"
+                aria-label="Refresh medical supplies"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+              {canManage && (
+                <>
+                  {/* Labelled, not an icon alone: a supply needs a category
+                    before it can exist, and a bare tag glyph was the only way
+                    to the page that makes one. */}
+                  <Link
+                    to="/medical-supplies/categories"
+                    className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium"
+                  >
+                    <Tag className="h-4 w-4" aria-hidden="true" />
+                    Categories
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setShowImportExport(true)}
+                    className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium whitespace-nowrap"
+                  >
+                    <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+                    Import / export
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeliveryModal(true)}
+                    className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium"
+                  >
+                    <PackagePlus className="h-4 w-4" />
+                    Receive delivery
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowItemModal(true)}
+                    className="btn-primary inline-flex items-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add supply
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        }
+      />
 
       {errors.summary && (
         <SectionError

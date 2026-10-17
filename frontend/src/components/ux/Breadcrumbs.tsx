@@ -305,7 +305,11 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
   underHub,
 }) => {
   const location = useLocation();
-  const checkPermission = useAuthStore((state) => state.checkPermission);
+  // A stub that ignores the selector hands back the whole store object, which
+  // `??` lets through and the first crumb then calls; only a function counts.
+  const storePredicate: unknown = useAuthStore((state) => state.checkPermission);
+  const checkPermission =
+    typeof storePredicate === 'function' ? (storePredicate as (permission: string) => boolean) : undefined;
   const generated = generateBreadcrumbs(location.pathname, checkPermission);
 
   // Trimmed only when the trail was generated — see the prop.
