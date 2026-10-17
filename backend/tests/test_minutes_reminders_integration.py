@@ -28,11 +28,30 @@ from tests.minutes_support import (
 
 pytestmark = [pytest.mark.integration]
 
+# Replaced for every test by ``_one_calendar_day``; the value here is only what
+# the names below are bound to when the module is imported.
 TODAY = datetime.now(timezone.utc).date()
 
 
 def _midnight(day: date) -> str:
     return datetime(day.year, day.month, day.day, tzinfo=timezone.utc).isoformat()
+
+
+@pytest.fixture(autouse=True)
+def _one_calendar_day(monkeypatch):
+    """Give the test and the service the same "today".
+
+    The service asks for the department's date when it runs; the fixtures
+    below build due dates from ``TODAY``. Computed separately, they agree only
+    until a run crosses midnight UTC: a suite that starts at 23:50 and takes a
+    quarter of an hour sees the fixtures built for one day and the service
+    deciding for the next, and a reminder due "tomorrow" is suddenly due today.
+    """
+    day = datetime.now(timezone.utc).date()
+    monkeypatch.setitem(globals(), "TODAY", day)
+    monkeypatch.setattr(
+        "app.services.minutes_reminder_service.org_today", lambda organization: day
+    )
 
 
 @pytest.fixture
