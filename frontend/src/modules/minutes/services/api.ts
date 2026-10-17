@@ -7,6 +7,7 @@
 
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
+  AgendaSyncPreview,
   MeetingMinutes,
   Motion,
   MotionCreate,
@@ -344,6 +345,18 @@ export const minutesService = {
     const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/apply-outline`, {
       template_id: outlineId,
     });
+    return response.data;
+  },
+
+  /** What the meeting's agenda now asks of these minutes' sections. */
+  async getAgendaSync(minutesId: string): Promise<AgendaSyncPreview> {
+    const response = await api.get<AgendaSyncPreview>(`/minutes-records/${minutesId}/agenda-sync`);
+    return response.data;
+  },
+
+  /** Apply the chosen agenda changes (by the ids the preview gave) to draft minutes. */
+  async applyAgendaSync(minutesId: string, accept: string[]): Promise<MeetingMinutes> {
+    const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/agenda-sync`, { accept });
     return response.data;
   },
 
