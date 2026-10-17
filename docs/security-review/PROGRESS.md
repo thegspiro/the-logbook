@@ -16,6 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3374](https://github.com/thegspiro/the-logbook/pull/3374)** (branch
+`claude/security-review-forms`):
+Feature 26 (Forms), pass 7. PR #3373 (Feature 25, Messaging &
+notifications, pass 7) merged with no next-feature PR open; this pass
+picked it up. Docs-only — no application code changed. Three real security
+fixes since pass 6 verified against current code rather than taken on
+faith: **XC-1** (`create_form`'s inline fields could persist a
+`condition_field_id` naming a field on another organization's form — now
+refused unconditionally), **FORM-10's org-scoping gap**
+(`_already_submitted`'s row lock now filters `Form.organization_id` as
+well as `Form.id`), and **FORM-10 itself** (one submission per person now
+enforced on both the in-app and public submit paths). A new
+`GET /{form_id}/publish-warnings` route verified permission-gated and
+org-scoped. **0 new findings** across the rest of the real delta: two new
+numeric condition operators shared with the suggestion-box feature (reads
+only already-org-scoped `form.fields`), an app-review null-rejection
+correctness fix, and four mypy-cleanup commits (type annotations only, no
+behavior change). Route surface re-enumerated: 21 → 22 (the new route).
+See `FORM-26-forms.md`'s **Pass 7** section. Row 26 → ✅ (pending this PR's
+merge); next is Feature 27 (Integrations).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 7, PR #3373, merged), preserved for history</summary>
+
 **PR [#3373](https://github.com/thegspiro/the-logbook/pull/3373)** (branch
 `claude/security-review-messaging-notifications`):
 Feature 25 (Messaging & notifications), pass 7. PR #3365 (Feature 24,
@@ -45,6 +69,8 @@ Workspace welcome-email addition (credentials block confirmed
 behavior change). Route surface re-enumerated: 51/51 unchanged. See
 `MSG-25-messaging-notifications.md`'s **Pass 7** section. Row 25 → ✅
 (pending this PR's merge); next is Feature 26 (Forms).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 7, PR #3365, merged), preserved for history</summary>
@@ -19659,7 +19685,7 @@ here.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
@@ -33310,3 +33336,52 @@ Findings doc:
 **Pass 7** section. No `KNOWN_LIMITATIONS.md` change needed — both entries
 already accurately documented their resolutions. Rotation row 25 → ✅
 (pending this PR's merge). Next: Feature 26 (Forms).
+
+### 2026-10-17 — Feature 26 (Forms, pass 7) — 0 fixed, 0 new findings; XC-1/FORM-10 fixes and a new publish-warnings route verified against current code
+
+PR #3373 (Feature 25, Messaging & notifications, pass 7) merged with no
+`claude/security-review-*` PR open, so this pass picked up Feature 26. Real
+growth since pass 6 (2026-10-07): `endpoints/forms.py` 784 → 813 lines (one
+new route), `forms_service.py` 3,317 → 3,492 lines, `schemas/forms.py` 430 →
+471 lines; `public/forms.py` unchanged. Every commit touching the five scope
+files since pass 6's merge read in full rather than inferred from its
+message, including the four that only changed a `hasattr(x, "value")` check
+to `getattr(x, "value", x)` or widened a `UUID` annotation to `UUID | str`
+(mypy cleanup, no behavior change — confirmed by reading each hunk). Three
+real changes verified fixed, not merely reported fixed: **XC-1**
+(`create_form`'s inline fields could persist a `condition_field_id` naming a
+field on another organization's form — now refused unconditionally, since
+the empty sibling list passed at creation time always yields "not on this
+form"); **FORM-10's org-scoping gap** (`_already_submitted`'s row lock now
+filters `Form.organization_id` as well as `Form.id`); and **FORM-10 itself**
+(one submission per person is now enforced on both the in-app and public
+submit paths, closing the owner-decision item passes 3–6 carried as the
+feature's remaining hardening work). The new `GET
+/{form_id}/publish-warnings` route is permission-gated
+(`forms.manage`) and resolves its form through the existing org-scoped
+`get_form_by_id` — no new client-supplied id reaches an unscoped query. The
+suggestion-box answer-types commit's only in-scope hunks (two new numeric
+condition operators shared with forms' own branching) read only
+already-org-scoped `form.fields` and introduce no new finding; its
+suggestion-box-specific files belong to and are covered by Feature 25
+(confirmed present in `MSG-25-messaging-notifications.md`), not reviewed
+again here. Route surface re-enumerated: 21 → 22 (the new route), every one
+carrying `require_permission` or (by design) bare `get_current_user`. All
+standing findings (FORM-12 open/non-security, BXC-1 closed) re-verified by
+direct code read against their current line numbers, not re-cited from a
+prior pass.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
+alembic/` (isort reinstalled to CI's pinned 9.0.1; flake8/black already
+matched CI's 7.3.0/26.5.1 pins); `validate_migrations.py --strict` — single
+head `c87efd81c5aa`, 612 revisions, no migration this pass;
+`pytest tests/ -q -k form` — 800 passed, 1 pre-existing skip (`pywebpush`),
+up from pass 6's 656; frontend `npm run typecheck`/`npm run lint` both clean
+(`npm ci` run first from the repo root — this sandbox's `node_modules`
+predated the `@tiptap/*` dependency, the same gap recent passes on other
+features have also hit and fixed the same way).
+
+Findings doc: [`FORM-26-forms.md`](./FORM-26-forms.md)'s **Pass 7** section.
+No `KNOWN_LIMITATIONS.md` change needed — nothing this pass found rises to an
+owner decision. Rotation row 26 → ✅ (pending this PR's merge). Next:
+Feature 27 (Integrations).
