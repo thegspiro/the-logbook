@@ -138,7 +138,14 @@ export type { DocumentFolder, DocumentRecord, DocumentsSummary } from './formsSe
 // Documents
 export { documentsService } from './documentsService';
 // Meeting types co-located with documentsService due to extraction overlap
-export type { MeetingRecord, MeetingAttendee, MeetingActionItem, MeetingsSummary } from './documentsService';
+export type {
+  AgendaDocument,
+  AgendaItem,
+  MeetingRecord,
+  MeetingAttendee,
+  MeetingActionItem,
+  MeetingsSummary,
+} from './documentsService';
 
 // Meetings & Minutes
 export { meetingsService, minutesService } from './meetingsServices';

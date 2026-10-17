@@ -12,6 +12,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.meeting import ActionItemStatus, MeetingStatus, MeetingType
 from app.schemas.base import UTCResponseBase
+from app.utils.agenda_items import (
+    MAX_AGENDA_ITEMS,
+    MAX_ITEM_DOCUMENTS,
+    MAX_MOTION_TEXT,
+    MAX_NOTES,
+    MAX_PRESENTER,
+    MAX_TITLE,
+    is_valid_item_key,
+    normalize_agenda_items,
+)
 
 # Meeting.meeting_type/status and MeetingActionItem.status are strict MySQL ENUMs;
 # SQLAlchemy doesn't validate the string on bind (validate_strings=False), so a
@@ -130,6 +140,58 @@ class ActionItemResponse(UTCResponseBase):
 # ============================================
 
 
+class AgendaDocument(BaseModel):
+    """A Documents-library file an agenda item points at."""
+
+    id: str = Field(..., min_length=1, max_length=36)
+    name: str = Field(default="", max_length=255)
+
+
+class AgendaItem(BaseModel):
+    """One item on a meeting's agenda."""
+
+    key: str = Field(
+        ...,
+        description="Stable across edits; the minutes section made from this item "
+        "is named agenda-<key>",
+    )
+    title: str = Field(..., min_length=1, max_length=MAX_TITLE)
+    presenter: str = Field(default="", max_length=MAX_PRESENTER)
+    notes: str = Field(default="", max_length=MAX_NOTES)
+    needs_motion: bool = False
+    motion_text: str = Field(default="", max_length=MAX_MOTION_TEXT)
+    documents: List[AgendaDocument] = Field(
+        default_factory=list, max_length=MAX_ITEM_DOCUMENTS
+    )
+
+    @field_validator("key")
+    @classmethod
+    def _check_key(cls, value: str) -> str:
+        if not is_valid_item_key(value):
+            raise ValueError(
+                "An agenda item key is lowercase letters, digits, - or _, "
+                "up to 50 characters"
+            )
+        return value
+
+    @field_validator("title")
+    @classmethod
+    def _check_title(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("An agenda item needs a title")
+        return value
+
+
+def _validate_agenda_items(value: Optional[List["AgendaItem"]]):
+    if value is None:
+        return value
+    keys = [item.key for item in value]
+    if len(set(keys)) != len(keys):
+        raise ValueError("Each agenda item needs its own key")
+    return value
+
+
 class MeetingCreate(BaseModel):
     """Schema for creating a meeting"""
 
@@ -141,12 +203,14 @@ class MeetingCreate(BaseModel):
     location: Optional[str] = Field(None, max_length=255)
     called_by: Optional[str] = Field(None, max_length=255)
     agenda: Optional[str] = None
+    agenda_items: Optional[List[AgendaItem]] = Field(None, max_length=MAX_AGENDA_ITEMS)
     notes: Optional[str] = None
     motions: Optional[str] = None
     attendees: Optional[List[MeetingAttendeeCreate]] = None
     action_items: Optional[List[ActionItemCreate]] = None
 
     _check_meeting_type = field_validator("meeting_type")(_validate_meeting_type)
+    _check_agenda_items = field_validator("agenda_items")(_validate_agenda_items)
 
 
 class MeetingUpdate(BaseModel):
@@ -161,11 +225,13 @@ class MeetingUpdate(BaseModel):
     called_by: Optional[str] = Field(None, max_length=255)
     status: Optional[str] = None
     agenda: Optional[str] = None
+    agenda_items: Optional[List[AgendaItem]] = Field(None, max_length=MAX_AGENDA_ITEMS)
     notes: Optional[str] = None
     motions: Optional[str] = None
 
     _check_meeting_type = field_validator("meeting_type")(_validate_meeting_type)
     _check_status = field_validator("status")(_validate_meeting_status)
+    _check_agenda_items = field_validator("agenda_items")(_validate_agenda_items)
 
 
 class MeetingResponse(UTCResponseBase):
@@ -182,6 +248,7 @@ class MeetingResponse(UTCResponseBase):
     called_by: Optional[str] = None
     status: str
     agenda: Optional[str] = None
+    agenda_items: List[AgendaItem] = Field(default_factory=list)
     notes: Optional[str] = None
     motions: Optional[str] = None
     approved_by: Optional[UUID] = None
@@ -194,6 +261,11 @@ class MeetingResponse(UTCResponseBase):
     action_item_count: Optional[int] = 0
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("agenda_items", mode="before")
+    @classmethod
+    def _read_agenda_items(cls, value):
+        return normalize_agenda_items(value)
 
 
 class MeetingDetailResponse(MeetingResponse):

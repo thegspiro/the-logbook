@@ -40,6 +40,23 @@ def _midnight(day: date) -> str:
     return datetime(day.year, day.month, day.day, tzinfo=timezone.utc).isoformat()
 
 
+@pytest.fixture(autouse=True)
+def _one_calendar_day(monkeypatch):
+    """Give the test and the service the same "today".
+
+    The service asks for the department's date when it runs; the fixtures
+    below build due dates from ``_today()``. Computed separately, they agree only
+    until a run crosses midnight UTC: a suite that starts at 23:50 and takes a
+    quarter of an hour sees the fixtures built for one day and the service
+    deciding for the next, and a reminder due "tomorrow" is suddenly due today.
+    """
+    day = _today()
+    monkeypatch.setitem(globals(), "_today", lambda: day)
+    monkeypatch.setattr(
+        "app.services.minutes_reminder_service.org_today", lambda organization: day
+    )
+
+
 @pytest.fixture
 async def world(db_session: AsyncSession) -> _World:
     return await build_world(db_session)
