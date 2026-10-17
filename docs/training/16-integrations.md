@@ -32,6 +32,7 @@ Most members never open this page. The parts a member may meet are the
 6. [Cal.com — Interview Scheduling](#calcom--interview-scheduling)
 7. [PayPal — Store Payment Reconciliation](#paypal--store-payment-reconciliation)
 8. [Google Workspace — Member Accounts](#google-workspace--member-accounts)
+   - [Microsoft 365 — Member Accounts](#microsoft-365--member-accounts)
 9. [Calendar Integrations](#calendar-integrations)
 10. [Messaging Integrations](#messaging-integrations)
 11. [Weather Alerts](#weather-alerts)
@@ -79,21 +80,22 @@ The page shows:
 
 ### Currently Available
 
-| Category           | Integration        | What it does today                                                                             |
-| ------------------ | ------------------ | ---------------------------------------------------------------------------------------------- |
-| **Calendar**       | iCalendar (ICS)    | A subscribe link to the department's published events — see [below](#icalendar-ics-feed)       |
-| **Messaging**      | Slack              | Posts new events, shifts and training records to a channel                                     |
-| **Messaging**      | Discord            | The same, to a Discord channel                                                                 |
-| **Messaging**      | Microsoft Teams    | The same, to a Teams channel                                                                   |
-| **CRM**            | Salesforce         | Sends members, training and events to Salesforce; can update contact details                   |
-| **Documents**      | Documenso          | Sends documents for e-signature (an open-source DocuSign alternative)                          |
-| **Scheduling**     | Cal.com            | Shows bookings and moves applicants on after a meeting                                         |
-| **Payments**       | PayPal             | Matches incoming store payments to Department Store orders                                     |
-| **Automation**     | Generic Webhooks   | Sends a signed test message to a web address — nothing else yet                                |
-| **Safety**         | NWS Weather Alerts | Checks your weather zone code — alerts are not shown yet                                       |
-| **Access Control** | NFC ID Cards       | ID cards with a tap-in chip, and a check-in station that reads them                            |
-| **Access Control** | Google Workspace   | Creates a Google account for each applicant converted to a member; suspends it when they leave |
-| **AI Assistants**  | Claude (MCP)       | Lets Claude answer questions about your department                                             |
+| Category           | Integration        | What it does today                                                                               |
+| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------ |
+| **Calendar**       | iCalendar (ICS)    | A subscribe link to the department's published events — see [below](#icalendar-ics-feed)         |
+| **Messaging**      | Slack              | Posts new events, shifts and training records to a channel                                       |
+| **Messaging**      | Discord            | The same, to a Discord channel                                                                   |
+| **Messaging**      | Microsoft Teams    | The same, to a Teams channel                                                                     |
+| **CRM**            | Salesforce         | Sends members, training and events to Salesforce; can update contact details                     |
+| **Documents**      | Documenso          | Sends documents for e-signature (an open-source DocuSign alternative)                            |
+| **Scheduling**     | Cal.com            | Shows bookings and moves applicants on after a meeting                                           |
+| **Payments**       | PayPal             | Matches incoming store payments to Department Store orders                                       |
+| **Automation**     | Generic Webhooks   | Sends a signed test message to a web address — nothing else yet                                  |
+| **Safety**         | NWS Weather Alerts | Checks your weather zone code — alerts are not shown yet                                         |
+| **Access Control** | NFC ID Cards       | ID cards with a tap-in chip, and a check-in station that reads them                              |
+| **Access Control** | Google Workspace   | Creates a Google account for each applicant converted to a member; suspends it when they leave   |
+| **Access Control** | Microsoft 365      | Creates and licenses a Microsoft 365 account for each new member; blocks sign-in when they leave |
+| **AI Assistants**  | Claude (MCP)       | Lets Claude answer questions about your department                                               |
 
 ### Coming Soon
 
@@ -542,6 +544,26 @@ When an account is waiting on something The Logbook could not finish — a depar
 Only accounts The Logbook created or linked are suspended. To cover members who were on the roster before the integration, an administrator clicks **Link existing members** on the Google Workspace card. It shows how many members have an account at exactly their Logbook email and why the others are skipped, then links them once confirmed. Members who have already left are not linked. Nothing changes in Google.
 
 See [Google Workspace Integration](../../wiki/Integration-Google-Workspace.md) for setup steps and account states.
+
+### Microsoft 365 — Member Accounts
+
+**Microsoft 365** does the same for departments on Microsoft: an account at the department email address for each new member, licensed and added to your groups, with sign-in blocked when they leave. A department connects **either** Google Workspace **or** Microsoft 365, not both. Only an organization administrator (`admin.access`) can connect, change or disconnect it.
+
+| Field                       | Description                                                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Directory (tenant) ID**   | From the Entra ID app registration's Overview page.                                                                                                                 |
+| **Application (client) ID** | From the same page.                                                                                                                                                 |
+| **Client secret value**     | The secret's value, not its ID. Stored encrypted, never shown. Replace it before it expires.                                                                        |
+| **Domain**                  | Must match **Organization Settings → Department Email** and be verified in Microsoft 365.                                                                           |
+| **Usage location**          | The two-letter country every new account gets (`US` by default). Microsoft will not license an account without one.                                                 |
+| **License SKU ID**          | _(optional)_ The license each new account is given. Leave empty when a group below licenses its members.                                                            |
+| **Groups**                  | _(optional)_ Up to 20 security groups (by object ID) or Microsoft 365 groups. **Test** rejects distribution lists, mail-enabled security groups and dynamic groups. |
+
+The app registration needs the Microsoft Graph application permissions `User.ReadWrite.All`, `User-PasswordProfile.ReadWrite.All`, `User.RevokeSessions.All`, `GroupMember.ReadWrite.All` and, with a license, `LicenseAssignment.ReadWrite.All`, with admin consent, and the **User Administrator** role.
+
+Conversion, the member's profile, **N need attention** and **Link existing members** work as for Google Workspace. Two differences: an account whose license could not be assigned is kept and its profile offers **Retry**; and an account synced from on-premises Active Directory is never blocked from here — the profile says to disable it in Active Directory.
+
+See [Microsoft 365 Integration](../../wiki/Integration-Microsoft-365.md) for setup steps and account states.
 
 ---
 

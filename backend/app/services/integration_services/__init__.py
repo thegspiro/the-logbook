@@ -134,6 +134,24 @@ async def test_integration_connection(integration: Integration) -> str:
         except GoogleWorkspaceError as exc:
             raise Exception(str(exc)) from exc
 
+    if itype == "microsoft-365":
+        from app.services.integration_services.microsoft_365_service import (
+            Microsoft365Error,
+        )
+        from app.services.integration_services.microsoft_365_service import (
+            directory_for as microsoft_directory_for,
+        )
+
+        # Hand-written messages, re-raised bare like Google's above.
+        try:
+            return await microsoft_directory_for(integration).test_connection(
+                str(config.get("domain", "")),
+                list(config.get("groups") or []),
+                str(config.get("license_sku_id") or "") or None,
+            )
+        except Microsoft365Error as exc:
+            raise Exception(str(exc)) from exc
+
     if itype == "ical":
         return "iCal feeds are read-only — no connection test needed"
 

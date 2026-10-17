@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**315 tables · 5207 columns · 1062 foreign keys**
+**315 tables · 5209 columns · 1062 foreign keys**
 
 ---
 
@@ -148,7 +148,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`directory_account_provisions`](#directory_account_provisions) | `DirectoryAccountProvision` | 21 | A member's directory account, as The Logbook created or found it |
+| [`directory_account_provisions`](#directory_account_provisions) | `DirectoryAccountProvision` | 23 | A member's directory account, as The Logbook created or found it |
 
 ### Documents
 
@@ -2119,6 +2119,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `external_user_id` | VARCHAR(64) | yes |  |  |  |
 | `credentials_sent` | BOOL | no |  | `0` |  |
 | `pending_groups` | JSON | yes |  |  |  |
+| `license_pending` | BOOL | no |  | `0` |  |
+| `managed_on_premises` | BOOL | no |  | `0` |  |
 | `last_error` | TEXT | yes |  |  |  |
 | `attempts` | INTEGER | no |  | `0` |  |
 | `last_attempt_at` | DATETIME | yes |  |  |  |

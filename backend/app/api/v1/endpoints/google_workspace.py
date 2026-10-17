@@ -1,8 +1,10 @@
 """
-Google Workspace account endpoints, per member.
+Directory account endpoints (Google Workspace, Microsoft 365), per member.
 
 Status and retry for the account The Logbook created (or tried to) when a
-member was converted from an applicant. Both require ``members.manage``: the
+member was converted from an applicant. The paths keep their Google-era
+prefix, which existing screens and clients use; each answers for whichever
+directory the member's record, or the department's connection, belongs to. Both require ``members.manage``: the
 retry can reset the password of an account nobody has yet received, and
 emails the new one to the member. Every lookup is scoped to the caller's
 organization in the service.
@@ -31,9 +33,7 @@ from app.services.directory_account_service import (
     DirectoryAccountService,
     ProvisionRetryError,
     ProvisionRetryTooSoon,
-)
-from app.services.integration_services.google_workspace_service import (
-    GOOGLE_WORKSPACE_PROVIDER,
+    provider_info,
 )
 
 router = APIRouter()
@@ -42,13 +42,18 @@ router = APIRouter()
 def _to_response(row: Optional[DirectoryAccountProvision]) -> GoogleAccountEnvelope:
     if row is None:
         return GoogleAccountEnvelope(account=None)
+    info = provider_info(row.provider)
     return GoogleAccountEnvelope(
         account=GoogleAccountResponse(
             user_id=row.user_id,
+            provider=info.provider,
+            provider_name=info.product,
             primary_email=row.primary_email,
             status=row.status,
             credentials_sent=bool(row.credentials_sent),
             pending_groups=[str(g) for g in (row.pending_groups or [])],
+            license_pending=bool(row.license_pending),
+            managed_on_premises=bool(row.managed_on_premises),
             last_error=row.last_error,
             attempts=row.attempts or 0,
             last_attempt_at=row.last_attempt_at,
@@ -68,7 +73,7 @@ async def get_member_google_account(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
 ):
-    """The member's Google Workspace account record, or ``account: null``.
+    """The member's directory account record, or ``account: null``.
 
     **Requires permission: members.manage**
     """
@@ -85,7 +90,7 @@ async def retry_member_google_account(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
 ):
-    """Finish whatever is incomplete about the member's Google account.
+    """Finish whatever is incomplete about the member's directory account.
 
     Brings an unsettled suspension into line first (suspend after a departure,
     unsuspend after a return). Otherwise creates a failed or pending account
@@ -110,7 +115,7 @@ async def retry_member_google_account(
     except LookupError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No Google Workspace account record for this member",
+            detail="No Google Workspace or Microsoft 365 account record for this member",
         )
     except ProvisionRetryTooSoon as exc:
         raise HTTPException(
@@ -123,7 +128,7 @@ async def retry_member_google_account(
 
     await log_audit_event(
         db,
-        "google_workspace.account_retry",
+        f"{provider_info(row.provider).audit_prefix}.account_retry",
         "integrations",
         "warning",
         {"target_user_id": str(user_id), "status": row.status},
@@ -141,15 +146,18 @@ async def list_attention(
     current_user: User = Depends(require_permission("integrations.manage")),
 ):
     """Accounts in this department that need a person to act: a departure's
-    suspension Google has not taken, a return's unsuspension, an account never
-    created, or one left unfinished. Read only; nothing in Google is called.
+    suspension the directory has not taken, a return's unsuspension, an account
+    never created, or one left unfinished. Read only; the directory is not
+    called.
 
     **Requires permission: integrations.manage**
     """
-    items = await DirectoryAccountService(db).attention_items(
-        str(current_user.organization_id)
-    )
+    service = DirectoryAccountService(db)
+    organization_id = str(current_user.organization_id)
+    items = await service.attention_items(organization_id)
+    connected = await service.connected_provider(organization_id)
     return AttentionResponse(
+        provider_name=connected.product if connected else None,
         items=[
             AttentionItemResponse(
                 user_id=i.user_id,
@@ -162,7 +170,7 @@ async def list_attention(
                 overdue=i.overdue,
             )
             for i in items
-        ]
+        ],
     )
 
 
@@ -181,10 +189,12 @@ async def link_existing_members(
         require_all_permissions("integrations.manage", "admin.access")
     ),
 ):
-    """Link current members to the Google accounts already at their addresses.
+    """Link current members to the accounts already at their addresses in the
+    connected directory.
 
     A member whose Logbook email is exactly an account's primary address gets
-    an "existing account" record, so leaving suspends it. Google is only read.
+    an "existing account" record, so leaving suspends it. The directory is
+    only read.
     Members who have already left are counted, not linked. Pass the previewed
     count as ``expected`` when applying, so a roster that changed in between
     is refused rather than linked unseen. Organization
@@ -204,10 +214,17 @@ async def link_existing_members(
         scope="google_workspace_link_existing",
     )
     organization_id = str(current_user.organization_id)
+    service = DirectoryAccountService(db)
+    connected = await service.connected_provider(organization_id)
+    if connected is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Connect Google Workspace or Microsoft 365 first.",
+        )
     try:
-        counts = await DirectoryAccountService(db).link_existing_members(
+        counts = await service.link_existing_members(
             organization_id,
-            GOOGLE_WORKSPACE_PROVIDER,
+            connected,
             apply=apply,
             actor_id=str(current_user.id),
             expected=expected,
@@ -218,7 +235,7 @@ async def link_existing_members(
     if apply:
         await log_audit_event(
             db,
-            "google_workspace.existing_members_linked",
+            f"{connected.audit_prefix}.existing_members_linked",
             "integrations",
             "warning",
             dict(counts),

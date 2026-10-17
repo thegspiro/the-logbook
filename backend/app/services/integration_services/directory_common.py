@@ -32,6 +32,12 @@ class DirectoryAccountNotFoundError(DirectoryError):
     """The account a per-user call names no longer exists."""
 
 
+class DirectoryAccountManagedElsewhereError(DirectoryError):
+    """The account is mastered outside the directory's API (a Microsoft 365
+    user synced from on-premises Active Directory), so no call here can
+    change it. Retrying cannot help; a person has to act where it lives."""
+
+
 @dataclass(frozen=True)
 class DirectoryAccount:
     """One account as the provider reports it.
@@ -41,12 +47,23 @@ class DirectoryAccount:
     that owns it, which is why the engine compares this field before treating
     an address as the member's. ``member_id`` is the Logbook member id the
     account was tagged with at creation, if any.
+
+    ``other_addresses`` are further addresses that are the account's *own*
+    and identify it as surely as ``primary_email`` -- Microsoft 365's primary
+    mail address where it differs from the sign-in name. Never aliases.
+    ``managed_elsewhere`` marks an account the directory's API cannot change.
     """
 
     id: str
     primary_email: str
     suspended: bool = False
     member_id: Optional[str] = None
+    other_addresses: tuple[str, ...] = ()
+    managed_elsewhere: bool = False
+
+    @property
+    def addresses(self) -> tuple[str, ...]:
+        return (self.primary_email, *self.other_addresses)
 
 
 class DirectoryClient(Protocol):
@@ -78,6 +95,10 @@ class DirectoryClient(Protocol):
     async def add_to_group(self, group: str, member_email: str) -> None:
         """Add the account to *group*; already a member counts as success."""
 
+    async def ensure_licensed(self, user_key: str) -> None:
+        """Give the account the license the integration is configured with,
+        if it lacks it. A directory that licenses on creation does nothing."""
+
 
 @dataclass(frozen=True)
 class DirectoryProviderInfo:
@@ -97,3 +118,5 @@ class DirectoryProviderInfo:
     # Prefix of the audit events and email template types the engine writes.
     audit_prefix: str
     client_for: Callable[["Integration"], DirectoryClient]
+    # The config key holding the groups a new account joins.
+    groups_key: str = "group_emails"

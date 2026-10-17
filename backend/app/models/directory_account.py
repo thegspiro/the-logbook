@@ -1,5 +1,5 @@
 """
-Directory account provisioning records (Google Workspace today).
+Directory account provisioning records (Google Workspace, Microsoft 365).
 
 One row per member The Logbook tried to give an account in the department's
 directory -- the provider named by ``provider`` -- when they were converted
@@ -25,10 +25,12 @@ from app.core.database import Base
 from app.core.utils import generate_uuid
 
 GOOGLE_WORKSPACE_INTEGRATION = "google-workspace"
+MICROSOFT_365_INTEGRATION = "microsoft-365"
 
 
 class DirectoryProvider(str, Enum):
     GOOGLE = "google"
+    MICROSOFT = "microsoft"
 
 
 class DirectoryAccountStatus(str, Enum):
@@ -73,6 +75,17 @@ class DirectoryAccountProvision(Base):
     )
     # Group addresses the member still has to be added to.
     pending_groups: Mapped[Optional[list[Any]]] = mapped_column(JSON, nullable=True)
+    # The configured license could not be assigned yet (Microsoft 365, which
+    # gives an account no mailbox until it is licensed). A retry assigns it.
+    license_pending: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    # The account is synced from on-premises Active Directory, so the
+    # directory's API cannot suspend it: an administrator disables it there.
+    # Set when that is discovered; the scheduled sweep stops retrying it.
+    managed_on_premises: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     # Sanitized before it is written: no raw provider response.
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     attempts: Mapped[int] = mapped_column(

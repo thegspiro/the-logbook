@@ -156,6 +156,45 @@ condition the intake refuses on, so the two cannot disagree
 Turning a form public after it is published, or switching the toggle off later,
 does not warn — publishing is the one moment the owner chose.
 
+## Microsoft 365 — Account Provisioning Not Yet Proven Against a Live Tenant (2026-10-17)
+
+The Microsoft 365 integration (`wiki/Integration-Microsoft-365.md`) shares the
+Google Workspace engine, so everything in the section below applies to it too
+— with sign-in blocked where Google suspends. These are specific to Microsoft,
+and an owner may want to revisit each:
+
+- **No live tenant has run it.** Every Microsoft Graph call is covered by tests
+  against recorded responses built from Microsoft's documentation, not by a
+  real tenant. Two behaviours rest on documentation alone: that a cloud-only
+  user's `extensionAttribute15` can be set in the request that creates it
+  (the tag that tells a retry its own account from someone else's), and the
+  shape of Graph's "already exists" and on-premises errors. A department's
+  first conversion is the first real test; **Test** checks credentials,
+  license and groups beforehand but creates nothing.
+- **The User Administrator role may be more than is needed.** Microsoft's
+  documentation does not say whether resetting a password with the
+  `User-PasswordProfile.ReadWrite.All` application permission also needs a
+  directory role; the setup guide asks for User Administrator so a retry does
+  not fail for want of it. The role lets the application manage every
+  non-administrator user in the tenant; a department that confirms resets work
+  without it can remove it.
+- **Accounts synced from on-premises Active Directory are not blocked.**
+  Microsoft 365 cannot change them. The Logbook flags them and stops retrying;
+  a person disables the account in Active Directory.
+- **Custom attribute 15 is The Logbook's.** Accounts it creates carry its tag
+  there. A tenant that already uses Exchange custom attribute 15 for every
+  user (in a dynamic-group rule, say) will see The Logbook's value on new
+  members' accounts instead.
+- **Client secrets expire.** An Entra ID secret lasts at most 24 months, and
+  The Logbook cannot read its expiry date without a further permission. When
+  it lapses, creation and blocking fail with "The client secret has expired"
+  until a new one is entered. A certificate is not supported.
+- **One directory per department.** Google Workspace and Microsoft 365 cannot
+  both be connected. Switching moves nothing: records for the old directory
+  stay, and their suspensions wait until it is connected again.
+
+---
+
 ## Google Workspace — What Account Provisioning Leaves Out (2026-10-15)
 
 The Google Workspace integration creates an account for each applicant

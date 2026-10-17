@@ -22,10 +22,14 @@ vi.mock('react-hot-toast', () => ({
 
 const base: GoogleAccount = {
   user_id: 'u-1',
+  provider: 'google',
+  provider_name: 'Google Workspace',
   primary_email: 'jordan.hale@firedept.org',
   status: 'created',
   credentials_sent: true,
   pending_groups: [],
+  license_pending: false,
+  managed_on_premises: false,
   last_error: null,
   attempts: 1,
   last_attempt_at: '2026-10-15T12:00:00Z',
@@ -135,5 +139,48 @@ describe('GoogleAccountPanel', () => {
     renderPanel({ ...base, status: 'linked_existing', last_error: 'Already exists.' });
     expect(screen.getByText('Existing account')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+});
+
+describe('GoogleAccountPanel with a Microsoft 365 account', () => {
+  const microsoft: GoogleAccount = { ...base, provider: 'microsoft', provider_name: 'Microsoft 365' };
+
+  beforeEach(() => {
+    mockRetry.mockReset();
+    mockRetry.mockResolvedValue({ account: microsoft });
+    onChange.mockReset();
+    onReload.mockReset();
+    onReload.mockResolvedValue(undefined);
+  });
+
+  it('is headed with the directory it belongs to', () => {
+    renderPanel(microsoft);
+    expect(screen.getByRole('heading', { name: 'Microsoft 365' })).toBeInTheDocument();
+    expect(screen.queryByText(/Google/)).not.toBeInTheDocument();
+  });
+
+  it('offers to finish setup while the license is outstanding', async () => {
+    const user = userEvent.setup();
+    renderPanel({ ...microsoft, license_pending: true });
+    expect(screen.getByText(/Not licensed yet, so the account has no mailbox/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Finish setup' }));
+
+    await waitFor(() => expect(mockRetry).toHaveBeenCalledWith('u-1'));
+    expect(onChange).toHaveBeenCalledWith(microsoft);
+  });
+
+  it('says an on-premises account is disabled in Active Directory', () => {
+    renderPanel({ ...microsoft, managed_on_premises: true });
+    expect(screen.getByTestId('directory-on-premises')).toHaveTextContent(/disable it in Active Directory/);
+  });
+
+  it('names Microsoft when asking to send a new password', async () => {
+    const user = userEvent.setup();
+    renderPanel({ ...microsoft, credentials_sent: false });
+
+    await user.click(screen.getByRole('button', { name: 'Finish setup' }));
+
+    expect(await screen.findByText('Send a new Microsoft password?')).toBeInTheDocument();
   });
 });
