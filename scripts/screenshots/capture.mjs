@@ -388,10 +388,11 @@ async function captureFrame(page, shot) {
         height: document.documentElement.scrollHeight,
       };
     }
-    // boundingBox() is document-space, so the viewport rect has to be too.
+    // boundingBox() is relative to the viewport, not the document, so a
+    // viewport shot's frame is the viewport at 0,0 however far it scrolled.
     return {
-      x: window.scrollX,
-      y: window.scrollY,
+      x: 0,
+      y: 0,
       width: window.innerWidth,
       height: window.innerHeight,
     };
