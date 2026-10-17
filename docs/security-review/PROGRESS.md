@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR** (branch `claude/security-review-integrations`):
+**PR [#3375](https://github.com/thegspiro/the-logbook/pull/3375)** (branch
+`claude/security-review-integrations`):
 Feature 27 (Integrations), pass 7. PR #3374 (Feature 26, Forms, pass 7)
 merged with no next-feature PR open; this pass picked it up. 0 new
 findings. The real delta since pass 6 (`7f521f66`, PR #2988) is mostly a
@@ -43,9 +44,7 @@ table/column existence correctly (Pitfall #26) and the one
 `ondelete="SET NULL"` column is `nullable=True` (Pitfall #2). Both standing
 flags (INT-5, INT-11) re-verified unchanged, still open by design. See
 `INT-27-integrations.md`'s **Pass 7** section. Row 27 → ✅ (pending this
-PR's merge); next is Feature 28 (Security audit & IP). (Open PR row
-to be updated in a follow-up commit on this same branch once this PR's
-number is known, per this rotation's convention.)
+PR's merge); next is Feature 28 (Security audit & IP).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 26, Forms, pass 7, PR #3374, merged), preserved for history</summary>
