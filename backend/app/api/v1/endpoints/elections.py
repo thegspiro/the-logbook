@@ -8,7 +8,7 @@ import copy
 import hashlib
 import unicodedata
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Awaitable, Callable, Optional
 from uuid import UUID, uuid4
 
 from fastapi import (
@@ -124,11 +124,15 @@ from app.schemas.election import (
 )
 from app.services.ballot_send_jobs import (
     SEND_IN_PROGRESS_DETAIL,
+    BallotSend,
+    QueuedSend,
+    ReminderSend,
     ensure_election_open,
     find_active_job,
     get_job,
     job_response,
     perform_ballot_send,
+    perform_reminder_send,
     start_ballot_send_job,
 )
 from app.services.election_service import (
@@ -3083,6 +3087,38 @@ async def start_ballot_send_job_endpoint(
     **Authentication required**
     **Requires permission: elections.manage**
     """
+
+    async def precheck(election: Election) -> None:
+        ensure_election_open(election)
+
+    return await _queue_send(
+        db,
+        election_id,
+        current_user,
+        BallotSend(
+            recipient_user_ids=email_data.recipient_user_ids,
+            subject=email_data.subject,
+            message=email_data.message,
+            base_ballot_url=_ballot_base_url(email_data),
+            send_eligibility_summary=bool(email_data.send_eligibility_summary),
+        ),
+        precheck,
+    )
+
+
+async def _queue_send(
+    db: AsyncSession,
+    election_id: UUID,
+    current_user: User,
+    send: QueuedSend,
+    precheck: Callable[[Election], Awaitable[None]],
+) -> BallotSendJobResponse:
+    """Record a queued send and start it, or refuse it now.
+
+    ``precheck`` raises ValueError for a send that cannot go out (400), so
+    the secretary hears it at once rather than from a failed job a moment
+    later. The runner checks again when the send starts.
+    """
     organization_id = str(current_user.organization_id)
     # Locked so two requests arriving together cannot both find no job in
     # progress and both queue one.
@@ -3098,9 +3134,11 @@ async def start_ballot_send_job_endpoint(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
     try:
-        ensure_election_open(election)
+        await precheck(election)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     if await find_active_job(db, election.id, organization_id) is not None:
         # The abandoned jobs find_active_job just failed are kept either way.
@@ -3115,6 +3153,7 @@ async def start_ballot_send_job_endpoint(
         organization_id=organization_id,
         election_id=election.id,
         requested_by=str(current_user.id),
+        kind=send.kind.value,
         status=BallotSendJobStatus.QUEUED.value,
         created_at=datetime.now(timezone.utc),
     )
@@ -3123,18 +3162,10 @@ async def start_ballot_send_job_endpoint(
     await db.refresh(job)
 
     logger.info(
-        f"Ballot send job queued | job={job.id} election={election.id} "
-        f"user={current_user.id}"
+        f"Ballot send job queued | job={job.id} kind={job.kind} "
+        f"election={election.id} user={current_user.id}"
     )
-    start_ballot_send_job(
-        job.id,
-        organization_id,
-        recipient_user_ids=email_data.recipient_user_ids,
-        subject=email_data.subject,
-        message=email_data.message,
-        base_ballot_url=_ballot_base_url(email_data),
-        send_eligibility_summary=bool(email_data.send_eligibility_summary),
-    )
+    start_ballot_send_job(job.id, organization_id, send)
     return job_response(job)
 
 
@@ -3149,7 +3180,8 @@ async def get_ballot_send_job_endpoint(
     current_user: User = Depends(require_permission("elections.manage")),
 ):
     """
-    The status of a queued ballot send and, once finished, its outcome.
+    The status of a queued ballot send or reminder and, once finished, its
+    outcome.
 
     **Authentication required**
     **Requires permission: elections.manage**
@@ -3382,42 +3414,79 @@ async def remind_non_voters(
     **Authentication required**
     **Requires permission: elections.manage**
     """
-    # SEC: server-configured FRONTEND_URL, never the Host header (see
-    # send-ballot above) — the link carries a live voting token.
-    frontend_origin = settings.FRONTEND_URL.rstrip("/")
+    if (
+        await find_active_job(db, str(election_id), str(current_user.organization_id))
+        is not None
+    ):
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=SEND_IN_PROGRESS_DETAIL,
+        )
 
     service = ElectionService(db)
     try:
-        reminded, failed, skipped, skipped_details = await service.remind_non_voters(
-            election_id=election_id,
-            organization_id=current_user.organization_id,
-            user_id=str(current_user.id),
+        return await perform_reminder_send(
+            service,
+            election_id,
+            str(current_user.organization_id),
+            requested_by=str(current_user.id),
             subject=payload.subject if payload else None,
             message=payload.message if payload else None,
-            base_ballot_url=f"{frontend_origin}/ballot",
+            base_ballot_url=_reminder_ballot_url(),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
-    if reminded == 0 and failed == 0 and skipped == 0:
-        message = "Everyone eligible has already voted — no reminders needed"
-    else:
-        parts = [f"Reminder sent to {reminded} non-voter(s)"]
-        if failed > 0:
-            parts.append(f"{failed} failed")
-        if skipped > 0:
-            parts.append(ElectionService.summarize_skipped(skipped_details))
-        message = ". ".join(parts)
-    return {
-        "success": failed == 0,
-        "recipients_count": reminded,
-        "failed_count": failed,
-        "skipped_count": skipped,
-        "skipped_details": skipped_details,
-        "message": message,
-    }
+
+def _reminder_ballot_url() -> str:
+    # SEC: server-configured FRONTEND_URL, never the Host header (see
+    # _ballot_base_url) — the link carries a live voting token.
+    return f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
+
+
+@router.post(
+    "/{election_id}/reminder-send-jobs",
+    response_model=BallotSendJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_reminder_send_job_endpoint(
+    election_id: UUID,
+    payload: Optional[RemindNonVotersRequest] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Queue a reminder, with a fresh voting link, to every eligible voter who
+    has not yet voted, and return without waiting.
+
+    Refused at once (400) when the election is not open, reminders are off,
+    or one went out within the cooldown; refused (409) while any ballot send
+    or reminder for the election is still running. Poll
+    ``GET /{election_id}/ballot-send-jobs/{job_id}`` for the outcome.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+
+    async def precheck(election: Election) -> None:
+        await service.ensure_reminder_allowed(election, current_user.organization_id)
+
+    return await _queue_send(
+        db,
+        election_id,
+        current_user,
+        ReminderSend(
+            requested_by=str(current_user.id),
+            subject=payload.subject if payload else None,
+            message=payload.message if payload else None,
+            base_ballot_url=_reminder_ballot_url(),
+        ),
+        precheck,
+    )
 
 
 @router.get(

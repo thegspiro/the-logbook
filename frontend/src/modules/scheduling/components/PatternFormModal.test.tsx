@@ -114,4 +114,46 @@ describe('PatternFormModal payload', () => {
       expect(payload[key]).toBeUndefined();
     }
   });
+
+  it('offers no weekly or custom type for a new pattern, and points to the Patterns tab', () => {
+    // This form has no weekday or date fields, so a weekly or custom pattern
+    // saved from it carried no schedule_config and generated no shifts.
+    renderWithRouter(
+      <PatternFormModal isOpen onClose={vi.fn()} onSubmit={onSubmit} title="Create Pattern" templates={templates} />
+    );
+
+    const values = Array.from(
+      screen.getByLabelText<HTMLSelectElement>(/^Pattern Type/).options,
+      (option) => option.value
+    );
+    expect(values).toEqual(['daily', 'platoon']);
+    expect(screen.getByRole('link', { name: 'Patterns tab' })).toHaveAttribute(
+      'href',
+      '/scheduling/admin/planning/patterns'
+    );
+  });
+
+  it('keeps a stored weekly pattern weekly when it is edited here', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <PatternFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        initialData={{ ...storedPattern, pattern_type: 'weekly' }}
+        title="Edit Pattern"
+        templates={templates}
+      />
+    );
+
+    const select = screen.getByLabelText<HTMLSelectElement>(/^Pattern Type/);
+    expect(select.value).toBe('weekly');
+    expect(Array.from(select.options, (option) => option.value)).toEqual(['daily', 'weekly', 'platoon']);
+
+    await user.click(screen.getByRole('button', { name: 'Save Pattern' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ pattern_type: 'weekly' }));
+    expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty('schedule_config');
+  });
 });

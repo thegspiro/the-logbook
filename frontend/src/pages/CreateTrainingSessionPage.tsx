@@ -239,6 +239,7 @@ const CreateTrainingSessionPage: React.FC = () => {
         course_name: formData.course_name?.trim() || undefined,
         course_code: formData.course_code?.trim() || undefined,
         instructor: formData.instructor?.trim() || undefined,
+        instructor_id: instructorId || undefined,
         certification_number_prefix: formData.certification_number_prefix?.trim() || undefined,
         issuing_agency: formData.issuing_agency?.trim() || undefined,
       };
@@ -791,6 +792,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                       // Auto-populate fields from selected course
                       const course = availableCourses.find((c) => c.id === courseId);
                       if (course) {
+                        // The course's instructor is free text, not a member, so a
+                        // lead instructor picked earlier no longer matches the name.
+                        if (course.instructor) setInstructorId('');
                         setFormData((prev) => ({
                           ...prev,
                           course_id: courseId,

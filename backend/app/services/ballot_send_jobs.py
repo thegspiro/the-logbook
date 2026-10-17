@@ -15,12 +15,19 @@ already in members' inboxes.
 after the response. The page polls the row for the outcome. The synchronous
 ``POST /elections/{id}/send-ballot`` is kept for API callers and runs the same
 :func:`perform_ballot_send`, so both report a send identically.
+
+Remind Non-Voters goes the same way through
+``POST /elections/{id}/reminder-send-jobs``: a reminder is a ballot send to
+the members who have not voted, with fresh tokens, and outlasts the timeout
+just the same. Both kinds share the table and the one-send-at-a-time guard,
+because two overlapping sends of either kind mint tokens over each other.
 """
 
 import asyncio
 from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Callable, List, Optional, Set
+from typing import Callable, List, Optional, Set, Union
 from uuid import UUID
 
 from loguru import logger
@@ -31,6 +38,7 @@ from app.core.database import async_session_factory
 from app.core.utils import safe_error_detail
 from app.models.election import (
     BallotSendJob,
+    BallotSendJobKind,
     BallotSendJobStatus,
     Election,
     ElectionStatus,
@@ -216,6 +224,114 @@ async def perform_ballot_send(
     )
 
 
+def reminder_send_message(
+    reminded: int,
+    failed: int,
+    skipped: int,
+    skipped_details: List[dict],
+) -> str:
+    """The secretary's account of a non-voter reminder."""
+    if reminded == 0 and failed == 0 and skipped == 0:
+        return "Everyone eligible has already voted — no reminders needed"
+    parts = [f"Reminder sent to {reminded} non-voter(s)"]
+    if failed > 0:
+        parts.append(f"{failed} failed")
+    if skipped > 0:
+        parts.append(ElectionService.summarize_skipped(skipped_details))
+    return ". ".join(parts)
+
+
+async def perform_reminder_send(
+    service: ElectionService,
+    election_id: UUID,
+    organization_id: str,
+    *,
+    requested_by: Optional[str],
+    subject: Optional[str],
+    message: Optional[str],
+    base_ballot_url: str,
+) -> EmailBallotResponse:
+    """Remind the members who have not voted, and report it.
+
+    Raises whatever ``remind_non_voters`` raises, including its cooldown and
+    open-election refusals.
+    """
+    reminded, failed, skipped, skipped_details = await service.remind_non_voters(
+        election_id=election_id,
+        organization_id=organization_id,
+        user_id=requested_by,
+        subject=subject,
+        message=message,
+        base_ballot_url=base_ballot_url,
+    )
+    return EmailBallotResponse(
+        success=failed == 0,
+        recipients_count=reminded,
+        failed_count=failed,
+        skipped_count=skipped,
+        skipped_details=[SkippedVoterDetail.model_validate(d) for d in skipped_details],
+        message=reminder_send_message(reminded, failed, skipped, skipped_details),
+    )
+
+
+@dataclass(frozen=True)
+class BallotSend:
+    """A queued send of the ballot itself."""
+
+    recipient_user_ids: Optional[List[UUID]]
+    subject: Optional[str]
+    message: Optional[str]
+    base_ballot_url: Optional[str]
+    send_eligibility_summary: bool
+
+    kind = BallotSendJobKind.BALLOTS
+
+    async def __call__(
+        self, service: ElectionService, election: Election, organization_id: str
+    ) -> EmailBallotResponse:
+        # Re-checked here, not only when the job was queued: the election can
+        # be closed in the moment between the request and the send.
+        ensure_election_open(election)
+        return await perform_ballot_send(
+            service,
+            election,
+            organization_id,
+            recipient_user_ids=self.recipient_user_ids,
+            subject=self.subject,
+            message=self.message,
+            base_ballot_url=self.base_ballot_url,
+            send_eligibility_summary=self.send_eligibility_summary,
+        )
+
+
+@dataclass(frozen=True)
+class ReminderSend:
+    """A queued reminder to the members who have not voted."""
+
+    requested_by: Optional[str]
+    subject: Optional[str]
+    message: Optional[str]
+    base_ballot_url: str
+
+    kind = BallotSendJobKind.REMINDER
+
+    async def __call__(
+        self, service: ElectionService, election: Election, organization_id: str
+    ) -> EmailBallotResponse:
+        return await perform_reminder_send(
+            service,
+            UUID(str(election.id)),
+            organization_id,
+            requested_by=self.requested_by,
+            subject=self.subject,
+            message=self.message,
+            base_ballot_url=self.base_ballot_url,
+        )
+
+
+QueuedSend = Union[BallotSend, ReminderSend]
+
+
 def _as_utc(value: datetime) -> datetime:
     # MySQL DATETIME comes back naive; every stored time is UTC.
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
@@ -302,6 +418,7 @@ def job_response(job: BallotSendJob) -> BallotSendJobResponse:
     return BallotSendJobResponse(
         id=job.id,
         election_id=job.election_id,
+        kind=job.kind,
         status=job.status,
         created_at=job.created_at,
         started_at=job.started_at,
@@ -314,12 +431,8 @@ def job_response(job: BallotSendJob) -> BallotSendJobResponse:
 async def run_ballot_send_job(
     job_id: str,
     organization_id: str,
+    send: QueuedSend,
     *,
-    recipient_user_ids: Optional[List[UUID]],
-    subject: Optional[str],
-    message: Optional[str],
-    base_ballot_url: Optional[str],
-    send_eligibility_summary: bool,
     session_factory: SessionFactory = async_session_factory,
 ) -> None:
     """Run one queued send and record its outcome on the job row.
@@ -330,16 +443,7 @@ async def run_ballot_send_job(
     """
     try:
         async with session_factory() as db:
-            await _run_job(
-                db,
-                job_id,
-                organization_id,
-                recipient_user_ids=recipient_user_ids,
-                subject=subject,
-                message=message,
-                base_ballot_url=base_ballot_url,
-                send_eligibility_summary=send_eligibility_summary,
-            )
+            await _run_job(db, job_id, organization_id, send)
     except Exception as e:
         logger.exception(f"Ballot send job crashed | job={job_id} error={e}")
 
@@ -348,12 +452,7 @@ async def _run_job(
     db: AsyncSession,
     job_id: str,
     organization_id: str,
-    *,
-    recipient_user_ids: Optional[List[UUID]],
-    subject: Optional[str],
-    message: Optional[str],
-    base_ballot_url: Optional[str],
-    send_eligibility_summary: bool,
+    send: QueuedSend,
 ) -> None:
     job = await _load_job(db, job_id, organization_id)
     if job is None or job.status != BallotSendJobStatus.QUEUED.value:
@@ -376,19 +475,7 @@ async def _run_job(
         election = election_result.scalar_one_or_none()
         if election is None:
             raise ValueError("Election not found")
-        # Re-checked here, not only when the job was queued: the election can
-        # be closed in the moment between the request and the send.
-        ensure_election_open(election)
-        outcome = await perform_ballot_send(
-            ElectionService(db),
-            election,
-            str(organization_id),
-            recipient_user_ids=recipient_user_ids,
-            subject=subject,
-            message=message,
-            base_ballot_url=base_ballot_url,
-            send_eligibility_summary=send_eligibility_summary,
-        )
+        outcome = await send(ElectionService(db), election, str(organization_id))
     except Exception as e:
         await db.rollback()
         failed = await _load_job(db, job_id, organization_id)
@@ -398,8 +485,8 @@ async def _run_job(
             failed.finished_at = datetime.now(timezone.utc)
             await db.commit()
         logger.error(
-            f"Ballot send job failed | job={job_id} election={election_id} "
-            f"error={e}"
+            f"Ballot send job failed | job={job_id} kind={send.kind.value} "
+            f"election={election_id} error={e}"
         )
         return
 
@@ -416,9 +503,9 @@ async def _run_job(
     done.finished_at = datetime.now(timezone.utc)
     await db.commit()
     logger.info(
-        f"Ballot send job completed | job={job_id} election={election_id} "
-        f"sent={outcome.recipients_count} failed={outcome.failed_count} "
-        f"skipped={outcome.skipped_count}"
+        f"Ballot send job completed | job={job_id} kind={send.kind.value} "
+        f"election={election_id} sent={outcome.recipients_count} "
+        f"failed={outcome.failed_count} skipped={outcome.skipped_count}"
     )
 
 
@@ -434,31 +521,14 @@ async def _load_job(
 
 
 def start_ballot_send_job(
-    job_id: str,
-    organization_id: str,
-    *,
-    recipient_user_ids: Optional[List[UUID]],
-    subject: Optional[str],
-    message: Optional[str],
-    base_ballot_url: Optional[str],
-    send_eligibility_summary: bool,
+    job_id: str, organization_id: str, send: QueuedSend
 ) -> "asyncio.Task[None]":
     """Schedule :func:`run_ballot_send_job` on the running loop.
 
     The send lives in this process: a restart while it runs abandons it, and
     the row is reported as interrupted once ``STALE_JOB_AFTER`` passes.
     """
-    task = asyncio.create_task(
-        run_ballot_send_job(
-            job_id,
-            organization_id,
-            recipient_user_ids=recipient_user_ids,
-            subject=subject,
-            message=message,
-            base_ballot_url=base_ballot_url,
-            send_eligibility_summary=send_eligibility_summary,
-        )
-    )
+    task = asyncio.create_task(run_ballot_send_job(job_id, organization_id, send))
     _running_tasks.add(task)
     task.add_done_callback(_running_tasks.discard)
     return task

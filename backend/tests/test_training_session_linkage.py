@@ -19,7 +19,7 @@ DB is mocked; no MySQL.
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from app.models.event import EventType
@@ -205,6 +205,70 @@ class TestCreateLinkageValidation:
 
         assert sessions == []
         assert error == "Invalid training category"
+
+
+class TestCreateInstructor:
+    """The lead instructor the wizard picks is stored as a member id."""
+
+    async def test_in_org_instructor_is_stored(self):
+        instructor_id = uuid4()
+        db = RecordingSession([_one(str(instructor_id))])
+        svc = TrainingSessionService(db)
+
+        session, error = await svc.create_training_session(
+            _payload(instructor="Rita Cole", instructor_id=instructor_id), ORG, ACTOR
+        )
+
+        assert error is None
+        assert session.instructor_id == str(instructor_id)
+
+    async def test_foreign_instructor_is_rejected(self):
+        db = RecordingSession([_one(None)])
+        svc = TrainingSessionService(db)
+
+        session, error = await svc.create_training_session(
+            _payload(instructor_id=uuid4()), ORG, ACTOR
+        )
+
+        assert session is None
+        assert error == "Invalid instructor"
+
+    async def test_recurring_path_stores_the_instructor_on_every_session(self):
+        from app.schemas.training_session import RecurringTrainingSessionCreate
+
+        instructor_id = uuid4()
+        start = datetime(2026, 9, 15, 9, 0, tzinfo=timezone.utc)
+        payload = RecurringTrainingSessionCreate(
+            title="Hose Operations",
+            start_datetime=start,
+            end_datetime=start + timedelta(hours=3),
+            requires_rsvp=False,
+            use_existing_course=False,
+            course_name="Hose Operations",
+            training_type="skills_practice",
+            credit_hours=3.0,
+            instructor="Rita Cole",
+            instructor_id=instructor_id,
+            recurrence_pattern="weekly",
+            recurrence_end_date=start + timedelta(days=14),
+        )
+        db = RecordingSession([_one(str(instructor_id))])
+        svc = TrainingSessionService(db)
+        # Event generation is EventService's concern; two occurrences stand in.
+        occurrences = [SimpleNamespace(id=str(uuid4())) for _ in range(2)]
+
+        with patch.object(
+            EventService,
+            "create_recurring_event",
+            AsyncMock(return_value=(occurrences, None)),
+        ):
+            sessions, error = await svc.create_recurring_training_session(
+                payload, ORG, ACTOR
+            )
+
+        assert error is None
+        assert len(sessions) == 2
+        assert {s.instructor_id for s in sessions} == {str(instructor_id)}
 
 
 class TestUpdateLinkage:

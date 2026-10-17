@@ -7,9 +7,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useSubmitGuard } from '../hooks/useSubmitGuard';
-import { electionService, eventService, meetingsService, ranksService } from '../services/api';
+import { electionService, eventService, meetingsService, ranksService, roleService } from '../services/api';
 import type { MeetingRecord, OperationalRankResponse } from '../services/api';
 import type { EventListItem } from '../types/event';
+import type { Role } from '../types/role';
 import type { ElectionListItem, ElectionCreate } from '../types/election';
 import type { VotingMethod, VictoryCondition } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
@@ -20,9 +21,18 @@ import { formatDate, formatForDateTimeInput, getTodayLocalDate, localToUTC } fro
 import { HelpLink } from '../components/HelpLink';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
+import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electionMeetingWindow';
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
+
+interface PositionSuggestion {
+  key: string;
+  name: string;
+  detail?: string | undefined;
+  code?: string | undefined;
+  kind: 'Position' | 'Rank';
+}
 
 export const ElectionsPage: React.FC = () => {
   const [elections, setElections] = useState<ElectionListItem[]>([]);
@@ -63,6 +73,7 @@ export const ElectionsPage: React.FC = () => {
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
   const [upcomingEvents, setBusinessMeetingEvents] = useState<EventListItem[]>([]);
   const [availableRanks, setAvailableRanks] = useState<OperationalRankResponse[]>([]);
+  const [availablePositions, setAvailablePositions] = useState<Role[]>([]);
 
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('elections.manage');
@@ -128,6 +139,7 @@ export const ElectionsPage: React.FC = () => {
     if (!canManage) return;
     void fetchMeetings();
     void fetchRanks();
+    void fetchPositions();
   }, [canManage, fetchMeetings]);
 
   useEffect(() => {
@@ -147,6 +159,31 @@ export const ElectionsPage: React.FC = () => {
     }
   };
 
+  // Officer and board seats (President, Treasurer, Board of Directors) are
+  // positions, not operational ranks, and elections fill both kinds. GET /roles
+  // needs positions.view, which every seeded elections.manage holder has; a
+  // custom role without it still gets the ranks and free text.
+  const fetchPositions = async () => {
+    try {
+      setAvailablePositions(await roleService.getRoles());
+    } catch {
+      // Non-critical — the ranks and free text remain
+    }
+  };
+
+  /**
+   * The election's dates from a linked meeting or event's window. Left as
+   * typed when the record has no start time or has already begun — a past
+   * start cannot be saved, and a date alone does not say when voting opens.
+   * With no end time the end falls back to end of day, as a typed start does.
+   */
+  const datesFromWindow = (win: MeetingWindow): Pick<typeof formData, 'start_date' | 'end_date'> => {
+    if (!win.start || new Date(localToUTC(win.start, tz)).getTime() <= Date.now()) {
+      return { start_date: formData.start_date, end_date: formData.end_date };
+    }
+    return { start_date: win.start, end_date: win.end ?? endOfDepartmentDay(win.start) };
+  };
+
   const handleMeetingChange = (value: string) => {
     if (!value) {
       setFormData({ ...formData, meeting_id: undefined, event_id: undefined });
@@ -159,6 +196,7 @@ export const ElectionsPage: React.FC = () => {
       if (meeting) {
         setFormData({
           ...formData,
+          ...datesFromWindow(meetingWindow(meeting)),
           meeting_id: id,
           event_id: undefined,
           meeting_date: meeting.meeting_date,
@@ -169,6 +207,7 @@ export const ElectionsPage: React.FC = () => {
       if (event) {
         setFormData({
           ...formData,
+          ...datesFromWindow(eventWindow(event, tz)),
           meeting_id: undefined,
           event_id: id,
           meeting_date: event.start_datetime,
@@ -275,14 +314,27 @@ export const ElectionsPage: React.FC = () => {
   };
 
   const addedPositions = formData.positions || [];
-  const positionSuggestions = availableRanks
-    .filter((r) => !addedPositions.includes(r.display_name))
-    .filter(
-      (r) =>
-        !positionInput.trim() ||
-        r.display_name.toLowerCase().includes(positionInput.toLowerCase()) ||
-        r.rank_code.toLowerCase().includes(positionInput.toLowerCase())
-    );
+  const positionQuery = positionInput.trim().toLowerCase();
+  const seenSuggestions = new Set(addedPositions.map((p) => p.toLowerCase()));
+  // Positions first, then ranks; a name in both (Chief, Captain) is offered once.
+  // `member` is the baseline position every member holds, not a seat to fill.
+  const positionSuggestions: PositionSuggestion[] = [
+    ...availablePositions
+      .filter((p) => p.slug !== 'member')
+      .map((p) => ({ key: `position-${p.id}`, name: p.name, detail: p.description, kind: 'Position' as const })),
+    ...availableRanks.map((r) => ({
+      key: `rank-${r.id}`,
+      name: r.display_name,
+      detail: r.description ?? undefined,
+      code: r.rank_code,
+      kind: 'Rank' as const,
+    })),
+  ].filter((suggestion: PositionSuggestion) => {
+    const name = suggestion.name.toLowerCase();
+    if (seenSuggestions.has(name)) return false;
+    seenSuggestions.add(name);
+    return !positionQuery || name.includes(positionQuery) || !!suggestion.code?.toLowerCase().includes(positionQuery);
+  });
   // The listbox is open only while there is a suggestion to show; it closes on
   // the input's blur rather than through a click-away scrim, which used to sit
   // over the Add button and eat the first tap (W50-63).
@@ -823,8 +875,8 @@ export const ElectionsPage: React.FC = () => {
                               role="listbox"
                               aria-label="Available positions"
                             >
-                              {positionSuggestions.map((rank) => (
-                                <li key={rank.id}>
+                              {positionSuggestions.map((suggestion) => (
+                                <li key={suggestion.key}>
                                   <button
                                     type="button"
                                     role="option"
@@ -833,17 +885,18 @@ export const ElectionsPage: React.FC = () => {
                                       e.preventDefault(); // Prevent input blur before click
                                       setPositionInput('');
                                       setShowPositionDropdown(false);
-                                      if (!addedPositions.includes(rank.display_name)) {
+                                      if (!addedPositions.includes(suggestion.name)) {
                                         setFormData({
                                           ...formData,
-                                          positions: [...addedPositions, rank.display_name],
+                                          positions: [...addedPositions, suggestion.name],
                                         });
                                       }
                                     }}
                                   >
-                                    <span className="font-medium">{rank.display_name}</span>
-                                    {rank.description && (
-                                      <span className="text-theme-text-muted ml-2 text-xs">— {rank.description}</span>
+                                    <span className="font-medium">{suggestion.name}</span>
+                                    <span className="text-theme-text-muted ml-2 text-xs">{suggestion.kind}</span>
+                                    {suggestion.detail && (
+                                      <span className="text-theme-text-muted ml-2 text-xs">— {suggestion.detail}</span>
                                     )}
                                   </button>
                                 </li>
@@ -864,7 +917,7 @@ export const ElectionsPage: React.FC = () => {
                       </div>
                     </div>
                     <p className="text-theme-text-muted mt-1 text-xs">
-                      Select from existing ranks or type a custom position name.
+                      Select a department position (President, Secretary…) or rank, or type a custom name.
                     </p>
                     {formData.positions && formData.positions.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">

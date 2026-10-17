@@ -12,12 +12,19 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
+const mockToastError = vi.fn();
+
 vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: vi.fn() },
+  default: {
+    success: vi.fn(),
+    error: (...args: unknown[]): void => {
+      mockToastError(...args);
+    },
+  },
 }));
 
 let hasManagePermission = false;
@@ -144,9 +151,81 @@ describe('ApparatusBasicPage management controls', () => {
       expect(within(dialog).getByRole('textbox', { name: /^Unit Number/ })).toBeInTheDocument();
       expect(within(dialog).getByRole('textbox', { name: /^Name/ })).toBeInTheDocument();
       expect(within(dialog).getByRole('combobox', { name: 'Apparatus Type' })).toBeInTheDocument();
-      expect(within(dialog).getByRole('spinbutton', { name: 'Minimum Staffing' })).toBeInTheDocument();
+      expect(within(dialog).getByRole('spinbutton', { name: /^Minimum Staffing/ })).toBeInTheDocument();
       expect(within(dialog).getByRole('combobox', { name: 'Crew position 2' })).toBeInTheDocument();
       expect(within(dialog).getByRole('button', { name: 'Remove crew position 2' })).toBeInTheDocument();
     });
+  });
+});
+
+describe('ApparatusBasicPage save validation', () => {
+  beforeEach(() => {
+    hasManagePermission = true;
+    mockGetBasicApparatus.mockReset();
+    mockGetBasicApparatus.mockResolvedValue([engine]);
+    mockCreateBasicApparatus.mockReset();
+    mockCreateBasicApparatus.mockResolvedValue({ id: 'app-2' });
+    mockUpdateBasicApparatus.mockReset();
+    mockUpdateBasicApparatus.mockResolvedValue({});
+    mockToastError.mockReset();
+  });
+
+  const openAdd = async (user: ReturnType<typeof userEvent.setup>) => {
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: /add apparatus/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Add Apparatus' });
+    await user.type(within(dialog).getByRole('textbox', { name: /^Unit Number/ }), 'E-52');
+    await user.type(within(dialog).getByRole('textbox', { name: /^Name/ }), 'Engine 52');
+    return dialog;
+  };
+
+  it('will not send a cleared minimum staffing as 0', async () => {
+    // Number('') is 0, which BasicApparatusCreate refuses with ge=1.
+    const user = userEvent.setup();
+    const dialog = await openAdd(user);
+
+    await user.clear(within(dialog).getByRole('spinbutton', { name: /^Minimum Staffing/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Add Apparatus' }));
+
+    expect(mockToastError).toHaveBeenCalledWith('Minimum staffing must be a whole number from 1 to 50');
+    expect(mockCreateBasicApparatus).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByRole('spinbutton', { name: /^Minimum Staffing/ }), '3');
+    await user.click(within(dialog).getByRole('button', { name: 'Add Apparatus' }));
+
+    await waitFor(() => expect(mockCreateBasicApparatus).toHaveBeenCalledTimes(1));
+    expect(mockCreateBasicApparatus.mock.calls[0]?.[0]).toMatchObject({
+      unit_number: 'E-52',
+      name: 'Engine 52',
+      min_staffing: 3,
+    });
+  });
+
+  it('will not send a unit number longer than the backend accepts', async () => {
+    const user = userEvent.setup();
+    const dialog = await openAdd(user);
+
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /^Unit Number/ }), {
+      target: { value: 'E'.repeat(21) },
+    });
+    await user.click(within(dialog).getByRole('button', { name: 'Add Apparatus' }));
+
+    expect(mockToastError).toHaveBeenCalledWith('Unit number must be 20 characters or fewer');
+    expect(mockCreateBasicApparatus).not.toHaveBeenCalled();
+  });
+
+  it("shows the server's reason when the save fails", async () => {
+    mockCreateBasicApparatus.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 409'), {
+        isAxiosError: true,
+        response: { status: 409, data: { detail: 'Unit number E-52 is already in use' } },
+      })
+    );
+    const user = userEvent.setup();
+    const dialog = await openAdd(user);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Add Apparatus' }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Unit number E-52 is already in use'));
   });
 });

@@ -50,6 +50,7 @@ from app.models.election import (
 )
 from app.models.email_template import EmailTemplateType
 from app.models.membership_pipeline import ProspectElectionPackage
+from app.models.notification import NotificationChannel, NotificationLog
 from app.models.user import Organization, User
 from app.schemas.election import (
     CandidateResult,
@@ -268,6 +269,14 @@ def position_ballot_items(election: Any) -> List[Dict]:
             }
         )
     return synthesized
+
+
+NOMINATION_NOTICE_CATEGORY = "election_nomination"
+
+
+def nominations_tab_path(election_id: Any) -> str:
+    """The in-app path where a nominee accepts or declines."""
+    return f"/elections/{election_id}?tab=nominations"
 
 
 def _is_approval_item(item: Dict, is_position_item: bool) -> bool:
@@ -3905,6 +3914,39 @@ class ElectionService:
 
         return non_voters
 
+    async def ensure_reminder_allowed(
+        self, election: Election, organization_id: UUID | str
+    ) -> None:
+        """Raise ValueError when a non-voter reminder may not go out now.
+
+        Called by ``remind_non_voters`` and, before queueing, by the
+        background reminder endpoint, so the secretary is refused at once
+        rather than after the job starts.
+        """
+        if election.status != ElectionStatus.OPEN:
+            raise ValueError("Reminders can only be sent for open elections")
+        flags = await self.get_feature_flags(organization_id)
+        if not flags["reminders_enabled"]:
+            raise ValueError(
+                "Non-voter reminders are disabled for this organization — "
+                "enable them in Election Settings"
+            )
+
+        # Cooldown: a manager double-clicking (or automation racing a manual
+        # send) must not spam members — each send mints fresh tokens.
+        now = datetime.now(timezone.utc)
+        last_sent = self._ensure_utc(election.reminder_sent_at)
+        if last_sent and now - last_sent < timedelta(
+            minutes=self.REMINDER_COOLDOWN_MINUTES
+        ):
+            wait_min = self.REMINDER_COOLDOWN_MINUTES - int(
+                (now - last_sent).total_seconds() // 60
+            )
+            raise ValueError(
+                f"A reminder was already sent recently — try again in about "
+                f"{max(wait_min, 1)} minute(s)"
+            )
+
     async def remind_non_voters(
         self,
         election_id: UUID,
@@ -3943,29 +3985,8 @@ class ElectionService:
         election = result.scalar_one_or_none()
         if not election:
             raise ValueError("Election not found")
-        if election.status != ElectionStatus.OPEN:
-            raise ValueError("Reminders can only be sent for open elections")
-        flags = await self.get_feature_flags(organization_id)
-        if not flags["reminders_enabled"]:
-            raise ValueError(
-                "Non-voter reminders are disabled for this organization — "
-                "enable them in Election Settings"
-            )
-
-        # Cooldown: a manager double-clicking (or automation racing a manual
-        # send) must not spam members — each send mints fresh tokens.
+        await self.ensure_reminder_allowed(election, organization_id)
         now = datetime.now(timezone.utc)
-        last_sent = self._ensure_utc(election.reminder_sent_at)
-        if last_sent and now - last_sent < timedelta(
-            minutes=self.REMINDER_COOLDOWN_MINUTES
-        ):
-            wait_min = self.REMINDER_COOLDOWN_MINUTES - int(
-                (now - last_sent).total_seconds() // 60
-            )
-            raise ValueError(
-                f"A reminder was already sent recently — try again in about "
-                f"{max(wait_min, 1)} minute(s)"
-            )
 
         non_voters = await self.get_non_voters(election_id, organization_id)
         if not non_voters:
@@ -4295,11 +4316,19 @@ class ElectionService:
     async def _notify_nominee(
         self, election, candidate, organization_id: UUID | str
     ) -> None:
-        """Email a third-party nominee that they must accept or decline.
+        """Tell a third-party nominee that they must accept or decline.
 
-        Best-effort: a mail failure must never fail the nomination itself —
-        the pending nomination is still visible on the election page.
+        Email is the channel of record; the bell notice is added beside it
+        (not instead of it) so a member who is signed in sees the request
+        and can open the Nominations tab in one tap. Both carry the link.
+        Best-effort: a delivery failure must never fail the nomination
+        itself — the pending nomination is still visible on the election
+        page.
         """
+        nominations_path = nominations_tab_path(election.id)
+        await self._record_nominee_bell_notice(
+            election, candidate, organization_id, nominations_path
+        )
         try:
             import html as html_mod
 
@@ -4332,6 +4361,7 @@ class ElectionService:
                     f"<strong>{deadline_local}</strong>.</p>"
                 )
 
+            nominations_url = f"{settings.FRONTEND_URL.rstrip('/')}{nominations_path}"
             title = html_mod.escape(election.title)
             position = html_mod.escape(candidate.position or "")
             body_html = (
@@ -4340,6 +4370,8 @@ class ElectionService:
                 "<p>Your name will only appear on the ballot if you accept. "
                 "Sign in to the intranet and open the election's Nominations "
                 "tab to accept or decline.</p>"
+                f'<p><a href="{html_mod.escape(nominations_url)}">'
+                "Review your nomination</a></p>"
                 f"{deadline_line}"
             )
             html_body = wrap_email_body(
@@ -4359,6 +4391,49 @@ class ElectionService:
         except Exception as e:
             logger.warning(
                 f"Nominee notification failed | election={election.id} "
+                f"candidate={candidate.id} error={e}"
+            )
+
+    async def _record_nominee_bell_notice(
+        self,
+        election,
+        candidate,
+        organization_id: UUID | str,
+        nominations_path: str,
+    ) -> None:
+        """Put the nomination in the nominee's notification bell.
+
+        Not gated on the member's email preferences: muting election email
+        must not also hide a request only the nominee can answer. Committed
+        on its own so a failed insert rolls back nothing but itself.
+        """
+        try:
+            self.db.add(
+                NotificationLog(
+                    organization_id=str(organization_id),
+                    recipient_id=str(candidate.user_id),
+                    channel=NotificationChannel.IN_APP,
+                    category=NOMINATION_NOTICE_CATEGORY,
+                    subject=f"You've been nominated for {candidate.position}",
+                    message=(
+                        f"You have been nominated for {candidate.position} in "
+                        f"{election.title}. Accept or decline from the "
+                        "election's Nominations tab — your name appears on "
+                        "the ballot only if you accept."
+                    ),
+                    action_url=nominations_path,
+                    notification_metadata={
+                        "election_id": str(election.id),
+                        "candidate_id": str(candidate.id),
+                    },
+                    delivered=True,
+                )
+            )
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            logger.warning(
+                f"Nominee bell notice failed | election={election.id} "
                 f"candidate={candidate.id} error={e}"
             )
 
@@ -8959,6 +9034,7 @@ class ElectionService:
         }
         meta = {
             "org_name": organization.name,
+            "logo": organization.logo,
             "generated_at": datetime.now(timezone.utc).astimezone(tz),
         }
 
