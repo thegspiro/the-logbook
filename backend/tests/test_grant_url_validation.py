@@ -46,7 +46,6 @@ def test_expenditure_rejects_executable_receipt_link() -> None:
             description="Equipment",
             amount=Decimal("10.00"),
             expenditure_date=date(2026, 8, 12),
-            application_id="00000000-0000-0000-0000-000000000001",
             receipt_url="javascript:alert(1)",
         )
 
@@ -60,7 +59,6 @@ def test_expenditure_rejects_executable_receipt_link() -> None:
                 "task_type": "performance_report",
                 "title": "Submit report",
                 "due_date": date(2026, 9, 1),
-                "application_id": "00000000-0000-0000-0000-000000000001",
             },
             "submission_url",
         ),
