@@ -16,6 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3374](https://github.com/thegspiro/the-logbook/pull/3374)** (branch
+`claude/security-review-forms`):
+Feature 26 (Forms), pass 7. PR #3373 (Feature 25, Messaging &
+notifications, pass 7) merged with no next-feature PR open; this pass
+picked it up. Docs-only — no application code changed. Three real security
+fixes since pass 6 verified against current code rather than taken on
+faith: **XC-1** (`create_form`'s inline fields could persist a
+`condition_field_id` naming a field on another organization's form — now
+refused unconditionally), **FORM-10's org-scoping gap**
+(`_already_submitted`'s row lock now filters `Form.organization_id` as
+well as `Form.id`), and **FORM-10 itself** (one submission per person now
+enforced on both the in-app and public submit paths). A new
+`GET /{form_id}/publish-warnings` route verified permission-gated and
+org-scoped. **0 new findings** across the rest of the real delta: two new
+numeric condition operators shared with the suggestion-box feature (reads
+only already-org-scoped `form.fields`), an app-review null-rejection
+correctness fix, and four mypy-cleanup commits (type annotations only, no
+behavior change). Route surface re-enumerated: 21 → 22 (the new route).
+See `FORM-26-forms.md`'s **Pass 7** section. Row 26 → ✅ (pending this PR's
+merge); next is Feature 27 (Integrations).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 7, PR #3373, merged), preserved for history</summary>
+
 **PR [#3373](https://github.com/thegspiro/the-logbook/pull/3373)** (branch
 `claude/security-review-messaging-notifications`):
 Feature 25 (Messaging & notifications), pass 7. PR #3365 (Feature 24,
@@ -45,6 +69,8 @@ Workspace welcome-email addition (credentials block confirmed
 behavior change). Route surface re-enumerated: 51/51 unchanged. See
 `MSG-25-messaging-notifications.md`'s **Pass 7** section. Row 25 → ✅
 (pending this PR's merge); next is Feature 26 (Forms).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 7, PR #3365, merged), preserved for history</summary>
