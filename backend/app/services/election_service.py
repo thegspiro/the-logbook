@@ -5702,6 +5702,7 @@ class ElectionService:
         }
         meta = {
             "org_name": organization.name if organization else "",
+            "logo": organization.logo if organization else None,
             "generated_at": await self._org_local_time(
                 organization, datetime.now(timezone.utc)
             ),
