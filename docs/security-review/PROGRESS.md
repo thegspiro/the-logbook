@@ -16,6 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR** (branch `claude/security-review-integrations`):
+Feature 27 (Integrations), pass 7. PR #3374 (Feature 26, Forms, pass 7)
+merged with no next-feature PR open; this pass picked it up. 0 new
+findings. The real delta since pass 6 (`7f521f66`, PR #2988) is mostly a
+new department iCalendar feed (`/org/{token}.ics`, token-protected,
+HMAC-digest matched, bounded, ICS-injection-escaped — reviewed clean) and
+an entirely new sub-feature this rotation had never looked at before:
+Google Workspace account provisioning (`google_workspace.py`,
+`google_workspace_provisioning_service.py`,
+`google_workspace_departure.py`, `google_workspace_attention_digest.py` —
+227+1052+226+182 lines, first commit `90b69e62`, no prior pass's file list
+or dedicated findings doc names it). Read in full: every by-id lookup
+filters `organization_id` in the same query (14a); `link-existing`
+requires both `integrations.manage` and `admin.access`, matching the
+existing bar on connecting the integration itself; the departure hook is a
+session-level invariant mechanism (not a new externally reachable
+endpoint) that cannot be bypassed by any path that moves a member across
+the departed line; the attention digest reuses `attention_items()` rather
+than re-deriving it (Pitfall #29) and `html.escape`s every interpolated
+value. New calendar connectors (`outlook_calendar_service.py` rewritten to
+OAuth, `google_calendar_oauth_service.py` new) default to the existing
+SSRF-pinned `create_integration_client()` transport, not a second,
+unreviewed HTTP path. Three new migrations all guard
+table/column existence correctly (Pitfall #26) and the one
+`ondelete="SET NULL"` column is `nullable=True` (Pitfall #2). Both standing
+flags (INT-5, INT-11) re-verified unchanged, still open by design. See
+`INT-27-integrations.md`'s **Pass 7** section. Row 27 → ✅ (pending this
+PR's merge); next is Feature 28 (Security audit & IP). (Open PR row
+to be updated in a follow-up commit on this same branch once this PR's
+number is known, per this rotation's convention.)
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 7, PR #3374, merged), preserved for history</summary>
+
 **PR [#3374](https://github.com/thegspiro/the-logbook/pull/3374)** (branch
 `claude/security-review-forms`):
 Feature 26 (Forms), pass 7. PR #3373 (Feature 25, Messaging &
@@ -36,6 +70,8 @@ correctness fix, and four mypy-cleanup commits (type annotations only, no
 behavior change). Route surface re-enumerated: 21 → 22 (the new route).
 See `FORM-26-forms.md`'s **Pass 7** section. Row 26 → ✅ (pending this PR's
 merge); next is Feature 27 (Integrations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 7, PR #3373, merged), preserved for history</summary>
@@ -33385,3 +33421,71 @@ Findings doc: [`FORM-26-forms.md`](./FORM-26-forms.md)'s **Pass 7** section.
 No `KNOWN_LIMITATIONS.md` change needed — nothing this pass found rises to an
 owner decision. Rotation row 26 → ✅ (pending this PR's merge). Next:
 Feature 27 (Integrations).
+
+### 2026-10-17 — Feature 27 (Integrations, pass 7) — 0 fixed, 0 new findings; a whole previously-unreviewed sub-feature (Google Workspace account provisioning) read in full and found clean
+
+PR #3374 (Feature 26, Forms, pass 7) merged with nothing started for the
+next feature since; this pass picked up Feature 27. The real delta since
+pass 6 (`7f521f66`, PR #2988, 2026-10-07) is a new department iCalendar
+feed (`/org/{token}.ics`, token-protected: `_plausible_token` rejects a
+malformed token before any DB work, the stored digest is matched with
+`hmac.compare_digest`, the feed is an explicit field allowlist and is
+bounded at 2000 events/30-365 days, and `_escape_ics` folds every
+line-break variant so a crafted title/description cannot inject ICS
+properties) and three new calendar connector files. The larger finding is
+scope, not a defect: `grep -rln "GoogleAccountProvision" backend/app/`
+surfaced `google_workspace.py`, `google_workspace_provisioning_service.py`,
+`google_workspace_departure.py` and `google_workspace_attention_digest.py`
+(227+1052+226+182 lines, first commit `90b69e62`, 2026-10-15) — the entire
+per-member Google Workspace account lifecycle, which no prior pass's file
+list names and no dedicated findings doc covers. All four read in full.
+Every by-id lookup in the service filters `organization_id` and the
+caller's id in one query (checklist 14a); `link-existing` requires both
+`integrations.manage` and `admin.access` (the same bar connecting the
+integration itself already carries, since a linked account is one the
+department will later suspend); the departure hook is a `Session`-level
+`before_flush`/`after_commit` pair that stages a suspend/unsuspend inside
+the same transaction as _any_ path that moves a member's `status` or
+`deleted_at` across the departed line, so no caller — "status endpoint,
+undo-drop, reactivation, auto-archive, soft and hard delete,
+anonymization… and any future path" per its own docstring — can forget to
+do it; Google is never called from inside that transaction, and a hard
+delete's `ON DELETE CASCADE` row is captured before the delete commits.
+No response schema carries a password or the service-account key (a reset
+password is only ever emailed). The attention digest calls
+`attention_items()` rather than re-deriving the overdue computation
+(Pitfall #29, cited in its own docstring) and `html.escape`s every
+interpolated value. `outlook_calendar_service.py` (rewritten to OAuth) and
+the new `google_calendar_oauth_service.py` both default to the existing
+SSRF-pinned `create_integration_client()` transport, confirmed by direct
+read of both constructors — not a second, unreviewed HTTP path.
+`GoogleWorkspaceConfig`'s `service_account_key` is `extra="forbid"`,
+size-capped, JSON-and-shape-validated, and is in `SECRET_CONFIG_KEYS` so it
+is encrypted at rest like every other secret this feature stores. Three
+new migrations (`c869ec90a41b` calendar sync mappings, `61dfbcc23cba`
+Google Workspace provisioning records, `64bf75298e89` a timestamp column
+on the latter) all guard table/column existence before touching it
+(Pitfall #26) and the one `ondelete="SET NULL"` column is `nullable=True`
+(Pitfall #2). Both standing flags — INT-5 (unused webhook-domain
+allowlist) and INT-11 (no UI control to clear a stored Salesforce refresh
+token) — re-verified unchanged, still open by design. The MCP write-tool
+surface added since pass 6 (`mcp/tools/medical_supplies.py` and diffs to
+several existing tools) is each feature's own scope per pass 6's own
+precedent for `app/mcp/oauth.py`/`MCPO-27`, not re-derived here — the
+pass-5 catch-up that temporarily reviewed MCP write tools from this
+rotation was a one-time gap-fill, not a standing scope addition.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
+alembic/` (isort already matched CI's pinned 9.0.1); `validate_migrations.py
+--strict` — single head `c87efd81c5aa`, 612 revisions; `pytest tests/ -q -k
+"integration or salesforce or calcom or documenso or paypal or webhook or
+connector or mcp_key or google_calendar or google_workspace or ical or
+calendar"` — 6980 passed, 21 skipped (environment-only), 0 failed; frontend
+`npm run typecheck`/`npm run lint` both clean.
+
+Findings doc: [`INT-27-integrations.md`](./INT-27-integrations.md)'s
+**Pass 7** section. No `KNOWN_LIMITATIONS.md` change needed — the existing
+"Google Workspace — What Account Provisioning Leaves Out" entry already
+correctly documents this sub-feature's owner-decided scope and needed no
+correction. Rotation row 27 → ✅ (pending this PR's merge). Next: Feature
+28 (Security audit & IP).
