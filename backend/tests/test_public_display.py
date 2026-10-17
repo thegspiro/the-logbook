@@ -18,12 +18,19 @@ import pytest
 import app.api.public.display as display
 from app.models.event import CheckInWindowType
 
-NOW = datetime.now(tz.utc)
+
+def _now() -> datetime:
+    # Read per event, not frozen at import: the endpoint reads the clock when
+    # the test runs, and a STRICT event 30 minutes out opens once a slow suite
+    # has spent that long between collection and this module.
+    return datetime.now(tz.utc)
+
+
 LOC_ID = str(uuid4())
 
 
 def _event(window_type, starts_in_minutes, allow_guest_check_in=False):
-    start = NOW + timedelta(minutes=starts_in_minutes)
+    start = _now() + timedelta(minutes=starts_in_minutes)
     return SimpleNamespace(
         id=uuid4(),
         title="Monthly Meeting",
