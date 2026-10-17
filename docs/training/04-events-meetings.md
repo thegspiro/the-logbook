@@ -1120,7 +1120,8 @@ choose it from **Create from Template** in the Events page's **⋯** menu.
   created from it are not affected, and you can reactivate it at any time
   with its switch."_ It is shown only on active templates.
 - Emptying an optional default (such as **Default Duration** or **Default
-  Location**) and saving clears it.
+  Location**) and saving clears it. An emptied reminder schedule is saved as
+  none.
 - A template's default start is the next hour on your department's clock.
 
 ![Event Templates page listing templates with type and active state](./images/04-09-event-templates.png)

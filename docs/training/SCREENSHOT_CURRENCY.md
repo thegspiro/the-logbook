@@ -78,6 +78,39 @@ down carry their own dispositions.
 | My Checklists on a phone (03 placeholder) | **NOT POSSIBLE** as described | Left open; see the October 15 – 16 queue below |
 | Scheduling setup guide card (03 placeholder) | **NOT POSSIBLE** in the seeded demo | Renders only while a department has no templates |
 
+## Queued by the October 16 – 17 documentation pass
+
+Nothing was captured by this pass. Source:
+[CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-16--17-2026).
+Rows are **Open**. The guide text that names each screen was updated; the
+`_[Screenshot …]_` markers it added are counted in `SCREENSHOT_STATUS.md`.
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `05-88-medical-supplies-list`, `05-89-medical-supply-where-lots` | **Replace** | **On hand** now reads "+N on trucks (M uncounted position)", **Next expiry** can name an apparatus place, and an apparatus-only supply reads "N on M apparatus". Seed one supply carried on a truck with a shelf count and one marked apparatus only |
+| `05-90-medical-supply-form` | **Replace** | The form gained **Kept on apparatus only** with help text; the new marker in 05 asks for it ticked |
+| Medical Supplies **Expiring** tab and tiles (new) | **Create** | Tiles show the "3 shelf · 2 on trucks" split and rows list truck stock with where it is |
+| Any Operations page at desktop width (new, plus every guide image of Apparatus, Facilities, Fleet Readiness, Apparatus Inventory, My Checklists, My Equipment, Inventory items and Medical Supplies) | **Replace** | The shared title row and Operations section strip replace each page's own header and back link. Spot-check `03-95`, `05-88` and `06-03` first |
+| One apparatus's page at 390px (new) | **Create** | Compact header, four pinned tabs, Findings grouped by item with the 2× badge |
+| Supply worklist (`03-59-supply-worklist`) and at 390px (new, two images) | **Replace** and **Create** | Phone: filter chips with counts, two-line items, per-rig headings, and the Add stock sheet with its pinned button. Desktop is unchanged apart from the shared header |
+| `14-02-create-election` | **Replace** | Linked Meeting now sets the dates; Positions offers the department's positions |
+| Ballot builder and ballot preview (`14-04-ballot-configuration`, `14-23-membership-ballot-item`) | **Replace** | Vote type reads **Approve / Deny**; an approval item has no write-in row |
+| Send Ballot Emails dialog while sending (new) and Remind Non-Voters dialog while sending (new) | **Create** | Progress state and the "continues if you leave the page" line. Needs a send that stays running; hold the mail server or use a large demo roster |
+| Printed ballot, certified results and pre-meeting package (new, three images or one side-by-side) | **Create** | Shared letterhead and logo, real tick boxes, grayscale section bands |
+| Nominations tab as a nominee, and the bell notice (new) | **Create** | The notice opens the Nominations tab |
+| `16-01-integrations-catalog` | **Replace** | Google Calendar and Outlook read **Coming Soon** only while `CALENDAR_SYNC_ENABLED` is off; with it on they offer **Connect** |
+| Google Calendar card and Outlook card, connected (new, two images) | **Create** | Needs a real sign-in; mock the account label and calendar name, as the guide 08 shots mocked the link domain |
+| Microsoft 365 card with Test and **Link existing members**, and the convert dialog's account step (new) | **Create** | Not possible in the demo without a tenant; route-mock the responses |
+| Google Workspace needs-attention panel (new) | **Create** | Needs a connected card; route-mock |
+| Training integrations page, **Sync History** tab, a run expanded (new) | **Create** | Seed a provider run with staged classes |
+| Training Admin settings, **Import Past Training** tab | **Replace** | The tab was renamed; the id and URL are unchanged. Check `02-02-historical-import-preview` and any image with the tab strip |
+| `02-69-instructor-qualifications` and its add dialog | **Replace** | Member picker replaces the raw id box |
+| `12-04-create-application` and the grant **Budget** tab (`12-06-application-budget-tab`) | **Replace** | Assigned To is a member picker; budget summary is an amount per category; key contacts is a list. The Add Budget Item dialog sends category codes |
+| Store overview with the store switched off, and **Open ordering** dialog in the same state (new, two images) | **Create** | "Members can't order yet", link to Settings, the badge as a button |
+| `18-03-order-windows` | **Check** | The member card now counts whole days |
+| Facility **Files** upload (06) | **Check** | Behaviour changed, the screen did not; only the permission note moved |
+| Equipment check builder and check form (03) | **Check** | Par, Min to Pass and Critical Min labels, the unit picker on count lines, and "8 / 10 each, restock 2" on a filed result. Earlier captures of the three columns are stale |
+
 ## Queued by the October 15 – 16 documentation pass
 
 Nothing was captured by this pass. The prospective-members set (`15-*`,

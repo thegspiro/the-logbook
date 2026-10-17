@@ -163,6 +163,25 @@ was re-captured in this window.
 
 ---
 
+# October 16–17, 2026 workflow updates
+
+Index for the ninth window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-16--17-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); the scheduling and
+administration guides were re-captured in this window.
+
+| Topic                                                                                               | Now in                                                                                                                 |
+| --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Ballot and reminder emails in the background; nominee notice; meeting-aligned dates; PDF letterhead | [14 — Elections](./14-elections.md)                                                                                    |
+| Medical Supplies: truck stock, Kept on apparatus only, Next expiry                                  | [05 — Inventory](./05-inventory.md#stock-on-the-trucks-counts)                                                         |
+| Shared Operations header; apparatus page on a phone                                                 | [05 — Inventory](./05-inventory.md)                                                                                    |
+| Min to Pass, par and units; supply worklist on a phone; Weekly and Custom patterns                  | [03 — Scheduling](./03-scheduling.md)                                                                                  |
+| Google Calendar and Outlook connect; Microsoft 365; Sync History                                    | [16 — Integrations](./16-integrations.md), [02 — Training](./02-training.md)                                           |
+| Grant fields, instructor picker, store messages, facility upload                                    | [12](./12-grants-fundraising.md), [02](./02-training.md), [18](./18-storefront.md), [06](./06-apparatus-facilities.md) |
+
+---
+
 # October 12–13, 2026 workflow updates
 
 Index for the sixth window. Audit:

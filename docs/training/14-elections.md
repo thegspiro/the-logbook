@@ -117,28 +117,34 @@ You can move between the tabs with the arrow keys, Home and End.
 1. Open **Elections** and select **Create Election**.
 2. Fill in the form:
 
-| Field                                | What to enter                                                                                                           |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| **Title** (required)                 | For example, "2026 Annual Officer Election"                                                                             |
-| **Description**                      | What the election is for                                                                                                |
-| **Linked Meeting**                   | The meeting or event the vote is held at, or **No linked meeting**                                                      |
-| **Start Date & Time** (required)     | When voting opens                                                                                                       |
-| **End Date & Time** (required)       | When voting closes. **Quick duration** buttons set it to 1, 2 or 4 hours after the start, or **End of Day**             |
-| **Positions**                        | The offices being filled. Pick from the list or type one, then select **Add**                                           |
-| **How is the Winner Determined?**    | The voting method and winning rule together (see below)                                                                 |
-| **Enable Automatic Runoffs**         | Create a runoff when nobody meets the winning rule. Then choose **Runoff Type** and **Maximum Runoff Rounds** (1 to 10) |
-| **Anonymous Voting**                 | Votes are saved without the voter's name or address. On unless you untick it                                            |
-| **Allow Write-in Candidates**        | Voters may type in someone not on the ballot. Off unless you tick it                                                    |
-| **Show Results Immediately**         | Members see the running tally while voting is open. Cannot be changed once voting opens                                 |
-| **Open Automatically at Start Time** | Voting opens by itself at the start time, and the ballots are emailed. Shown only when scheduled opening is on          |
-| **Auto-Remind Non-Voters**           | One reminder email 2 hours to 3 days before close, or none. Shown only when reminders are on                            |
-| **If the Top Candidates Tie**        | The tie rule. See [Tie Handling](#tie-handling)                                                                         |
-| **Seats per Race**                   | How many people each race elects, from 1 to 50                                                                          |
+| Field                                | What to enter                                                                                                                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Title** (required)                 | For example, "2026 Annual Officer Election"                                                                                                                                     |
+| **Description**                      | What the election is for                                                                                                                                                        |
+| **Linked Meeting**                   | The meeting or event the vote is held at, or **No linked meeting**. Choosing one sets the voting window to that meeting's start and end (see below)                             |
+| **Start Date & Time** (required)     | When voting opens                                                                                                                                                               |
+| **End Date & Time** (required)       | When voting closes. **Quick duration** buttons set it to 1, 2 or 4 hours after the start, or **End of Day**                                                                     |
+| **Positions**                        | The offices being filled. Pick from the list, which offers your department's positions (President, Secretary and so on) and operational ranks, or type one, then select **Add** |
+| **How is the Winner Determined?**    | The voting method and winning rule together (see below)                                                                                                                         |
+| **Enable Automatic Runoffs**         | Create a runoff when nobody meets the winning rule. Then choose **Runoff Type** and **Maximum Runoff Rounds** (1 to 10)                                                         |
+| **Anonymous Voting**                 | Votes are saved without the voter's name or address. On unless you untick it                                                                                                    |
+| **Allow Write-in Candidates**        | Voters may type in someone not on the ballot. Applies to candidate races only; an Approve / Deny item never offers one. Off unless you tick it                                  |
+| **Show Results Immediately**         | Members see the running tally while voting is open. Cannot be changed once voting opens                                                                                         |
+| **Open Automatically at Start Time** | Voting opens by itself at the start time, and the ballots are emailed. Shown only when scheduled opening is on                                                                  |
+| **Auto-Remind Non-Voters**           | One reminder email 2 hours to 3 days before close, or none. Shown only when reminders are on                                                                                    |
+| **If the Top Candidates Tie**        | The tie rule. See [Tie Handling](#tie-handling)                                                                                                                                 |
+| **Seats per Race**                   | How many people each race elects, from 1 to 50                                                                                                                                  |
 
 3. Select **Create Election**. The election starts as a **Draft**.
 
 **Things to know about the form:**
 
+- **A linked meeting fills in the dates.** Linking a meeting or event sets the
+  voting window to its start and end, on the create form and on a draft or
+  nominations election's page. A meeting with no start time, or one that has
+  already started, leaves your dates alone. With no end time the create form
+  uses the end of that day, and an existing election keeps its current length.
+  Change the dates afterwards if you want a different window.
 - The quick durations and **End of Day** use your department's time zone,
   not your computer's.
 - **Seats per Race:** a two-seat board race elects the top two, and each voter
@@ -202,7 +208,7 @@ A ballot item is one question or race on the ballot. You build them on the
 | **Title** (required)                   | The question or race, as voters will see it                                                |
 | **Description**                        | More detail for voters                                                                     |
 | **Item Type**                          | **General Vote**, **Membership Approval** or **Officer Election**                          |
-| **Vote Type**                          | **Approval (Yes/No)** or **Candidate Selection**                                           |
+| **Vote Type**                          | **Approve / Deny** or **Candidate Selection**                                              |
 | **Position**                           | For candidate selection: the position whose candidates appear on this item                 |
 | **Who Can Vote**                       | All members, or a membership group. See [Voter Eligibility](#voter-eligibility--overrides) |
 | **Require meeting attendance to vote** | Only members checked in at the linked meeting may vote on this item                        |
@@ -314,7 +320,9 @@ candidates during a **nomination phase**.
 3. While nominations are open, **any member** can:
    - **Nominate themselves** for a position. This is accepted at once.
    - **Nominate another member**, with an optional supporting statement. The
-     nominee is emailed and must **accept** before they reach the ballot.
+     nominee is emailed and must **accept** before they reach the ballot. They
+     also get a notice in the bell that opens the election's **Nominations**
+     tab, so muting election email cannot hide a request only they can answer.
      Declining removes the nomination (the audit log keeps a record).
 4. Select **Close Nominations**, or let the deadline do it. The election goes
    back to **Draft**, where you order the ballot and open voting as usual.
@@ -562,6 +570,15 @@ When you select **Send Ballot Emails**, The Logbook:
 3. Emails each voter their link.
 4. Reports how many ballots were sent and which members were skipped, and why.
 
+**Sending runs in the background.** Select **Send Ballot Emails** and the dialog
+shows progress while the emails go out; you do not have to wait on it. It keeps
+sending if you leave the page, and the result appears on the election when it
+finishes. Only one send (ballots or reminders) runs for an election at a time,
+so a second attempt while one is running is refused. Do not send again because
+the page seems slow: every send issues fresh links and voids the earlier ones.
+If the server restarts mid-send, the send is reported as failed after 30
+minutes. Check who received a ballot before sending again.
+
 The ballot link is private. It does not reach the department's server logs,
 and the ballot page removes it from the address bar once loaded.
 
@@ -610,14 +627,14 @@ without changing it stops nothing.
 
 ### What if …?
 
-| What happened                                               | What it means                                                                                                                                       |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A member has no email address                               | Skipped, with the reason shown                                                                                                                      |
-| A member who already voted uses their link                  | The second vote is refused. Votes are never overwritten                                                                                             |
-| A member may vote on no items                               | Skipped, so nobody gets an empty ballot                                                                                                             |
-| The election has no ballot items and no accepted candidates | It cannot be opened                                                                                                                                 |
-| The election has neither ballot items nor positions         | Ballots cannot be emailed. The **Open election** dialog warns you before you confirm                                                                |
-| A member checks in at the meeting after voting opened       | They are recorded as present but **cannot vote**, because the roll froze at opening. The **Attendance** tab says so. Add an override to let them in |
+| What happened                                               | What it means                                                                                                                                            |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A member has no email address                               | Skipped, with the reason shown                                                                                                                           |
+| A member who already voted uses their link                  | The second vote is refused. Votes are never overwritten                                                                                                  |
+| A member may vote on no items                               | Skipped, so nobody gets an empty ballot                                                                                                                  |
+| The election has no ballot items and no accepted candidates | It cannot be opened                                                                                                                                      |
+| The election has neither ballot items nor positions         | Ballots cannot be emailed (nor test ballots or reminders); the send is refused with a message. The **Open election** dialog warns you before you confirm |
+| A member checks in at the meeting after voting opened       | They are recorded as present but **cannot vote**, because the roll froze at opening. The **Attendance** tab says so. Add an override to let them in      |
 
 ### Voter-Roll Freeze
 
@@ -633,9 +650,12 @@ Running a paper vote in the room? Select **Print Blank Ballots**. It makes the
 official blank paper ballot from the election setup:
 
 - Positions in ballot order, with accepted candidates.
-- Write-in lines where allowed.
+- Write-in lines where allowed, on candidate races only.
 - Instructions for the voting method.
 - Every approval item as "☐ Approve ☐ Deny" under its title.
+- The department logo, real tick boxes, and the same letterhead, page footer
+  and ruled tables as the certified results and the pre-meeting package, so the
+  three print and file as one set.
 
 The button shows on elections that have positions and are not closed. Print
 the ballots, hand them out, then enter the totals under
@@ -675,6 +695,9 @@ sending.
 - **A reminder replaces the earlier link.** The email is titled "Reminder:
   vote in (election)". An older link opened afterwards says it was replaced by
   a newer ballot email.
+- **Reminders also send in the background.** The dialog shows progress, keeps
+  going if you leave the page, and shares the one-send-at-a-time rule with
+  ballot emails, so a large roster no longer times out.
 - **Old links stop only once the new email is handed over for delivery.** If
   the new one bounces, the old link keeps working, so nobody is left without a
   ballot.
@@ -1176,6 +1199,9 @@ result. It includes:
 - the **integrity check** result, run when the PDF is made;
 - any corrections made after close;
 - **signature lines** for officers to sign by hand.
+
+It uses the same letterhead, grayscale section bands, ruled tables and
+numbered page footer as the printed ballot and the pre-meeting package.
 
 File the signed copy with the meeting minutes. Together with the forensics
 report, it is your full defence if the result is disputed.

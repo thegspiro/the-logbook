@@ -1,5 +1,30 @@
 # Script currency
 
+## Flagged by the 2026-10-16 → 10-17 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-16--17-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 14 / 07 (elections: the send and remind dialogs, the printed ballot), 03 / 05 (Medical Supplies and equipment-check counts), 16 (calendar and Microsoft 365 connect).
+
+| Script                            | Beat                            | Was                                                 | Now                                                                                                  |
+| --------------------------------- | ------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **07 / 14** (secretary)           | Sending ballots                 | Wait on the button; a big roster timed out          | Progress dialog; keeps going if you leave; one send at a time; do not resend because it is slow      |
+| **07 / 14**                       | Remind Non-Voters               | Ran in the request                                  | Same background progress as ballots                                                                  |
+| **07 / 14**                       | Creating an election            | Dates typed by hand                                 | Linking a meeting sets the voting window; positions offered from the department's positions          |
+| **07 / 14**                       | Nominations (member)            | Email only                                          | Bell notice that opens the Nominations tab                                                           |
+| **07 / 14**                       | Ballot items                    | "Approval (Yes/No)" with a write-in row             | **Approve / Deny**, no write-in                                                                      |
+| **07 / 14**                       | Printed ballot and results      | Plain ballot; dark table headers                    | Logo, real tick boxes, shared letterhead across ballot, certified results and pre-meeting package    |
+| **03 / 05** (if inventory shown)  | Medical Supplies                | Shelf stock only                                    | On hand "+N on trucks"; **Kept on apparatus only**; Next expiry includes trucks                      |
+| **03 / 06**                       | Equipment check counts          | Min to Pass or par decided both verdict and restock | Min to Pass fails the line; par sets the restock; a unit on each count line                          |
+| **03 / 05**                       | Operations pages                | A different header on each                          | One title row and section strip                                                                      |
+| **06** (member, phone)            | Apparatus page, supply worklist | Desktop layout squeezed                             | Compact header, pinned tabs, findings by item; counted filter chips and an Add stock sheet           |
+| **03** (IT)                       | Calendar integrations           | Cards that connected to nothing                     | Sign-in connect and one-way publishing to "<Org> Events", behind `CALENDAR_SYNC_ENABLED`             |
+| **03** (IT, if shown)             | Microsoft 365                   | None                                                | Accounts for converted members; Google or Microsoft, not both                                        |
+| **02 / 09** (training officer)    | External training               | Last-sync time only                                 | **Sync History** tab with the classes each run staged; **Import Past Training** (was Import History) |
+| **04** (finance, if grants shown) | Grants                          | Free-text assignee; add forms failed                | Member picker; budget item, expenditure, task and note save                                          |
+| **All**                           | Edit forms                      | Emptying a field was lost behind a success message  | Cleared fields are saved                                                                             |
+
 ## Flagged by the 2026-10-15 → 10-16 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-15--16-2026).

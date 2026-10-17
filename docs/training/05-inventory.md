@@ -2789,6 +2789,26 @@ This section covers building checklists, the settings, and the fleet views.
 
 The checklist console links to **Fleet readiness** and **Check log** too.
 
+**One header across Operations.** The eight Operations pages (Apparatus,
+Facilities, Fleet Readiness, Apparatus Inventory, My Checklists, My Equipment,
+Inventory items and Medical Supplies) now share a title row (icon, heading,
+subtitle, actions on the right) above a strip of Operations sections. The strip
+is made of links, so each section can be bookmarked, and on a page below a
+section's own it shows a trail in Operations' terms. The side menu, top menu and
+strip draw from one list, so they cannot offer different sections.
+
+_[Screenshot to capture: any Operations page at desktop width showing the shared title row and section strip, replacing the older per-page headers in this guide's screenshots of those pages.]_
+
+**One apparatus on a phone.** The rig's page has a compact header (back arrow,
+unit and readiness pill on one row, the recent-check strip at full width, one
+line for last check, who and completion), four equal tabs pinned under the
+header, and compact check rows that each link **In my checklists**. **Findings**
+lists each failing item once ("Found on 2 checks · last Oct 12 by J. Smith", with
+a 2× badge) instead of one card per check, and expiring or short items become a
+compact list.
+
+_[Screenshot to capture, phone width (390px): one apparatus's page showing the compact header, pinned tabs and Findings grouped by item.]_
+
 Checklists need the Inventory module. If an administrator switches Inventory
 off, the checklist entries disappear rather than showing errors.
 
@@ -3049,6 +3069,9 @@ Supplies categories page.
 - **A category's supplies.** Open a category on the categories page to list its
   supplies and their stock. Cards say how many active supplies they hold.
 - **Import / export** is the button that was labelled for import alone.
+- **Import / export** is the button that was labelled for import alone. The
+  file has a **Kept on Apparatus Only** column (Yes or No; anything else is
+  refused).
 
 ![Medical Supplies on the All supplies tab: the summary tiles, each supply with its size beside the name, its Where path, next expiry and reorder point, and two supplies ticked with the Retire selected bar above the table](./images/05-88-medical-supplies-list.png)
 
@@ -3074,6 +3097,47 @@ drops an area that belongs to another one. The old free text stays as a
 ![The Lots dialog for Tourniquet, CAT: Where it is, with its storage room and the two apparatus and compartments carrying it with the count aboard, above Stock lots with the lot table, its edit controls and the Add lot form](./images/05-89-medical-supply-where-lots.png)
 
 ![The medical supply form for Bag Valve Mask, with its also-called names, Size Adult, the Station 1 room and the EMS Supply Cabinet shelf as its storage area](./images/05-90-medical-supply-form.png)
+
+### Stock on the trucks counts
+
+A medical supply's ready stock is the shelf **plus** what is aboard the
+apparatus, as the daily checks and recounts last reported it. A position that
+has not been counted yet is assumed to hold its target and is tallied as
+**uncounted**.
+
+- **On hand** reads, for example, "+12 on trucks (1 uncounted position)".
+- **Low stock**, the Low stock tile, the daily alert email and automatic
+  reorder all use that combined figure, so a supply is no longer reordered
+  because the stock room is empty while the trucks are full. The alert email
+  labels these rows "shelf + apparatus".
+- **A reorder can now start after a daily check, a "report used" or a
+  recount**, not only after a swap, because use on a truck is what lowers the
+  total. There is still only one open request per item.
+- **Expiring** lists truck stock beside shelf lots, with where each is. The
+  tiles count both and show the split ("3 shelf · 2 on trucks").
+- **Next expiry** is the soonest of the shelf and the trucks, and says where
+  ("Medic 1 > Jump Bag", or the storage path). A tie goes to the shelf.
+
+Uniform and gear are unchanged: they still judge the shelf alone.
+
+### A supply kept on the apparatus only
+
+Some equipment has no spare in a stock room: a LUCAS device or a cardiac monitor
+lives on the ambulance and is checked there. Tick **Kept on apparatus only** on
+its supply form.
+
+- Its shelf counts as 0, so Low stock, the alert email and reorder judge it on
+  the trucks alone.
+- The list shows "N on M apparatus" instead of a shelf count, with no storage
+  path.
+- The Lots dialog shows where it is carried and offers no stock-lot controls.
+- **Receive delivery** does not offer it.
+- Old shelf lots from before you ticked the box stop appearing in Expiring and
+  **Next expiry**. Nothing is deleted: unticking the box brings them back.
+
+![The medical supply form for Bag Valve Mask, with its also-called names, Size Adult, the Station 1 room and the EMS Supply Cabinet shelf as its storage area](./images/05-90-medical-supply-form.png)
+
+_[Screenshot to capture, replacing the form above: the same form with **Kept on apparatus only** ticked and its help text showing, for the Medical Supplies form in the October 17 pass.]_
 
 ---
 

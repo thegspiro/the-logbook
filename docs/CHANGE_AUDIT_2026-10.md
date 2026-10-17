@@ -5,6 +5,131 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 16 – 17, 2026
+
+Net changes merged to `main` from the close of the
+[October 15 – 16 pass](#change-audit-october-15--16-2026) (2026-10-16 ~13:00 UTC)
+to 2026-10-17 ~12:00 UTC, written against `1ae45c21`. About 60 non-merge
+commits outside the security-review ledgers (passes 7 and 8 for meetings,
+messaging, forms and integrations, medical supplies pass 14, grants pass 8,
+admin hours pass 8, and compliance recorded **0 fixes needed** or only stale-finding
+corrections; see `docs/security-review/PROGRESS.md`). Themes: **calendar and
+directory integrations** (Google Calendar and Outlook connect, Microsoft 365
+accounts), **Elections** (background sending, ballot PDFs, nominee notices),
+**Medical Supplies** truck stock, a sweep of **create and edit forms that lost
+input**, and **phone layouts**. `CHANGELOG.md` is closed; this section and its
+wiki handoff are the record.
+
+Wiki handoff:
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-16--17-2026).
+
+**Migration route.** New revisions in this window: `0bbf263a5ff0`
+(`inventory_items.apparatus_only`), `c869ec90a41b` (`calendar_sync_mappings`),
+`64bf75298e89` (`suspension_requested_at`), `12e20092c1a8` (check item unit and
+par snapshot), `c87efd81c5aa` (`ballot_send_jobs`), `244b0fd07205` (job
+`kind`), `73594b326e68` (`google_account_provisions` renamed
+`directory_account_provisions`, with a provider column) and `d3bb8f81ed07`
+(`license_pending`, `managed_on_premises`). All are additive or guarded, and
+downgrades drop the new columns and tables (the `73594b326e68` downgrade
+renames back). **`244b0fd07205` and `d3bb8f81ed07` were both merged as heads
+on 2026-10-17, so `alembic upgrade head` refused to run on main** (a fresh
+database could not be migrated, which is what the session-start hook reported).
+This pass adds the schema-neutral merge revision `9a4c7e21b5d0`;
+`alembic heads` now reports that single head.
+
+### Read this first
+
+1. **Run the migrations from this pass's merge revision.** An installation
+   upgrading from main before `9a4c7e21b5d0` would have stopped at "Multiple head
+   revisions". Nothing else is needed.
+2. **A department connects Google Workspace _or_ Microsoft 365, not both.** Both
+   now run on one account engine; Google behaves as before. Microsoft 365
+   creates, licenses and blocks accounts through Microsoft Graph. See wiki
+   `Integration-Microsoft-365`.
+3. **Google Calendar and Outlook now connect with a sign-in** and publish one-way
+   to a calendar named "<Organization> Events". They stay **Coming Soon** and
+   refuse to connect until the server sets `CALENDAR_SYNC_ENABLED=true` (new
+   variable, off by default, passed through every Compose file; see wiki
+   `Configuration-Environment`). A reconciler runs every five minutes once it
+   is on.
+4. **Ballot and reminder emails send in the background.** The old synchronous
+   endpoints keep their contract and answer 409 while a background send runs.
+   A job older than 30 minutes is treated as interrupted.
+5. **Equipment-check counts changed meaning.** Min to Pass fails a line (Critical
+   Min when that is blank), par only sets the restock. Old results keep their
+   verdicts. Recorded in `UPGRADING.md` by the commit.
+6. **Facilities upload needs facility permissions only**, not Manage documents.
+   Recorded in `UPGRADING.md` by the commit.
+7. **Medical supplies now count stock on the apparatus.** Low stock, the alert
+   email and automatic reorder read shelf plus trucks, so a department that had
+   a supply flagged low because its shelf was empty may see it clear.
+
+### User-visible changes, by area
+
+| Area             | Change                                                                                                                                                                                                                                                                                                               | Where documented                                                   |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Integrations     | Google Calendar and Outlook: sign-in connect, department calendar, one-way publishing behind `CALENDAR_SYNC_ENABLED`; honest catalog                                                                                                                                                                                 | training 16; wiki `Configuration-Environment`                      |
+| Integrations     | Department iCalendar feed link (`/api/public/v1/calendar/org/{token}.ics`), reset link                                                                                                                                                                                                                               | training 07 and 16; `PUBLIC_API_DOCUMENTATION.md`                  |
+| Integrations     | Microsoft 365 accounts for converted members; Google attention list, daily email, org-unit check                                                                                                                                                                                                                     | training 16; wiki `Integration-Microsoft-365`, `-Google-Workspace` |
+| Integrations     | Disconnect cannot unlock a Coming Soon card; chat and webhook cards need a destination                                                                                                                                                                                                                               | `KNOWN_LIMITATIONS.md`                                             |
+| Training         | **Sync History** tab on the training integrations page; Import History tab renamed **Import Past Training**                                                                                                                                                                                                          | training 02, 16                                                    |
+| Elections        | Ballot emails and reminders send in the background with progress                                                                                                                                                                                                                                                     | training 14; wiki `Module-Elections`                               |
+| Elections        | Nominee gets a bell notice; linking a meeting sets the voting window; positions offered from the department's positions                                                                                                                                                                                              | training 14                                                        |
+| Elections        | No write-in on an Approve / Deny item; labels read "Approve / Deny"; ballot emails refused when nothing is on the ballot                                                                                                                                                                                             | training 14                                                        |
+| Elections        | Ballot, certified results and pre-meeting package PDFs share one letterhead, logo and real tick boxes                                                                                                                                                                                                                | training 14                                                        |
+| Medical Supplies | Truck stock counts toward Low stock, reorder, Expiring and Next expiry; **Kept on apparatus only**; CSV column                                                                                                                                                                                                       | training 05; `MEDICAL_SUPPLIES_MODULE.md`                          |
+| Equipment checks | Min to Pass fails a count, par sets the restock, units on count lines, par and unit kept on filed results                                                                                                                                                                                                            | training 03; `UPGRADING.md`                                        |
+| Operations       | One shared header and section strip on eight pages; apparatus page and supply worklist laid out for a phone                                                                                                                                                                                                          | training 03, 05                                                    |
+| Forms            | Cleared fields now saved on event, template, pattern, calls, storefront window, facility systems and locations edit forms                                                                                                                                                                                            | training 04; `KNOWN_LIMITATIONS.md`                                |
+| Forms            | Create forms that failed or lost input: grants (budget, expenditure, task, note, assignee, structured budget and contacts), training (instructor picker, lead instructor, duplicate requirement), operations (swaps, patterns, fuel log dates, products, vendors, locations), API key expiry, role names, onboarding | training 02, 03, 12, 18                                            |
+| Store            | Says when members cannot order, explains drafts, one countdown                                                                                                                                                                                                                                                       | training 18                                                        |
+| Facilities       | Photos and documents upload in one step                                                                                                                                                                                                                                                                              | training 06; `UPGRADING.md`                                        |
+| Scheduling       | Screenshots re-shot; the Weekly and Custom patterns are built on the Patterns tab                                                                                                                                                                                                                                    | training 03                                                        |
+| Scheduled tasks  | One organization's rollback or failed refresh, and a failed Salesforce sync, no longer stop the others                                                                                                                                                                                                               | `KNOWN_LIMITATIONS.md`                                             |
+
+### Documentation changes in this pass
+
+| File                                                                                       | Change                                                                                                                 |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `backend/alembic/versions/20261017_1210_9a4c7e21b5d0_*.py`                                 | Merge revision for the two heads above                                                                                 |
+| `docs/training/14-elections.md`                                                            | Background sending, nominee bell notice, meeting-aligned dates, positions, write-in and Approve / Deny, PDF letterhead |
+| `docs/training/05-inventory.md`                                                            | Truck stock, apparatus-only, CSV column; shared Operations header; apparatus page on a phone                           |
+| `docs/training/03-scheduling.md`                                                           | Supply worklist on a phone; patterns dialog and template link fixes                                                    |
+| `docs/training/02-training.md`, `04-events-meetings.md`                                    | Instructor picker; emptied reminder schedule                                                                           |
+| `docs/training/06-apparatus-facilities.md`, `12-grants-fundraising.md`, `18-storefront.md` | Facility upload permission; grant fields; store messages                                                               |
+| `docs/MEDICAL_SUPPLIES_MODULE.md`, `wiki/Module-Medical-Supplies.md`                       | Stock breakdown, apparatus-only, expiring-stock route, CSV                                                             |
+| `docs/training/21-october-2026-release-changes.md`                                         | Index for this window                                                                                                  |
+| `docs/training/SCREENSHOT_CURRENCY.md`, `docs/youtube-scripts/SCRIPT_CURRENCY.md`          | Queues                                                                                                                 |
+| `wiki/Recent-Changes-2026-10.md`, `wiki/Home.md`                                           | Wiki handoff                                                                                                           |
+
+Already updated by the feature commits and checked: training 02, 03 (equipment
+checks, scheduling re-shoot), 07, 08 and 16, `KNOWN_LIMITATIONS.md`,
+`UPGRADING.md`, `PUBLIC_API_DOCUMENTATION.md`, `DATABASE_SCHEMA.md`, wiki
+`Integration-Google-Workspace`, `Integration-Microsoft-365` (new),
+`Configuration-Environment`, `Module-Elections`, `Module-Elections-Developer`.
+
+### Screenshots
+
+Captured by the feature commits in this window: scheduling guide 03 (37 re-shot,
+17 added), guide 08 (8 re-shot, 25 added), and `05-88` to `05-92`, `07-25`,
+`11-17`, `12-04`, `12-15`, `16-01`, `16-16`. Still to create or replace, from this
+pass's edits, are in
+[`training/SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md#queued-by-the-october-16--17-documentation-pass).
+Nothing was captured by this pass.
+
+### Scripts
+
+Flagged in [`youtube-scripts/SCRIPT_CURRENCY.md`](./youtube-scripts/SCRIPT_CURRENCY.md).
+Nothing was re-recorded.
+
+### Open items found while writing this pass
+
+- The wiki `Module-Medical-Supplies` page now covers storage and truck stock but
+  still not bulk retire in detail; it points to the module doc.
+- Training 16 and wiki `Integration-Microsoft-365` describe Microsoft 365 from the
+  commit's own text; neither has been checked against a real tenant.
+- SCH-18 (unbounded `member_call_counts`) still awaits an owner-picked cap.
+
 ## Change audit: October 15 – 16, 2026
 
 Net changes merged to `main` from the close of the
