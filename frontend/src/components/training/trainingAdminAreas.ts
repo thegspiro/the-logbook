@@ -186,7 +186,12 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
         icon: Award,
       },
       { id: 'integrations', label: 'Integrations', hint: 'Connections to outside training systems', icon: Plug },
-      { id: 'import', label: 'Import History', hint: 'Bulk imports of past training records', icon: History },
+      {
+        id: 'import',
+        label: 'Import Past Training',
+        hint: 'Upload training completed before The Logbook',
+        icon: History,
+      },
       { id: 'metrics', label: 'Headline Metrics', hint: 'The figures shown at the top of this page', icon: Activity },
     ],
   },

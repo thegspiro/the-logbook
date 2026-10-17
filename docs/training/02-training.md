@@ -1502,15 +1502,15 @@ opens **Records → Sessions**.
 
 The areas are:
 
-| Area                     | What is in it                                                                           |
-| ------------------------ | --------------------------------------------------------------------------------------- |
-| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                          |
-| **Records**              | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status          |
-| **Curriculum**           | Requirements, Course Library, Programs                                                  |
-| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                 |
-| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports          |
-| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure** |
-| **Settings & Data**      | Manual Entry Rules, Practical Skills, Integrations, Import History, Headline Metrics    |
+| Area                     | What is in it                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------ |
+| **Overview**             | Dashboard, Compliance Matrix, Expiring Certs, Training Waivers                             |
+| **Records**              | Submissions to Review, Sessions, Course Cohorts, Shift Reports, Monthly Status             |
+| **Curriculum**           | Requirements, Course Library, Programs                                                     |
+| **Evaluations**          | Practical-skills tools, Knowledge Tests                                                    |
+| **Program Management**   | Recertification, Competency, Instructors, Effectiveness, Multi-Agency, Reports             |
+| **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**    |
+| **Settings & Data**      | Manual Entry Rules, Practical Skills, Integrations, Import Past Training, Headline Metrics |
 
 **Evaluations** shows **Skill Evaluations** or **Skills Test Templates** and
 **Skills Test Records**, depending on which practical-skills system your
@@ -2798,7 +2798,7 @@ deleting the program afterwards leaves them in your requirement list.
 
 **Who can do this:** training officers.
 
-Open **Training Admin → Settings & Data → Import History** to bring in past
+Open **Training Admin → Settings & Data → Import Past Training** to bring in past
 training records from a CSV file.
 
 1. **Choose how members are matched** — by **Membership Number** (the default,
@@ -3973,7 +3973,7 @@ have moved, been renamed or work differently.
   Curriculum, Evaluations, Program Management, Compliance Reporting, and
   Settings & Data. There is no **Setup** or **Advanced** area. Requirements,
   the Course Library and Programs are under **Curriculum**; Knowledge Tests and
-  Skill Evaluations under **Evaluations**; Integrations, Import History, Manual
+  Skill Evaluations under **Evaluations**; Integrations, Import Past Training, Manual
   Entry Rules and Practical Skills under **Settings & Data**; Recertification,
   Competency, Instructors, Effectiveness, Multi-Agency and Reports under
   **Program Management**. Old links still open the right page.
