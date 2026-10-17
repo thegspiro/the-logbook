@@ -77,8 +77,8 @@ export const EventEditPage: React.FC = () => {
       // leaving them out keeps what the server has, so a value the browser
       // rounded or defaulted (a time's seconds, an unset lead time) cannot be
       // refused as a change nobody made. An open event's save keeps them as
-      // the form produced them (a blank category is still left out rather than
-      // cleared; see "Events — Edit Form Gaps" in docs/KNOWN_LIMITATIONS.md).
+      // the form produced them, including the nulls it sends for a cleared
+      // field (Category → None among them).
       const payload: EventUpdate = event?.attendance_finalized_at ? withoutAttendanceLockedFields(data) : data;
       const isRecurring = event?.is_recurring || event?.recurrence_parent_id;
       if (isRecurring && updateScope === 'future') {

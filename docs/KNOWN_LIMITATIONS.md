@@ -5277,11 +5277,6 @@ same screen, and left as they are:
 
 - **Saving a draft publishes it.** The edit page does not load `is_draft`, so
   the form starts from its default and every save sends `is_draft: false`.
-- **Clearing an optional field does not stick.** A blank description,
-  location, location details, RSVP deadline, capacity (max attendees) or
-  category is left out of the save rather than sent as `null`, so the stored
-  value survives behind a success toast (CLAUDE.md pitfall #1). Choosing
-  Category → None is the same no-op.
 - **A window-type event stored with no lead time is shown, and saved, as 60
   minutes.** The backend reads a missing lead time on a window-type event as 15,
   so the first save of an open one moves its check-in window. A finalized
@@ -5292,7 +5287,7 @@ same screen, and left as they are:
   event's times are locked, never resent, and not checked by the form either.
 - **A series save from an open occurrence can be refused for a field nobody
   touched.** "This and all future events" writes the edited occurrence's type,
-  category (when it has one) and check-in rules onto every later occurrence,
+  category and check-in rules onto every later occurrence,
   and moves every occurrence when the form's restatement of its times, which
   is to the minute, differs from what is stored (a start or end saved with
   seconds). Where a later occurrence is finalized and would change, the save
@@ -5301,8 +5296,12 @@ same screen, and left as they are:
   every event's category as None and leave it out of the save, so a series
   save never touched it. It now loads the stored category, so a save from an
   open occurrence also writes that category onto later open occurrences that
-  had a different one. A save from a finalized occurrence leaves all of these
-  fields out and is not affected.
+  had a different one. Since 2026-10-16 a blank field is sent as a clear rather
+  than left out, so an occurrence with no category (or no description,
+  location, capacity or RSVP deadline) clears that field on later open
+  occurrences too, and a later finalized occurrence that has a category refuses
+  the save. A save from a finalized occurrence leaves all of these fields out
+  and is not affected.
 - **Reminder and validation markers an earlier series save copied are still
   there.** Before this change, a "This and all future events" save wrote the
   edited occurrence's `reminders_sent` and `validation_notification_sent` onto

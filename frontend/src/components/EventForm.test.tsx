@@ -1274,6 +1274,135 @@ describe('EventForm', () => {
     });
   });
 
+  // The update path reads an omitted key as "leave alone", so an edit that
+  // left out what the user emptied kept the old value behind a success toast
+  // (CLAUDE.md pitfall #1). A create still omits blanks.
+  describe('clearing a field', () => {
+    const stored: ComponentProps<typeof EventForm>['initialData'] = {
+      title: 'Monday drill',
+      event_type: 'other',
+      description: 'Bring turnout gear',
+      custom_category: 'drill',
+      location_id: 'loc-1',
+      location_details: 'Bay 2',
+      start_datetime: '2026-04-01T22:00:00Z',
+      end_datetime: '2026-04-01T23:00:00Z',
+      requires_rsvp: true,
+      rsvp_deadline: '2026-04-01T12:00:00Z',
+      max_attendees: 20,
+    };
+
+    beforeEach(() => {
+      mockOnSubmit.mockReset();
+      mockOnSubmit.mockResolvedValue(undefined);
+    });
+
+    const renderEdit = (initialData = stored) =>
+      renderWithRouter(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          editingEventId="evt-1"
+          submitLabel="Save Changes"
+          initialData={initialData}
+        />
+      );
+
+    const sent = () => mockOnSubmit.mock.calls[0]?.[0] as Record<string, unknown>;
+
+    it('sends each emptied field as null when editing', async () => {
+      renderEdit();
+      const user = userEvent.setup();
+      await screen.findByRole('option', { name: 'Station 1 Conference Room' });
+
+      await user.clear(screen.getByLabelText(/description/i));
+      await user.clear(screen.getByLabelText(/additional directions/i));
+      await user.clear(screen.getByLabelText(/max attendees/i));
+      await user.selectOptions(screen.getByLabelText(/^category$/i), '');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled());
+      expect(sent()).toMatchObject({
+        description: null,
+        location_details: null,
+        max_attendees: null,
+        custom_category: null,
+        location_id: 'loc-1',
+        location: null,
+      });
+    });
+
+    it('clears the RSVP deadline when Require RSVP is turned off', async () => {
+      renderEdit();
+      const user = userEvent.setup();
+
+      await user.click(screen.getByLabelText(/require rsvp/i));
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled());
+      expect(sent()).toMatchObject({ requires_rsvp: false, rsvp_deadline: null });
+    });
+
+    it('clears the listed location when switching to Other', async () => {
+      renderEdit();
+      const user = userEvent.setup();
+      await screen.findByRole('option', { name: 'Station 1 Conference Room' });
+
+      await user.selectOptions(screen.getByLabelText(/^location$/i), '__other__');
+      await user.type(screen.getByLabelText(/location name/i), 'City Hall');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled());
+      expect(sent()).toMatchObject({ location_id: null, location: 'City Hall' });
+    });
+
+    it('clears the free-text location when switching to a listed one', async () => {
+      renderEdit({ ...stored, location_id: undefined, location: 'City Hall' });
+      const user = userEvent.setup();
+      await screen.findByRole('option', { name: 'Training Center' });
+
+      await user.selectOptions(screen.getByLabelText(/^location$/i), 'loc-2');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled());
+      expect(sent()).toMatchObject({ location_id: 'loc-2', location: null });
+    });
+
+    it('clears the location when it is unselected', async () => {
+      renderEdit();
+      const user = userEvent.setup();
+      await screen.findByRole('option', { name: 'Station 1 Conference Room' });
+
+      await user.selectOptions(screen.getByLabelText(/^location$/i), '');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled());
+      expect(sent()).toMatchObject({ location_id: null, location: null });
+    });
+
+    it('still leaves blank fields out when creating', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+      const user = userEvent.setup();
+      await user.type(screen.getByLabelText(/title/i), 'Bare');
+      fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
+      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-01' } });
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled());
+      for (const field of [
+        'description',
+        'location_id',
+        'location',
+        'location_details',
+        'rsvp_deadline',
+        'max_attendees',
+        'custom_category',
+      ]) {
+        expect(sent()[field]).toBeUndefined();
+      }
+    });
+  });
+
   // Create Event crashed the whole Events hub when this lookup answered 200
   // with a body that was not the settings shape (a captive portal's HTML page):
   // `visibleTypes.includes` ran on undefined. It now gets the same fallback a
