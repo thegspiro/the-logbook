@@ -166,9 +166,7 @@ nothing says "Nothing matches that".
 
 ![The inventory admin hub with the "Finish inventory setup" prompt naming what is still missing](./images/05-72-setup-prompt.png)
 
-<!-- Screenshot needed:
-_[Quartermaster (inventory.manage) on a department with no inventory items, at /inventory/admin/items: the empty state "Your department has no inventory items yet" with the Open the Setup Guide and Add Item buttons. Capture outside the seeded demo department, the way 05-72 is captured by scripts/screenshots/inventory-setup.mjs.]_
--->
+![The items list of a department with no items: Your department has no inventory items yet, with Open the Setup Guide and Add Item](./images/05-93-empty-items.png)
 
 ### The four steps
 

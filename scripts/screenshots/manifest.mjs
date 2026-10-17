@@ -15553,6 +15553,19 @@ export const SHOTS = [
   // Several of these need state `seed_guide05_states` makes; the rest drive
   // the UI into a dialog or panel and leave without saving.
   {
+    id: "05-93-empty-items",
+    doc: "05-inventory.md",
+    line: 169,
+    anchor:
+      "Quartermaster (inventory.manage) on a department with no inventory items",
+    alt: "The items list of a department with no items: Your department has no inventory items yet, with Open the Setup Guide and Add Item",
+    route: "/inventory/admin/items",
+    expect: "Your department has no inventory items yet",
+    // The seeded department has items, so this is written by the fixture
+    // harness, the way 05-72 and 05-73 are.
+    capturedElsewhere: "scripts/screenshots/inventory-setup.mjs",
+  },
+  {
     id: "05-95-kit-issue-confirm",
     doc: "05-inventory.md",
     line: 570,

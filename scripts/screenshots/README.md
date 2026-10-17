@@ -116,7 +116,8 @@ picture — the state it describes is the absence of seed data.
 
 `inventory-setup.mjs` covers those by running the built frontend under
 `vite preview` and answering every `/api/v1` request from fixtures. It writes
-the same `05-7x-setup-*` ids at the same framing capture.mjs uses (1440x900
+`05-72-setup-prompt`, `05-73-setup-rooms` and `05-93-empty-items` (the
+items list of a department with no items) at the same framing capture.mjs uses (1440x900
 desktop, 414x896 phone, 1x, pngquant), so the outputs are interchangeable and
 `capture.mjs` remains the pipeline of record for everything it _can_ reach.
 
