@@ -806,11 +806,15 @@ class InventoryItemResponse(InventoryItemBase):
     # the item has no lots — there is nothing to prefer over `quantity`.
     lot_stock: Optional[int] = None
     is_lot_stocked: bool = False
-    # The soonest expiry among lots still holding stock (expired ones
-    # included), and its distance from the department's today. Set by the
-    # medical supply list only; other lists leave both empty.
+    # The soonest expiry among units still in stock (expired ones included),
+    # on the shelf or aboard an apparatus, and its distance from the
+    # department's today; then which of the two it is and where ("Medic 1 ›
+    # Jump Bag", or the storage path). Set by the medical supply list only;
+    # other lists leave all four empty.
     next_expiration_date: Optional[date] = None
     days_until_next_expiration: Optional[int] = None
+    next_expiration_location: Optional[Literal["shelf", "apparatus"]] = None
+    next_expiration_where: Optional[str] = None
     # Where it is: "Station 1 › Supply Room › Shelf 2" from the item's room
     # and storage area, and how many apparatus checklists carry it. Set by the
     # medical supply list only; other lists leave both empty.
