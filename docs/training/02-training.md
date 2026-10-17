@@ -2651,13 +2651,22 @@ training providers. You can:
 - match the provider's courses to your library courses;
 - see sync history and imported records.
 
-The page has three tabs:
+The page has four tabs:
 
 - **Providers** — one card per provider, with its name and platform, whether
   it is active, when it last synced and how often it syncs on its own. Along
   the bottom are **Test**, **Fetch Categories**, **Sync Now** and **Mappings**.
 - **Import Queue** — per provider, the records waiting for review and the ones
   that failed. A count that reaches the page limit means "at least this many".
+- **Sync History** — the provider's last 25 runs (scheduled pulls, daily
+  reviews, manual syncs and uploaded reports), each with when it ran, how it
+  ended, its fetched / new / updated / skipped / failed counts and any error.
+  **Show classes** lists the classes that run brought in: the class and its
+  code, the member, the completion date, the hours and what happened to it
+  (**Added to records**, **Waiting for review**, **Failed**, **Skipped** or
+  **Already on file**). A class that a later run synced again is listed under
+  that later run, so an older run can show fewer classes than its counts.
+  With more than one provider, pick one from **Provider** at the top.
 - **All Mappings** — per provider, how many categories, users and courses are
   matched and unmatched, with the names of the unmatched ones.
 

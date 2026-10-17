@@ -1623,7 +1623,7 @@ export interface ExternalTrainingSyncLog {
   id: string;
   provider_id: string;
   organization_id: string;
-  sync_type: 'full' | 'incremental' | 'manual' | 'review';
+  sync_type: 'full' | 'incremental' | 'manual' | 'review' | 'upload';
   status: SyncStatus;
   started_at: string;
   completed_at?: string;
@@ -1650,6 +1650,7 @@ export interface ExternalTrainingImport {
   course_code?: string;
   description?: string;
   duration_minutes?: number;
+  credit_hours?: number;
   completion_date?: string;
   score?: number;
   passed?: boolean;

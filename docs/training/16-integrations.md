@@ -1073,8 +1073,8 @@ yet, is not answering, or to load history older than 30 days.
 
 Completions whose member is matched, by email and then Employee ID, become
 training records at once, just as after a sync. Completions nobody matches wait
-in the **Import Queue**. The upload appears in the sync history as an
-**upload**.
+in the **Import Queue**. The upload appears on the **Sync History** tab as an
+**Uploaded report**, and **Show classes** there lists what it brought in.
 
 **Nothing is recorded twice.** Every completion is identified by its
 **Transcript ID**. Each of these updates the one existing entry instead of
