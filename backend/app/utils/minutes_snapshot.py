@@ -62,6 +62,12 @@ def _section_snapshot(section: dict) -> dict:
     }
     if normalize_format(section.get("format")) == FORMAT_HTML:
         entry["format"] = FORMAT_HTML
+    # Like ``format``, written only when set, so a version sealed before
+    # agendas existed verifies byte for byte.
+    if section.get("presenter"):
+        entry["presenter"] = section["presenter"]
+    if section.get("not_taken_up"):
+        entry["not_taken_up"] = True
     return entry
 
 
