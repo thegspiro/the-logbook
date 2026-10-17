@@ -2914,7 +2914,7 @@ either link would be a guess. Weak and unmatched names stay on the report.
 - **Undo** on a name clears those links, but only where the line still points at
   the item the pass chose. A link you made by hand since is kept.
 
-<!-- Screenshot needed: Catalog Links after an automatic pass, with the linked list, "check this" marker and Undo. -->
+![Catalog Links after Link matches automatically: the list of names it linked, each with its catalog item and the checklists it landed on, BVM marked check this because it matched an also-called name, an Undo on each, and the lines it skipped still listed below](./images/05-92-catalog-links-auto-linked.png)
 
 If someone else linked a line after you opened the page, your choice does not
 overwrite theirs. The page lists those lines (line, checklist, compartment,
@@ -3025,6 +3025,8 @@ Supplies categories page.
   subcategories first.
 - **The supplies' low-stock levels follow their new category.**
 
+![Medical supply categories: each card reads Show and its number of supplies, and Airway & Oxygen is opened to list its supplies and their stock](./images/05-91-medical-categories.png)
+
 ### Finding and tidying supplies
 
 - **Summary tiles are buttons.** **Low stock** opens the list filtered to the
@@ -3048,7 +3050,7 @@ Supplies categories page.
   supplies and their stock. Cards say how many active supplies they hold.
 - **Import / export** is the button that was labelled for import alone.
 
-<!-- Screenshot needed: Medical Supplies list with the summary tiles, Size beside names, Next expiry, and two rows ticked with the bulk Retire bar. -->
+![Medical Supplies on the All supplies tab: the summary tiles, each supply with its size beside the name, its Where path, next expiry and reorder point, and two supplies ticked with the Retire selected bar above the table](./images/05-88-medical-supplies-list.png)
 
 ### Where a supply is kept
 
@@ -3069,7 +3071,9 @@ drops an area that belongs to another one. The old free text stays as a
 - On upgrade, each existing supply is filed under the one active storage area
   whose name matches its old text. A supply with no single match is left alone.
 
-<!-- Screenshot needed: the supply dialog on "Where it is", and the form's Room and Storage area fields. -->
+![The Lots dialog for Tourniquet, CAT: Where it is, with its storage room and the two apparatus and compartments carrying it with the count aboard, above Stock lots with the lot table, its edit controls and the Add lot form](./images/05-89-medical-supply-where-lots.png)
+
+![The medical supply form for Bag Valve Mask, with its also-called names, Size Adult, the Station 1 room and the EMS Supply Cabinet shelf as its storage area](./images/05-90-medical-supply-form.png)
 
 ---
 

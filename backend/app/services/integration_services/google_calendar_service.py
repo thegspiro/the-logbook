@@ -363,6 +363,19 @@ class GoogleCalendarService(CalendarSyncInterface):
             raise CalendarError(f"{_PROVIDER} did not return a calendar id")
         return calendar_id
 
+    async def calendar_exists(self, calendar_id: str) -> bool:
+        """Whether ``calendar_id`` is still reachable with these credentials.
+
+        A reconnect keeps publishing into the calendar members already
+        subscribe to, but only if it survived: an administrator may have
+        deleted it in Google while the grant was broken.
+        """
+        try:
+            await self._execute(lambda s: s.calendars().get(calendarId=calendar_id))
+        except CalendarNotFound:
+            return False
+        return True
+
     async def update_event(
         self, calendar_id: str, external_id: str, payload: dict[str, Any]
     ) -> None:
@@ -406,7 +419,14 @@ class GoogleCalendarService(CalendarSyncInterface):
             return
 
     async def test_connection(self) -> str:
+        calendar_id = self._credentials.get("calendar_id")
         try:
+            if calendar_id:
+                calendar = await self._execute(
+                    lambda s: s.calendars().get(calendarId=calendar_id)
+                )
+                name = calendar.get("summary") or "the department calendar"
+                return f"Connected to Google Calendar (publishing to {name})"
             calendar_list = await self._execute(
                 lambda s: s.calendarList().list(maxResults=1)
             )

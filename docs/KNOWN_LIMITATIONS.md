@@ -1915,24 +1915,40 @@ sync status, a connected Cal.com bookings panel, a warning state carrying a
 real provider error) and is not capturable from a demo database at all. The
 connect _dialogs_ are ordinary forms and have been captured.
 
-## Integrations — Google Calendar and Outlook Read "Coming Soon" Behind a Server Setting (2026-10-16)
+## Integrations — Calendar Publishing Is Off by Default, and Outlook Has No Sign-In (2026-10-16)
 
-One-way publishing of department events to a Google or Outlook calendar is
-partly built: the connectors and the `calendar_sync` scheduled task that
-publishes are in place, but no screen can complete the Google or Microsoft
-sign-in yet, so no integration ever holds the tokens the task needs. The two
-catalog cards report **Coming Soon** while the server setting
-`CALENDAR_SYNC_ENABLED` is off, which is its default; connect, update and test
-are refused with `400`, and the scheduled task does nothing.
+One-way publishing of department events to a Google or Outlook calendar sits
+behind the server setting `CALENDAR_SYNC_ENABLED`, which is off by default.
+While it is off both catalog cards report **Coming Soon**; connect, update,
+test and the Google sign-in are refused with `400`, and the `calendar_sync`
+scheduled task does nothing.
+
+With it on, **Google Calendar** is connected by an administrator through
+**Connect with Google** (`POST /api/v1/integrations/google-calendar/oauth/start`
+and its callback): the sign-in asks only for the `calendar.app.created` scope,
+creates a "<Department> Events" calendar, and stores the grant encrypted on
+the integration. The generic connect endpoint refuses Google Calendar, and the
+connect and update endpoints refuse a typed `refresh_token`, `access_token`,
+`calendar_id` or `account_email` for either calendar card. It needs the
+deployment's Google OAuth client (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`,
+with the Google Calendar API enabled and the callback registered) or the
+department's own client ID and secret.
+
+**Microsoft Outlook still has no sign-in.** With the setting on its card can
+be connected through the generic form, but that stores no grant and no
+calendar, so the API keeps reporting it as `available` and nothing is
+published. Use the department iCalendar feed for Outlook users until the
+Microsoft sign-in ships.
 
 An older release let both cards be connected with an empty configuration.
-Those rows were left as they are in the database — no data migration — and
-the API reports them as `coming_soon` and not enabled while the setting is
-off, on the integration list, the detail and the `/integrations/connected`
-projection. They never held a Google or Microsoft sign-in, so nothing was ever
-published through them. Turning the setting on brings back each row's stored
-status, but nothing publishes until the sign-in screens ship, so it should
-stay off until then.
+Those rows were left as they are in the database — no data migration. The API
+reports a calendar row as connected only when it holds a grant and a calendar
+id; otherwise it reads `coming_soon` (setting off) or `available` (setting
+on), on the integration list, the detail and the `/integrations/connected`
+projection. Such a row never held a sign-in, so nothing was ever published
+through it. A stored `sync_direction` of `pull` or `both` from that release is
+ignored — publishing is push-only — and no longer blocks saving other
+settings.
 
 ## Integrations — Weather Alerts and Generic Webhooks Do Nothing After Their Test (2026-10-08)
 
@@ -2775,6 +2791,40 @@ neither a cap nor a pagination contract change for the manual-ballots screen
 is worth taking. Revisit if an election ever accumulates more than a few dozen
 batches. (Security review ELEC-16,
 `docs/security-review/ELEC-06-elections-ballots.md`.)
+
+## Elections — Background Ballot Sends Live in the Web Process, and Reminders Are Still Synchronous (2026-10-17)
+
+Sending ballots to a 42-member department failed in the browser with "timeout
+of 30000ms exceeded". The send ran inside the HTTP request: an eligibility check
+and a new voting token per member, then one SMTP connection with a 0.25 s pause
+between messages. The server kept going after the browser gave up, so the
+ballots most likely went out, but the secretary was shown an error. Sending
+again would have minted new tokens and broken the links already in members'
+inboxes.
+
+**Fixed for the Send Ballots dialog.** `POST /elections/{id}/ballot-send-jobs`
+records a `ballot_send_jobs` row and returns `202`. The send runs after the
+response, and the page polls `GET /elections/{id}/ballot-send-jobs/{job_id}`
+for the outcome. While a send is queued or running, a second one for the same
+election is refused with `409`, from both the new endpoint and the synchronous
+`POST /elections/{id}/send-ballot`. The synchronous endpoint is kept, unchanged
+in behaviour otherwise, for API callers. Tests: `tests/test_ballot_send_jobs.py`,
+`electionService.test.ts`.
+
+Two limitations remain:
+
+- **The send runs in the web process, not in a worker.** No Celery worker is
+  deployed (Celery is in `requirements.txt`, but no compose file runs one), so
+  the job is an asyncio task like the scheduled-email loop in `main.py`. A
+  restart while it runs stops it partway. Some members will have been mailed,
+  but their tokens are committed only at the end, so those links will not work.
+  The row stays `running` until `STALE_JOB_AFTER` (30 minutes) passes. After
+  that it reads as failed with a message to check who received a ballot, and it
+  stops blocking a new send. Moving sends to a real worker would remove this,
+  at the cost of a new service in every deployment (Docker, Unraid, AWS).
+- **Remind Non-Voters (`POST /elections/{id}/remind-non-voters`) is still
+  synchronous** and will hit the same 30-second timeout once enough members
+  have not voted. It needs the same job treatment as a separate change.
 
 ## Elections — Two Ballot Items Sharing an Alias String Can't Be Fully Disambiguated Without a Schema Change (2026-09-02)
 

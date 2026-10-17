@@ -4,7 +4,7 @@
  * Shows detailed information about an election including results.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { electionService, eventService, meetingsService } from '../services/api';
@@ -106,6 +106,15 @@ export const ElectionDetailPage: React.FC = () => {
   const [ballotsMustBeResent, setBallotsMustBeResent] = useState(false);
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [isSendingEmails, setIsSendingEmails] = useState(false);
+  // Stops the ballot-send poll when the page goes away; the send itself runs
+  // on the server and finishes regardless.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   const [sendEmailError, setSendEmailError] = useState<string | null>(null);
   const [lastSkippedDetails, setLastSkippedDetails] = useState<Array<{ name: string; reason: string }>>([]);
   // Both the ballot send and the reminder send feed the skipped banner; the
@@ -805,12 +814,14 @@ export const ElectionDetailPage: React.FC = () => {
       setIsSendingEmails(true);
       setSendEmailError(null);
 
-      const response = await electionService.sendBallotEmail(electionId, {
+      const job = await electionService.startBallotSendJob(electionId, {
         subject: payload.subject.trim() || undefined,
         message: payload.message.trim() || undefined,
         include_ballot_link: true,
         send_eligibility_summary: payload.sendEligibilitySummary,
       });
+      const response = await electionService.waitForBallotSendJob(electionId, job.id, () => !isMountedRef.current);
+      if (!response) return;
 
       setShowSendEmailModal(false);
       void fetchElection(); // Refresh to update email_sent status

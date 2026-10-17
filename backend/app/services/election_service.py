@@ -279,6 +279,17 @@ def nominations_tab_path(election_id: Any) -> str:
     return f"/elections/{election_id}?tab=nominations"
 
 
+def _is_approval_item(item: Dict, is_position_item: bool) -> bool:
+    """An Approve/Deny item decides a question rather than filling a seat.
+
+    ``allow_write_ins`` is an election-wide switch, but a write-in names a
+    person for a seat, so it never applies to one of these: the printed
+    ballot gives them only Approve and Deny, and both electronic ballots
+    must agree with it. A plain position is always a candidate race.
+    """
+    return not is_position_item and item.get("vote_type") == "approval"
+
+
 def effective_ballot_items(election: Any) -> Tuple[List[Dict], Set[str]]:
     """Every contest on the ballot — stored items, then plain positions —
     and the ids of the plain-position ones (see ``position_ballot_items``).
@@ -5870,6 +5881,7 @@ class ElectionService:
         }
         meta = {
             "org_name": organization.name if organization else "",
+            "logo": organization.logo if organization else None,
             "generated_at": await self._org_local_time(
                 organization, datetime.now(timezone.utc)
             ),
@@ -10448,7 +10460,9 @@ class ElectionService:
             candidate_id = None
 
             if choice == "write_in":
-                if not election.allow_write_ins:
+                if not election.allow_write_ins or _is_approval_item(
+                    ballot_item, ballot_item_id in position_item_ids
+                ):
                     return (
                         None,
                         f"Write-in votes are not allowed for: {item_title}",
@@ -10961,7 +10975,9 @@ class ElectionService:
                 selections.append((title, str(option.id), None))
             elif choice == "write_in":
                 name = (vote_data.get("write_in_name") or "").strip()
-                if not election.allow_write_ins:
+                if not election.allow_write_ins or _is_approval_item(
+                    item, is_position_item
+                ):
                     return None, f"Write-in votes are not allowed for: {title}"
                 if not name:
                     return None, f"Write-in name is required for: {title}"

@@ -38,8 +38,10 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
-from app.core.utils import safe_error_detail
+from app.core.utils import generate_uuid, safe_error_detail
 from app.models.election import (
+    BallotSendJob,
+    BallotSendJobStatus,
     Candidate,
     Election,
     ElectionStatus,
@@ -59,6 +61,7 @@ from app.schemas.election import (
     BallotElectionResponse,
     BallotItem,
     BallotPreviewResponse,
+    BallotSendJobResponse,
     BallotSubmission,
     BallotSubmissionResponse,
     BallotTemplatesResponse,
@@ -118,6 +121,15 @@ from app.schemas.election import (
     VoterOverrideListResponse,
     VoterOverrideRecord,
     seat_rule_error,
+)
+from app.services.ballot_send_jobs import (
+    SEND_IN_PROGRESS_DETAIL,
+    ensure_election_open,
+    find_active_job,
+    get_job,
+    job_response,
+    perform_ballot_send,
+    start_ballot_send_job,
 )
 from app.services.election_service import (
     ElectionService,
@@ -3001,145 +3013,155 @@ async def send_ballot_emails(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    # Only an OPEN election can take a vote, so a live ballot sent in any
-    # other status mails members a "Vote Now" link that answers "Election is
-    # draft" / "Election is closed" — and a draft is still editable, so the
-    # ballot they were mailed may not even be the one that opens. A closed or
-    # cancelled one also mints dead tokens. The gate lives here rather than in
-    # the service because /send-test-ballot (is_test=True, sender only) uses
-    # the same service and is exactly how a draft is previewed before opening.
-    if election.status != ElectionStatus.OPEN:
+    try:
+        ensure_election_open(election)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    # A queued send is about to mint every member a new token; one sent here
+    # alongside it would void whichever links land first.
+    if (
+        await find_active_job(db, election.id, str(current_user.organization_id))
+        is not None
+    ):
+        await db.commit()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Ballot emails cannot be sent for a {election.status.value} election",
+            status_code=status.HTTP_409_CONFLICT,
+            detail=SEND_IN_PROGRESS_DETAIL,
         )
-
-    # Build base ballot URL pointing to the frontend ballot page.
-    # SEC: use the server-configured FRONTEND_URL, NOT request.base_url — the
-    # latter derives from the client-controlled Host header, so a spoofed Host
-    # would send members ballot links (with voting tokens) to an attacker's
-    # domain. The token is appended by the service as a URL fragment:
-    # /ballot#token=xxx (fragments never reach any server — R-D3)
-    frontend_origin = settings.FRONTEND_URL.rstrip("/")
-    base_ballot_url = (
-        f"{frontend_origin}/ballot" if email_data.include_ballot_link else None
-    )
 
     service = ElectionService(db)
     try:
-        recipients_count, failed_count, skipped_count, skipped_details, _sent_ids = (
-            await service.send_ballot_emails(
-                election_id=election_id,
-                organization_id=current_user.organization_id,
-                recipient_user_ids=email_data.recipient_user_ids,
-                subject=email_data.subject,
-                message=email_data.message,
-                base_ballot_url=base_ballot_url,
-            )
+        return await perform_ballot_send(
+            service,
+            election,
+            str(current_user.organization_id),
+            recipient_user_ids=email_data.recipient_user_ids,
+            subject=email_data.subject,
+            message=email_data.message,
+            base_ballot_url=_ballot_base_url(email_data),
+            send_eligibility_summary=bool(email_data.send_eligibility_summary),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
-    total_attempted = recipients_count + failed_count + skipped_count
-    if total_attempted == 0:
-        # Build a diagnostic message explaining why nobody was found
-        if email_data.recipient_user_ids:
-            hint = (
-                "None of the specified recipients were found in this "
-                "organization. Verify the selected members are active."
-            )
-        elif election.eligible_voters:
-            hint = (
-                "The election has an eligible voters list configured, but "
-                "none of those members were found. Verify the listed members "
-                "are still active in the organization."
-            )
-        else:
-            hint = (
-                "No active members were found in the organization. Ensure "
-                "members exist and are marked as active."
-            )
-        return EmailBallotResponse(
-            success=False,
-            recipients_count=0,
-            failed_count=0,
-            skipped_count=0,
-            skipped_details=skipped_details,
-            message=f"No eligible recipients found. {hint}",
-        )
 
-    # Send eligibility summary email to secretary if requested
-    summary_requested = bool(email_data.send_eligibility_summary)
-    summary_sent = False
-    if summary_requested and total_attempted > 0:
-        try:
-            summary_sent, _ = await service.send_eligibility_summary_email(
-                election_id=election_id,
-                organization_id=current_user.organization_id,
-                sent_count=recipients_count,
-                skipped_count=skipped_count,
-                skipped_details=skipped_details,
-            )
-        except Exception as e:
-            logger.warning(f"Failed to send eligibility summary email: {e}")
+def _ballot_base_url(email_data: EmailBallot) -> Optional[str]:
+    """The ballot page the emailed links point at, or None for no link.
 
-    return EmailBallotResponse(
-        success=recipients_count > 0 and failed_count == 0,
-        recipients_count=recipients_count,
-        failed_count=failed_count,
-        skipped_count=skipped_count,
-        skipped_details=skipped_details,
-        message=ballot_send_message(
-            recipients_count,
-            failed_count,
-            skipped_count,
-            summary_requested=summary_requested,
-            summary_sent=summary_sent,
-            skipped_details=skipped_details,
-        ),
-    )
-
-
-def ballot_send_message(
-    recipients_count: int,
-    failed_count: int,
-    skipped_count: int,
-    *,
-    summary_requested: bool,
-    summary_sent: bool,
-    skipped_details: Optional[list[dict]] = None,
-) -> str:
-    """The secretary's account of a ballot send.
-
-    The summary line reports whether the summary email actually went. It used
-    to say "emailed to you" whenever one was asked for, including when email
-    was off and nothing was sent.
-
-    The skipped clause names the reasons the send actually recorded when it
-    has them. The fixed "did not meet ballot item requirements" named an item
-    rule for a member skipped for not being on the voter roll frozen when the
-    election opened (W50-55); it remains the wording for a caller that has a
-    count but no per-member reasons to report.
+    SEC: use the server-configured FRONTEND_URL, NOT request.base_url — the
+    latter derives from the client-controlled Host header, so a spoofed Host
+    would send members ballot links (with voting tokens) to an attacker's
+    domain. The token is appended by the service as a URL fragment:
+    /ballot#token=xxx (fragments never reach any server — R-D3)
     """
-    parts = [f"Ballot emails sent to {recipients_count} recipient(s)"]
-    if failed_count > 0:
-        parts.append(f"{failed_count} failed")
-    if skipped_count > 0:
-        parts.append(
-            ElectionService.summarize_skipped(skipped_details)
-            if skipped_details
-            else f"{skipped_count} skipped (did not meet ballot item "
-            f"requirements — see skipped details for per-member reasons)"
+    if not email_data.include_ballot_link:
+        return None
+    return f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
+
+
+@router.post(
+    "/{election_id}/ballot-send-jobs",
+    response_model=BallotSendJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_ballot_send_job_endpoint(
+    election_id: UUID,
+    email_data: EmailBallot,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Queue ballot emails to eligible voters and return without waiting.
+
+    The send runs after the response; poll
+    ``GET /{election_id}/ballot-send-jobs/{job_id}`` for its outcome. Only one
+    send per election may be in progress: each mints new voting tokens, so
+    overlapping sends would leave members holding links that no longer work.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    organization_id = str(current_user.organization_id)
+    # Locked so two requests arriving together cannot both find no job in
+    # progress and both queue one.
+    election_result = await db.execute(
+        select(Election)
+        .where(Election.id == str(election_id))
+        .where(Election.organization_id == organization_id)
+        .with_for_update()
+    )
+    election = election_result.scalar_one_or_none()
+    if not election:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
-    if summary_requested:
-        parts.append(
-            "Eligibility summary emailed to you"
-            if summary_sent
-            else "The eligibility summary email could not be sent"
+    try:
+        ensure_election_open(election)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if await find_active_job(db, election.id, organization_id) is not None:
+        # The abandoned jobs find_active_job just failed are kept either way.
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=SEND_IN_PROGRESS_DETAIL,
         )
-    return ". ".join(parts)
+
+    job = BallotSendJob(
+        id=generate_uuid(),
+        organization_id=organization_id,
+        election_id=election.id,
+        requested_by=str(current_user.id),
+        status=BallotSendJobStatus.QUEUED.value,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    logger.info(
+        f"Ballot send job queued | job={job.id} election={election.id} "
+        f"user={current_user.id}"
+    )
+    start_ballot_send_job(
+        job.id,
+        organization_id,
+        recipient_user_ids=email_data.recipient_user_ids,
+        subject=email_data.subject,
+        message=email_data.message,
+        base_ballot_url=_ballot_base_url(email_data),
+        send_eligibility_summary=bool(email_data.send_eligibility_summary),
+    )
+    return job_response(job)
+
+
+@router.get(
+    "/{election_id}/ballot-send-jobs/{job_id}",
+    response_model=BallotSendJobResponse,
+)
+async def get_ballot_send_job_endpoint(
+    election_id: UUID,
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    The status of a queued ballot send and, once finished, its outcome.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    job = await get_job(
+        db, str(job_id), str(election_id), str(current_user.organization_id)
+    )
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Ballot send not found"
+        )
+    return job_response(job)
 
 
 @router.post("/{election_id}/send-report", response_model=ElectionReportResponse)

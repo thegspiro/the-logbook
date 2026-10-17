@@ -1367,11 +1367,17 @@ class Settings(BaseSettings):
     # "coming soon" and cannot be connected, a row an older release left
     # "connected" is presented the same way (it never held credentials), and
     # the calendar_sync scheduled task does nothing. Turning it on makes the
-    # cards connectable and lets the task publish for an integration that
-    # holds tokens and a calendar id, but no screen can complete the sign-in
-    # yet, so nothing is published. The department iCalendar (ICS) feed does
-    # not depend on this switch.
+    # cards connectable: Google Calendar through "Connect with Google" (an
+    # OAuth sign-in that creates the department's calendar), after which the
+    # task publishes every five minutes. Outlook has no sign-in screen yet.
+    # The department iCalendar (ICS) feed does not depend on this switch.
     CALENDAR_SYNC_ENABLED: bool = False
+    # Absolute URL Google redirects back to after the Google Calendar
+    # consent screen. Must exactly match an "Authorized redirect URI" on the
+    # OAuth client (GOOGLE_CLIENT_ID, or the department's own), e.g.
+    # https://app.example.org/api/v1/integrations/google-calendar/oauth/callback
+    # Leave unset to derive it from the incoming request's base URL.
+    GOOGLE_CALENDAR_REDIRECT_URI: str | None = None
 
     # ============================================
     # Claude (MCP) OAuth 2.1 authorization server

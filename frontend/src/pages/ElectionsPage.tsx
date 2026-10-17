@@ -1167,7 +1167,8 @@ export const ElectionsPage: React.FC = () => {
                       <span className="text-theme-text-primary ml-2 text-sm">Allow Write-in Candidates</span>
                     </label>
                     <p id="election-write-ins-help" className="text-theme-text-muted mb-2 ml-6 text-xs">
-                      Voters may type in someone who is not on the ballot.
+                      Voters may type in someone who is not on the ballot. Applies to candidate races only; Approve/Deny
+                      items never offer a write-in.
                     </p>
 
                     <label className="flex items-center">
