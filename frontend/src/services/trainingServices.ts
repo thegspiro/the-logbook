@@ -1542,7 +1542,12 @@ export interface IntegrationConfig {
   config: Record<string, unknown>;
   enabled: boolean;
   contains_phi?: boolean;
-  last_sync_at?: string;
+  last_sync_at?: string | null;
+  // Health of the integration's runs (syncs, connection tests, connects).
+  last_success_at?: string | null;
+  last_error?: string | null;
+  last_error_at?: string | null;
+  consecutive_error_count?: number;
   created_at: string;
   updated_at: string;
 }

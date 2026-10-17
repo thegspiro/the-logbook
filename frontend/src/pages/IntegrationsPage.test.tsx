@@ -31,6 +31,7 @@ const mockLinkExistingGoogleMembers = vi.fn();
 const mockGetGoogleWorkspaceAttention = vi.fn().mockResolvedValue([]);
 const mockGetIcalFeed = vi.fn();
 const mockRotateIcalFeed = vi.fn();
+const mockStartGoogleCalendarConnect = vi.fn();
 
 vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
@@ -54,6 +55,7 @@ vi.mock('../services/api', () => ({
     getGoogleWorkspaceAttention: (...args: unknown[]) => mockGetGoogleWorkspaceAttention(...args) as unknown,
     getIcalFeed: (...args: unknown[]) => mockGetIcalFeed(...args) as unknown,
     rotateIcalFeed: (...args: unknown[]) => mockRotateIcalFeed(...args) as unknown,
+    startGoogleCalendarConnect: (...args: unknown[]) => mockStartGoogleCalendarConnect(...args) as unknown,
   },
 }));
 
@@ -687,6 +689,184 @@ describe('IntegrationsPage', () => {
       const card = await screen.findByTestId('integration-card-ical');
       expect(within(card).queryByLabelText('Department events feed URL')).not.toBeInTheDocument();
       expect(mockGetIcalFeed).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Google Calendar connect', () => {
+    const gcal = (overrides: Record<string, unknown> = {}) => ({
+      id: 'gcal-1',
+      organization_id: 'org-1',
+      integration_type: 'google-calendar',
+      name: 'Google Calendar',
+      description: 'Publish department events one way',
+      category: 'Calendar',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      last_sync_at: null,
+      last_error: null,
+      last_error_at: null,
+      consecutive_error_count: 0,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      ...overrides,
+    });
+    const connected = gcal({
+      status: 'connected' as const,
+      enabled: true,
+      config: {
+        account_email: 'calendar@dept.org',
+        calendar_name: 'Falls Station Events',
+        calendar_id: 'cal-1',
+        sync_descriptions: false,
+      },
+      last_sync_at: '2026-10-15T14:00:00Z',
+    });
+
+    beforeEach(() => {
+      mockStartGoogleCalendarConnect.mockReset();
+      mockStartGoogleCalendarConnect.mockResolvedValue('https://accounts.google.com/o/oauth2/v2/auth?state=s');
+      mockUpdateIntegration.mockReset();
+      mockDisconnectIntegration.mockReset();
+      mockDisconnectIntegration.mockResolvedValue(undefined);
+    });
+
+    it('offers Connect with Google instead of the connect form, and hands off to Google', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([gcal()]);
+      const originalLocation = window.location;
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: { ...originalLocation, href: '' },
+      });
+      try {
+        renderPage();
+        const card = await screen.findByTestId('integration-card-google-calendar');
+        expect(within(card).queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+        await user.click(within(card).getByRole('button', { name: /Connect with Google/ }));
+        await waitFor(() => {
+          expect(window.location.href).toBe('https://accounts.google.com/o/oauth2/v2/auth?state=s');
+        });
+        expect(mockStartGoogleCalendarConnect).toHaveBeenCalled();
+        expect(mockConnectIntegration).not.toHaveBeenCalled();
+      } finally {
+        Object.defineProperty(window, 'location', {
+          configurable: true,
+          writable: true,
+          value: originalLocation,
+        });
+      }
+    });
+
+    it('shows the account, the calendar and when events were last published', async () => {
+      mockGetIntegrations.mockResolvedValue([connected]);
+      renderPage();
+      const card = await screen.findByTestId('integration-card-google-calendar');
+      expect(within(card).getByText('calendar@dept.org')).toBeInTheDocument();
+      expect(within(card).getByText('Falls Station Events')).toBeInTheDocument();
+      expect(within(card).getByText(/October 15, 2026/)).toBeInTheDocument();
+      expect(within(card).getByRole('switch', { name: 'Sync event descriptions' })).toHaveAttribute(
+        'aria-checked',
+        'false'
+      );
+      // One Disconnect, from the panel, not a second generic one.
+      expect(within(card).getAllByRole('button', { name: 'Disconnect' })).toHaveLength(1);
+    });
+
+    it('shows the last error and how many runs in a row failed', async () => {
+      mockGetIntegrations.mockResolvedValue([
+        {
+          ...connected,
+          last_error: 'Google Calendar is rate limiting requests',
+          last_error_at: '2026-10-15T15:00:00Z',
+          consecutive_error_count: 3,
+        },
+      ]);
+      renderPage();
+      const card = await screen.findByTestId('integration-card-google-calendar');
+      expect(within(card).getByText(/rate limiting requests/)).toBeInTheDocument();
+      expect(within(card).getByText(/3 failed runs in a row/)).toBeInTheDocument();
+    });
+
+    it('says Reconnect required when the grant stopped working', async () => {
+      mockGetIntegrations.mockResolvedValue([
+        gcal({
+          status: 'error' as const,
+          config: { account_email: 'calendar@dept.org', calendar_name: 'Falls Station Events' },
+          last_error: 'Reconnect required: the calendar provider no longer accepts the stored authorization.',
+          consecutive_error_count: 1,
+        }),
+      ]);
+      renderPage();
+      const card = await screen.findByTestId('integration-card-google-calendar');
+      expect(within(card).getByRole('alert')).toHaveTextContent('Reconnect required');
+      expect(within(card).getByRole('button', { name: /Reconnect with Google/ })).toBeInTheDocument();
+      expect(within(card).getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+    });
+
+    it('turns description publishing on through a settings update', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([connected]);
+      mockUpdateIntegration.mockResolvedValue({
+        ...connected,
+        config: { ...connected.config, sync_descriptions: true },
+      });
+      renderPage();
+      const card = await screen.findByTestId('integration-card-google-calendar');
+      await user.click(within(card).getByRole('switch', { name: 'Sync event descriptions' }));
+      await waitFor(() => {
+        expect(within(card).getByRole('switch', { name: 'Sync event descriptions' })).toHaveAttribute(
+          'aria-checked',
+          'true'
+        );
+      });
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('gcal-1', { sync_descriptions: true });
+    });
+
+    it('disconnects only after confirmation', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([connected]);
+      renderPage();
+      const card = await screen.findByTestId('integration-card-google-calendar');
+
+      await user.click(within(card).getByRole('button', { name: 'Disconnect' }));
+      await user.click(await screen.findByRole('button', { name: 'Stay connected' }));
+      expect(mockDisconnectIntegration).not.toHaveBeenCalled();
+
+      mockGetIntegrations.mockResolvedValue([gcal()]);
+      await user.click(within(card).getByRole('button', { name: 'Disconnect' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
+      expect(mockDisconnectIntegration).toHaveBeenCalledWith('gcal-1');
+      expect(await screen.findByRole('button', { name: /Connect with Google/ })).toBeInTheDocument();
+    });
+
+    it('reports the outcome of the return from Google', async () => {
+      mockGetIntegrations.mockResolvedValue([connected]);
+      const { unmount } = render(
+        <MemoryRouter initialEntries={['/integrations?google_calendar=connected']}>
+          <ConfirmProvider>
+            <IntegrationsPage />
+          </ConfirmProvider>
+        </MemoryRouter>
+      );
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Google Calendar connected'));
+      });
+      unmount();
+
+      render(
+        <MemoryRouter initialEntries={['/integrations?google_calendar_error=calendar_create_failed']}>
+          <ConfirmProvider>
+            <IntegrationsPage />
+          </ConfirmProvider>
+        </MemoryRouter>
+      );
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('could not be created'));
+      });
     });
   });
 

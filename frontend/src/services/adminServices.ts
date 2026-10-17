@@ -1530,6 +1530,14 @@ export const integrationsService = {
     return response.data;
   },
 
+  // Starts the Google Calendar sign-in and returns Google's consent URL for
+  // the browser to navigate to. A POST rather than a link: it records the
+  // attempt and sets its nonce cookie, so it carries the CSRF header.
+  async startGoogleCalendarConnect(): Promise<string> {
+    const response = await api.post<{ authorization_url: string }>('/integrations/google-calendar/oauth/start');
+    return response.data.authorization_url;
+  },
+
   // Full-page navigation target for the one-click OAuth connect flow. Not an
   // axios call — the browser navigates here and the backend 302s to Salesforce.
   getSalesforceOAuthUrl(): string {
