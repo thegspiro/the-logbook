@@ -15,7 +15,7 @@ The free-text agenda and every set of minutes are untouched, and sections
 already drafted from agenda items stay as ordinary sections.
 
 Revision ID: 38a57d984653
-Revises: c869ec90a41b
+Revises: 244b0fd07205, d3bb8f81ed07
 Create Date: 2026-10-16 21:41:00.000000
 
 """
@@ -27,7 +27,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "38a57d984653"
-down_revision: Union[str, None] = "c869ec90a41b"
+down_revision: Union[str, Sequence[str], None] = ("244b0fd07205", "d3bb8f81ed07")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
