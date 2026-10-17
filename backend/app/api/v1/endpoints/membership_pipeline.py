@@ -1950,6 +1950,7 @@ async def transfer_prospect(
                 await provision_after_commit()
             from app.services.directory_account_service import (
                 DirectoryAccountService,
+                provider_info,
             )
 
             row = await DirectoryAccountService(db).get_for_user(
@@ -1957,6 +1958,8 @@ async def transfer_prospect(
             )
             if row is not None:
                 result["google_account"] = {
+                    "provider": row.provider,
+                    "provider_name": provider_info(row.provider).product,
                     "status": row.status,
                     "email": row.primary_email,
                     "credentials_sent": bool(row.credentials_sent),

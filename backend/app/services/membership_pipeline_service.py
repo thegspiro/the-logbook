@@ -4630,7 +4630,14 @@ class MembershipPipelineService:
             "welcome_email_sent": welcome_email_sent,
             # The response key predates other directories; the screen reads it.
             "google_account": (
-                {"status": directory_row.status, "email": directory_row.primary_email}
+                {
+                    "provider": directory_row.provider,
+                    "provider_name": (
+                        directory_info.product if directory_info else None
+                    ),
+                    "status": directory_row.status,
+                    "email": directory_row.primary_email,
+                }
                 if directory_row is not None
                 else None
             ),

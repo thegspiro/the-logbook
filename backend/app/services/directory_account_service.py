@@ -1,8 +1,8 @@
 """
 Directory account provisioning for newly converted members.
 
-When a department has connected a directory integration (Google Workspace)
-and a member is converted from an applicant with a department email address,
+When a department has connected a directory integration (Google Workspace or
+Microsoft 365) and a member is converted from an applicant with a department email address,
 the conversion stages a :class:`DirectoryAccountProvision` row in its own
 transaction. After that transaction commits, :meth:`provision` creates the
 account. A failure never undoes the conversion -- the member exists whatever
@@ -44,6 +44,7 @@ from app.services.email_theme import callout, fact, facts
 from app.services.integration_services.directory_common import (
     DirectoryAccount,
     DirectoryAccountExistsError,
+    DirectoryAccountManagedElsewhereError,
     DirectoryAccountNotFoundError,
     DirectoryClient,
     DirectoryError,
@@ -52,11 +53,15 @@ from app.services.integration_services.directory_common import (
 from app.services.integration_services.google_workspace_service import (
     GOOGLE_WORKSPACE_PROVIDER,
 )
+from app.services.integration_services.microsoft_365_service import (
+    MICROSOFT_365_PROVIDER,
+)
 
 # Every directory The Logbook can provision into, by the value stored in
-# ``directory_account_provisions.provider``.
+# ``directory_account_provisions.provider``. A department connects one at a
+# time (the integrations endpoint refuses a second).
 PROVIDERS: dict[str, DirectoryProviderInfo] = {
-    GOOGLE_WORKSPACE_PROVIDER.provider: GOOGLE_WORKSPACE_PROVIDER,
+    info.provider: info for info in (GOOGLE_WORKSPACE_PROVIDER, MICROSOFT_365_PROVIDER)
 }
 _BY_INTEGRATION = {info.integration_type: info for info in PROVIDERS.values()}
 
@@ -299,7 +304,7 @@ class DirectoryAccountService:
             provider=info.provider,
             primary_email=email,
             status=DirectoryAccountStatus.PENDING.value,
-            pending_groups=list(config.get("group_emails") or []) or None,
+            pending_groups=list(config.get(info.groups_key) or []) or None,
             created_by=created_by,
         )
         if _domain_of(email) != domain:
@@ -428,7 +433,7 @@ class DirectoryAccountService:
             row.last_error = f"The {info.product} account creation failed."
 
         if created:
-            await self._add_pending_groups(row, integration)
+            await self._finish_setup(row, integration)
         await self.db.commit()
         logger.info(f"{info.product} provisioning for user {row.user_id}: {row.status}")
         return password if created else None
@@ -466,7 +471,7 @@ class DirectoryAccountService:
 
         if (
             account is None
-            or account.primary_email != row.primary_email
+            or row.primary_email not in account.addresses
             or not account.id
         ):
             row.status = DirectoryAccountStatus.FAILED.value
@@ -483,6 +488,7 @@ class DirectoryAccountService:
             return False
 
         row.external_user_id = account.id
+        row.managed_on_premises = account.managed_elsewhere
         if account.member_id == row.user_id:
             # Ours, from an attempt whose answer never arrived. Nobody holds
             # its password, so it is reset for this attempt to deliver.
@@ -515,26 +521,38 @@ class DirectoryAccountService:
         )
         return other.first() is not None
 
-    async def _add_pending_groups(
+    async def _finish_setup(
         self, row: DirectoryAccountProvision, integration: Integration
     ) -> None:
-        remaining: list[str] = []
+        """License a created account if its directory needs it, then add it to
+        the groups it is still missing. Either can fail without undoing the
+        other; what is left is on the row for a retry."""
         try:
             directory = directory_for(integration)
         except DirectoryError as exc:
             row.last_error = str(exc)
             return
+        license_error: Optional[str] = None
+        try:
+            await directory.ensure_licensed(_account_key(row))
+            row.license_pending = False
+        except DirectoryError as exc:
+            row.license_pending = True
+            license_error = str(exc)
+        remaining: list[str] = []
         for group in list(row.pending_groups or []):
             try:
                 await directory.add_to_group(str(group), row.primary_email)
             except DirectoryError:
                 remaining.append(str(group))
         row.pending_groups = remaining or None
+        problems: list[str] = []
+        if license_error is not None:
+            problems.append(f"its license could not be assigned ({license_error})")
         if remaining:
-            row.last_error = (
-                "The account exists, but it could not be added to: "
-                + ", ".join(remaining)
-            )
+            problems.append("it could not be added to: " + ", ".join(remaining))
+        if problems:
+            row.last_error = "The account exists, but " + "; and ".join(problems)
 
     async def mark_credentials_sent(
         self, provision_id: str, organization_id: str
@@ -603,7 +621,7 @@ class DirectoryAccountService:
         )
         if sent_count > 0:
             row.credentials_sent = True
-            if not row.pending_groups:
+            if not row.pending_groups and not row.license_pending:
                 row.last_error = None
         else:
             row.last_error = (
@@ -685,12 +703,21 @@ class DirectoryAccountService:
                 outcome = "unsuspended"
             row.suspension_settled = True
             row.suspension_error = None
+            row.managed_on_premises = False
         except DirectoryAccountNotFoundError as exc:
             # Deleted in the directory: nothing left to suspend or restore.
             row.suspended_by_logbook = False
             row.suspension_settled = True
             row.suspension_error = str(exc)
             outcome = "missing"
+        except DirectoryAccountManagedElsewhereError as exc:
+            # No call here can ever change it, so it stays unsettled -- the
+            # member's profile and the attention list keep saying so -- but
+            # the sweep stops retrying. A person disables it where it lives;
+            # Retry looks again.
+            row.managed_on_premises = True
+            row.suspension_error = str(exc)
+            outcome = "managed_on_premises"
         except DirectoryError as exc:
             row.suspension_error = str(exc)
             outcome = "failed"
@@ -700,7 +727,7 @@ class DirectoryAccountService:
             self.db,
             f"{info.audit_prefix}.account_suspension",
             "integrations",
-            "warning" if outcome == "failed" else "info",
+            "warning" if outcome in ("failed", "managed_on_premises") else "info",
             {
                 "target_user_id": row.user_id,
                 "suspend": wanted,
@@ -746,10 +773,16 @@ class DirectoryAccountService:
             accounts = await directory_for(integration).list_users(domain)
         except DirectoryError as exc:
             raise ProvisionRetryError(str(exc))
-        by_address: dict[str, str] = {}
+        # Every address an account owns finds it, its primary address ahead
+        # of any other: written second, a primary is never overwritten.
+        by_address: dict[str, DirectoryAccount] = {}
         for account in accounts:
-            if account.primary_email and account.id:
-                by_address[account.primary_email] = account.id
+            if account.id:
+                for other in account.other_addresses:
+                    by_address[other] = account
+        for account in accounts:
+            if account.id and account.primary_email:
+                by_address[account.primary_email] = account
 
         records = (
             await self.db.execute(
@@ -788,7 +821,7 @@ class DirectoryAccountService:
             "off_domain": 0,
             "account_in_use": 0,
         }
-        to_link: list[tuple[User, str, str]] = []
+        candidates: list[tuple[User, str, DirectoryAccount]] = []
         for member in members:
             recorded_status = status_by_member.get(str(member.id))
             if recorded_status is not None:
@@ -805,19 +838,28 @@ class DirectoryAccountService:
             if not address or _domain_of(address) != domain:
                 counts["off_domain"] += 1
                 continue
-            external_id = by_address.get(address)
-            if external_id is None:
+            match = by_address.get(address)
+            if match is None:
                 counts["not_in_google"] += 1
                 continue
             if member_has_departed(member):
                 counts["departed"] += 1
                 continue
-            if external_id in claimed:
+            candidates.append((member, address, match))
+        # One account, one member. Where two members' addresses find the same
+        # account (one its sign-in name, the other its mail), neither is
+        # linked: choosing would let one member's departure suspend an
+        # account the other may be using (owner decision, 2026-10-17).
+        matches_per_account: dict[str, int] = {}
+        for _, _, match in candidates:
+            matches_per_account[match.id] = matches_per_account.get(match.id, 0) + 1
+        to_link: list[tuple[User, str, DirectoryAccount]] = []
+        for member, address, match in candidates:
+            if match.id in claimed or matches_per_account[match.id] > 1:
                 counts["account_in_use"] += 1
                 continue
             counts["linked"] += 1
-            claimed.add(external_id)
-            to_link.append((member, address, external_id))
+            to_link.append((member, address, match))
         if not apply:
             return counts
         if expected is not None and counts["linked"] != expected:
@@ -825,7 +867,7 @@ class DirectoryAccountService:
                 f"The roster changed since the preview: {counts['linked']} "
                 f"members would be linked, not {expected}. Review it again."
             )
-        for member, address, external_id in to_link:
+        for member, address, match in to_link:
             self.db.add(
                 DirectoryAccountProvision(
                     organization_id=str(organization_id),
@@ -833,7 +875,8 @@ class DirectoryAccountService:
                     provider=info.provider,
                     primary_email=address,
                     status=DirectoryAccountStatus.LINKED_EXISTING.value,
-                    external_user_id=external_id,
+                    external_user_id=match.id,
+                    managed_on_premises=match.managed_elsewhere,
                     created_by=actor_id,
                 )
             )
@@ -923,6 +966,12 @@ class DirectoryAccountService:
                 ).where(
                     DirectoryAccountProvision.suspension_settled.is_(False),
                     DirectoryAccountProvision.status.in_(SUSPENDABLE_STATUSES),
+                    # A block only Active Directory can apply is not retried;
+                    # a return (nothing to unblock) still settles here.
+                    or_(
+                        DirectoryAccountProvision.managed_on_premises.is_(False),
+                        DirectoryAccountProvision.suspension_wanted.is_(False),
+                    ),
                     or_(
                         DirectoryAccountProvision.suspension_error.is_(None),
                         DirectoryAccountProvision.last_attempt_at.is_(None),
@@ -964,6 +1013,8 @@ class DirectoryAccountService:
                     outcome = "suspended"
         except DirectoryAccountNotFoundError:
             outcome = "missing"
+        except DirectoryAccountManagedElsewhereError:
+            outcome = "managed_on_premises"
         except Exception:
             logger.exception(
                 f"Suspending a hard-deleted member's {info.product} account failed"
@@ -973,7 +1024,13 @@ class DirectoryAccountService:
                 self.db,
                 f"{info.audit_prefix}.account_suspension",
                 "integrations",
-                "info" if outcome != "failed" else "critical",
+                # Either way a departed member's account still works and
+                # nothing is left to retry it: a person has to act.
+                (
+                    "critical"
+                    if outcome in ("failed", "managed_on_premises")
+                    else "info"
+                ),
                 {"suspend": True, "outcome": outcome, "reason": "member_deleted"},
                 user_id=actor_id,
                 organization_id=str(organization_id),
@@ -1031,6 +1088,7 @@ class DirectoryAccountService:
         nothing_to_do = (
             row.status == DirectoryAccountStatus.CREATED.value
             and not row.pending_groups
+            and not row.license_pending
             and row.credentials_sent
         )
         if nothing_to_do:
@@ -1058,8 +1116,8 @@ class DirectoryAccountService:
                 await self.send_credentials_email(row.id, organization_id, password)
         else:
             row.last_error = None
-            if row.pending_groups:
-                await self._add_pending_groups(row, integration)
+            if row.pending_groups or row.license_pending:
+                await self._finish_setup(row, integration)
             if not row.credentials_sent:
                 password = generate_temporary_password()
                 try:
@@ -1128,16 +1186,17 @@ def _attention_issue(
     if row.status == DirectoryAccountStatus.FAILED.value:
         return AttentionIssue.NOT_CREATED, row.last_error, row.created_at
     if row.status == DirectoryAccountStatus.CREATED.value and (
-        row.pending_groups or not row.credentials_sent
+        row.pending_groups or row.license_pending or not row.credentials_sent
     ):
+        if not row.credentials_sent:
+            fallback = "The member has not been sent the account's password."
+        elif row.license_pending:
+            fallback = "The account has no license yet, so it has no mailbox."
+        else:
+            fallback = "The account is not yet in every group."
         return (
             AttentionIssue.SETUP_UNFINISHED,
-            row.last_error
-            or (
-                "The member has not been sent the account's password."
-                if not row.credentials_sent
-                else "The account is not yet in every group."
-            ),
+            row.last_error or fallback,
             row.created_at,
         )
     return None

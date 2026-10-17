@@ -93,6 +93,7 @@ class FakeDirectory:
         self.keys = []
         self.member_ids: list[str] = []
         self.domain_users: list[dict] = []
+        self.licensed: list[str] = []
 
     async def create_user(self, email, given, family, password, member_id):
         if self.create_error:
@@ -105,6 +106,10 @@ class FakeDirectory:
         if self.group_error:
             raise self.group_error
         self.groups.append((group, email))
+
+    async def ensure_licensed(self, key):
+        # Google licenses on creation; a Microsoft-style fake overrides this.
+        self.licensed.append(key)
 
     async def reset_password(self, key, password):
         if self.reset_error:
@@ -768,7 +773,7 @@ class TestRetry:
 @pytest.mark.integration
 class TestConnectGate:
     async def test_integrations_manage_alone_cannot_connect_it(self, db_session):
-        from app.api.v1.endpoints.integrations import _require_google_workspace_admin
+        from app.api.v1.endpoints.integrations import _require_directory_admin
 
         integration = Integration(integration_type=GOOGLE_WORKSPACE_INTEGRATION)
         with patch(
@@ -776,30 +781,28 @@ class TestConnectGate:
             return_value=False,
         ) as check:
             with pytest.raises(HTTPException) as refused:
-                _require_google_workspace_admin(integration, MagicMock())
+                _require_directory_admin(integration, MagicMock())
         assert refused.value.status_code == 403
         assert check.call_args.args[1] == "admin.access"
 
     async def test_other_integrations_are_not_gated(self):
-        from app.api.v1.endpoints.integrations import _require_google_workspace_admin
+        from app.api.v1.endpoints.integrations import _require_directory_admin
 
         with patch(
             "app.api.v1.endpoints.integrations.user_has_permission",
             return_value=False,
         ):
-            _require_google_workspace_admin(
-                Integration(integration_type="slack"), MagicMock()
-            )
+            _require_directory_admin(Integration(integration_type="slack"), MagicMock())
 
     async def test_department_email_must_be_on_for_the_same_domain(self, db_session):
-        from app.api.v1.endpoints.integrations import _check_google_workspace_ready
+        from app.api.v1.endpoints.integrations import _check_directory_ready
 
         org = await _org(db_session, department_email=False)
         integration = Integration(
             organization_id=org.id, integration_type=GOOGLE_WORKSPACE_INTEGRATION
         )
         with pytest.raises(HTTPException) as refused:
-            await _check_google_workspace_ready(
+            await _check_directory_ready(
                 db_session,
                 integration,
                 {"domain": DOMAIN, "service_account_key": _key()},
@@ -808,21 +811,19 @@ class TestConnectGate:
 
         ready = await _org(db_session)
         integration.organization_id = ready.id
-        await _check_google_workspace_ready(
+        await _check_directory_ready(
             db_session, integration, {"domain": DOMAIN, "service_account_key": _key()}
         )
 
     async def test_a_first_connection_needs_a_key(self, db_session):
-        from app.api.v1.endpoints.integrations import _check_google_workspace_ready
+        from app.api.v1.endpoints.integrations import _check_directory_ready
 
         org = await _org(db_session)
         integration = Integration(
             organization_id=org.id, integration_type=GOOGLE_WORKSPACE_INTEGRATION
         )
         with pytest.raises(HTTPException) as refused:
-            await _check_google_workspace_ready(
-                db_session, integration, {"domain": DOMAIN}
-            )
+            await _check_directory_ready(db_session, integration, {"domain": DOMAIN})
         assert refused.value.status_code == 422
 
 
@@ -880,6 +881,7 @@ class TestTransferEndpointAfterCommit:
             return True
 
         row = SimpleNamespace(
+            provider="google",
             status="created",
             primary_email="jordan.hale@firedept.org",
             credentials_sent=True,
@@ -899,6 +901,7 @@ class TestTransferEndpointAfterCommit:
         assert events == ["send"]
         assert result["welcome_email_sent"] is True
         assert result["google_account"]["status"] == "created"
+        assert result["google_account"]["provider_name"] == "Google Workspace"
         assert "_send_welcome_email" not in result
 
     async def test_a_delivery_failure_never_fails_a_committed_conversion(self):

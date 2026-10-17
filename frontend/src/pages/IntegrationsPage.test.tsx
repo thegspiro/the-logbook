@@ -1389,6 +1389,119 @@ describe('IntegrationsPage', () => {
     });
   });
 
+  describe('Microsoft 365', () => {
+    const tenant = '11111111-2222-3333-4444-555555555555';
+    const client = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    const microsoftAvailable = {
+      id: 'ms-1',
+      organization_id: 'org-1',
+      integration_type: 'microsoft-365',
+      name: 'Microsoft 365',
+      description: 'Create a Microsoft 365 account for each new member',
+      category: 'Access Control',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const microsoftConnected = {
+      ...microsoftAvailable,
+      status: 'connected' as const,
+      enabled: true,
+      config: {
+        tenant_id: tenant,
+        client_id: client,
+        domain: 'firedept.org',
+        usage_location: 'CA',
+        license_sku_id: '',
+        groups: ['members@firedept.org'],
+      },
+    };
+
+    beforeEach(() => {
+      mockCheckPermission.mockReset();
+      mockCheckPermission.mockReturnValue(true);
+      mockGetIntegrations.mockReset();
+      mockGetIntegrations.mockResolvedValue([microsoftAvailable]);
+      mockConnectIntegration.mockReset();
+      mockConnectIntegration.mockResolvedValue(microsoftConnected);
+      mockUpdateIntegration.mockReset();
+      mockUpdateIntegration.mockResolvedValue(microsoftConnected);
+    });
+
+    it('connects with the app registration, usage location, license and groups', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText('Microsoft 365');
+      const card = screen.getByTestId('integration-card-microsoft-365');
+      await user.click(within(card).getByText('Connect'));
+
+      expect(screen.getByLabelText('Usage location')).toHaveValue('US');
+      await user.type(screen.getByLabelText('Directory (tenant) ID'), tenant);
+      await user.type(screen.getByLabelText('Application (client) ID'), client);
+      await user.type(screen.getByLabelText('Client secret value'), ' s3cret ');
+      await user.type(screen.getByLabelText('Domain'), 'firedept.org');
+      await user.type(screen.getByLabelText('License SKU ID (optional)'), 'c42b9cae-ea4f-4ab7-9717-81576235ccac');
+      await user.type(
+        screen.getByLabelText('Add new members to these groups (optional)'),
+        'members@firedept.org{enter}99999999-8888-7777-6666-555555555555'
+      );
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('ms-1', {
+        tenant_id: tenant,
+        client_id: client,
+        client_secret: 's3cret',
+        domain: 'firedept.org',
+        usage_location: 'US',
+        license_sku_id: 'c42b9cae-ea4f-4ab7-9717-81576235ccac',
+        groups: ['members@firedept.org', '99999999-8888-7777-6666-555555555555'],
+      });
+    });
+
+    it('keeps the stored secret when settings are saved without a new one', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([microsoftConnected]);
+      renderPage();
+      await screen.findByText('Microsoft 365');
+      await user.click(screen.getByRole('button', { name: 'Microsoft 365 settings' }));
+
+      expect(screen.getByLabelText('Usage location')).toHaveValue('CA');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('ms-1', {
+        tenant_id: tenant,
+        client_id: client,
+        client_secret: undefined,
+        domain: 'firedept.org',
+        usage_location: 'CA',
+        license_sku_id: '',
+        groups: ['members@firedept.org'],
+      });
+    });
+
+    it('leaves connecting to an organization administrator', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission !== 'admin.access');
+      renderPage();
+      await screen.findByText('Microsoft 365');
+      const card = screen.getByTestId('integration-card-microsoft-365');
+
+      expect(within(card).queryByText('Connect')).not.toBeInTheDocument();
+      expect(within(card).getByText('An organization administrator connects this')).toBeInTheDocument();
+    });
+
+    it('offers linking existing members once connected', async () => {
+      mockGetIntegrations.mockResolvedValue([microsoftConnected]);
+      renderPage();
+      await screen.findByText('Microsoft 365');
+      const card = screen.getByTestId('integration-card-microsoft-365');
+
+      expect(within(card).getByText('Link existing members')).toBeInTheDocument();
+    });
+  });
+
   describe('Google Workspace', () => {
     const workspaceAvailable = {
       id: 'gws-1',

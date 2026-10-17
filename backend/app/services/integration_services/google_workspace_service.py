@@ -308,6 +308,9 @@ class GoogleWorkspaceDirectory:
         except GoogleAccountExistsError:
             return
 
+    async def ensure_licensed(self, user_key: str) -> None:
+        """Google licenses an account when it is created; nothing to do."""
+
     async def test_connection(
         self, domain: str, group_emails: Sequence[str], org_unit_path: str
     ) -> str:
