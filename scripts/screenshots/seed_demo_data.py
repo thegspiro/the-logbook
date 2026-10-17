@@ -16199,6 +16199,261 @@ class Seeder:
                 f"not {self.MEETING_STAGE_NAME!r}"
             )
 
+    # ── Guide 15 states: checklist, sign-offs, withdrawn and inactive ──────
+    #
+    # A fourth pipeline, so none of these touch the default pipeline the other
+    # prospective-member shots are composed around. Its Onboarding stage could
+    # have carried the checklist, but `15-09-convert-modal` opens Convert on
+    # whoever sits there, and a two-item checklist would put a gate in front
+    # of that shot. The Withdrawn and Inactive tabs and the stat cards are per
+    # pipeline, so closed applicants parked here leave the default pipeline's
+    # header as it is.
+    GUIDE15_PIPELINE_NAME = "Reinstatement Pipeline"
+    GUIDE15_CHECKLIST_STAGE = "Return-to-Duty Checklist"
+    GUIDE15_CHECKLIST_ITEMS = ("Turnout gear fitted and issued", "SCBA fit test passed")
+    GUIDE15_APPROVAL_STAGE = "Chief and President approval"
+    # Office keys, the form a stage preset stores: a Fire Chief answers to
+    # "chief" through the office catalog (see _approval_roles_held).
+    GUIDE15_APPROVERS = ("chief", "president")
+    # Signs as President, then gives the position back: nobody in the demo
+    # holds it, and a member left holding it would gain its administrative
+    # grants and a "Needs you" row on their dashboard. The office is already
+    # hers (seed_officers), so she is the one a reader would expect.
+    GUIDE15_PRESIDENT_USERNAME = "smarchetti"
+    GUIDE15_CHECKLIST_APPLICANT = ("Nadia", "Ferreira", "nadia.ferreira@example.org")
+    GUIDE15_APPROVAL_APPLICANT = ("Dana", "Whitcomb", "dana.whitcomb@example.org")
+    GUIDE15_CLOSED_APPLICANTS = (
+        (
+            "Kofi",
+            "Mensah",
+            "kofi.mensah@example.org",
+            "withdrawn",
+            "Accepted a job out of state and moves in December.",
+        ),
+        (
+            "Lena",
+            "Park",
+            "lena.park@example.org",
+            "withdrawn",
+            "Rotating shifts at work leave no time for drills this year; "
+            "may reapply in the spring.",
+        ),
+        (
+            "Tomas",
+            "Reyes",
+            "tomas.reyes@example.org",
+            "inactive",
+            "No reply to three calls and two emails since August.",
+        ),
+        (
+            "Hannah",
+            "Cole",
+            "hannah.cole@example.org",
+            "inactive",
+            "Paperwork never returned.",
+        ),
+    )
+
+    def seed_guide15_states(self) -> None:
+        pipeline = self._guide15_pipeline()
+        pipeline_id = str(pick(pipeline, "id"))
+        steps = {
+            pick(s, "name"): s
+            for s in items(
+                self.api.get(f"/prospective-members/pipelines/{pipeline_id}/steps"),
+                "steps",
+            )
+        }
+
+        checklist = self._guide15_applicant(
+            self.GUIDE15_CHECKLIST_APPLICANT, pipeline_id
+        )
+        # Ticks are held by the drawer until the Advance that completes the
+        # stage, so the applicant is left with none: the capture ticks one in
+        # the browser and never advances.
+        if checklist.get("current_step_name") not in (
+            self.GUIDE15_CHECKLIST_STAGE,
+            self.GUIDE15_APPROVAL_STAGE,
+        ):
+            self.api.post(
+                f"/prospective-members/prospects/{pick(checklist, 'id')}/advance", {}
+            )
+
+        signer = self._guide15_applicant(self.GUIDE15_APPROVAL_APPLICANT, pipeline_id)
+        for _ in range(2):
+            if signer.get("current_step_name") == self.GUIDE15_APPROVAL_STAGE:
+                break
+            self.api.post(
+                f"/prospective-members/prospects/{pick(signer, 'id')}/advance",
+                {"completed_items": list(self.GUIDE15_CHECKLIST_ITEMS)},
+            )
+            signer = self._guide15_applicant(
+                self.GUIDE15_APPROVAL_APPLICANT, pipeline_id
+            )
+        approval_step = steps.get(self.GUIDE15_APPROVAL_STAGE)
+        if (
+            signer.get("current_step_name") != self.GUIDE15_APPROVAL_STAGE
+            or not approval_step
+        ):
+            self.blocked.append(
+                f"guide 15 states: {self.GUIDE15_APPROVAL_APPLICANT[0]} is on "
+                f"{signer.get('current_step_name')!r}, not the approval stage"
+            )
+        else:
+            self._guide15_president_signs(signer, str(pick(approval_step, "id")))
+
+        for first, last, email, wanted, reason in self.GUIDE15_CLOSED_APPLICANTS:
+            prospect = self._guide15_applicant((first, last, email), pipeline_id)
+            if prospect.get("status") != wanted:
+                self.api.post(
+                    f"/prospective-members/prospects/{pick(prospect, 'id')}/status",
+                    {"status": wanted, "reason": reason},
+                )
+
+    def _guide15_pipeline(self) -> dict:
+        pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
+        found = next(
+            (p for p in pipelines if p.get("name") == self.GUIDE15_PIPELINE_NAME), None
+        )
+        if found is not None:
+            return found
+        stages = [
+            (
+                "Reinstatement Request",
+                "manual_approval",
+                "The former member's request and the reason they left.",
+                {},
+            ),
+            (
+                self.GUIDE15_CHECKLIST_STAGE,
+                "checklist",
+                "Gear and fit testing before they ride again.",
+                {
+                    "items": [
+                        {"label": label} for label in self.GUIDE15_CHECKLIST_ITEMS
+                    ],
+                    "require_all": True,
+                },
+            ),
+            (
+                self.GUIDE15_APPROVAL_STAGE,
+                "multi_approval",
+                "Require Chief and President to both approve.",
+                {
+                    "required_approvers": list(self.GUIDE15_APPROVERS),
+                    "require_notes": False,
+                    "approval_order": "any",
+                },
+            ),
+        ]
+        return self.api.post(
+            "/prospective-members/pipelines",
+            {
+                "name": self.GUIDE15_PIPELINE_NAME,
+                "description": "Former members returning to the department.",
+                "is_default": False,
+                "is_active": True,
+                "steps": [
+                    {
+                        "name": name,
+                        "description": description,
+                        "step_type": step_type,
+                        "is_first_step": order == 0,
+                        "is_final_step": order == len(stages) - 1,
+                        "sort_order": order,
+                        "required": True,
+                        "config": config,
+                    }
+                    for order, (name, step_type, description, config) in enumerate(
+                        stages
+                    )
+                ],
+            },
+        )
+
+    def _guide15_applicant(self, who: tuple[str, str, str], pipeline_id: str) -> dict:
+        """The applicant by email, created on the pipeline when missing.
+
+        Re-read from the list rather than returned from the create: only the
+        list rows carry ``current_step_name``, which every caller branches on.
+        """
+        first, last, email = who
+
+        def lookup() -> dict | None:
+            found = items(
+                self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+                "prospects",
+            )
+            return next((p for p in found if p.get("email") == email), None)
+
+        prospect = lookup()
+        if prospect is None:
+            self.api.post(
+                "/prospective-members/prospects",
+                {
+                    "first_name": first,
+                    "last_name": last,
+                    "email": email,
+                    "address_city": "Oakville",
+                    "address_state": "VA",
+                    "address_zip": "22046",
+                    "interest_reason": "Former member asking to return.",
+                    "referral_source": "Former member",
+                    "desired_membership_type": "active",
+                    "pipeline_id": pipeline_id,
+                },
+            )
+            prospect = lookup()
+        if prospect is None:
+            raise RuntimeError(f"guide 15 states: {email} not found after create")
+        return prospect
+
+    def _guide15_president_signs(self, prospect: dict, step_id: str) -> None:
+        detail = self.api.get(f"/prospective-members/prospects/{pick(prospect, 'id')}")
+        progress = next(
+            (
+                p
+                for p in detail.get("step_progress") or []
+                if str(pick(p, "step_id")) == step_id
+            ),
+            {},
+        )
+        signed = {
+            str(a.get("role", "")).casefold()
+            for a in (progress.get("action_result") or {}).get("approvals") or []
+            if isinstance(a, dict)
+        }
+        if "president" in signed:
+            return
+        username = self.GUIDE15_PRESIDENT_USERNAME
+        if not self._ensure_role(username, "President"):
+            self.blocked.append(f"guide 15 states: could not make {username} President")
+            return
+        try:
+            member = self.member_session(
+                self.base_url, self._user_id(username), username
+            )
+            member.post(
+                f"/prospective-members/prospects/{pick(prospect, 'id')}/approve-step",
+                {"step_id": step_id, "role": "president"},
+            )
+        finally:
+            self._remove_role(username, "President")
+
+    def _remove_role(self, username: str, role_name: str) -> None:
+        user_id = self._user_id(username)
+        roles = self.api.get("/roles")
+        role_id = next(
+            (
+                str(pick(r, "id"))
+                for r in (roles if isinstance(roles, list) else items(roles, "roles"))
+                if pick(r, "name") == role_name
+            ),
+            "",
+        )
+        if user_id and role_id:
+            self.api.delete(f"/users/{user_id}/roles/{role_id}")
+
     # A third pipeline, holding one applicant who is on no stage, for
     # `20-07-applicant-place-on-stage`. The Not on a stage panel renders only
     # for an applicant with no current stage, and nothing in the default
@@ -18873,6 +19128,7 @@ class Seeder:
         # the default pipeline by name, so order is not load-bearing, but the
         # vote outcomes above are the steps that assume one pipeline.
         self.step("meeting-stage applicant", self.seed_meeting_stage_applicant)
+        self.step("guide 15 states", self.seed_guide15_states)
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("compliance profiles", self.seed_compliance_profiles)
