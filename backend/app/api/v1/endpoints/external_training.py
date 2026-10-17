@@ -1413,6 +1413,9 @@ async def update_user_mapping(
 async def list_imported_records(
     provider_id: UUID,
     status: str | None = Query(None, description="Filter by import status"),
+    sync_log_id: UUID | None = Query(
+        None, description="Only records last staged by this sync run"
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -1420,6 +1423,10 @@ async def list_imported_records(
 ):
     """
     List imported training records from a provider.
+
+    A re-synced record is re-pointed at the run that last saw it, so filtering
+    by ``sync_log_id`` returns the records whose latest sync was that run, not
+    every record the run touched.
 
     **Authentication required**
     **Requires permission: training.manage**
@@ -1434,6 +1441,8 @@ async def list_imported_records(
 
     if status:
         query = query.where(ExternalTrainingImport.import_status == status)
+    if sync_log_id:
+        query = query.where(ExternalTrainingImport.sync_log_id == str(sync_log_id))
 
     query = (
         query.order_by(ExternalTrainingImport.created_at.desc())

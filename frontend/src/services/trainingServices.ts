@@ -664,6 +664,7 @@ export const externalTrainingService = {
     providerId: string,
     params?: {
       status?: string;
+      sync_log_id?: string;
       limit?: number;
       offset?: number;
     }
