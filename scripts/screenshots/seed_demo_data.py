@@ -4902,6 +4902,354 @@ class Seeder:
             "linked_positions": len(positions),
         }
 
+    # -- medical supply inventory (the Medical Supplies page) --
+
+    # The supply-tracking catalog above is filed as consumable gear, so the
+    # Medical Supplies page -- which lists medical categories only -- was an
+    # empty state. These are medical categories and supplies in their own
+    # right, shaped for guide 05's Medical Supplies section: two masks that
+    # differ only by size, one supply below its reorder point, a supply with a
+    # lot inside the expiring window, supplies filed under a room and a nested
+    # storage area, and one carried on two apparatus.
+    MEDICAL_CATEGORIES = [
+        ("Airway & Oxygen", "Masks, cannulas and ventilation."),
+        ("Bleeding Control", "Tourniquets and hemostatic dressings."),
+        ("Immobilization", "Collars and splints."),
+    ]
+    MEDICAL_ROOM = "Station 1 - Headquarters"
+    MEDICAL_CABINET = "EMS Supply Cabinet"
+    MEDICAL_SHELF = "Shelf 2"
+
+    # name, category, size, unit, reorder point, also called, filed on the
+    # shelf (else the room only), lots (lot number, days to expiry, quantity)
+    MEDICAL_ITEMS = [
+        (
+            "Oxygen Mask, Non-Rebreather",
+            "Airway & Oxygen",
+            "Adult",
+            "Each",
+            10,
+            [],
+            True,
+            [("NRB-A-2603", 410, 18), ("NRB-A-2511", 240, 6)],
+        ),
+        (
+            "Oxygen Mask, Non-Rebreather",
+            "Airway & Oxygen",
+            "Pediatric",
+            "Each",
+            6,
+            [],
+            True,
+            [("NRB-P-2509", 200, 4)],
+        ),
+        (
+            "Bag Valve Mask",
+            "Airway & Oxygen",
+            "Adult",
+            "Each",
+            4,
+            ["BVM", "Ambu bag"],
+            True,
+            [("BVM-2604", 700, 6)],
+        ),
+        (
+            "Nasal Cannula",
+            "Airway & Oxygen",
+            "Adult",
+            "Each",
+            10,
+            [],
+            True,
+            [("NC-2602", 380, 30)],
+        ),
+        (
+            "Tourniquet, CAT",
+            "Bleeding Control",
+            None,
+            "Each",
+            8,
+            [],
+            False,
+            [("CAT-2512", 520, 12)],
+        ),
+        (
+            "Hemostatic Gauze",
+            "Bleeding Control",
+            None,
+            "Each",
+            6,
+            [],
+            True,
+            [("HG-2511", 21, 4), ("HG-2607", 600, 8)],
+        ),
+        (
+            "Cervical Collar, Adjustable",
+            "Immobilization",
+            "Adult",
+            "Each",
+            4,
+            [],
+            False,
+            [],
+        ),
+    ]
+
+    # The apparatus checklists that carry medical supplies. Tourniquet is on
+    # both, so its Where cell shows two apparatus. On Rescue 7, BVM, Nasal
+    # Cannula and Oxygen Mask stay unlinked for Catalog Links to find: BVM
+    # matches by an "also called" name (a strong match, marked "check this"),
+    # Nasal Cannula exactly, and Oxygen Mask ties between the adult and the
+    # pediatric mask, so the automatic pass skips it.
+    MEDICAL_CHECKLISTS = [
+        (
+            "R-7",
+            "Rescue 7 EMS Bag Check",
+            "Jump Bag",
+            [
+                ("Tourniquet, CAT", "Tourniquet, CAT", 2),
+                ("BVM", None, None),
+                ("Nasal Cannula", None, None),
+                ("Oxygen Mask", None, None),
+            ],
+        ),
+        (
+            "B-5",
+            "Brush 5 Trauma Kit Check",
+            "Trauma Kit",
+            [
+                ("Tourniquet, CAT", "Tourniquet, CAT", 2),
+                ("Trauma dressings sealed", None, None),
+            ],
+        ),
+    ]
+
+    def seed_medical_supplies(self, apparatus: list[dict]) -> dict[str, Any]:
+        """Medical categories, supplies, lots, storage and two checklists."""
+        categories = {
+            str(pick(c, "name")): pick(c, "id")
+            for c in items(
+                self.api.get("/medical-supplies/categories?active_only=false"),
+                "categories",
+            )
+        }
+        for name, description in self.MEDICAL_CATEGORIES:
+            if name not in categories:
+                created = self.api.post(
+                    "/medical-supplies/categories",
+                    # The router files it as medical whatever this says; the
+                    # schema still requires the field.
+                    {"name": name, "description": description, "item_type": "medical"},
+                )
+                categories[name] = pick(created, "id")
+
+        room_id, shelf_id = self._medical_storage()
+
+        existing = {
+            (str(pick(i, "name")), pick(i, "size")): i
+            for i in items(self.api.get("/medical-supplies/items?limit=200"), "items")
+        }
+        catalog: dict[str, dict] = {}
+        created = 0
+        for (
+            name,
+            category,
+            size,
+            unit,
+            reorder,
+            also_called,
+            on_shelf,
+            lots,
+        ) in self.MEDICAL_ITEMS:
+            item = existing.get((name, size))
+            if item is None:
+                payload: dict[str, Any] = {
+                    "name": name,
+                    "category_id": categories.get(category),
+                    "unit_of_measure": unit,
+                    "condition": "good",
+                    "status": "available",
+                    "tracking_type": "pool",
+                    # Below the reorder point when it has no dated lots, so
+                    # the Low stock tile counts something undated too.
+                    "quantity": 1 if lots else 3,
+                    "reorder_point": reorder,
+                }
+                if size:
+                    payload["size"] = size
+                if also_called:
+                    payload["also_called"] = also_called
+                if room_id:
+                    payload["location_id"] = room_id
+                if on_shelf and shelf_id:
+                    payload["storage_area_id"] = shelf_id
+                item = self.api.post("/medical-supplies/items", payload)
+                created += 1
+            catalog.setdefault(name, item)
+            item_id = pick(item, "id")
+            have = {
+                pick(lot, "lot_number", "lotNumber")
+                for lot in items(
+                    self.api.get(f"/medical-supplies/items/{item_id}/lots"), "lots"
+                )
+            }
+            for lot_number, days, quantity in lots:
+                if lot_number in have:
+                    continue
+                self.api.post(
+                    f"/medical-supplies/items/{item_id}/lots",
+                    {
+                        "lot_number": lot_number,
+                        "expiration_date": str(TODAY + timedelta(days=days)),
+                        "quantity": quantity,
+                        "received_date": str(TODAY - timedelta(days=45)),
+                    },
+                )
+            if lots:
+                # A pool item cannot be created with a quantity below 1, and
+                # that unit lands as an undated, unnumbered lot. A supply
+                # stocked entirely from dated lots should not carry it.
+                for lot in items(
+                    self.api.get(f"/medical-supplies/items/{item_id}/lots"), "lots"
+                ):
+                    if not pick(lot, "lot_number", "lotNumber") and not pick(
+                        lot, "expiration_date", "expirationDate"
+                    ):
+                        self.api.delete(f"/medical-supplies/lots/{pick(lot, 'id')}")
+
+        templates = self._medical_checklists(apparatus, catalog)
+        self._publish_seeded_templates()
+        return {"created": created, "templates": templates}
+
+    def _medical_storage(self) -> tuple[str | None, str | None]:
+        """A cabinet with a shelf nested in it, in the station's own room."""
+        options = self.api.get("/medical-supplies/storage-options")
+        room_id = next(
+            (
+                pick(r, "id")
+                for r in items(options, "rooms")
+                if pick(r, "name") == self.MEDICAL_ROOM
+            ),
+            None,
+        )
+        if not room_id:
+            return None, None
+        areas = items(self.api.get("/inventory/storage-areas"), "storage_areas")
+
+        def find(name: str) -> str | None:
+            return next((pick(a, "id") for a in areas if pick(a, "name") == name), None)
+
+        cabinet_id = find(self.MEDICAL_CABINET)
+        if not cabinet_id:
+            cabinet_id = pick(
+                self.api.post(
+                    "/inventory/storage-areas",
+                    {
+                        "name": self.MEDICAL_CABINET,
+                        "label": "EMS-01",
+                        "storage_type": "cabinet",
+                        "location_id": room_id,
+                        "sort_order": 10,
+                    },
+                ),
+                "id",
+            )
+        shelf_id = find(self.MEDICAL_SHELF)
+        if not shelf_id:
+            shelf_id = pick(
+                self.api.post(
+                    "/inventory/storage-areas",
+                    {
+                        "name": self.MEDICAL_SHELF,
+                        "label": "EMS-01-2",
+                        "storage_type": "shelf",
+                        "parent_id": cabinet_id,
+                        "location_id": room_id,
+                    },
+                ),
+                "id",
+            )
+        return room_id, shelf_id
+
+    def _medical_checklists(
+        self, apparatus: list[dict], catalog: dict[str, dict]
+    ) -> list[str]:
+        by_unit = {
+            str(pick(a, "unit_number", "unitNumber") or ""): pick(a, "id")
+            for a in apparatus
+        }
+        existing = {
+            str(pick(t, "name")): t
+            for t in items(self.api.get("/equipment-checks/templates"), "templates")
+        }
+        names: list[str] = []
+        for unit, name, compartment, contents in self.MEDICAL_CHECKLISTS:
+            apparatus_id = by_unit.get(unit)
+            if not apparatus_id:
+                continue
+            names.append(name)
+            template = existing.get(name)
+            if template is None:
+                self.api.post(
+                    "/equipment-checks/templates",
+                    {
+                        "name": name,
+                        "description": "Medical supplies carried on this unit.",
+                        "check_timing": "start_of_shift",
+                        "apparatus_id": apparatus_id,
+                        "is_active": True,
+                        "compartments": [
+                            {
+                                "name": compartment,
+                                "sort_order": 0,
+                                "items": [
+                                    {
+                                        "name": position,
+                                        "sort_order": order,
+                                        "check_type": (
+                                            "quantity" if target else "pass_fail"
+                                        ),
+                                        "is_required": True,
+                                        "required_quantity": target,
+                                        "expected_quantity": target,
+                                        "has_expiration": bool(linked),
+                                        "expiration_warning_days": 30,
+                                        **(
+                                            {
+                                                "inventory_item_id": pick(
+                                                    catalog[linked], "id"
+                                                )
+                                            }
+                                            if linked and linked in catalog
+                                            else {}
+                                        ),
+                                    }
+                                    for order, (position, linked, target) in enumerate(
+                                        contents
+                                    )
+                                ],
+                            }
+                        ],
+                    },
+                )
+                continue
+            # Re-seeding puts the Catalog Links lines back: the automatic pass
+            # that `05-` pictures links them, and its Undo is the shot's own
+            # cleanup, but a capture that died half way must not leave the
+            # next one with nothing to link.
+            detail = self.api.get(f"/equipment-checks/templates/{pick(template, 'id')}")
+            meant_unlinked = {p for p, linked, _ in contents if not linked}
+            for comp in items(detail, "compartments"):
+                for line in items(comp, "items"):
+                    if pick(line, "name") in meant_unlinked and pick(
+                        line, "inventory_item_id", "inventoryItemId"
+                    ):
+                        self.api.put(
+                            f"/equipment-checks/items/{pick(line, 'id')}",
+                            {"inventory_item_id": None},
+                        )
+        return names
+
     def _supply_category(self) -> str | None:
         """A consumable category, created if the department has none."""
         categories = items(self.api.get("/inventory/categories"), "categories")
@@ -5449,6 +5797,47 @@ class Seeder:
                 )
             )
         return chains
+
+    UNUSED_CHAIN_NAME = "Major Purchase Approval"
+
+    def seed_unused_approval_chain(self) -> dict[str, Any]:
+        """A three-step chain no request has been routed through.
+
+        Guide 11 pictures the Delete step confirmation over a chain whose steps
+        can actually be deleted. Every seeded default chain has routed
+        requests, so deleting one of their steps is refused; this chain sits
+        above every seeded request's amount and is never the default, so it
+        stays unused.
+        """
+        chains = items(self.api.get("/finance/approval-chains"), "approval_chains")
+        if any(pick(c, "name") == self.UNUSED_CHAIN_NAME for c in chains):
+            return {"created": False}
+        self.api.post(
+            "/finance/approval-chains",
+            {
+                "name": self.UNUSED_CHAIN_NAME,
+                "description": "Purchases of $25,000 or more.",
+                "applies_to": "purchase_request",
+                "min_amount": 25000,
+                "is_default": False,
+                "steps": [
+                    {
+                        "step_order": order,
+                        "name": step_name,
+                        "step_type": "approval",
+                        "approver_type": "position",
+                        "approver_value": position,
+                        "required": True,
+                    }
+                    for order, step_name, position in (
+                        (1, "Company officer review", "captain"),
+                        (2, "Treasurer review", "treasurer"),
+                        (3, "Chief approval", "fire_chief"),
+                    )
+                ],
+            },
+        )
+        return {"created": True}
 
     def seed_expense_reports(self, finance: dict) -> list[dict]:
         """Reimbursement claims, which the expense report detail pictures."""
@@ -16260,6 +16649,33 @@ class Seeder:
             )
         return {"issued": issued, "member_id": member_id}
 
+    ICAL_INTEGRATION_TYPE = "ical"
+
+    def seed_ical_feed(self) -> dict[str, Any]:
+        """Connect the iCalendar card so it shows the department events feed.
+
+        Guide 16 pictures the feed link, its copy button and Reset link on the
+        card, and the panel renders only on a connected iCalendar integration.
+        Connecting is what mints the feed token; a re-seed leaves a connected
+        card alone so the link does not change between runs.
+        """
+        integration = next(
+            (
+                i
+                for i in items(self.api.get("/integrations"), "integrations")
+                if pick(i, "integration_type") == self.ICAL_INTEGRATION_TYPE
+            ),
+            None,
+        )
+        if not integration:
+            return {"blocked": "no ical integration row"}
+        if pick(integration, "status") == "connected" and pick(integration, "enabled"):
+            return {"connected": "already"}
+        self.api.post(
+            f"/integrations/{pick(integration, 'id')}/connect", {"config": {}}
+        )
+        return {"connected": "now"}
+
     def seed_label_printers(self) -> int:
         """Two registered printers, one per command language, one default.
 
@@ -16474,6 +16890,7 @@ class Seeder:
         # Daily Check first — it selects by name now, but ordering that does not
         # depend on that fix is one less thing to get wrong later.
         self.step("supply tracking", lambda: self.seed_supply_tracking(apparatus))
+        self.step("medical supplies", lambda: self.seed_medical_supplies(apparatus))
         self.step("shift reports", lambda: self.seed_shift_reports(members))
         # After the reports: the pair-picker above skips recruits, so crewing
         # one onto the ladder now leaves their Evaluate control live.
@@ -16492,6 +16909,8 @@ class Seeder:
         )
         self.step("label printers", self.seed_label_printers)
         self.step("id cards", self.seed_id_cards)
+        self.step("ical feed", self.seed_ical_feed)
+        self.step("unused approval chain", self.seed_unused_approval_chain)
         self.step("unsized shift", self.seed_unsized_shift)
         self.step("sealed compartments", self.seed_sealed_compartments)
         self.step("member admin hours", self.seed_member_admin_hours)

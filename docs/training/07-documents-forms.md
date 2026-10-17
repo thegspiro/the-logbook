@@ -185,7 +185,7 @@ an email listing every one, the same list the Documents page shows. If sending
 fails it retries the next day. The email is the optional **Document folder
 access** kind; a department can make it required under notification settings.
 
-_[Screenshot needed: the confirmation shown after choosing Specific roles with a position nobody holds, in Manage folder.]_
+![The Only full administrators could open this folder confirmation over Manage folder, explaining that no active member holds what the settings require, with Go back and change it and Save for administrators only](./images/07-25-folder-admin-only-confirm.png)
 
 ---
 

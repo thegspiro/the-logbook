@@ -7826,6 +7826,45 @@ export const SHOTS = [
     route: "/grants/applications",
   },
   {
+    id: "12-15-record-pledge-reminders",
+    doc: "12-grants-fundraising.md",
+    line: 588,
+    anchor: "The Record pledge dialog from Grants & Fundraising, Pledges",
+    alt: "The Record pledge dialog with a donor, an amount pledged and a due date filled in, and Send reminders ticked above its note that fundraising managers are emailed 14 days and 1 day before the due date and the donor never is",
+    route: "/grants/pledges",
+    expect: "The donor is never emailed.",
+    allowEmptyState:
+      '"No campaign" is the Campaign picker\'s blank option, not an empty dialog.',
+    viewport: { width: 1280, height: 1100 },
+    selector: '[data-testid="modal-panel"]',
+    // Filled in the browser and never saved.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Record Pledge" })
+        .click({ timeout: 15_000 });
+      await page.locator("#pledge-amount").waitFor({ timeout: 10_000 });
+      const donor = page.locator("#pledge-donor");
+      const options = await donor.locator("option").count();
+      if (options > 1) await donor.selectOption({ index: 1 });
+      const campaign = page.locator("#pledge-campaign");
+      if ((await campaign.locator("option").count()) > 1) {
+        await campaign.selectOption({ index: 1 });
+      }
+      await page.locator("#pledge-amount").fill("2500");
+      const due = new Date(Date.now() + 60 * 86_400_000);
+      const iso = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}-${String(due.getDate()).padStart(2, "0")}`;
+      await page.locator("#pledge-due").fill(iso);
+      const reminders = page.getByLabel("Send reminders");
+      if (!(await reminders.isChecked())) {
+        throw new Error("Send reminders is not ticked by default");
+      }
+      // Off the date field, so its selected segment is not highlighted.
+      await page.locator("#pledge-notes").focus();
+      await page.locator("#pledge-notes").blur();
+      await page.waitForTimeout(300);
+    },
+  },
+  {
     id: "12-10-donors",
     doc: "12-grants-fundraising.md",
     line: 331,
@@ -8001,6 +8040,9 @@ export const SHOTS = [
       "Screenshot of the Integrations page showing the catalog grid with connected integrations",
     alt: "Integrations catalog grid with connection status on each card",
     route: "/integrations",
+    allowEmptyState:
+      '"No personal information" is a feature chip on the Claude (MCP) card, ' +
+      "not an empty catalog.",
     fullPage: true,
   },
   {
@@ -12460,6 +12502,24 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    id: "16-16-ical-department-feed",
+    doc: "16-integrations.md",
+    line: 590,
+    anchor: "The iCalendar (ICS) card on the Integrations page, connected",
+    alt: "The connected iCalendar (ICS) card: the note that anyone with the link can see the department's published events, the feed link with its copy button, and Reset link",
+    route: "/integrations",
+    expect: { selector: '[data-testid="ical-feed-panel"]' },
+    // The card alone. `seed_ical_feed` connects it, which is what mints the
+    // feed token the panel reads.
+    selector: '[data-testid="integration-card-ical"]',
+    prepare: async (page) => {
+      await page
+        .locator('[data-testid="ical-feed-panel"] input[readonly]')
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     id: "16-04-documenso-connect",
     doc: "16-integrations.md",
     line: 176,
@@ -15280,6 +15340,215 @@ export const SHOTS = [
     }),
     cleanup: disableTestingModule,
     fullPage: true,
+  },
+
+  // ── Medical Supplies and Catalog Links (05), approval chains (11) ──
+  // The medical rows come from `seed_medical_supplies`; nothing else in the
+  // demo files a supply under a medical category.
+  {
+    id: "05-88-medical-supplies-list",
+    doc: "05-inventory.md",
+    line: 3063,
+    anchor:
+      "Medical Supplies list with the summary tiles, Size beside names, Next expiry",
+    alt: "Medical Supplies on the All supplies tab: the summary tiles, each supply with its size beside the name, its Where path, next expiry and reorder point, and two supplies ticked with the Retire selected bar above the table",
+    route: "/medical-supplies",
+    expect: { selector: '[aria-label="Selected supplies"]' },
+    viewport: { width: 1440, height: 1100 },
+    // Ticked in the browser; Retire selected is never pressed.
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: "All supplies" })
+        .click({ timeout: 15_000 });
+      for (const name of ["Tourniquet, CAT", "Bag Valve Mask"]) {
+        await page
+          .getByRole("checkbox", { name: `Select ${name}` })
+          .check({ timeout: 15_000 });
+      }
+      await page
+        .getByRole("button", { name: "Retire selected" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-89-medical-supply-where-lots",
+    doc: "05-inventory.md",
+    line: 3086,
+    anchor: "The supply dialog for a supply carried on two apparatus",
+    alt: "The Lots dialog for Tourniquet, CAT: Where it is, with its storage room and the two apparatus and compartments carrying it with the count aboard, above Stock lots with the lot table, its edit controls and the Add lot form",
+    route: "/medical-supplies",
+    expect: "Where it is",
+    viewport: { width: 1440, height: 1300 },
+    selector: '[data-testid="modal-panel"]',
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: "All supplies" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Lots for Tourniquet, CAT" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("usable on hand across", { exact: false })
+        .waitFor({ timeout: 15_000 });
+      await page.getByText("Rescue 7", { exact: false }).first().waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-90-medical-supply-form",
+    doc: "05-inventory.md",
+    line: 3092,
+    anchor: "The supply form open on an existing supply, with its Size, Room",
+    alt: "The medical supply form for Bag Valve Mask, with its also-called names, Size Adult, the Station 1 room and the EMS Supply Cabinet shelf as its storage area",
+    route: "/medical-supplies",
+    expect: "Storage area",
+    allowEmptyState:
+      '"No room" is the Room picker\'s blank option, not an empty form.',
+    viewport: { width: 1440, height: 1500 },
+    selector: '[data-testid="modal-panel"]',
+    // Opened and photographed; never saved.
+    prepare: async (page) => {
+      await page
+        .getByRole("tab", { name: "All supplies" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Edit Bag Valve Mask" })
+        .click({ timeout: 15_000 });
+      await page
+        .locator('[data-testid="modal-panel"]')
+        .getByText("Storage area", { exact: false })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      // The form focuses Name on open; drop the focus ring from the shot.
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    id: "05-91-medical-categories",
+    doc: "05-inventory.md",
+    line: 3028,
+    anchor: "The Medical Supplies categories page: each category card reads",
+    alt: "Medical supply categories: each card reads Show and its number of supplies, and Airway & Oxygen is opened to list its supplies and their stock",
+    route: "/medical-supplies/categories",
+    expect: "Hide 4 supplies",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Show \d+ suppl/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("list", { name: "Supplies in Airway & Oxygen" })
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-92-catalog-links-auto-linked",
+    doc: "05-inventory.md",
+    line: 2917,
+    anchor: "Catalog Links after an automatic pass, with the linked list",
+    alt: "Catalog Links after Link matches automatically: the list of names it linked, each with its catalog item and the checklists it landed on, BVM marked check this because it matched an also-called name, an Undo on each, and the lines it skipped still listed below",
+    route: "/inventory/admin/checklists/catalog-links",
+    expect: { selector: 'section[aria-labelledby="auto-linked"]' },
+    viewport: { width: 1440, height: 1200 },
+    // Runs a real automatic pass, so it changes the data it pictures. The
+    // cleanup undoes every link the pass made, and `seed_medical_supplies`
+    // also unlinks the Rescue 7 lines on the next seed should a run die
+    // between the two.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Link matches automatically" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Link matches", exact: true })
+        .click({ timeout: 10_000 });
+      await page
+        .locator('section[aria-labelledby="auto-linked"]')
+        .waitFor({ timeout: 20_000 });
+      await page.getByText("check this", { exact: false }).first().waitFor();
+      // Let the success toast clear the frame.
+      await page.waitForTimeout(4500);
+    },
+    cleanup: async (page) => {
+      const undo = page.getByRole("button", { name: /^Undo linking / });
+      for (let i = 0; i < 20 && (await undo.count()) > 0; i += 1) {
+        await undo.first().click();
+        await page.waitForTimeout(1200);
+      }
+    },
+  },
+  {
+    id: "07-25-folder-admin-only-confirm",
+    doc: "07-documents-forms.md",
+    line: 186,
+    anchor:
+      "The Only full administrators could open this folder confirmation, shown in",
+    alt: "The Only full administrators could open this folder confirmation over Manage folder, explaining that no active member holds what the settings require, with Go back and change it and Save for administrators only",
+    route: "/documents",
+    expect: "Save for administrators only",
+    // Historian is a seeded position nobody holds. The save is refused by the
+    // server and turned into this question; it is photographed and never
+    // answered, so the folder keeps its access.
+    prepare: async (page) => {
+      const card = page
+        .locator("div.relative")
+        .filter({ has: page.getByText("Forms & Templates", { exact: true }) })
+        .filter({ has: page.getByRole("button", { name: "Manage folder" }) })
+        .last();
+      await card
+        .getByRole("button", { name: "Manage folder" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("radio", { name: /Specific positions/ })
+        .check({ timeout: 10_000 });
+      await page
+        .getByRole("group", { name: "Positions" })
+        .getByRole("checkbox", { name: "Historian" })
+        .check({ timeout: 15_000 });
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Go back and change it" })
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    fullPage: false,
+  },
+  {
+    id: "11-17-approval-step-delete",
+    doc: "11-finance.md",
+    line: 772,
+    anchor:
+      "The Delete step confirmation over a chain with three steps, showing that only a step no request has used",
+    alt: "The Delete step confirmation for a step in an approval chain: it can be deleted only if no request has been routed through it yet, otherwise deleting is refused so the record of who approved or denied it is kept, with Delete step and Keep it buttons",
+    route: "/finance/settings/approval-chains",
+    expect: "Keep it",
+    // `seed_unused_approval_chain` makes a three-step chain no request has
+    // used, so the step pictured is one that would delete. Opened and
+    // photographed, never confirmed.
+    prepare: async (page) => {
+      await page
+        .locator("button[aria-expanded]")
+        .filter({ hasText: "Major Purchase Approval" })
+        .first()
+        .click({ timeout: 15_000 });
+      const steps = page.getByRole("list", {
+        name: "Steps in Major Purchase Approval",
+      });
+      await steps
+        .getByRole("button", { name: "Delete Treasurer review" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Keep it" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    // The dialog alone: the chain sits far down the settings page, so a
+    // viewport frame scrolled to it cannot also hold the fixed dialog.
+    selector: '[data-testid="modal-panel"]',
   },
 ];
 
