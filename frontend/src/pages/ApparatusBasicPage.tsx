@@ -18,6 +18,7 @@ import { schedulingService } from '../modules/scheduling/services/api';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useAuthStore } from '../stores/authStore';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
+import { OperationsPageHeader } from '../components/operations/OperationsPageHeader';
 interface BasicApparatus {
   id: string;
   organization_id?: string;
@@ -257,20 +258,18 @@ export default function ApparatusBasicPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Apparatus & Vehicles</h1>
-          <p className="text-theme-text-secondary mt-1">
-            Define your department's vehicles and crew positions for shift scheduling
-          </p>
-        </div>
-        {canManage && (
-          <button onClick={openCreate} className="btn-primary flex shrink-0 items-center gap-2 py-2.5">
-            <Plus className="h-4 w-4" /> Add Apparatus
-          </button>
-        )}
-      </div>
+      <OperationsPageHeader
+        icon={Truck}
+        title="Apparatus & Vehicles"
+        subtitle="Define your department's vehicles and crew positions for shift scheduling"
+        actions={
+          canManage && (
+            <button onClick={openCreate} className="btn-primary flex shrink-0 items-center gap-2 py-2.5">
+              <Plus className="h-4 w-4" /> Add Apparatus
+            </button>
+          )
+        }
+      />
 
       {/* Info Banner */}
       <div className="flex items-start gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
