@@ -117,9 +117,7 @@ end."
 
 ![Events listing page with upcoming events and type badges](./images/04-01-events-list.png)
 
-<!-- Screenshot needed:
-_[Events page as a regular member on a department with no upcoming events → the "No upcoming events yet" empty state with its explanation and the "Take the short walkthrough in the Learning Center" link.]_
--->
+![The Events page as a member when nothing is scheduled: "No upcoming events yet", what appears there once events are scheduled, and the link to the Learning Center walkthrough](./images/04-51-events-empty-member.png)
 
 ---
 
@@ -332,13 +330,9 @@ and **All events**.
 - The member hears the decision in the app and by email (**Event
   reminders**).
 
-<!-- Screenshot needed:
-_[Event detail as a member, for an event whose check-in window closed today and with no check-in recorded → the "Were you at this event but never checked in?" card with its "I was there" button.]_
--->
+![An ended event as a member with no check-in: "Were you at this event but never checked in?" with the I was there button](./images/04-52-attendance-request-prompt.png)
 
-<!-- Screenshot needed:
-_[Event detail as the event's organizer → the Attendance Requests card listing one pending request (name, "Asked …", the reason, "Says they were there from … until …") with Approve and Decline.]_
--->
+![The Attendance Requests card on an ended event, as its organizer: one pending request with the member's name, when they asked, their reason and the times they say they were there, with Approve and Decline](./images/04-53-attendance-requests-card.png)
 
 ---
 
@@ -384,9 +378,7 @@ added to your training record when the event's attendance is finalized."_ On
 any other event no such notice appears. See
 [Training Credit from Events](#training-credit-from-events).
 
-<!-- Screenshot needed:
-_[Member at /events/:id/check-in on a Training-type demo event inside its check-in window, after tapping Check In to This Event: the "You're Checked In" heading, the event name, and the green Training Record panel reading "Your attendance will be added to your training record when the event's attendance is finalized." Creates a check-in (mutates seed data). Do not capture the member's email or the URL bar.]_
--->
+![A member's check-in confirmation on a Training event: You're Checked In, the event name, and the Training Record panel saying the attendance is added to their training record when the event's attendance is finalized](./images/04-54-training-check-in-confirmation.png)
 
 ### Check-In Window Types
 
@@ -554,13 +546,9 @@ the member's first name and last initial.
 > recorded in the project's known-limitations notes. Turn badge check-in on
 > only for rooms where that is acceptable.
 
-<!-- Screenshot needed:
-_[Check-In QR Codes (`/locations/qr-codes`) as an administrator with the NFC ID Cards integration on → a room card showing its QR code, **Write NFC tag** and the **Badge check-in** switch.]_
--->
+![A room's card on Check-In QR Codes on an Android phone with ID cards turned on: its QR code, Write NFC tag and the Badge check-in switch](./images/04-55-qr-codes-badge-switch.png)
 
-<!-- Screenshot needed:
-_[A phone after tapping a room tag while two events are in their check-in window in that room → "Which event are you here for?" with both events listed.]_
--->
+![A phone after tapping a room tag while two events are open for check-in there: "Which event are you here for?" listing both with their times](./images/04-56-room-tag-event-chooser.png)
 
 ### Checking Members In With an ID Card
 
@@ -903,13 +891,11 @@ hand the event over.
   type starts on **Default (Secretary)**), then to the Secretary, then to
   every officer who can manage events.
 
-<!-- Screenshot needed:
-_[Event detail as an administrator → the details card's "Organized by" row with the alternate's name and the "Transfer event" link; then the Transfer Event dialog on a recurring event with "This and all future events in the series" selected.]_
--->
+![The event's details card as an administrator: the Organized by row naming the organizer and the alternate, with the Transfer event link](./images/04-57-organized-by-row.png)
 
-<!-- Screenshot needed:
-_[Manage Events → Event settings → Attendance → the "Attendance requests" block with one select per event type, each on "Default (Secretary)".]_
--->
+![The Transfer Event dialog on a recurring meeting: the organizer and alternate pickers and Apply to with This and all future events in the series selected](./images/04-58-transfer-event-series.png)
+
+![Event settings, Attendance: the Attendance requests block with one position select per event type, each on Default (Secretary)](./images/04-59-attendance-request-routing.png)
 
 ---
 
@@ -997,9 +983,7 @@ actual change is refused, and the message names just the fields that would
 change. A category your department no longer lists still shows, so it is not
 lost when you save.
 
-<!-- Screenshot needed:
-_[Event organizer at /events/:id/edit on a finalized demo event: the "Attendance for this event is finalized" notice at the top, with the type, category, schedule and check-in controls greyed out and the title editable.]_
--->
+![Editing a finalized event: the "Attendance for this event is finalized" notice at the top, the type, schedule and check-in controls greyed out, and the title still editable](./images/04-60-finalized-event-edit.png)
 
 ### Training Credit from Events
 
@@ -1022,9 +1006,7 @@ its attendance is finalized — however the event was created.
 4. To correct a finalized event, someone who can reopen attendance reopens it.
    Change the details or times, then finalize again.
 
-<!-- Screenshot needed:
-_[Admin with events.manage and training.manage at /events/admin?tab=create: Create Event with Event Type set to Training, scrolled to the "Training details (optional)" group, a course picked (so Training Type and Category fill), and the Create Training Session link line visible. Do not submit.]_
--->
+![Create Event with the type set to Training: the Training details (optional) group with a course picked, its training type and category filled in, and the Create Training Session link](./images/04-61-training-details-create.png)
 
 **What each member is credited.** Finalizing gives every checked-in member a
 **Completed** training record for:
@@ -1044,9 +1026,7 @@ class as **In Progress** until an officer approves it. The approval page is
 linked from their email and from the event's **Requirements & Programs**
 card.
 
-<!-- Screenshot needed:
-_[Event organizer (events.manage) at /events/:eventId on an ended Training event with attendance still open: the "Finalize attendance?" confirmation, listing how each member's time is decided, that members with no credited time get no record, and that earlier admin-hours entries are removed, with Finalize and close / Keep it open. Press Keep it open; never confirm.]_
--->
+![The Finalize attendance? confirmation on an ended Training event: how each member's time is decided, that members with no credited time get no record, that earlier admin-hours entries are removed, and Finalize and close beside Keep it open](./images/04-62-finalize-training-confirm.png)
 
 **Training events do not credit admin hours.** Their attendance goes to
 training records; crediting admin hours too would count the same hours twice.
@@ -1200,9 +1180,7 @@ the events list. On any occurrence's page:
 > **Hint:** Deleting a single occurrence does not affect the others. The
 > Logbook warns you when an edit will affect several events.
 
-<!-- Screenshot needed:
-_[Event organizer (events.manage) at /events/:id/edit on an occurrence of a weekly recurring demo event: the indigo "This event is part of a recurring series." panel above the form with "This and all future events" selected. Do not save.]_
--->
+![Editing one event of a recurring series: the "This event is part of a recurring series." panel above the form with This and all future events selected](./images/04-63-recurring-edit-scope.png)
 
 ### Recurring Event Edge Cases
 
@@ -1456,7 +1434,7 @@ approval** and **Approved**; see
 Who sees which minutes is decided for you: members see circulated and adopted minutes, never drafts or executive sessions.
 The **Pending Approval** tile counts minutes awaiting approval.
 
-![Meeting minutes page with the meeting type selector and attendee list](./images/04-14-meeting-minutes.png)
+![The Meeting Minutes page: the Outlines button, the summary tiles, and each meeting card listing its minutes with their state, one Circulated for review and one Adopted](./images/04-14-meeting-minutes.png)
 
 ### Creating Minutes
 
@@ -1602,6 +1580,10 @@ and adopt them at the next meeting. The screen now follows that order:
 - **Adopted minutes are locked.** **Reopen for Correction** works as described
   above; it clears the adoption details but keeps the earlier version.
 
+![Circulated minutes as a member: Suggest a change open under the Roll Call section, with a comment typed in](./images/04-64-minutes-suggest-change.png)
+
+![The Adopt these minutes dialog: When the body voted, the minutes of the meeting that adopted them, and the as-amended tick](./images/04-65-minutes-adopt-dialog.png)
+
 **Writing sections with formatting.** A section's text now has a small editor:
 bold, italic, underline, two heading levels, bulleted and numbered lists, block
 quotes and links. Nothing else (no tables, pictures or colours) is accepted, and
@@ -1623,6 +1605,10 @@ suggestions and the sections stay open.
 | **Attachments**      | Reports, handouts and the signed copy. Files are scanned and stored encrypted; members see them only once the minutes are adopted. The scanned **signed copy** can be added after adoption and cannot be removed |
 | **Approved versions**| One entry per adoption, with a SHA-256 fingerprint. It opens itself and says **Needs attention** if the record no longer matches the adopted version |
 
+![Below the sections of circulated minutes, the folded panels with their counts: Motions (1), Closed sessions (1), Election results (0) and Action Items (0)](./images/04-66-minutes-folded-panels.png)
+
+![The Closed sessions panel opened: the reason, start and end times, legal basis, who was in the room with the member who stepped out, and the summary](./images/04-67-minutes-closed-session.png)
+
 **Print the minutes** for the signature lines. The printed copy shows
 attendance by status, quorum, sections, motions, action items, filed election
 results and the attachment list, and — once adopted — the approver, version and
@@ -1636,12 +1622,12 @@ starting minutes asks which; **Apply outline** on a draft lays an outline over
 it, keeping every section that already has text. Deleting an outline does not
 change minutes already written from it.
 
+![Minutes > Outlines: each meeting type's outlines, with Make default beside Edit and Duplicate on the business outline that is not the default](./images/04-68-minutes-outlines.png)
+
+![The outline editor on a short business outline: its name, kind of meeting and default switch, then the order of business with Required ticked on Call to Order](./images/04-69-minutes-outline-editor.png)
+
 **Upgrading?** Minutes' rich-text editor needs the `nh3` package on the
 server; rebuild the backend image (see [`UPGRADING.md`](../UPGRADING.md)).
-
-<!-- Screenshots needed (queued in SCREENSHOT_CURRENCY.md): circulated minutes
-with Suggest a change open under a section; Adopt these minutes dialog; the
-Outlines page; the detail page with folded panels; the Closed sessions panel. -->
 
 ---
 

@@ -156,6 +156,45 @@ condition the intake refuses on, so the two cannot disagree
 Turning a form public after it is published, or switching the toggle off later,
 does not warn — publishing is the one moment the owner chose.
 
+## Microsoft 365 — Account Provisioning Not Yet Proven Against a Live Tenant (2026-10-17)
+
+The Microsoft 365 integration (`wiki/Integration-Microsoft-365.md`) shares the
+Google Workspace engine, so everything in the section below applies to it too
+— with sign-in blocked where Google suspends. These are specific to Microsoft,
+and an owner may want to revisit each:
+
+- **No live tenant has run it.** Every Microsoft Graph call is covered by tests
+  against recorded responses built from Microsoft's documentation, not by a
+  real tenant. Two behaviours rest on documentation alone: that a cloud-only
+  user's `extensionAttribute15` can be set in the request that creates it
+  (the tag that tells a retry its own account from someone else's), and the
+  shape of Graph's "already exists" and on-premises errors. A department's
+  first conversion is the first real test; **Test** checks credentials,
+  license and groups beforehand but creates nothing.
+- **The User Administrator role may be more than is needed.** Microsoft's
+  documentation does not say whether resetting a password with the
+  `User-PasswordProfile.ReadWrite.All` application permission also needs a
+  directory role; the setup guide asks for User Administrator so a retry does
+  not fail for want of it. The role lets the application manage every
+  non-administrator user in the tenant; a department that confirms resets work
+  without it can remove it.
+- **Accounts synced from on-premises Active Directory are not blocked.**
+  Microsoft 365 cannot change them. The Logbook flags them and stops retrying;
+  a person disables the account in Active Directory.
+- **Custom attribute 15 is The Logbook's.** Accounts it creates carry its tag
+  there. A tenant that already uses Exchange custom attribute 15 for every
+  user (in a dynamic-group rule, say) will see The Logbook's value on new
+  members' accounts instead.
+- **Client secrets expire.** An Entra ID secret lasts at most 24 months, and
+  The Logbook cannot read its expiry date without a further permission. When
+  it lapses, creation and blocking fail with "The client secret has expired"
+  until a new one is entered. A certificate is not supported.
+- **One directory per department.** Google Workspace and Microsoft 365 cannot
+  both be connected. Switching moves nothing: records for the old directory
+  stay, and their suspensions wait until it is connected again.
+
+---
+
 ## Google Workspace — What Account Provisioning Leaves Out (2026-10-15)
 
 The Google Workspace integration creates an account for each applicant
@@ -1915,30 +1954,37 @@ sync status, a connected Cal.com bookings panel, a warning state carrying a
 real provider error) and is not capturable from a demo database at all. The
 connect _dialogs_ are ordinary forms and have been captured.
 
-## Integrations — Calendar Publishing Is Off by Default, and Outlook Has No Sign-In (2026-10-16)
+## Integrations — Calendar Publishing Is Off by Default (2026-10-16)
 
 One-way publishing of department events to a Google or Outlook calendar sits
 behind the server setting `CALENDAR_SYNC_ENABLED`, which is off by default.
 While it is off both catalog cards report **Coming Soon**; connect, update,
-test and the Google sign-in are refused with `400`, and the `calendar_sync`
+test and both sign-ins are refused with `400`, and the `calendar_sync`
 scheduled task does nothing.
 
-With it on, **Google Calendar** is connected by an administrator through
-**Connect with Google** (`POST /api/v1/integrations/google-calendar/oauth/start`
-and its callback): the sign-in asks only for the `calendar.app.created` scope,
-creates a "<Department> Events" calendar, and stores the grant encrypted on
-the integration. The generic connect endpoint refuses Google Calendar, and the
-connect and update endpoints refuse a typed `refresh_token`, `access_token`,
-`calendar_id` or `account_email` for either calendar card. It needs the
-deployment's Google OAuth client (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`,
-with the Google Calendar API enabled and the callback registered) or the
-department's own client ID and secret.
+With it on, an administrator connects each card through its provider
+sign-in, which creates a "<Department> Events" calendar and stores the grant
+encrypted on the integration:
 
-**Microsoft Outlook still has no sign-in.** With the setting on its card can
-be connected through the generic form, but that stores no grant and no
-calendar, so the API keeps reporting it as `available` and nothing is
-published. Use the department iCalendar feed for Outlook users until the
-Microsoft sign-in ships.
+- **Google Calendar** — **Connect with Google**
+  (`POST /api/v1/integrations/google-calendar/oauth/start` and its callback),
+  asking only for the `calendar.app.created` scope. It needs the deployment's
+  Google OAuth client (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, with the
+  Google Calendar API enabled and the callback registered) or the
+  department's own client ID and secret.
+- **Microsoft Outlook** — **Connect with Microsoft**
+  (`POST /api/v1/integrations/outlook/oauth/start` and its callback), asking
+  for delegated `Calendars.ReadWrite` plus `offline_access openid email`. It
+  needs the deployment's Azure AD app (`AZURE_AD_CLIENT_ID` /
+  `AZURE_AD_CLIENT_SECRET`, tenant `AZURE_AD_TENANT_ID`, else the
+  `organizations` endpoint) or the department's own client ID, secret and
+  tenant ID. Microsoft offers no per-grant revocation, so disconnecting
+  forgets the tokens without revoking them; the grant lapses on its own or
+  when an administrator removes the app in the Microsoft account.
+
+The generic connect endpoint refuses both calendar cards, and the connect and
+update endpoints refuse a typed `refresh_token`, `access_token`,
+`calendar_id` or `account_email` for either.
 
 An older release let both cards be connected with an empty configuration.
 Those rows were left as they are in the database — no data migration. The API
@@ -2792,7 +2838,7 @@ is worth taking. Revisit if an election ever accumulates more than a few dozen
 batches. (Security review ELEC-16,
 `docs/security-review/ELEC-06-elections-ballots.md`.)
 
-## Elections — Background Ballot Sends Live in the Web Process, and Reminders Are Still Synchronous (2026-10-17)
+## Elections — Background Ballot Sends Live in the Web Process (2026-10-17)
 
 Sending ballots to a 42-member department failed in the browser with "timeout
 of 30000ms exceeded". The send ran inside the HTTP request: an eligibility check
@@ -2822,9 +2868,22 @@ Two limitations remain:
   that it reads as failed with a message to check who received a ballot, and it
   stops blocking a new send. Moving sends to a real worker would remove this,
   at the cost of a new service in every deployment (Docker, Unraid, AWS).
-- **Remind Non-Voters (`POST /elections/{id}/remind-non-voters`) is still
-  synchronous** and will hit the same 30-second timeout once enough members
-  have not voted. It needs the same job treatment as a separate change.
+- **The automatic pre-close reminder does not consult the guard.** It runs
+  from the election lifecycle task, not through a job, so it does not check
+  for a send in progress. If a secretary's manual send happens to be running
+  at the moment the lifecycle task fires, both mint tokens for the same
+  members. The reminder's one-hour cooldown and `reminder_sent_at` stamp keep
+  this to one overlap at most, and only around the pre-close window.
+
+**Remind Non-Voters fixed the same way (2026-10-17).** It had the same
+synchronous timeout. `POST /elections/{id}/reminder-send-jobs` now queues it
+as a `ballot_send_jobs` row with `kind = 'reminder'`, polled through the same
+`GET /elections/{id}/ballot-send-jobs/{job_id}`. A reminder that is refused
+outright (election not open, reminders off, inside the one-hour cooldown) is
+refused before anything is queued. Ballot sends and reminders share the
+in-progress guard, because both mint fresh tokens. The synchronous
+`POST /elections/{id}/remind-non-voters` is kept for API callers and now also
+answers `409` while a send is running.
 
 ## Elections — Two Ballot Items Sharing an Alias String Can't Be Fully Disambiguated Without a Schema Change (2026-09-02)
 
@@ -3752,30 +3811,24 @@ seconds.
 (Security review INT-27, follow-up round 5, 2026-09-06:
 `docs/security-review/INT-27-integrations.md`.)
 
-## Calendar Publishing Has No Connect Flow (2026-10-16)
+## Calendar Publishing — What a Pass Sends, and What No Screen Sets (2026-10-16)
 
 The `calendar_sync` scheduled task publishes department events one way to a
 Google Calendar or Outlook integration's calendar
 (`app/services/calendar_sync_service.py`, mapping rows in
 `calendar_sync_mappings`). It does nothing unless `CALENDAR_SYNC_ENABLED` is
 on, and then only for an integration that is connected and holds a refresh or
-access token plus a `calendar_id` in its config.
-
-No screen gives an integration those yet. There is no Google or Microsoft
-sign-in for these cards and nothing creates the department calendar, so
-connecting either card from the Integrations page only marks it connected, as
-[guide 16](training/16-integrations.md#calendar-integrations) describes, and
-the task skips it. The connect API does accept a `refresh_token` and a
-`calendar_id` for both types; only a caller who obtained a refresh token
-outside The Logbook, for the same OAuth client, could make the task publish
-today.
+access token plus a `calendar_id` in its config — which only the provider
+sign-ins on the two cards write (see
+[guide 16](training/16-integrations.md#calendar-integrations)).
 
 What a pass sends is the allowlist in `build_calendar_payload`: title, start
 and end in the department's timezone, location name, event type label, a link
 back, and the description only when the integration's `sync_descriptions` is
 true. It skips drafts, deletes cancelled events from the calendar, covers 30
 days back to `days_ahead` (default 180) ahead, and honours an
-`event_types_to_sync` list. No screen sets those three config keys either.
+`event_types_to_sync` list. The cards set `sync_descriptions`; no screen sets
+`days_ahead` or `event_types_to_sync`, which only the API accepts.
 
 ## Salesforce Integration — Clearing the Refresh Token Has No Reachable UI Control (INT-11, 2026-09-13)
 

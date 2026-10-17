@@ -22,6 +22,13 @@ pytestmark = [pytest.mark.integration]
 _NOW = datetime.now(timezone.utc)
 
 
+def _today() -> date:
+    # The department's calendar, not the machine's: these orgs are on UTC and
+    # the service reads its date there, so a local date.today() is a day off
+    # on any developer machine whose local date differs from the UTC one.
+    return datetime.now(timezone.utc).date()
+
+
 def _uid() -> str:
     return str(uuid.uuid4())
 
@@ -162,7 +169,7 @@ class TestMatrixProgressFields:
         user_id = await _insert_member(db_session, org_id, last_name="Boyle")
         await _insert_hours_req(db_session, org_id, name="Company Hours")
         await _insert_record(
-            db_session, org_id, user_id, hours=18.0, completion_date=date.today()
+            db_session, org_id, user_id, hours=18.0, completion_date=_today()
         )
 
         payload = await _call(db_session, org_id)
@@ -202,7 +209,7 @@ class TestMatrixProgressFields:
 
         payload = await _call(db_session, org_id)
 
-        assert payload["as_of"] == date.today().isoformat()
+        assert payload["as_of"] == _today().isoformat()
         assert payload["threshold_type"] == "percentage"
 
     async def test_original_fields_are_unchanged(self, db_session: AsyncSession):
@@ -252,7 +259,7 @@ class TestApplicableRequirementDenominator:
             membership_types=["probationary"],
         )
         await _insert_record(
-            db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+            db_session, org_id, user_id, hours=30.0, completion_date=_today()
         )
 
         payload = await _call(db_session, org_id)
@@ -301,7 +308,7 @@ class TestApplicableRequirementDenominator:
         await _insert_hours_req(db_session, org_id, name="Company Hours")
         await _insert_hours_req(db_session, org_id, name="Officer Hours")
         await _insert_record(
-            db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+            db_session, org_id, user_id, hours=30.0, completion_date=_today()
         )
 
         payload = await _call(db_session, org_id)
@@ -414,7 +421,7 @@ class TestComplianceProfiles:
             db_session, org_id, name="Officer Hours", required_hours=100.0
         )
         await _insert_record(
-            db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+            db_session, org_id, user_id, hours=30.0, completion_date=_today()
         )
 
         config_id = await _insert_compliance_config(db_session, org_id)
@@ -449,7 +456,7 @@ class TestComplianceProfiles:
             db_session, org_id, name="Officer Hours", required_hours=100.0
         )
         await _insert_record(
-            db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+            db_session, org_id, user_id, hours=30.0, completion_date=_today()
         )
 
         config_id = await _insert_compliance_config(db_session, org_id)
@@ -509,7 +516,7 @@ class TestComplianceProfiles:
             db_session, org_id, name="Officer Hours", required_hours=100.0
         )
         await _insert_record(
-            db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+            db_session, org_id, user_id, hours=30.0, completion_date=_today()
         )
 
         config_id = await _insert_compliance_config(db_session, org_id)
@@ -661,7 +668,7 @@ class TestRoleBasedProfiles:
             db_session, org_id, name="Officer Hours", required_hours=100.0
         )
         await _insert_record(
-            db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+            db_session, org_id, user_id, hours=30.0, completion_date=_today()
         )
         await db_session.flush()
 
@@ -704,7 +711,7 @@ class TestRoleBasedProfiles:
             db_session, org_id, name="Officer Hours", required_hours=100.0
         )
         await _insert_record(
-            db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+            db_session, org_id, user_id, hours=30.0, completion_date=_today()
         )
 
         config_id = await _insert_compliance_config(db_session, org_id)
@@ -747,7 +754,7 @@ class TestPerCellCutoff:
         payload = await _call(db_session, org_id)
 
         cell = payload["members"][0]["requirements"][0]
-        assert cell["as_of"] == date.today().isoformat()
+        assert cell["as_of"] == _today().isoformat()
 
 
 class TestDashboardCardAgreesWithMatrix:
@@ -779,7 +786,7 @@ class TestDashboardCardAgreesWithMatrix:
         )
         for user_id in (regular, support):
             await _insert_record(
-                db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+                db_session, org_id, user_id, hours=30.0, completion_date=_today()
             )
 
         config_id = await _insert_compliance_config(db_session, org_id)

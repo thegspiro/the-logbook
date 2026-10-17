@@ -57,6 +57,12 @@ from app.models.compliance_config import (
     ReportStatus,
 )
 from app.models.consent import ConsentType, UserConsent
+from app.models.directory_account import (
+    DirectoryAccountProvision,
+    DirectoryAccountStatus,
+    DirectoryProvider,
+)
+from app.models.directory_account_departure import DEPARTED_STATUSES
 from app.models.document import (
     SYSTEM_FOLDERS,
     Document,
@@ -66,6 +72,7 @@ from app.models.document import (
 )
 from app.models.election import (
     BallotSendJob,
+    BallotSendJobKind,
     BallotSendJobStatus,
     Candidate,
     Election,
@@ -173,11 +180,6 @@ from app.models.forms import (
     IntegrationTarget,
     IntegrationType,
 )
-from app.models.google_workspace import (
-    GoogleAccountProvision,
-    GoogleAccountStatus,
-)
-from app.models.google_workspace_departure import DEPARTED_STATUSES
 from app.models.grant import (
     ApplicationStatus,
     BudgetItemCategory,
@@ -534,8 +536,9 @@ __all__ = [
     "MessageTargetType",
     # Integration models
     "DEPARTED_STATUSES",
-    "GoogleAccountProvision",
-    "GoogleAccountStatus",
+    "DirectoryAccountProvision",
+    "DirectoryAccountStatus",
+    "DirectoryProvider",
     "Integration",
     "IntegrationSyncLog",
     "CalendarSyncMapping",
@@ -595,6 +598,7 @@ __all__ = [
     # Election models
     "Election",
     "BallotSendJob",
+    "BallotSendJobKind",
     "BallotSendJobStatus",
     "Candidate",
     "VotingToken",

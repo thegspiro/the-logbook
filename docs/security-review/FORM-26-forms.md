@@ -1,6 +1,155 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+
+---
+
+## Pass 7 (2026-10-17) — XC-1/FORM-10 fixes and a new publish-warnings route re-verified, 0 fixed, 0 new findings
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes
+1-6) before touching code. File sizes since pass 6: `endpoints/forms.py` 784 L
+→ 813 L (+29), `public/forms.py` 236 L (unchanged, confirmed byte-identical by
+full re-read), `forms_service.py` 3,317 L → 3,492 L (+175), `models/forms.py`
+347 L → 397 L (+50, but a full read of the current file found nothing beyond
+what passes 1-6 already described — `FieldType`, `Form`/`FormField`/
+`FormSubmission`/`FormIntegration` and every FK/index/`ondelete` match the
+prior description exactly; this repository's squashed/grafted megacommit
+history, per CLAUDE.md, makes the file's own git-blame unreliable, so the
+discrepancy is a measurement artifact from an earlier pass and not a change
+this pass could locate), `schemas/forms.py` 430 L → 471 L (+41, fully
+accounted for below).
+
+Commits touching scope files since pass 6 (`git log --since=2026-10-07` on the
+five scope files): `2d673132` (XC-1 fix), `f460cd48`/`51f26550` (FORM-10
+feature + its org-scoping follow-up), `0ccba3d8` (new publish-warnings route),
+`44d8edb6` (suggestion-box answer types — mostly out of this feature's scope,
+see below), `48a163e6` (app-review B13 null-rejection fix), and four
+mypy-only cleanup commits (`f5ad6018`, `51c77a9c`, `0d4d7c5a`, `62828a9e`).
+Each read in full, not inferred from its message:
+
+- **XC-1 (`2d673132`, verified fixed):** `create_form`'s inline
+  `fields` had no sibling list yet to validate `condition_field_id` against,
+  so a client could set it to any field id — including one on another
+  organization's form — and it would persist unchecked. `create_form`
+  (`forms_service.py:627-633`) now calls `_condition_error(None,
+field_data.get("condition_field_id"), [])` for every inline field; passing
+  an empty sibling list means any non-null `condition_field_id` always comes
+  back `parent is None` → refused with "The question this field depends on is
+  not on this form". Confirmed by direct read, not the commit message: the
+  only way to set a field's `condition_field_id` at creation is now to leave
+  it null and set it afterward via `add_field`/`update_field`, which already
+  validate the id against the (now real) sibling list.
+- **FORM-10 org-scoping (`51f26550`, verified fixed):** `_already_submitted`
+  (`forms_service.py:1301-1329`) now filters `Form.organization_id` as well
+  as `Form.id` on its row-lock, in addition to the org-scoped `form` already
+  having been resolved by `get_form_by_id`/`get_form_by_slug` before this is
+  called — re-confirmed at both call sites (`_create_member_submission:1341`,
+  the public retry loop's `get_form_by_slug` at `:1504`). The
+  `FormSubmission` lock that follows filters only `form_id` + `submitted_by`
+  (not `organization_id`), which is safe because `form_id` is only ever the
+  id of the already org-scoped `form` object, never a client-supplied value
+  reaching this query directly.
+- **FORM-10 feature (`f460cd48`, re-verified as the currently-documented
+  behavior):** the in-app submit path now runs the same locked
+  duplicate-submission check as the public path; an
+  `allow_multiple_submissions=False` form refuses a member's second
+  submission. This is the FORM-10-scope/FORM-10-builder owner decision
+  pass 3-6 already tracked as the remaining hardening item — now shipped, not
+  a new finding.
+- **New route, `GET /{form_id}/publish-warnings` (`0ccba3d8`):** gated by
+  `require_permission("forms.manage")` (`endpoints/forms.py:314-318`); the
+  service method (`forms_service.py:956-982`) resolves the form through the
+  org-scoped `get_form_by_id(form_id, organization_id)` (404 on a miss or a
+  foreign-org id) and reads `Organization` by the caller's own
+  `organization_id` — no client-supplied id reaches an unscoped query. Route
+  inventory therefore grows from 21 to **22**, all 22 re-enumerated against
+  their `Depends`: 20 carry `require_permission("forms.view"/"forms.manage")`,
+  and `submit_form`/`GET /member-lookup` remain on bare `get_current_user` by
+  design (unchanged from pass 6).
+- **Suggestion-box answer types (`44d8edb6`) — mostly out of scope:** this
+  commit's `suggestions.py`/`suggestion_service.py`/`suggestion_intake.py`
+  changes belong to Feature 25 (Messaging & notifications — see
+  `docs/COMMUNICATIONS_MODULE.md`'s suggestion-box material and
+  `MSG-25-messaging-notifications.md`'s own coverage of the same feature,
+  confirmed present there so this is not an orphaned surface), not Forms. Its
+  only in-scope hunks are `forms_service.py` (+two "at least"/"at most"
+  numeric condition operators, shared so forms' own number-field branching
+  gets them too — `NUMERIC_CONDITION_OPERATORS`,
+  `_condition_matches:437-449`, `_condition_error:533-537`) and
+  `schemas/forms.py` (the `condition_operator` pattern extended to include
+  them). Both read in full: the new comparison only ever reads
+  `parent_value`/`expected` already reached through the existing, org-scoped
+  `form.fields` lookup — no new client-supplied id, no new unescaped input,
+  fails closed (an unparsable threshold or answer is treated as not meeting
+  the rule, matching the existing unknown-operator default).
+- **App-review B13 (`48a163e6`) — correctness, not security:** seven
+  `FormUpdate`/`FormFieldUpdate`/`FormIntegrationUpdate` flags could be set to
+  an explicit `null` (the column is nullable but the response field is a
+  plain `bool`), which 500'd the form's own detail view afterward. The new
+  `_reject_null` validator (`schemas/forms.py:53-69`) now 422s an explicit
+  null on all seven while still letting the key be omitted — matches
+  CLAUDE.md Pitfall #1's "omit vs. null vs. value" contract exactly, verified
+  by reading `apply_updates`'s call sites are unaffected (validation happens
+  before `apply_updates` ever sees the payload).
+- **Four mypy-only commits** (`f5ad6018`, `51c77a9c`, `0d4d7c5a`,
+  `62828a9e`): each hunk touching the five scope files read in full — every
+  change is a type annotation, an `Optional`/`UUID | str` widening, or a
+  `getattr(x, "value", x)` rewrite of an existing `hasattr` check. No
+  behavior change on any path these five files expose.
+
+### Re-verified this pass (unchanged, all hold)
+
+- **Route inventory** — 22 routes (21 + the new publish-warnings route above),
+  every one carrying `require_permission` or (by design) bare
+  `get_current_user`. Both `public/forms.py` routes unauthenticated behind
+  slug regex + rate limiting + honeypot + CAPTCHA — re-read the full file,
+  byte-identical to pass 6's description.
+- **FORM-1/FORM-2** (`_entity_in_org` gates `member_id`/`item_id`/`event_id`
+  before every cross-module integration write) — unchanged.
+- **FORM-3/FORM-6** (`MULTISELECT` option-membership validation;
+  `_is_empty_value`) — unchanged.
+- **FORM-5** (`require_authentication`/`allow_multiple_submissions`
+  enforcement, cross-org 404 for an authenticated foreign-org submitter) —
+  re-read `public/forms.py` in full; unchanged (`:175-186`).
+- **FORM-7/FORM-9** (`safe_error_detail`/`sanitize_error_message` on every
+  client-facing error path) — spot-checked via grep; no bare `str(e)`
+  reintroduced.
+- **FORM-8** (`apply_updates` on `update_form`/`update_field`/
+  `update_integration`) — unchanged; the new `_reject_null` validators run
+  before `apply_updates`, not instead of it.
+- **FORM-11** (event-request `status_token` dropped from
+  `integration_result`) — unchanged.
+- **FORM-12** (`get_submission_by_id`/`delete_submission`/
+  `reprocess_submission_integrations` ignore the `form_id` path segment,
+  relying on `submission.id` + `organization_id` instead) — re-read all three
+  (`forms_service.py:1615-1679`): each still filters
+  `FormSubmission.organization_id`, so this remains a correctness-only gap
+  (the URL's `form_id` is decorative), not a tenant-isolation one. Still
+  flagged, unchanged reasoning.
+- **BXC-1** (closed by pass 5's W60 same-form/cycle check) — re-read
+  `_condition_error`/`_visible_field_ids`/`_condition_matches`; still closed.
+- **Tenant isolation** — every by-id read/update/delete still filters
+  `organization_id` or resolves through an org-scoped parent; the pass's two
+  real additions (publish-warnings, numeric condition operators) introduce no
+  new client-supplied id.
+- **LIKE escaping** — `get_forms`/`search_members` unchanged, both still use
+  `like_pattern()` + `escape=LIKE_ESCAPE_CHAR`.
+- **JSON column mutation (Pitfall #12)** — unchanged; no new JSON-column
+  write this pass.
+- **CSV export (Pitfall #15)** — n/a, unchanged (grepped, zero matches).
+
+### Completion gate (pass 7)
+
+| Check                                             | Result                                                 |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                        |
+| `black --check app/ tests/ alembic/`              | ✅ clean                                               |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (reinstalled to CI's pinned version)          |
+| `python3 scripts/validate_migrations.py --strict` | ✅ PASSED — single head, no migration this pass        |
+| `pytest tests/ -q -k form`                        | ✅ 800 passed, 1 skipped (pywebpush, environment-only) |
+| `npm run typecheck`                               | ✅ 0 errors                                            |
+| `npm run lint`                                    | ✅ exit 0, no warnings                                 |
 
 ---
 

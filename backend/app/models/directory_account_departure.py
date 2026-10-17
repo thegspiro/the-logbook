@@ -1,5 +1,5 @@
 """
-The one place a member's departure reaches their Google Workspace account.
+The one place a member's departure reaches their directory account.
 
 A member leaves when they are dropped (and stay gone through archiving) or
 deleted, and returns when a drop is undone, they rejoin, or an archived record
@@ -11,7 +11,8 @@ a session hook watches every flush for a member crossing that line and, in the
 same transaction, records on their account record that it should be suspended
 or no longer suspended. A path cannot forget to do it.
 
-Google itself is never called from inside a transaction. After the commit, a
+The directory itself is never called from inside a transaction. After the
+commit, a
 background task brings the accounts into line (the pattern the audit chain's
 sealer uses); the ``google_workspace_suspension_sync`` scheduled task is the
 backstop for anything that task did not finish and for retries. A rolled-back
@@ -32,7 +33,10 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import set_committed_value
 
-from app.models.google_workspace import GoogleAccountProvision, GoogleAccountStatus
+from app.models.directory_account import (
+    DirectoryAccountProvision,
+    DirectoryAccountStatus,
+)
 from app.models.user import User, UserStatus
 
 # A member in one of these, or deleted, has left the department.
@@ -40,15 +44,16 @@ DEPARTED_STATUSES = frozenset(
     {UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY, UserStatus.ARCHIVED}
 )
 
-# Accounts that exist in Google, and so can be suspended.
+# Accounts that exist in the directory, and so can be suspended.
 SUSPENDABLE_STATUSES = (
-    GoogleAccountStatus.CREATED.value,
-    GoogleAccountStatus.LINKED_EXISTING.value,
+    DirectoryAccountStatus.CREATED.value,
+    DirectoryAccountStatus.LINKED_EXISTING.value,
 )
 
 # session.info keys: work this transaction has staged for after its commit.
-_RECONCILE = "google_workspace_reconcile"  # {(organization_id, user_id)}
-_DETACHED = "google_workspace_detached"  # [(organization_id, account_key)]
+_RECONCILE = "directory_account_reconcile"  # {(organization_id, user_id)}
+# [(organization_id, provider, account_ref)]
+_DETACHED = "directory_account_detached"
 
 _tasks: set["asyncio.Task[None]"] = set()
 
@@ -75,16 +80,16 @@ def _stage(session: Session, user: User, suspended: bool) -> None:
     requested_at = datetime.now(timezone.utc)
     still_to_do = not_(
         and_(
-            GoogleAccountProvision.suspension_wanted.is_(suspended),
-            GoogleAccountProvision.suspension_settled.is_(True),
+            DirectoryAccountProvision.suspension_wanted.is_(suspended),
+            DirectoryAccountProvision.suspension_settled.is_(True),
         )
     )
     result = session.connection().execute(
-        update(GoogleAccountProvision)
+        update(DirectoryAccountProvision)
         .where(
-            GoogleAccountProvision.user_id == user_id,
-            GoogleAccountProvision.organization_id == organization_id,
-            GoogleAccountProvision.status.in_(SUSPENDABLE_STATUSES),
+            DirectoryAccountProvision.user_id == user_id,
+            DirectoryAccountProvision.organization_id == organization_id,
+            DirectoryAccountProvision.status.in_(SUSPENDABLE_STATUSES),
             still_to_do,
         )
         .values(
@@ -99,7 +104,7 @@ def _stage(session: Session, user: User, suspended: bool) -> None:
     # A copy already loaded in this session would otherwise keep the old
     # values, and anything reading it before a refresh would act on them.
     for loaded in list(session.identity_map.values()):
-        if isinstance(loaded, GoogleAccountProvision) and loaded.user_id == user_id:
+        if isinstance(loaded, DirectoryAccountProvision) and loaded.user_id == user_id:
             set_committed_value(loaded, "suspension_wanted", suspended)
             set_committed_value(loaded, "suspension_settled", False)
             set_committed_value(loaded, "suspension_error", None)
@@ -114,20 +119,23 @@ def _capture_before_hard_delete(session: Session, user: User) -> None:
         session.connection()
         .execute(
             select(
-                GoogleAccountProvision.google_user_id,
-                GoogleAccountProvision.primary_email,
+                DirectoryAccountProvision.provider,
+                DirectoryAccountProvision.external_user_id,
+                DirectoryAccountProvision.primary_email,
             ).where(
-                GoogleAccountProvision.user_id == str(user.id),
-                GoogleAccountProvision.organization_id == str(user.organization_id),
-                GoogleAccountProvision.status.in_(SUSPENDABLE_STATUSES),
+                DirectoryAccountProvision.user_id == str(user.id),
+                DirectoryAccountProvision.organization_id == str(user.organization_id),
+                DirectoryAccountProvision.status.in_(SUSPENDABLE_STATUSES),
             )
         )
         .first()
     )
     if row is None:
         return
-    key = row.google_user_id or row.primary_email
-    session.info.setdefault(_DETACHED, []).append((str(user.organization_id), key))
+    account_ref = row.external_user_id or row.primary_email
+    session.info.setdefault(_DETACHED, []).append(
+        (str(user.organization_id), row.provider, account_ref)
+    )
 
 
 @event.listens_for(Session, "before_flush")
@@ -182,25 +190,25 @@ def _forget_on_rollback(session: Session, previous_transaction: Any) -> None:
 
 
 async def _run_after_commit(
-    reconcile: list[tuple[str, str]], detached: list[tuple[str, str]]
+    reconcile: list[tuple[str, str]], detached: list[tuple[str, str, str]]
 ) -> None:
     from app.core.database import async_session_factory
-    from app.services.google_workspace_provisioning_service import (
-        GoogleWorkspaceProvisioningService,
-    )
+    from app.services.directory_account_service import DirectoryAccountService
 
     try:
         async with async_session_factory() as db:
-            service = GoogleWorkspaceProvisioningService(db)
+            service = DirectoryAccountService(db)
             for organization_id, user_id in reconcile:
                 await service.reconcile_suspension(user_id, organization_id)
-            for organization_id, key in detached:
-                await service.suspend_detached(organization_id, key, actor_id=None)
+            for organization_id, provider, account_ref in detached:
+                await service.suspend_detached(
+                    organization_id, provider, account_ref, actor_id=None
+                )
     except Exception:
         # The scheduled google_workspace_suspension_sync task is the backstop
         # for every staged row; a detached account it cannot see is in the
         # audit log's absence and the server log.
-        logger.exception("After-commit Google Workspace suspension sync failed")
+        logger.exception("After-commit directory account suspension sync failed")
 
 
 async def run_staged_now(session: Any) -> None:
@@ -209,17 +217,17 @@ async def run_staged_now(session: Any) -> None:
     For a session whose commits only release savepoints (tests), where the
     after-commit task deliberately does not run.
     """
-    from app.services.google_workspace_provisioning_service import (
-        GoogleWorkspaceProvisioningService,
-    )
+    from app.services.directory_account_service import DirectoryAccountService
 
     info = (
         session.sync_session.info if hasattr(session, "sync_session") else session.info
     )
     reconcile = sorted(info.pop(_RECONCILE, None) or ())
     detached = list(info.pop(_DETACHED, None) or ())
-    service = GoogleWorkspaceProvisioningService(session)
+    service = DirectoryAccountService(session)
     for organization_id, user_id in reconcile:
         await service.reconcile_suspension(user_id, organization_id)
-    for organization_id, key in detached:
-        await service.suspend_detached(organization_id, key, actor_id=None)
+    for organization_id, provider, account_ref in detached:
+        await service.suspend_detached(
+            organization_id, provider, account_ref, actor_id=None
+        )

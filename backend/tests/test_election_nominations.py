@@ -1042,6 +1042,93 @@ class TestHardening(TestNominationSetup):
         assert len(to_emails) == 1
         assert to_emails[0].startswith("nom2-")
 
+    async def _nominate_user2(self, db_session, org_id, user1_id, user2_id):
+        from unittest.mock import AsyncMock, patch
+
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+        await svc.open_nominations(uuid.UUID(election_id), uuid.UUID(org_id))
+        send_email = AsyncMock(return_value=(1, 0))
+        with patch(
+            "app.services.email_service.EmailService.send_email", new=send_email
+        ):
+            candidate, err = await svc.create_nomination(
+                election_id=uuid.UUID(election_id),
+                organization_id=uuid.UUID(org_id),
+                nominator_id=user1_id,
+                position="Chief",
+                nominee_user_id=user2_id,
+            )
+        assert err is None, err
+        return election_id, candidate, send_email
+
+    async def _bell_notices(self, db_session, recipient_id):
+        from app.models.notification import NotificationLog
+
+        result = await db_session.execute(
+            select(NotificationLog).where(
+                NotificationLog.recipient_id == recipient_id,
+                NotificationLog.category == "election_nomination",
+            )
+        )
+        return list(result.scalars().all())
+
+    async def test_nominee_gets_a_bell_notice_linking_to_the_nominations_tab(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, user2_id = setup_org_and_users
+        election_id, candidate, send_email = await self._nominate_user2(
+            db_session, org_id, user1_id, user2_id
+        )
+
+        (notice,) = await self._bell_notices(db_session, user2_id)
+        assert notice.channel.value == "in_app"
+        assert notice.action_url == f"/elections/{election_id}?tab=nominations"
+        assert "Chief" in notice.subject
+        assert notice.notification_metadata["candidate_id"] == str(candidate.id)
+        # The email carries the same destination as an absolute link.
+        html_body = send_email.await_args.kwargs["html_body"]
+        assert f"/elections/{election_id}?tab=nominations" in html_body
+
+    async def test_bell_notice_ignores_an_election_email_opt_out(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        """Muting election email must not hide a request only the nominee
+        can answer."""
+        import json
+
+        org_id, user1_id, user2_id = setup_org_and_users
+        await db_session.execute(
+            text("UPDATE users SET notification_preferences = :p WHERE id = :id"),
+            {"p": json.dumps({"email_notifications": False}), "id": user2_id},
+        )
+        await db_session.flush()
+
+        _eid, _cand, send_email = await self._nominate_user2(
+            db_session, org_id, user1_id, user2_id
+        )
+
+        assert send_email.await_count == 0
+        assert len(await self._bell_notices(db_session, user2_id)) == 1
+
+    async def test_self_nomination_sends_no_bell_notice(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _user2_id = setup_org_and_users
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+        await svc.open_nominations(uuid.UUID(election_id), uuid.UUID(org_id))
+
+        _candidate, err = await svc.create_nomination(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            nominator_id=user1_id,
+            position="Chief",
+        )
+
+        assert err is None, err
+        assert await self._bell_notices(db_session, user1_id) == []
+
     async def test_pending_nomination_cap(
         self, db_session: AsyncSession, setup_org_and_users
     ):

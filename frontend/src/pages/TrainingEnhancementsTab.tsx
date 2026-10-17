@@ -33,6 +33,8 @@ import { EmptyState } from '../components/ux/EmptyState';
 import { CompetencyHeatmap } from '../components/training/CompetencyHeatmap';
 import useLoadData from '../hooks/useLoadData';
 import { getErrorMessage } from '../utils/errorHandling';
+import { displayNameOf } from '../utils/memberName';
+import { userService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { QUALIFICATION_STANDING, qualificationStanding } from '../utils/instructorQualifications';
@@ -61,6 +63,7 @@ import type {
   ComplianceForecast,
   ParticipatingOrganization,
 } from '../types/training';
+import type { User } from '../types/user';
 
 const inputClass = 'form-input px-3 focus:ring-red-500/50 focus:border-red-500';
 const labelClass = 'form-label';
@@ -362,6 +365,33 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
   const [certificationLevel, setCertificationLevel] = useState('');
   const [issuedDate, setIssuedDate] = useState('');
   const [expirationDate, setExpirationDate] = useState('');
+  const [members, setMembers] = useState<User[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let cancelled = false;
+    setMembersLoading(true);
+    setMembersError(null);
+    userService
+      .getUsers()
+      .then((users) => {
+        if (cancelled) return;
+        const named = users.map((u) => ({ user: u, name: displayNameOf(u) || u.username }));
+        named.sort((a, b) => a.name.localeCompare(b.name));
+        setMembers(named.map((n) => n.user));
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setMembersError(getErrorMessage(err, 'Unable to load members.'));
+      })
+      .finally(() => {
+        if (!cancelled) setMembersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -377,14 +407,14 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId.trim()) {
-      toast.error('User ID is required');
+    if (!userId) {
+      toast.error('Select the member this qualification belongs to');
       return;
     }
     setSaving(true);
     try {
       const data: InstructorQualificationCreate = {
-        user_id: userId.trim(),
+        user_id: userId,
         qualification_type: qualificationType,
         certification_number: certificationNumber.trim() || undefined,
         issuing_agency: issuingAgency.trim() || undefined,
@@ -430,14 +460,30 @@ const AddQualificationModal: React.FC<AddQualificationModalProps> = ({ isOpen, o
     >
       <div className="space-y-4">
         <div>
-          <label className={labelClass}>User ID *</label>
-          <input
-            className={inputClass}
+          <label htmlFor="qualification-member" className={labelClass}>
+            Member *
+          </label>
+          <select
+            id="qualification-member"
+            className={selectClass}
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
-            placeholder="Member user ID"
+            disabled={membersLoading}
             required
-          />
+          >
+            <option value="">{membersLoading ? 'Loading members...' : 'Select a member...'}</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {displayNameOf(m) || m.username}
+                {m.membership_number ? ` (#${m.membership_number})` : ''}
+              </option>
+            ))}
+          </select>
+          {membersError && (
+            <p className="mt-1 text-xs text-red-700 dark:text-red-400" role="alert">
+              {membersError}
+            </p>
+          )}
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>

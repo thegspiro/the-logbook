@@ -283,3 +283,52 @@ describe('TrainingRequirementsPage', () => {
     );
   });
 });
+
+describe('TrainingRequirementsPage duplicate', () => {
+  // The create endpoint defaults allows_external_credit to false, shift_credited
+  // to the type's choice and recency_days to "no window", so a copy that omits
+  // them is a different requirement wearing the original's name.
+  const source = {
+    id: 'req-src',
+    name: 'Driver Recency',
+    requirement_type: 'hours',
+    source: 'department',
+    training_type: 'continuing_education',
+    required_hours: 12,
+    frequency: 'annual',
+    applies_to_all: true,
+    active: true,
+    due_date_type: 'calendar_period',
+    allows_external_credit: true,
+    shift_credited: true,
+    recency_days: 90,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    mockGetRequirements.mockReset();
+    mockGetRequirements.mockResolvedValue([source]);
+    mockGetCategories.mockReset();
+    mockGetCategories.mockResolvedValue([]);
+    mockCreateRequirement.mockReset();
+    mockCreateRequirement.mockResolvedValue({ ...source, id: 'req-copy', name: 'Driver Recency (Copy)' });
+  });
+
+  it('carries external credit, shift credit and the recency window onto the copy', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Duplicate requirement' }));
+
+    await waitFor(() => expect(mockCreateRequirement).toHaveBeenCalledTimes(1));
+    expect(mockCreateRequirement).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Driver Recency (Copy)',
+        allows_external_credit: true,
+        shift_credited: true,
+        recency_days: 90,
+      })
+    );
+  });
+});

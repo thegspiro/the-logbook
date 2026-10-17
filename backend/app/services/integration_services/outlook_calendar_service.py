@@ -81,7 +81,8 @@ class OutlookCalendarService(CalendarSyncInterface):
 
     ``credentials`` keys: ``token`` (access token), ``refresh_token``,
     ``client_id``, ``client_secret``, ``tenant_id`` (default ``common``) and
-    optionally ``token_expires_at``.
+    optionally ``token_expires_at`` and ``calendar_id`` (which the connection
+    test reads).
     """
 
     def __init__(
@@ -190,6 +191,19 @@ class OutlookCalendarService(CalendarSyncInterface):
         response = await self._send("POST", "/me/calendars", {"name": name})
         return self._id_from(response, "a calendar")
 
+    async def calendar_exists(self, calendar_id: str) -> bool:
+        """Whether ``calendar_id`` is still reachable with these credentials.
+
+        A reconnect keeps publishing into the calendar members already
+        subscribe to, but only if it survived: someone may have deleted it
+        in Outlook while the grant was broken.
+        """
+        try:
+            await self._send("GET", f"/me/calendars/{quote(calendar_id, safe='')}")
+        except CalendarNotFound:
+            return False
+        return True
+
     async def update_event(
         self, calendar_id: str, external_id: str, payload: dict[str, Any]
     ) -> None:
@@ -222,7 +236,16 @@ class OutlookCalendarService(CalendarSyncInterface):
             return
 
     async def test_connection(self) -> str:
+        calendar_id = self._credentials.get("calendar_id")
         try:
+            if calendar_id:
+                # With a calendar connected, check that one: it is what the
+                # reconciler publishes into.
+                response = await self._send(
+                    "GET", f"/me/calendars/{quote(str(calendar_id), safe='')}"
+                )
+                name = response.json().get("name") or "the department calendar"
+                return f"Connected to Outlook (publishing to {name})"
             response = await self._send("GET", "/me/calendars")
             calendars = response.json().get("value", [])
             return f"Connected to Outlook ({len(calendars)} calendar(s))"
