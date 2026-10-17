@@ -1013,10 +1013,14 @@ const Dashboard: React.FC = () => {
       let schedulingFailed = false;
       let trainingFailed = false;
       let adminHoursFailed = false;
-      const [schedulingSummary, trainingSummary, adminHoursSummary] = await Promise.all([
+      const [shiftHours, trainingSummary, adminHoursSummary] = await Promise.all([
         canLoadScheduling
-          ? schedulingService.getSummary().catch((err) => {
-              console.error('Failed to load scheduling summary:', err);
+          ? // The member's own credited hours, the same source as Shift
+            // Scheduling > My Hours. getSummary() is the department-wide total
+            // of every member's attendance, which headed "My Hours" showed one
+            // member the whole roster's shift time.
+            schedulingService.getMyHoursHistory().catch((err) => {
+              console.error('Failed to load shift hours:', err);
               schedulingFailed = true;
               return null;
             })
@@ -1071,10 +1075,7 @@ const Dashboard: React.FC = () => {
           trainingFailed || !canLoadTraining
             ? previous.training
             : (trainingSummary?.hours_summary?.hours_this_month ?? null),
-        standby:
-          schedulingFailed || !canLoadScheduling
-            ? previous.standby
-            : (schedulingSummary?.hours_worked_this_month ?? null),
+        standby: schedulingFailed || !canLoadScheduling ? previous.standby : (shiftHours?.current_month.hours ?? null),
         administrative:
           adminHoursFailed || !canLoadAdminHours ? previous.administrative : (adminHoursSummary?.totalHours ?? null),
       }));
