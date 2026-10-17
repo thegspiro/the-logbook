@@ -48,6 +48,12 @@ DIRECTORY_SCOPES = (
     "https://www.googleapis.com/auth/admin.directory.group.member",
 )
 
+# Read-only, and requested by the connection test alone. Google refuses a
+# delegated token outright when any scope asked for is not authorized, so
+# adding it to DIRECTORY_SCOPES would stop account creation and suspension on
+# every installation that authorized only the two above.
+ORG_UNIT_SCOPE = "https://www.googleapis.com/auth/admin.directory.orgunit.readonly"
+
 
 class GoogleWorkspaceError(Exception):
     """A failure whose message is safe to show an officer.
@@ -130,9 +136,9 @@ class GoogleWorkspaceDirectory:
     def __init__(self, service_account_info: dict[str, Any], admin_email: str):
         self._info = service_account_info
         self._admin_email = admin_email
-        self._credentials: Any = None
+        self._credentials: dict[tuple[str, ...], Any] = {}
 
-    def _service(self) -> Any:
+    def _service(self, scopes: tuple[str, ...] = DIRECTORY_SCOPES) -> Any:
         # The HTTP transport is built per call -- httplib2 connections are not
         # thread-safe, and each call runs on whichever worker thread asyncio
         # hands it -- but the credentials are kept, so one access token serves
@@ -142,11 +148,12 @@ class GoogleWorkspaceDirectory:
         from google_auth_httplib2 import AuthorizedHttp
         from googleapiclient.discovery import build
 
-        if self._credentials is None:
-            self._credentials = service_account.Credentials.from_service_account_info(
-                self._info, scopes=list(DIRECTORY_SCOPES), subject=self._admin_email
+        creds = self._credentials.get(scopes)
+        if creds is None:
+            creds = service_account.Credentials.from_service_account_info(
+                self._info, scopes=list(scopes), subject=self._admin_email
             )
-        creds = self._credentials
+            self._credentials[scopes] = creds
         return build(
             "admin",
             "directory_v1",
@@ -282,13 +289,17 @@ class GoogleWorkspaceDirectory:
         except GoogleAccountExistsError:
             return
 
-    async def test_connection(self, domain: str, group_emails: Sequence[str]) -> str:
-        """Read-only check that delegation works and every group exists."""
+    async def test_connection(
+        self, domain: str, group_emails: Sequence[str], org_unit_path: str
+    ) -> str:
+        """Read-only check that delegation works, the org unit exists and
+        every group can be read. Nothing is created or changed."""
 
         def list_users() -> Any:
             return self._service().users().list(domain=domain, maxResults=1).execute()
 
         await self._run("connection test", list_users)
+        unchecked = await self._check_org_unit(domain, org_unit_path)
         for group in group_emails:
 
             def list_members(group_key: str = group) -> Any:
@@ -307,7 +318,52 @@ class GoogleWorkspaceDirectory:
                     "read. Check the address and the admin's group privileges."
                 )
         groups = f" and {len(group_emails)} group(s)" if group_emails else ""
-        return f"Connected to Google Workspace for {domain}{groups}"
+        unit = org_unit_path if org_unit_path not in ("", "/") else "the top level"
+        message = f"Connected to Google Workspace for {domain}: org unit {unit}{groups}"
+        return f"{message}. {unchecked}" if unchecked else message
+
+    async def _check_org_unit(self, domain: str, org_unit_path: str) -> Optional[str]:
+        """Raise if the org unit does not exist. Returns a note, rather than
+        failing, when only the optional read-only scope is missing: account
+        creation and suspension work without it, and a red Test would mark a
+        working integration unhealthy."""
+        path = (org_unit_path or "/").strip("/")
+        if not path:
+            return None  # the top level always exists
+
+        def get_org_unit() -> Any:
+            return (
+                self._service(DIRECTORY_SCOPES + (ORG_UNIT_SCOPE,))
+                .orgunits()
+                .get(customerId="my_customer", orgUnitPath=path)
+                .execute()
+            )
+
+        try:
+            await asyncio.to_thread(get_org_unit)
+        except Exception as exc:
+            from google.auth.exceptions import RefreshError
+            from googleapiclient.errors import HttpError
+
+            # Delegation already worked for the two operating scopes above, so
+            # a refused token here means only the read-only one is missing.
+            if isinstance(exc, RefreshError):
+                logger.warning("Google Workspace org unit check: scope refused")
+                return (
+                    "The org unit was not checked: add the read-only scope "
+                    + ORG_UNIT_SCOPE
+                    + " to the service account's domain-wide delegation to "
+                    "have Test confirm it exists."
+                )
+            status = int(getattr(getattr(exc, "resp", None), "status", 0) or 0)
+            if isinstance(exc, HttpError) and status in (400, 404):
+                logger.warning("Google Workspace org unit check: not found")
+                raise GoogleWorkspaceError(
+                    f"Connected to {domain}, but the org unit /{path} does not "
+                    "exist. Check the path in the Google Admin console."
+                ) from exc
+            raise _translate(exc, "org unit check") from exc
+        return None
 
 
 def directory_for(integration: "Integration") -> GoogleWorkspaceDirectory:

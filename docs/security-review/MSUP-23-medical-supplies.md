@@ -3,7 +3,137 @@
 **Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 (pass 1, PR
 #1905), 2026-08-30 (pass 2, PR #2075; audit-trail follow-up, PR #2076),
 2026-09-06 (pass 3 through pass 10, all on PR #2301), 2026-09-11 (pass 11, PR
-#2489), 2026-10-03 (pass 12, PR #2877), 2026-10-07 (pass 13, this PR)
+#2489), 2026-10-03 (pass 12, PR #2877), 2026-10-07 (pass 13, PR #2981),
+2026-10-17 (pass 14, this PR)
+
+## Pass 14 (2026-10-17) — 0 fixed, 0 new findings, 1 stale-finding correction (watchdog pickup)
+
+**Watchdog pickup.** PR #3339 (Feature 22, Grants & fundraising, pass 8)
+merged 2026-10-16 23:11 UTC with nothing started for Feature 23 in the ~2.5
+hours since — confirmed via `list_pull_requests` (state=open, empty) and
+`search_pull_requests` (`head:claude/security-review-`, empty) that no
+security-review PR was open before this pass began.
+
+**Scope check.** `git log df5f0b3c..origin/main` restricted to this
+feature's own files (`backend/app/api/v1/endpoints/medical_supplies.py`,
+`backend/app/mcp/tools/medical_supplies.py`,
+`frontend/src/modules/medical-supplies/`) found substantial real delta since
+pass 13 — this is not a near-zero-delta pickup:
+
+- **A supply can be kept on the apparatus only** (`InventoryItem.apparatus_only`),
+  with the department's stock figure now counting shelf **and** truck stock
+  together for medical supplies specifically (gear still judges the shelf
+  alone) — `InventoryService.stock_breakdown`
+  (`inventory_service.py:8561-8604`).
+- **CSV import/export** for medical items and lots, plus an import template,
+  sharing the general inventory import's row parser (`_coerce_csv_row`) so a
+  column cannot mean two things on the two pages.
+- **Permanent category delete** (`DELETE /categories/{id}`), with an optional
+  `move_items_to` to relocate items first.
+- **Bulk retire** (`POST /items/bulk-retire`), sort/filter/list-by-category on
+  `GET /items`, and a storage-options read (`GET /storage-options`) so a
+  medical-only officer can file and find supplies without general inventory
+  access.
+- **An opt-in MCP read switch** (`backend/app/mcp/tools/medical_supplies.py`)
+  sharing summary/list/low-stock/expiring-lot data with Claude, gated behind
+  the organization's own module+permission+MCP-switch checks.
+- Fuzzy catalog matching and an "Also called" aliases field, shared with the
+  general inventory's checklist-linking flow.
+
+**Reviewed against all seven CHECKLIST.md dimensions, reading the real code
+rather than spot-checking:**
+
+- **Route count: 15 → 25, re-enumerated individually, not regex-counted.**
+  All 25 carry `Depends(require_permission(...))` — confirmed by both a
+  direct read of every route (this pass) and `grep -c` agreement between
+  `@router.` decorators (25) and `require_permission(` calls (25). Every
+  write route stays domain-first: `inventory.manage_medical` OR'd against
+  the broad `inventory.manage`, matching every prior pass.
+- **XC-3 (tenant isolation) and the domain pin, on every new by-id route:**
+  `delete_medical_category` resolves both the target and (when given)
+  `move_items_to` through `_require_medical_category` before calling
+  `delete_category_permanently`, which itself re-checks
+  `organization_id`/`item_type` under a row lock
+  (`inventory_service.py:1090-1208`) — both category rows locked in id order
+  (no deadlock), and the item/child counts are locking reads per Pitfall
+  #27, because the route's own preflight already opened this transaction's
+  snapshot. `bulk_retire_medical_items` and `receive_medical_delivery` both
+  resolve their whole id list through `items_in_domain` in one query before
+  writing anything, so a partially-received shipment or a spurious bulk
+  failure can't come from checking one id at a time.
+- **XC-1 (client-supplied FK validation):** `move_items_to` is validated
+  in-domain before use; the CSV import validates every category/vendor match
+  against the caller's own org before storing it, and a category name that
+  belongs to a gear/uniform category on the same org is refused for the row
+  rather than silently duplicated.
+- **Abuse resistance:** `ItemBulkRetireRequest.item_ids` and
+  `InventoryLotBulkCreate.entries` are both capped at 200
+  (`schemas/inventory.py:916`, `:1409`); the CSV import is read through
+  `read_upload_limited` (10MB cap) and `reject_if_malicious` before parsing,
+  matching the general inventory import.
+- **Injection & untrusted output:** all three new CSV export/template routes
+  use `SafeCsvWriter`, never bare `csv.writer`.
+- **Data exposure, MCP tool:** `backend/app/mcp/tools/medical_supplies.py` is
+  read-only (no write tool registered for this module at all — a reorder
+  request is refused "whatever the switch says", per the module's own
+  docstring) and every tool is registered through `logbook_tool` with
+  `gate="medical_supplies"` and an explicit `permissions` tuple matching the
+  page's own view routes. Read `gate_allows()`
+  (`app/mcp/registry.py:90-117`) directly: it requires the org's module
+  enablement, the connected member's own permission, **and** the org's MCP
+  switch (`principal.expose_medical_supplies`) — all three, not an OR — so
+  an OAuth-connected member with no view permission gets refused before the
+  org's switch is even consulted. Every new helper the MCP tools and the
+  page's new list extras call (`stock_breakdown`, `storage_paths_for`,
+  `item_ids_stored_in`, `item_ids_kept_in_stock`, `apparatus_places_for_items`,
+  `apparatus_expiring_stock`) filters `organization_id` on every join,
+  re-read directly rather than assumed from their docstrings.
+- **Schema & migration integrity:** `apparatus_only`, `also_called` and the
+  category-delete path all read as additive, org-scoped changes with no new
+  `ondelete="SET NULL"` column; `validate_migrations.py --strict` below
+  confirms a single head with no duplicate revision ids.
+
+**0 new findings.**
+
+**Stale-finding correction: MSUP-15 is now FIXED, not open.** Pass 13 (and
+every pass since pass 11) carried MSUP-15 as open — "the general inventory
+`ItemFormModal.tsx`'s Quantity field has no lot-stocked awareness, unlike
+this module's own `MedicalItemFormModal.tsx`." Reading the file now
+(`frontend/src/modules/inventory/components/ItemFormModal.tsx:297,446,1043`)
+shows it has since gained exactly that: `isLotStocked` reads
+`editItem?.is_lot_stocked`, the Quantity field under it is suppressed when
+true, `quantity` is sent as `undefined` rather than a stale number on save,
+and a read-only line reports `editItem?.lot_stock` with the same
+"adjust by receiving a delivery or editing the item's lots" guidance
+`MedicalItemFormModal.tsx` already gave. This repo's git history has a known
+reshaping artifact (noted in pass 13) that makes `git log -L`/blame on this
+file unreliable for dating the change precisely; what is confirmed directly
+against current code is that the gap pass 11 found no longer exists. MSUP-4
+(`get_expiring_lots` has no row cap,
+`inventory_service.py:9413-9453`) and MSUP-11 (`list_lots` has no row cap,
+`inventory_service.py:8951-8964`) were re-checked at their current line
+numbers and remain open, unchanged — both re-flagged as owner decisions, not
+fixed here.
+
+### Completion gate (pass 14)
+
+| Check                                                                   | Result                                                                                                                                        |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                           | ✅ clean                                                                                                                                      |
+| `black --check app/ tests/ alembic/`                                    | ✅ clean — 2391 files unchanged                                                                                                               |
+| `isort --check-only app/ tests/ alembic/`                               | ✅ clean                                                                                                                                      |
+| `python3 scripts/validate_migrations.py --strict`                       | ✅ 611 revisions, single head `64bf75298e89`                                                                                                  |
+| `pytest tests/ -q -k "medical_supplies or medical_supply or inventory"` | ✅ 1484 passed, 1 pre-existing skip                                                                                                           |
+| `cd frontend && npm run typecheck`                                      | ✅ 0 errors (after `npm ci` — this sandbox's `node_modules/` was missing unrelated packages, e.g. `@tiptap/*`; no `package-lock.json` change) |
+| `cd frontend && npm run lint`                                           | ✅ 0 errors, 0 warnings                                                                                                                       |
+
+No source file was modified by this pass itself — this pass is a
+re-verification plus the MSUP-15 doc correction above; the new surface it
+reviewed was all already merged to `main` by other work.
+
+MSUP-4 and MSUP-11 remain the only open, flagged items. MSUP-15 is now
+fixed (this pass). MSUP-25 remains fixed (pass 13). MSUP-1 through MSUP-27
+all re-verified intact at their current citations.
 
 ## Pass 13 (2026-10-07) — 0 fixed by this pass, 0 new findings (watchdog pickup)
 

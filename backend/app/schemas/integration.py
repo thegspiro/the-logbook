@@ -105,22 +105,48 @@ class EPCRImportConfig(BaseModel):
     auto_match_members: bool = True
 
 
-class GoogleCalendarConfig(BaseModel):
+# Calendar publishing is one way by design, and the tokens, the calendar and
+# the signed-in account come only from the provider's sign-in: the connect
+# flow writes them and the API refuses them (see
+# CALENDAR_OAUTH_MANAGED_KEYS). What an administrator may set is below.
+class _CalendarPublishConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    refresh_token: str = ""
-    calendar_id: str = "primary"
-    sync_direction: str = Field(default="push", pattern=r"^(push|pull|both)$")
+    sync_direction: Literal["push"] = "push"
     event_types_to_sync: List[str] = Field(default_factory=list)
+    # Event descriptions can carry internal notes, so they stay out of the
+    # published calendar unless an administrator opts in.
+    sync_descriptions: bool = False
+    days_ahead: int = Field(default=180, ge=1, le=730)
+    # A department's own OAuth client, overriding the deployment's sign-in
+    # app. Both are stored encrypted (SECRET_CONFIG_KEYS).
+    client_id: str = ""
+    client_secret: str = ""
 
 
-class OutlookCalendarConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class GoogleCalendarConfig(_CalendarPublishConfig):
+    pass
 
-    refresh_token: str = ""
-    calendar_id: str = ""
-    sync_direction: str = Field(default="push", pattern=r"^(push|pull|both)$")
+
+class OutlookCalendarConfig(_CalendarPublishConfig):
     tenant_id: str = ""
+
+
+# Keys of a calendar integration's config that only the provider sign-in and
+# the calendar_sync reconciler write. A hand-typed refresh token or calendar
+# id would point publishing at whatever account or calendar was typed.
+CALENDAR_OAUTH_MANAGED_KEYS = frozenset(
+    {
+        "refresh_token",
+        "access_token",
+        "token",
+        "calendar_id",
+        "calendar_name",
+        "account_email",
+        "token_expires_at",
+        "sync_paused_until",
+    }
+)
 
 
 class ICalConfig(BaseModel):

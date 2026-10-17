@@ -173,6 +173,8 @@ const ReorderFormModal: React.FC<{
           // Sent every save, null when unlinked (pitfall #1). The server keeps
           // it fixed once stock has arrived, and an unchanged id passes.
           item_id: f.item_id || null,
+          // Sent every save so a changed or cleared category persists.
+          category_id: f.category_id || null,
           item_name: f.item_name.trim(),
           quantity_requested: Number(f.quantity_requested),
           // Explicit nulls so clearing these persists: an omitted key means

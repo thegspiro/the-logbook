@@ -9,6 +9,8 @@ takes back exactly what was placed.
 """
 
 import importlib.util
+import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,11 @@ from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext
 
 pytestmark = pytest.mark.unit
+
+# Python 3.12 deprecated sqlite3's implicit datetime adapter, which the
+# migration under test relies on when it binds a datetime. Registering the
+# same conversion explicitly keeps the stored text identical.
+sqlite3.register_adapter(datetime, lambda value: value.isoformat(" "))
 
 VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 MATCHES = sorted(VERSIONS.glob("*_e1a5bfe7a2ed_*.py"))

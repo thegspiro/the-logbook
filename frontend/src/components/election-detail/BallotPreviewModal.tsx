@@ -3,6 +3,7 @@ import type { Election, Candidate, BallotItem } from '../../types/election';
 import { VoteType, BallotItemType } from '../../constants/enums';
 import { formatDate } from '../../utils/dateFormatting';
 import { useDialog } from '../../hooks/useDialog';
+import { itemAllowsWriteIn } from '../ballot/ballotChoices';
 
 interface BallotPreviewModalProps {
   election: Election;
@@ -139,7 +140,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
                       </>
                     )}
 
-                    {election.allow_write_ins && (
+                    {itemAllowsWriteIn(item, election.allow_write_ins) && (
                       <div className="border-theme-surface-border rounded-lg border p-3">
                         <div className="flex items-center gap-3">
                           <input type="radio" disabled className="h-4 w-4 text-purple-600" aria-label="Write-in" />
@@ -165,7 +166,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
                       {item.type?.replace('_', ' ')}
                     </span>
                     <span className="bg-theme-surface-hover text-theme-text-muted rounded-sm px-2 py-0.5 text-xs">
-                      {isApprovalType ? 'Yes/No vote' : 'Candidate selection'}
+                      {isApprovalType ? 'Approve/Deny vote' : 'Candidate selection'}
                     </span>
                     {item.require_attendance && (
                       <span className="rounded-sm bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
@@ -223,7 +224,7 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
             )}
             {election.allow_write_ins && (
               <span className="rounded-sm bg-purple-100 px-2 py-1 text-xs text-purple-700 dark:bg-purple-500/20 dark:text-purple-400">
-                Write-ins allowed
+                Write-ins allowed (candidate races)
               </span>
             )}
             {election.quorum_type && election.quorum_type !== 'none' && (

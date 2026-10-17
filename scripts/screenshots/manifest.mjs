@@ -2595,6 +2595,98 @@ function openItemNamed(name) {
   );
 }
 
+// ── Guide 08 helpers ────────────────────────────────────────────────
+// Shots below that have to write to the database undo it in `cleanup`, so
+// a `--only` run leaves the demo as the seeder made it.
+
+/** A JSON call against /api/v1 from the signed-in page, with its CSRF token. */
+async function guide08Api(page, method, path, body) {
+  return page.evaluate(
+    async ({ method, path, body }) => {
+      const csrf =
+        document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+      const response = await fetch(`/api/v1${path}`, {
+        method,
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": decodeURIComponent(csrf),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(
+          `${method} ${path} -> ${response.status}: ${text.slice(0, 200)}`,
+        );
+      }
+      return text ? JSON.parse(text) : null;
+    },
+    { method, path, body },
+  );
+}
+
+/**
+ * Serve a fixed link-domain answer. The address comes from the server's
+ * FRONTEND_URL, which a running demo cannot change without a restart, and a
+ * real department hostname must never be pictured. Writes are refused so a
+ * stray Save cannot persist anything.
+ */
+function mockLinkDomain(domain) {
+  return async (page) => {
+    await page.route(
+      "**/api/v1/organization/settings/email/link-domain",
+      async (route) => {
+        if (route.request().method() !== "GET") {
+          await route.abort();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            configured_url: domain.effective_url,
+            deployment_url: domain.effective_url,
+            override_url: null,
+            is_loopback: false,
+            email_enabled: true,
+            ...domain,
+          }),
+        });
+      },
+    );
+  };
+}
+
+const GUIDE08_PUBLIC_LINK_DOMAIN = {
+  effective_url: "https://logbook.oakvillefd.example.org",
+  source: "frontend_url",
+  is_https: true,
+  is_private_network: false,
+  allowed_hosts: [
+    "logbook.oakvillefd.example.org",
+    "intranet.oakvillefd.example.org",
+  ],
+};
+
+/** Open a tab of the Public Portal page; its tabs are buttons, not routes. */
+function openPortalTab(label) {
+  return async (page) => {
+    await page
+      .getByRole("button", { name: label, exact: true })
+      .first()
+      .click({ timeout: 15_000 });
+    await page.waitForTimeout(1_000);
+  };
+}
+
+let guide08MembershipIdBefore = null;
+const GUIDE08_RANK = {
+  rank_code: "probationary_ff",
+  display_name: "Probationary Firefighter",
+};
+const GUIDE08_ROLE = "Inventory Coordinator";
+
 export const SHOTS = [
   {
     id: "03-63-batch-report-form",
@@ -7061,7 +7153,7 @@ export const SHOTS = [
     line: 305,
     anchor:
       "Screenshot of the Public Portal configuration page showing the enable toggle, domain",
-    alt: "Public Portal configuration page with the enable toggle and domain settings",
+    alt: "Public Portal page on the Configuration tab, with the Enable Portal button and the default rate limit",
     route: "/admin/public-portal",
     fullPage: true,
   },
@@ -7315,7 +7407,7 @@ export const SHOTS = [
     line: 1600,
     anchor:
       "Screenshot of the email preview pane showing the new white-card-on-grey design",
-    alt: "The rendered preview: a white card on grey, its centred masthead, fact panel and footer",
+    alt: "The rendered Shift Assignment preview: the accent tab naming the category with its right-hand note, the title on a tinted card, and the message card",
     route: "/communications/email-templates",
     // The Preview tab, not the editor: the two are alternate views of the same
     // panel and cannot both be on screen.
@@ -14097,7 +14189,7 @@ export const SHOTS = [
     doc: "08-admin-reports.md",
     line: 2121,
     anchor: "the revision editor captured under an account holding",
-    alt: "The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish to members — beside the administrator's draft, which offers them nothing",
+    alt: "The secretary's own proposed revision to the Terms: Edit and Discard, and no Publish — beside the administrator's draft, which offers them nothing",
     route: "/governance/legal",
     auth: "secretary",
     prepare: openOwnLegalProposal,
@@ -15468,6 +15560,601 @@ export const SHOTS = [
     }),
     cleanup: disableTestingModule,
     fullPage: true,
+  },
+
+  // ── 08 placeholders filled 2026-10-17 ──
+  {
+    id: "08-88-membership-id-fiscal-year",
+    doc: "08-admin-reports.md",
+    line: 392,
+    anchor:
+      "Admin holding settings.edit at `/members/admin/settings/ids`: the Membership IDs section",
+    alt: "Membership ID Number settings: numbering and auto-generation on, the Year and number pattern {YYYY}-{SEQ} with three digits, the count restarting each year on a fiscal year starting in July, how that fiscal year is named, and the number the next member will receive",
+    route: "/members/admin/settings/ids",
+    expect: "A fiscal year starting in July is named by",
+    // The section autosaves, so the state is written through the API and put
+    // back afterwards; the demo ships with numbering off.
+    prepare: async (page) => {
+      guide08MembershipIdBefore = await guide08Api(
+        page,
+        "GET",
+        "/organization/settings/membership-id",
+      );
+      await guide08Api(page, "PATCH", "/organization/settings/membership-id", {
+        ...guide08MembershipIdBefore,
+        enabled: true,
+        auto_generate: true,
+        pattern: "{YYYY}-{SEQ}",
+        padding: 3,
+        reset_yearly: true,
+        year_basis: "fiscal",
+        fiscal_year_start_month: 7,
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByText(/The next member will be numbered/)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      if (!guide08MembershipIdBefore) return;
+      await guide08Api(
+        page,
+        "PATCH",
+        "/organization/settings/membership-id",
+        guide08MembershipIdBefore,
+      );
+      guide08MembershipIdBefore = null;
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-89-rank-delete-confirm",
+    doc: "08-admin-reports.md",
+    line: 436,
+    anchor:
+      "Admin at `/members/admin/settings/ranks`: the Delete rank confirmation over the Operational",
+    alt: "The Delete rank confirmation for Probationary Firefighter, a rank nobody holds, over the Operational Ranks ladder: its warning that the rank's place and eligible positions go with it, and the Keep it and Delete buttons",
+    route: "/members/admin/settings/ranks",
+    expect: "Delete the Probationary Firefighter rank?",
+    // "No default permissions" is a rank row's own note, not an empty page.
+    allowEmptyState: true,
+    // Every seeded rank is held, and the server refuses to delete a held
+    // rank, so the shot adds an unheld one, never confirms, and removes it.
+    prepare: async (page) => {
+      const ranks = await guide08Api(page, "GET", "/operational-ranks");
+      if (!ranks.some((r) => r.rank_code === GUIDE08_RANK.rank_code)) {
+        await guide08Api(page, "POST", "/operational-ranks", GUIDE08_RANK);
+      }
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const remove = page.getByRole("button", {
+        name: `Delete ${GUIDE08_RANK.display_name}`,
+      });
+      await remove.scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await remove.click();
+      await page
+        .getByText("Delete the Probationary Firefighter rank?")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep it" });
+      if (await keep.isVisible().catch(() => false)) await keep.click();
+      const ranks = await guide08Api(page, "GET", "/operational-ranks");
+      for (const rank of ranks) {
+        if (rank.rank_code === GUIDE08_RANK.rank_code) {
+          await guide08Api(page, "DELETE", `/operational-ranks/${rank.id}`);
+        }
+      }
+    },
+  },
+  {
+    id: "08-04b-role-save-wildcard",
+    doc: "08-admin-reports.md",
+    line: 626,
+    anchor:
+      "Role Management → edit a position that holds `inventory.*`, change one",
+    alt: "The Inventory Coordinator position, which holds all of Inventory (inventory.*), after a save in Role Management: its card now lists the events.view permission just added",
+    route: "/settings/roles",
+    expect: GUIDE08_ROLE,
+    // No seeded position holds a module wildcard, so the shot makes one,
+    // saves a real change through the dialog, and deletes it afterwards.
+    // Role Management shows no toast on a successful save: the dialog closes
+    // and the card shows the new permission, which is what is pictured.
+    prepare: async (page) => {
+      const roles = await guide08Api(page, "GET", "/roles");
+      for (const role of roles.filter((r) => r.name === GUIDE08_ROLE)) {
+        await guide08Api(page, "DELETE", `/roles/${role.id}`);
+      }
+      await guide08Api(page, "POST", "/roles", {
+        name: GUIDE08_ROLE,
+        description: "Runs the supply room and every inventory screen",
+        permissions: ["inventory.*", "members.view"],
+        priority: 5,
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const card = page.locator(`li:has(h3:text-is("${GUIDE08_ROLE}"))`);
+      await card.scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await card.getByRole("button", { name: "Edit", exact: true }).click();
+      const dialog = page.locator('[aria-labelledby="role-modal-title"]');
+      await dialog.waitFor({ timeout: 10_000 });
+      await dialog
+        .locator('label:has(div:text-is("events.view")) input')
+        .check();
+      await dialog.getByRole("button", { name: "Save Changes" }).click();
+      await dialog.waitFor({ state: "hidden", timeout: 15_000 });
+      await card.getByText("events.view").waitFor({ timeout: 10_000 });
+      await card.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      const roles = await guide08Api(page, "GET", "/roles");
+      for (const role of roles.filter((r) => r.name === GUIDE08_ROLE)) {
+        await guide08Api(page, "DELETE", `/roles/${role.id}`);
+      }
+    },
+    selector: `li:has(h3:text-is("${GUIDE08_ROLE}"))`,
+  },
+  {
+    id: "08-90-training-admin-hub",
+    doc: "08-admin-reports.md",
+    line: 740,
+    anchor: "each hub's card row on desktop; the chip row on a phone",
+    alt: "Training Administration on a laptop: the headline metrics, Needs attention with its queues, and the seven area cards",
+    route: "/training/admin",
+    expect: "Needs attention",
+    // The phrase matched is in a dashboard card below the frame.
+    allowEmptyState: true,
+    // Down to the area cards and the first area's tabs; the dashboard below
+    // them is pictured in guide 02.
+    viewport: { width: 1440, height: 1060 },
+  },
+  {
+    id: "08-91-members-admin-hub-phone",
+    doc: "08-admin-reports.md",
+    line: 740,
+    // Applied by hand beside 08-90: the one marker asked for both, and the
+    // applier consumes a marker with a single image.
+    anchor: "__paired-with-08-90__",
+    alt: "Members Administration on a phone: the sections as one sideways-scrolling row of chips, with the fade and arrow on the edge that has more, and the chosen section's description under it",
+    route: "/members/admin",
+    // A phone leaves Needs attention out when the list is the page itself,
+    // so the subject is the chip row.
+    expect: { selector: '[role="tablist"][data-mobile-scroll-region]' },
+    // "No dropped member has property outstanding" is one card's all-clear,
+    // not an empty page.
+    allowEmptyState: true,
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    id: "08-92-portal-create-api-key",
+    doc: "08-admin-reports.md",
+    line: 1132,
+    anchor:
+      "Administrator (settings.manage) at `/admin/public-portal`, API Keys tab → Create API Key",
+    alt: "The Create API Key dialog with Department website typed as the key name and the rate limit and expiry left blank",
+    route: "/admin/public-portal",
+    expect: { selector: "#api-key-name" },
+    // Never submitted: the next dialog shows a live, full key.
+    prepare: async (page) => {
+      await openPortalTab("API Keys")(page);
+      await page
+        .getByRole("button", { name: "Create API Key" })
+        .first()
+        .click({ timeout: 10_000 });
+      await page.locator("#api-key-name").fill("Department website");
+      await page.waitForTimeout(500);
+    },
+    // The demo has no keys, so "No API keys" sits behind the dialog.
+    allowEmptyState: true,
+  },
+  {
+    id: "08-93-portal-statistics",
+    doc: "08-admin-reports.md",
+    line: 1136,
+    anchor:
+      "Administrator at `/admin/public-portal`, Statistics tab: the full tab. An unseeded demo",
+    alt: "The Public Portal Statistics tab on a department whose portal has had no traffic: every count at zero and Error Rate reading No requests in 24h",
+    route: "/admin/public-portal",
+    expect: "Rate Limits Hit",
+    prepare: openPortalTab("Statistics"),
+    allowEmptyState: true,
+    fullPage: true,
+  },
+  {
+    id: "08-94-portal-data-control",
+    doc: "08-admin-reports.md",
+    line: 1140,
+    anchor:
+      "Administrator at `/admin/public-portal`, Data Control tab on the demo department",
+    alt: "The Public Portal Data Control tab: the Events, Organization and Stats fields all switched off, PII badges on phone, email and both addresses, and the Sensitive (PII) count at 0",
+    route: "/admin/public-portal",
+    expect: "Sensitive (PII)",
+    // Looked at only: a toggle saves immediately and publishes the field.
+    prepare: openPortalTab("Data Control"),
+    fullPage: true,
+  },
+  {
+    id: "08-95-admin-hours-categories",
+    doc: "08-admin-reports.md",
+    line: 1231,
+    anchor:
+      "Admin holding admin_hours.manage at `/admin-hours/manage`, Categories tab: two categories",
+    alt: "Admin Hours Categories: Administrative Work reading Approval: Required, Auto-approved under 4h and Manual entries: always reviewed, beside categories reading Approval: Not required and Manual entries: always reviewed",
+    route: "/admin-hours/manage",
+    expect: "Auto-approved under 4h",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Categories", exact: true })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.getByText("Auto-approved under 4h").waitFor();
+      await page.waitForTimeout(500);
+    },
+    fullPage: true,
+  },
+  {
+    id: "08-96-my-hours-pending-rejected",
+    doc: "08-admin-reports.md",
+    line: 1235,
+    anchor:
+      "Member at `/admin-hours`, period This month: the My Hours list with one pending",
+    alt: "My Hours for this month: a pending manual entry with Edit and Withdraw, and a rejected one with its red Rejected line asking the member to edit and resubmit it or withdraw it, and its Edit & resubmit button",
+    route: "/admin-hours",
+    auth: "member",
+    expect: "Edit & resubmit",
+    selector: "section#my-hours",
+  },
+  {
+    id: "08-97-my-hours-resubmit-form",
+    doc: "08-admin-reports.md",
+    line: 1239,
+    anchor:
+      "Member at `/admin-hours`: the inline edit form open on a rejected entry",
+    alt: "The inline edit form open on a rejected entry: Returned with and the reason, the Category, Start Time, End Time and Description fields, and Resubmit and Cancel",
+    route: "/admin-hours",
+    auth: "member",
+    expect: "Returned with:",
+    // Opened, never resubmitted.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Edit Administrative Work on/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.getByText("Returned with:").waitFor();
+      await page.waitForTimeout(500);
+    },
+    selector: "section#my-hours",
+  },
+  {
+    id: "08-98-my-updates-stacked-row",
+    doc: "08-admin-reports.md",
+    line: 1316,
+    anchor:
+      "Admin at `/dashboard`: the My Updates card (section[aria-labelledby='my-updates-heading'])",
+    alt: "My Updates with a stacked row, 2 attendance validations and the latest one under it, among ordinary notification and message rows",
+    route: "/dashboard",
+    expect: "attendance validations",
+    selector: "section[aria-labelledby='my-updates-heading']",
+  },
+  {
+    id: "08-99-email-link-domain",
+    doc: "08-admin-reports.md",
+    line: 1454,
+    anchor:
+      "IT Manager (the demo's System Owner) at `/settings?tab=email`, clipped to",
+    alt: "The Email link address card for a department served at https://logbook.oakvillefd.example.org: the address with its copy button, Set by the FRONTEND_URL setting, and the Change address field with Save and the hosts it accepts. Opened from a different address, so the You are viewing this site at warning and Use the address I'm on now also show",
+    route: "/settings?tab=email",
+    expect: "Set by the",
+    beforeNavigate: mockLinkDomain(GUIDE08_PUBLIC_LINK_DOMAIN),
+    selector: 'section[aria-labelledby="email-link-domain-heading"]',
+  },
+  {
+    id: "08-100-email-link-domain-confirm",
+    doc: "08-admin-reports.md",
+    line: 1458,
+    anchor:
+      "IT Manager at `/settings?tab=email` with the same mock: a second allowed address",
+    alt: "The Change the email link address? confirmation: every email from now on, including password resets and ballots, will link to the new address, with Change address and Keep current address",
+    route: "/settings?tab=email",
+    expect: "Change the email link address?",
+    beforeNavigate: mockLinkDomain(GUIDE08_PUBLIC_LINK_DOMAIN),
+    prepare: async (page) => {
+      const card = page.locator(
+        'section[aria-labelledby="email-link-domain-heading"]',
+      );
+      await card.scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await page
+        .locator("#email-link-domain-input")
+        .fill("https://intranet.oakvillefd.example.org");
+      await card.getByRole("button", { name: "Save", exact: true }).click();
+      await page.getByText("Change the email link address?").waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep current address" });
+      if (await keep.isVisible().catch(() => false)) await keep.click();
+    },
+  },
+  {
+    id: "08-101-template-previous-version",
+    doc: "08-admin-reports.md",
+    line: 1685,
+    anchor:
+      "Communications → Email Templates → **Templates**, a template with a backup selected",
+    alt: "The Previous version (before the redesign) panel above the template editor, with Load this wording and the old wording shown, beside the solid-tab preview",
+    route: "/communications/email-templates",
+    expect: "Previous version (before the redesign)",
+    // Tall enough to hold the panel, which sits in the editor column under
+    // the template's description, with the old wording opened.
+    viewport: { width: 1440, height: 1500 },
+    // A backup is written only by the redesign migration, to templates a
+    // department had edited before it, and the demo's templates were never
+    // edited. The backup list is therefore served from a fixture; the rest of
+    // the screen is the live template.
+    beforeNavigate: async (page) => {
+      await page.route("**/api/v1/email-templates/*/backups", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([
+            {
+              id: "backup-welcome-1",
+              template_id: "welcome",
+              subject: "Welcome to Oakville Fire Department",
+              text_body:
+                "Welcome aboard, {{first_name}}!\n\nYour Logbook account is ready. Sign in at {{login_url}} with the username {{username}} and the temporary password below, then choose your own.\n\nSee you at drill night,\nThe Oakville Fire Department officers",
+              created_at: "2026-09-27T14:05:00Z",
+              restored_subject: "Welcome to Oakville Fire Department",
+              restored_html_body: "<p>Welcome aboard, {{first_name}}!</p>",
+              restored_text_body: "Welcome aboard, {{first_name}}!",
+            },
+          ]),
+        }),
+      );
+    },
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Show the old wording" })
+        .click({ timeout: 15_000 });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(800);
+    },
+  },
+  {
+    id: "08-102-email-link-lan-notice",
+    doc: "08-admin-reports.md",
+    line: 1727,
+    anchor:
+      "Administrator with settings.manage at `/communications/email-templates`, with the backend's FRONTEND_URL",
+    alt: "The Email Templates notice for a LAN link address: Emails link to http://192.168.1.50:7880, which only works on your station's network, with its Change the email link address link and the Save bar beneath",
+    route: "/communications/email-templates",
+    expect: "which only works on",
+    // The server's FRONTEND_URL is what decides this, and the shared demo
+    // backend cannot be restarted with a LAN address, so the link-domain
+    // answer is served from a fixture.
+    beforeNavigate: mockLinkDomain({
+      effective_url: "http://192.168.1.50:7880",
+      source: "frontend_url",
+      is_https: false,
+      is_private_network: true,
+      allowed_hosts: ["192.168.1.50"],
+    }),
+    viewport: { width: 1440, height: 420 },
+  },
+  {
+    id: "08-103-ip-exception-request-form",
+    doc: "08-admin-reports.md",
+    line: 2194,
+    anchor:
+      "Member at `/ip-security/my-requests`: My IP Exceptions with the New Request form open",
+    alt: "My IP Exceptions with the New Request form open: IP address 203.0.113.50, Select a use case, Duration (days, 1–90), Justification and Additional Details, and the Show expired, rejected, and revoked requests checkbox",
+    route: "/ip-security/my-requests",
+    auth: "member",
+    expect: "Request IP Exception",
+    // Never submitted.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "New Request" })
+        .click({ timeout: 15_000 });
+      await page.locator("#ip-address").fill("203.0.113.50");
+      await page.waitForTimeout(400);
+    },
+    allowEmptyState: true,
+    fullPage: true,
+  },
+  {
+    id: "08-104-ip-pending-requests",
+    doc: "08-admin-reports.md",
+    line: 2198,
+    anchor:
+      "Administrator holding security.manage at `/ip-security`: the Pending Requests tab with its",
+    alt: "IP Security on the Pending Requests tab with its count badge: one request from 203.0.113.24 for travel, five days, with its approve (tick) and reject (cross) actions",
+    route: "/ip-security",
+    expect: "203.0.113.24",
+    fullPage: true,
+  },
+
+  // ── 08 currency queue, 2026-10-17. Placed by hand: none had a placeholder
+  // the applier recognises.
+  {
+    id: "08-105-pulse-customize",
+    doc: "08-admin-reports.md",
+    line: 1026,
+    anchor: "__placed-by-hand-08-105__",
+    alt: "Customize Department pulse open above the cards: Grant deadlines moved above Budget threshold and Dues retitled Member dues, with Save for me, Save as department default and Close",
+    route: "/dashboard",
+    expect: "Customize Department pulse",
+    // Edited in the panel and never saved.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Customize", exact: true })
+        .click({ timeout: 15_000 });
+      await page.getByText("Customize Department pulse").waitFor();
+      await page
+        .getByRole("button", { name: "Move Grant deadlines up" })
+        .click();
+      await page
+        .getByRole("textbox", { name: "Title for Dues" })
+        .fill("Member dues");
+      await page.waitForTimeout(500);
+    },
+    selector: 'section[aria-labelledby="dashboard-widgets-title"]',
+  },
+  {
+    id: "08-106-pulse-all-hidden",
+    doc: "08-admin-reports.md",
+    line: 1026,
+    anchor: "__placed-by-hand-08-106__",
+    alt: "Department pulse with every card hidden: All cards are hidden. Choose Customize to show some.",
+    route: "/dashboard",
+    expect: "All cards are hidden",
+    // A personal layout with every card hidden, saved for the administrator
+    // and removed afterwards; the demo starts with no personal layout.
+    prepare: async (page) => {
+      const pulse = await guide08Api(page, "GET", "/dashboard/pulse-layout");
+      if (pulse.personal) {
+        throw new Error("the administrator already has a pulse layout");
+      }
+      await guide08Api(page, "PUT", "/dashboard/pulse-layout", {
+        period: null,
+        cards: pulse.layout.cards.map((card) => ({ ...card, visible: false })),
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByText("All cards are hidden").waitFor({ timeout: 15_000 });
+    },
+    cleanup: async (page) => {
+      const pulse = await guide08Api(page, "GET", "/dashboard/pulse-layout");
+      if (pulse.personal) {
+        await guide08Api(page, "DELETE", "/dashboard/pulse-layout");
+      }
+    },
+    allowEmptyState: true,
+    selector: 'section[aria-labelledby="dashboard-widgets-title"]',
+  },
+  {
+    id: "08-107-saved-reports",
+    doc: "08-admin-reports.md",
+    line: 904,
+    anchor: "__placed-by-hand-08-107__",
+    alt: "Saved Reports: a monthly call-volume report and a quarterly apparatus report, each with its period, schedule and next email, and an unscheduled year-to-date training summary, with Run and Edit on each",
+    route: "/reports/saved",
+    expect: "Quarterly apparatus status",
+  },
+  {
+    id: "08-108-saved-report-schedule",
+    doc: "08-admin-reports.md",
+    line: 904,
+    anchor: "__placed-by-hand-08-108__",
+    alt: "Editing a saved report: its name, report and reporting period, with Email this report on a schedule ticked, Quarterly on day 5 and two recipients",
+    route: "/reports/saved",
+    expect: { selector: '[aria-labelledby="saved-report-form-title"]' },
+    // Opened, never saved.
+    prepare: async (page) => {
+      await page
+        .locator('li:has(h2:text-is("Quarterly apparatus status"))')
+        .getByRole("button", { name: "Edit" })
+        .click({ timeout: 15_000 });
+      await page
+        .locator('[aria-labelledby="saved-report-form-title"]')
+        .waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "08-109-admin-hours-review-rules",
+    doc: "08-admin-reports.md",
+    line: 1225,
+    anchor: "__placed-by-hand-08-109__",
+    alt: "Admin Hours Review Rules: Let an approver approve their own entries, off, and the percentage a corrected event entry may grow before it goes back for review, 25",
+    route: "/admin-hours/manage",
+    expect: "Let an approver approve their own entries",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Review Rules", exact: true })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("Let an approver approve their own entries")
+        .waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "08-110-member-position-confirm",
+    doc: "08-admin-reports.md",
+    line: 612,
+    anchor: "__placed-by-hand-08-110__",
+    alt: "Changing the Member position's permissions: the confirmation naming the permission being removed and how many members hold the position, with Apply to members and Keep editing",
+    route: "/settings/roles",
+    expect: "is the position every member holds",
+    // Keep editing, then Cancel: the Member position is never changed.
+    prepare: async (page) => {
+      const card = page.locator('li:has(h3:text-is("Member"))');
+      await card.scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await card.getByRole("button", { name: "Edit", exact: true }).click();
+      const dialog = page.locator('[aria-labelledby="role-modal-title"]');
+      await dialog.waitFor({ timeout: 10_000 });
+      await dialog
+        .locator('label:has(div:text-is("events.view")) input')
+        .click();
+      await dialog.getByRole("button", { name: "Save Changes" }).click();
+      await page.getByText(/is the position every member holds/).waitFor();
+      // The dialogs are fixed; the list behind them was scrolled to the card.
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep editing" });
+      if (await keep.isVisible().catch(() => false)) await keep.click();
+      const cancel = page.getByRole("button", { name: "Cancel", exact: true });
+      if (await cancel.isVisible().catch(() => false)) await cancel.click();
+    },
+  },
+  {
+    id: "08-111-role-duplicate-name",
+    doc: "08-admin-reports.md",
+    line: 606,
+    anchor: "__placed-by-hand-08-111__",
+    alt: "Create New Role refused: the dialog's message says a position named captain already exists and asks for a name no other position uses",
+    route: "/settings/roles",
+    expect: "already exists",
+    // Refused by the server, so nothing is created.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Create Custom Role" })
+        .click({ timeout: 15_000 });
+      await page.locator("#role-name").fill("captain");
+      await page.getByRole("button", { name: "Create Role" }).click();
+      await page.getByText(/already exists/).waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const cancel = page.getByRole("button", { name: "Cancel", exact: true });
+      if (await cancel.isVisible().catch(() => false)) await cancel.click();
+    },
+    selector: '[aria-labelledby="role-modal-title"]',
+  },
+  {
+    id: "08-112-command-palette-hub-section",
+    doc: "08-admin-reports.md",
+    line: 729,
+    anchor: "__placed-by-hand-08-112__",
+    alt: "The command palette with Compliance typed: Training Administration's matching sections, among them Compliance Matrix, Annual Report and ISO Readiness, listed under Training Admin",
+    route: "/dashboard",
+    expect: { selector: '[aria-label="Command palette"]' },
+    prepare: async (page) => {
+      await page.keyboard.press("Control+k");
+      const search = page
+        .getByRole("combobox", { name: "Search commands" })
+        .or(page.getByRole("textbox", { name: "Search commands" }));
+      await search.first().waitFor({ timeout: 10_000 });
+      await search.first().fill("Compliance");
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
   },
 
   // ── Medical Supplies and Catalog Links (05), approval chains (11) ──
