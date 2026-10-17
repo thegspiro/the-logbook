@@ -116,7 +116,8 @@ picture — the state it describes is the absence of seed data.
 
 `inventory-setup.mjs` covers those by running the built frontend under
 `vite preview` and answering every `/api/v1` request from fixtures. It writes
-the same `05-7x-setup-*` ids at the same framing capture.mjs uses (1440x900
+`05-72-setup-prompt`, `05-73-setup-rooms` and `05-93-empty-items` (the
+items list of a department with no items) at the same framing capture.mjs uses (1440x900
 desktop, 414x896 phone, 1x, pngquant), so the outputs are interchangeable and
 `capture.mjs` remains the pipeline of record for everything it _can_ reach.
 
@@ -153,10 +154,10 @@ library, a member gets Available Tests and My Results. A placeholder describing
 what a member sees therefore cannot be filled from the administrator's session,
 and a shot that looks fine can quietly picture the wrong screen.
 
-| Field   | Values                                                                              | Notes                                                                                                                                                                                                                                                                                    |
-| ------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth`  | `admin` (default), `member`, `second-member`, `secretary`, `forwardee`, `anonymous` | `member` signs in as `DEMO_MEMBER_CREDENTIALS` — no officer rights. `second-member` is another ordinary member with no shift reports and nothing pending in Requests. `secretary` reviews every seeded suggestion box. `forwardee` reviews none and has one suggestion forwarded to them |
-| `theme` | light (default), `dark`                                                             | Drives the context's `colorScheme`; the app's theme follows system                                                                                                                                                                                                                       |
+| Field   | Values                                                                                          | Notes                                                                                                                                                                                                                                                                                                                                         |
+| ------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`  | `admin` (default), `member`, `second-member`, `secretary`, `forwardee`, `gearless`, `anonymous` | `member` signs in as `DEMO_MEMBER_CREDENTIALS` — no officer rights. `second-member` is another ordinary member with no shift reports and nothing pending in Requests. `secretary` reviews every seeded suggestion box. `forwardee` reviews none and has one suggestion forwarded to them. `gearless` holds, borrows and has requested nothing |
+| `theme` | light (default), `dark`                                                                         | Drives the context's `colorScheme`; the app's theme follows system                                                                                                                                                                                                                                                                            |
 
 Each `auth` + `theme` combination gets its own browser context, built on first
 use — cookies are per-context, so swapping users by clearing them mid-run would

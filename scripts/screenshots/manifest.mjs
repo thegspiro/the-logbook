@@ -32,6 +32,9 @@
  *   selector optional CSS/locator to clip to instead of the full viewport
  *   fullPage capture the whole scroll height rather than the viewport
  *   viewport 'mobile' to shoot at phone width instead of desktop
+ *   allowPageError one exact phrase on the screen that capture.mjs's in-page
+ *            error pattern mistakes for an error (a label, not a failed load);
+ *            any other match still fails the shot
  *   holdBack why the shot must not be applied yet, even though it captures
  *            cleanly — for a page that renders a misleading picture rather than
  *            an empty one, which the empty-state check cannot see
@@ -121,6 +124,23 @@ export const DEMO_SECRETARY_CREDENTIALS = {
  */
 export const DEMO_FORWARDEE_CREDENTIALS = {
   username: "cfrazier",
+  password: "DemoMember!2026",
+};
+
+/**
+ * A member with no gear issued, nothing on loan and no requests.
+ *
+ * Shots marked `auth: "gearless"` sign in as this account, for the empty My
+ * Issued Gear page. Their shirt size on file is one the department never
+ * stocks the polo in, which is how the request form's "not stocked" size is
+ * photographed without anyone submitting a request.
+ *
+ * Must match GEARLESS_MEMBER_USERNAME in seed_demo_data.py, whose
+ * `_guide05_gearless_member` clears the account's forced password change and
+ * records that size.
+ */
+export const DEMO_GEARLESS_CREDENTIALS = {
+  username: "dokonkwo",
   password: "DemoMember!2026",
 };
 
@@ -2634,6 +2654,54 @@ function withTestingModule(then) {
 
 const disableTestingModule = (page) => setTestingModule(page, false);
 
+/**
+ * Switch the department's NFC inventory tracking on or off.
+ *
+ * Off is how the demo department ships, matching the guide ("NFC tags are off
+ * until an administrator turns them on"), so every NFC shot switches it on in
+ * its prepare and back off in its cleanup. The organization settings endpoint
+ * deep-merges, so this writes only the one key, as the NFC Tags screen does.
+ */
+async function setInventoryNfc(page, enabled) {
+  const result = await apiCall(page, "PATCH", "organization/settings", {
+    inventory: { nfc_tracking_enabled: enabled },
+  });
+  if (result.status !== 200) {
+    throw new Error(`switching NFC tracking returned ${result.status}`);
+  }
+}
+
+function withInventoryNfc(then) {
+  return async (page, helpers) => {
+    await setInventoryNfc(page, true);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    if (then) await then(page, helpers);
+  };
+}
+
+const disableInventoryNfc = (page) => setInventoryNfc(page, false);
+
+// Tag serials `seed_guide05_states` links (GUIDE05_TAGS there). Invented, and
+// shown on screen only as their last four characters. The enroll shot links
+// its own, and its cleanup removes it.
+const GUIDE05_COAT_S_TAG = "04A9C3E5F70B12";
+const GUIDE05_CYLINDER_TAG = "04E1186C3D9A57";
+const GUIDE05_ENROLL_TAG = "04B5D7F91A3C6E";
+
+// State a prepare step hands to its own cleanup.
+let enrolledItemId = null;
+let catalogConflictUndo = null;
+
+/** Open an inventory item's page by its exact name. */
+function openItemNamed(name) {
+  return openFirstFromApi(
+    "/inventory/items?limit=500",
+    (id) => `/inventory/items/${id}`,
+    "items",
+    (item) => item.name === name,
+  );
+}
+
 // ── Guide 08 helpers ────────────────────────────────────────────────
 // Shots below that have to write to the database undo it in `cleanup`, so
 // a `--only` run leaves the demo as the seeder made it.
@@ -3438,6 +3506,9 @@ export const SHOTS = [
     anchor: "Screenshot of the label settings panel's orientation block",
     alt: "The label settings panel — size presets, auto-rotate, and the test-label download",
     route: "/inventory/print-labels",
+    // Scrolled to the orientation block and the test-label button, which sit
+    // below What Prints on the Label.
+    expect: "Test Label",
     prepare: async (page) => {
       await withIdsFromApi("/inventory/items?limit=6", "items", 6)(page);
       await page
@@ -4695,6 +4766,7 @@ export const SHOTS = [
     // wording is what broke it.
     auth: "member",
     route: "/inventory/my-equipment",
+    expect: "Pending requests",
     prepare: async (page) => {
       await page
         .getByRole("heading", { name: /My Issued Gear/i })
@@ -4739,6 +4811,7 @@ export const SHOTS = [
     anchor: "Screenshot of the analysis results showing the four summary cards",
     alt: "Impact planner results with its summary cards, size breakdown and cost estimate",
     route: "/inventory/admin/impact-planner",
+    expect: "Back to Admin",
     prepare: async (page) => {
       await runImpactAnalysis(page);
       // Analysing scrolls the results into view; the summary cards and the
@@ -5167,8 +5240,10 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 464,
     anchor: "Screenshot of the Assign Items modal showing the member it is",
-    alt: "Assigning items to a member by scanning or searching, with two items staged",
+    alt: "Distribute Items for a member: the intro about scanning or typing each item, two items staged, Ongoing assignment chosen under Intended duration with each option's one-line description, and Review 2 Items enabled",
     route: "/inventory/admin/members",
+    allowEmptyState:
+      '"Former members still holding property" is correctly empty: no demo member has been dropped.',
     prepare: async (page) => {
       // "Assign items to <member>" since #2821; the visible text is still Assign.
       await clickByName(/^Assign items to /)(page);
@@ -5184,7 +5259,15 @@ export const SHOTS = [
         await page.keyboard.press("Enter");
         await page.waitForTimeout(900);
       }
+      // A duration is what enables Review; until one is chosen the dialog
+      // says to pick one.
+      await page.getByRole("radio", { name: "Ongoing assignment" }).check();
+      await page
+        .getByRole("button", { name: /^Review 2 Items/ })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
     },
+    expect: { selector: 'button:has-text("Review 2 Items"):not([disabled])' },
     fullPage: false,
   },
   {
@@ -5195,6 +5278,8 @@ export const SHOTS = [
       "Screenshot of the Return Items modal listing everything one member",
     alt: "Returning several items at once, each with its own condition",
     route: "/inventory/admin/members",
+    allowEmptyState:
+      '"Former members still holding property" is correctly empty: no demo member has been dropped.',
     prepare: async (page) => {
       // The member the seeder issues a full kit to. Any other row holds one
       // item, and a "batch" return of one row shows none of the mechanism.
@@ -6929,6 +7014,9 @@ export const SHOTS = [
       "Screenshot of the Inventory Items List page showing the search bar, category",
     alt: "Inventory Items list with search, category filter, and status pills",
     route: "/inventory/items",
+    allowEmptyState:
+      '"No location" is an option in the location filter, not an empty list.',
+    expect: "need a label.",
   },
   {
     id: "05-02-items-pinned",
@@ -8792,6 +8880,7 @@ export const SHOTS = [
       "Screenshot of the Item Detail page showing the two-column layout. Left sidebar",
     alt: "Inventory item detail with its barcode, quick info, and history panels",
     route: "/inventory/items",
+    expect: { selector: "h1" },
     prepare: openFirstFromApi(
       "/inventory/items?limit=1",
       (id) => `/inventory/items/${id}`,
@@ -8826,6 +8915,7 @@ export const SHOTS = [
       'Screenshot of the pool-item issue dialog showing an "allowance exceeded" warning',
     alt: 'Pool item issue dialog warning that the quantity exceeds the member’s uniform allowance, with the "Override allowance" checkbox',
     route: "/inventory/admin/pool",
+    expect: "Override allowance",
     prepare: async (page) => {
       // Job Shirt is a Uniforms pool item, and the seeder has already spent 2
       // of the demo member's 3 annual uniform allowance — so asking for 2 is
@@ -8870,6 +8960,9 @@ export const SHOTS = [
       "Screenshot of the Reorder Requests page showing a table of reorder requests",
     alt: "Reorder requests table with requested quantities and status",
     route: "/inventory/admin/reorder",
+    // The status filter's closed <option> carries the same word, so the badge
+    // is found inside the table.
+    expect: { selector: 'tbody :text-is("Ordered")' },
   },
   {
     id: "05-24-member-inventory",
@@ -8879,6 +8972,9 @@ export const SHOTS = [
       "Screenshot of the Members inventory tab showing a list of members with",
     alt: "Members inventory tab listing each member and their assigned item count",
     route: "/inventory/admin/members",
+    allowEmptyState:
+      '"Former members still holding property" is correctly empty: no demo member has been dropped.',
+    expect: "Member Equipment",
   },
   {
     id: "05-25-admin-hub",
@@ -9056,7 +9152,7 @@ export const SHOTS = [
     line: 340,
     anchor:
       "Screenshot of the Equipment Requests page showing an approved request with its Fulfill",
-    alt: "Equipment Requests — a pending request, an approved one carrying Fulfill, and a fulfilled one with its terminal badge",
+    alt: "Gear Requests filtered to All: requests awaiting review, an approved one carrying Fulfill, an issued one, and a declined one, each with its status badge",
     route: "/inventory/admin/requests",
     prepare: async (page) => {
       // The page opens on Pending, which is right for a review queue and wrong
@@ -9064,6 +9160,7 @@ export const SHOTS = [
       await page.selectOption("#status-filter", "");
       await page.waitForTimeout(800);
     },
+    expect: "Fulfill",
     fullPage: true,
   },
   {
@@ -9137,6 +9234,7 @@ export const SHOTS = [
       "Screenshot of the label printing page showing the format dropdown (Letter, Dymo",
     alt: "Inventory label printing page with format presets and preview",
     route: "/inventory/print-labels",
+    expect: "Save setup",
     // The page prints whatever ?ids= names and otherwise renders "No items
     // specified" — which is what this shot published until 2026-08-09.
     prepare: withIdsFromApi("/inventory/items?limit=6", "items"),
@@ -9150,7 +9248,9 @@ export const SHOTS = [
       "Screenshot of the Storage Areas page showing an expanded storage area panel",
     alt: "Storage areas page with an expanded area listing its items",
     route: "/inventory/storage-areas",
-    prepare: async (page) => {
+    // NFC on, so the toolbar carries Put Away by NFC beside Put away, Scan
+    // shelf label, Check contents and Print labels.
+    prepare: withInventoryNfc(async (page) => {
       await selectStorageRoom(page);
       // The last area rather than the first, so this and 05-48 — which both
       // want an area expanded — do not publish the same picture twice.
@@ -9158,7 +9258,9 @@ export const SHOTS = [
         .getByRole("button", { name: /^Show \d+ items? in / })
         .last()
         .click({ timeout: 10_000 });
-    },
+    }),
+    cleanup: disableInventoryNfc,
+    expect: "Put Away by NFC",
     fullPage: true,
   },
   {
@@ -9172,6 +9274,7 @@ export const SHOTS = [
       "Screenshot of the Impact Planner page showing the filter panel on the",
     alt: "Inventory impact planner with its filter panel and member analysis",
     route: "/inventory/admin/impact-planner",
+    expect: "Back to Admin",
     fullPage: true,
   },
   {
@@ -9827,10 +9930,26 @@ export const SHOTS = [
     line: 71,
     anchor:
       "Screenshot of the item edit modal showing form fields for name, description,",
-    alt: "Inventory item form with category, serial, condition and tracking fields",
+    alt: "The Add Item form for a Structural PPE item: Serial # and Inspection Interval (days) marked required by the category, and the line under Tracking Type describing Individual tracking",
     route: "/inventory/admin/items",
-    prepare: clickByName(/add item/i),
-    fullPage: false,
+    // A category that requires serial numbers and maintenance, so Serial # and
+    // Inspection Interval (days) carry their required markers, and Individual
+    // tracking so the help line under Tracking Type describes it. Never saved.
+    prepare: async (page) => {
+      await clickByName(/add item/i)(page);
+      const dialog = page.locator('[data-testid="modal-panel"]');
+      await dialog
+        .locator("#item-category_id")
+        .selectOption({ label: "Structural PPE" });
+      await dialog
+        .getByText("Individual: one record per physical item", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(400);
+    },
+    expect: "Individual: one record per physical item",
+    selector: '[data-testid="modal-panel"]',
+    viewport: { width: 1440, height: 2200 },
   },
   {
     id: "05-12-new-allowance-modal",
@@ -10653,8 +10772,9 @@ export const SHOTS = [
     line: 1761,
     anchor:
       "Screenshot of the label print page (any module) showing the label size choices",
-    alt: "The inventory label print page — the nine label size choices with Rollo/Thermal 2x1 selected, copies per item, extra-detail toggles, and a preview of the three barcode labels",
+    alt: "The inventory label print page with Settings open: the saved-setup row, the label size choices, copies per item, What Prints on the Label, and a preview of the three barcode labels",
     route: "/inventory/items",
+    expect: "What Prints on the Label",
     prepare: async (page) => {
       // The page renders from ?ids= and shows "No items specified" without it,
       // so the ids have to be picked up before navigating.
@@ -13181,6 +13301,7 @@ export const SHOTS = [
       "Screenshot of the barcode print page Settings panel showing the Label Size grid",
     alt: "Label print settings with the size presets and content options",
     route: "/inventory/print-labels",
+    expect: "What Prints on the Label",
     prepare: async (page) => {
       await withIdsFromApi("/inventory/items?limit=6", "items")(page);
       await clickByName(/^Settings$/)(page);
@@ -13228,6 +13349,7 @@ export const SHOTS = [
       "Screenshot of the Storage Areas page with one area expanded showing",
     alt: "Storage area expanded to show the items stored in it",
     route: "/inventory/storage-areas",
+    expect: "Check contents",
     prepare: async (page) => {
       await selectStorageRoom(page);
       // The count is the control: clicking it opens the inline items panel.
@@ -13999,7 +14121,7 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 863,
     anchor: "immediately after pressing **print labels**",
-    alt: "The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark 11 items as labelled and Not yet, above the label preview",
+    alt: "The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark the items as labelled, Scan labels to confirm and Not yet, above the label preview",
     route: "/inventory/print-labels",
     expect: "Did the labels print correctly?",
     // Full page, as 05-33 is: this page renders its label preview well below
@@ -15772,16 +15894,22 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 2738,
     anchor: "__paired-with-05-86__",
-    alt: "The size step for Structural Coat: L preselected from the member's size on file, and XXL labelled none on hand but still selectable",
+    alt: "The size step for Structural Coat with XXL selected: labelled none on hand, the size-on-file line (from your profile), and the notice that none are on hand in XXL right now but the request can still be submitted",
     route: "/inventory/my-equipment",
     auth: "member",
     viewport: { width: 1440, height: 1000 },
     selector: '.modal-panel:has-text("Request Equipment")',
-    expect: "none on hand",
+    expect: "None in XXL on hand right now.",
     prepare: async (page) => {
       await clickByName(/^Request Equipment$/)(page);
       await page.getByText("Structural Coat", { exact: false }).first().click();
       await page.getByText("Your size on file", { exact: false }).waitFor();
+      await page
+        .getByRole("button", { name: /^XXL/ })
+        .first()
+        .click({ timeout: 10_000 });
+      await page.getByText("None in XXL on hand right now.").waitFor();
+      await page.waitForTimeout(300);
     },
   },
   {
@@ -16621,6 +16749,862 @@ export const SHOTS = [
         await undo.first().click();
         await page.waitForTimeout(1200);
       }
+    },
+  },
+  // ── Guide 05, second batch: placeholders left after the medical set ──
+  // Several of these need state `seed_guide05_states` makes; the rest drive
+  // the UI into a dialog or panel and leave without saving.
+  {
+    id: "05-93-empty-items",
+    doc: "05-inventory.md",
+    line: 169,
+    anchor:
+      "Quartermaster (inventory.manage) on a department with no inventory items",
+    alt: "The items list of a department with no items: Your department has no inventory items yet, with Open the Setup Guide and Add Item",
+    route: "/inventory/admin/items",
+    expect: "Your department has no inventory items yet",
+    // The seeded department has items, so this is written by the fixture
+    // harness, the way 05-72 and 05-73 are.
+    capturedElsewhere: "scripts/screenshots/inventory-setup.mjs",
+  },
+  {
+    id: "05-95-kit-issue-confirm",
+    doc: "05-inventory.md",
+    line: 570,
+    anchor:
+      'Quartermaster at /inventory/admin/kits: the "Issue <kit>?" confirmation',
+    alt: "The Issue New Recruit PPE Kit? confirmation after picking Rafael Duarte, naming how many items the kit hands out, with Don't issue and Issue to Rafael Duarte",
+    route: "/inventory/admin/kits",
+    expect: "Don't issue",
+    selector: '[data-testid="modal-panel"]',
+    // The confirmation is photographed and answered Don't issue by leaving.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Issue New Recruit PPE Kit to a member" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: /Rafael Duarte/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "Don't issue" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-105-put-away-panel",
+    doc: "05-inventory.md",
+    line: 1518,
+    anchor:
+      "Quartermaster at /inventory/storage-areas: press Put away, type a seeded",
+    alt: "Put away on Storage Areas after scanning the Quartermaster Shelving label and two item barcodes: Filing onto Quartermaster Shelving (SA-000003), the two items listed with remove buttons, and File 2 items on Quartermaster Shelving",
+    route: "/inventory/storage-areas",
+    expect: "File 2 items on Quartermaster Shelving",
+    selector: 'div.card-secondary:has(h2:text-is("Put away"))',
+    // Codes are typed, as a handheld scanner would; File is never pressed.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Put away", exact: true })
+        .click({ timeout: 15_000 });
+      const field = page.getByLabel("Scan or type a shelf or item barcode");
+      for (const code of ["SA-000003", "INV-000004", "INV-000006"]) {
+        await field.fill(code);
+        await field.press("Enter");
+        await page.waitForTimeout(900);
+      }
+      await page
+        .getByRole("button", { name: "File 2 items on Quartermaster Shelving" })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: "05-106-check-contents-panel",
+    doc: "05-inventory.md",
+    line: 1542,
+    anchor: "Quartermaster at /inventory/storage-areas: press Check contents",
+    alt: "Check contents on the Uniform Bins: one of its items found, the rest listed under Not scanned yet, and Firefighting Gloves under Doesn't belong here with the rack it is recorded on and File it here",
+    route: "/inventory/storage-areas",
+    expect: "File it here",
+    selector: 'div.card-secondary:has(h2:text-is("Check contents"))',
+    // Checking changes nothing; File it here is never pressed.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Check contents", exact: true })
+        .click({ timeout: 15_000 });
+      const field = page.getByLabel("Scan or type a container or item barcode");
+      for (const code of ["SA-000004", "INV-000009", "INV-000004"]) {
+        await field.fill(code);
+        await field.press("Enter");
+        await page.waitForTimeout(900);
+      }
+      await page
+        .getByText("Doesn’t belong here (1)")
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: "05-107-storage-area-labels",
+    doc: "05-inventory.md",
+    line: 1562,
+    anchor: "Quartermaster at /inventory/storage-areas/print-labels?ids=",
+    alt: "Print Storage Area Labels for four seeded areas with Settings closed: each preview carries the area's label code and name above its SA- barcode",
+    route: "/inventory/storage-areas/print-labels",
+    expect: "Print Storage Area Labels",
+    prepare: async (page) => {
+      await withIdsFromApi("/inventory/storage-areas", "", 4)(page);
+      await page.getByText("SA-000001").first().waitFor({ timeout: 15_000 });
+    },
+  },
+  {
+    id: "05-115-category-kiosk",
+    doc: "05-inventory.md",
+    line: 1806,
+    anchor:
+      "Admin (inventory.manage) at /inventory/admin/categories: edit a loaner",
+    alt: "Editing the Portable Radios category with Allow self-checkout at the kiosk switched on and Kiosk loan period (days) set to 14, its help text saying kiosk loans fall due after that many days",
+    route: "/inventory/admin/categories",
+    expect: "Kiosk loan period (days)",
+    selector: '[data-testid="modal-panel"]',
+    viewport: { width: 1440, height: 1300 },
+    // Switched on in the form and closed without saving.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit Portable Radios" })
+        .click({ timeout: 15_000 });
+      const toggle = page.locator("#cat-self-checkout");
+      if (!(await toggle.isChecked())) {
+        await page.locator('label[for="cat-self-checkout"]').click();
+      }
+      await page.locator("#cat-loan-days").fill("14");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: "05-119-item-added-label-prompt",
+    doc: "05-inventory.md",
+    line: 1972,
+    anchor:
+      "Quartermaster (inventory.manage) at /inventory right after saving Add Item",
+    alt: 'The items list right after Add Item: the green line "1 item added. Label it now?" with Print label and Dismiss',
+    route: "/inventory/admin/items",
+    expect: "Label it now?",
+    selector: 'div[role="status"]:has-text("Label it now?")',
+    // Creates one item to get the prompt; the cleanup retires it, which takes
+    // it off every list.
+    prepare: async (page) => {
+      await clickByName(/add item/i)(page);
+      const dialog = page.locator('[data-testid="modal-panel"]');
+      await dialog.waitFor({ timeout: 10_000 });
+      await dialog.locator("#item-name").fill("Screenshot Spare Flashlight");
+      await dialog
+        .locator("#item-category_id")
+        .selectOption({ label: "Hand Tools" });
+      await page.locator('button[form="item-form"]').click();
+      await page.getByText("Label it now?").waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const listing = await apiCall(
+        page,
+        "GET",
+        "inventory/items?search=Screenshot%20Spare%20Flashlight&limit=50",
+      );
+      const rows = listing.json?.items ?? listing.json ?? [];
+      for (const row of rows) {
+        if (row.name !== "Screenshot Spare Flashlight") continue;
+        const retired = await apiCall(
+          page,
+          "POST",
+          `inventory/items/${row.id}/retire`,
+          { notes: "Created by the documentation screenshot run" },
+        );
+        if (retired.status !== 200) {
+          throw new Error(
+            `retiring the screenshot item returned ${retired.status}`,
+          );
+        }
+      }
+    },
+  },
+  {
+    id: "05-120-needs-label-line",
+    doc: "05-inventory.md",
+    line: 2042,
+    anchor:
+      "Quartermaster (inventory.manage) at /inventory with no filter applied",
+    alt: "The line above the items list counting the items that need a label, with Show them, Print their labels and Not now",
+    route: "/inventory/admin/items",
+    expect: "need a label.",
+    selector: 'div[role="status"]:has-text("need a label.")',
+  },
+  {
+    id: "05-121-log-maintenance-inspection",
+    doc: "05-inventory.md",
+    line: 2294,
+    anchor:
+      "Quartermaster at /inventory/admin/maintenance (or an item's Inspections tab",
+    alt: "Log Maintenance for an item with Record inspection chosen and Pass ticked, the completion date at today, and the note that this records the inspection without changing the item's status",
+    route: "/inventory/admin/maintenance",
+    expect: "This records the inspection without changing the item's status.",
+    selector: '[data-testid="modal-panel"]',
+    viewport: { width: 1440, height: 1300 },
+    // Opened the way an item's "+ Add Record" opens it (`?item=`): nothing in
+    // the demo is due, so the Due Items tab has no row to start from. Filled
+    // in and never saved.
+    prepare: async (page) => {
+      const listing = await apiCall(page, "GET", "inventory/items?limit=200");
+      const coat = (listing.json?.items ?? []).find((item) =>
+        (item.name || "").startsWith("Bunker Coat"),
+      );
+      if (!coat) throw new Error("no Bunker Coat in the demo catalog");
+      await page.goto(
+        new URL(
+          `/inventory/admin/maintenance?item=${coat.id}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page
+        .getByRole("button", { name: "Record inspection" })
+        .click({ timeout: 10_000 });
+      await page.getByRole("radio", { name: /pass/i }).check();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "05-108-nfc-settings",
+    doc: "05-inventory.md",
+    line: 1639,
+    anchor: "Administrator at /inventory/admin/nfc: the NFC Tags page with",
+    alt: "Inventory Administration → NFC Tags with Use NFC tags for inventory items ticked, and the What works on which phone card below it, including the note that this computer cannot read or write tags itself",
+    route: "/inventory/admin/nfc",
+    expect: "What works on which phone",
+    prepare: withInventoryNfc(async (page) => {
+      await page
+        .getByText("Use NFC tags for inventory items")
+        .waitFor({ timeout: 15_000 });
+    }),
+    cleanup: disableInventoryNfc,
+    fullPage: true,
+  },
+  {
+    id: "05-116-put-away-offline",
+    doc: "05-inventory.md",
+    line: 1833,
+    anchor:
+      "Admin (inventory.manage) at /inventory/put-away with NFC on, then the browser",
+    alt: 'Put Away by NFC with the browser offline: the amber "No signal: keep tapping" banner saying taps are saved on this phone and applied when signal returns',
+    route: "/inventory/put-away",
+    expect: "No signal: keep tapping",
+    prepare: withInventoryNfc(async (page) => {
+      await page.getByText("Or pick a shelf").waitFor({ timeout: 15_000 });
+      await page.context().setOffline(true);
+      await page
+        .getByText("No signal: keep tapping")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    }),
+    // Back online before anything else runs on this page: the cleanup itself
+    // needs the network, and the next shot shares the context.
+    cleanup: async (page) => {
+      await page.context().setOffline(false);
+      await disableInventoryNfc(page);
+    },
+    fullPage: false,
+  },
+  {
+    id: "05-117-compartment-nfc-tags",
+    doc: "05-inventory.md",
+    line: 1847,
+    anchor:
+      "Admin (inventory.check_manage) at /inventory/admin/checklists/templates/:templateId",
+    alt: "The NFC tags: Cab dialog opened from the Cab compartment's ⋯ menu in the checklist builder, with the tag serial box, Link serial and the hint about sticking the tag on that compartment; no tag linked",
+    route: "/inventory/admin/checklists",
+    expect: "NFC tags: Cab",
+    allowEmptyState:
+      "No tag linked is the state asked for: the shot must not link one.",
+    selector: '[data-testid="modal-panel"]',
+    // Opened and closed without linking anything.
+    prepare: withInventoryNfc(async (page) => {
+      await openTemplateNamed("Engine Daily Check")(page);
+      // The ⋯ menu is a <details>, so its trigger is a summary, not a button.
+      await page
+        .locator('summary[aria-label="Actions for Cab"]')
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: "NFC tags", exact: true })
+        .click({ timeout: 10_000 });
+      await page.getByText("NFC tags: Cab").waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(500);
+    }),
+    cleanup: disableInventoryNfc,
+  },
+  {
+    id: "05-123-builder-medical-picker",
+    doc: "05-inventory.md",
+    line: 2887,
+    anchor: "a builder item picker showing a medical result with its badge",
+    alt: "Linked Inventory Item in the checklist builder, searched for tourniquet: Tourniquet, CAT with its Medical badge, then Create in Medical Supplies and Create as equipment or gear",
+    route: "/inventory/admin/checklists",
+    expect: { selector: 'span.badge:text-is("Medical")' },
+    viewport: { width: 1440, height: 900 },
+    // Typed into the picker and never chosen.
+    prepare: async (page) => {
+      await openTemplateNamed("Engine Daily Check")(page);
+      await page
+        .getByRole("button", { name: "Not linked to inventory — Map book" })
+        .click({ timeout: 15_000 });
+      const input = page.getByPlaceholder("Search inventory to link…").first();
+      await input.click();
+      await input.fill("tourniquet");
+      await page
+        .getByText("in Medical Supplies", { exact: false })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await input.evaluate((el) =>
+        el.scrollIntoView({ block: "center", behavior: "instant" }),
+      );
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "05-124-clone-checklist-dialog",
+    doc: "05-inventory.md",
+    line: 2888,
+    anchor: "__paired-with-05-123__",
+    alt: "Copy checklist to an apparatus, opened from Tools → Clone checklist: the note that the copy starts switched off so it can be reviewed first, and Copy onto set to B-5 — Brush 5",
+    route: "/inventory/admin/checklists",
+    expect: "Copy checklist to an apparatus",
+    selector: '[data-testid="modal-panel"]',
+    // An apparatus is chosen so the picker is not blank; Copy checklist is
+    // never pressed.
+    prepare: async (page) => {
+      await openTemplateNamed("Engine Daily Check")(page);
+      await page.locator('summary[aria-label="Tools"]').click();
+      await page
+        .getByRole("button", { name: "Clone checklist" })
+        .click({ timeout: 10_000 });
+      const select = page.locator('[data-testid="modal-panel"] select');
+      await select.waitFor({ timeout: 15_000 });
+      await page.waitForFunction(
+        () =>
+          document.querySelectorAll('[data-testid="modal-panel"] select option')
+            .length > 1,
+        null,
+        { timeout: 15_000 },
+      );
+      await select.selectOption({ index: 1 });
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "05-94-pool-issuances",
+    doc: "05-inventory.md",
+    line: 380,
+    anchor:
+      "Quartermaster at /inventory/admin/pool: one pool card with Issuances expanded",
+    alt: "The Firefighting Gloves pool card with Issuances open: its on-hand and issued counts, and three members holding pairs, each with the count, the date issued and a Return button",
+    route: "/inventory/admin/pool",
+    expect: { selector: 'button[aria-label^="Return 2 from"]' },
+    selector:
+      'div.card-secondary:has(button[aria-label="Issuances of Firefighting Gloves"])',
+    // `seed_guide05_states` issues the gloves to three demo members.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Issuances of Firefighting Gloves" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByRole("button", { name: /^Return \d+ from / })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-96-receive-pool-return",
+    doc: "05-inventory.md",
+    line: 867,
+    anchor:
+      "Quartermaster at /inventory/admin/returns: the Receive Item dialog for a multi-unit",
+    alt: "Receive Item for Nadia Belhaj's return of two pairs of Firefighting Gloves: Good chosen as the observed condition, the quantity box empty with the hint that the count must match the 2 the member reported, and Receive disabled",
+    route: "/inventory/admin/returns",
+    expect: "It must match the 2 the member",
+    selector:
+      '[role="dialog"][aria-labelledby="return-review-title"] .max-w-md',
+    // `seed_guide05_states` files the return notice. Never submitted.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: "Receive Firefighting Gloves from Nadia Belhaj",
+        })
+        .click({ timeout: 15_000 });
+      await page.locator("#override-condition").selectOption("good");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-97-needs-attention-pending-return",
+    doc: "05-inventory.md",
+    line: 871,
+    anchor:
+      "Quartermaster (inventory.manage) at /inventory/admin: the Needs attention queue",
+    alt: "The top of Inventory Administration: Needs attention with a Pending return row for Nadia Belhaj's Firefighting Gloves and its Review action, and the Return Requests card under Requests & Approvals carrying its count of one",
+    route: "/inventory/admin",
+    expect: "Pending return",
+    // Tall enough to reach Requests & Approvals, where the Return Requests
+    // card carries its count.
+    viewport: { width: 1440, height: 2000 },
+    fullPage: false,
+  },
+  {
+    id: "05-98-my-equipment-empty",
+    doc: "05-inventory.md",
+    line: 984,
+    anchor: "Member with no gear, loans or requests at /inventory/my-equipment",
+    alt: "My Issued Gear for a member who holds nothing: the subtitle, the Issued to me, Temporary loans and Pending requests tiles at 0, Nothing has been issued to you yet with the link to the Learning Center walkthrough, and the Active Temporary Loans explanation",
+    route: "/inventory/my-equipment",
+    auth: "gearless",
+    expect: "Nothing has been issued to you yet.",
+    allowEmptyState: "An empty page is the subject: the member holds nothing.",
+    fullPage: true,
+  },
+  {
+    id: "05-99-gear-request-not-stocked",
+    doc: "05-inventory.md",
+    line: 1037,
+    anchor:
+      "Member at /inventory/my-equipment: Request Equipment → pick a garment → select",
+    alt: "The size step for the Department Polo, for a member whose shirt size on file is XXL: XXL offered and selected, labelled not stocked, the (from your profile) line, and the notice that the department doesn't stock this item in XXL",
+    route: "/inventory/my-equipment",
+    auth: "gearless",
+    viewport: { width: 1440, height: 1300 },
+    selector: '.modal-panel:has-text("Request Equipment")',
+    expect: "The department doesn't stock this item in XXL.",
+    // Never submitted.
+    prepare: async (page) => {
+      await clickByName(/^Request Equipment$/)(page);
+      await page
+        .getByText("Department Polo", { exact: false })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("The department doesn't stock this item in XXL.")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-100-request-review-unstocked",
+    doc: "05-inventory.md",
+    line: 1070,
+    anchor:
+      "Quartermaster at /inventory/admin/requests: Review on an Awaiting review request",
+    alt: "Review: Department Polo, for Nadia Belhaj's request in XXL: Size requested XXL, not a size the department stocks for this item, so Tracking reads Determined when fulfilled and Availability has no catalog item to count; the Review Notes box, and Decline, Approve for later fulfillment and Approve & fulfill now",
+    route: "/inventory/admin/requests",
+    expect: "not a size the department stocks",
+    // An unstocked size has no catalog row, so the Availability line reads
+    // this instead of a count. It is the label, not a failed load.
+    allowPageError: "No specific catalog item selected",
+    selector: '[data-testid="modal-panel"]',
+    viewport: { width: 1440, height: 1300 },
+    // `seed_guide05_states` files the request. No decision is clicked.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: "Review Department Polo for Nadia Belhaj",
+        })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("not a size the department stocks", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-101-my-requests-states",
+    doc: "05-inventory.md",
+    line: 1125,
+    anchor:
+      "Member at /inventory/my-equipment: My Requests with seeded requests in Awaiting",
+    alt: "My Requests on My Issued Gear: gear requests awaiting review, approved, issued and declined, the declined one with the quartermaster's note beneath it, and the open return notice for two pairs of gloves",
+    route: "/inventory/my-equipment",
+    auth: "member",
+    expect: "Quartermaster: Two pairs are already issued to you.",
+    selector: 'div.card-secondary:has(> h2:text-is("My Requests"))',
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "My Requests" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("Quartermaster: Two pairs", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: "05-102-reorder-receive-unlinked",
+    doc: "05-inventory.md",
+    line: 1251,
+    anchor:
+      "Quartermaster at /inventory/admin/reorder: an Ordered request with no linked item",
+    alt: "Receive stock on the ordered Rescue Rope, 150 ft request, which was never linked to an item: the Inventory item search and the note that the order isn't linked to an inventory item yet, with Receive stock disabled",
+    route: "/inventory/admin/reorder",
+    expect: "This order isn't linked to an inventory item yet.",
+    selector: '[data-testid="modal-panel"]',
+    // `seed_guide05_states` places the order. Never submitted.
+    prepare: async (page) => {
+      await page
+        .locator("tr", { hasText: "Rescue Rope, 150 ft" })
+        .getByRole("button", { name: "Receive stock" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("isn't linked to an inventory item yet", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "05-104-storage-area-delete-blocked",
+    doc: "05-inventory.md",
+    line: 1480,
+    anchor:
+      'Quartermaster at /inventory/storage-areas: the "Delete <area>?" dialog',
+    alt: "Delete Quartermaster Shelving? refused on both counts: it holds items, which must move to another storage area first, and it has an area nested inside it, with Delete greyed out",
+    route: "/inventory/storage-areas",
+    expect: "Move or delete those first.",
+    selector: '[data-testid="modal-panel"]',
+    // `seed_guide05_states` nests Top Shelf inside it. Never deleted.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Delete Quartermaster Shelving" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("Move or delete those first.")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: "05-109-item-nfc-tags",
+    doc: "05-inventory.md",
+    line: 1663,
+    anchor:
+      "Quartermaster at /inventory/items/:id with NFC switched on and two seeded tags",
+    alt: "The NFC Tags card on Structural Coat — M: the Inside left cuff tag linked by serial with Mark lost and Unlink, the Collar tag marked lost with Mark found, and below them the box for where a new tag goes, the serial box and Link serial. On a desktop the card has no Write or Read buttons; those appear only in Chrome on Android",
+    route: "/inventory/admin/items",
+    expect: "Inside left cuff",
+    selector: 'section.card-secondary:has(h3:text-is("NFC Tags"))',
+    // `seed_guide05_states` links both tags; the card shows each serial only as
+    // its last four characters.
+    prepare: withInventoryNfc(async (page) => {
+      await openItemNamed("Structural Coat — M")(page);
+      await page.getByText("Inside left cuff").waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    }),
+    cleanup: disableInventoryNfc,
+  },
+  {
+    id: "05-111-item-last-seen",
+    doc: "05-inventory.md",
+    line: 1707,
+    anchor:
+      "Quartermaster at /inventory/items/:id with NFC on: crop to the Last Seen",
+    alt: "Last Seen (NFC) on Structural Coat — M: moved from Turnout Gear Racks to Top Shelf, and found on Top Shelf during a shelf audit, each with its time and who tapped it",
+    route: "/inventory/admin/items",
+    expect: "during a shelf audit",
+    selector: 'section[aria-labelledby="item-nfc-last-seen-heading"]',
+    prepare: withInventoryNfc(async (page) => {
+      await openItemNamed("Structural Coat — M")(page);
+      await page
+        .getByText("during a shelf audit", { exact: false })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    }),
+    cleanup: disableInventoryNfc,
+  },
+  {
+    id: "05-113-audit-schedule",
+    doc: "05-inventory.md",
+    line: 1758,
+    anchor:
+      'Admin (inventory.manage) at /inventory/shelf-audit with NFC on: the "Audit schedule',
+    alt: "Shelf Audit with NFC on: the Audit schedule card counting what is due, Uniform Bins never audited and due now with Audit now, and Top Shelf last audited with its next due date",
+    route: "/inventory/shelf-audit",
+    expect: { selector: "#audit-schedule-heading" },
+    selector: 'section[aria-labelledby="audit-schedule-heading"]',
+    prepare: withInventoryNfc(async (page) => {
+      await page
+        .locator("#audit-schedule-heading")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    }),
+    cleanup: disableInventoryNfc,
+  },
+  {
+    id: "05-125-catalog-links-matches",
+    doc: "05-inventory.md",
+    line: 2924,
+    anchor:
+      "Catalog Links with a mix of ticked exact matches and unticked likely ones",
+    alt: "Catalog Links before anything is applied: unlinked checklist lines grouped by name under Likely matches, the exact matches already chosen in their pickers, the others left on Don't link for you to confirm, and Link 5 positions counting what is chosen",
+    route: "/inventory/admin/checklists/catalog-links",
+    expect: { selector: 'section[aria-labelledby="likely-matches"]' },
+    viewport: { width: 1440, height: 1300 },
+  },
+  {
+    id: "05-110-nfc-put-away",
+    doc: "05-inventory.md",
+    line: 1697,
+    anchor:
+      "Quartermaster at /inventory/put-away with NFC on: choose a shelf from",
+    alt: "Put Away by NFC with Top Shelf picked from Or pick a shelf, so taps go on Top Shelf, and two typed tag serials under Put away this session: SCBA Spare Cylinder moved onto Top Shelf from the SCBA Cabinet, and Structural Coat — S already on Top Shelf",
+    route: "/inventory/put-away",
+    expect: "already on Top Shelf",
+    // Moves the cylinder for real; the cleanup files it back in the SCBA
+    // Cabinet. The serials are the ones `seed_guide05_states` links.
+    prepare: withInventoryNfc(async (page) => {
+      const shelf = page.locator("#put-away-shelf");
+      await shelf.waitFor({ timeout: 15_000 });
+      const value = await shelf
+        .locator("option", { hasText: "Top Shelf" })
+        .first()
+        .getAttribute("value");
+      await shelf.selectOption(value ?? "");
+      await page
+        .getByText("Items tapped now go on", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      const serial = page.locator("#put-away-serial");
+      for (const tag of [GUIDE05_CYLINDER_TAG, GUIDE05_COAT_S_TAG]) {
+        await serial.fill(tag);
+        await serial.press("Enter");
+        await page.waitForTimeout(1200);
+      }
+      await page
+        .getByText("already on Top Shelf", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(400);
+    }),
+    cleanup: async (page) => {
+      const listing = await apiCall(page, "GET", "inventory/items?limit=500");
+      const areas = await apiCall(page, "GET", "inventory/storage-areas");
+      const cylinder = (listing.json?.items ?? []).find(
+        (item) => item.name === "SCBA Spare Cylinder",
+      );
+      const cabinet = (areas.json ?? []).find(
+        (area) => area.name === "SCBA Cabinet",
+      );
+      if (cylinder && cabinet && cylinder.storage_area_id !== cabinet.id) {
+        const moved = await apiCall(
+          page,
+          "PATCH",
+          `inventory/items/${cylinder.id}`,
+          { storage_area_id: cabinet.id },
+        );
+        if (moved.status !== 200) {
+          throw new Error(`moving the cylinder back returned ${moved.status}`);
+        }
+      }
+      await disableInventoryNfc(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-112-shelf-audit-result",
+    doc: "05-inventory.md",
+    line: 1738,
+    anchor:
+      "Quartermaster at /inventory/shelf-audit with NFC on: pick a seeded shelf",
+    alt: "A finished shelf audit of Top Shelf: 1 of 2 expected found, 1 missing and 1 unexpected; Structural Coat — M under Missing with the note that nothing has been marked lost, SCBA Spare Cylinder under Unexpected with its box ticked and Move 1 selected onto Top Shelf, and Recent audits below",
+    route: "/inventory/shelf-audit",
+    expect: "Nothing has been marked lost",
+    // Finish audit saves an audit of Top Shelf each run; Move is never
+    // pressed, so no item changes place.
+    prepare: withInventoryNfc(async (page) => {
+      const shelf = page.locator("#audit-shelf");
+      await shelf.waitFor({ timeout: 15_000 });
+      const value = await shelf
+        .locator("option", { hasText: "Top Shelf" })
+        .first()
+        .getAttribute("value");
+      await shelf.selectOption(value ?? "");
+      const serial = page.locator("#audit-serial");
+      await serial.waitFor({ timeout: 10_000 });
+      for (const tag of [GUIDE05_COAT_S_TAG, GUIDE05_CYLINDER_TAG]) {
+        await serial.fill(tag);
+        await serial.press("Enter");
+        await page.waitForTimeout(1200);
+      }
+      await page
+        .getByRole("button", { name: "Finish audit" })
+        .click({ timeout: 10_000 });
+      await page
+        .getByText("Nothing has been marked lost", { exact: false })
+        .waitFor({ timeout: 15_000 });
+      const unexpected = page
+        .locator('section[aria-labelledby="audit-result-heading"]')
+        .getByRole("checkbox");
+      await unexpected.first().check();
+      await page
+        .getByRole("button", { name: "Move 1 selected onto Top Shelf" })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    }),
+    cleanup: disableInventoryNfc,
+    fullPage: true,
+  },
+  {
+    id: "05-114-nfc-enroll",
+    doc: "05-inventory.md",
+    line: 1779,
+    anchor:
+      "Quartermaster at /inventory/admin/nfc/enroll with NFC on, after one typed serial",
+    alt: "Tag Items in Bulk after one typed serial was linked: 1 tagged this session and how many are left, the next item, Bunker Coat, with its serial number, asset tag, category and storage area, Read serials chosen with Write links greyed out on a desktop, the serial box and Skip this item",
+    route: "/inventory/admin/nfc/enroll",
+    expect: "1 tagged this session",
+    // Links one invented serial to the first untagged item; the cleanup
+    // unlinks it again.
+    prepare: withInventoryNfc(async (page) => {
+      const serial = page.locator("#enroll-serial");
+      await serial.waitFor({ timeout: 15_000 });
+      const readSerials = page.getByRole("button", { name: "Read serials" });
+      if (await readSerials.isEnabled()) await readSerials.click();
+      // The untagged list includes medical supplies, which the gear item
+      // list does not, so the cleanup goes by id rather than by name.
+      const untagged = await apiCall(page, "GET", "inventory/nfc/untagged");
+      const first = untagged.json?.items?.[0];
+      const shown = (
+        await page.locator("p.text-lg.font-semibold").first().innerText()
+      ).trim();
+      if (!first || first.name !== shown) {
+        throw new Error(
+          `the enroll page shows ${shown}, not the first untagged item`,
+        );
+      }
+      enrolledItemId = first.id;
+      await serial.fill(GUIDE05_ENROLL_TAG);
+      await page.getByRole("button", { name: "Link serial" }).click();
+      await page
+        .getByText("1 tagged this session", { exact: false })
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+    }),
+    cleanup: async (page) => {
+      if (enrolledItemId) {
+        const tags = await apiCall(
+          page,
+          "GET",
+          `inventory/items/${enrolledItemId}/nfc-tags`,
+        );
+        for (const tag of tags.json?.items ?? []) {
+          if (tag.label) continue;
+          const removed = await apiCall(
+            page,
+            "DELETE",
+            `inventory/nfc-tags/${tag.id}`,
+          );
+          if (removed.status !== 204) {
+            throw new Error(
+              `unlinking the enrolled tag returned ${removed.status}`,
+            );
+          }
+        }
+        enrolledItemId = null;
+      }
+      await disableInventoryNfc(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "05-126-catalog-links-conflicts",
+    doc: "05-inventory.md",
+    line: 2925,
+    anchor: "__paired-with-05-125__",
+    alt: "After Link positions, the list of lines someone else had linked in the builder after the page loaded: the Portable radio line on Engine Daily Check, its compartment, the item it is linked to and the one chosen here, with a link into the checklist",
+    route: "/inventory/admin/checklists/catalog-links",
+    expect: { selector: 'section[aria-labelledby="skipped-links"]' },
+    selector: 'section[aria-labelledby="skipped-links"]',
+    // Links the exact matches for real and, before that, links one Portable
+    // radio line to a different item behind the page's back, so the apply
+    // finds it taken. The cleanup undoes every one of those links and
+    // dismisses the list, which the page otherwise keeps across reloads.
+    prepare: async (page) => {
+      const report = await apiCall(
+        page,
+        "GET",
+        "equipment-checks/inventory-link-report",
+      );
+      const groups = report.json?.groups ?? [];
+      const exact = (group) =>
+        (group.suggestions ?? []).find((s) => s.confidence === "exact");
+      const radio = groups.find((g) => g.key === "portable radio");
+      const camera = groups.find((g) => g.key === "thermal imaging camera");
+      const taken = radio?.positions.find(
+        (p) => p.templateName === "Engine Daily Check",
+      );
+      if (!radio || !camera || !taken || !exact(radio) || !exact(camera)) {
+        throw new Error("the Portable radio and camera lines are not unlinked");
+      }
+      catalogConflictUndo = {};
+      for (const group of groups) {
+        const match = exact(group);
+        if (!match) continue;
+        for (const position of group.positions) {
+          catalogConflictUndo[position.templateItemId] = match.id;
+        }
+      }
+      catalogConflictUndo[taken.templateItemId] = exact(camera).id;
+      await page
+        .getByRole("button", { name: /^Link \d+ positions?$/ })
+        .waitFor({ timeout: 15_000 });
+      const linked = await apiCall(
+        page,
+        "POST",
+        "equipment-checks/inventory-links",
+        {
+          links: { [taken.templateItemId]: exact(camera).id },
+        },
+      );
+      if (linked.status !== 200) {
+        throw new Error(
+          `linking the line behind the page returned ${linked.status}`,
+        );
+      }
+      await page.getByRole("button", { name: /^Link \d+ positions?$/ }).click();
+      await page
+        .locator('section[aria-labelledby="skipped-links"]')
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(4500);
+    },
+    cleanup: async (page) => {
+      if (catalogConflictUndo) {
+        const undone = await apiCall(
+          page,
+          "POST",
+          "equipment-checks/inventory-links/undo",
+          { links: catalogConflictUndo },
+        );
+        if (undone.status !== 200) {
+          throw new Error(`undoing the links returned ${undone.status}`);
+        }
+        catalogConflictUndo = null;
+      }
+      const dismiss = page.getByRole("button", {
+        name: "Dismiss skipped positions",
+      });
+      if (await dismiss.count()) await dismiss.click();
     },
   },
   {
