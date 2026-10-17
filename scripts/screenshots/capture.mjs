@@ -28,6 +28,7 @@ import {
   DEMO_FORWARDEE_CREDENTIALS,
   DEMO_MEMBER_CREDENTIALS,
   DEMO_SECRETARY_CREDENTIALS,
+  DEMO_TREASURER_CREDENTIALS,
   SHOTS,
 } from "./manifest.mjs";
 
@@ -388,10 +389,11 @@ async function captureFrame(page, shot) {
         height: document.documentElement.scrollHeight,
       };
     }
-    // boundingBox() is document-space, so the viewport rect has to be too.
+    // boundingBox() is relative to the viewport, not the document, so a
+    // viewport shot's frame is the viewport at 0,0 however far it scrolled.
     return {
-      x: window.scrollX,
-      y: window.scrollY,
+      x: 0,
+      y: 0,
       width: window.innerWidth,
       height: window.innerHeight,
     };
@@ -495,6 +497,11 @@ function makeSessions(browser, baseOptions) {
         // Reaches one suggestion through a forward and reviews no box, so the
         // Review tab shows what a forward recipient sees and nothing more.
         await login(page, DEMO_FORWARDEE_CREDENTIALS);
+      } else if (auth === "treasurer") {
+        // Runs the approval chains and raised none of the seeded requests, so
+        // the Approve controls separation of duties hides from the
+        // administrator are on screen.
+        await login(page, DEMO_TREASURER_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }

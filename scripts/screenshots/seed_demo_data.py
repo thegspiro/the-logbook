@@ -5845,6 +5845,222 @@ class Seeder:
         )
         return {"created": True}
 
+    #: Holds the Treasurer position, so guide 11 can picture the approvals
+    #: screens as the person who runs them rather than as the administrator,
+    #: who raised every seeded request and so may not approve any of them.
+    TREASURER_USERNAME = "aosei"
+    UNROUTED_REQUEST_TITLE = "Hose tester calibration"
+    TREASURER_EXPENSE_TITLE = "EMS refresher mileage"
+    TREASURER_CHECK_PAYEE = "Oakville Hardware Supply"
+
+    def seed_guide11_finance_states(self) -> dict[str, Any]:
+        """States guide 11 pictures that the ordinary finance seed does not.
+
+        * A Treasurer. The seeded expense and check chains route their first
+          step to the treasurer position; without a holder every one of those
+          steps reads "No active member can act on this step".
+        * An expense report and a check request waiting on that Treasurer, so
+          "Requests waiting on you" has rows the Treasurer can approve beside
+          the ones marked Not assigned to you.
+        * One purchase request pending with no approval steps, for the "No
+          approval chain applies to this request" panel.
+
+        All three are submitted with the default purchase-request chain
+        switched off, and it is switched back on in `finally`; a request keeps
+        the routing it was submitted under. Switching it off is what makes the
+        purchase request unrouted, and it is also the only way to route the
+        other two through their own chains: the resolver accepts a
+        purchase-request chain for every request type and keeps the first of
+        two equally specific defaults, so the seeded expense report and check
+        request went to the purchase-request chain's company officer step.
+        """
+        result: dict[str, Any] = {
+            "treasurer": self._ensure_role(self.TREASURER_USERNAME, "Treasurer"),
+            "email_step": self._add_email_approver_step(),
+            "sub_lines": self._add_category_sub_lines(),
+        }
+        requests = items(
+            self.api.get("/finance/purchase-requests"), "purchase_requests"
+        )
+        reports = items(self.api.get("/finance/expense-reports"), "expense_reports")
+        checks = items(self.api.get("/finance/check-requests"), "check_requests")
+        todo_request = not any(
+            pick(r, "title") == self.UNROUTED_REQUEST_TITLE for r in requests
+        )
+        todo_report = not any(
+            pick(r, "title") == self.TREASURER_EXPENSE_TITLE for r in reports
+        )
+        todo_check = not any(
+            pick(c, "payeeName", "payee_name") == self.TREASURER_CHECK_PAYEE
+            for c in checks
+        )
+        if not (todo_request or todo_report or todo_check):
+            return result
+        fiscal_year_id = next(
+            (pick(r, "fiscalYearId", "fiscal_year_id") for r in requests), None
+        )
+        budget_id = next((pick(r, "budgetId", "budget_id") for r in requests), None)
+        if not fiscal_year_id:
+            self.blocked.append("guide 11: no purchase request to borrow a year from")
+            return result
+        budget = {"budget_id": budget_id} if budget_id else {}
+        chains = items(self.api.get("/finance/approval-chains"), "approval_chains")
+        defaults = [
+            str(pick(c, "id"))
+            for c in chains
+            if pick(c, "appliesTo", "applies_to") == "purchase_request"
+            and pick(c, "isActive", "is_active")
+            and not pick(c, "minAmount", "min_amount")
+        ]
+        for chain_id in defaults:
+            self.api.put(f"/finance/approval-chains/{chain_id}", {"is_active": False})
+        try:
+            if todo_request:
+                request = self.api.post(
+                    "/finance/purchase-requests",
+                    {
+                        "fiscal_year_id": fiscal_year_id,
+                        **budget,
+                        "title": self.UNROUTED_REQUEST_TITLE,
+                        "description": "Annual calibration of the hose test pressure gauge.",
+                        "vendor": "Tidewater Fire Service",
+                        "estimated_amount": 640,
+                        "priority": "medium",
+                    },
+                )
+                self.api.post(
+                    f"/finance/purchase-requests/{pick(request, 'id')}/submit"
+                )
+                result["unrouted"] = True
+            if todo_report:
+                report = self.api.post(
+                    "/finance/expense-reports",
+                    {
+                        "fiscal_year_id": fiscal_year_id,
+                        "title": self.TREASURER_EXPENSE_TITLE,
+                        "description": "Round trip to the regional EMS refresher.",
+                        "line_items": [
+                            {
+                                **budget,
+                                "description": "Mileage, 184 miles",
+                                "amount": 123.28,
+                                "date_incurred": iso(NOW - timedelta(days=6)),
+                                "expense_type": "mileage",
+                            }
+                        ],
+                    },
+                )
+                self._submit_expense_report_with_receipts(report)
+                result["expense_report"] = True
+            if todo_check:
+                check = self.api.post(
+                    "/finance/check-requests",
+                    {
+                        "fiscal_year_id": fiscal_year_id,
+                        **budget,
+                        "payee_name": self.TREASURER_CHECK_PAYEE,
+                        "payee_address": "48 Main Street, Oakville, VA 22046",
+                        "amount": 412.60,
+                        "memo": "Station 1 shop supplies",
+                        "purpose": "Station 1 shop supplies",
+                    },
+                )
+                self.api.post(f"/finance/check-requests/{pick(check, 'id')}/submit")
+                result["check_request"] = True
+        finally:
+            for chain_id in defaults:
+                self.api.put(
+                    f"/finance/approval-chains/{chain_id}", {"is_active": True}
+                )
+        return result
+
+    def _add_category_sub_lines(self) -> int:
+        """Two sub-lines under Personal Protective Equipment.
+
+        The Budget Categories list is pictured as a tree, and the guide's own
+        example of a restricted line is officer brass kept for the
+        Quartermaster. No budget is drawn against either, so the budget pages
+        other shots picture are unchanged.
+        """
+        categories = items(self.api.get("/finance/budget-categories"), "categories")
+        parent = next(
+            (
+                c
+                for c in categories
+                if pick(c, "name") == "Personal Protective Equipment"
+            ),
+            None,
+        )
+        if not parent:
+            return 0
+        names = {pick(c, "name") for c in categories}
+        roles = self.api.get("/roles")
+        role_ids = {
+            pick(r, "slug"): str(pick(r, "id"))
+            for r in (roles if isinstance(roles, list) else items(roles, "roles"))
+        }
+        planned = [
+            (
+                "Officer brass",
+                "Collar brass and badges for officers.",
+                {
+                    "owner_position_id": role_ids.get("quartermaster"),
+                    "charge_access": "restricted",
+                    "charge_position_ids": [
+                        role_ids[slug]
+                        for slug in ("quartermaster", "captain")
+                        if slug in role_ids
+                    ],
+                },
+            ),
+            ("Station boots", "Station boot reimbursements for members.", {}),
+        ]
+        created = 0
+        for name, description, extra in planned:
+            if name in names:
+                continue
+            self.api.post(
+                "/finance/budget-categories",
+                {
+                    "name": name,
+                    "description": description,
+                    "parent_category_id": str(pick(parent, "id")),
+                    **{k: v for k, v in extra.items() if v},
+                },
+            )
+            created += 1
+        return created
+
+    def _add_email_approver_step(self) -> bool:
+        """Give the unused Major Purchase chain a fourth step, approved by email.
+
+        The chains page is pictured with one chain expanded, and the guide
+        describes an Email approver beside the position ones. That chain has
+        routed no request, so the step changes nobody's approvals, and the
+        Delete step confirmation guide 11 pictures on it still offers deletion.
+        """
+        chains = items(self.api.get("/finance/approval-chains"), "approval_chains")
+        chain = next(
+            (c for c in chains if pick(c, "name") == self.UNUSED_CHAIN_NAME), None
+        )
+        if not chain:
+            return False
+        steps = pick(chain, "steps") or []
+        if any(pick(st, "approverType", "approver_type") == "email" for st in steps):
+            return False
+        self.api.post(
+            f"/finance/approval-chains/{pick(chain, 'id')}/steps",
+            {
+                "step_order": len(steps) + 1,
+                "name": "Board sign-off",
+                "step_type": "approval",
+                "approver_type": "email",
+                "approver_value": "board@oakvillefd.example.org",
+                "required": True,
+            },
+        )
+        return True
+
     def seed_expense_reports(self, finance: dict) -> list[dict]:
         """Reimbursement claims, which the expense report detail pictures."""
         fiscal_year_id = pick(finance.get("fiscal_year") or {}, "id")
@@ -17096,6 +17312,7 @@ class Seeder:
         self.step("id cards", self.seed_id_cards)
         self.step("ical feed", self.seed_ical_feed)
         self.step("unused approval chain", self.seed_unused_approval_chain)
+        self.step("guide 11 finance states", self.seed_guide11_finance_states)
         self.step("unsized shift", self.seed_unsized_shift)
         self.step("sealed compartments", self.seed_sealed_compartments)
         self.step("member admin hours", self.seed_member_admin_hours)
