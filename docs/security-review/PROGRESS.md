@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3373](https://github.com/thegspiro/the-logbook/pull/3373)** (branch
+`claude/security-review-messaging-notifications`):
+Feature 25 (Messaging & notifications), pass 7. PR #3365 (Feature 24,
+Meetings & minutes, pass 7) had merged with nothing started for the next
+feature since; this pass picked it up. Docs-only — no application code
+changed. Diffed every file this feature's scope covers against pass 6's
+merge (PR #2984) rather than re-reading cold. **Two standing findings
+closed by other work, verified here rather than taken on faith:** MSG-12
+(a failed or throttled department-message delivery was never retried) is
+now fixed — migration `b834afdaffdf` adds `attempt_count`/`next_attempt_at`;
+a new scheduled task `run_retry_message_deliveries` (registered in all
+three of `SCHEDULE`/`TASK_RUNNERS`/`TASK_INTERVALS_SECONDS`) retries with
+5/10/20/40/80-minute backoff, and a throttled batch now claims a `retrying`
+row per member instead of leaving none. MSG-15 (web push's send-time
+DNS-rebinding pin skipped outside `ENVIRONMENT in ("production",
+"staging")`) is now fixed — every send is pinned unconditionally, with the
+only bypass a module attribute no deployment configuration can reach.
+`KNOWN_LIMITATIONS.md`'s entries for both already documented the
+resolutions accurately. **0 new findings** across the rest of the real
+delta since pass 6: an app-review notification-rules correctness fix, five
+new `EmailKind` members wired through `email_policy.py` (each confirmed to
+have a real reader, Pitfall #19, none added to the one-member `SmsAlert`
+allowlist), a new event-cancellation email sender (no new unescaped
+variable on `_RAW_HTML_VARIABLES`, org-scoped recipient query), a Google
+Workspace welcome-email addition (credentials block confirmed
+`html.escape`d), and six mypy-cleanup commits (type annotations only, no
+behavior change). Route surface re-enumerated: 51/51 unchanged. See
+`MSG-25-messaging-notifications.md`'s **Pass 7** section. Row 25 → ✅
+(pending this PR's merge); next is Feature 26 (Forms).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 7, PR #3365, merged), preserved for history</summary>
+
 **PR [#3365](https://github.com/thegspiro/the-logbook/pull/3365)** (branch
 `claude/security-review-meetings-minutes-p7`):
 Feature 24 (Meetings & minutes), pass 7. PR #3339 (Feature 23, Medical
@@ -48,6 +81,8 @@ self-scoped exception. Two app-review items (MM5-4, MM2-3) re-checked and
 left as that track's own open/flagged items, not re-fixed. See
 `MM-24-meetings-minutes.md`'s **Pass 7** section. Row 24 → ✅ (pending this
 PR's merge); next is Feature 25 (Messaging & notifications).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 14, PR #3352, merged), preserved for history</summary>
