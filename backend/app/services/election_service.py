@@ -3905,6 +3905,39 @@ class ElectionService:
 
         return non_voters
 
+    async def ensure_reminder_allowed(
+        self, election: Election, organization_id: UUID | str
+    ) -> None:
+        """Raise ValueError when a non-voter reminder may not go out now.
+
+        Called by ``remind_non_voters`` and, before queueing, by the
+        background reminder endpoint, so the secretary is refused at once
+        rather than after the job starts.
+        """
+        if election.status != ElectionStatus.OPEN:
+            raise ValueError("Reminders can only be sent for open elections")
+        flags = await self.get_feature_flags(organization_id)
+        if not flags["reminders_enabled"]:
+            raise ValueError(
+                "Non-voter reminders are disabled for this organization — "
+                "enable them in Election Settings"
+            )
+
+        # Cooldown: a manager double-clicking (or automation racing a manual
+        # send) must not spam members — each send mints fresh tokens.
+        now = datetime.now(timezone.utc)
+        last_sent = self._ensure_utc(election.reminder_sent_at)
+        if last_sent and now - last_sent < timedelta(
+            minutes=self.REMINDER_COOLDOWN_MINUTES
+        ):
+            wait_min = self.REMINDER_COOLDOWN_MINUTES - int(
+                (now - last_sent).total_seconds() // 60
+            )
+            raise ValueError(
+                f"A reminder was already sent recently — try again in about "
+                f"{max(wait_min, 1)} minute(s)"
+            )
+
     async def remind_non_voters(
         self,
         election_id: UUID,
@@ -3943,29 +3976,8 @@ class ElectionService:
         election = result.scalar_one_or_none()
         if not election:
             raise ValueError("Election not found")
-        if election.status != ElectionStatus.OPEN:
-            raise ValueError("Reminders can only be sent for open elections")
-        flags = await self.get_feature_flags(organization_id)
-        if not flags["reminders_enabled"]:
-            raise ValueError(
-                "Non-voter reminders are disabled for this organization — "
-                "enable them in Election Settings"
-            )
-
-        # Cooldown: a manager double-clicking (or automation racing a manual
-        # send) must not spam members — each send mints fresh tokens.
+        await self.ensure_reminder_allowed(election, organization_id)
         now = datetime.now(timezone.utc)
-        last_sent = self._ensure_utc(election.reminder_sent_at)
-        if last_sent and now - last_sent < timedelta(
-            minutes=self.REMINDER_COOLDOWN_MINUTES
-        ):
-            wait_min = self.REMINDER_COOLDOWN_MINUTES - int(
-                (now - last_sent).total_seconds() // 60
-            )
-            raise ValueError(
-                f"A reminder was already sent recently — try again in about "
-                f"{max(wait_min, 1)} minute(s)"
-            )
 
         non_voters = await self.get_non_voters(election_id, organization_id)
         if not non_voters:

@@ -66,6 +66,7 @@ from app.models.document import (
 )
 from app.models.election import (
     BallotSendJob,
+    BallotSendJobKind,
     BallotSendJobStatus,
     Candidate,
     Election,
@@ -595,6 +596,7 @@ __all__ = [
     # Election models
     "Election",
     "BallotSendJob",
+    "BallotSendJobKind",
     "BallotSendJobStatus",
     "Candidate",
     "VotingToken",
