@@ -14768,6 +14768,309 @@ class Seeder:
                 },
             )
 
+    # -- guide 02: states the training guide's screenshots picture ----------
+
+    # A submission the officer approved after lowering its hours, and one sent
+    # back for changes. Both are the demo member's, so the notices land in the
+    # inbox the member shots sign in to.
+    GUIDE02_CHANGED_COURSE = "S-190: Introduction to Wildland Fire Behavior"
+    GUIDE02_RETURNED_COURSE = "Vehicle Extrication Awareness"
+    # Submissions still waiting on an officer, each filed by a different member
+    # so the Training Officer's inbox stacks two prompts rather than one.
+    GUIDE02_PENDING = (
+        ("cfrazier", "Hazardous Materials Awareness Refresher", 3.0),
+        ("rduarte", "Rapid Intervention Crew Operations", 6.0),
+    )
+    # The member holding the Training Officer position, who is prompted in the
+    # inbox for each submission. The demo department otherwise has nobody in
+    # it, and a department with nobody in the position gets no prompt.
+    # Must match DEMO_TRAINING_OFFICER_CREDENTIALS in manifest.mjs.
+    TRAINING_OFFICER_USERNAME = "hvance"
+    TRAINING_OFFICER_POSITION = "Training Officer"
+    GUIDE02_SESSION_TITLE = "Ventilation Drill"
+    GUIDE02_SESSION_ATTENDEES = (DEMO_MEMBER_USERNAME, "cfrazier", "rduarte")
+    GUIDE02_LEAVE_REASON = "Recovering from a shoulder injury (off duty)."
+
+    def seed_guide02_states(self) -> None:
+        """Records the training guide's screenshots picture.
+
+        Each part is idempotent on the state it makes, so a re-run adds
+        nothing unless that state has moved on (an approval decided or past
+        its deadline is replaced).
+        """
+        self._guide02_submission_decisions()
+        self._guide02_pending_submissions()
+        self._guide02_pending_approval()
+        self._guide02_leave_month()
+        self._guide02_earlier_year()
+
+    def _guide02_submission_decisions(self) -> None:
+        user_id = self._user_id(DEMO_MEMBER_USERNAME)
+        if not user_id:
+            return
+        member = self.member_session(self.base_url, user_id, DEMO_MEMBER_USERNAME)
+        mine = {
+            pick(s, "course_name")
+            for s in items(member.get("/training/submissions/my"), "submissions")
+        }
+        if self.GUIDE02_CHANGED_COURSE not in mine:
+            submission = member.post(
+                "/training/submissions",
+                {
+                    "course_name": self.GUIDE02_CHANGED_COURSE,
+                    "training_type": "continuing_education",
+                    "description": "NWCG online course, then the classroom day.",
+                    "completion_date": str(TODAY - timedelta(days=12)),
+                    "hours_completed": 3.0,
+                    "instructor": "Virginia Department of Forestry",
+                },
+            )
+            # Approving with lower hours is what sends the "approved with
+            # changes" notice; a plain approval tells the member nothing.
+            self.api.post(
+                f"/training/submissions/{pick(submission, 'id')}/review",
+                {
+                    "action": "approve",
+                    "override_hours": 2.0,
+                    "reviewer_notes": (
+                        "The certificate shows a two-hour online module; the "
+                        "classroom day is credited separately."
+                    ),
+                },
+            )
+        if self.GUIDE02_RETURNED_COURSE not in mine:
+            submission = member.post(
+                "/training/submissions",
+                {
+                    "course_name": self.GUIDE02_RETURNED_COURSE,
+                    "training_type": "continuing_education",
+                    "description": "County rescue squad's evening class.",
+                    "completion_date": str(TODAY - timedelta(days=6)),
+                    "hours_completed": 4.0,
+                    "instructor": "Fairfax County Rescue Squad",
+                },
+            )
+            self.api.post(
+                f"/training/submissions/{pick(submission, 'id')}/review",
+                {
+                    "action": "revision_requested",
+                    "reviewer_notes": (
+                        "Please attach the sign-in sheet or certificate, and "
+                        "add the instructor's name as it appears on it."
+                    ),
+                },
+            )
+
+    def _guide02_training_officer(self) -> Api | None:
+        """Put a member in the Training Officer position and sign them in.
+
+        The session also clears the must-change-password flag, so the capture
+        can sign in as them.
+        """
+        username = self.TRAINING_OFFICER_USERNAME
+        if not self._ensure_role(username, self.TRAINING_OFFICER_POSITION):
+            return None
+        return self.member_session(self.base_url, self._user_id(username), username)
+
+    def _guide02_pending_submissions(self) -> None:
+        """Submissions awaiting approval, each with the officer's prompt.
+
+        A prompt is written when a submission arrives, so one filed before the
+        position was held has none. Such a submission is withdrawn and filed
+        again rather than left promptless.
+        """
+        officer = self._guide02_training_officer()
+        prompts = set()
+        if officer is not None:
+            prompts = {
+                str(pick(log, "subject") or "")
+                for log in items(officer.get("/notifications/my?limit=100"), "logs")
+            }
+        pending = {
+            pick(s, "course_name"): s
+            for s in items(self.api.get("/training/submissions/pending"))
+        }
+        users = items(self.api.get("/users?limit=200"), "users")
+        for username, course, hours in self.GUIDE02_PENDING:
+            user = next((u for u in users if pick(u, "username") == username), None)
+            if user is None:
+                continue
+            name = f"{pick(user, 'first_name')} {pick(user, 'last_name')}"
+            prompted = f"Training submission awaiting approval — {name}" in prompts
+            existing = pending.get(course)
+            if existing is not None and (prompted or officer is None):
+                continue
+            member = self.member_session(self.base_url, str(pick(user, "id")), username)
+            if existing is not None:
+                member.delete(f"/training/submissions/{pick(existing, 'id')}")
+            member.post(
+                "/training/submissions",
+                {
+                    "course_name": course,
+                    "training_type": "continuing_education",
+                    "completion_date": str(TODAY - timedelta(days=4)),
+                    "hours_completed": hours,
+                    "instructor": "Northern Virginia Fire Academy",
+                },
+            )
+
+    def _guide02_pending_approval(self) -> None:
+        """A finished training session whose credit waits on an officer.
+
+        The session requires instructor confirmation, so finalizing it leaves
+        a pending approval with a link token instead of crediting the members.
+        Replaced when the approval is no longer pending or its deadline is
+        near, so the approval page always has something to approve.
+        """
+        events = items(
+            self.api.get("/events?event_type=training&include_drafts=true&limit=500"),
+            "events",
+        )
+        for event in events:
+            if pick(event, "title") != self.GUIDE02_SESSION_TITLE:
+                continue
+            try:
+                summary = self.api.get(
+                    f"/training/sessions/by-event/{pick(event, 'id')}/approval"
+                )
+            except ApiError as exc:
+                if exc.code != 404:
+                    raise
+                summary = {}
+            deadline = str(pick(summary, "approval_deadline") or "")[:10]
+            if (
+                pick(summary, "status") == "pending"
+                and not pick(summary, "expired")
+                and deadline > str(TODAY + timedelta(days=3))
+            ):
+                return
+            # A finalized event cannot be deleted until its attendance is
+            # reopened, which also withdraws the stale approval.
+            event_id = pick(event, "id")
+            try:
+                self.api.post(
+                    f"/events/{event_id}/reopen-attendance",
+                    {"reason": "Replacing the screenshot fixture"},
+                )
+            except ApiError as exc:
+                if exc.code not in (400, 409):
+                    raise
+            self.api.delete(f"/events/{event_id}")
+
+        # Sent as UTC, as everywhere else in this file: the API stores the wall
+        # time it is given.
+        start = datetime.combine(
+            TODAY - timedelta(days=2), time(19, 0), tzinfo=ORG_TIMEZONE
+        ).astimezone(timezone.utc)
+        end = start + timedelta(hours=3)
+        session = self.api.post(
+            "/training/sessions",
+            {
+                "title": self.GUIDE02_SESSION_TITLE,
+                "description": "Vertical and horizontal ventilation on the "
+                "acquired structure.",
+                "location": "Station 1 Training Ground",
+                "start_datetime": iso(start),
+                "end_datetime": iso(end),
+                "requires_rsvp": False,
+                "course_name": "Ventilation Operations",
+                "training_type": "skills_practice",
+                "credit_hours": 3.0,
+                "instructor": "Capt. Ortiz",
+                "auto_create_records": True,
+                "require_completion_confirmation": True,
+                "approval_deadline_days": 30,
+            },
+        )
+        event_id = pick(session, "event_id")
+        # Different arrival and departure times, so the roster's credited
+        # minutes differ row to row.
+        for username, late, early in zip(
+            self.GUIDE02_SESSION_ATTENDEES, (0, 10, 25), (0, 0, 40)
+        ):
+            user_id = self._user_id(username)
+            if not user_id:
+                continue
+            self.api.post(
+                f"/events/{event_id}/add-attendee",
+                {"user_id": user_id, "status": "going", "checked_in": True},
+            )
+            self.api.patch(
+                f"/events/{event_id}/rsvps/{user_id}/override",
+                {
+                    "override_check_in_at": iso(start + timedelta(minutes=late)),
+                    "override_check_out_at": iso(end - timedelta(minutes=early)),
+                },
+            )
+        self.api.post(f"/training/sessions/{pick(session, 'id')}/finalize")
+
+    def _guide02_leave_month(self) -> None:
+        """A month of leave inside this year, for the monthly-hours strip.
+
+        Two months back, so it sits in a calendar-year requirement's window and
+        has finished. Skipped in January and February, when that month would
+        fall in the previous year.
+        """
+        if TODAY.month < 3:
+            return
+        user_id = self._user_id(DEMO_MEMBER_USERNAME)
+        if not user_id:
+            return
+        leaves = items(self.api.get(f"/users/{user_id}/leaves-of-absence"))
+        if any(pick(lv, "reason") == self.GUIDE02_LEAVE_REASON for lv in leaves):
+            return
+        first = date(TODAY.year, TODAY.month - 2, 1)
+        last = date(TODAY.year, TODAY.month - 1, 1) - timedelta(days=1)
+        self.api.post(
+            "/users/leaves-of-absence",
+            {
+                "user_id": user_id,
+                "leave_type": "medical",
+                "reason": self.GUIDE02_LEAVE_REASON,
+                "start_date": str(first),
+                "end_date": str(last),
+            },
+        )
+
+    # Last year's records for the demo member, so the History tab has an
+    # earlier year to show closed beneath this one.
+    GUIDE02_EARLIER_RECORDS = (
+        ("Ropes and Knots Workshop", "skills_practice", 4.0, 9, 20),
+        ("Hazmat Operations Refresher", "refresher", 8.0, 3, 14),
+        ("Vehicle Rescue Awareness", "continuing_education", 6.0, 5, 2),
+    )
+
+    def _guide02_earlier_year(self) -> None:
+        user_id = self._user_id(DEMO_MEMBER_USERNAME)
+        if not user_id:
+            return
+        year = TODAY.year - 1
+        on_file = {
+            (pick(r, "course_name"), str(pick(r, "completion_date") or "")[:4])
+            for r in items(
+                self.api.get(f"/training/records?user_id={user_id}&limit=200"),
+                "records",
+            )
+        }
+        for course, kind, hours, month, day in self.GUIDE02_EARLIER_RECORDS:
+            if (course, str(year)) in on_file:
+                continue
+            self.api.post(
+                "/training/records",
+                {
+                    "user_id": user_id,
+                    "course_name": course,
+                    "training_type": kind,
+                    "hours_completed": hours,
+                    "credit_hours": hours,
+                    "completion_date": str(date(year, month, day)),
+                    "status": "completed",
+                    "passed": True,
+                    "instructor": "Capt. Owen Kittredge",
+                    "location": "Training & Administration Center",
+                },
+            )
+
     def seed_meeting_stage_applicant(self) -> None:
         pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
         pipeline = next(
@@ -17299,6 +17602,7 @@ class Seeder:
         # Last: it parks two coats on a new shelf and issues gloves, which no
         # earlier step expects to find moved or issued.
         self.step("guide 05 states", self.seed_guide05_states)
+        self.step("guide 02 states", self.seed_guide02_states)
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:
