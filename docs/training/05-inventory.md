@@ -567,9 +567,7 @@ Each item in the kit is then given to the member on its own record: tracked
 items as assignments, counted items as issuances. The message says how many
 were issued.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/kits: the "Issue <kit>?" confirmation after picking a demo member, reading 'Issue N items from "<kit>" to <member>.' with Don't issue and Issue to <member>. Do not confirm.]_
--->
+![The Issue New Recruit PPE Kit? confirmation after picking Rafael Duarte, naming how many items the kit hands out, with Don't issue and Issue to Rafael Duarte](./images/05-95-kit-issue-confirm.png)
 
 ![Equipment kit detail listing its component items](./images/05-50-equipment-kit-detail.png)
 
@@ -1515,9 +1513,7 @@ If you picked the shelf on screen rather than scanning it, the result offers
 **Print shelf label**, so next time you can start with a scan. A shelf with no
 barcode yet gets one when its label prints.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/storage-areas: press Put away, type a seeded shelf's SA- code (e.g. SA-000003) and press Add, then two available item barcodes, so the panel reads "Filing onto <path> (SA-000003)", lists the two items and shows "File 2 items on <shelf>". Do not press File; no camera.]_
--->
+![Put away on Storage Areas after scanning the Quartermaster Shelving label and two item barcodes: Filing onto Quartermaster Shelving (SA-000003), the two items listed with remove buttons, and File 2 items on Quartermaster Shelving](./images/05-105-put-away-panel.png)
 
 ### Checking a bag, box or bin
 
@@ -1539,9 +1535,7 @@ Items assigned or lent to a member are not counted as missing. If one is
 scanned inside anyway, it is listed under **Here, but the record disagrees** so
 you can correct the record. Checking alone changes nothing.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/storage-areas: press Check contents, type a seeded bin's SA- code (e.g. the Uniform Bins area), then one item filed in it and one filed elsewhere, so the panel shows "1 of N found", "Not scanned yet (N)" and "Doesn’t belong here (1)" with its recorded location and File it here. Do not press File it here.]_
--->
+![Check contents on the Uniform Bins: one of its items found, the rest listed under Not scanned yet, and Firefighting Gloves under Doesn't belong here with the rack it is recorded on and File it here](./images/05-106-check-contents-panel.png)
 
 ### Shelf, rack and bin labels
 
@@ -1559,9 +1553,7 @@ label** for a partly used sheet. Each label shows the area's name and where it
 is ("_Station 1 › Rack A_"), and carries its barcode. An area with no barcode
 yet gets one when it prints.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/storage-areas/print-labels?ids=<3–4 storage area ids>: the Print Storage Area Labels page with Settings closed, previews showing each area's name, its location/parent trail and its SA- barcode. Seeded areas only; if a printer is registered, show only an RFC 5737 documentation address.]_
--->
+![Print Storage Area Labels for four seeded areas with Settings closed: each preview carries the area's label code and name above its SA- barcode](./images/05-107-storage-area-labels.png)
 
 ---
 
@@ -1636,9 +1628,7 @@ settings** permission.
 Turning it off hides the NFC buttons and stops tags working, but keeps every
 link. Turning it back on restores them.
 
-<!-- Screenshot needed:
-_[Administrator at /inventory/admin/nfc: the NFC Tags page with "Use NFC tags for inventory items" ticked and the "What works on which phone" card below it. The harness line "This device cannot read or write NFC tags itself…" is accurate and can stay.]_
--->
+![Inventory Administration → NFC Tags with Use NFC tags for inventory items ticked, and the What works on which phone card below it, including the note that this computer cannot read or write tags itself](./images/05-108-nfc-settings.png)
 
 ### Linking a tag to an item
 
@@ -1803,9 +1793,7 @@ turn on **Allow self-checkout at the kiosk**, and set a **Kiosk loan period
 (days)** if loans should be due back. Then open **Inventory Administration →
 Self-Service Kiosk** on a tablet and select **Start kiosk**.
 
-<!-- Screenshot needed:
-_[Admin (inventory.manage) at /inventory/admin/categories: edit a loaner category (e.g. "Loaner Radios") with "Allow self-checkout at the kiosk" switched on and "Kiosk loan period (days)" set to 14, so its help text is visible. Close without saving.]_
--->
+![Editing the Portable Radios category with Allow self-checkout at the kiosk switched on and Kiosk loan period (days) set to 14, its help text saying kiosk loans fall due after that many days](./images/05-115-category-kiosk.png)
 
 **For members:**
 
@@ -1830,9 +1818,7 @@ then keep tapping.
   on the phone and saved later. Finish an audit before closing the screen; an
   unfinished one is not kept.
 
-<!-- Screenshot needed:
-_[Admin (inventory.manage) at /inventory/put-away with NFC on, then the browser set offline: the amber "No signal: keep tapping" banner with "Taps are saved on this phone and applied when signal returns." No taps needed; the tap button's unavailable line is expected on desktop.]_
--->
+![Put Away by NFC with the browser offline: the amber "No signal: keep tapping" banner saying taps are saved on this phone and applied when signal returns](./images/05-116-put-away-offline.png)
 
 ### Apparatus compartment tags
 
@@ -1844,9 +1830,7 @@ compartment's **⋯** menu, and link a tag. Stick it on that compartment. For an
 item to be answered by a tap, give the item its own tag and link its checklist
 row to the inventory item.
 
-<!-- Screenshot needed:
-_[Admin (inventory.check_manage) at /inventory/admin/checklists/templates/:templateId with inventory NFC on: the "NFC tags: <compartment>" dialog opened from a saved compartment's ⋯ menu, showing the serial box, Link serial and the compartment hint line. No write button is expected on desktop. Do not link or show a real tag serial; close without linking.]_
--->
+![The NFC tags: Cab dialog opened from the Cab compartment's ⋯ menu in the checklist builder, with the tag serial box, Link serial and the hint about sticking the tag on that compartment; no tag linked](./images/05-117-compartment-nfc-tags.png)
 
 **During a check** (Chrome on Android):
 
@@ -1969,9 +1953,7 @@ and for this part of The Logbook. See
 > same box is on the label pages for apparatus, facilities, members and storage
 > areas.
 
-<!-- Screenshot needed:
-_[Quartermaster (inventory.manage) at /inventory right after saving Add Item for one new item: the green line "1 item added. Label it now?" with Print label and Dismiss. Creates an item, so use a disposable demo item and delete it afterwards, or mark the shot as mutating seed data.]_
--->
+![The items list right after Add Item: the green line "1 item added. Label it now?" with Print label and Dismiss](./images/05-119-item-added-label-prompt.png)
 
 ### Choosing which items to label
 
@@ -2039,9 +2021,7 @@ question. It is never asked after **Download Test Label**.
   page on that filter). **Not now** hides it until the page is reloaded. It
   disappears on its own once every item is labelled.
 
-<!-- Screenshot needed:
-_[Quartermaster (inventory.manage) at /inventory with no filter applied: crop to the line "N items need a label." with Show them, Print their labels and Not now above the table. The line hides under the Needs a Label filter, so leave filters clear.]_
--->
+![The line above the items list counting the items that need a label, with Show them, Print their labels and Not now](./images/05-120-needs-label-line.png)
 
 **The mark clears itself when the label goes out of date.** A label carries one
 value: the item's **barcode**; or its **asset tag** if it has no barcode; or
@@ -2291,9 +2271,7 @@ under the form says what the action does to the item's status:
 The completion date starts at today's date in your department's time zone.
 Select **Save Record** to save.
 
-<!-- Screenshot needed:
-_[Quartermaster at /inventory/admin/maintenance (or an item's Inspections tab → + Add Record): the "Log Maintenance — <item>" dialog with Record inspection selected and Pass chosen, the completion date showing today, and the note "This records the inspection without changing the item's status." Do not save.]_
--->
+![Log Maintenance for an item with Record inspection chosen and Pass ticked, the completion date at today, and the note that this records the inspection without changing the item's status](./images/05-121-log-maintenance-inspection.png)
 
 ![Item inspections tab listing its service history](./images/05-52-item-maintenance.png)
 
@@ -2884,7 +2862,9 @@ Build checklists in the **Template builder**, from the checklist console.
   units are offered. The copy is named "_apparatus_ - _template_" and starts
   switched off, which the window says.
 
-<!-- Screenshot needed: a builder item picker showing a medical result with its badge and Create in Medical Supplies; the clone dialog. -->
+![Linked Inventory Item in the checklist builder, searched for tourniquet: Tourniquet, CAT with its Medical badge, then Create in Medical Supplies and Create as equipment or gear](./images/05-123-builder-medical-picker.png)
+
+![Copy checklist to an apparatus, opened from Tools → Clone checklist: the note that the copy starts switched off so it can be reviewed first, and Copy onto set to B-5 — Brush 5](./images/05-124-clone-checklist-dialog.png)
 
 ### Catalog Links
 
