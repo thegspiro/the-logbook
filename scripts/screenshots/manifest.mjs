@@ -3307,6 +3307,9 @@ export const SHOTS = [
     anchor: "Screenshot of the label settings panel's orientation block",
     alt: "The label settings panel — size presets, auto-rotate, and the test-label download",
     route: "/inventory/print-labels",
+    // Scrolled to the orientation block and the test-label button, which sit
+    // below What Prints on the Label.
+    expect: "Test Label",
     prepare: async (page) => {
       await withIdsFromApi("/inventory/items?limit=6", "items", 6)(page);
       await page
@@ -4564,6 +4567,7 @@ export const SHOTS = [
     // wording is what broke it.
     auth: "member",
     route: "/inventory/my-equipment",
+    expect: "Pending requests",
     prepare: async (page) => {
       await page
         .getByRole("heading", { name: /My Issued Gear/i })
@@ -4608,6 +4612,7 @@ export const SHOTS = [
     anchor: "Screenshot of the analysis results showing the four summary cards",
     alt: "Impact planner results with its summary cards, size breakdown and cost estimate",
     route: "/inventory/admin/impact-planner",
+    expect: "Back to Admin",
     prepare: async (page) => {
       await runImpactAnalysis(page);
       // Analysing scrolls the results into view; the summary cards and the
@@ -5036,8 +5041,10 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 464,
     anchor: "Screenshot of the Assign Items modal showing the member it is",
-    alt: "Assigning items to a member by scanning or searching, with two items staged",
+    alt: "Distribute Items for a member: the intro about scanning or typing each item, two items staged, Ongoing assignment chosen under Intended duration with each option's one-line description, and Review 2 Items enabled",
     route: "/inventory/admin/members",
+    allowEmptyState:
+      '"Former members still holding property" is correctly empty: no demo member has been dropped.',
     prepare: async (page) => {
       // "Assign items to <member>" since #2821; the visible text is still Assign.
       await clickByName(/^Assign items to /)(page);
@@ -5053,7 +5060,15 @@ export const SHOTS = [
         await page.keyboard.press("Enter");
         await page.waitForTimeout(900);
       }
+      // A duration is what enables Review; until one is chosen the dialog
+      // says to pick one.
+      await page.getByRole("radio", { name: "Ongoing assignment" }).check();
+      await page
+        .getByRole("button", { name: /^Review 2 Items/ })
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
     },
+    expect: { selector: 'button:has-text("Review 2 Items"):not([disabled])' },
     fullPage: false,
   },
   {
@@ -5064,6 +5079,8 @@ export const SHOTS = [
       "Screenshot of the Return Items modal listing everything one member",
     alt: "Returning several items at once, each with its own condition",
     route: "/inventory/admin/members",
+    allowEmptyState:
+      '"Former members still holding property" is correctly empty: no demo member has been dropped.',
     prepare: async (page) => {
       // The member the seeder issues a full kit to. Any other row holds one
       // item, and a "batch" return of one row shows none of the mechanism.
@@ -6798,6 +6815,9 @@ export const SHOTS = [
       "Screenshot of the Inventory Items List page showing the search bar, category",
     alt: "Inventory Items list with search, category filter, and status pills",
     route: "/inventory/items",
+    allowEmptyState:
+      '"No location" is an option in the location filter, not an empty list.',
+    expect: "need a label.",
   },
   {
     id: "05-02-items-pinned",
@@ -8661,6 +8681,7 @@ export const SHOTS = [
       "Screenshot of the Item Detail page showing the two-column layout. Left sidebar",
     alt: "Inventory item detail with its barcode, quick info, and history panels",
     route: "/inventory/items",
+    expect: { selector: "h1" },
     prepare: openFirstFromApi(
       "/inventory/items?limit=1",
       (id) => `/inventory/items/${id}`,
@@ -8695,6 +8716,7 @@ export const SHOTS = [
       'Screenshot of the pool-item issue dialog showing an "allowance exceeded" warning',
     alt: 'Pool item issue dialog warning that the quantity exceeds the member’s uniform allowance, with the "Override allowance" checkbox',
     route: "/inventory/admin/pool",
+    expect: "Override allowance",
     prepare: async (page) => {
       // Job Shirt is a Uniforms pool item, and the seeder has already spent 2
       // of the demo member's 3 annual uniform allowance — so asking for 2 is
@@ -8739,6 +8761,9 @@ export const SHOTS = [
       "Screenshot of the Reorder Requests page showing a table of reorder requests",
     alt: "Reorder requests table with requested quantities and status",
     route: "/inventory/admin/reorder",
+    // The status filter's closed <option> carries the same word, so the badge
+    // is found inside the table.
+    expect: { selector: 'tbody :text-is("Ordered")' },
   },
   {
     id: "05-24-member-inventory",
@@ -8748,6 +8773,9 @@ export const SHOTS = [
       "Screenshot of the Members inventory tab showing a list of members with",
     alt: "Members inventory tab listing each member and their assigned item count",
     route: "/inventory/admin/members",
+    allowEmptyState:
+      '"Former members still holding property" is correctly empty: no demo member has been dropped.',
+    expect: "Member Equipment",
   },
   {
     id: "05-25-admin-hub",
@@ -8925,7 +8953,7 @@ export const SHOTS = [
     line: 340,
     anchor:
       "Screenshot of the Equipment Requests page showing an approved request with its Fulfill",
-    alt: "Equipment Requests — a pending request, an approved one carrying Fulfill, and a fulfilled one with its terminal badge",
+    alt: "Gear Requests filtered to All: requests awaiting review, an approved one carrying Fulfill, an issued one, and a declined one, each with its status badge",
     route: "/inventory/admin/requests",
     prepare: async (page) => {
       // The page opens on Pending, which is right for a review queue and wrong
@@ -8933,6 +8961,7 @@ export const SHOTS = [
       await page.selectOption("#status-filter", "");
       await page.waitForTimeout(800);
     },
+    expect: "Fulfill",
     fullPage: true,
   },
   {
@@ -9006,6 +9035,7 @@ export const SHOTS = [
       "Screenshot of the label printing page showing the format dropdown (Letter, Dymo",
     alt: "Inventory label printing page with format presets and preview",
     route: "/inventory/print-labels",
+    expect: "Save setup",
     // The page prints whatever ?ids= names and otherwise renders "No items
     // specified" — which is what this shot published until 2026-08-09.
     prepare: withIdsFromApi("/inventory/items?limit=6", "items"),
@@ -9019,7 +9049,9 @@ export const SHOTS = [
       "Screenshot of the Storage Areas page showing an expanded storage area panel",
     alt: "Storage areas page with an expanded area listing its items",
     route: "/inventory/storage-areas",
-    prepare: async (page) => {
+    // NFC on, so the toolbar carries Put Away by NFC beside Put away, Scan
+    // shelf label, Check contents and Print labels.
+    prepare: withInventoryNfc(async (page) => {
       await selectStorageRoom(page);
       // The last area rather than the first, so this and 05-48 — which both
       // want an area expanded — do not publish the same picture twice.
@@ -9027,7 +9059,9 @@ export const SHOTS = [
         .getByRole("button", { name: /^Show \d+ items? in / })
         .last()
         .click({ timeout: 10_000 });
-    },
+    }),
+    cleanup: disableInventoryNfc,
+    expect: "Put Away by NFC",
     fullPage: true,
   },
   {
@@ -9041,6 +9075,7 @@ export const SHOTS = [
       "Screenshot of the Impact Planner page showing the filter panel on the",
     alt: "Inventory impact planner with its filter panel and member analysis",
     route: "/inventory/admin/impact-planner",
+    expect: "Back to Admin",
     fullPage: true,
   },
   {
@@ -9698,10 +9733,26 @@ export const SHOTS = [
     line: 71,
     anchor:
       "Screenshot of the item edit modal showing form fields for name, description,",
-    alt: "Inventory item form with category, serial, condition and tracking fields",
+    alt: "The Add Item form for a Structural PPE item: Serial # and Inspection Interval (days) marked required by the category, and the line under Tracking Type describing Individual tracking",
     route: "/inventory/admin/items",
-    prepare: clickByName(/add item/i),
-    fullPage: false,
+    // A category that requires serial numbers and maintenance, so Serial # and
+    // Inspection Interval (days) carry their required markers, and Individual
+    // tracking so the help line under Tracking Type describes it. Never saved.
+    prepare: async (page) => {
+      await clickByName(/add item/i)(page);
+      const dialog = page.locator('[data-testid="modal-panel"]');
+      await dialog
+        .locator("#item-category_id")
+        .selectOption({ label: "Structural PPE" });
+      await dialog
+        .getByText("Individual: one record per physical item", { exact: false })
+        .waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(400);
+    },
+    expect: "Individual: one record per physical item",
+    selector: '[data-testid="modal-panel"]',
+    viewport: { width: 1440, height: 2200 },
   },
   {
     id: "05-12-new-allowance-modal",
@@ -10522,8 +10573,9 @@ export const SHOTS = [
     line: 1761,
     anchor:
       "Screenshot of the label print page (any module) showing the label size choices",
-    alt: "The inventory label print page — the nine label size choices with Rollo/Thermal 2x1 selected, copies per item, extra-detail toggles, and a preview of the three barcode labels",
+    alt: "The inventory label print page with Settings open: the saved-setup row, the label size choices, copies per item, What Prints on the Label, and a preview of the three barcode labels",
     route: "/inventory/items",
+    expect: "What Prints on the Label",
     prepare: async (page) => {
       // The page renders from ?ids= and shows "No items specified" without it,
       // so the ids have to be picked up before navigating.
@@ -13050,6 +13102,7 @@ export const SHOTS = [
       "Screenshot of the barcode print page Settings panel showing the Label Size grid",
     alt: "Label print settings with the size presets and content options",
     route: "/inventory/print-labels",
+    expect: "What Prints on the Label",
     prepare: async (page) => {
       await withIdsFromApi("/inventory/items?limit=6", "items")(page);
       await clickByName(/^Settings$/)(page);
@@ -13097,6 +13150,7 @@ export const SHOTS = [
       "Screenshot of the Storage Areas page with one area expanded showing",
     alt: "Storage area expanded to show the items stored in it",
     route: "/inventory/storage-areas",
+    expect: "Check contents",
     prepare: async (page) => {
       await selectStorageRoom(page);
       // The count is the control: clicking it opens the inline items panel.
@@ -13868,7 +13922,7 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 863,
     anchor: "immediately after pressing **print labels**",
-    alt: "The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark 11 items as labelled and Not yet, above the label preview",
+    alt: "The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark the items as labelled, Scan labels to confirm and Not yet, above the label preview",
     route: "/inventory/print-labels",
     expect: "Did the labels print correctly?",
     // Full page, as 05-33 is: this page renders its label preview well below
@@ -15293,16 +15347,22 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 2738,
     anchor: "__paired-with-05-86__",
-    alt: "The size step for Structural Coat: L preselected from the member's size on file, and XXL labelled none on hand but still selectable",
+    alt: "The size step for Structural Coat with XXL selected: labelled none on hand, the size-on-file line (from your profile), and the notice that none are on hand in XXL right now but the request can still be submitted",
     route: "/inventory/my-equipment",
     auth: "member",
     viewport: { width: 1440, height: 1000 },
     selector: '.modal-panel:has-text("Request Equipment")',
-    expect: "none on hand",
+    expect: "None in XXL on hand right now.",
     prepare: async (page) => {
       await clickByName(/^Request Equipment$/)(page);
       await page.getByText("Structural Coat", { exact: false }).first().click();
       await page.getByText("Your size on file", { exact: false }).waitFor();
+      await page
+        .getByRole("button", { name: /^XXL/ })
+        .first()
+        .click({ timeout: 10_000 });
+      await page.getByText("None in XXL on hand right now.").waitFor();
+      await page.waitForTimeout(300);
     },
   },
   {

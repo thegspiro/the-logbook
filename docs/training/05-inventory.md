@@ -293,7 +293,7 @@ Select an item's row to open its edit form. There you can see and change its
 description, serial number and asset tag, condition and status, storage place,
 purchase and warranty details, and notes.
 
-![Inventory item form with category, serial, condition and tracking fields](./images/05-05-item-form-modal.png)
+![The Add Item form for a Structural PPE item: Serial # and Inspection Interval (days) marked required by the category, and the line under Tracking Type describing Individual tracking](./images/05-05-item-form-modal.png)
 
 The form shows what the category requires:
 
@@ -770,7 +770,7 @@ each. If an item is held by someone else, you are asked to **Confirm custody
 transfer** before it moves. The transfer takes effect immediately, and the
 record notes who made it.
 
-![Assigning items to a member by scanning or searching, with two items staged](./images/05-57-assign-scan-modal.png)
+![Distribute Items for a member: the intro about scanning or typing each item, two items staged, Ongoing assignment chosen under Intended duration with each option's one-line description, and Review 2 Items enabled](./images/05-57-assign-scan-modal.png)
 
 ![The inventory admin hub with Assign to Member in the header above the navigation cards](./images/05-54-admin-hub-assign.png)
 
@@ -1007,7 +1007,7 @@ cannot request it.
 
 ![Request Equipment at the product step: category filters across the top and one row per product with its on-hand count and number of sizes, or None on hand — you can still ask](./images/05-86-gear-request-products.png)
 
-![The size step for Structural Coat: L preselected from the member's size on file, and XXL labelled none on hand but still selectable](./images/05-87-gear-request-size.png)
+![The size step for Structural Coat with XXL selected: labelled none on hand, the size-on-file line (from your profile), and the notice that none are on hand in XXL right now but the request can still be submitted](./images/05-87-gear-request-size.png)
 
 #### When your size is not on the shelf
 
@@ -1083,7 +1083,7 @@ and date.
 Only **Approved** requests can be fulfilled, so the same request cannot be
 handed out twice by accident.
 
-![Gear Requests — a pending request, an approved one carrying Fulfill, and a fulfilled one with its terminal badge](./images/05-68-equipment-request-states.png)
+![Gear Requests filtered to All: requests awaiting review, an approved one carrying Fulfill, an issued one, and a declined one, each with its status badge](./images/05-68-equipment-request-states.png)
 
 ### What the member is told
 
@@ -1892,7 +1892,7 @@ and for this part of The Logbook. See
 
 ![Label print settings with the size presets and content options](./images/05-51-label-print-settings.png)
 
-![The inventory label print page — the nine label size choices with Rollo/Thermal 2x1 selected, copies per item, extra-detail toggles, and a preview of the three barcode labels](./images/05-69-label-print-page.png)
+![The inventory label print page with Settings open: the saved-setup row, the label size choices, copies per item, What Prints on the Label, and a preview of the three barcode labels](./images/05-69-label-print-page.png)
 
 ![Inventory label printing page with format presets and preview](./images/05-33-label-printing.png)
 
@@ -1971,7 +1971,7 @@ Nothing is recorded until you confirm. A print window you cancelled, a jam, or
 a PDF you never opened should not mark anything. **Not yet** just closes the
 question. It is never asked after **Download Test Label**.
 
-![The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark 11 items as labelled and Not yet, above the label preview](./images/05-85-label-print-confirm.png)
+![The label print page just after Print Labels: the prompt asking whether the labels printed correctly, with Mark the items as labelled, Scan labels to confirm and Not yet, above the label preview](./images/05-85-label-print-confirm.png)
 
 **Where it shows:**
 
