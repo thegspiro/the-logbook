@@ -38,6 +38,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     confirmAssignment: vi.fn().mockResolvedValue({}),
     checkIn: vi.fn().mockResolvedValue({}),
     checkOut: vi.fn().mockResolvedValue({}),
+    updateAssignment: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -695,6 +696,33 @@ describe('ShiftDetailPanel dialog shell', () => {
 
     expect(screen.queryByRole('textbox', { name: 'Assignment notes' })).not.toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('sends null when an assignment note is emptied, so the clear persists', async () => {
+    // The update endpoint reads exclude_unset: an omitted `notes` key means
+    // "leave it alone", so a note the officer deleted came back after save.
+    const mockUpdate = vi.mocked(schedulingService.updateAssignment);
+    mockUpdate.mockReset();
+    mockUpdate.mockResolvedValue({} as never);
+    mockAssignments.mockResolvedValue([
+      {
+        id: 'a-1',
+        user_id: 'user-2',
+        user_name: 'A Member',
+        position: 'firefighter',
+        status: 'assigned',
+        notes: 'Covering for B shift',
+      },
+    ] as never);
+
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit notes' }));
+    await user.clear(screen.getByRole('textbox', { name: 'Assignment notes' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('a-1', { notes: null }));
   });
 
   it('goes inert while the driver-qualification dialog is on top of it', async () => {

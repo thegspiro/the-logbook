@@ -3184,6 +3184,11 @@ class InventoryService:
             # Validate pool quantity constraints
             if item.tracking_type == TrackingType.POOL and "quantity" in update_data:
                 new_qty = update_data["quantity"]
+                # A pool item's quantity is its whole stock record, so an
+                # explicit null cannot mean "clear" here; refuse it by name
+                # rather than letting the comparison below raise a TypeError.
+                if new_qty is None:
+                    return None, "Pool item quantity is required"
                 if new_qty < 0:
                     return None, "Pool item quantity cannot be negative"
 

@@ -902,7 +902,7 @@ const HistoricalImportPage: React.FC = () => {
   }, []);
 
   return (
-    // Rendered only as the Import History tab of Training Administration,
+    // Rendered only as the Import Past Training tab of Training Administration,
     // whose content column already supplies the side padding and width.
     <div className="py-6">
       <div className="mb-6">

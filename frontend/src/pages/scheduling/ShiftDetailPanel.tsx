@@ -73,6 +73,7 @@ import {
   localToUTC,
 } from '../../utils/dateFormatting';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
+import { blankToNull } from '../../utils/formValues';
 import { formatHours } from '../../utils/hoursFormatting';
 import { DriverBlockedDialog } from './DriverBlockedDialog';
 import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
@@ -756,7 +757,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const handleSaveAssignmentNotes = async (assignmentId: string) => {
     setPendingFlag('savingNotes', true);
     try {
-      await schedulingService.updateAssignment(assignmentId, { notes: editingNotesValue || undefined });
+      await schedulingService.updateAssignment(assignmentId, { notes: blankToNull(editingNotesValue) });
       toast.success('Notes updated');
       setEditingNotesId(null);
       await refreshAssignments();

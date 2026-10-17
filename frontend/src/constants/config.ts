@@ -10,6 +10,20 @@
 // ============================================
 export const API_TIMEOUT_MS = 30_000; // 30 seconds
 
+/**
+ * How often the election page asks whether a background ballot send has
+ * finished. A send runs at roughly a second per member, so polling faster
+ * buys nothing but requests.
+ */
+export const BALLOT_SEND_POLL_INTERVAL_MS = 2_000;
+
+/**
+ * Consecutive failed status checks tolerated before the page stops waiting.
+ * One dropped request on a flaky connection must not read as a failed send:
+ * the send itself is on the server and carries on regardless.
+ */
+export const BALLOT_SEND_POLL_MAX_FAILURES = 5;
+
 // ============================================
 // Pagination defaults
 // ============================================

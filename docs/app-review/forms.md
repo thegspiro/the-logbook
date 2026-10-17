@@ -1,7 +1,8 @@
 # Application Review — Forms (Tier B)
 
 **Prefix:** `FORM2` · **Iteration:** B13 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-16 (pass 5)
 
 **Backend:** `endpoints/forms.py` (752 L, 21 endpoints), `public/forms.py` (209 L),
 `services/forms_service.py` (2,290 L), models `models/forms.py`
@@ -22,6 +23,101 @@ not a security one, but it closes BXC-1 as a side effect: the dangling/
 foreign-reference case these notes reasoned about can no longer occur. See
 the security-review pass 5 entry for the full re-verification. Left in place
 below as the historical record of what was true through pass 4.
+
+---
+
+## Pass 5 (2026-10-16) — seven flags could be nulled into a row that broke the form's own screen (7 fixed, 0 flagged)
+
+Lens for this pass: the update-payload discipline the B4–B12 passes applied, driven
+through the real handlers. The three PATCH routes (`/forms/{id}`, `/fields/{id}`,
+`/integrations/{id}`) already write through `apply_updates`, and the service wraps it in
+`except Exception → safe_error_detail`, so a null against a NOT NULL column was already a
+clean 400 — that half was verified rather than fixed. What was open is the other shape
+(DOC-20 / NOTIF2-5): a **nullable column behind a response field typed as a plain
+`bool` / `str`**. All 22 routes were inventoried for their gate: `forms.manage` on every
+write and on the submissions and integrations routes, `forms.view` on list / summary /
+detail, `get_current_user` on `member-lookup` (own visibility test) and on the
+authenticated submit (any member, by design).
+
+### FORM2-2 — MEDIUM — `PATCH` with `null` on a flag stored NULL, then every read of the form returned 500 — ✅ FIXED
+
+Probed by sending `{field: null}` for every field of the three `*Update` schemas against
+a fresh form each time, then reading the row back from the table and `GET`ting the form.
+Seven fields stored NULL, answered 500, and left `GET /forms/{id}` at 500 as well:
+
+| Update schema           | Fields                                                                                      | Column                        |
+| ----------------------- | ------------------------------------------------------------------------------------------- | ----------------------------- |
+| `FormUpdate`            | `allow_multiple_submissions`, `require_authentication`, `notify_on_submission`, `is_public` | nullable `Boolean`            |
+| `FormFieldUpdate`       | `required`, `width`                                                                         | nullable `Boolean` / `String` |
+| `FormIntegrationUpdate` | `is_active`                                                                                 | nullable `Boolean`            |
+
+Each column allows NULL (`Mapped[Optional[...]]`) while its response field is a plain
+`bool` / `str`, so `apply_updates` — which refuses a null only for a NOT NULL column —
+wrote it, the commit succeeded, and serializing the row failed. The cost is the form's
+detail view and, for the form flags, the list, until the row is repaired in the database.
+Two of the flags are read as falsy afterwards: `require_authentication` is checked as
+`if form.require_authentication and not submitted_by` (`forms_service.py:1508`), so a NULL
+**opens an authenticated form to public submission**, and `allow_multiple_submissions` NULL
+reads as "one submission per person". Reachability is low — the frontend types
+(`formTypes.ts`) never allow null for any of these, so it needs a direct API client with
+`forms.manage` — but the failure is fail-open on one flag and takes the screen down on all.
+
+**Fixed in the request schemas**, not the handlers: a shared `_reject_null` validator
+(`field_validator`, using `info.field_name` for the message) answers 422 for an explicit
+null and does nothing when the key is omitted, since a validator does not run for a key
+that was not sent. Same fix and same reasoning as NOTIF2-5.
+
+Tests: `tests/test_forms_update_null_columns_integration.py` (39). The case lists are
+**derived** from schema ∩ model ∩ response model, so a new column becomes a new case the
+day it is added: NOT NULL columns must answer exactly 400 or 422 and keep their value;
+nullable-but-plain-typed flags must answer 422, keep their value and leave the form
+loading (detail and list); every other nullable column must still clear. A guard test pins
+the derived flag set to the seven above so a new one is a deliberate edit. 7 cases fail on
+the unmodified schemas (one per flag), 32 pass either way, 0 are selected under the unit
+job's marker expression. A JSON column (`options`, `notification_emails`) stores the JSON
+literal `null` rather than SQL NULL when cleared; the ORM reads either back as `None`, and
+the test accepts both.
+
+### Observation, not changed — one redundant `# noqa: E712`
+
+`forms_service.py:2076` carries `# noqa: E712` on a `== True` JSON-value compare. `.flake8`
+ignores E711 and E712 globally, so it is a no-op; it belongs to the repo-wide sweep
+recorded in `docs/app-review/notifications.md` (67 + 6 comments), not to this change set.
+
+### Verified good ✅ (this pass)
+
+- **Nothing unreferenced.** The AST scan (counting `tests/`, `scripts/`, `alembic/`) over
+  the endpoints, public router, service, model and schema files found no unused module-level
+  name or class method.
+- **Org scoping.** Every by-id read resolves the form through `get_form_by_id(form_id,
+organization_id)` first; field queries then constrain by the parent `form_id`; integration
+  queries filter `organization_id` as well (the FORM-1 / FORM-2 fixes from the earlier
+  audit still hold, and the org-scoping ratchet passes).
+- **NOT NULL columns** (`name`, `category`, `status`, `label`, `field_type`, `sort_order`,
+  `field_mappings`) answer 400 / 422 and leave the stored value untouched.
+- **Enum validation** (`category`, `status`, `field_type`, `integration_type`) rejects an
+  out-of-set value with a 422 before it reaches the ENUM column (FORM2-1 still holds).
+
+### Not read (scope, stated plainly)
+
+The 3,492-line service was read at its update, delete, field and integration paths and
+scanned for dead names; the submission pipeline, the integration processors (membership,
+equipment, event registration, event request), email notification and the stage-advance
+guards were left to their dedicated suites, which pass. The `modules/forms` frontend was
+read only at its update payload types.
+
+### Completion gate (pass 5)
+
+| Check                                                           | Result                                                             |
+| --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `flake8 app/ tests/`                                            | ✅ exit 0, no output                                               |
+| `black --check app/ tests/`                                     | ✅ 1767 files unchanged                                            |
+| `isort --check` (changed files)                                 | ✅                                                                 |
+| `mypy app/schemas/forms.py`                                     | ✅ no issues                                                       |
+| Related backend suites (16 files incl. the org-scoping ratchet) | ✅ 270 passed                                                      |
+| New file                                                        | ✅ 39 pass; 7 fail without the fix; 0 under the unit job's markers |
+| `check_route_permissions.py --strict`                           | ✅ 0 errors, 0 warnings                                            |
+| Frontend                                                        | n/a — no frontend change                                           |
 
 ---
 

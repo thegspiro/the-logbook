@@ -133,7 +133,24 @@ describe('BallotVotingPage public error states (W50-44, W50-52)', () => {
   });
 
   it('makes the bordered write-in card the label and gives the confirm buttons a 44px target', async () => {
-    mockLookupBallot.mockResolvedValue({ election: election(), candidates: [], is_test: false });
+    // A write-in belongs to a candidate race; an Approve/Deny item never offers one.
+    mockLookupBallot.mockResolvedValue({
+      election: {
+        ...election(),
+        ballot_items: [
+          {
+            id: 'chair',
+            type: 'officer_election',
+            title: 'Board Chair',
+            position: 'Chair',
+            eligible_voter_types: ['all'],
+            vote_type: 'candidate_selection',
+          },
+        ],
+      },
+      candidates: [{ id: 'cand-1', name: 'Alex Rivera', position: 'Chair', accepted: true, is_write_in: false }],
+      is_test: false,
+    });
     const user = userEvent.setup();
 
     render(<BallotVotingPage />);
@@ -143,7 +160,7 @@ describe('BallotVotingPage public error states (W50-44, W50-52)', () => {
     expect(label.className).toContain('border');
     expect(label.className).toContain('mobile-touch-row');
 
-    await user.click(screen.getByRole('radio', { name: 'Approve' }));
+    await user.click(screen.getByRole('radio', { name: /Alex Rivera/ }));
     await user.click(screen.getByRole('button', { name: 'Submit Ballot' }));
 
     expect(screen.getByRole('button', { name: 'Change Ballot' }).className).toContain('mobile-touch-target');

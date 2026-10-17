@@ -136,6 +136,13 @@ const SendBallotEmailsModal: React.FC<SendBallotEmailsModalProps> = ({
             </label>
           </div>
 
+          {sending && (
+            <p className="text-theme-text-secondary mt-4 text-sm" role="status" aria-live="polite">
+              Sending ballots. A large roster can take a few minutes. If you leave this page the send carries on, and
+              the election page will show who received a ballot.
+            </p>
+          )}
+
           <div className="mt-6 flex justify-end space-x-3">
             <button
               type="button"
