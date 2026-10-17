@@ -128,6 +128,22 @@ export const DEMO_FORWARDEE_CREDENTIALS = {
 };
 
 /**
+ * The Compliance Officer: the only reviewer of the default Compliance
+ * suggestion box, which the Secretary does not review.
+ *
+ * Shots marked `auth: "compliance"` sign in as this account, to picture a
+ * Compliance submission as its reviewer sees it, intake answers included.
+ *
+ * Must match COMPLIANCE_OFFICER_USERNAME in seed_demo_data.py, whose
+ * `seed_guide07_states` signs the account in once so its forced password
+ * change is already cleared.
+ */
+export const DEMO_COMPLIANCE_CREDENTIALS = {
+  username: "lnakamura",
+  password: "DemoMember!2026",
+};
+
+/**
  * A member with no gear issued, nothing on loan and no requests.
  *
  * Shots marked `auth: "gearless"` sign in as this account, for the empty My
@@ -441,6 +457,53 @@ export const isUpcoming = (event) => {
   const start = event.start_datetime ?? event.startDatetime ?? "";
   return start > new Date().toISOString();
 };
+
+/** The administrator page 04-54 borrowed, kept for its cleanup step. */
+let drillCheckInAdmin = null;
+
+/**
+ * Remove ("DELETE") or restore ("POST") the demo member's check-in on the
+ * in-progress drill, as the administrator. Resolves to the drill's id, or a
+ * short reason when the call was refused. A 400 is accepted both ways: there
+ * is no RSVP to remove, or she is already checked in.
+ */
+async function drillMemberCheckIn(admin, method) {
+  return await admin.evaluate(
+    async ([verb, title, username]) => {
+      const get = async (path) =>
+        (await fetch(`/api/v1${path}`, { credentials: "include" })).json();
+      const list = await get("/events?limit=200");
+      const event = (Array.isArray(list) ? list : list.events || []).find(
+        (e) => e.title === title,
+      );
+      const users = await get("/users?limit=200");
+      const member = (
+        Array.isArray(users) ? users : users.users || users.items || []
+      ).find((u) => u.username === username);
+      if (!event || !member) return "drill or member not found";
+      const csrf =
+        (document.cookie.match(/(?:^|; )csrf_token=([^;]+)/) || [])[1] || "";
+      const response = await fetch(
+        verb === "DELETE"
+          ? `/api/v1/events/${event.id}/rsvps/${member.id}`
+          : `/api/v1/events/${event.id}/check-in`,
+        {
+          method: verb,
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": decodeURIComponent(csrf),
+          },
+          body: verb === "POST" ? JSON.stringify({ user_id: member.id }) : null,
+        },
+      );
+      return response.ok || response.status === 400
+        ? event.id
+        : `${verb} answered ${response.status}`;
+    },
+    [method, "Company Drill — In Progress", DEMO_MEMBER_CREDENTIALS.username],
+  );
+}
 
 /**
  * True for an event still open for RSVPs.
@@ -1038,6 +1101,35 @@ export function openIntegrationConnect(providerName) {
       .getByRole("button", { name: "Connect" })
       .click({ timeout: 10_000 });
   };
+}
+
+/**
+ * Open Add Provider on Training Admin's integrations tab and fill in a Target
+ * Solutions provider with obviously fake credentials, auto-sync on.
+ *
+ * Never saved: the shots picture the form, and a saved provider would start
+ * syncing against a Target Solutions account the demo does not have. Picking
+ * Target Solutions sets the hourly pull and the 02:00 review itself.
+ */
+async function openTargetSolutionsProvider(page, { baseUrl }) {
+  await page
+    .getByRole("button", { name: "Add Provider" })
+    .locator("visible=true")
+    .first()
+    .click({ timeout: 15_000 });
+  await page
+    .getByRole("button", { name: /^Target Solutions/ })
+    .click({ timeout: 10_000 });
+  await page.locator("#provider-api-key").waitFor({ timeout: 10_000 });
+  if (baseUrl) await page.locator("#provider-api-url").fill(baseUrl);
+  await page.locator("#provider-api-key").fill("demo-key");
+  await page.locator("#provider-api-secret").fill("demo-secret");
+  await page.getByRole("switch", { name: "Enable auto-sync" }).click();
+  await page.getByText("Daily 30-day review at").waitFor({ timeout: 10_000 });
+  await page.evaluate(() => {
+    const el = document.activeElement;
+    if (el instanceof HTMLElement) el.blur();
+  });
 }
 
 /**
@@ -2462,6 +2554,13 @@ const DEMO_OAUTH_CLIENT_ID = "lbmcp_DEMO-not-a-real-client-id";
 const DEMO_OAUTH_CLIENT_SECRET = "lbmcs_DEMO-not-a-real-credential-0000000000";
 
 let memberSignInAdminPage = null;
+
+// What 07-04, 07-27 and 07-31 change for the length of their shot, and how to put it
+// back. Kept here because a cleanup receives only its own page: 07-27's is the
+// signed-out one, which cannot write.
+let publicFormSignInRestore = null;
+let memberEmailsRestore = null;
+let draftFormCleanup = null;
 
 async function apiCall(page, method, path, body) {
   return page.evaluate(
@@ -4268,6 +4367,13 @@ export const SHOTS = [
             event.recurrencePattern,
           ),
       )(page);
+      // The detail page renders its actions after the event loads; asked
+      // straight after navigation, clickByName found no visible match and the
+      // fallback below clicked the wrong icon button.
+      await page
+        .getByRole("button", { name: /^More$|^Actions$/ })
+        .first()
+        .waitFor({ timeout: 20_000 });
       await clickByName(/^More$|^Actions$/)(page).catch(async () => {
         // The menu button has no label of its own — it is an icon — so fall
         // back to the control that sits beside End Event / Edit.
@@ -5483,6 +5589,12 @@ export const SHOTS = [
       await page
         .locator("#recurrence-pattern")
         .selectOption("monthly_weekday", { timeout: 10_000 });
+      // "2nd Tuesday", the guide's own example, and a series end date, which
+      // the caption names. Nothing is submitted.
+      await page.locator("#recurrence-ordinal").selectOption("2");
+      await page.locator("#recurrence-weekday").selectOption("1");
+      await page.locator("#recurrence-end-date").fill("2027-06-30");
+      await page.locator("#recurrence-end-date").evaluate((el) => el.blur());
       await page.waitForTimeout(600);
     },
     // Clipped to the form: the sidebar is position:fixed, so a full-page
@@ -7862,7 +7974,7 @@ export const SHOTS = [
     line: 423,
     anchor:
       "Screenshot of the minutes creation/editing page showing the meeting type selector, date,",
-    alt: "Meeting minutes page with the meeting type selector and attendee list",
+    alt: "The Meeting Minutes page: the Outlines button, the summary tiles, and each meeting card listing its minutes with their state, one Circulated for review and one Adopted",
     route: "/minutes",
   },
   {
@@ -7873,6 +7985,594 @@ export const SHOTS = [
       "Screenshot of the Action Items page showing a filterable list of tasks",
     alt: "Action Items page listing tasks with assignee, due date, and status",
     route: "/action-items",
+  },
+  {
+    // The seeded officer-meeting minutes are circulated, so the demo member
+    // can read them and suggest a change. The comment is typed, never sent.
+    id: "04-64-minutes-suggest-change",
+    doc: "04-events-meetings.md",
+    line: 1583,
+    anchor: "A member on circulated minutes with Suggest a change open under",
+    alt: "Circulated minutes as a member: Suggest a change open under the Roll Call section, with a comment typed in",
+    route: "/minutes",
+    auth: "member",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Officer Meeting — Budget Review",
+      )(page);
+      await page
+        .getByRole("button", {
+          name: "Suggest a change to Roll Call / Attendance",
+        })
+        .click({ timeout: 20_000 });
+      const form = page.getByRole("form", {
+        name: "Suggest a change to Roll Call / Attendance",
+      });
+      await form
+        .locator("textarea")
+        .first()
+        .fill(
+          "Viktor Brennan arrived after the treasurer's report, so he should be recorded as late.",
+        );
+      await page.waitForTimeout(500);
+    },
+    selector: "div.card:has(h3:has-text('Roll Call / Attendance'))",
+    expect: {
+      selector: "form[aria-label='Suggest a change to Roll Call / Attendance']",
+    },
+  },
+  {
+    // As the Secretary: the administrator circulated these minutes, and the
+    // one who circulates them cannot adopt them. Closed with Cancel.
+    id: "04-65-minutes-adopt-dialog",
+    doc: "04-events-meetings.md",
+    line: 1587,
+    anchor: "A second officer (not the one who circulated them) on circulated",
+    alt: "The Adopt these minutes dialog: When the body voted, the minutes of the meeting that adopted them, and the as-amended tick",
+    route: "/minutes",
+    auth: "secretary",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Officer Meeting — Budget Review",
+      )(page);
+      await page
+        .getByRole("button", { name: "Adopt Minutes" })
+        .click({ timeout: 20_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      // The dialog focuses its first field; a caret and a selected date
+      // segment read as a half-finished edit.
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(600);
+    },
+    selector: "[role='dialog']",
+    expect: "When the body voted",
+  },
+  {
+    id: "04-66-minutes-folded-panels",
+    doc: "04-events-meetings.md",
+    line: 1612,
+    anchor:
+      "Circulated minutes below the sections: the folded panels, each with",
+    alt: "Below the sections of circulated minutes, the folded panels with their counts: Motions (1), Closed sessions (1), Election results (0) and Action Items (0)",
+    route: "/minutes",
+    allowEmptyState:
+      '"No suggestions yet" is the suggestions panel at the top of the page, out of this frame.',
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Officer Meeting — Budget Review",
+      )(page);
+      const first = page.locator("section[aria-labelledby]").filter({
+        hasText: "Motions (",
+      });
+      await first.waitFor({ timeout: 20_000 });
+      await first.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
+    },
+    expect: { selector: "#closed-sessions-heading" },
+    fullPage: false,
+  },
+  {
+    id: "04-67-minutes-closed-session",
+    doc: "04-events-meetings.md",
+    line: 1616,
+    anchor: "The Closed sessions panel opened on minutes with one recorded",
+    alt: "The Closed sessions panel opened: the reason, start and end times, legal basis, who was in the room with the member who stepped out, and the summary",
+    route: "/minutes",
+    allowEmptyState:
+      '"No action was taken." is the closed session\'s recorded summary, not an empty list.',
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Officer Meeting — Budget Review",
+      )(page);
+      const panel = page.locator(
+        "section[aria-labelledby='closed-sessions-heading']",
+      );
+      await panel.getByRole("button").first().click({ timeout: 20_000 });
+      await panel
+        .getByText("No action was taken.")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "section[aria-labelledby='closed-sessions-heading']",
+    expect: "Department bylaws, Article VI, Section 3",
+  },
+  {
+    // The seeder adds a second, non-default business outline; every outline
+    // a department starts with is its type's default.
+    id: "04-68-minutes-outlines",
+    doc: "04-events-meetings.md",
+    line: 1633,
+    anchor: "Minutes > Outlines with a second business outline that is not the",
+    alt: "Minutes > Outlines: each meeting type's outlines, with Make default beside Edit and Duplicate on the business outline that is not the default",
+    route: "/minutes/outlines",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Make .* the default$/ })
+        .first()
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    expect: {
+      selector: "button[aria-label^='Make '][aria-label$=' the default']",
+    },
+    fullPage: false,
+  },
+  {
+    // Opened on the short-form outline the seeder adds; closed unsaved.
+    id: "04-69-minutes-outline-editor",
+    doc: "04-events-meetings.md",
+    line: 1637,
+    anchor:
+      "An outline open in the outline editor: its sections with the Required",
+    alt: "The outline editor on a short business outline: its name, kind of meeting and default switch, then the order of business with Required ticked on Call to Order",
+    route: "/minutes/outlines",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit Business Meeting — Short Form" })
+        .click({ timeout: 20_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      // The dialog focuses its first field; a caret and a selected date
+      // segment read as a half-finished edit.
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(800);
+    },
+    selector: "[role='dialog']",
+    expect: "Required: needs text before the minutes can be circulated",
+  },
+  {
+    // A department with no events is the state this pictures, and the demo
+    // department has dozens. The member's event list and missed-mandatory
+    // list are answered empty, which is exactly what a new department's API
+    // returns; nothing else on the page is mocked.
+    id: "04-51-events-empty-member",
+    doc: "04-events-meetings.md",
+    line: 120,
+    anchor: "Events page as a regular member on a department with no upcoming",
+    alt: 'The Events page as a member when nothing is scheduled: "No upcoming events yet", what appears there once events are scheduled, and the link to the Learning Center walkthrough',
+    route: "/events",
+    auth: "member",
+    beforeNavigate: async (page) => {
+      await page.route(
+        (url) =>
+          url.pathname === "/api/v1/events" ||
+          url.pathname === "/api/v1/events/missed-mandatory",
+        (route) =>
+          route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: "[]",
+          }),
+      );
+    },
+    expect: "Take the short walkthrough in the Learning Center",
+    allowEmptyState:
+      "The empty state is the subject: the placeholder asks for the page a " +
+      "member sees before the department has scheduled anything.",
+    fullPage: false,
+  },
+  {
+    // Pump Panel Practice is seeded ended a few hours ago with no check-in for
+    // the demo member, so the server offers her a request.
+    id: "04-52-attendance-request-prompt",
+    doc: "04-events-meetings.md",
+    line: 335,
+    anchor: "for an event whose check-in window closed today and with no",
+    alt: 'An ended event as a member with no check-in: "Were you at this event but never checked in?" with the I was there button',
+    route: "/events",
+    auth: "member",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Pump Panel Practice",
+      )(page);
+      const prompt = page.getByText(
+        "Were you at this event but never checked in?",
+      );
+      await prompt.waitFor({ timeout: 20_000 });
+      await prompt.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+    expect: { selector: "button:has-text('I was there')" },
+    fullPage: false,
+  },
+  {
+    // The same event as the organizer: Owen Kittredge's request is seeded
+    // pending, with the times he says he was there.
+    id: "04-53-attendance-requests-card",
+    doc: "04-events-meetings.md",
+    line: 339,
+    anchor:
+      "Event detail as the event's organizer → the Attendance Requests card",
+    alt: "The Attendance Requests card on an ended event, as its organizer: one pending request with the member's name, when they asked, their reason and the times they say they were there, with Approve and Decline",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Pump Panel Practice",
+      )(page);
+      await page
+        .getByRole("heading", { name: "Attendance Requests" })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div.card:has(> h2:has-text('Attendance Requests'))",
+    expect: "Says they were there from",
+  },
+  {
+    // A real check-in by the demo member on the in-progress drill. She is
+    // seeded checked in there, so the prepare step removes her RSVP first and
+    // the tap puts it back: the drill ends the shot as it started, apart from
+    // her check-in time.
+    id: "04-54-training-check-in-confirmation",
+    doc: "04-events-meetings.md",
+    line: 387,
+    anchor:
+      "Member at /events/:id/check-in on a Training-type demo event inside",
+    alt: "A member's check-in confirmation on a Training event: You're Checked In, the event name, and the Training Record panel saying the attendance is added to their training record when the event's attendance is finalized",
+    route: "/events",
+    auth: "member",
+    prepare: async (page, { lookupPage }) => {
+      drillCheckInAdmin = await lookupPage();
+      const removed = await drillMemberCheckIn(drillCheckInAdmin, "DELETE");
+      if (!/^[0-9a-f-]{36}$/.test(removed)) {
+        throw new Error(`04-54: could not reset the check-in (${removed})`);
+      }
+      await page.goto(
+        new URL(`/events/${removed}/check-in`, page.url()).toString(),
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
+      await page
+        .getByRole("button", { name: /^Check In to This Event$/ })
+        .click({ timeout: 15_000 });
+      await page.getByText("You're Checked In").waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    expect:
+      "Your attendance will be added to your training record when the event's attendance is finalized.",
+    // Puts her back on the roster if the shot failed after removing her.
+    // A manager check-in of a member already checked in is refused with a
+    // 400, which is the ordinary case after a successful shot.
+    cleanup: async () => {
+      if (!drillCheckInAdmin) return;
+      const outcome = await drillMemberCheckIn(drillCheckInAdmin, "POST");
+      drillCheckInAdmin = null;
+      if (!/^[0-9a-f-]{36}$/.test(outcome)) {
+        throw new Error(`04-54: could not restore the check-in (${outcome})`);
+      }
+    },
+    // Not flagged `mutatesSeedData`: the drill ends the shot with her checked
+    // in, as the seeder left it, so nothing captured after it can tell.
+    fullPage: false,
+  },
+  {
+    // Write NFC tag renders only where the browser offers Web NFC, which is
+    // Chrome on Android, so this is shot at phone width with that one browser
+    // capability present. Nothing is written: the button is not pressed. The
+    // stub is switched on by a sessionStorage flag so it does not reach any
+    // later shot on this reused page, and the cleanup clears it.
+    id: "04-55-qr-codes-badge-switch",
+    doc: "04-events-meetings.md",
+    line: 557,
+    anchor:
+      "Check-In QR Codes (`/locations/qr-codes`) as an administrator with the NFC",
+    alt: "A room's card on Check-In QR Codes on an Android phone with ID cards turned on: its QR code, Write NFC tag and the Badge check-in switch",
+    route: "/locations/qr-codes",
+    viewport: "mobile",
+    beforeNavigate: async (page) => {
+      await page.addInitScript(() => {
+        if (sessionStorage.getItem("shots:web-nfc") === "on") {
+          window.NDEFReader = class {
+            async write() {}
+            async scan() {}
+            addEventListener() {}
+          };
+        }
+      });
+    },
+    prepare: async (page) => {
+      await page.evaluate(() => sessionStorage.setItem("shots:web-nfc", "on"));
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const card = page
+        .locator(".qr-card")
+        .filter({ hasText: "Training & Administration Center" })
+        .filter({ has: page.getByRole("switch") })
+        .first();
+      await card.waitFor({ timeout: 20_000 });
+      // Centred, so the phone's bottom navigation bar does not cover the
+      // card's action row in the element capture.
+      await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      await page.evaluate(() => sessionStorage.removeItem("shots:web-nfc"));
+    },
+    selector:
+      ".qr-card:has([role='switch']):has-text('Training & Administration Center')",
+    expect: {
+      selector:
+        ".qr-card:has-text('Training & Administration Center') button:has-text('Write NFC tag')",
+    },
+  },
+  {
+    // Two seeded events in the Volunteer Office: one ended minutes before the
+    // seed and stays open on a Window check-in, the other starts shortly and
+    // is open on its Flexible lead time. A room cannot hold overlapping
+    // bookings, so that is the only way two can be open there at once.
+    id: "04-56-room-tag-event-chooser",
+    doc: "04-events-meetings.md",
+    line: 561,
+    anchor: "A phone after tapping a room tag while two events are in their",
+    alt: 'A phone after tapping a room tag while two events are open for check-in there: "Which event are you here for?" listing both with their times',
+    route: "/events",
+    auth: "member",
+    viewport: "mobile",
+    prepare: async (page) => {
+      const roomId = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/locations?limit=100", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const rows = Array.isArray(body)
+          ? body
+          : body.locations || body.items || [];
+        return (
+          rows.find((row) =>
+            String(row.name || "").startsWith("Volunteer Office"),
+          )?.id ?? null
+        );
+      });
+      if (!roomId)
+        throw new Error("04-56: the Volunteer Office room was not found");
+      await page.goto(
+        new URL(`/locations/${roomId}/check-in`, page.url()).toString(),
+        {
+          waitUntil: "domcontentloaded",
+        },
+      );
+      await page
+        .getByText("Officer Candidate Study Group")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    expect: "Which event are you here for?",
+    fullPage: false,
+  },
+  {
+    // The next occurrence of the seeded monthly series, whose organizer and
+    // alternate the seeder sets with a real transfer.
+    id: "04-57-organized-by-row",
+    doc: "04-events-meetings.md",
+    line: 906,
+    anchor: "the details card's \"Organized by\" row with the alternate's name",
+    alt: "The event's details card as an administrator: the Organized by row naming the organizer and the alternate, with the Transfer event link",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) =>
+          event.title === "Monthly Officers Meeting" && isUpcoming(event),
+      )(page);
+      await page
+        .getByText("Alternate: Lila Nakamura")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div.card:has(button:text-is('Transfer event'))",
+    expect: "Transfer event",
+  },
+  {
+    // Paired with 04-57 under one placeholder. Opened and left on "This and
+    // all future events in the series"; Keep as is closes it unsaved.
+    id: "04-58-transfer-event-series",
+    allowEmptyState:
+      '"No alternate" is the Alternate picker\'s empty option, in the DOM whatever is selected.',
+    doc: "04-events-meetings.md",
+    line: 906,
+    anchor: "__paired-with-04-57__",
+    alt: "The Transfer Event dialog on a recurring meeting: the organizer and alternate pickers and Apply to with This and all future events in the series selected",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) =>
+          event.title === "Monthly Officers Meeting" && isUpcoming(event),
+      )(page);
+      await page
+        .getByRole("button", { name: "Transfer event" })
+        .click({ timeout: 20_000 });
+      const dialog = page.getByRole("dialog");
+      await dialog.waitFor({ timeout: 10_000 });
+      await dialog
+        .getByLabel(/This and all future events in the series/)
+        .check();
+      await page.waitForTimeout(600);
+    },
+    selector: "[role='dialog']",
+    expect: "Past events keep the organizer who ran them.",
+  },
+  {
+    id: "04-59-attendance-request-routing",
+    doc: "04-events-meetings.md",
+    line: 910,
+    anchor:
+      'Manage Events → Event settings → Attendance → the "Attendance requests" block',
+    alt: "Event settings, Attendance: the Attendance requests block with one position select per event type, each on Default (Secretary)",
+    route: "/events/admin?tab=settings",
+    prepare: async (page) => {
+      await clickByName(/^Attendance/)(page);
+      const heading = page.getByRole("heading", {
+        name: "Attendance requests",
+      });
+      await heading.waitFor({ timeout: 15_000 });
+      await page
+        .locator("#fallback-position-training")
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    selector: "div.border-t:has(> h3:has-text('Attendance requests'))",
+    // Not the "Default (Secretary)" text: it is a native <option>, which
+    // Playwright never reports visible.
+    expect: { selector: "#fallback-position-training" },
+  },
+  {
+    // A seeded business meeting finalized four days ago. Nothing is saved.
+    id: "04-60-finalized-event-edit",
+    allowEmptyState:
+      '"No reminders" is an option of the reminder audience select on every event form.',
+    doc: "04-events-meetings.md",
+    line: 1000,
+    anchor: "Event organizer at /events/:id/edit on a finalized demo event",
+    alt: 'Editing a finalized event: the "Attendance for this event is finalized" notice at the top, the type, schedule and check-in controls greyed out, and the title still editable',
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}/edit`,
+        "events",
+        (event) => event.title === "Apparatus Committee Meeting",
+      )(page);
+      await page
+        .getByText("Attendance for this event is finalized")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    selector: "form",
+    expect: "Attendance for this event is finalized",
+  },
+  {
+    // Not submitted. The first course in the picker fills Training Type and
+    // Category, which is what the placeholder asks to see.
+    id: "04-61-training-details-create",
+    allowEmptyState:
+      '"No category" is the Training Category select\'s empty option.',
+    doc: "04-events-meetings.md",
+    line: 1025,
+    anchor:
+      "Admin with events.manage and training.manage at /events/admin?tab=create",
+    alt: "Create Event with the type set to Training: the Training details (optional) group with a course picked, its training type and category filled in, and the Create Training Session link",
+    route: "/events/admin?tab=create",
+    prepare: async (page) => {
+      await page
+        .locator("#event-type")
+        .selectOption("training", { timeout: 15_000 });
+      const group = page.getByRole("group", {
+        name: "Training details (optional)",
+      });
+      await group.waitFor({ timeout: 10_000 });
+      const course = group.locator("select").first();
+      await course
+        .locator("option:nth-child(2)")
+        .waitFor({ state: "attached", timeout: 15_000 });
+      const value = await course
+        .locator("option:nth-child(2)")
+        .getAttribute("value");
+      await course.selectOption(value ?? "");
+      await page.waitForTimeout(600);
+    },
+    selector: "[role='group'][aria-labelledby='training-details-heading']",
+    expect: "Create Training Session",
+  },
+  {
+    // Opened and dismissed with Keep it open: the confirmation is the subject,
+    // and finalizing would close the seeded event for every later shot.
+    id: "04-62-finalize-training-confirm",
+    doc: "04-events-meetings.md",
+    line: 1047,
+    anchor:
+      'on an ended Training event with attendance still open: the "Finalize',
+    alt: "The Finalize attendance? confirmation on an ended Training event: how each member's time is decided, that members with no credited time get no record, that earlier admin-hours entries are removed, and Finalize and close beside Keep it open",
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}`,
+        "events",
+        (event) => event.title === "Pump Panel Practice",
+      )(page);
+      await page
+        .getByRole("button", { name: "Finalize Attendance" })
+        .click({ timeout: 20_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep it open" });
+      if (await keep.isVisible()) await keep.click();
+    },
+    selector: "[role='dialog']",
+    expect: "Earlier admin-hours entries for this event are removed.",
+  },
+  {
+    // The next occurrence of the seeded series. The panel reads the same for
+    // any recurrence pattern; the demo's series is monthly. Never saved.
+    id: "04-63-recurring-edit-scope",
+    allowEmptyState:
+      '"No reminders" is an option of the reminder audience select on every event form.',
+    doc: "04-events-meetings.md",
+    line: 1203,
+    anchor:
+      "Event organizer (events.manage) at /events/:id/edit on an occurrence",
+    alt: 'Editing one event of a recurring series: the "This event is part of a recurring series." panel above the form with This and all future events selected',
+    route: "/events",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/events?limit=200",
+        (id) => `/events/${id}/edit`,
+        "events",
+        (event) =>
+          event.title === "Monthly Officers Meeting" && isUpcoming(event),
+      )(page);
+      await page
+        .getByText("This event is part of a recurring series.")
+        .waitFor({ timeout: 20_000 });
+      await page.locator("input[name='updateScope'][value='future']").check();
+      await page.waitForTimeout(500);
+    },
+    fullPage: false,
+    expect: "This event is part of a recurring series.",
   },
 
   // ── 05 Inventory ────────────────────────────────────────────────────
@@ -8053,7 +8753,7 @@ export const SHOTS = [
     line: 41,
     anchor:
       "Screenshot of the Documents page showing the folder tree on the left",
-    alt: "Documents page with the folder tree, file list, and search bar",
+    alt: "Documents & Files with its four totals, the search bar and the folder cards",
     route: "/documents",
   },
   {
@@ -8062,8 +8762,53 @@ export const SHOTS = [
     line: 105,
     anchor:
       "Screenshot of the Forms listing page showing created forms with name, status",
-    alt: "Forms listing page with status, submission counts, and actions",
+    alt: "Custom Forms with its five totals and the Forms tab: a new draft form beside published ones, each card showing its status, category and Public badges, field and submission counts, and its actions",
     route: "/forms",
+    expect: "Station Open House Volunteers",
+    // The demo publishes every form it seeds (each is answered, and answering
+    // needs a published form), so the draft is made here and deleted in
+    // cleanup. A seeded draft would be published and answered by the next
+    // seed run.
+    prepare: async (page) => {
+      const created = await apiCall(page, "POST", "forms", {
+        name: "Station Open House Volunteers",
+        description:
+          "Sign up to help at the station open house: tours, the kids' hose line and the pancake breakfast.",
+        category: "other",
+        is_public: false,
+        require_authentication: true,
+        fields: [
+          {
+            label: "Which job would you like?",
+            field_type: "select",
+            required: true,
+            sort_order: 0,
+            options: [
+              { value: "tours", label: "Station tours" },
+              { value: "hose", label: "Kids' hose line" },
+              { value: "breakfast", label: "Pancake breakfast" },
+            ],
+          },
+        ],
+      });
+      if (created.status !== 201 && created.status !== 200) {
+        throw new Error(`could not create the draft form (${created.status})`);
+      }
+      draftFormCleanup = { page, id: created.json?.id };
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByText("Station Open House Volunteers")
+        .waitFor({ timeout: 20_000 });
+    },
+    cleanup: async () => {
+      const draft = draftFormCleanup;
+      draftFormCleanup = null;
+      if (!draft?.id) return;
+      const result = await apiCall(draft.page, "DELETE", `forms/${draft.id}`);
+      if (result.status >= 300) {
+        throw new Error(`could not delete the draft form (${result.status})`);
+      }
+    },
   },
   {
     id: "07-08-notification-rules",
@@ -9068,7 +9813,7 @@ export const SHOTS = [
     line: 700,
     anchor:
       "Screenshot of the Election Settings page showing toggle switches for each setting,",
-    alt: "Election settings page with the default rule toggles",
+    alt: "Election Settings open on Proxy Voting, with the Features, Test Ballot and Security sections beside it",
     route: "/elections/settings",
     fullPage: true,
   },
@@ -9232,12 +9977,12 @@ export const SHOTS = [
     line: 43,
     anchor:
       "Screenshot of Settings → Security showing the Privacy Choices section with three",
-    alt: "Account security settings showing the privacy choices section",
-    // Privacy Choices lives on the Security tab; this shot was landing on
-    // Account, byte-identical to 00-09-account-settings. Note the canonical
-    // path: /settings/account is a <Navigate to="/account"> with no query, so
+    alt: "My Account, Privacy tab: Profile visibility for each contact detail, then the Privacy Choices checkboxes for photo use, public roster listing and text message notifications, and Your Data",
+    // Privacy Choices lives on the Privacy tab (it moved off Security). Note
+    // the canonical path: /settings/account is a <Navigate to="/account"> with no query, so
     // React Router drops ?tab= on the redirect and the param never arrives.
-    route: "/account?tab=security",
+    route: "/account?tab=privacy",
+    expect: "Privacy Choices",
     fullPage: true,
   },
 
@@ -10361,6 +11106,8 @@ export const SHOTS = [
       "events",
       isInProgress,
     ),
+    // Full page, so the Instructions steps under the code are in frame.
+    fullPage: true,
   },
   {
     id: "04-06-check-in-monitoring",
@@ -10582,7 +11329,7 @@ export const SHOTS = [
     line: 71,
     anchor:
       "The Requirements tab showing a table of requirements with columns: Name, Screening",
-    alt: "Medical screening requirements tab with frequency and grace period",
+    alt: "Medical screening Requirements tab listing each requirement with its screening type, frequency and description",
     route: "/medical-screening",
     prepare: clickByName(/requirements/i),
     fullPage: true,
@@ -10701,7 +11448,7 @@ export const SHOTS = [
     line: 65,
     anchor:
       "Screenshot of the New Folder dialog showing the folder name field and",
-    alt: "New folder dialog with the name field and parent folder selector",
+    alt: "The Create Folder dialog with its Location, Folder Name and Description fields, the Who can open it choices (Organization, Leadership, Specific positions) and the Also require a permission list",
     route: "/documents",
     prepare: clickByName(/new folder/i),
   },
@@ -10797,11 +11544,21 @@ export const SHOTS = [
     line: 160,
     anchor:
       "Screenshot of the form builder showing a form being designed with a",
-    alt: "Form builder with the field palette, canvas, and field settings",
+    alt: "The form builder with the One submission per person setting above the field list; each field shows its type and Required badge, and the field under the pointer shows its move up, move down, duplicate, edit and delete buttons",
     route: "/forms",
+    expect: "One submission per person",
     // "Create Form" only opens a name/category dialog; the builder this
     // placeholder describes is behind "Edit Fields" on an existing form.
-    prepare: clickByName(/edit fields/i),
+    prepare: async (page) => {
+      await clickByName(/edit fields/i)(page);
+      // A field shows its move, duplicate, edit and delete buttons only under
+      // the pointer, and the guide's Form Builder Features list is about those
+      // buttons. Hover one on purpose rather than wherever the click left it.
+      await page
+        .getByText("Your Organization", { exact: true })
+        .hover({ timeout: 15_000 });
+      await page.waitForTimeout(300);
+    },
     // Viewport only: the builder opens over the list page, and a full-page
     // capture trails the taller page underneath it below the fold.
     fullPage: false,
@@ -12153,8 +12910,10 @@ export const SHOTS = [
     line: 270,
     anchor:
       "Screenshot of the Create Rule modal showing the name field, trigger dropdown",
-    alt: "Create notification rule modal with its trigger and channel fields",
+    alt: "Create Notification Rule with Rule Name, Trigger Event set to Event Reminder, Description, and the note under the trigger about switching off every rule for it",
     route: "/notifications",
+    // Event Reminder is the first trigger, so it is what the dialog opens on.
+    expect: "Sends reminders before scheduled events",
     prepare: clickByName(/add rule/i),
     fullPage: false,
   },
@@ -12211,7 +12970,7 @@ export const SHOTS = [
     doc: "07-documents-forms.md",
     line: 600,
     anchor: 'dialog filled in for a "training ideas" box',
-    alt: "The New suggestion box dialog filled in: name, description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below",
+    alt: "The New suggestion box dialog filled in: name, description, the Questions section with Add question directly under the description, Anonymity set to Submitter chooses, Allow follow-up and Public idea board ticked, the note that managing boxes does not let you read them, two reviewer positions ticked, and the Also notify pickers below",
     route: "/communications/suggestion-boxes",
     // The sentence the shot exists to carry. It sits between the switches and
     // the reviewer pickers, so a frame cut short above it also fails here.
@@ -13100,9 +13859,14 @@ export const SHOTS = [
     anchor: "Screenshot of the Eligibility Roster showing a table of members",
     alt: "Eligibility roster listing members with their eligibility status",
     route: "/elections",
+    // The roster opens expanded, so clicking its header (as this shot once
+    // did) folds it shut. The renamed stat proves the table loaded.
+    expect: "Voter Overrides",
     prepare: async (page) => {
       await openElectionTab("eligibility", isNominatingElection)(page);
-      await clickByName(/voter eligibility roster/i)(page);
+      await page.getByText("Voter Overrides").first().waitFor({
+        timeout: 15_000,
+      });
     },
     fullPage: true,
     allowEmptyState: true,
@@ -13149,6 +13913,50 @@ export const SHOTS = [
       "A member is meant to see a shorter list here -- the withheld pending " +
       "nomination is the subject of the shot, so one name on the ballot is " +
       "the result rather than missing demo data.",
+  },
+  {
+    // Real mutation, deliberately unflagged: `mutatesSeedData` would force
+    // this to be the last shot of guide 14, and 14-24 already holds that
+    // place. Placed directly before it instead, which is what the guard
+    // requires: 14-24 sends the Operations Committee ballot and reads nothing
+    // of the Lieutenant Election this votes in.
+    //
+    // The receipt exists only in the page that cast the vote, so the shot has
+    // to cast one, as the demo member, for the one candidate. A vote cannot
+    // be withdrawn: a second run finds "You have already voted" with no
+    // receipt and fails on its `expect` rather than picturing that. A fresh
+    // seed of an empty database makes it repeatable.
+    id: "14-27-vote-receipt",
+    doc: "14-elections.md",
+    line: 712,
+    anchor: "A member voting in-app on an open demo election",
+    alt: "Cast Vote after voting in the app: You have already voted in this election, then the Vote Receipt with its line about saving the receipt to verify the vote was counted without revealing how you voted, and the receipt code",
+    route: "/elections",
+    auth: "member",
+    expect: { selector: '[data-testid="ballot-receipts"]' },
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/elections?limit=50",
+        (id) => `/elections/${id}`,
+        "elections",
+        isPostNominationElection,
+      )(page);
+      await page.getByLabel("Amara Osei").check({ timeout: 20_000 });
+      await page
+        .getByRole("button", { name: "Cast Ballot", exact: true })
+        .click();
+      // The confirmation's button differs from the page's only in case.
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Cast ballot", exact: true })
+        .click({ timeout: 10_000 });
+      await page
+        .locator('[data-testid="ballot-receipts"]')
+        .waitFor({ timeout: 20_000 });
+      // Wait out the success toast.
+      await page.waitForTimeout(4_500);
+    },
+    selector: 'div.rounded-lg:has(> [data-testid="ballot-receipts"])',
   },
   {
     id: "14-24-ballot-send-skipped",
@@ -13730,6 +14538,34 @@ export const SHOTS = [
     },
   },
   {
+    id: "16-17-target-solutions-details",
+    doc: "16-integrations.md",
+    line: 952,
+    anchor: "Add Provider → Target Solutions, details step",
+    alt: "Configure Provider for Target Solutions: Display Name, API Base URL empty with its helper text giving the Training Records API address, API Key and API Secret holding demo values, and under Sync Settings Enable Auto-Sync on, Pull new completions Every hour and Daily 30-day review at 02:00 with the department-timezone note",
+    route: "/training/admin?page=setup&tab=integrations",
+    expect: "Daily 30-day review at",
+    viewport: { width: 1280, height: 1700 },
+    // Filled with obviously fake values and never saved.
+    prepare: (page) => openTargetSolutionsProvider(page, { baseUrl: "" }),
+    selector: '[aria-labelledby="create-provider-title"] .modal-panel',
+  },
+  {
+    id: "16-18-target-solutions-filled",
+    doc: "16-integrations.md",
+    line: 1006,
+    anchor: "add a Target Solutions provider: the form with **API Base URL**",
+    alt: "The Target Solutions provider form filled in: API Base URL https://app.targetsolutions.com/tsapp/api/, API Key and API Secret with placeholder values, and Enable Auto-Sync on with Pull new completions Every hour and Daily 30-day review at 02:00",
+    route: "/training/admin?page=setup&tab=integrations",
+    expect: "Daily 30-day review at",
+    viewport: { width: 1280, height: 1700 },
+    prepare: (page) =>
+      openTargetSolutionsProvider(page, {
+        baseUrl: "https://app.targetsolutions.com/tsapp/api/",
+      }),
+    selector: '[aria-labelledby="create-provider-title"] .modal-panel',
+  },
+  {
     id: "16-04-documenso-connect",
     doc: "16-integrations.md",
     line: 176,
@@ -13737,6 +14573,10 @@ export const SHOTS = [
     alt: "Documenso connect dialog with its API token and webhook fields",
     route: "/integrations",
     prepare: openIntegrationConnect("Documenso"),
+    expect: "Connecting turns this integration on",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
     fullPage: false,
   },
   {
@@ -13748,6 +14588,11 @@ export const SHOTS = [
     alt: "PayPal connect dialog with environment and credential fields",
     route: "/integrations",
     prepare: openIntegrationConnect("PayPal"),
+    expect: "Connecting turns this integration on",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1100 },
     fullPage: false,
   },
   {
@@ -13759,6 +14604,10 @@ export const SHOTS = [
     alt: "Slack connect dialog with its webhook URL field",
     route: "/integrations",
     prepare: openIntegrationConnect("Slack"),
+    expect: "Connecting turns this integration on",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
     fullPage: false,
   },
   {
@@ -13776,12 +14625,11 @@ export const SHOTS = [
     doc: "13-medical-screening.md",
     line: 239,
     anchor: "dialog, showing the amber",
-    alt: "The Add Screening Record dialog with the amber notice at the top: not linked to a member or prospect, so the record will not count toward anyone's compliance",
+    alt: "The Add Screening Record dialog with Record is for set to Member and a member chosen, above Linked Requirement and Screening Type",
     route: "/medical-screening",
-    // The notice's own words, not the dialog title: the Edit dialog shares the
-    // title shape and deliberately has no notice, so only this proves the
-    // create dialog is the one in frame.
-    expect: "Not linked to a member or prospect",
+    // Only the create dialog asks who the record is for; the Edit dialog
+    // shares the title shape and never changes the subject.
+    expect: "Record is for",
     selector: '[aria-labelledby="screening-record-dialog-title"] .modal-panel',
     prepare: async (page) => {
       await clickByName(/records/i)(page);
@@ -13790,8 +14638,41 @@ export const SHOTS = [
         .first()
         .click();
       await page.locator("#screening-record-dialog-title").waitFor();
+      // Member is the default subject; choose the first one listed so the
+      // picker shows a name rather than its placeholder.
+      const subject = page.locator("#rec-subject");
+      await subject.locator("option:not([value=''])").first().waitFor({
+        state: "attached",
+        timeout: 15_000,
+      });
+      const value = await subject.evaluate(
+        (el) => Array.from(el.options).find((o) => o.value)?.value ?? "",
+      );
+      await subject.selectOption(value);
       // Nothing is saved: the dialog is closed by the next shot's navigation.
     },
+  },
+  {
+    id: "13-08-delete-requirement-confirm",
+    doc: "13-medical-screening.md",
+    line: 179,
+    anchor:
+      "Click the delete button on a seeded requirement that has records filed under it",
+    alt: "The Delete Requirement confirmation for Annual NFPA 1582 Physical: screening records filed under it are kept but will no longer be linked to a requirement, and it cannot be undone, with Cancel and Delete Requirement",
+    route: "/medical-screening",
+    expect: "will no longer be linked to a requirement",
+    // Opened and photographed, never confirmed. Clipped to the dialog so no
+    // member's name or result is in frame.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Delete Annual NFPA 1582 Physical" })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("will no longer be linked to a requirement")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(300);
+    },
+    selector: '[data-testid="modal-panel"]',
   },
   {
     id: "04-08-calendar-view",
@@ -14907,7 +15788,7 @@ export const SHOTS = [
     doc: "17-privacy-data-rights.md",
     line: 137,
     anchor: "__paired-with-17-03__",
-    alt: "The same profile as an ordinary member: contact details and assigned gear remain, while the compliance summary, training history and emergency contacts are not rendered",
+    alt: "The same profile as an ordinary member: Contact Information reads that no contact details are shared, beside Membership; there is no ID Card button, and the compliance summary, training history and emergency contacts are not rendered",
     route: "/members",
     auth: "member",
     prepare: openMemberProfile,
@@ -14916,6 +15797,48 @@ export const SHOTS = [
       "A member is meant to see fewer panels on a colleague's profile -- the " +
       "missing ones are the subject of the shot, so a thinner page is the " +
       "result rather than a sign of missing demo data.",
+  },
+  {
+    id: "17-05-dropped-member-anonymize",
+    doc: "17-privacy-data-rights.md",
+    line: 451,
+    anchor: "for a Dropped (Voluntary) demo member: the Membership card",
+    alt: "The Membership card on a dropped member's profile, as an administrator: Rank, Member type, Platoon and Member since, then Status reading Dropped Voluntary with the red Anonymize member link beneath it",
+    route: "/members",
+    expect: "Anonymize member",
+    // The demo department has no departed member, and dropping one for real
+    // writes a property-return report into Documents and opens a departure
+    // clearance that other screens list. So the profile response for one
+    // member is answered with `status: "dropped_voluntary"`, a value the app
+    // sets itself when a member is dropped, and every other field is the
+    // real record. Nothing is written; the dialog is never opened.
+    prepare: async (page) => {
+      const id = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/users", {
+          credentials: "include",
+        });
+        const users = response.ok ? await response.json() : [];
+        return users.find((u) => u.username === "tlindqvist")?.id ?? null;
+      });
+      if (!id)
+        throw new Error("the demo member tlindqvist is not on the roster");
+      await page.route(`**/api/v1/users/${id}/with-roles`, async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        await route.fulfill({
+          response,
+          json: { ...body, status: "dropped_voluntary" },
+        });
+      });
+      await page.goto(`${new URL(page.url()).origin}/members/${id}`, {
+        waitUntil: "domcontentloaded",
+      });
+      await page.getByText("Anonymize member").waitFor({ timeout: 20_000 });
+    },
+    cleanup: async (page) => {
+      await page.unroute("**/api/v1/users/*/with-roles");
+    },
+    selector: 'div.card:has(> h2:text-is("Membership"))',
   },
   {
     // The deepest seeded room, chosen so the whole containment chain is in the
@@ -18544,6 +19467,388 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
     fullPage: false,
+  },
+  // ── 07 placeholders filled 2026-10-17 ──
+  {
+    id: "07-26-starter-templates",
+    doc: "07-documents-forms.md",
+    line: 383,
+    anchor: "**Starter Templates** tab: the",
+    alt: "Custom Forms, Starter Templates tab: the template cards with their category badges and Use Template buttons; Membership Interest Form is badged Public and says it sends responses to Membership, and Community Event Request, also Public, says it sends responses to Events",
+    route: "/forms",
+    expect: "Sends responses to Membership",
+    // Use Template creates a form, so it is never pressed.
+    prepare: clickByName(/^Starter Templates$/),
+    fullPage: true,
+  },
+  {
+    id: "07-27-public-form-sign-in",
+    doc: "07-documents-forms.md",
+    line: 426,
+    anchor: "A public form at `/f/<slug>` opened in a signed-out browser",
+    alt: "A public form opened without signing in, for a form that does not allow submissions without signing in: the Sign in to submit this form notice above the first question names the department and carries a Sign in button",
+    route: "/login",
+    auth: "anonymous",
+    expect: "Sign in to submit this form",
+    // The one published public form the seeder makes accepts anonymous
+    // submissions, which is what 10-11 pictures. This shot switches its
+    // "Allow submissions without signing in" off for the length of the shot,
+    // as the Share Form checkbox does, and cleanup switches it back.
+    prepare: async (page, helpers) => {
+      const admin = await helpers.lookupPage();
+      const listed = await apiCall(admin, "GET", "forms");
+      const forms = Array.isArray(listed.json)
+        ? listed.json
+        : (listed.json?.forms ?? listed.json?.items ?? []);
+      const form = forms.find(
+        (f) => f.name === "Community Event Request" && f.public_slug,
+      );
+      if (!form) throw new Error("the seeded public form is not published");
+      publicFormSignInRestore = {
+        admin,
+        id: form.id,
+        requireAuthentication: Boolean(form.require_authentication),
+      };
+      const patched = await apiCall(admin, "PATCH", `forms/${form.id}`, {
+        require_authentication: true,
+      });
+      if (patched.status !== 200) {
+        throw new Error(`could not require sign-in (${patched.status})`);
+      }
+      await page.goto(`${new URL(page.url()).origin}/f/${form.public_slug}`, {
+        waitUntil: "domcontentloaded",
+      });
+      await page
+        .getByText("Sign in to submit this form")
+        .waitFor({ timeout: 20_000 });
+    },
+    cleanup: async () => {
+      const restore = publicFormSignInRestore;
+      publicFormSignInRestore = null;
+      if (!restore) return;
+      const result = await apiCall(
+        restore.admin,
+        "PATCH",
+        `forms/${restore.id}`,
+        {
+          require_authentication: restore.requireAuthentication,
+        },
+      );
+      if (result.status !== 200) {
+        throw new Error(`could not restore the form (${result.status})`);
+      }
+    },
+    fullPage: false,
+  },
+  {
+    id: "07-28-notification-stack",
+    doc: "07-documents-forms.md",
+    line: 551,
+    anchor: "Notifications → **My Notifications** with a collapsed stack",
+    alt: "Notifications → My Notifications: a collapsed stack of attendance validations with its Latest line, unread badge and Mark all read, among single notifications and other stacks",
+    route: "/notifications?tab=inbox",
+    expect: { selector: '[data-testid^="notification-stack-"]' },
+    fullPage: false,
+  },
+  {
+    id: "07-29-notification-stack-expanded",
+    doc: "07-documents-forms.md",
+    line: 551,
+    // One placeholder asks for both states; this half is placed by hand
+    // under 07-28.
+    anchor: "__paired-with-07-28__",
+    alt: "The same attendance-validations stack expanded, showing each of its notifications as its own row",
+    route: "/notifications?tab=inbox",
+    expect: {
+      selector:
+        '[data-testid^="notification-stack-"]:has-text("attendance validations") [role="region"]',
+    },
+    // Expanding only opens the stack; nothing is marked read.
+    prepare: async (page) => {
+      // By its subject, not its place: the newest stack on top changes as
+      // other activity arrives.
+      const stack = page
+        .locator('[data-testid^="notification-stack-"]')
+        .filter({ hasText: "attendance validations" })
+        .first();
+      await stack
+        .locator("button[aria-expanded]")
+        .first()
+        .click({ timeout: 15_000 });
+      await stack
+        .locator('[role="region"]')
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+    },
+    selector:
+      '[data-testid^="notification-stack-"]:has-text("attendance validations")',
+  },
+  {
+    id: "07-30-rule-equipment-request",
+    doc: "07-documents-forms.md",
+    line: 600,
+    anchor: 'press **Add Rule**, name it "Gear request notices"',
+    alt: "Create Notification Rule named Gear request notices with the trigger Equipment Request Update, and the note under it about switching off every rule for that trigger",
+    route: "/notifications?tab=rules",
+    expect: "Create Notification Rule",
+    viewport: { width: 1280, height: 1100 },
+    selector: '[aria-labelledby="create-rule-title"] div.max-w-lg',
+    prepare: async (page) => {
+      // Opened and photographed, never saved.
+      await page.getByRole("button", { name: "Add Rule" }).click();
+      const dialog = page.locator('[aria-labelledby="create-rule-title"]');
+      await dialog.waitFor();
+      await dialog.locator("#rule-name").fill("Gear request notices");
+      await dialog
+        .locator("select")
+        .first()
+        .selectOption({ label: "Equipment Request Update" });
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+    },
+  },
+  {
+    id: "07-31-member-emails-required",
+    doc: "07-documents-forms.md",
+    line: 830,
+    anchor:
+      "Communications → **Member Emails & Texts** as an administrator: the **Always",
+    alt: "Member Emails & Texts as an administrator: the Always sent cards, then Members can turn off, where Quartermaster duties has Require for every member switched on and reads Required by your department beside cards reading On unless turned off, then the Text messages section",
+    route: "/communications/member-emails",
+    expect: "Required by your department",
+    // Switched on through the page's own control, and cleanup puts back
+    // whatever was required before (the demo requires nothing).
+    prepare: async (page) => {
+      const policy = await apiCall(
+        page,
+        "GET",
+        "email-templates/member-email-policy",
+      );
+      if (policy.status !== 200) {
+        throw new Error(`could not read the policy (${policy.status})`);
+      }
+      memberEmailsRestore = {
+        page,
+        required: (policy.json?.emails ?? [])
+          .filter((kind) => kind.department_required)
+          .map((kind) => kind.key),
+      };
+      await page
+        .getByRole("switch", {
+          name: "Require Quartermaster duties for every member",
+        })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("Required by your department")
+        .waitFor({ timeout: 15_000 });
+      // Let the "Now required for every member" toast clear the frame.
+      await page.waitForTimeout(4_500);
+    },
+    cleanup: async () => {
+      const restore = memberEmailsRestore;
+      memberEmailsRestore = null;
+      if (!restore) return;
+      const result = await apiCall(
+        restore.page,
+        "PUT",
+        "email-templates/member-email-policy",
+        { required_kinds: restore.required },
+      );
+      if (result.status !== 200) {
+        throw new Error(`could not restore the policy (${result.status})`);
+      }
+    },
+    fullPage: true,
+  },
+  {
+    id: "07-32-member-notification-preferences",
+    doc: "07-documents-forms.md",
+    line: 837,
+    anchor:
+      "Settings → **Notifications** as a member: **Email Notifications** on",
+    alt: "My Account, Notifications tab, as a member: Email Notifications on, Event reminders switched off in the Emails you can turn off list, and Always emailed to you below it",
+    route: "/account?tab=notifications",
+    auth: "member",
+    expect: "Always emailed to you",
+    // The switches are kept in the page until Save Preferences, which is
+    // never pressed, so the member's stored choices do not change.
+    prepare: async (page) => {
+      const toggle = page.getByRole("switch", {
+        name: "Event reminders",
+        exact: true,
+      });
+      await toggle.waitFor({ timeout: 15_000 });
+      if ((await toggle.getAttribute("aria-checked")) === "true") {
+        await toggle.click();
+      }
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(300);
+    },
+    viewport: { width: 1280, height: 900 },
+    selector:
+      'div.space-y-6:has(> div > h2:text-is("Notification Preferences"))',
+  },
+  {
+    id: "07-33-suggestion-boxes-list",
+    doc: "07-documents-forms.md",
+    line: 943,
+    anchor: "`/communications/suggestion-boxes` after a fresh demo seed",
+    alt: "Suggestion boxes as a holder of suggestions.manage: each box with its description, anonymity and follow-up settings, submission count and reviewers (Compliance reviewed by the Compliance Officer, Training ideas by the Secretary and the Training Officer), and Edit and Delete on every row",
+    route: "/communications/suggestion-boxes",
+    expect: "Reviewers: Compliance Officer",
+    fullPage: true,
+  },
+  {
+    id: "07-34-box-questions-routed",
+    doc: "07-documents-forms.md",
+    line: 1007,
+    anchor: "the box dialog's **Questions** section with one routed",
+    alt: "The Questions section of a new suggestion box: one required Dropdown question, What is this about?, whose third option, Compliance or safety, is set to Send to Compliance while the other two keep it in this box",
+    route: "/communications/suggestion-boxes",
+    // The route's own control: its chosen option is a native <option>,
+    // which Playwright never counts as visible.
+    expect: {
+      selector: 'select[aria-label="Where option 3 sends the submission"]',
+    },
+    viewport: { width: 1280, height: 2000 },
+    // A new box, never saved: Save box is not pressed, so the question and
+    // its route exist only in the dialog.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /New box/ })
+        .first()
+        .click();
+      const dialog = page.locator('[role="dialog"]');
+      await dialog.waitFor({ state: "visible" });
+      await dialog.locator("#box-name").fill("Station feedback");
+      await dialog.getByRole("button", { name: "Add question" }).click();
+      const question = dialog
+        .locator('section[aria-labelledby="box-questions-heading"] fieldset')
+        .first();
+      await question.locator('input[id$="-label"]').fill("What is this about?");
+      await question.locator('select[id$="-type"]').selectOption("select");
+      await question
+        .locator("label", { hasText: "Required when shown" })
+        .locator('input[type="checkbox"]')
+        .check();
+      for (const label of [
+        "Station or equipment",
+        "How we run things",
+        "Compliance or safety",
+      ]) {
+        await question.getByRole("button", { name: "Add option" }).click();
+        await question
+          .locator('input[aria-label^="Option "]')
+          .last()
+          .fill(label);
+      }
+      await question
+        .getByLabel("Where option 3 sends the submission")
+        .selectOption({ label: "Send to Compliance" });
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      });
+    },
+    selector: 'section[aria-labelledby="box-questions-heading"]',
+  },
+  {
+    id: "07-35-compliance-question-step",
+    doc: "07-documents-forms.md",
+    line: 1004,
+    // The inline marker above the blockquote is not a placeholder the
+    // applier reads; placed by hand.
+    anchor: "__inline-marker-07-question-step__",
+    alt: "Suggestions → Submit as a member with the Compliance box chosen: Step 1 of 2, A few questions, with the box's description, the question What kind of concern is this? and its five answers, and the Continue button",
+    route: "/suggestions",
+    auth: "member",
+    expect: "Step 1 of 2",
+    viewport: { width: 1280, height: 1000 },
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Compliance" });
+      await page
+        .getByText("What kind of concern is this?")
+        .waitFor({ timeout: 10_000 });
+    },
+    selector: '[role="tabpanel"]',
+  },
+  {
+    id: "07-36-compliance-details-step",
+    doc: "07-documents-forms.md",
+    line: 1004,
+    anchor: "__paired-with-07-35__",
+    alt: "Step 2 of 2, Your suggestion, for the Compliance box: the anonymity and follow-up hints, Submit anonymously, empty Title and Details, the screenshots box, and Back to the questions beside Submit. Nothing is submitted",
+    route: "/suggestions",
+    auth: "member",
+    expect: "Back to the questions",
+    viewport: { width: 1280, height: 1200 },
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Compliance" });
+      await page
+        .getByLabel("Safety", { exact: true })
+        .check({ timeout: 10_000 });
+      await page.getByLabel("No", { exact: true }).check({ timeout: 10_000 });
+      await page.getByRole("button", { name: /Continue/ }).click();
+      await page.getByText("Step 2 of 2").waitFor({ timeout: 10_000 });
+    },
+    selector: '[role="tabpanel"]',
+  },
+  {
+    id: "07-37-compliance-follow-up-question",
+    doc: "07-documents-forms.md",
+    line: 1007,
+    anchor: "__paired-with-07-34__",
+    alt: "The Compliance box's question step with Safety chosen, which shows the follow-up question Is anyone at immediate risk? with its help text that the box is not watched around the clock",
+    route: "/suggestions",
+    auth: "member",
+    expect: "Is anyone at immediate risk?",
+    viewport: { width: 1280, height: 1000 },
+    prepare: async (page) => {
+      await page
+        .locator("#suggestion-box")
+        .selectOption({ label: "Compliance" });
+      await page
+        .getByLabel("Safety", { exact: true })
+        .check({ timeout: 10_000 });
+      await page
+        .getByText("Is anyone at immediate risk?")
+        .waitFor({ timeout: 10_000 });
+    },
+    selector: '[role="tabpanel"]',
+  },
+  {
+    id: "07-38-compliance-review-intake-answers",
+    doc: "07-documents-forms.md",
+    line: 1007,
+    anchor: "__paired-with-07-34__",
+    alt: "Suggestions → Review as the Compliance Officer with a Compliance submission open: its answers to What kind of concern is this? (Safety) and Is anyone at immediate risk? (No) above the details, then the Disposition, response and internal note fields, Status history, Forwarded to and Follow-up",
+    route: "/suggestions?tab=review",
+    // The Compliance box's only reviewer; seed_guide07_states files the
+    // submission as an ordinary member.
+    auth: "compliance",
+    expect: "Is anyone at immediate risk?",
+    // "No follow-up messages yet" is the thread of a submission nobody has
+    // replied to, which is what a new one is; the answers are the subject.
+    allowEmptyState: true,
+    viewport: { width: 1280, height: 1700 },
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /Bay door sensor on Engine 1/ })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .locator("article h2", { hasText: "Bay door sensor on Engine 1" })
+        .waitFor({ timeout: 10_000 });
+    },
+    selector: '[role="tabpanel"]',
   },
   {
     id: "11-17-approval-step-delete",

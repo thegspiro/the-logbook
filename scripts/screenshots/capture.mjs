@@ -24,6 +24,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  DEMO_COMPLIANCE_CREDENTIALS,
   DEMO_CREDENTIALS,
   DEMO_FORWARDEE_CREDENTIALS,
   DEMO_GEARLESS_CREDENTIALS,
@@ -505,6 +506,10 @@ function makeSessions(browser, baseOptions) {
         // Reaches one suggestion through a forward and reviews no box, so the
         // Review tab shows what a forward recipient sees and nothing more.
         await login(page, DEMO_FORWARDEE_CREDENTIALS);
+      } else if (auth === "compliance") {
+        // The Compliance box's only reviewer. The secretary reviews every
+        // other seeded box but not this one.
+        await login(page, DEMO_COMPLIANCE_CREDENTIALS);
       } else if (auth === "gearless") {
         // Holds nothing, borrows nothing and has asked for nothing, so My
         // Issued Gear shows a member's empty page rather than the demo

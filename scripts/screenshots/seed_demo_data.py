@@ -2653,6 +2653,438 @@ class Seeder:
             ):
                 raise
 
+    # -- guide 04: attendance requests, handovers and room tags -------
+
+    GUIDE04_PETITION_EVENT_TITLE = "Pump Panel Practice"
+    GUIDE04_PETITIONER_USERNAME = "okittredge"
+    GUIDE04_PETITION_REASON = (
+        "My phone died before I could scan the code. I ran the second pump "
+        "panel with Engine 2 for the whole session."
+    )
+    GUIDE04_FINALIZED_EVENT_TITLE = "Apparatus Committee Meeting"
+    GUIDE04_ATTENDEES = ("rduarte", "ecaldwell", "vbrennan", "cfrazier")
+    GUIDE04_ALTERNATE_USERNAME = "lnakamura"
+    GUIDE04_TAG_ROOM_PREFIX = "Volunteer Office"
+    GUIDE04_TAG_ROOM_EVENTS = (
+        "Driver Training Classroom",
+        "Officer Candidate Study Group",
+    )
+
+    def seed_guide04_event_states(self) -> dict[str, Any]:
+        """States guide 04 pictures that nothing else in the demo produces.
+
+        * An event that ended a few hours ago with a pending attendance
+          request from one member and no check-in for the demo member, so
+          the same event shows the organizer's request card and the member's
+          "I was there" prompt. A request is one per member per event and
+          cannot be re-dated, so once the event is older than a day it is
+          deleted (which takes the request with it) and rebuilt.
+        * One past meeting with its attendance finalized, for the edit form's
+          locked-fields notice. A business meeting, so finalizing writes no
+          training records into the demo members' histories.
+        * An alternate organizer on the recurring series, for the details
+          card's "Organized by" row.
+        * Two events in one room whose check-in windows overlap right now,
+          for the room tag's "Which event are you here for?" chooser. A room
+          refuses overlapping bookings, so they are back to back: the first
+          is in progress, and the second starts when it ends and is already
+          open on a four-hour Flexible lead. (An event that has ended but is
+          still open on a Window check-in would not do: the room lookup drops
+          every event past its scheduled end.)
+        """
+        result: dict[str, Any] = {}
+        users = {
+            str(pick(u, "username")): u
+            for u in items(self.api.get("/users?limit=200"), "users")
+        }
+        events = items(self.api.get("/events?limit=200"), "events")
+        by_title = {str(e.get("title")): e for e in events}
+
+        result["petition"] = self._guide04_petition_event(users, by_title)
+        result["finalized"] = self._guide04_finalized_event(users, by_title)
+        result["alternate"] = self._guide04_series_alternate(users, events)
+        result["room pair"] = self._guide04_room_pair(by_title)
+        result["meeting minutes"] = self._guide04_meeting_minutes()
+        result["short outline"] = self._guide04_short_outline()
+        return result
+
+    GUIDE04_SHORT_OUTLINE_NAME = "Business Meeting — Short Form"
+
+    def _guide04_short_outline(self) -> str:
+        """A second, non-default business outline, so Make default shows.
+
+        Every outline the department starts with is its type's default, and
+        the Outlines page offers Make default only on one that is not.
+        """
+        outlines = items(self.api.get("/minutes-records/templates"), "templates")
+        if any(pick(o, "name") == self.GUIDE04_SHORT_OUTLINE_NAME for o in outlines):
+            return "already there"
+        sections = [
+            ("call_to_order", "Call to Order", True, False),
+            ("roll_call", "Roll Call / Attendance", True, False),
+            ("approval_of_previous", "Approval of Previous Minutes", False, True),
+            ("chief_report", "Chief's Report", False, False),
+            ("new_business", "New Business", False, False),
+            ("adjournment", "Adjournment", True, True),
+        ]
+        self.api.post(
+            "/minutes-records/templates",
+            {
+                "name": self.GUIDE04_SHORT_OUTLINE_NAME,
+                "description": "For a business meeting with no committee reports.",
+                "meeting_type": "business",
+                "is_default": False,
+                "sections": [
+                    {
+                        "order": order,
+                        "key": key,
+                        "title": title,
+                        "required": required,
+                        "needs_motion": needs_motion,
+                    }
+                    for order, (key, title, required, needs_motion) in enumerate(
+                        sections
+                    )
+                ],
+            },
+        )
+        return "created"
+
+    # Meeting title -> whether its minutes are carried through to adoption.
+    # The other is left circulated for review, so the Minutes page shows a
+    # set in each state under the meeting it was written from.
+    GUIDE04_MINUTES_FOR_MEETINGS = {
+        "July Business Meeting": True,
+        "Officer Meeting — Budget Review": False,
+    }
+
+    # What the secretary wrote in the sections an outline marks required;
+    # submitting refuses minutes with a required section left empty.
+    GUIDE04_SECTION_TEXT = {
+        "call_to_order": "Called to order by the presiding officer.",
+        "roll_call": "Members present as recorded in the attendance list. Quorum met.",
+        "adjournment": "Moved and seconded to adjourn. Carried without objection.",
+    }
+
+    def _guide04_fill_required_sections(self, minutes: dict) -> dict:
+        if str(pick(minutes, "status") or "") != "draft":
+            return minutes
+        minutes_id = pick(minutes, "id")
+        detail = self.api.get(f"/minutes-records/{minutes_id}")
+        sections = list(pick(detail, "sections") or [])
+        changed = False
+        for section in sections:
+            if section.get("required") and not str(section.get("content") or ""):
+                section["content"] = self.GUIDE04_SECTION_TEXT.get(
+                    str(section.get("key")), "Recorded as presented."
+                )
+                changed = True
+        if not changed:
+            return detail
+        return self.api.put(f"/minutes-records/{minutes_id}", {"sections": sections})
+
+    def _guide04_circulate_with_closed_session(self, minutes: dict) -> dict:
+        """Circulate these minutes with one recorded closed session.
+
+        A closed session can be recorded only on a draft, so minutes an
+        earlier run circulated without one are recalled, given it, and
+        circulated again.
+        """
+        minutes_id = pick(minutes, "id")
+        sessions = items(
+            self.api.get(f"/minutes-records/{minutes_id}/closed-sessions"),
+            "closed_sessions",
+        )
+        status = str(pick(minutes, "status") or "")
+        if sessions and status == "submitted":
+            return minutes
+        if status == "submitted":
+            minutes = self.api.post(f"/minutes-records/{minutes_id}/recall")
+        if not sessions:
+            detail = self.api.get(f"/minutes-records/{minutes_id}")
+            meeting_start = datetime.fromisoformat(
+                str(pick(detail, "meeting_date")).replace("Z", "+00:00")
+            )
+            if meeting_start.tzinfo is None:
+                meeting_start = meeting_start.replace(tzinfo=timezone.utc)
+            motion = self.api.post(
+                f"/minutes-records/{minutes_id}/motions",
+                {
+                    "motion_text": (
+                        "Motion to enter closed session to discuss a personnel "
+                        "matter."
+                    ),
+                    "moved_by": "Rafael Duarte",
+                    "seconded_by": "Esme Caldwell",
+                    "status": "passed",
+                    "votes_for": 4,
+                    "votes_against": 0,
+                },
+            )
+            entered = meeting_start + timedelta(minutes=48)
+            self.api.post(
+                f"/minutes-records/{minutes_id}/closed-sessions",
+                {
+                    "reason": "Personnel matter: a member's return-to-duty plan",
+                    "legal_basis": "Department bylaws, Article VI, Section 3",
+                    "started_at": iso(entered),
+                    "ended_at": iso(entered + timedelta(minutes=22)),
+                    "motion_id": pick(motion, "id"),
+                    "participants": [
+                        {"name": "Dana Ruiz"},
+                        {"name": "Rafael Duarte"},
+                        {"name": "Esme Caldwell"},
+                        {
+                            "name": "Callum Frazier",
+                            "joined_at": iso(entered),
+                            "left_at": iso(entered + timedelta(minutes=10)),
+                        },
+                    ],
+                    "summary": "No action was taken.",
+                },
+            )
+        return self.api.post(f"/minutes-records/{minutes_id}/submit")
+
+    def _guide04_meeting_minutes(self) -> str:
+        meetings = {
+            str(pick(m, "title")): m
+            for m in items(self.api.get("/meetings?limit=100"), "meetings")
+        }
+        linked = {
+            str(pick(m, "meeting_id", "meetingId")): m
+            for m in items(self.api.get("/minutes-records?limit=100"), "minutes")
+            if pick(m, "meeting_id", "meetingId")
+        }
+        done = []
+        for title, adopt in self.GUIDE04_MINUTES_FOR_MEETINGS.items():
+            meeting = meetings.get(title)
+            if not meeting:
+                continue
+            meeting_id = str(pick(meeting, "id"))
+            minutes = linked.get(meeting_id) or self.api.post(
+                f"/minutes-records/from-meeting/{meeting_id}"
+            )
+            minutes = self._guide04_fill_required_sections(minutes)
+            if adopt:
+                minutes = self._finish_minutes(minutes)
+            else:
+                minutes = self._guide04_circulate_with_closed_session(minutes)
+            done.append(f"{title}: {pick(minutes, 'status')}")
+        return "; ".join(done) or "no seeded meetings"
+
+    def _guide04_add_attendees(self, event_id: str, users: dict) -> None:
+        """Put a few members on the roster as going, without checking them in.
+
+        A manager's check-in is stamped with the moment it is made, and these
+        events are already over when the seeder reaches them. Checked in
+        here, every one of them would read as arriving hours (or days) after
+        the start and drag the analytics page's average check-in time with
+        it.
+        """
+        for username in self.GUIDE04_ATTENDEES:
+            user = users.get(username)
+            if not user:
+                continue
+            try:
+                self.api.post(
+                    f"/events/{event_id}/add-attendee",
+                    {"user_id": pick(user, "id"), "checked_in": False},
+                )
+            except ApiError as exc:
+                # Already on the roster from an earlier run.
+                if exc.code not in (400, 409):
+                    raise
+
+    def _guide04_petition_event(self, users: dict, by_title: dict) -> str:
+        existing = by_title.get(self.GUIDE04_PETITION_EVENT_TITLE)
+        if existing and pick(existing, "id"):
+            ends = str(pick(existing, "end_datetime", "endDatetime") or "")
+            if ends and ends < iso(NOW - timedelta(hours=20)):
+                self.api.delete(f"/events/{pick(existing, 'id')}")
+                existing = None
+        if existing and pick(existing, "id"):
+            event_id = str(pick(existing, "id"))
+        else:
+            end = (NOW - timedelta(hours=3)).replace(minute=0, second=0, microsecond=0)
+            event = self.api.post(
+                "/events",
+                {
+                    "title": self.GUIDE04_PETITION_EVENT_TITLE,
+                    "description": (
+                        "Hands-on pump panel operation for engine company "
+                        "drivers, at the drafting pit behind Station 1."
+                    ),
+                    "event_type": "training",
+                    "location": "Station 1 - Headquarters",
+                    "start_datetime": iso(end - timedelta(hours=2)),
+                    "end_datetime": iso(end),
+                    "requires_rsvp": False,
+                    "is_mandatory": False,
+                    "send_reminders": False,
+                    "is_draft": False,
+                },
+            )
+            event_id = str(pick(event, "id"))
+        self._guide04_add_attendees(event_id, users)
+
+        petitioner = users.get(self.GUIDE04_PETITIONER_USERNAME)
+        if not petitioner:
+            return "petitioner not found"
+        current = self.api.get(f"/events/{event_id}")
+        start = datetime.fromisoformat(
+            str(pick(current, "start_datetime", "startDatetime")).replace("Z", "+00:00")
+        )
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        session = self.member_session(
+            self.base_url, str(pick(petitioner, "id")), self.GUIDE04_PETITIONER_USERNAME
+        )
+        standing = session.get(f"/events/{event_id}/attendance-petitions/mine")
+        if pick(standing, "petition"):
+            return "request already pending"
+        session.post(
+            f"/events/{event_id}/attendance-petitions",
+            {
+                "reason": self.GUIDE04_PETITION_REASON,
+                "requested_check_in_at": iso(start + timedelta(minutes=10)),
+                "requested_check_out_at": iso(start + timedelta(hours=2)),
+            },
+        )
+        return "request raised"
+
+    def _guide04_finalized_event(self, users: dict, by_title: dict) -> str:
+        existing = by_title.get(self.GUIDE04_FINALIZED_EVENT_TITLE)
+        if existing and pick(existing, "id"):
+            event_id = str(pick(existing, "id"))
+        else:
+            start = (NOW - timedelta(days=4)).replace(
+                hour=23, minute=0, second=0, microsecond=0
+            )
+            event = self.api.post(
+                "/events",
+                {
+                    "title": self.GUIDE04_FINALIZED_EVENT_TITLE,
+                    "description": (
+                        "Review of the engine replacement specification and "
+                        "the ladder truck's annual service findings."
+                    ),
+                    "event_type": "business_meeting",
+                    "location": "Station 1 - Headquarters",
+                    "start_datetime": iso(start),
+                    "end_datetime": iso(start + timedelta(hours=2)),
+                    "requires_rsvp": False,
+                    "is_mandatory": False,
+                    "send_reminders": False,
+                    "is_draft": False,
+                },
+            )
+            event_id = str(pick(event, "id"))
+        # The list carries no finalized marker; only the detail does.
+        detail = self.api.get(f"/events/{event_id}")
+        if pick(detail, "attendance_finalized_at", "attendanceFinalizedAt"):
+            return "already finalized"
+        self._guide04_add_attendees(event_id, users)
+        self.api.post(f"/events/{event_id}/finalize-attendance", {})
+        return "finalized"
+
+    def _guide04_series_alternate(self, users: dict, events: list[dict]) -> str:
+        alternate = users.get(self.GUIDE04_ALTERNATE_USERNAME)
+        admin = users.get(DEMO_ADMIN_USERNAME)
+        if not (alternate and admin):
+            return "alternate or administrator not found"
+        upcoming = sorted(
+            (
+                e
+                for e in events
+                if e.get("title") == self.RECURRING_SERIES_TITLE
+                and str(pick(e, "start_datetime", "startDatetime") or "") > iso(NOW)
+            ),
+            key=lambda e: str(pick(e, "start_datetime", "startDatetime")),
+        )
+        if not upcoming:
+            return "no upcoming occurrence"
+        event_id = pick(upcoming[0], "id")
+        detail = self.api.get(f"/events/{event_id}")
+        if pick(detail, "alternate_organizer_id", "alternateOrganizerId"):
+            return "alternate already set"
+        self.api.post(
+            f"/events/{event_id}/transfer",
+            {
+                "organizer_id": pick(admin, "id"),
+                "alternate_organizer_id": pick(alternate, "id"),
+                "scope": "future",
+            },
+        )
+        return "alternate set"
+
+    def _guide04_room_pair(self, by_title: dict) -> str:
+        room = next(
+            (
+                loc
+                for loc in items(self.api.get("/locations?limit=100"), "locations")
+                if str(pick(loc, "name") or "").startswith(self.GUIDE04_TAG_ROOM_PREFIX)
+            ),
+            None,
+        )
+        if not room:
+            return "room not found"
+        first_title, second_title = self.GUIDE04_TAG_ROOM_EVENTS
+        first = by_title.get(first_title)
+        second = by_title.get(second_title)
+        # Re-dated together once the first one is within half an hour of its
+        # end, which is when the pair stops being open at the same time.
+        first_end = str(pick(first or {}, "end_datetime", "endDatetime") or "")
+        stale = not first_end or first_end < iso(NOW + timedelta(minutes=30))
+        if first and second and not stale:
+            return "windows still open"
+        anchor = NOW.replace(second=0, microsecond=0)
+        handover = anchor + timedelta(hours=3)
+        second_window = {
+            "start_datetime": iso(handover + timedelta(minutes=1)),
+            "end_datetime": iso(handover + timedelta(hours=2)),
+            "check_in_window_type": "flexible",
+            "check_in_minutes_before": 240,
+        }
+        first_window = {
+            "start_datetime": iso(anchor - timedelta(hours=1)),
+            "end_datetime": iso(handover),
+            "check_in_window_type": "flexible",
+            "check_in_minutes_before": 60,
+        }
+        common = {
+            "event_type": "training",
+            "location_id": pick(room, "id"),
+            "location": None,
+            "requires_rsvp": False,
+            "is_mandatory": False,
+            "send_reminders": False,
+            "is_draft": False,
+        }
+        # The second event moves first: its old dates are behind the new ones,
+        # so the first event's new dates cannot collide with them.
+        for title, event, window, description in (
+            (
+                second_title,
+                second,
+                second_window,
+                "Study session for the company officer written exam.",
+            ),
+            (
+                first_title,
+                first,
+                first_window,
+                "Classroom portion of the driver operator course.",
+            ),
+        ):
+            if event and pick(event, "id"):
+                self.api.patch(f"/events/{pick(event, 'id')}", window)
+            else:
+                self.api.post(
+                    "/events",
+                    {"title": title, "description": description, **common, **window},
+                )
+        return "windows opened"
+
     # -- scheduling --------------------------------------------------
 
     SHIFT_TEMPLATES = [
@@ -17389,6 +17821,76 @@ class Seeder:
     #: never picture a real client address.
     GUIDE08_IP_EXCEPTION = "203.0.113.24"
 
+    #: Raised in the default Compliance box by an ordinary member, answering
+    #: its intake questions, so the box's reviewer has a submission whose
+    #: answers show. Not the demo member: their My submissions list is
+    #: pictured, and this would join it.
+    COMPLIANCE_SUBMITTER_USERNAME = "snolan"
+    COMPLIANCE_SUBMISSION_TITLE = "Bay door sensor on Engine 1 is not reversing"
+
+    def seed_guide07_states(self) -> dict[str, Any]:
+        """States guide 07 pictures that nothing else in the demo produces.
+
+        * One submission in the default Compliance box, answering both of its
+          intake questions (Safety, which opens the follow-up "Is anyone at
+          immediate risk?", then No), for the reviewer's view of intake
+          answers. Raised named, by an ordinary member. Its reviewer, the
+          Compliance Officer, is signed in once through ``member_session`` so
+          the capture harness can sign in as them without meeting a forced
+          password change.
+        """
+        result: dict[str, Any] = {}
+        reviewer_id = self._user_id(COMPLIANCE_OFFICER_USERNAME)
+        submitter_id = self._user_id(self.COMPLIANCE_SUBMITTER_USERNAME)
+        if not reviewer_id or not submitter_id:
+            self.blocked.append("guide 07: compliance reviewer or submitter missing")
+            return result
+        reviewer = self.member_session(
+            self.base_url, reviewer_id, COMPLIANCE_OFFICER_USERNAME
+        )
+        titles = {
+            pick(s, "title")
+            for s in items(reviewer.get("/suggestions/review?limit=200"), "items")
+        }
+        if self.COMPLIANCE_SUBMISSION_TITLE in titles:
+            return result
+        submitter = self.member_session(
+            self.base_url, submitter_id, self.COMPLIANCE_SUBMITTER_USERNAME
+        )
+        box_id = next(
+            (
+                str(pick(b, "id"))
+                for b in items(submitter.get("/suggestions/boxes"), "boxes")
+                if pick(b, "name") == "Compliance"
+            ),
+            "",
+        )
+        if not box_id:
+            self.blocked.append("guide 07: the default Compliance box is not open")
+            return result
+        submitter.post_multipart(
+            f"/suggestions/boxes/{box_id}/submissions",
+            {
+                "title": self.COMPLIANCE_SUBMISSION_TITLE,
+                "details": (
+                    "The safety reverse on bay 1 did not trip when I walked "
+                    "under the door during this morning's check. I stopped it "
+                    "by hand and taped off the bay. The door contractor has "
+                    "not been called yet."
+                ),
+                "anonymous": "false",
+                "answers": json.dumps(
+                    {
+                        "compliance_concern_type": "safety",
+                        "compliance_immediate_risk": "no",
+                    }
+                ),
+            },
+            [],
+        )
+        result["compliance_submission"] = "created"
+        return result
+
     def seed_guide08_admin_states(self) -> dict[str, Any]:
         """States guide 08 pictures that nothing else in the demo produces.
 
@@ -18137,6 +18639,7 @@ class Seeder:
             self.seed_event_validation_notification,
         )
         self.step("early check-in event", self.seed_early_checkin_event)
+        self.step("guide 04 event states", self.seed_guide04_event_states)
         if self.bulk_prospects:
             pipelines = prospect_data.get("pipelines") or []
             self.step(
@@ -18197,6 +18700,7 @@ class Seeder:
         self.step("unsized shift", self.seed_unsized_shift)
         self.step("sealed compartments", self.seed_sealed_compartments)
         self.step("member admin hours", self.seed_member_admin_hours)
+        self.step("guide 07 states", self.seed_guide07_states)
         self.step("guide 08 admin states", self.seed_guide08_admin_states)
         self.step("profile visibility mix", self.seed_profile_visibility_mix)
         self.step("retired call type", self.seed_retired_call_type)
