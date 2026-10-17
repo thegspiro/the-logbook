@@ -32,6 +32,7 @@ import {
   DEMO_MEMBER_CREDENTIALS,
   DEMO_SECOND_MEMBER_CREDENTIALS,
   DEMO_SECRETARY_CREDENTIALS,
+  DEMO_TREASURER_CREDENTIALS,
   SHOTS,
 } from "./manifest.mjs";
 
@@ -506,6 +507,11 @@ function makeSessions(browser, baseOptions) {
         // Reaches one suggestion through a forward and reviews no box, so the
         // Review tab shows what a forward recipient sees and nothing more.
         await login(page, DEMO_FORWARDEE_CREDENTIALS);
+      } else if (auth === "treasurer") {
+        // Runs the approval chains and raised none of the seeded requests, so
+        // the Approve controls separation of duties hides from the
+        // administrator are on screen.
+        await login(page, DEMO_TREASURER_CREDENTIALS);
       } else if (auth === "compliance") {
         // The Compliance box's only reviewer. The secretary reviews every
         // other seeded box but not this one.

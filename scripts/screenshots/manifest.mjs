@@ -196,6 +196,23 @@ export const DEMO_TWO_FACTOR_CREDENTIALS = {
 };
 
 /**
+ * The department treasurer: holds `finance.approve` and
+ * `finance.configure_approvals`, and raised none of the seeded requests.
+ *
+ * Shots marked `auth: "treasurer"` sign in as this account. Guide 11 pictures
+ * the approvals screens as the person they are for, and the administrator
+ * cannot stand in: every seeded request is theirs, so separation of duties
+ * hides the Approve button the pictures are about.
+ *
+ * Must match TREASURER_USERNAME in seed_demo_data.py, whose
+ * `seed_guide11_finance_states` grants the Treasurer position.
+ */
+export const DEMO_TREASURER_CREDENTIALS = {
+  username: "aosei",
+  password: "DemoMember!2026",
+};
+
+/**
  * Click a control by its visible label.
  *
  * Matches buttons, tabs and links, because which of the three a given tab strip
@@ -348,6 +365,135 @@ export function clickSettingsSection(label) {
  * and emptied a screenshot that had been correct for weeks. A shot that needs a
  * record in a particular state should say so.
  */
+/** Unpin every notification of the signed-in member's own inbox. */
+async function unpinAllNotifications(page) {
+  await page.evaluate(async () => {
+    const listed = await fetch("/api/v1/notifications/my?limit=100", {
+      credentials: "include",
+    });
+    const logs = (await listed.json()).logs ?? [];
+    const csrf =
+      document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+    for (const log of logs.filter((l) => l.pinned)) {
+      await fetch(`/api/v1/notifications/my/${log.id}/pin?pinned=false`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
+      });
+    }
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+}
+
+/** Open the phone navigation drawer from **More** on the bottom bar. */
+async function openPhoneDrawer(page) {
+  await page
+    .getByRole("button", { name: "More: open full navigation menu" })
+    .click({ timeout: 20_000 });
+  await page
+    .locator('[data-testid="side-nav-scroll-hint"] button')
+    .waitFor({ state: "visible", timeout: 10_000 });
+  await page.waitForTimeout(800);
+}
+
+/** The member's own phone-bar slots, read before `10-27` changes them. */
+const phoneNavFixture = { before: null };
+
+/**
+ * Put three untagged entries in the generic offline queue, as a device that
+ * queued them before entries recorded their owner would hold, and reload so
+ * the app shell counts them.
+ *
+ * Untagged entries are never sent on their own, so nothing reaches the
+ * server; `clearHeldOfflineItems` removes them after the shot. The URLs are
+ * ones nothing would accept, in case a later change ever did send them.
+ */
+async function seedHeldOfflineItems(page) {
+  await page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("logbook-offline-generic", 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains("pendingMutations")) {
+          request.result.createObjectStore("pendingMutations", {
+            keyPath: "id",
+          });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const hour = 3_600_000;
+    const now = Date.now();
+    const entries = [
+      ["training-submission", "Pump operations drill, 2 hours", 30],
+      ["training-submission", "EVOC refresher, 4 hours", 29],
+      ["event-rsvp", "RSVP: Monthly business meeting", 28],
+    ].map(([kind, label, daysAgo], index) => ({
+      id: `g-screenshot-held-${index}`,
+      kind,
+      url: "/screenshot-fixture/held-item",
+      body: {},
+      label,
+      queuedAt: now - daysAgo * 24 * hour,
+      retries: 0,
+    }));
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction("pendingMutations", "readwrite");
+      for (const entry of entries)
+        tx.objectStore("pendingMutations").put(entry);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+}
+
+async function clearHeldOfflineItems(page) {
+  await page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("logbook-offline-generic", 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction("pendingMutations", "readwrite");
+      for (let index = 0; index < 3; index += 1) {
+        tx.objectStore("pendingMutations").delete(`g-screenshot-held-${index}`);
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+}
+
+/**
+ * The two events `06-32-room-checkin-chooser` makes, and the administrator
+ * page that made them: its cleanup receives only the member's page, which
+ * cannot delete events.
+ */
+const roomCheckInFixture = { admin: null, ids: [] };
+
+/**
+ * Expand an approval chain on Finance → Settings → Approval Chains and open
+ * its **Add step** dialog.
+ */
+async function openApprovalStepDialog(page, chainName) {
+  await page
+    .locator("button[aria-expanded]")
+    .filter({ hasText: chainName })
+    .first()
+    .click({ timeout: 15_000 });
+  const chain = page
+    .locator("div")
+    .filter({ has: page.getByRole("list", { name: `Steps in ${chainName}` }) })
+    .last();
+  await chain.getByRole("button", { name: "Add step" }).click();
+  await page.locator("#step-name").waitFor({ timeout: 10_000 });
+}
+
 export function openFirstFromApi(apiPath, routeFor, listKey, match) {
   return async (page) => {
     const records = await page.evaluate(
@@ -5686,13 +5832,12 @@ export const SHOTS = [
       await page.waitForTimeout(500);
       // Typed rather than left blank: the requirement checklist only tells you
       // anything once there is something to check it against.
-      await page
-        .locator('input[type="password"]')
-        .nth(1)
-        .fill("Oakville!2026")
-        .catch(() => {});
+      await page.locator('input[type="password"]').nth(1).fill("Oakville!2026");
       await page.waitForTimeout(400);
     },
+    expect: "No character three times in a row",
+    // "No runs like 123 or abc" is a requirement line, not an empty page.
+    allowEmptyState: true,
     fullPage: true,
   },
   {
@@ -5850,6 +5995,7 @@ export const SHOTS = [
     route: "/facilities/maintenance",
     prepare: clickByName(/^New Record$/),
     fullPage: false,
+    expect: "New Maintenance Record",
   },
   {
     id: "05-57-assign-scan-modal",
@@ -6593,6 +6739,9 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
     fullPage: true,
+    // The pin is written to the database; take it off again so no other
+    // shot of the inbox or the dashboard inherits it.
+    cleanup: unpinAllNotifications,
   },
   {
     id: "00-04-dashboard-overview",
@@ -6624,7 +6773,7 @@ export const SHOTS = [
     line: 206,
     anchor:
       "Screenshot of the Account Settings page showing the profile section, notification preferences",
-    alt: "Account Settings on its Account tab — the tab row leads to password, security, emergency contacts, appearance and notifications",
+    alt: "My Account on its Account tab — the tab row leads to Password, Security, Privacy, Emergency Contacts, Appearance, Notifications and App",
     route: "/account",
     fullPage: true,
   },
@@ -8716,6 +8865,7 @@ export const SHOTS = [
       "Screenshot of the Apparatus listing page showing a grid or list of",
     alt: "Apparatus listing with unit numbers, type badges, and status badges",
     route: "/apparatus",
+    expect: "Maintenance Due",
   },
   {
     id: "06-09-facilities-dashboard",
@@ -8726,6 +8876,11 @@ export const SHOTS = [
     alt: "Facilities dashboard with summary cards and facility cards",
     route: "/facilities",
     fullPage: true,
+    expect: "Recent Maintenance Completions",
+    // The two panels read "No overdue maintenance items" and "No inspections
+    // in the next 30 days" on a department that is caught up.
+    allowEmptyState: true,
+    viewport: { width: 1280, height: 900 },
   },
   {
     id: "06-13-facility-maintenance",
@@ -9469,9 +9624,10 @@ export const SHOTS = [
     doc: "10-mobile-pwa.md",
     line: 140,
     anchor: "Re-shoot of the phone header showing the ☰ button",
-    alt: "Phone header with the menu button at the left edge and the department name beside it",
+    alt: "Phone header with the department logo and name, and no menu button",
     route: "/dashboard",
     viewport: "mobile",
+    expect: { selector: 'header[role="banner"].md\\:hidden' },
     // Clipped to the header: the placeholder is about where one button sits,
     // and a whole-phone shot buries it above a screen of dashboard.
     selector: 'header[role="banner"].md\\:hidden',
@@ -9568,6 +9724,7 @@ export const SHOTS = [
     alt: "Dashboard on a phone in portrait orientation with stacked widget cards",
     route: "/dashboard",
     viewport: "mobile",
+    expect: "Record a course or hours",
     fullPage: true,
   },
   {
@@ -9612,6 +9769,7 @@ export const SHOTS = [
     alt: "Inventory admin hub on a phone with grouped card sections stacked vertically",
     route: "/inventory/admin",
     viewport: "mobile",
+    expect: "Inventory Administration",
     fullPage: true,
   },
 
@@ -9624,6 +9782,10 @@ export const SHOTS = [
       "The Finance Dashboard showing budget health summary cards at the top (total",
     alt: "Finance dashboard with budget health cards and recent transactions",
     route: "/finance",
+    // The Treasurer holds finance.approve, so the Approvals quick link and the
+    // linked Pending Approvals card both show.
+    auth: "treasurer",
+    expect: "Budgets, spending, and requests at a glance",
     fullPage: true,
   },
   {
@@ -9643,6 +9805,20 @@ export const SHOTS = [
       "The Create Approval Chain form showing the name field, applies-to dropdown (Purchase",
     alt: "Approval chain configuration page with the chain list and step builder",
     route: "/finance/settings/approval-chains",
+    expect: "Board sign-off",
+    // The "No active member can act on this step" warnings start "No …",
+    // which the empty-state check reads as an empty page.
+    allowEmptyState: true,
+    // The unused Major Purchase chain carries the seeded Email approver step.
+    prepare: async (page) => {
+      await page
+        .locator("button[aria-expanded]")
+        .filter({ hasText: "Major Purchase Approval" })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.getByText("Board sign-off").first().waitFor();
+      await page.waitForTimeout(400);
+    },
     fullPage: true,
   },
   {
@@ -9653,6 +9829,9 @@ export const SHOTS = [
       "The Create Purchase Request form showing all fields: title, fiscal year dropdown,",
     alt: "Create Purchase Request form with budget, vendor, and priority fields",
     route: "/finance/purchase-requests/new",
+    // "No budget linked" is the Budget picker's first option, not an empty page.
+    allowEmptyState: true,
+    expect: "Saved as a draft. Submit it for approval from the next page.",
     fullPage: true,
   },
   {
@@ -9665,6 +9844,7 @@ export const SHOTS = [
       "The Create Expense Report form showing the header fields at the top",
     alt: "Create Expense Report form with header fields and the line items section",
     route: "/finance/expenses/new",
+    expect: "Saved as a draft. Submit it for approval from the next page.",
     fullPage: true,
   },
   {
@@ -9675,6 +9855,9 @@ export const SHOTS = [
       "The Create Check Request form showing payee name, amount, fiscal year dropdown,",
     alt: "Create Check Request form with payee, amount, and budget fields",
     route: "/finance/check-requests/new",
+    // "No budget linked" is the Budget picker's first option, not an empty page.
+    allowEmptyState: true,
+    expect: "New Check Request",
     fullPage: true,
   },
   {
@@ -9685,6 +9868,139 @@ export const SHOTS = [
       "The Dues Management page showing the summary cards at the top (total",
     alt: "Dues management page with collection summary cards and the member dues table",
     route: "/finance/dues",
+    expect: "What members owe and have paid, by dues schedule",
+    fullPage: true,
+  },
+
+  // ── 11 Finance, approvals placeholders (2026-10-17). The treasurer shots
+  // sign in as the seeded Treasurer: the administrator raised every seeded
+  // request, so separation of duties hides the controls they picture.
+  {
+    id: "11-18-approval-step-email",
+    doc: "11-finance.md",
+    line: 764,
+    anchor:
+      "expand a chain → **Add step**, with Step type **Approval**, Approver type **Email**",
+    alt: "The Add step dialog with Step type Approval and Approver type Email: the help text under Approver type, an approver email filled in, the Allow self-approval by email box and the Auto-approve under ($) field",
+    route: "/finance/settings/approval-chains",
+    expect: "Allow self-approval by email",
+    // Filled in, never saved.
+    prepare: async (page) => {
+      await openApprovalStepDialog(page, "Major Purchase Approval");
+      await page.locator("#step-name").fill("Trustee sign-off");
+      await page.locator("#step-approver-type").selectOption("email");
+      await page
+        .locator("#step-approver-value")
+        .fill("trustee@oakvillefd.example.org");
+      await page.waitForTimeout(300);
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "11-19-approval-step-position",
+    doc: "11-finance.md",
+    line: 768,
+    anchor: "The Add step dialog over an expanded purchase-request chain",
+    alt: "The Add step dialog as the Treasurer, over the Purchase Request Approval chain: Step type Approval, Approver type Position with Treasurer chosen, Auto-approve under ($) set to 250, and the help text naming the finance.approve permission",
+    route: "/finance/settings/approval-chains",
+    auth: "treasurer",
+    expect: "finance.approve",
+    // Filled in, never saved.
+    prepare: async (page) => {
+      await openApprovalStepDialog(page, "Purchase Request Approval");
+      await page.locator("#step-name").fill("Treasurer review");
+      await page.locator("#step-approver-type").selectOption("position");
+      await page
+        .locator("#step-approver-value")
+        .selectOption({ label: "Treasurer" });
+      await page.locator("#step-auto-approve").fill("250");
+      await page.waitForTimeout(300);
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "11-20-approval-step-unreachable",
+    doc: "11-finance.md",
+    line: 790,
+    anchor: "with a demo chain whose step names a position nobody holds",
+    alt: "Approval Chains as the Treasurer: the amber banner counting approval steps no one can act on, and the Purchase Request Approval chain expanded with its Company officer review step warning that no active member can act on it and how many requests are waiting",
+    route: "/finance/settings/approval-chains",
+    auth: "treasurer",
+    expect: "No active member can act on this step",
+    // The warning starts "No …", which the empty-state check reads as an
+    // empty page; the chains around it are populated.
+    allowEmptyState: true,
+    // No seeded member holds the Captain position the purchase-request chain's
+    // first step names, so its warning is the demo's own state.
+    prepare: async (page) => {
+      await page
+        .locator("button[aria-expanded]")
+        .filter({ hasText: "Purchase Request Approval" })
+        .first()
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("No active member can act on this step")
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page
+        .getByText(/approval steps? ha(s|ve) no one who can act/)
+        .first()
+        .evaluate((node) => node.scrollIntoView({ block: "start" }));
+      await page.evaluate(() => window.scrollBy(0, -24));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "11-21-approvals-admin-view",
+    doc: "11-finance.md",
+    line: 880,
+    anchor:
+      "Finance → Approvals as an approvals administrator (finance.configure_approvals)",
+    alt: 'Approvals as the Treasurer, an approvals administrator: "Requests waiting on you." and the administrator line above a table whose first rows wait on the Treasurer with Approve and Deny, and whose later rows wait on the Captain position, marked Not assigned to you with Approve as admin and Deny as admin',
+    route: "/finance/approvals",
+    auth: "treasurer",
+    expect: "Not assigned to you",
+  },
+  {
+    id: "11-22-approvals-admin-override",
+    doc: "11-finance.md",
+    line: 884,
+    anchor:
+      'a "Approve as approvals admin" dialog open on a step assigned to another member',
+    alt: "The Approve as approvals admin dialog on a step assigned to the Captain position: the text naming who the step is assigned to, Notes, and the required Override reason box with its help text",
+    route: "/finance/approvals",
+    auth: "treasurer",
+    expect: "Override reason",
+    // Opened and photographed, never submitted.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: "Approve FDIC Conference Expenses as approvals admin",
+        })
+        .click({ timeout: 15_000 });
+      await page.getByText("Override reason").first().waitFor();
+      await page.waitForTimeout(400);
+    },
+    selector: '[data-testid="modal-panel"]',
+  },
+  {
+    id: "11-23-unrouted-request",
+    doc: "11-finance.md",
+    line: 951,
+    anchor:
+      "A purchase request detail page in Pending Approval with no approval chain configured",
+    alt: 'A purchase request pending approval with no approval chain, viewed by the Treasurer: the panel reading "No approval chain applies to this request. Approve or deny it here." with Approve and Deny, above a timeline with no approval steps',
+    route: "/finance/purchase-requests",
+    auth: "treasurer",
+    expect: "No approval chain applies to this request",
+    // `seed_guide11_finance_states` submits this one request while the default
+    // purchase-request chain is switched off.
+    prepare: openFirstFromApi(
+      "/finance/purchase-requests",
+      (id) => `/finance/purchase-requests/${id}`,
+      "purchase_requests",
+      (request) => request.title === "Hose tester calibration",
+    ),
     fullPage: true,
   },
 
@@ -10418,6 +10734,7 @@ export const SHOTS = [
       "apparatus",
     ),
     fullPage: true,
+    expect: "Expiration Dates",
   },
   {
     id: "06-11-facility-detail",
@@ -10440,10 +10757,14 @@ export const SHOTS = [
     line: 176,
     anchor:
       "The Budget Categories section on the Settings page showing a hierarchical list",
-    alt: "Budget categories list with QuickBooks account mapping",
+    alt: "Budget categories as a tree: Officer brass and Station boots nested under Personal Protective Equipment, each line with its owner and who can charge it",
     route: "/finance/settings",
-    prepare: clickByName(/categor/i),
-    fullPage: true,
+    // Officer brass and Station boots sit under Personal Protective Equipment
+    // (`seed_guide11_finance_states`), so the list reads as a tree. Lines with
+    // no owner read "No owner", which is not an empty page.
+    allowEmptyState: true,
+    expect: "Officer brass",
+    selector: 'div.card:has(h2:text-is("Budget Categories"))',
   },
   {
     id: "11-05-budget-detail",
@@ -11288,6 +11609,7 @@ export const SHOTS = [
       await clickByName(/maintenance/i)(page);
     },
     fullPage: true,
+    expect: "Maintenance Records",
   },
   {
     id: "06-05-apparatus-fuel-tab",
@@ -11322,6 +11644,7 @@ export const SHOTS = [
       await clickByName(/equipment/i)(page);
     },
     fullPage: true,
+    expect: "Build equipment checklists",
   },
   {
     id: "13-02-requirements-tab",
@@ -13395,6 +13718,7 @@ export const SHOTS = [
       await clickByName(/^settings$/i)(page);
     },
     fullPage: true,
+    expect: "Download test label",
   },
   {
     id: "06-08-facility-label-print",
@@ -13410,6 +13734,7 @@ export const SHOTS = [
       await clickByName(/^settings$/i)(page);
     },
     fullPage: true,
+    expect: "Download test label",
   },
   {
     id: "06-20-apparatus-badges",
@@ -13563,6 +13888,7 @@ export const SHOTS = [
       await page.waitForTimeout(600);
     },
     fullPage: true,
+    expect: "Quartermaster's Storage",
   },
   {
     id: "06-25-room-located-inside",
@@ -13693,12 +14019,16 @@ export const SHOTS = [
     anchor: "A Purchase Request Detail page showing the request header",
     alt: "Purchase request detail with its status and approval chain",
     route: "/finance/purchase-requests",
-    // A draft has no approval chain to picture, so open one that was submitted.
+    // A draft has no approval chain to picture, so open one that was
+    // submitted. As the Treasurer, who did not raise it: its step waits on the
+    // Captain position, so the panel offers the approvals-admin override.
+    auth: "treasurer",
+    expect: "Not assigned to you",
     prepare: openFirstFromApi(
       "/finance/purchase-requests",
       (id) => `/finance/purchase-requests/${id}`,
       "purchase_requests",
-      (request) => (request.status ?? request.Status) !== "draft",
+      (request) => request.title === "Thermal Imaging Camera",
     ),
     fullPage: true,
   },
@@ -13709,11 +14039,15 @@ export const SHOTS = [
     anchor: "An Expense Report Detail page showing the report header",
     alt: "Expense report detail with its line items and approval status",
     route: "/finance/expenses",
+    // The report waiting on the Treasurer, opened as the Treasurer, so the
+    // pending panel offers Approve and Deny.
+    auth: "treasurer",
+    expect: "You can approve or deny this step.",
     prepare: openFirstFromApi(
       "/finance/expense-reports",
       (id) => `/finance/expenses/${id}`,
       "expense_reports",
-      (report) => (report.status ?? "") !== "draft",
+      (report) => report.title === "EMS refresher mileage",
     ),
     fullPage: true,
   },
@@ -13724,11 +14058,14 @@ export const SHOTS = [
     anchor: "A Check Request Detail page showing the request header",
     alt: "Check request detail with payee, amount and approval status",
     route: "/finance/check-requests",
+    // The check request waiting on the Treasurer, opened as the Treasurer.
+    auth: "treasurer",
+    expect: "You can approve or deny this step.",
     prepare: openFirstFromApi(
       "/finance/check-requests",
       (id) => `/finance/check-requests/${id}`,
       "check_requests",
-      (request) => (request.status ?? "") !== "draft",
+      (request) => request.payeeName === "Oakville Hardware Supply",
     ),
     fullPage: true,
   },
@@ -16289,11 +16626,14 @@ export const SHOTS = [
     doc: "00-getting-started.md",
     line: 437,
     anchor: "leader dashboard with Personal and Organization tabs",
-    alt: "The dashboard's personal tab: the member's own attention items, shifts, hours and issued gear, under a tab strip whose other tab is the leadership view",
+    alt: "The dashboard's personal tab: the member's own attention items, shifts and hours, under a tab strip whose other tab is the leadership view",
     route: "/dashboard",
+    // The administrator holds no issued gear, so the My Issued Gear card,
+    // which renders only for a member who does, is not on this tab.
+    expect: "Next 30 Days",
     prepare: async (page) => {
       await page
-        .getByRole("heading", { name: /My Issued Gear/i })
+        .getByRole("heading", { name: /Next 30 Days/i })
         .first()
         .waitFor({ state: "visible", timeout: 20_000 });
       await page.waitForTimeout(500);
@@ -16953,6 +17293,168 @@ export const SHOTS = [
         .waitFor({ timeout: 10_000 });
     },
   },
+
+  // ── 00 Getting Started, placeholders (2026-10-17) ──────────────────
+  {
+    id: "00-27-login-password-changed",
+    doc: "00-getting-started.md",
+    line: 169,
+    anchor: "immediately after changing the password on My Account",
+    alt: 'The sign-in page with the green notice "Your password was changed, and you have been signed out everywhere. Sign in with your new password." above empty username and password fields',
+    route: "/login",
+    auth: "anonymous",
+    expect: "you have been signed out everywhere",
+    // The notice is driven by the router state the password change navigates
+    // with ({ reason: "password_changed" }). Writing that state and reloading
+    // is the same landing without changing any member's password.
+    prepare: async (page) => {
+      await page.evaluate(() => {
+        window.history.replaceState(
+          { usr: { reason: "password_changed" }, key: "pwchange", idx: 0 },
+          "",
+          "/login",
+        );
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByText("you have been signed out everywhere").waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "00-28-top-bar-more-menu",
+    doc: "00-getting-started.md",
+    line: 193,
+    anchor: "with Navigation Layout set to Top bar: the More dropdown open",
+    alt: "The menu as a bar across the top at 1280px: groups that do not fit sit under More at its right-hand end, open here with each overflowed group under its own label and separators between them",
+    route: "/dashboard",
+    viewport: { width: 1280, height: 900 },
+    expect: { selector: '[data-dropdown-trigger][aria-expanded="true"]' },
+    // Navigation Layout is one department-wide setting, and the other batch
+    // captures from the same department, so the branding answer is mocked to
+    // "top" for this page alone rather than switching every member's layout.
+    prepare: async (page) => {
+      await page.route("**/api/v1/auth/branding", async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        await route.fulfill({
+          response,
+          body: JSON.stringify({ ...body, navigation_layout: "top" }),
+        });
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const more = page.locator(
+        'nav[aria-label="Main navigation"] button[data-dropdown-trigger]',
+        {
+          hasText: "More",
+        },
+      );
+      await more.first().click({ timeout: 20_000 });
+      await page
+        .locator('[data-dropdown-trigger][aria-expanded="true"]')
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.unroute("**/api/v1/auth/branding");
+      await page.evaluate(() =>
+        localStorage.setItem("navigationLayout", "left"),
+      );
+      await page.reload({ waitUntil: "domcontentloaded" });
+    },
+  },
+  {
+    id: "00-29-notification-stacks",
+    doc: "00-getting-started.md",
+    line: 399,
+    anchor: 'collapsed into a stack showing "N attendance validations"',
+    alt: 'The notifications inbox with nothing pinned: unread notifications of one kind folded into stacks, such as "5 attendance validations" with its Latest line, unread badge and Mark all read, beside an ordinary single card',
+    route: "/notifications?tab=inbox",
+    expect: "attendance validations",
+    prepare: async (page) => {
+      await unpinAllNotifications(page);
+      await page.getByText("attendance validations").first().waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "00-30-notification-stack-expanded",
+    doc: "00-getting-started.md",
+    line: 399,
+    anchor: "__placed-by-hand-00-30__",
+    alt: "The same inbox with the attendance-validations stack expanded to its individual cards; Mark all read not pressed",
+    route: "/notifications?tab=inbox",
+    expect: "Validate attendance for",
+    prepare: async (page) => {
+      await unpinAllNotifications(page);
+      await page
+        .locator("button[aria-expanded]")
+        .filter({ hasText: "attendance validations" })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.waitForTimeout(800);
+    },
+    fullPage: true,
+  },
+  {
+    id: "00-31-mfa-recovery-codes",
+    doc: "00-getting-started.md",
+    line: 440,
+    anchor: 'right after Verify & enable: the "Save your recovery codes" panel',
+    alt: "My Account, Security, right after Verify & enable: the Save your recovery codes panel with its grid of ten codes, Copy codes and Done. The codes are made up for the picture",
+    route: "/account?tab=security",
+    auth: "member",
+    expect: "Save your recovery codes",
+    // Nobody's two-factor is turned on for this. The setup and verify answers
+    // are mocked, so the demo member stays unenrolled and the codes pictured
+    // were never valid anywhere; the panel around them is the live page.
+    prepare: async (page) => {
+      await page.route("**/api/v1/auth/mfa/setup", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            secret: "DEMODEMODEMODEMO",
+            qr_code_url: "otpauth://totp/Demo?secret=DEMODEMODEMODEMO",
+          }),
+        }),
+      );
+      await page.route("**/api/v1/auth/mfa/verify-setup", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            mfa_enabled: true,
+            recovery_codes: [
+              "3f9a1-c07e2-5b8d4-e61a9",
+              "a24c8-91f03-d7e5b-2c6f0",
+              "7e0d3-b5a92-48c1f-9d07e",
+              "c18f6-2a4e9-0b7d3-f5c21",
+              "59b2e-e7c04-a3f18-6d9b5",
+              "0d6a7-f3b81-c92e4-1a5f8",
+              "e4c19-6b0d5-7f2a3-b8e06",
+              "8a3f0-d1c6e-29b74-c0e5a",
+              "b7e52-4f9a1-e0c38-5d2b7",
+              "16d4b-a8e3f-c5091-7b2d4",
+            ],
+          }),
+        }),
+      );
+      await page
+        .getByRole("button", { name: "Enable two-factor authentication" })
+        .click({ timeout: 15_000 });
+      await page.locator("#mfa-setup-code").fill("123456");
+      await page.getByRole("button", { name: "Verify & enable" }).click();
+      await page.getByText("Save your recovery codes").waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.unroute("**/api/v1/auth/mfa/setup");
+      await page.unroute("**/api/v1/auth/mfa/verify-setup");
+      await page.reload({ waitUntil: "domcontentloaded" });
+    },
+    selector:
+      'div.space-y-4:has(> div > p:text-is("Save your recovery codes"))',
+  },
   {
     id: "01-40-member-directory-member",
     doc: "01-membership.md",
@@ -17042,6 +17544,188 @@ export const SHOTS = [
     expect: "Facility Types",
     fullPage: true,
   },
+
+  // ── 06 Apparatus & Facilities, placeholders (2026-10-17). The first three
+  // are placed by hand: each fills part of a placeholder that also asks for a
+  // state the demo cannot reach (an empty fleet, a vehicle with a deficiency).
+  {
+    id: "06-29-add-apparatus-form",
+    doc: "06-apparatus-facilities.md",
+    line: 104,
+    anchor: "__placed-by-hand-06-29__",
+    alt: "The Add Apparatus form: the intro line, the identification and status fields, CNG chosen as the fuel type, and the NFPA compliance tracking help text",
+    route: "/apparatus/new",
+    expect: { selector: "#apparatus-fuelType" },
+    // "No EVOC requirement" is an option in the form, not an empty page.
+    allowEmptyState: true,
+    // Filled in, never saved.
+    prepare: async (page) => {
+      await page.locator("#apparatus-fuelType").selectOption("cng");
+      await page.waitForTimeout(300);
+    },
+    fullPage: true,
+  },
+  {
+    id: "06-30-apparatus-status-reason",
+    doc: "06-apparatus-facilities.md",
+    line: 218,
+    anchor: "__placed-by-hand-06-30__",
+    alt: 'Editing a vehicle\'s status: Out of Service chosen, and the Reason field below it, required for that status, with "Shown next to the status on the apparatus page."',
+    route: "/apparatus",
+    expect: { selector: "#apparatus-statusReason" },
+    // "No EVOC requirement" is an option in the form, not an empty page.
+    allowEmptyState: true,
+    // Changed in the form, never saved.
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}/edit`,
+        "apparatus",
+        (rig) => (rig.unitNumber ?? rig.unit_number) === "E-2",
+      )(page);
+      const status = page.locator("#apparatus-statusId");
+      await status.waitFor({ timeout: 15_000 });
+      await status.selectOption({ label: "Out of Service" });
+      await page
+        .locator("#apparatus-statusReason")
+        .fill("Pump seal leaking, at the shop");
+      await status.evaluate((node) => node.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "06-31-create-shift-apparatus",
+    doc: "06-apparatus-facilities.md",
+    line: 218,
+    anchor: "__placed-by-hand-06-31__",
+    alt: "The Create Shift dialog with its Apparatus picker set to an Apparatus-module vehicle",
+    route: "/scheduling",
+    expect: { selector: "#create-shift-apparatus" },
+    // Opened and filled, never created.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Create Shift" })
+        .first()
+        .click({ timeout: 15_000 });
+      const picker = page.locator("#create-shift-apparatus");
+      await picker.waitFor({ timeout: 10_000 });
+      await picker.selectOption({ label: "E-1 — Engine 1" });
+      await page.waitForTimeout(400);
+    },
+    selector:
+      "#create-shift-apparatus >> xpath=ancestor::div[contains(@class,'modal-panel')]",
+  },
+  {
+    id: "06-32-room-checkin-chooser",
+    doc: "06-apparatus-facilities.md",
+    line: 645,
+    anchor: "for a room with two events in their check-in window",
+    alt: 'A member who tapped the Volunteer Office\'s room tag: "Which event are you here for?" listing the two events open for check-in in that room',
+    route: "/locations",
+    auth: "member",
+    expect: "Which event are you here for?",
+    // A room's events cannot overlap in time, so the two are back to back and
+    // the second opens its check-in early. Both are made for the shot as the
+    // administrator and deleted afterwards, so no event list elsewhere gains
+    // them; where the room is already booked by guide 04's own pair, that
+    // pair is the state pictured and nothing is made.
+    prepare: async (page, { lookupPage }) => {
+      const admin = await lookupPage();
+      roomCheckInFixture.admin = admin;
+      const made = await admin.evaluate(async () => {
+        const csrf =
+          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+        const headers = {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": decodeURIComponent(csrf),
+        };
+        const list = await (
+          await fetch("/api/v1/locations", { credentials: "include" })
+        ).json();
+        const rows = Array.isArray(list) ? list : (list.items ?? []);
+        const room = rows.find((row) =>
+          String(row.name).startsWith("Volunteer Office"),
+        );
+        if (!room) throw new Error("no Volunteer Office room");
+        const hour = 3_600_000;
+        const now = Date.now();
+        const plan = [
+          ["Pump Operations Drill", "training", now - hour / 2, now + hour, 60],
+          [
+            "Volunteer Committee Meeting",
+            "business_meeting",
+            now + hour,
+            now + 3 * hour,
+            120,
+          ],
+        ];
+        const ids = [];
+        for (const [title, type, start, end, early] of plan) {
+          const response = await fetch("/api/v1/events", {
+            method: "POST",
+            credentials: "include",
+            headers,
+            body: JSON.stringify({
+              title,
+              event_type: type,
+              location_id: room.id,
+              start_datetime: new Date(start).toISOString(),
+              end_datetime: new Date(end).toISOString(),
+              check_in_window_type: "flexible",
+              check_in_minutes_before: early,
+            }),
+          });
+          if (response.ok) {
+            ids.push((await response.json()).id);
+            continue;
+          }
+          const detail = await response.text();
+          // Already booked: guide 04's seeder keeps its own back-to-back pair
+          // in this room, which is the same state. Use that and undo ours.
+          if (response.status !== 400 || !detail.includes("already booked")) {
+            throw new Error(`event create ${response.status}: ${detail}`);
+          }
+          for (const id of ids) {
+            await fetch(`/api/v1/events/${id}`, {
+              method: "DELETE",
+              credentials: "include",
+              headers,
+            });
+          }
+          return { roomId: room.id, ids: [] };
+        }
+        return { roomId: room.id, ids };
+      });
+      roomCheckInFixture.ids = made.ids;
+      await page.goto(
+        new URL(`/locations/${made.roomId}/check-in`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      await page
+        .getByRole("heading", { name: "Which event are you here for?" })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: async () => {
+      const { admin, ids } = roomCheckInFixture;
+      if (!admin || !ids.length) return;
+      await admin.evaluate(async (eventIds) => {
+        const csrf =
+          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+        for (const id of eventIds) {
+          const response = await fetch(`/api/v1/events/${id}`, {
+            method: "DELETE",
+            credentials: "include",
+            headers: { "X-CSRF-Token": decodeURIComponent(csrf) },
+          });
+          if (!response.ok && response.status !== 404) {
+            throw new Error(`event delete ${response.status}`);
+          }
+        }
+      }, ids);
+      roomCheckInFixture.ids = [];
+    },
+  },
   {
     id: "08-87-dashboard-next-30-days",
     doc: "08-admin-reports.md",
@@ -17088,6 +17772,127 @@ export const SHOTS = [
     viewport: { width: 390, height: 844 },
     selector: 'nav[aria-label="Primary"]',
     expect: { selector: 'nav[aria-label="Primary"] button:has-text("Add")' },
+  },
+
+  // ── 10 Mobile & PWA, placeholders (2026-10-17) ─────────────────────
+  {
+    id: "10-25-drawer-open-scroll-hint",
+    doc: "10-mobile-pwa.md",
+    line: 195,
+    anchor:
+      "bottom-bar More tapped so the navigation drawer is open and not yet scrolled",
+    alt: "The administrator's navigation drawer at 390px, opened from More on the bottom bar and not yet scrolled: the list fades at its foot, with the More pill and its down arrow above the theme and logout controls",
+    route: "/dashboard",
+    viewport: "mobile",
+    expect: { selector: '[data-testid="side-nav-scroll-hint"] button' },
+    prepare: openPhoneDrawer,
+  },
+  {
+    id: "10-26-drawer-more-chevron",
+    doc: "10-mobile-pwa.md",
+    line: 205,
+    anchor:
+      "The navigation drawer open on a 390px phone as an officer, with items below the fold",
+    alt: "The menu list in the open drawer, clipped: items continue below the fold, the last visible rows fade out and the floating More button with its bouncing chevron sits over them",
+    route: "/dashboard",
+    viewport: "mobile",
+    expect: { selector: '[data-testid="side-nav-scroll-hint"] button' },
+    prepare: openPhoneDrawer,
+    selector: 'div:has(> [data-testid="side-nav-scroll-hint"])',
+  },
+  {
+    id: "10-27-phone-nav-bar-setting",
+    doc: "10-mobile-pwa.md",
+    line: 277,
+    anchor:
+      "My Account → Appearance on a 390px phone, scrolled to **Phone navigation bar**",
+    alt: "My Account, Appearance, at 390px as a member: Phone navigation bar with Right of Add set to Training, the Use the default tabs link, and the bottom bar beneath carrying the Training tab",
+    route: "/account?tab=appearance",
+    auth: "member",
+    viewport: "mobile",
+    expect: "Use the default tabs",
+    // The choice saves on change, so the member's own slots are read first and
+    // written back in cleanup.
+    prepare: async (page) => {
+      phoneNavFixture.before = await page.evaluate(async () => {
+        const me = await (
+          await fetch("/api/v1/auth/me", { credentials: "include" })
+        ).json();
+        return me.bottom_nav_slots ?? null;
+      });
+      const right = page.locator("#bottom-nav-slot-1");
+      await right.waitFor({ timeout: 15_000 });
+      await right.selectOption({ label: "Training" });
+      await page.getByText("Use the default tabs").waitFor();
+      await page
+        .locator('nav[aria-label="Primary"]')
+        .getByText("Training")
+        .waitFor({ timeout: 10_000 });
+      // The link sits under the selects; centring it keeps the heading above
+      // and the bottom bar below in one frame.
+      await page
+        .getByText("Use the default tabs")
+        .evaluate((node) => node.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      await page.evaluate(async (slots) => {
+        const csrf =
+          document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "";
+        const response = await fetch("/api/v1/users/me/bottom-navigation", {
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": decodeURIComponent(csrf),
+          },
+          body: JSON.stringify({ slots }),
+        });
+        if (!response.ok) throw new Error(`restore ${response.status}`);
+      }, phoneNavFixture.before);
+    },
+  },
+  {
+    id: "10-28-held-offline-notice",
+    doc: "10-mobile-pwa.md",
+    line: 708,
+    anchor: "Member signed in on a device with two or three held offline items",
+    alt: "At 390px as a member: the yellow notice at the top of the app saying three offline items are on hold, saved before this device recorded who saved them, with Send as me and Discard",
+    route: "/dashboard",
+    auth: "member",
+    viewport: "mobile",
+    expect: "offline items are on hold",
+    prepare: async (page) => {
+      await seedHeldOfflineItems(page);
+      await page
+        .getByText("offline items are on hold")
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+    },
+    cleanup: clearHeldOfflineItems,
+  },
+  {
+    id: "10-29-held-offline-confirm",
+    doc: "10-mobile-pwa.md",
+    line: 708,
+    anchor: "__placed-by-hand-10-29__",
+    alt: "The Send these as yours? confirmation over the held-items notice, warning that the device cannot tell who saved them, with Keep on hold and Send as me",
+    route: "/dashboard",
+    auth: "member",
+    viewport: "mobile",
+    expect: "Send these as yours?",
+    // Opened and photographed, never confirmed.
+    prepare: async (page) => {
+      await seedHeldOfflineItems(page);
+      await page
+        .getByRole("button", { name: "Send as me" })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.getByText("Send these as yours?").first().waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: clearHeldOfflineItems,
   },
   {
     id: "16-08-mcp-connect-form",
