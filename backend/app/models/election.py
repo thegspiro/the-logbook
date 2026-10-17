@@ -816,6 +816,15 @@ class BallotSendJobStatus(str, Enum):
     FAILED = "failed"
 
 
+class BallotSendJobKind(str, Enum):
+    """What a background send mails: the ballot itself, or a reminder to
+    the members who have not voted yet. Both mint fresh voting tokens, which
+    is why they share one table and one in-progress guard."""
+
+    BALLOTS = "ballots"
+    REMINDER = "reminder"
+
+
 class BallotSendJob(Base):
     """One request to email ballots, run in the background.
 
@@ -850,6 +859,12 @@ class BallotSendJob(Base):
     )
     requested_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=BallotSendJobKind.BALLOTS.value,
+        server_default=BallotSendJobKind.BALLOTS.value,
     )
     status: Mapped[str] = mapped_column(
         String(20),

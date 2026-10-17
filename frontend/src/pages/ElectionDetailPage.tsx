@@ -903,9 +903,11 @@ export const ElectionDetailPage: React.FC = () => {
       // Dedicated endpoint: the server recomputes the non-voter list at
       // send time (no stale client-side list) and stamps reminder_sent_at,
       // which suppresses the automatic pre-close reminder.
-      const response = await electionService.remindNonVoters(electionId, {
+      const job = await electionService.startReminderSendJob(electionId, {
         message: message || 'This is a reminder to cast your vote. The voting window will be closing soon.',
       });
+      const response = await electionService.waitForBallotSendJob(electionId, job.id, () => !isMountedRef.current);
+      if (!response) return;
 
       setShowRemindModal(false);
       // The server stamps reminder_sent_at on a delivered send; the stamp and

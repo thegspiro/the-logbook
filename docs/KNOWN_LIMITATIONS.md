@@ -2799,7 +2799,7 @@ is worth taking. Revisit if an election ever accumulates more than a few dozen
 batches. (Security review ELEC-16,
 `docs/security-review/ELEC-06-elections-ballots.md`.)
 
-## Elections — Background Ballot Sends Live in the Web Process, and Reminders Are Still Synchronous (2026-10-17)
+## Elections — Background Ballot Sends Live in the Web Process (2026-10-17)
 
 Sending ballots to a 42-member department failed in the browser with "timeout
 of 30000ms exceeded". The send ran inside the HTTP request: an eligibility check
@@ -2829,9 +2829,22 @@ Two limitations remain:
   that it reads as failed with a message to check who received a ballot, and it
   stops blocking a new send. Moving sends to a real worker would remove this,
   at the cost of a new service in every deployment (Docker, Unraid, AWS).
-- **Remind Non-Voters (`POST /elections/{id}/remind-non-voters`) is still
-  synchronous** and will hit the same 30-second timeout once enough members
-  have not voted. It needs the same job treatment as a separate change.
+- **The automatic pre-close reminder does not consult the guard.** It runs
+  from the election lifecycle task, not through a job, so it does not check
+  for a send in progress. If a secretary's manual send happens to be running
+  at the moment the lifecycle task fires, both mint tokens for the same
+  members. The reminder's one-hour cooldown and `reminder_sent_at` stamp keep
+  this to one overlap at most, and only around the pre-close window.
+
+**Remind Non-Voters fixed the same way (2026-10-17).** It had the same
+synchronous timeout. `POST /elections/{id}/reminder-send-jobs` now queues it
+as a `ballot_send_jobs` row with `kind = 'reminder'`, polled through the same
+`GET /elections/{id}/ballot-send-jobs/{job_id}`. A reminder that is refused
+outright (election not open, reminders off, inside the one-hour cooldown) is
+refused before anything is queued. Ballot sends and reminders share the
+in-progress guard, because both mint fresh tokens. The synchronous
+`POST /elections/{id}/remind-non-voters` is kept for API callers and now also
+answers `409` while a send is running.
 
 ## Elections — Two Ballot Items Sharing an Alias String Can't Be Fully Disambiguated Without a Schema Change (2026-09-02)
 

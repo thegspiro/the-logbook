@@ -302,8 +302,6 @@ class TestSendSummaryNamesTheRecordedReason:
                 ),
             )
 
-        assert response["recipients_count"] == 1
-        assert response["skipped_count"] == 1
-        assert f"1 skipped ({ElectionService.NOT_ON_FROZEN_ROLL})" in (
-            response["message"]
-        )
+        assert response.recipients_count == 1
+        assert response.skipped_count == 1
+        assert f"1 skipped ({ElectionService.NOT_ON_FROZEN_ROLL})" in response.message
