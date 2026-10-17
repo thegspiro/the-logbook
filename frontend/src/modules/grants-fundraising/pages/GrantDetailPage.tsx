@@ -38,7 +38,7 @@ import {
   X,
   ChevronRight,
 } from 'lucide-react';
-import type { ComplianceTaskType, ComplianceTaskStatus, GrantPriority } from '../types';
+import type { ComplianceTaskType, ComplianceTaskStatus, GrantNoteType, GrantPriority } from '../types';
 import {
   APPLICATION_STATUS_COLORS,
   PRIORITY_COLORS,
@@ -46,6 +46,7 @@ import {
   ComplianceTaskType as ComplianceTaskTypeEnum,
   ComplianceTaskStatus as ComplianceTaskStatusEnum,
   GrantPriority as GrantPriorityEnum,
+  GrantNoteType as GrantNoteTypeEnum,
   BUDGET_ITEM_CATEGORY_LABELS,
 } from '../types';
 import { BUDGET_CATEGORY_ORDER, readBudgetSummary, readKeyContacts } from '../utils/applicationStructuredFields';
@@ -102,15 +103,14 @@ const COMPLIANCE_STATUS_LABELS: Record<string, string> = {
   waived: 'Waived',
 };
 
-const NOTE_TYPE_ICONS: Record<string, React.ReactNode> = {
+const NOTE_TYPE_ICONS: Record<GrantNoteType, React.ReactNode> = {
+  general: <MessageSquare className="text-theme-text-secondary h-4 w-4" />,
   status_change: <ChevronRight className="h-4 w-4 text-blue-500" />,
-  document: <FileText className="h-4 w-4 text-indigo-500" />,
-  contact: <Users className="h-4 w-4 text-green-500" />,
+  document_added: <FileText className="h-4 w-4 text-indigo-500" />,
+  contact_made: <Users className="h-4 w-4 text-green-500" />,
   milestone: <Target className="h-4 w-4 text-amber-500" />,
-  comment: <MessageSquare className="text-theme-text-secondary h-4 w-4" />,
-  submission: <Send className="h-4 w-4 text-purple-500" />,
-  review: <Eye className="h-4 w-4 text-cyan-500" />,
   financial: <DollarSign className="h-4 w-4 text-emerald-500" />,
+  compliance: <ClipboardCheck className="h-4 w-4 text-purple-500" />,
 };
 
 const COMPLIANCE_TASK_TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -408,7 +408,7 @@ export const GrantDetailPage: React.FC = () => {
     setIsSubmittingNote(true);
     try {
       await addGrantNote(id, {
-        noteType: 'comment',
+        noteType: GrantNoteTypeEnum.GENERAL,
         content: newNoteContent.trim(),
       });
       toast.success('Note added');

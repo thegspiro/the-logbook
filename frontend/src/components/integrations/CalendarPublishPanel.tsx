@@ -1,12 +1,12 @@
 /**
- * Google Calendar card body
+ * Google Calendar / Microsoft Outlook card body
  *
- * Connecting is a Google sign-in: "Connect with Google" sends the browser to
- * Google's consent screen, and the backend's callback creates the
- * department's calendar and returns to /integrations with a query flag that
- * IntegrationsPage turns into a toast. Once connected this shows which
- * account and calendar events are published to, how publishing is going,
- * the description switch, and Disconnect.
+ * Connecting is a provider sign-in: "Connect with Google" or "Connect with
+ * Microsoft" sends the browser to the provider, and the backend's callback
+ * creates the department's calendar and returns to /integrations with a
+ * query flag that IntegrationsPage turns into a toast. Once connected this
+ * shows which account and calendar events are published to, how publishing
+ * is going, the description switch, and Disconnect.
  */
 
 import React, { useState } from 'react';
@@ -17,8 +17,10 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import { formatDateTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { useConfirm } from '../../contexts/ConfirmContext';
+import type { CalendarProvider } from './calendarProviders';
 
-interface GoogleCalendarPanelProps {
+interface CalendarPublishPanelProps {
+  provider: CalendarProvider;
   integration: IntegrationConfig;
   onUpdated: (updated: IntegrationConfig) => void;
   onDisconnected: () => void;
@@ -29,7 +31,12 @@ const configString = (config: Record<string, unknown>, key: string): string | nu
   return typeof value === 'string' && value ? value : null;
 };
 
-export const GoogleCalendarPanel: React.FC<GoogleCalendarPanelProps> = ({ integration, onUpdated, onDisconnected }) => {
+export const CalendarPublishPanel: React.FC<CalendarPublishPanelProps> = ({
+  provider,
+  integration,
+  onUpdated,
+  onDisconnected,
+}) => {
   const { confirm } = useConfirm();
   const tz = useTimezone();
   const [starting, setStarting] = useState(false);
@@ -43,14 +50,15 @@ export const GoogleCalendarPanel: React.FC<GoogleCalendarPanelProps> = ({ integr
   const isConnected = integration.status === 'connected';
   const needsReconnect = integration.status === 'error';
   const errorCount = integration.consecutive_error_count ?? 0;
+  const descriptionsLabelId = `calendar-descriptions-${integration.id}`;
 
   const handleConnect = async () => {
     setStarting(true);
     try {
-      const url = await integrationsService.startGoogleCalendarConnect();
+      const url = await provider.start();
       window.location.href = url;
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not start the Google sign-in'));
+      toast.error(getErrorMessage(err, `Could not start the ${provider.signInWith} sign-in`));
       setStarting(false);
     }
   };
@@ -72,9 +80,8 @@ export const GoogleCalendarPanel: React.FC<GoogleCalendarPanelProps> = ({ integr
 
   const handleDisconnect = async () => {
     const confirmed = await confirm({
-      title: 'Disconnect Google Calendar?',
-      message:
-        'Events stop being published and The Logbook gives up its access to the Google account. The calendar itself stays in Google with the events already on it — delete it there if the department no longer wants it. Connecting again creates a new calendar.',
+      title: `Disconnect ${provider.name}?`,
+      message: provider.disconnectMessage,
       confirmLabel: 'Disconnect',
       cancelLabel: 'Stay connected',
       variant: 'warning',
@@ -83,10 +90,10 @@ export const GoogleCalendarPanel: React.FC<GoogleCalendarPanelProps> = ({ integr
     setDisconnecting(true);
     try {
       await integrationsService.disconnectIntegration(integration.id);
-      toast.success('Google Calendar disconnected');
+      toast.success(`${provider.name} disconnected`);
       onDisconnected();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not disconnect Google Calendar'));
+      toast.error(getErrorMessage(err, `Could not disconnect ${provider.name}`));
     } finally {
       setDisconnecting(false);
     }
@@ -107,7 +114,9 @@ export const GoogleCalendarPanel: React.FC<GoogleCalendarPanelProps> = ({ integr
       ) : (
         <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
       )}
-      <span>{starting ? 'Redirecting…' : needsReconnect ? 'Reconnect with Google' : 'Connect with Google'}</span>
+      <span>
+        {starting ? 'Redirecting…' : `${needsReconnect ? 'Reconnect' : 'Connect'} with ${provider.signInWith}`}
+      </span>
     </button>
   );
 
@@ -131,18 +140,15 @@ export const GoogleCalendarPanel: React.FC<GoogleCalendarPanelProps> = ({ integr
 
   if (!isConnected && !needsReconnect) {
     return (
-      <div className="mb-4 space-y-2" data-testid="google-calendar-panel">
-        <p className="text-theme-text-muted text-xs">
-          Sign in with the Google account that should own the department calendar. The Logbook creates a new calendar
-          there and can reach only the calendars it creates.
-        </p>
+      <div className="mb-4 space-y-2" data-testid={`${provider.integrationType}-panel`}>
+        <p className="text-theme-text-muted text-xs">{provider.intro}</p>
         <div className="flex justify-end">{connectButton}</div>
       </div>
     );
   }
 
   return (
-    <div className="mb-4 space-y-3" data-testid="google-calendar-panel">
+    <div className="mb-4 space-y-3" data-testid={`${provider.integrationType}-panel`}>
       {needsReconnect && (
         <div className="alert-warning text-sm" role="alert">
           <p className="flex items-center gap-1.5 font-medium">
@@ -197,7 +203,7 @@ export const GoogleCalendarPanel: React.FC<GoogleCalendarPanelProps> = ({ integr
       {isConnected && (
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p id={`gcal-descriptions-${integration.id}`} className="text-theme-text-primary text-sm">
+            <p id={descriptionsLabelId} className="text-theme-text-primary text-sm">
               Sync event descriptions
             </p>
             <p className="text-theme-text-muted text-xs">
@@ -208,7 +214,7 @@ export const GoogleCalendarPanel: React.FC<GoogleCalendarPanelProps> = ({ integr
             type="button"
             role="switch"
             aria-checked={syncDescriptions}
-            aria-labelledby={`gcal-descriptions-${integration.id}`}
+            aria-labelledby={descriptionsLabelId}
             disabled={savingDescriptions}
             onClick={() => {
               void handleToggleDescriptions();

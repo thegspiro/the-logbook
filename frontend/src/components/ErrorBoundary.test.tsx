@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ReactElement } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // Mock the error tracking service
@@ -8,7 +9,7 @@ vi.mock('../services/errorTracking', () => ({
   },
 }));
 
-import { ErrorBoundary } from './ErrorBoundary';
+import { ErrorBoundary, MAX_COMPONENT_STACK_LENGTH } from './ErrorBoundary';
 import { errorTracker } from '../services/errorTracking';
 
 const mockedLogError = vi.mocked(errorTracker.logError);
@@ -165,6 +166,23 @@ describe('ErrorBoundary', () => {
         }) as unknown,
       }) as unknown
     );
+  });
+
+  it('sends at most MAX_COMPONENT_STACK_LENGTH characters of a deep component stack', () => {
+    const DeeplyNestedComponentWithALongName = ({ depth }: { depth: number }): ReactElement =>
+      depth === 0 ? <ThrowingChild shouldThrow={true} /> : <DeeplyNestedComponentWithALongName depth={depth - 1} />;
+    render(
+      <ErrorBoundary>
+        <DeeplyNestedComponentWithALongName depth={200} />
+      </ErrorBoundary>
+    );
+
+    expect(mockedLogError).toHaveBeenCalledTimes(1);
+    const context = mockedLogError.mock.calls[0]?.[1];
+    const stack = context?.additionalContext?.['componentStack'];
+    expect(typeof stack).toBe('string');
+    expect(String(stack).length).toBe(MAX_COMPONENT_STACK_LENGTH);
+    expect(String(stack)).toContain('ThrowingChild');
   });
 
   it('Reload Page button calls window.location.reload', () => {

@@ -10,7 +10,7 @@ split — including the audit entries both must leave.
 
 import json
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
@@ -28,7 +28,9 @@ from app.services.training_service import TrainingService
 pytestmark = [pytest.mark.integration]
 
 _NOW = datetime.now(timezone.utc)
-TODAY = date.today()
+# UTC, the org's timezone here: a local date ahead of UTC makes TODAY - 1 the
+# service's today, still inside an inclusive catch-up deadline.
+TODAY = _NOW.date()
 CUTOFF = TODAY - timedelta(days=10)
 VETERAN_HIRED = TODAY - timedelta(days=3650)
 RECRUIT_HIRED = TODAY - timedelta(days=2)

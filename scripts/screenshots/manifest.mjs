@@ -72,6 +72,21 @@ export const DEMO_MEMBER_CREDENTIALS = {
 };
 
 /**
+ * A second ordinary member, for the states the demo member cannot be in at
+ * the same time as the ones other shots need: no shift report about them, and
+ * a swap request that has already been approved, so nothing is pending.
+ *
+ * Shots marked `auth: "second-member"` sign in as this account. Kept in step
+ * with SECOND_MEMBER_USERNAME in seed_demo_data.py, whose guide-03 step signs
+ * in as it (clearing the forced password change) and seeds the approved
+ * exchange.
+ */
+export const DEMO_SECOND_MEMBER_CREDENTIALS = {
+  username: "snolan",
+  password: "DemoMember!2026",
+};
+
+/**
  * The department secretary: holds `legal.propose`, and neither `legal.publish`
  * nor `settings.manage`.
  *
@@ -1894,7 +1909,13 @@ export function openCallVolumeReport(mode) {
       .getByRole("button", { name: /Generate Report/i })
       .first()
       .click({ timeout: 15_000 });
-    const label = mode === "count_only" ? /Unit Responses/ : /Total Calls/;
+    // Count-only tracking counts incidents ("Total Calls"); detailed tracking
+    // sums members' shift reports ("Member-Reported Calls"). See
+    // callVolumeLabels in CallVolumeRenderer.tsx.
+    const label =
+      mode === "count_only"
+        ? /^Total Calls$/
+        : /Member-Reported Calls|Total Calls/;
     const card = page.getByText(label).first();
     await card.waitFor({ state: "visible", timeout: 20_000 });
     await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -2254,6 +2275,92 @@ async function connectMcpAndShowIssuedKey(page) {
 async function disconnectMcp(page) {
   await page.unroute("**/api/v1/integrations/claude-mcp/keys");
   await postIntegration(page, `${await mcpIntegrationId(page)}/disconnect`);
+}
+
+/**
+ * Open My Shifts → Hours → Log outside shift and fill the dialog in the way
+ * the guide describes: a start, an end set with the +12 hours button, a
+ * department, a unit and a position. Never saved.
+ *
+ * The department and unit are the seeder's placeholder agency
+ * (`OUTSIDE_AGENCIES` in seed_demo_data.py), never a real neighbour.
+ */
+async function fillOutsideShift(page) {
+  await clickByName(/^Hours$/)(page);
+  await clickByName(/^Log outside shift$/)(page);
+  await page.locator("#external-shift-start").waitFor({ timeout: 15_000 });
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 2);
+  await page
+    .locator("#external-shift-start")
+    .fill(d.toISOString().slice(0, 10));
+  await page.getByLabel("Start time hour").selectOption({ label: "7" });
+  await page.getByLabel("Start time minute").selectOption("00");
+  await page.getByLabel("Start time AM/PM").selectOption("AM");
+  await page.getByRole("button", { name: /\+12/ }).first().click();
+  await page.locator("#external-shift-agency").selectOption({
+    label: "Township Fire Company",
+  });
+  await page.locator("#external-shift-apparatus").selectOption({
+    label: "Engine 21 (engine)",
+  });
+  await page.locator("#external-shift-role").fill("Driver");
+  await page.getByText("Counts as").waitFor({ timeout: 10_000 });
+  // Leave no field focused, so no focus ring sits on the Position box.
+  await page.locator("#external-shift-role").blur();
+}
+
+/**
+ * Generate Member Hours from `daysBack` days ago to today, so the range takes
+ * in the seeded outside shifts from last month as well as this one (the tab
+ * opens on the current month).
+ */
+async function memberHoursSince(page, daysBack) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - daysBack);
+  await page
+    .getByLabel("Start date")
+    .first()
+    .fill(d.toISOString().slice(0, 10));
+  await page
+    .getByRole("button", { name: /^Generate Report$/ })
+    .first()
+    .click();
+  await page
+    .getByText("Outside apparatus staffed")
+    .first()
+    .waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(1500);
+}
+
+/**
+ * The id of the shift the signed-in account is seated on right now.
+ *
+ * Shift Check-In only offers Check Out inside a shift that is under way, and
+ * which seeded shift that is depends on the hour the run happens. Fails the
+ * shot rather than photographing a different state.
+ */
+async function currentShiftOf(page) {
+  const shifts = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/scheduling/my-shifts?limit=100", {
+      credentials: "include",
+    });
+    if (!response.ok) return [];
+    const body = await response.json();
+    return Array.isArray(body) ? body : body.shifts || body.items || [];
+  });
+  const now = Date.now();
+  const running = shifts.find(
+    (s) =>
+      s.start_time &&
+      s.end_time &&
+      Date.parse(s.start_time) <= now &&
+      Date.parse(s.end_time) > now,
+  );
+  if (!running?.id) {
+    throw new Error("currentShiftOf: no shift of this account is in progress");
+  }
+  return running.id;
 }
 
 /**
@@ -5308,7 +5415,7 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1138,
     anchor: "Screenshot of an expanded shift report card, its header naming",
-    alt: "A shift report card naming the trainee in its header, with the filing officer in the metadata row beneath it",
+    alt: "A shift report card on Written by me naming the member in its header, expanded to its rating, call types, narrative, skills and tasks",
     route: "/scheduling?tab=shift-reports",
     prepare: async (page) => {
       await expandFirstReportCard(page);
@@ -9024,7 +9131,7 @@ export const SHOTS = [
     line: 291,
     anchor:
       "Screenshot of the Request Shift Swap dialog with Specific Shift chosen",
-    alt: "The Request Shift Swap dialog — the two swap-type cards, the shift picker and the reason field",
+    alt: "The Request Shift Swap dialog — the three swap-type cards (Open Swap, Specific Shift, Exchange With a Member) with Specific Shift chosen, the shift picker and the reason field",
     route: "/scheduling?tab=my-shifts",
     prepare: async (page) => {
       // The Swap button only exists on the Upcoming view, which is the
@@ -9064,7 +9171,7 @@ export const SHOTS = [
     line: 357,
     anchor:
       "Screenshot of the compliance report showing a requirement (e.g., 'Monthly Minimum Shifts:",
-    alt: "Scheduling compliance report with per-member shift totals",
+    alt: "Shift Compliance: the Requirements, Requirement Checks, Checks Met and Checks Not Met cards above each requirement, a requirement nobody is held to reading Not applicable",
     route: "/scheduling/admin/reports",
     // The page opens on Member Hours with an empty picker and "Select a Date
     // Range" where the report goes, so a plain route visit captured a
@@ -9756,11 +9863,9 @@ export const SHOTS = [
     alt: "Scheduling notification settings showing the start-of-shift reminder options",
     route: "/scheduling/admin/settings/notifications",
     // Same page as 03-38; this clips to the reminders block so the two shots
-    // are not the same image under two placeholders. The heading sits in its
-    // own flex row inside the section, so `:has(> h4)` selects that row and
-    // clips to the title alone — the section is its grandparent.
-    selector:
-      'div:has(> div > h4:text-is("Start-of-Shift Reminders")):not(:has(div:has(> div > h4:text-is("Start-of-Shift Reminders"))))',
+    // are not the same image under two placeholders.
+    selector: 'section:has(> div > h4:text-is("Start-of-Shift Reminders"))',
+    expect: { selector: 'h4:text-is("Start-of-Shift Reminders")' },
   },
   {
     id: "03-22-equipment-check-builder",
@@ -10638,6 +10743,8 @@ export const SHOTS = [
     viewport: CLOSEOUT_VIEWPORT,
     selector: CLOSEOUT_WIZARD_CARD,
     fullPage: false,
+    // "no hours recorded" is a member line inside the step, not an empty page.
+    allowEmptyState: true,
   },
   {
     id: "03-46-finalized-badge",
@@ -15425,7 +15532,7 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 423,
     anchor: "Reports → Call Volume for a count-only department",
-    alt: "Call Volume for a count-only department: Unit Responses, Avg Responses/Day and Peak Responses, over the footnote saying an incident two units attended is counted once for each",
+    alt: "Call Volume for a count-only department: Total Calls, Avg Calls/Day and Peak Calls, with no per-unit footnote",
     route: "/reports",
     prepare: openCallVolumeReport("count_only"),
     fullPage: false,
@@ -15874,6 +15981,354 @@ export const SHOTS = [
     // Clipped to the Call types card, which is taller than a viewport.
     selector: 'div.card-secondary:has(h3:text-is("Call types"))',
     expect: { selector: 'h3:text-is("Call types")' },
+  },
+  {
+    id: "03-106-exchange-swap-dialog",
+    doc: "03-scheduling.md",
+    line: 299,
+    anchor:
+      "Member at /scheduling?tab=my-shifts, Request swap dialog with Exchange With a Member",
+    alt: "The Request Shift Swap dialog as a member, with Exchange With a Member chosen and the Exchange With list naming the member and seat to trade with",
+    route: "/scheduling?tab=my-shifts",
+    auth: "member",
+    selector: '[role="dialog"] > div',
+    expect: { selector: "#swap-exchange" },
+    prepare: async (page) => {
+      await clickByName("Swap")(page);
+      await page.waitForSelector("#swap-reason", { timeout: 15_000 });
+      await clickByName(/Exchange With a Member/)(page);
+      await page.waitForFunction(
+        () => {
+          const select = document.querySelector("#swap-exchange");
+          return !!select && select.options.length > 1 && !!select.value;
+        },
+        { timeout: 15_000 },
+      );
+    },
+  },
+  {
+    id: "03-107-approve-without-qualification",
+    doc: "03-scheduling.md",
+    line: 303,
+    anchor:
+      'Scheduling officer at /scheduling?tab=requests: the "Approve without qualification?"',
+    alt: "The Approve without qualification? confirmation over the Requests tab, naming the seat the member is not cleared for, with Keep it pending and Approve anyway",
+    route: "/scheduling?tab=requests",
+    viewport: { width: 1440, height: 900 },
+    expect: "Approve without qualification?",
+    // The refusal is answered from a route mock, never the server. The seeded
+    // exchange is between two members who both qualify, and making one of
+    // them lose a qualification would mean demoting a seeded member whose
+    // rank other guides photograph. The mocked body is the server's own
+    // refusal for this case (LB-SCHED-002 with the reviewer wording from
+    // `_exchange_qualification_error`), so the dialog is the one an officer
+    // sees when it happens. The mock also guarantees Approve cannot reach the
+    // server and actually approve the seeded exchange.
+    prepare: async (page) => {
+      await page.route("**/api/v1/scheduling/swap-requests/*/review", (route) =>
+        route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({
+            detail:
+              "The requesting member is not qualified for the Firefighter seat they would take",
+            code: "LB-SCHED-002",
+          }),
+        }),
+      );
+      await page
+        .getByRole("button", { name: /^Approve swap for Rafael Duarte$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByText("Approve without qualification?")
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "03-108-member-outside-shifts",
+    doc: "03-scheduling.md",
+    line: 522,
+    anchor:
+      'My Shifts → Hours as a member → the "Shifts with other departments" card',
+    alt: "The Shifts with other departments card on a member's Hours view: two counted shifts with their times, hours and unit, one Not counted entry with the officer's reason, and the Log outside shift button",
+    route: "/scheduling?tab=my-shifts",
+    auth: "member",
+    selector: 'section[aria-labelledby="my-external-shifts-heading"]',
+    expect: "Not counted",
+    prepare: async (page) => {
+      await clickByName(/^Hours$/)(page);
+      await page.getByText("Not counted").first().waitFor({ timeout: 15_000 });
+    },
+  },
+  {
+    id: "03-109-log-outside-shift-dialog",
+    doc: "03-scheduling.md",
+    line: 526,
+    anchor:
+      'My Shifts → Hours → Log outside shift → the "Log a shift with another department"',
+    alt: "The Log a shift with another department dialog: Start filled in, End set by the +12 hours button, Counts as 12 hours, and Township Fire Company and Engine 21 chosen",
+    route: "/scheduling?tab=my-shifts",
+    auth: "member",
+    viewport: { width: 1440, height: 1100 },
+    selector: '[data-testid="modal-panel"]',
+    expect: "Counts as",
+    prepare: (page) => fillOutsideShift(page),
+  },
+  {
+    id: "03-110-outside-apparatus-settings",
+    doc: "03-scheduling.md",
+    line: 548,
+    anchor:
+      "Scheduling Admin → Settings → Outside Apparatus → one department with two units",
+    alt: "Scheduling Settings on Outside Apparatus: Township Fire Company with Engine 21 on and Tanker 23 switched off, a second department below, and the Add a department field",
+    route: "/scheduling/admin/settings/outside-apparatus",
+    fullPage: true,
+    expect: "Tanker 23",
+  },
+  {
+    id: "03-111-member-hours-outside-tables",
+    doc: "03-scheduling.md",
+    line: 552,
+    anchor:
+      'Scheduling Reports → Member Hours → scrolled to the "Outside apparatus staffed" table',
+    alt: "Member Hours scrolled to Outside apparatus staffed, one row per outside unit with its shifts, hours and members, and below it Shifts with other departments with a Reject button on each counted row",
+    route: "/scheduling/admin/reports",
+    viewport: { width: 1440, height: 1000 },
+    expect: { selector: "#external-apparatus-summary-heading" },
+    prepare: async (page) => {
+      await memberHoursSince(page, 30);
+      await page
+        .locator("#external-apparatus-summary-heading")
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "03-122-member-hours-report-outside",
+    doc: "03-scheduling.md",
+    line: 1646,
+    anchor:
+      "Scheduling administrator (scheduling.manage) at /scheduling/admin/reports, Member Hours generated",
+    alt: "Member Hours for a range containing outside shifts: the Outside Hours column in the member table, the Outside apparatus staffed table with its Total row, and Shifts with other departments with Reject buttons and one Not counted row",
+    route: "/scheduling/admin/reports",
+    fullPage: true,
+    expect: { selector: "#external-shifts-review-heading" },
+    prepare: (page) => memberHoursSince(page, 30),
+  },
+  {
+    id: "03-112-member-outside-dialog-driver",
+    doc: "03-scheduling.md",
+    line: 556,
+    anchor:
+      "Member at /scheduling?tab=my-shifts&view=hours, with at least one outside department and unit seeded. The 'Log a shift",
+    alt: "The Log a shift with another department dialog at phone width, filled in: Start, an End set with +12 hours, Counts as 12 hours, Township Fire Company, Engine 21 and Position Driver",
+    route: "/scheduling?tab=my-shifts",
+    auth: "member",
+    viewport: { width: 390, height: 1300 },
+    selector: '[data-testid="modal-panel"]',
+    expect: "Counts as",
+    prepare: (page) => fillOutsideShift(page),
+  },
+  {
+    id: "03-113-member-hours-with-outside",
+    doc: "03-scheduling.md",
+    line: 560,
+    anchor:
+      "Member at /scheduling?tab=my-shifts&view=hours. The 'Shifts with other departments' section",
+    alt: "A member's Hours view: the This month card reading +24 hrs with other departments above the monthly table, and the Shifts with other departments section beneath with two counted entries and one Not counted with its reason",
+    route: "/scheduling?tab=my-shifts",
+    auth: "member",
+    fullPage: true,
+    expect: "with other departments",
+    prepare: async (page) => {
+      await clickByName(/^Hours$/)(page);
+      await page.getByText("Not counted").first().waitFor({ timeout: 15_000 });
+    },
+  },
+  {
+    id: "03-114-check-out-early",
+    doc: "03-scheduling.md",
+    line: 778,
+    anchor:
+      "Shift Check-In at phone width, one hour into a shift → tap Check Out",
+    alt: "Shift Check-In on a phone during a shift: the Check out early? dialog saying when the shift runs until, with Stay checked in and Check out now",
+    route: "/scheduling/checkin",
+    // The account seated on a shift that is under way when the run happens.
+    // The secretary is a captain on the rotation; `currentShiftOf` fails the
+    // shot rather than guessing when none of their shifts is in progress.
+    auth: "secretary",
+    viewport: { width: 390, height: 844 },
+    expect: "Check out early?",
+    prepare: async (page) => {
+      const shiftId = await currentShiftOf(page);
+      await page.goto(
+        new URL(`/scheduling/checkin?shift=${shiftId}`, page.url()).toString(),
+      );
+      // The Check In / Check Out buttons only render once the shift loads.
+      await page
+        .getByRole("button", { name: /^(Check In|Check Out)$/i })
+        .first()
+        .waitFor({ timeout: 15_000 });
+      const checkIn = page.getByRole("button", { name: /^Check In$/i });
+      if (await checkIn.count()) {
+        // A real check-in: the shot needs a checked-in member, and the next
+        // run finds them still checked in and skips this.
+        await checkIn.first().click();
+      }
+      await page
+        .getByRole("button", { name: /^Check Out$/i })
+        .first()
+        .click({ timeout: 15_000 });
+      await page.getByText("Check out early?").waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "03-115-requests-nothing-pending",
+    doc: "03-scheduling.md",
+    line: 1205,
+    anchor:
+      "Member at /scheduling?tab=requests on the default Pending filter, after their only swap request",
+    alt: "The Requests tab for a member whose only swap request was approved: No swap requests on the default Pending filter, with the line Showing pending requests only. Choose All Statuses to see the rest.",
+    route: "/scheduling?tab=requests",
+    auth: "second-member",
+    fullPage: true,
+    expect: "Showing pending requests only",
+    // The empty state is the subject.
+    allowEmptyState: true,
+  },
+  {
+    id: "03-116-shift-reports-none-yet",
+    doc: "03-scheduling.md",
+    line: 1724,
+    anchor: "Scheduling → Shift Reports as a member with no reports",
+    alt: "Shift Reports for a member with no reports: the Shift reports about you heading and the No shift reports yet explanation with its three cards",
+    route: "/scheduling?tab=shift-reports",
+    auth: "second-member",
+    fullPage: true,
+    expect: "Shift reports about you",
+    // The empty state is the subject.
+    allowEmptyState: true,
+  },
+  {
+    id: "03-117-reporting-summary",
+    doc: "03-scheduling.md",
+    line: 1764,
+    anchor: "Scheduling → Shift Reports as a training officer → Written by me",
+    alt: "Shift Reports on Written by me: Your reporting summary tiles including Drafts to finish, the Reports written per month chart, and the start of the Reports you've written list",
+    route: "/scheduling?tab=shift-reports",
+    viewport: { width: 1440, height: 1300 },
+    expect: "Reports written per month",
+  },
+  {
+    id: "03-118-report-card-phone",
+    doc: "03-scheduling.md",
+    line: 1784,
+    anchor: "Scheduling → Shift Reports at 390 px width as an officer",
+    alt: "A shift report card at 390px phone width: the member's full name on its own line and the status badges on a row beneath it",
+    route: "/scheduling?tab=shift-reports",
+    viewport: { width: 390, height: 1400 },
+    // The first card under "Reports you've written": the subject is how its
+    // header stacks at phone width.
+    selector: "div.card.overflow-hidden:has(> button.grid)",
+    expect: { selector: "div.card.overflow-hidden:has(> button.grid)" },
+    prepare: async (page) => {
+      await page
+        .getByText(/Reports you.ve written/)
+        .first()
+        .scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "03-119-pattern-generate-nothing-new",
+    doc: "03-scheduling.md",
+    line: 3222,
+    anchor:
+      "Scheduling administrator at /scheduling/admin/planning/patterns. A pattern's Generate panel",
+    alt: "Shift Patterns after generating a range already on the schedule: the No new shifts. Dates already on the schedule are skipped… message over the pattern list",
+    route: "/scheduling/admin/planning/patterns",
+    viewport: { width: 1440, height: 900 },
+    expect: "No new shifts",
+    // Generates the seeded platoon window twice. The seeder generates that
+    // window itself (PLATOON_SHIFT_DAYS_AHEAD), so the first run normally
+    // creates nothing either; it is there so the second is a re-run whatever
+    // state the schedule is in.
+    prepare: async (page) => {
+      const pattern = "A/B/C Platoon Rotation";
+      const day = (offset) => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() + offset);
+        return d.toISOString().slice(0, 10);
+      };
+      for (let run = 0; run < 2; run += 1) {
+        await page
+          .getByRole("button", { name: `Generate shifts from ${pattern}` })
+          .click({ timeout: 20_000 });
+        await page
+          .locator('input[id^="pattern-generate-start-"]')
+          .fill(day(35));
+        await page.locator('input[id^="pattern-generate-end-"]').fill(day(37));
+        await page
+          .locator('div:has(> h4:has-text("Generate Shifts"))')
+          .getByRole("button", { name: /Generate/ })
+          .last()
+          .click();
+        await page
+          .getByText(/No new shifts|Generated \d+ shift/)
+          .first()
+          .waitFor({ timeout: 20_000 });
+        if (run === 0) {
+          // Let the first run's message time out, so the picture carries
+          // only the second run's.
+          await page
+            .getByText(/No new shifts|Generated \d+ shift/)
+            .first()
+            .waitFor({ state: "hidden", timeout: 15_000 });
+        }
+      }
+      await page.getByText("No new shifts").first().waitFor({ timeout: 5_000 });
+    },
+  },
+  {
+    id: "03-120-history-import-list",
+    doc: "03-scheduling.md",
+    line: 4414,
+    anchor: "the Shift History Import list (upload form with the time",
+    alt: "Shift History Import: the upload form with its time zone picker above the list of imports, one draft waiting for review",
+    route: "/scheduling/admin/history-import",
+    fullPage: true,
+    expect: { selector: "#history-imports-heading" },
+  },
+  {
+    id: "03-121-history-import-members",
+    doc: "03-scheduling.md",
+    line: 4416,
+    anchor: "__paired-with-03-120__",
+    alt: "A draft import's Members tab with Show settled ticked: three names from the file marked No match, each with a Choose… picker, above the names matched automatically to members on file",
+    route: "/scheduling/admin/history-import",
+    fullPage: true,
+    expect: {
+      selector: '[role="tab"][aria-selected="true"]:has-text("Members")',
+    },
+    // "No match" is the state of a name the import could not place, which is
+    // half of what the tab is for, not an empty page.
+    allowEmptyState: true,
+    prepare: async (page) => {
+      await page
+        .getByRole("link", { name: /^Review$/ })
+        .first()
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("tab", { name: /^Members/ })
+        .click({ timeout: 20_000 });
+      // Settled rows are hidden by default; showing them puts the matched
+      // names, with their confidence, beside the ones still to decide.
+      await page.getByLabel("Show settled").check();
+      await page.waitForTimeout(1000);
+    },
   },
   {
     id: "05-86-gear-request-products",

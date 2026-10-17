@@ -8,7 +8,8 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { getTodayLocalDate } from '../../../utils/dateFormatting';
+import { getTodayLocalDate, localToUTC } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
 import { apparatusFuelLogService } from '../services/api';
 import type { ApparatusFuelLogCreate, FuelType } from '../types';
 
@@ -33,8 +34,10 @@ interface FormData {
   notes: string;
 }
 
-const EMPTY: FormData = {
-  fuelDate: getTodayLocalDate(),
+// Built per open rather than once at module load: a constant froze "today" at
+// the day the bundle loaded, and it must be today in the department's zone.
+const emptyForm = (tz: string): FormData => ({
+  fuelDate: getTodayLocalDate(tz),
   fuelType: 'diesel',
   gallons: '',
   pricePerGallon: '',
@@ -45,7 +48,7 @@ const EMPTY: FormData = {
   stationName: '',
   stationAddress: '',
   notes: '',
-};
+});
 
 const FUEL_TYPES: { value: FuelType; label: string }[] = [
   { value: 'diesel', label: 'Diesel' },
@@ -62,14 +65,15 @@ const labelClass = 'form-label';
 const selectClass = inputClass;
 
 export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onSaved, apparatusId }) => {
-  const [f, setF] = useState<FormData>(EMPTY);
+  const tz = useTimezone();
+  const [f, setF] = useState<FormData>(() => emptyForm(tz));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setF(EMPTY);
+      setF(emptyForm(tz));
     }
-  }, [isOpen]);
+  }, [isOpen, tz]);
 
   const up = (k: keyof FormData, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
 
@@ -102,7 +106,11 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
     try {
       const payload: ApparatusFuelLogCreate = {
         apparatusId,
-        fuelDate: f.fuelDate,
+        // fuel_date is a datetime column read back through formatDate in the
+        // department's zone. A bare date is stored as midnight UTC, which is
+        // the previous evening west of Greenwich; local noon stays on the
+        // chosen day in every zone.
+        fuelDate: localToUTC(`${f.fuelDate}T12:00`, tz),
         fuelType: f.fuelType,
         gallons: Number(f.gallons),
         ...(f.pricePerGallon ? { pricePerGallon: Number(f.pricePerGallon) } : {}),
@@ -152,8 +160,11 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
         {/* Date & Type */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClass}>Date *</label>
+            <label htmlFor="fuel-date" className={labelClass}>
+              Date *
+            </label>
             <input
+              id="fuel-date"
               type="date"
               className={inputClass}
               value={f.fuelDate}
@@ -162,8 +173,15 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
             />
           </div>
           <div>
-            <label className={labelClass}>Fuel Type *</label>
-            <select className={selectClass} value={f.fuelType} onChange={(e) => up('fuelType', e.target.value)}>
+            <label htmlFor="fuel-type" className={labelClass}>
+              Fuel Type *
+            </label>
+            <select
+              id="fuel-type"
+              className={selectClass}
+              value={f.fuelType}
+              onChange={(e) => up('fuelType', e.target.value)}
+            >
               {FUEL_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
@@ -176,8 +194,11 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
         {/* Gallons, Price, Total */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
-            <label className={labelClass}>Gallons *</label>
+            <label htmlFor="fuel-gallons" className={labelClass}>
+              Gallons *
+            </label>
             <input
+              id="fuel-gallons"
               type="number"
               step="0.01"
               min="0"
@@ -188,8 +209,11 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
             />
           </div>
           <div>
-            <label className={labelClass}>Price / Gallon ($)</label>
+            <label htmlFor="fuel-price" className={labelClass}>
+              Price / Gallon ($)
+            </label>
             <input
+              id="fuel-price"
               type="number"
               step="0.001"
               min="0"
@@ -199,8 +223,11 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
             />
           </div>
           <div>
-            <label className={labelClass}>Total Cost ($)</label>
+            <label htmlFor="fuel-total" className={labelClass}>
+              Total Cost ($)
+            </label>
             <input
+              id="fuel-total"
               type="number"
               step="0.01"
               min="0"
@@ -214,8 +241,11 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
         {/* Mileage & Hours */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClass}>Mileage at Fill</label>
+            <label htmlFor="fuel-mileage" className={labelClass}>
+              Mileage at Fill
+            </label>
             <input
+              id="fuel-mileage"
               type="number"
               min="0"
               className={inputClass}
@@ -224,8 +254,11 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
             />
           </div>
           <div>
-            <label className={labelClass}>Engine Hours at Fill</label>
+            <label htmlFor="fuel-hours" className={labelClass}>
+              Engine Hours at Fill
+            </label>
             <input
+              id="fuel-hours"
               type="number"
               min="0"
               step="0.1"
@@ -252,8 +285,11 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
         {/* Station */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClass}>Station Name</label>
+            <label htmlFor="fuel-station-name" className={labelClass}>
+              Station Name
+            </label>
             <input
+              id="fuel-station-name"
               type="text"
               className={inputClass}
               value={f.stationName}
@@ -262,8 +298,11 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
             />
           </div>
           <div>
-            <label className={labelClass}>Station Address</label>
+            <label htmlFor="fuel-station-address" className={labelClass}>
+              Station Address
+            </label>
             <input
+              id="fuel-station-address"
               type="text"
               className={inputClass}
               value={f.stationAddress}
@@ -274,8 +313,16 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
 
         {/* Notes */}
         <div>
-          <label className={labelClass}>Notes</label>
-          <textarea className={inputClass} rows={2} value={f.notes} onChange={(e) => up('notes', e.target.value)} />
+          <label htmlFor="fuel-notes" className={labelClass}>
+            Notes
+          </label>
+          <textarea
+            id="fuel-notes"
+            className={inputClass}
+            rows={2}
+            value={f.notes}
+            onChange={(e) => up('notes', e.target.value)}
+          />
         </div>
       </div>
     </Modal>

@@ -52,6 +52,32 @@ Rows elsewhere in this file that these resolve are marked **CURRENT**
 | Setup wizard step 7 (IT & Backup Contacts) and the apparatus seat chips | **NOT POSSIBLE** on the shared stack | Both need the wizard run against an empty database (`wizard-walk.mjs`), which means dropping and re-bootstrapping the demo database the other batches capture from. Placeholders left open |
 | Organization profile with the Timezone select open | **NOT POSSIBLE** as described | The timezone is a native `<select>`; an open native dropdown is drawn by the browser outside the page and never appears in a screenshot. The closed field is already in `08-02-organization-settings`. Placeholder left open |
 
+## Scheduling guide, re-shot or added 2026-10-17
+
+Guide 03's open placeholders, and its rows below that the demo can produce.
+The seeder gained a guide-03 step: two placeholder outside departments (one
+unit turned off) with shifts members logged on them, one rejected; an approved
+exchange for a second ordinary member and a pending one for the officer to
+review; a draft shift-history import; and one shift report in the previous
+month, without which "Reports written per month" never draws. Rows further
+down carry their own dispositions.
+
+| Image | Disposition | Notes |
+| ----- | ----------- | ----- |
+| `03-106-exchange-swap-dialog` | **CURRENT** 2026-10-17 | New: the member's Request Shift Swap dialog with Exchange With a Member chosen |
+| `03-107-approve-without-qualification` | **CURRENT** 2026-10-17 | New. The review call is answered by a route mock carrying the server's own LB-SCHED-002 refusal; the real state needs a seeded member demoted after raising an exchange, and that member's rank shows in other guides. The mock also keeps Approve from reaching the server |
+| `03-108-member-outside-shifts`, `03-113-member-hours-with-outside` | **CURRENT** 2026-10-17 | New: the member's Shifts with other departments card, alone and on the full Hours view, with a Not counted entry |
+| `03-109-log-outside-shift-dialog`, `03-112-member-outside-dialog-driver` | **CURRENT** 2026-10-17 | New: Log a shift with another department, desktop and phone, filled in and never saved |
+| `03-110-outside-apparatus-settings` | **CURRENT** 2026-10-17 | New: Township Fire Company with Tanker 23 switched off, and a second department |
+| `03-111-member-hours-outside-tables`, `03-122-member-hours-report-outside` | **CURRENT** 2026-10-17 | New: Member Hours' outside tables, scrolled to and full page |
+| `03-114-check-out-early` | **CURRENT** 2026-10-17 | New: Check out early? on a phone. The shot checks the signed-in captain in to whichever of their shifts is under way, and fails if none is |
+| `03-115-requests-nothing-pending`, `03-116-shift-reports-none-yet` | **CURRENT** 2026-10-17 | New, as a second ordinary member (`auth: "second-member"`): nothing pending in Requests, no shift reports |
+| `03-117-reporting-summary`, `03-118-report-card-phone` | **CURRENT** 2026-10-17 | New: Your reporting summary with the per-month chart; a report card at 390px |
+| `03-119-pattern-generate-nothing-new` | **CURRENT** 2026-10-17 | New: a pattern re-run over the seeded platoon window, creating nothing |
+| `03-120-history-import-list`, `03-121-history-import-members` | **CURRENT** 2026-10-17 | New: the import list with one draft, and the draft's Members tab |
+| My Checklists on a phone (03 placeholder) | **NOT POSSIBLE** as described | Left open; see the October 15 – 16 queue below |
+| Scheduling setup guide card (03 placeholder) | **NOT POSSIBLE** in the seeded demo | Renders only while a department has no templates |
+
 ## Queued by the October 15 – 16 documentation pass
 
 Nothing was captured by this pass. The prospective-members set (`15-*`,
@@ -388,7 +414,7 @@ images (`01-35`, `20-13`) were recaptured on 2026-10-14 and are current.
 | 07 Documents, suggestion box editor                                     | **REPLACE**       | **Questions** is directly under Description                                                                                           |
 | 06 Facilities, New Record / New Inspection                              | **REPLACE**       | Dialogs are centred, **Maintenance Type** marked required                                                                             |
 | 06 Facilities, maintenance list                                         | **REPLACE**       | Rows read **Overdue · due …**, **Due …**, **Completed …**                                                                             |
-| 03 Scheduling, `03-95-apparatus-inventory.png`                          | **REPLACE**       | Phone layout: stacked rows, filter chips, pinned heading, no Save button, status line                                                |
+| 03 Scheduling, `03-95-apparatus-inventory.png`                          | **CURRENT** 2026-10-17       | Phone layout: stacked rows, filter chips, pinned heading, no Save button, status line. Re-shot: stacked rows, filter chips, location heading, no Save button, "All changes saved" status line |
 | 03 Scheduling, history import review                                    | **CHECK**         | Any shot of the Shifts or Positions tabs showing `ems` or "a 85% match"                                                               |
 | 02 Training, My Training                                                | **CURRENT** 2026-10-17, `02-01` re-shot; History tab as `02-107`, monthly hours as `02-108`       | Two tabs, year-to-date tiles, **Upcoming Expirations & Due Dates**, **Show monthly hours** strip; add the **History** tab (new)       |
 | 02 / 09 Skills, skill sheet editor                                      | **NEW**           | **Valid for (months)** field                                                                                                          |
@@ -451,7 +477,7 @@ Nothing was captured; every row is open.
 | 07 Documents & Forms | **NEW** | **Manage folder** dialog; "Publish this form?" warning dialog; builder one-submission control |
 | 14 Elections | **REPLACE** | Ballot screens without a default Abstain; results grouped per item; resend-ballots banner |
 | 15 Prospective members / 08 Admin | **NEW** | Drawer referral fields; **Department Email** section in Organization settings |
-| 03 Scheduling, `03-77-closeout-step3-confirm.png` | **REPLACE** | Shows **Give everyone all N calls**; capture with one member below the total |
+| 03 Scheduling, `03-77-closeout-step3-confirm.png` | **CURRENT** 2026-10-17 | Shows **Give everyone all N calls**; capture with one member below the total. Re-shot with one member lowered to 2 of 4 calls |
 | 03 Scheduling settings | **CHECK** | Three settings now carry a "not in effect" notice |
 
 ## Moved out of 01-membership.md by the plain-language rewrite, 2026-10-11
@@ -517,8 +543,8 @@ Compliance box.
 | 03-scheduling.md | Pre-Shift Work | Vehicle check-in page with check-in closed: **Doing pre-shift work?**, the 48-hour shift list, **Start pre-shift work** |
 | 03-scheduling.md | Pre-Shift Work | **Pre-shift work in progress** card, then the **Pre-shift time awaiting review** queue on Shift Close-Out (as an officer who did not do the work) |
 | 03-scheduling.md | Pre-Shift Work | Shift Settings with **Allow pre-shift work** |
-| 03-scheduling.md | Importing Shift History | `/scheduling/admin/history-import`: upload with time-zone picker, drafts and committed imports |
-| 03-scheduling.md | Importing Shift History | A draft's **Members**, **Units** and **Shifts** tabs (confidence column, **Split apart**, a **Remembered** badge) and the Commit confirmation that says it cannot be undone |
+| 03-scheduling.md | Importing Shift History | `/scheduling/admin/history-import`: upload with time-zone picker, drafts and committed imports — **CURRENT** 2026-10-17 as `03-120-history-import-list`: one draft; the demo commits no import, so no committed row is listed |
+| 03-scheduling.md | Importing Shift History | A draft's **Members**, **Units** and **Shifts** tabs (confidence column, **Split apart**, a **Remembered** badge) and the Commit confirmation that says it cannot be undone — Members tab **CURRENT** 2026-10-17 as `03-121-history-import-members` (matched and No match names; the demo file has no Split apart or Remembered case). Units and Shifts tabs and the Commit confirmation are still open |
 | 07-documents-forms.md | Asking questions first | Suggestion Box dialog, **Questions** section: a dropdown question whose option routes to another box, and a follow-up with **Show only after this question** |
 | 07-documents-forms.md | Asking questions first | Member submit form with an intake question and a follow-up; reviewer panel showing intake answers |
 | 07-documents-forms.md | Asking questions first | The Compliance box submit form: **What kind of concern is this?** and, after choosing safety, **Is anyone at immediate risk?** |
@@ -550,23 +576,23 @@ Compliance box.
 | Compliance suggestion box submit form | **REPLACE** | It now asks a required question first |
 | Apparatus status in the edit form | **REPLACE** | New **Reason** field |
 | Create Shift (any frame showing the apparatus picker) | **CHECK** | Lists Apparatus-module rigs |
-| Every desktop shot of the scheduling page (`03-01`, `03-04`, `03-61`, `03-62` among them) | **REPLACE** | The subtitle reads "See the schedule, sign up for shifts, and request swaps and time off" (was "Manage schedules, sign up for shifts, and handle trades") |
-| `03-05-open-shifts.png`, `03-100-open-shifts-member.png`, `03-105-open-shifts-admin.png` | **REPLACE** | The intro reads "Shifts with open seats. Sign up for one and it goes straight onto your schedule."; the old one promised an officer would confirm the signup |
+| Every desktop shot of the scheduling page (`03-01`, `03-04`, `03-61`, `03-62` among them) | **CURRENT** 2026-10-17 | The subtitle reads "See the schedule, sign up for shifts, and request swaps and time off" (was "Manage schedules, sign up for shifts, and handle trades"). Re-shot with the other Scheduling tab shots. The full-page Shift Details modal shots (`03-02`, `03-05-assignment-form`, `03-09`, `03-31`, `03-45`, `03-46`) were not; they still carry the old subtitle behind the modal |
+| `03-05-open-shifts.png`, `03-100-open-shifts-member.png`, `03-105-open-shifts-admin.png` | **CURRENT** 2026-10-17 | The intro reads "Shifts with open seats. Sign up for one and it goes straight onto your schedule."; the old one promised an officer would confirm the signup |
 | `03-02-shift-detail-panel.png`, `03-05-assignment-form.png` | **CHECK** | Taken of the older right-hand drawer; may show the old **Add Assignment** form. Compare with `03-102` / `03-58` |
-| `03-82-call-volume-count-only.png` | **REPLACE** | The count-only report reads **Total Calls**, **Avg Calls/Day**, **Peak Calls**, with no per-unit footnote |
-| `03-67-swap-request-dialog.png` | **REPLACE** | Three cards (Open Swap, Specific Shift, Exchange With a Member); Open Swap's subtitle is "Offered to members cleared for your seat; it stays yours until one picks it up". Alt text still says "two swap-type cards" |
-| `03-47-settings-desktop.png` | **REPLACE** | Seven sections including **Outside Apparatus**; General reads "Shift defaults, overtime, and close-out" |
-| `03-48-settings-phone.png` | **CHECK** | Seven-section strip; settings use full width on phones |
+| `03-82-call-volume-count-only.png` | **CURRENT** 2026-10-17 | The count-only report reads **Total Calls**, **Avg Calls/Day**, **Peak Calls**, with no per-unit footnote. The manifest waited for the old Unit Responses label; it now waits for Total Calls |
+| `03-67-swap-request-dialog.png` | **CURRENT** 2026-10-17 | Three cards (Open Swap, Specific Shift, Exchange With a Member); Open Swap's subtitle is "Offered to members cleared for your seat; it stays yours until one picks it up". Alt text still says "two swap-type cards". Alt text now names the three cards |
+| `03-47-settings-desktop.png` | **CURRENT** 2026-10-17 | Seven sections including **Outside Apparatus**; General reads "Shift defaults, overtime, and close-out" |
+| `03-48-settings-phone.png` | **CURRENT** 2026-10-17 | Seven-section strip; settings use full width on phones |
 | `20-16-scheduling-admin-hub.png` | **REPLACE** | **Outside Apparatus** card added; Shift Templates / Shift Patterns / Who Can Fill What descriptions reworded. Shoot on a department with shifts so the setup guide is hidden |
 | `03-31-shift-edit-times.png` | **CHECK** | The shift form may have changed since it was taken |
-| `03-61-review-queue-batch.png` | **REPLACE** | **New report** is a separate button beside the view strip (was **+ New** inside it) |
-| `03-62-flagged-queue.png` | **REPLACE** | Same strip change; the expanded card shows only the reviewer's comment box |
+| `03-61-review-queue-batch.png` | **CURRENT** 2026-10-17 | **New report** is a separate button beside the view strip (was **+ New** inside it) |
+| `03-62-flagged-queue.png` | **CURRENT** 2026-10-17 | Same strip change; the expanded card shows only the reviewer's comment box |
 | `03-46-finalized-badge.png` | **CHECK** | Alt text mentions a pass-down note under the badge; the closed-out badge shows none |
-| `03-63-batch-report-form.png` | **CHECK** | Alt text mentions "shared hours and calls"; calls are entered per member |
-| `03-22-equipment-check-builder.png` | **REPLACE** | Predates the one-list builder; the shot shows a sidebar, progress strip and readiness card that no longer exist. Demo: engine template with three locations, one nested, one item of each answer type, **Before publishing** showing two items. Viewport at least 1440px |
+| `03-63-batch-report-form.png` | **CHECK** | Alt text mentions "shared hours and calls"; calls are entered per member. 2026-10-17: not re-shot. On today's seed the trainee's Evaluate panel lists no Skills Observed, so the manifest step that scores three skills times out. The live form does enter calls per member |
+| `03-22-equipment-check-builder.png` | **CURRENT** 2026-10-17 | Predates the one-list builder; the shot shows a sidebar, progress strip and readiness card that no longer exist. Demo: engine template with three locations, one nested, one item of each answer type, **Before publishing** showing two items. Viewport at least 1440px. Re-shot of the one-list builder (Medic 3 Supply Check: three locations, Before publishing reading Ready to publish); the engine template with a nested location is not seeded |
 | `03-72-check-item-controls.png` | **CHECK** | May predate the **Note required** state on a failed item |
 | `03-80-submitted-check-phone.png` | note | The queued/offline half of its description is not pictured; the harness cannot simulate a dropped connection honestly |
-| Placeholder "Scheduling Admin → Settings → Notifications → the 'Not in effect yet' notice above the six switches" | **RETIRE** | The six switches and the notice no longer exist; the placeholder can never be filled |
+| Placeholder "Scheduling Admin → Settings → Notifications → the 'Not in effect yet' notice above the six switches" | **RETIRED** 2026-10-17 | The six switches and the notice no longer exist; the placeholder can never be filled. Placeholder removed from the guide |
 
 ## Queued by the October 7 – 8 documentation pass, 2026-10-08
 
@@ -643,8 +669,8 @@ client secret; use a throwaway demo client.
 | 01-membership.md | Qualifications | Member profile Qualifications card; Members admin › Import Qualifications dry-run result with a rejected row by line |
 | 01-membership.md | Undo a drop | Profile of a dropped member showing the Undo drop control and its confirmation (do not confirm) |
 | 01-membership.md | Add Member | Add Member with the **Status** field |
-| 03-scheduling.md | Shared calls | Close-out wizard step 2 with "calls another unit already logged" ticked, showing unit labels |
-| 03-scheduling.md | Open swaps | Requests tab listing an open swap with **Pick up**, and the refusal message for an unqualified member |
+| 03-scheduling.md | Shared calls | Close-out wizard step 2 with "calls another unit already logged" ticked, showing unit labels — **CURRENT** 2026-10-17 in `03-76-closeout-step2-calls` (desktop: the unit labels shown, none ticked) |
+| 03-scheduling.md | Open swaps | Requests tab listing an open swap with **Pick up**, and the refusal message for an unqualified member — the Requests tab with **Pick up** **CURRENT** 2026-10-17 in `03-11-swap-requests-tab` and `03-115-requests-nothing-pending`; the unqualified refusal is not captured |
 | 03-scheduling.md | Skills testing offline | Skills-test screen with the "saved on this device" state; Sign Out warning about unsent evaluations (do not confirm) |
 | 08-admin-reports.md | Security Alerts | `/admin/security-alerts` with alerts in each state; the resolve dialog with a note; Download activity list |
 | 08-admin-reports.md | Admin hours Review Rules | `/admin-hours/manage` › Review Rules tab with self-approval and the resync percentage |
@@ -666,8 +692,8 @@ client secret; use a throwaway demo client.
 | `18-*` store catalog shots | **REPLACE** | Price moved from beside the name to the end of the badge row |
 | `02-*` cohort list and `03-*` shift-pattern list shots | **CHECK** | Status badge wraps below long names |
 | `03-*` shift-template dialog | **REPLACE** | Starts and Ends are stacked at every width |
-| `03-*` swap request dialog and Requests tab | **CHECK** | Open swaps are picked up, not officer-approved |
-| `03-*` close-out wizard step 2 | **REPLACE** | Gained the shared-calls picker |
+| `03-*` swap request dialog and Requests tab | **CURRENT** 2026-10-17 | Open swaps are picked up, not officer-approved |
+| `03-*` close-out wizard step 2 | **CURRENT** 2026-10-17 | Gained the shared-calls picker. `03-76` shows the shared-calls picker |
 | `14-*` Results tab, Cast Vote tab and Send Ballot Emails shots | **REPLACE** | One ballot model; results released on close; revised mark |
 | `01-*` Members page as a non-manager | **CHECK** | Directory hides archived members and opens on Active |
 | `02-*` Compliance Matrix, Shift Compliance and program enrollment progress | **CHECK** | Shift counts and linked requirements now read shift attendance / live compliance |
@@ -696,8 +722,8 @@ grades. Never capture a real badge code; use a throwaway demo member.
 | 02-training.md | One definition of "compliant" everywhere | Training dashboard **Department Compliance** card beside the matrix it opens, same percentage — **CURRENT** 2026-10-17 as `02-118` |
 | 02-training.md | Compliance Attestations | New Attestation with the **Quarter** picker and the "calculated when you submit" sentence; one history entry showing "as of <date>" — **CURRENT** 2026-10-17 as `02-73` (re-shot) |
 | 02-training.md | Shift Credit | Requirement form for an Hours requirement: **Shift attendance satisfies this requirement**, unticked — **CURRENT** 2026-10-17 as `02-115` |
-| 03-scheduling.md | Trades somebody can actually accept | Request swap dialog with **Exchange With a Member** chosen and the **Exchange With** list |
-| 03-scheduling.md | Trades somebody can actually accept | Requests tab: **Approve without qualification?** with **Approve anyway** / **Keep it pending** (do not confirm) |
+| 03-scheduling.md | Trades somebody can actually accept | Request swap dialog with **Exchange With a Member** chosen and the **Exchange With** list — **CURRENT** 2026-10-17 as `03-106-exchange-swap-dialog` |
+| 03-scheduling.md | Trades somebody can actually accept | Requests tab: **Approve without qualification?** with **Approve anyway** / **Keep it pending** (do not confirm) — **CURRENT** 2026-10-17 as `03-107-approve-without-qualification`. The refusal comes from a route mock carrying the server's own LB-SCHED-002 response; producing it for real would mean demoting a seeded member whose rank other guides show |
 | 04-events-meetings.md | A finalized event can still be edited | Edit form on a finalized event: the "Attendance for this event is finalized" notice, locked controls, editable title |
 | 05-inventory.md | What the alert emails say now | Supplies to Replace email at 390px: **Status** column with an expiring, a **Restock reported** and a **Short — 2 of 4 aboard** row — **NOT POSSIBLE** in the demo (2026-10-17): the email is composed by the weekly scheduled task, not the template editor, and the demo stack has no mail catcher |
 | 10-mobile-pwa.md | Queued Work Is Sent Only by the Member Who Saved It | The "N offline items are on hold" notice with **Send as me** / **Discard**, and the "Send these as yours?" confirmation (do not confirm) |
@@ -718,9 +744,9 @@ grades. Never capture a real badge code; use a throwaway demo member.
 | `02-73-compliance-attestations` | **CURRENT** 2026-10-17, re-shot with Quarterly chosen | Form lost the Compliance % box and gained the Quarter picker; entries show "as of" |
 | `02-66-compliance-matrix`, `02-65-print-compliance`, `02-17-officer-dashboard` | **CHECK** | A Not applicable group and graded-member percentages can change the rail and the Department Compliance card |
 | `02-16-requirements` | **CURRENT** 2026-10-17, the Shift Credit box is pictured on its own as `02-115` | Requirement form gains the Shift Credit box (Hours and Shifts types) |
-| `03-14-scheduling-reports` | **REPLACE** | Shift Compliance cards are **Requirement Checks**, **Checks Met**, **Checks Not Met** (were Total Members, Compliant, Non-Compliant) |
-| `03-67-swap-request-dialog`, `03-11-swap-requests-tab` | **REPLACE** | Exchange With a Member picker; exchange cards name the other member |
-| `03-60-dashboard-my-shifts`, `00-04-dashboard-overview` | **CHECK** | Open slots the member cannot take read "Not eligible" instead of Sign Up |
+| `03-14-scheduling-reports` | **CURRENT** 2026-10-17 | Shift Compliance cards are **Requirement Checks**, **Checks Met**, **Checks Not Met** (were Total Members, Compliant, Non-Compliant) |
+| `03-67-swap-request-dialog`, `03-11-swap-requests-tab` | **CURRENT** 2026-10-17 | Exchange With a Member picker; exchange cards name the other member |
+| `03-60-dashboard-my-shifts`, `00-04-dashboard-overview` | **CHECK** (03-60 CURRENT 2026-10-17) | Open slots the member cannot take read "Not eligible" instead of Sign Up. `03-60` re-shot; no open slot the member cannot take falls in its window today |
 | `01-23-print-member-badges`, `19-37-member-id-cards` | **CHECK** | Badge now encodes the server badge code; Print Badges needs `members.manage` or `members.manage_id_cards` |
 | `15-10-pipeline-settings`, `15-14-applicant-drawer-overview` | **CHECK** | Automatic Transfer card; checklist items as tickboxes in the drawer |
 | `08-11-error-monitor` | **CHECK** | Rows from scheduled tasks carry the source **Scheduled task** |
@@ -778,11 +804,11 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | 02-training.md | Fixing a Mistaken Approval or Record | _[Member holding the Training Officer position at /notifications?tab=inbox: a "Training submission awaiting approval — <demo member>" card expanded to its body with the Review Submission button, or collapsed into an "N training submissions awaiting approval" stack. Seed the submissions after the upgrade so the prompts exist.]_ — **CURRENT** 2026-10-17 as `02-116`, signed in as the Training Officer position holder the seeder now appoints |
 | 02-training.md | Finalizing a Training Session | _[Training Officer (training.manage) at /training/approve/:token for a pending approval: the header (event title, Course, Event date, Approve by), the roster with Credited minutes and Approved minutes (one row edited to 0), and the Approval notes field. Never press Approve and record. Capture the page only — no browser address bar, so the token is not visible.]_ — **CURRENT** 2026-10-17 as `02-117`; the two approval-page placeholders were merged into one |
 | 02-training.md | Draft Reports and Review Workflow _(2026-03-28)_ | _[Member without training.manage, no shift reports yet, at /scheduling?tab=shift-reports: the "Shift reports about you" heading, the "No shift reports yet" explanation and the three tiles (the shift itself / your officer's feedback / a place to acknowledge it). No view toggle should be visible.]_ — **CURRENT** 2026-10-17 as `02-119` |
-| 03-scheduling.md | For scheduling officers: the list and the review | _[Member at /scheduling?tab=my-shifts&view=hours, with at least one outside department and unit seeded. The 'Log a shift with another department' dialog opened from 'Log outside shift' and filled in: a Start, an End set with '+12 hours', the 'Counts as 12 hours' line, a Department and Apparatus chosen, and Position 'Driver'. Use placeholder department names, never a real neighbouring department.]_ |
-| 03-scheduling.md | For scheduling officers: the list and the review | _[Member at /scheduling?tab=my-shifts&view=hours. The 'Shifts with other departments' section under the Hours table, with two counted entries showing date, time range, hours and apparatus, and one 'Not counted' entry with its Reason line; a card above should read '+N hrs with other departments'.]_ |
-| 03-scheduling.md | Patterns | _[Scheduling administrator at /scheduling/admin/planning/patterns. A pattern's Generate panel after generating a date range that is already fully on the schedule, with the 'No new shifts. Dates already on the schedule are skipped…' toast visible. Generate the same range once first so the second run creates nothing.]_ |
-| 03-scheduling.md | Member Hours: worked vs. scheduled _(2026-08-01)_ | _[Scheduling administrator (scheduling.manage) at /scheduling/admin/reports, Member Hours generated for a range containing outside shifts. Show the Outside Hours column, the 'Outside apparatus staffed' table with its Total row, and the 'Shifts with other departments' list with a Reject button and one 'Not counted' row. Use placeholder department names such as 'Township Fire Company', never a real neighbouring department.]_ |
-| 03-scheduling.md | August 19–23, 2026 update — request review and pagination | _[Member at /scheduling?tab=requests on the default Pending filter, after their only swap request was approved. It shows 'No swap requests', 'Your swap requests will appear here…' and the line 'Showing pending requests only. Choose All Statuses to see the rest.']_ |
+| 03-scheduling.md | For scheduling officers: the list and the review | _[Member at /scheduling?tab=my-shifts&view=hours, with at least one outside department and unit seeded. The 'Log a shift with another department' dialog opened from 'Log outside shift' and filled in: a Start, an End set with '+12 hours', the 'Counts as 12 hours' line, a Department and Apparatus chosen, and Position 'Driver'. Use placeholder department names, never a real neighbouring department.]_ **CURRENT** 2026-10-17 as `03-112-member-outside-dialog-driver` |
+| 03-scheduling.md | For scheduling officers: the list and the review | _[Member at /scheduling?tab=my-shifts&view=hours. The 'Shifts with other departments' section under the Hours table, with two counted entries showing date, time range, hours and apparatus, and one 'Not counted' entry with its Reason line; a card above should read '+N hrs with other departments'.]_ **CURRENT** 2026-10-17 as `03-113-member-hours-with-outside` |
+| 03-scheduling.md | Patterns | _[Scheduling administrator at /scheduling/admin/planning/patterns. A pattern's Generate panel after generating a date range that is already fully on the schedule, with the 'No new shifts. Dates already on the schedule are skipped…' toast visible. Generate the same range once first so the second run creates nothing.]_ **CURRENT** 2026-10-17 as `03-119-pattern-generate-nothing-new` |
+| 03-scheduling.md | Member Hours: worked vs. scheduled _(2026-08-01)_ | _[Scheduling administrator (scheduling.manage) at /scheduling/admin/reports, Member Hours generated for a range containing outside shifts. Show the Outside Hours column, the 'Outside apparatus staffed' table with its Total row, and the 'Shifts with other departments' list with a Reject button and one 'Not counted' row. Use placeholder department names such as 'Township Fire Company', never a real neighbouring department.]_ **CURRENT** 2026-10-17 as `03-122-member-hours-report-outside` |
+| 03-scheduling.md | August 19–23, 2026 update — request review and pagination | _[Member at /scheduling?tab=requests on the default Pending filter, after their only swap request was approved. It shows 'No swap requests', 'Your swap requests will appear here…' and the line 'Showing pending requests only. Choose All Statuses to see the rest.']_ **CURRENT** 2026-10-17 as `03-115-requests-nothing-pending`, signed in as a second ordinary member |
 | 04-events-meetings.md | For Members (Checking In) | _[Member at /events/:id/check-in on a Training-type demo event inside its check-in window, after tapping Check In to This Event: the "You're Checked In" heading, the event name, and the green Training Record panel reading "Your attendance will be added to your training record when the event's attendance is finalized." Creates a check-in (mutates seed data). Do not capture the member's email or the URL bar.]_ |
 | 04-events-meetings.md | Post-Event Notifications | _[Event organizer (events.manage) at /events/:eventId on an ended Training event with attendance still open: the "Finalize attendance?" confirmation, listing how each member's time is decided, that members with no credited time get no record, and that earlier admin-hours entries are removed, with Finalize and close / Keep it open. Press Keep it open; never confirm.]_ |
 | 04-events-meetings.md | Training Credit from Events _(2026-09-29)_ | _[Admin with events.manage and training.manage at /events/admin?tab=create: Create Event with Event Type set to Training, scrolled to the "Training details (optional)" group, a course picked (so Training Type and Category fill), and the Create Training Session link line visible. Do not submit.]_ |
@@ -893,18 +919,18 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | `02-40-member-training-history` | **CURRENT** 2026-10-17, re-shot | Buttons now read Export CSV / Export PDF, and the status filter is 'All Statuses'. | #2784 |
 | `02-65-print-compliance` | **CURRENT** 2026-10-17, re-shot | Tiles are now Compliant / At Risk / Non-Compliant. Cells print ✗ and Exp, a legend line was added, and headings wrap to full names. | #2788 |
 | `02-91-session-confirmation-toggle` | **CURRENT** 2026-10-17, re-shot | The step 3 checkbox was renamed 'Start an in-progress training record when members check in' with a new helper, and the back link reads 'Back to Training Dashboard'. | #2820, #2777 |
-| `03-05-open-shifts` | **REPLACE** (also queued below) | The intro line under the tab now reads 'Shifts with open seats. Sign up for one and it goes straight onto your schedule.' | #2780 |
-| `03-104-my-shifts-hours` | **REPLACE** | The Hours view now ends with the 'Shifts with other departments' section and the 'Log outside shift' button below the monthly table. | #2749, #2826 |
-| `03-11-swap-requests-tab` | **REPLACE** | A seeded one-way targeted offer now reads '→ Offered to <name>' instead of '→ Open swap'. If the default Pending view is empty, the new 'Showing pending requests only…' line also appears. | #2832, #2788 |
-| `03-15-scheduling-settings` | **REPLACE** | Full-page General section: Department Defaults no longer has the 'Require assignment confirmation' checkbox. | #2812 |
-| `03-32-settings-general-closeout` | **REPLACE** | Full-page General section: the 'Require assignment confirmation' checkbox is gone. Close-out summary copy was also reworded. | #2812, #2780 |
-| `03-38-notifications-assignment` | **REPLACE** | Full-page capture of /scheduling/admin/settings/notifications. An amber 'Not in effect yet…' notice now sits above the six Scheduling Notifications switches. | #2814 |
-| `03-47-settings-desktop` | **REPLACE** (also queued below) | The section list gains 'Outside Apparatus — Other departments members ride with'. General help copy changed, and the 'Require assignment confirmation' checkbox is gone from Department Defaults. | #2749, #2780, #2812 |
-| `03-48-settings-phone` | **REPLACE** (also queued below) | The tab strip gains Outside Apparatus. | #2749 |
-| `03-49-report-card-names` | **REPLACE** | Written by me cards no longer carry the author chip, so the 'filing officer in the metadata row' the alt text describes may be absent. The header is now a grid. | #2756, #2762 |
-| `03-59-open-shifts-signup` | **REPLACE** (also queued below) | The intro line changed. The manifest prepare also waits on getByLabel('Sign up for this shift'), which no longer exists: the label is now 'Sign up for shift on <date>, <time> (<unit>)'. Re-capture fails until the locator becomes /Sign up for shift on/. | #2780, #2788 |
-| `03-63-offline-banner` | **REPLACE** (also queued below) | The banner text is now 'You're offline. Reports are saved on this device and sent automatically when you're back online.' The alt text quotes the old wording ('saved locally and submitted when connectivity returns'), and the image line was left untouched per the rules. | #2780 |
-| `03-67-swap-request-dialog` | **REPLACE** (also queued below) | The Open Swap card subtitle changed from 'Any member can pick it up' to 'An officer finds cover; it stays yours until then', and the shot shows both swap-type cards. | #2788 |
+| `03-05-open-shifts` | **CURRENT** 2026-10-17 (also queued below) | The intro line under the tab now reads 'Shifts with open seats. Sign up for one and it goes straight onto your schedule.' | #2780 |
+| `03-104-my-shifts-hours` | **CURRENT** 2026-10-17 | The Hours view now ends with the 'Shifts with other departments' section and the 'Log outside shift' button below the monthly table. | #2749, #2826 |
+| `03-11-swap-requests-tab` | **CURRENT** 2026-10-17 | A seeded one-way targeted offer now reads '→ Offered to <name>' instead of '→ Open swap'. If the default Pending view is empty, the new 'Showing pending requests only…' line also appears. | #2832, #2788 |
+| `03-15-scheduling-settings` | **CURRENT** 2026-10-17 | Full-page General section: Department Defaults no longer has the 'Require assignment confirmation' checkbox. | #2812 |
+| `03-32-settings-general-closeout` | **CURRENT** 2026-10-17 | Full-page General section: the 'Require assignment confirmation' checkbox is gone. Close-out summary copy was also reworded. | #2812, #2780 |
+| `03-38-notifications-assignment` | **CURRENT** 2026-10-17 | Full-page capture of /scheduling/admin/settings/notifications. An amber 'Not in effect yet…' notice now sits above the six Scheduling Notifications switches. | #2814 |
+| `03-47-settings-desktop` | **CURRENT** 2026-10-17 (also queued below) | The section list gains 'Outside Apparatus — Other departments members ride with'. General help copy changed, and the 'Require assignment confirmation' checkbox is gone from Department Defaults. | #2749, #2780, #2812 |
+| `03-48-settings-phone` | **CURRENT** 2026-10-17 (also queued below) | The tab strip gains Outside Apparatus. | #2749 |
+| `03-49-report-card-names` | **CURRENT** 2026-10-17 | Written by me cards no longer carry the author chip, so the 'filing officer in the metadata row' the alt text describes may be absent. The header is now a grid. | #2756, #2762 |
+| `03-59-open-shifts-signup` | **CURRENT** 2026-10-17 (also queued below) | The intro line changed. The manifest prepare also waits on getByLabel('Sign up for this shift'), which no longer exists: the label is now 'Sign up for shift on <date>, <time> (<unit>)'. Re-capture fails until the locator becomes /Sign up for shift on/. | #2780, #2788 |
+| `03-63-offline-banner` | **CURRENT** 2026-10-17 (also queued below) | The banner text is now 'You're offline. Reports are saved on this device and sent automatically when you're back online.' The alt text quotes the old wording ('saved locally and submitted when connectivity returns'), and the image line was left untouched per the rules. | #2780 |
+| `03-67-swap-request-dialog` | **CURRENT** 2026-10-17 (also queued below) | The Open Swap card subtitle changed from 'Any member can pick it up' to 'An officer finds cover; it stays yours until then', and the shot shows both swap-type cards. | #2788 |
 | `04-04-event-qr-code` | **REPLACE** (also queued below) | The QR page subtitle now reads 'Members scan this code to check themselves in'. The Instructions steps now end 'Members sign in if they aren't already' / 'Members tap Check In to record their attendance'. The NFC unsupported line is also reworded. The image was captured 2026-09-25, before these changes | #2779, #2804 |
 | `04-05-create-event` | **REPLACE** (also queued below) | The Check-In Window option now reads 'Flexible - Opens before the start, closes when the event ends' and the field is 'Minutes before start'. The attachments card reads 'Files can't be attached from the app yet.' and the template card reads 'Pick a template to pre-fill common settings, or start blank.' Captured 2026-09-25 | #2779, #2820 |
 | `04-08-event-analytics` | **REPLACE** (also queued below) | Header subtitle is now 'Attendance and check-in rates across your events' | #2779 |
@@ -1017,20 +1043,20 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | `02-64-skills-testing-admin` | **CHECK** | The same summary tiles may now read '—'. | |
 | `02-74-annual-compliance-report` | **CHECK** | Any requirement with members_total 0 in the demo now reads 'Not applicable' instead of a red 0%. | |
 | `02-90-crew-summary-table` | **CHECK** | The table is unchanged but sits in the retitled card; confirm the selector still resolves. | |
-| `03-01-scheduling-tabs` | **CHECK** (also queued below) | The Scheduling header description is now 'See the schedule, sign up for shifts, and request swaps and time off' if the header is in frame. | |
-| `03-04-my-shifts` | **CHECK** | Empty-state copy changed if captured empty. Per-row accessible names changed, but nothing visible. | |
+| `03-01-scheduling-tabs` | **CURRENT** 2026-10-17 (also queued below) | The Scheduling header description is now 'See the schedule, sign up for shifts, and request swaps and time off' if the header is in frame. | |
+| `03-04-my-shifts` | **CURRENT** 2026-10-17 | Empty-state copy changed if captured empty. Per-row accessible names changed, but nothing visible. | |
 | `03-103-shift-details-modal-phone` | **CHECK** | Did not run in the last sweep; the committed bytes predate it. | |
-| `03-13-shift-patterns` | **CHECK** | The per-pattern button reads 'Generate shifts' ('Generate' on phones); the alt says 'Generate Shifts action'. Accessibility-only changes elsewhere. | |
-| `03-14-scheduling-reports` | **CHECK** | Captured on Shift Compliance. A requirement nobody is held to now reads 'Not applicable' instead of a red 0% and 0/0. Rows may show 'incl. N outside' if the seed has outside shifts, and Member Hours gained a column. | |
+| `03-13-shift-patterns` | **CURRENT** 2026-10-17 | The per-pattern button reads 'Generate shifts' ('Generate' on phones); the alt says 'Generate Shifts action'. Accessibility-only changes elsewhere. | |
+| `03-14-scheduling-reports` | **CURRENT** 2026-10-17 | Captured on Shift Compliance. A requirement nobody is held to now reads 'Not applicable' instead of a red 0% and 0/0. Rows may show 'incl. N outside' if the seed has outside shifts, and Member Hours gained a column. | |
 | `03-24-equipment-check-reports` | **CHECK** | The date range and trend buckets are now cut at the department's midnight; figures may differ for evening checks. Layout is unchanged. | |
 | `03-33-settings-eligibility` | **CHECK** | The ranks screen's empty-rank button now reads '+ Choose shift positions this rank can fill'. | |
-| `03-39-notifications-reminders` | **CHECK** | Clipped to Start-of-Shift Reminders. Confirm the new 'Not in effect yet' notice is outside the clip. | |
-| `03-60-dashboard-my-shifts` | **CHECK** | The Next 30 Days event-row RSVP controls changed (Open instead of Going/Can't for closed RSVPs). | |
-| `03-61-review-queue-batch` | **CHECK** (also queued below) | The strip's new 'New report' button may be in frame. | |
-| `03-62-flagged-queue` | **CHECK** (also queued below) | The Flagged view dropped the duplicate flagged box when a reviewer comment exists, and the view strip and New report button changed. | |
+| `03-39-notifications-reminders` | **CURRENT** 2026-10-17 | Clipped to Start-of-Shift Reminders. Confirm the new 'Not in effect yet' notice is outside the clip. Re-shot; the clip selector no longer matched and now targets the section | |
+| `03-60-dashboard-my-shifts` | **CURRENT** 2026-10-17 | The Next 30 Days event-row RSVP controls changed (Open instead of Going/Can't for closed RSVPs). | |
+| `03-61-review-queue-batch` | **CURRENT** 2026-10-17 (also queued below) | The strip's new 'New report' button may be in frame. | |
+| `03-62-flagged-queue` | **CURRENT** 2026-10-17 (also queued below) | The Flagged view dropped the duplicate flagged box when a reviewer comment exists, and the view strip and New report button changed. | |
 | `03-73-flat-check-form-header` | **CHECK** | The check form gained a 'Tap NFC tags' strip, rendered only with Web NFC, which the harness lacks. The sweep container was rewrapped, so confirm the capture is unchanged; 03-70/71/72 are in the same position. | |
-| `03-74-settings-call-count-toggle` | **CHECK** | General section: check whether Department Defaults, now missing the removed checkbox, is in frame. | |
-| `03-78-swap-review-blocked` | **CHECK** | Changes only if the pictured request is a targeted offer ('→ Offered to <name>'). | |
+| `03-74-settings-call-count-toggle` | **CURRENT** 2026-10-17 | General section: check whether Department Defaults, now missing the removed checkbox, is in frame. | |
+| `03-78-swap-review-blocked` | **CHECK** | Changes only if the pictured request is a targeted offer ('→ Offered to <name>'). 2026-10-17: not re-shot. The administrator's own seeded swap is an open swap, which has no Approve button at all, so the step that presses Approve to show the refusal cannot run | |
 | `03-97-shift-reminder-expanded` | **CHECK** | Two or more Shift Reminder rows now stack in the inbox, and the inbox subtitle changed. A fresh capture also reads 'No equipment checklists are assigned for this shift' against a caption promising checklists, so it needs seed data. | |
 | `04-01-events-list` | **CHECK** | A card for an event whose RSVP deadline has passed or that has ended now shows no RSVP buttons (#2828) | |
 | `04-02-event-detail` | **CHECK** (also queued below) | Only if the pictured event is a cancelled recurring occurrence, the header would now read 'Series of N' (#2773) | |
@@ -1325,25 +1351,25 @@ and this file cannot disagree.
 
 | Disposition | Image | What the new frame must show |
 | --- | --- | --- |
-| **REPLACE** | `03-01-scheduling-tabs.png` | The header subtitle under **Shift Scheduling** changed on 2026-09-29 from "Manage schedules, sign up for shifts, and handle trades" to "See the schedule, sign up for shifts, and request swaps and time off". Every desktop shot of the scheduling page carries that line — `03-04`, `03-61` and `03-62` among them; re-shoot them in the same pass. |
-| **REPLACE** | `03-05-open-shifts.png` | The tab intro changed on 2026-09-29 from "Browse available shifts … A scheduling officer will review and confirm your signup." to "Shifts with open seats. Sign up for one and it goes straight onto your schedule." Re-shoot Open Shifts as a member with the new intro visible above the list. |
-| **REPLACE** | `03-100-open-shifts-member.png` | Shot 2026-09-24, before the 2026-09-29 copy pass: the intro above the list still promises an officer will confirm the signup. Re-shoot the same member view with "Shifts with open seats. Sign up for one and it goes straight onto your schedule." |
-| **REPLACE** | `03-105-open-shifts-admin.png` | Same intro change as `03-100`; re-shoot the administrator's view with the new intro. |
+| **CURRENT** 2026-10-17 | `03-01-scheduling-tabs.png` | The header subtitle under **Shift Scheduling** changed on 2026-09-29 from "Manage schedules, sign up for shifts, and handle trades" to "See the schedule, sign up for shifts, and request swaps and time off". Every desktop shot of the scheduling page carries that line — `03-04`, `03-61` and `03-62` among them; re-shoot them in the same pass. |
+| **CURRENT** 2026-10-17 | `03-05-open-shifts.png` | The tab intro changed on 2026-09-29 from "Browse available shifts … A scheduling officer will review and confirm your signup." to "Shifts with open seats. Sign up for one and it goes straight onto your schedule." Re-shoot Open Shifts as a member with the new intro visible above the list. |
+| **CURRENT** 2026-10-17 | `03-100-open-shifts-member.png` | Shot 2026-09-24, before the 2026-09-29 copy pass: the intro above the list still promises an officer will confirm the signup. Re-shoot the same member view with "Shifts with open seats. Sign up for one and it goes straight onto your schedule." |
+| **CURRENT** 2026-10-17 | `03-105-open-shifts-admin.png` | Same intro change as `03-100`; re-shoot the administrator's view with the new intro. |
 | **NEW** | — | My Shifts → Hours as a member → the "Shifts with other departments" card with two entries (one showing a start–end time range, one reading **Not counted** with its reason) and the **Log outside shift** button. |
 | **NEW** | — | My Shifts → Hours → Log outside shift → the "Log a shift with another department" dialog with Start and End filled, the **+12 hours** / **+24 hours** buttons, "Counts as 12 hours", and Department and Apparatus chosen. |
-| **NEW** | — | Scheduling Admin → Settings → Outside Apparatus → one department with two units, one turned off, and the "Add a department" field. |
-| **NEW** | — | Scheduling Reports → Member Hours → scrolled to the "Outside apparatus staffed" table and the "Shifts with other departments" list with a Reject button on a row. |
+| **CURRENT** 2026-10-17 | `03-110-outside-apparatus-settings` | Scheduling Admin → Settings → Outside Apparatus → one department with two units, one turned off, and the "Add a department" field. |
+| **CURRENT** 2026-10-17 | `03-111-member-hours-outside-tables` | Scheduling Reports → Member Hours → scrolled to the "Outside apparatus staffed" table and the "Shifts with other departments" list with a Reject button on a row. |
 | **NEW** | — | Shift Check-In at phone width, one hour into a shift → tap Check Out → the "Check out early?" dialog with **Stay checked in** and **Check out now**. |
-| **REPLACE** | `03-67-swap-request-dialog.png` | The Open Swap card's subtitle changed on 2026-09-29 from "Any member can pick it up" to "An officer finds cover; it stays yours until then". Re-shoot the dialog with both swap-type cards readable. |
-| **REPLACE** | `03-47-settings-desktop.png` | The section list gained a seventh entry, **Outside Apparatus** ("Other departments members ride with"), on 2026-09-27, and General's description now reads "Shift defaults, overtime, and close-out". Re-shoot with all seven sections in the list. |
-| **NEW** | — | Scheduling Admin → Settings → Notifications → the "Not in effect yet" notice above the six switches. |
+| **CURRENT** 2026-10-17 | `03-67-swap-request-dialog.png` | The Open Swap card's subtitle changed on 2026-09-29 from "Any member can pick it up" to "An officer finds cover; it stays yours until then". Re-shoot the dialog with both swap-type cards readable. |
+| **CURRENT** 2026-10-17 | `03-47-settings-desktop.png` | The section list gained a seventh entry, **Outside Apparatus** ("Other departments members ride with"), on 2026-09-27, and General's description now reads "Shift defaults, overtime, and close-out". Re-shoot with all seven sections in the list. |
+| **RETIRED** 2026-10-17 | — | Scheduling Admin → Settings → Notifications → the "Not in effect yet" notice above the six switches. The switches and notice no longer exist; placeholder removed from the guide. |
 | **REPLACE** | `20-16-scheduling-admin-hub.png` | The Department settings group gained an **Outside Apparatus** card ("Other departments and units members log shifts on") on 2026-09-27, and several card descriptions were reworded on 2026-09-29 (Shift Templates: "Reusable shift setups — hours, crew seats and vehicle"; Shift Patterns: "Repeating rotations, and generating shifts from them"; Who Can Fill What: "Which positions each member is cleared for, and why"). Re-shoot the hub on a department that has scheduled shifts, so the setup guide below is not shown. |
-| **NEW** | — | Scheduling Admin hub on a fresh department with no templates → the "Set up scheduling for your department" card reading "0 of 2 required steps done", its three numbered steps with their links, and the × in the corner. |
-| **REPLACE** | `03-61-review-queue-batch.png` | The view strip's last segment, **+ New**, became a separate **New report** button beside the strip on 2026-09-28, and the page subtitle now reads "See the schedule, sign up for shifts, and request swaps and time off" (was "Manage schedules, sign up for shifts, and handle trades"). Re-shoot the same selection state. |
-| **REPLACE** | `03-62-flagged-queue.png` | Same strip and subtitle change as `03-61`; and the expanded card now shows only the reviewer's comment box, not a second generic red box above it. |
-| **NEW** | — | Scheduling → Shift Reports as a member with no reports → the "Shift reports about you" heading and the "No shift reports yet" empty state with its three cards. |
-| **NEW** | — | Scheduling → Shift Reports as a training officer → Written by me → "Your reporting summary" with its tiles (including a Drafts to finish → button), the "Reports written per month" chart, and the "Reports you've written (N)" list beginning below. |
-| **NEW** | — | Scheduling → Shift Reports at 390 px width as an officer → a report card with its status badges on their own row beneath the member's full name. |
+| **NEW** | — | Scheduling Admin hub on a fresh department with no templates → the "Set up scheduling for your department" card reading "0 of 2 required steps done", its three numbered steps with their links, and the × in the corner. Not possible in the seeded demo (2026-10-17): the card renders only while the department has no templates, and the demo has four. Needs a fixture run like `inventory-setup.mjs`. |
+| **CURRENT** 2026-10-17 | `03-61-review-queue-batch.png` | The view strip's last segment, **+ New**, became a separate **New report** button beside the strip on 2026-09-28, and the page subtitle now reads "See the schedule, sign up for shifts, and request swaps and time off" (was "Manage schedules, sign up for shifts, and handle trades"). Re-shoot the same selection state. |
+| **CURRENT** 2026-10-17 | `03-62-flagged-queue.png` | Same strip and subtitle change as `03-61`; and the expanded card now shows only the reviewer's comment box, not a second generic red box above it. |
+| **CURRENT** 2026-10-17 | `03-116-shift-reports-none-yet` | Scheduling → Shift Reports as a member with no reports → the "Shift reports about you" heading and the "No shift reports yet" empty state with its three cards. |
+| **CURRENT** 2026-10-17 | `03-117-reporting-summary` | Scheduling → Shift Reports as a training officer → Written by me → "Your reporting summary" with its tiles (including a Drafts to finish → button), the "Reports written per month" chart, and the "Reports you've written (N)" list beginning below. |
+| **CURRENT** 2026-10-17 | `03-118-report-card-phone` | Scheduling → Shift Reports at 390 px width as an officer → a report card with its status badges on their own row beneath the member's full name. |
 
 ### [04 — events-meetings](./04-events-meetings.md)
 
