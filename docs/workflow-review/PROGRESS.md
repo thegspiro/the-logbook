@@ -136,7 +136,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W70 | Administrative hours: clock in and out by QR, manage categories and hours | member → admin   | `/admin-hours`, `/admin-hours/manage`      | ✅     |
 | W71 | Medical screening                                                         | admin            | `/medical-screening`                       | ✅     |
 | W72 | Reports                                                                   | admin, chief     | `/reports`                                 | ✅     |
-| W73 | Integrations                                                              | admin            | `/integrations`                            | ⬜     |
+| W73 | Integrations                                                              | admin            | `/integrations`                            | ✅     |
 | W74 | IP security, and a member's access request                                | member → admin   | `/ip-security/my-requests`, `/ip-security` | ⬜     |
 | W75 | Audit log, error monitoring and analytics                                 | admin            | `/admin/audit-log`, `/admin/errors`        | ⬜     |
 | W76 | Public portal and the public pages                                        | admin, anonymous | `/admin/public-portal`, `/`, `/privacy`    | ⬜     |
@@ -223,6 +223,41 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   (W72-4).
 
 ## Log
+
+### W73 — Integrations — 2026-10-17
+
+Driven as:
+
+- `admin` connecting, testing and disconnecting iCalendar, connecting Slack
+  with bad and unresolvable URLs and with no config, and disconnecting it
+  through the new confirmation at 390×844;
+- `chief`, `secretary` and `member` for access.
+
+Held:
+
+- a double-clicked Connect makes one connection;
+- bad webhook URLs are refused;
+- only `integrations.manage` holders manage the page;
+- members see on/off state only.
+
+Fixed:
+
+- W73-1 (MED — Disconnect acted on one tap, including Claude (MCP)'s, which
+  revokes every key).
+- W73-2 (LOW — card buttons all read "Connect" / "Disconnect").
+- W73-3 (LOW — an empty-config connect left Slack connected with no
+  webhook).
+- W73-4 (LOW — the messaging webhook field had no label).
+
+Flagged: W73-5 (MED — iCalendar is a switch with no reader).
+
+Environment: the sandbox has no outbound DNS, so no integration that needs
+a real service was driven past its URL check.
+
+Gate: typecheck and lint are clean; 49 integrations frontend tests and 121
+integration and MCP-key backend tests pass.
+
+Next: W74.
 
 ### W72 — Reports — 2026-10-16
 

@@ -5822,6 +5822,26 @@ Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
   standing of existing records on upgrade), and whether a record should
   satisfy only the requirement it is linked to.
 
+## Integrations — Connecting iCalendar (ICS) Does Nothing (2026-10-17)
+
+Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
+
+- **What happens:** the catalog offers "iCalendar (ICS) — Subscribe to
+  department events via standard iCal feed URL … Filtered feeds". Connecting
+  it shows Connected, but no feed URL appears anywhere, and nothing reads the
+  integration's status or its config (`feed_token`, `included_event_types`,
+  `include_shifts` in `ICalConfig`).
+- **What does work:** each member's personal shift feed, from
+  `GET /scheduling/calendar-feed` (`/api/public/v1/calendar/{token}.ics`),
+  whether or not this integration is connected.
+- **Decision:**
+  - build the department events feed the card describes;
+  - mark the entry unavailable; or
+  - re-describe it as the members' personal shift feeds.
+
+  The catalog row is seeded per organization, so the last two also need a
+  data change for existing installations.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

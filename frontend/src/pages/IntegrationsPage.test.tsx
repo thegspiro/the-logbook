@@ -246,6 +246,41 @@ describe('IntegrationsPage', () => {
     expect(screen.getByText('Disconnect')).toBeInTheDocument();
   });
 
+  // W73: Disconnect acted on one tap, and the card's buttons read only
+  // "Connect" / "Disconnect" whichever integration they belonged to.
+  it('names each card button after its integration', async () => {
+    renderPage();
+    await screen.findByText('Slack');
+
+    expect(screen.getByRole('button', { name: 'Connect Slack' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Disconnect Generic ePCR Import' })).toBeInTheDocument();
+  });
+
+  it('asks before disconnecting, and keeps the connection when told to', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Slack');
+
+    await user.click(screen.getByRole('button', { name: 'Disconnect Generic ePCR Import' }));
+    expect(await screen.findByText(/stops working for the department/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Keep it connected' }));
+
+    expect(mockDisconnectIntegration).not.toHaveBeenCalled();
+  });
+
+  it('disconnects once confirmed', async () => {
+    const user = userEvent.setup();
+    mockDisconnectIntegration.mockResolvedValue({});
+    renderPage();
+    await screen.findByText('Slack');
+
+    await user.click(screen.getByRole('button', { name: 'Disconnect Generic ePCR Import' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Disconnect Generic ePCR Import?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
+
+    await waitFor(() => expect(mockDisconnectIntegration).toHaveBeenCalledWith('int-3'));
+  });
+
   it('opens connect modal with config form for webhook type', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -257,7 +292,8 @@ describe('IntegrationsPage', () => {
     await user.click(connectBtn);
 
     expect(screen.getByText('Connect Slack')).toBeInTheDocument();
-    expect(screen.getByText('Webhook URL')).toBeInTheDocument();
+    // Tied to its field since W73.
+    expect(screen.getByLabelText('Webhook URL')).toHaveAttribute('type', 'url');
   });
 
   it('hides manage buttons when user lacks permission', async () => {
@@ -870,7 +906,8 @@ describe('IntegrationsPage', () => {
       await screen.findByText('Claude (MCP)');
       await user.click(screen.getByRole('button', { name: 'Claude (MCP) settings' }));
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
-      await user.click(screen.getByRole('button', { name: /^Connect$/ }));
+      // Named after its integration since W73.
+      await user.click(screen.getByRole('button', { name: 'Connect Claude (MCP) 2' }));
 
       expect(screen.getByRole('heading', { name: 'Connect Claude (MCP) 2' })).toBeInTheDocument();
       expect(screen.getByTestId('connect-submit')).toBeInTheDocument();
