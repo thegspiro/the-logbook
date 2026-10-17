@@ -118,6 +118,8 @@ export interface TrainingSessionCreate {
   training_type: TrainingType;
   credit_hours: number;
   instructor?: string | undefined;
+  /** The member teaching it; the backend checks they are in the org and runs qualification checks against them. */
+  instructor_id?: string | undefined;
 
   // Certification
   issues_certification?: boolean | undefined;
