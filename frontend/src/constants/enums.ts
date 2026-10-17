@@ -214,6 +214,15 @@ export const ElectionStatus = {
 } as const;
 export type ElectionStatus = (typeof ElectionStatus)[keyof typeof ElectionStatus];
 
+/** Lifecycle of a background ballot send (backend BallotSendJobStatus). */
+export const BallotSendJobStatus = {
+  QUEUED: 'queued',
+  RUNNING: 'running',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+} as const;
+export type BallotSendJobStatus = (typeof BallotSendJobStatus)[keyof typeof BallotSendJobStatus];
+
 // ============================================
 // RSVP Status
 // ============================================

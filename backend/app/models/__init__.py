@@ -65,6 +65,8 @@ from app.models.document import (
     DocumentType,
 )
 from app.models.election import (
+    BallotSendJob,
+    BallotSendJobStatus,
     Candidate,
     Election,
     ElectionStatus,
@@ -592,6 +594,8 @@ __all__ = [
     "ActionItemPriority",
     # Election models
     "Election",
+    "BallotSendJob",
+    "BallotSendJobStatus",
     "Candidate",
     "VotingToken",
     "Vote",

@@ -2792,6 +2792,40 @@ is worth taking. Revisit if an election ever accumulates more than a few dozen
 batches. (Security review ELEC-16,
 `docs/security-review/ELEC-06-elections-ballots.md`.)
 
+## Elections — Background Ballot Sends Live in the Web Process, and Reminders Are Still Synchronous (2026-10-17)
+
+Sending ballots to a 42-member department failed in the browser with "timeout
+of 30000ms exceeded". The send ran inside the HTTP request: an eligibility check
+and a new voting token per member, then one SMTP connection with a 0.25 s pause
+between messages. The server kept going after the browser gave up, so the
+ballots most likely went out, but the secretary was shown an error. Sending
+again would have minted new tokens and broken the links already in members'
+inboxes.
+
+**Fixed for the Send Ballots dialog.** `POST /elections/{id}/ballot-send-jobs`
+records a `ballot_send_jobs` row and returns `202`. The send runs after the
+response, and the page polls `GET /elections/{id}/ballot-send-jobs/{job_id}`
+for the outcome. While a send is queued or running, a second one for the same
+election is refused with `409`, from both the new endpoint and the synchronous
+`POST /elections/{id}/send-ballot`. The synchronous endpoint is kept, unchanged
+in behaviour otherwise, for API callers. Tests: `tests/test_ballot_send_jobs.py`,
+`electionService.test.ts`.
+
+Two limitations remain:
+
+- **The send runs in the web process, not in a worker.** No Celery worker is
+  deployed (Celery is in `requirements.txt`, but no compose file runs one), so
+  the job is an asyncio task like the scheduled-email loop in `main.py`. A
+  restart while it runs stops it partway. Some members will have been mailed,
+  but their tokens are committed only at the end, so those links will not work.
+  The row stays `running` until `STALE_JOB_AFTER` (30 minutes) passes. After
+  that it reads as failed with a message to check who received a ballot, and it
+  stops blocking a new send. Moving sends to a real worker would remove this,
+  at the cost of a new service in every deployment (Docker, Unraid, AWS).
+- **Remind Non-Voters (`POST /elections/{id}/remind-non-voters`) is still
+  synchronous** and will hit the same 30-second timeout once enough members
+  have not voted. It needs the same job treatment as a separate change.
+
 ## Elections — Two Ballot Items Sharing an Alias String Can't Be Fully Disambiguated Without a Schema Change (2026-09-02)
 
 A legacy ballot item (one persisted without its own `position` field) is
