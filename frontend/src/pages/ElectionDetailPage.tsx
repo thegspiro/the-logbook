@@ -38,6 +38,7 @@ import { Breadcrumbs, PromptDialog } from '../components/ux';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
+import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electionMeetingWindow';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 import { groupVoidedVotes } from '../utils/electionForensics';
 import {
@@ -301,27 +302,58 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       // PATCH is applied with exclude_unset: an omitted key leaves the old
       // link in place, so every "clear" position must be an explicit null.
-      const updateData: Pick<ElectionUpdate, 'meeting_id' | 'event_id' | 'meeting_date'> = {};
+      const updateData: Pick<ElectionUpdate, 'meeting_id' | 'event_id' | 'meeting_date' | 'start_date' | 'end_date'> =
+        {};
+      let meetingTimes: MeetingWindow = { start: null, end: null };
       if (source === 'meeting') {
         const meeting = availableMeetings.find((m) => m.id === id);
         updateData.meeting_id = id;
         updateData.event_id = null;
         updateData.meeting_date = meeting?.meeting_date ?? null;
+        if (meeting) meetingTimes = meetingWindow(meeting);
       } else if (source === 'event') {
         const event = upcomingEvents.find((e) => e.id === id);
         updateData.meeting_id = null;
         updateData.event_id = id;
         updateData.meeting_date = event?.start_datetime ?? null;
+        if (event) meetingTimes = eventWindow(event, tz);
       } else {
         updateData.meeting_id = null;
         updateData.event_id = null;
         updateData.meeting_date = null;
       }
 
+      // Voting runs during the meeting it is linked to, so the window follows
+      // the meeting's — but only while the dates can still change (the server
+      // refuses a start date once voting opens), and only to a start still
+      // ahead. Without an end time the election keeps its current length.
+      const datesEditable = election.status === ElectionStatus.DRAFT || election.status === ElectionStatus.NOMINATIONS;
+      const start = meetingTimes.start ? localToUTC(meetingTimes.start, tz) : '';
+      const aligned = datesEditable && !!start && new Date(start).getTime() > Date.now();
+      if (aligned) {
+        const currentLength = new Date(election.end_date).getTime() - new Date(election.start_date).getTime();
+        updateData.start_date = start;
+        updateData.end_date = meetingTimes.end
+          ? localToUTC(meetingTimes.end, tz)
+          : new Date(new Date(start).getTime() + (currentLength > 0 ? currentLength : 60 * 60 * 1000)).toISOString();
+      }
+
       const updated = await electionService.updateElection(electionId, updateData);
       setElection(updated);
       setShowMeetingSelector(false);
-      toast.success('Meeting link updated');
+      if (aligned) {
+        toast.success(
+          `Meeting linked. Voting now runs ${formatDateTime(updated.start_date, tz)} – ${formatDateTime(updated.end_date, tz)}.`
+        );
+      } else if (source && datesEditable) {
+        toast.success(
+          meetingTimes.start
+            ? 'Meeting linked. Dates unchanged because the meeting has already started.'
+            : 'Meeting linked. Dates unchanged because the meeting has no start time.'
+        );
+      } else {
+        toast.success('Meeting link updated');
+      }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update meeting link'));
     }
@@ -1475,6 +1507,7 @@ export const ElectionDetailPage: React.FC = () => {
                       : ''
                 }
                 onChange={(e) => void handleMeetingChange(e.target.value)}
+                aria-label="Linked meeting or event"
                 className="form-input shadow-xs"
               >
                 <option value="">No linked meeting</option>

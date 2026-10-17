@@ -361,6 +361,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           styles: selectedStyles.length > 0 ? selectedStyles : undefined,
           category_id: f.category_id || undefined,
           quantity_per_variant: f.quantity ? Number(f.quantity) : 0,
+          tracking_type: f.tracking_type,
           replacement_cost: f.replacement_cost ? Number(f.replacement_cost) : undefined,
           purchase_price: f.purchase_price ? Number(f.purchase_price) : undefined,
           unit_of_measure: f.unit_of_measure.trim() || undefined,
@@ -523,34 +524,41 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 required
               />
             </div>
-            <div className="sm:col-span-2">
-              <label className={lbl} htmlFor="item-also-called">
-                Also called
-              </label>
-              <input
-                id="item-also-called"
-                className={inp}
-                value={f.also_called}
-                onChange={(e) => up('also_called', e.target.value)}
-                placeholder="e.g. BVM, Ambu bag"
-                aria-describedby="item-also-called-help"
-              />
-              <p id="item-also-called-help" className="text-theme-text-muted mt-1 text-xs">
-                Other names for this item, separated by commas. Checklists use them to find it.
-              </p>
-            </div>
-            <div className="sm:col-span-2">
-              <label className={lbl} htmlFor="item-description">
-                Description
-              </label>
-              <textarea
-                id="item-description"
-                className={inp}
-                rows={2}
-                value={f.description}
-                onChange={(e) => up('description', e.target.value)}
-              />
-            </div>
+            {/* SizeVariantCreate carries no alternate names, description,
+                current value, purchase date, vendor or warranty, so those
+                fields are offered only when one item is being saved. */}
+            {!generateVariants && (
+              <>
+                <div className="sm:col-span-2">
+                  <label className={lbl} htmlFor="item-also-called">
+                    Also called
+                  </label>
+                  <input
+                    id="item-also-called"
+                    className={inp}
+                    value={f.also_called}
+                    onChange={(e) => up('also_called', e.target.value)}
+                    placeholder="e.g. BVM, Ambu bag"
+                    aria-describedby="item-also-called-help"
+                  />
+                  <p id="item-also-called-help" className="text-theme-text-muted mt-1 text-xs">
+                    Other names for this item, separated by commas. Checklists use them to find it.
+                  </p>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={lbl} htmlFor="item-description">
+                    Description
+                  </label>
+                  <textarea
+                    id="item-description"
+                    className={inp}
+                    rows={2}
+                    value={f.description}
+                    onChange={(e) => up('description', e.target.value)}
+                  />
+                </div>
+              </>
+            )}
             <div>
               <label className={lbl} htmlFor="item-category_id">
                 Category
@@ -896,78 +904,82 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   onChange={(e) => up('purchase_price', e.target.value)}
                 />
               </div>
-              <div>
-                <label className={lbl} htmlFor="item-current_value">
-                  Current Value
-                </label>
-                <input
-                  id="item-current_value"
-                  type="number"
-                  step="0.01"
-                  className={inp}
-                  value={f.current_value}
-                  onChange={(e) => up('current_value', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={lbl} htmlFor="item-purchase_date">
-                  Purchase Date
-                </label>
-                <input
-                  id="item-purchase_date"
-                  type="date"
-                  className={inp}
-                  value={f.purchase_date}
-                  onChange={(e) => up('purchase_date', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={lbl} htmlFor="item-vendor">
-                  Vendor
-                </label>
-                <select
-                  id="item-vendor"
-                  className={inp}
-                  value={f.vendor_id}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    // Linking wins over the typed-in name: keeping both would
-                    // leave two answers to "who did we buy this from".
-                    setF((p) => ({ ...p, vendor_id: id, vendor: id ? '' : p.vendor }));
-                  }}
-                >
-                  <option value="">— Not linked —</option>
-                  {vendors
-                    .filter((v) => v.is_active || v.id === f.vendor_id)
-                    .map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                        {v.is_active ? '' : ' (inactive)'}
-                      </option>
-                    ))}
-                </select>
-                {!f.vendor_id && (
-                  <input
-                    className={`${inp} mt-2`}
-                    value={f.vendor}
-                    onChange={(e) => up('vendor', e.target.value)}
-                    aria-label="Vendor name (not on file)"
-                    placeholder="Or type a name not on file"
-                  />
-                )}
-              </div>
-              <div>
-                <label className={lbl} htmlFor="item-warranty_expiration">
-                  Warranty Expiration
-                </label>
-                <input
-                  id="item-warranty_expiration"
-                  type="date"
-                  className={inp}
-                  value={f.warranty_expiration}
-                  onChange={(e) => up('warranty_expiration', e.target.value)}
-                />
-              </div>
+              {!generateVariants && (
+                <>
+                  <div>
+                    <label className={lbl} htmlFor="item-current_value">
+                      Current Value
+                    </label>
+                    <input
+                      id="item-current_value"
+                      type="number"
+                      step="0.01"
+                      className={inp}
+                      value={f.current_value}
+                      onChange={(e) => up('current_value', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={lbl} htmlFor="item-purchase_date">
+                      Purchase Date
+                    </label>
+                    <input
+                      id="item-purchase_date"
+                      type="date"
+                      className={inp}
+                      value={f.purchase_date}
+                      onChange={(e) => up('purchase_date', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={lbl} htmlFor="item-vendor">
+                      Vendor
+                    </label>
+                    <select
+                      id="item-vendor"
+                      className={inp}
+                      value={f.vendor_id}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        // Linking wins over the typed-in name: keeping both would
+                        // leave two answers to "who did we buy this from".
+                        setF((p) => ({ ...p, vendor_id: id, vendor: id ? '' : p.vendor }));
+                      }}
+                    >
+                      <option value="">— Not linked —</option>
+                      {vendors
+                        .filter((v) => v.is_active || v.id === f.vendor_id)
+                        .map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name}
+                            {v.is_active ? '' : ' (inactive)'}
+                          </option>
+                        ))}
+                    </select>
+                    {!f.vendor_id && (
+                      <input
+                        className={`${inp} mt-2`}
+                        value={f.vendor}
+                        onChange={(e) => up('vendor', e.target.value)}
+                        aria-label="Vendor name (not on file)"
+                        placeholder="Or type a name not on file"
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <label className={lbl} htmlFor="item-warranty_expiration">
+                      Warranty Expiration
+                    </label>
+                    <input
+                      id="item-warranty_expiration"
+                      type="date"
+                      className={inp}
+                      value={f.warranty_expiration}
+                      onChange={(e) => up('warranty_expiration', e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
               <div>
                 <label className={lbl} htmlFor="item-replacement_cost">
                   Replacement Cost

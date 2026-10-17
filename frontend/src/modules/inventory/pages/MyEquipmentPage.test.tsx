@@ -15,6 +15,10 @@ const mockExtendCheckout = vi.fn();
 const mockCreateReturnRequest = vi.fn();
 
 vi.mock('../../../services/api', () => ({
+  // Read by the Operations section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   inventoryService: {
     getUserInventory: (...a: unknown[]) => mockGetUserInventory(...a) as unknown,
     getEquipmentRequests: (...a: unknown[]) => mockGetEquipmentRequests(...a) as unknown,

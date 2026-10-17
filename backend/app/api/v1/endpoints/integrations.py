@@ -51,6 +51,7 @@ from app.services.integration_health import (
     start_integration_run,
     sync_log_to_dict,
 )
+from app.services.integration_services import calendar_oauth_common as calendar_oauth
 from app.services.integration_services import (
     google_calendar_oauth_service as gcal_oauth,
 )
@@ -390,6 +391,12 @@ _CATALOG_BY_TYPE: dict[str, _CatalogEntry] = {
 # an empty config, and such a row never published anything.
 CALENDAR_PUBLISH_TYPES = frozenset({"google-calendar", "outlook"})
 
+# The button that connects each calendar card; the generic connect refuses them.
+_CALENDAR_SIGN_IN_LABELS = {
+    gcal_oauth.GOOGLE_CALENDAR_INTEGRATION_TYPE: "Connect with Google",
+    "outlook": "Connect with Microsoft",
+}
+
 # Config keys only the server writes. A client-supplied value is refused by
 # the type's schema (extra="forbid"); the stored value is left out of the
 # PATCH validation merge so it does not trip that same check.
@@ -508,10 +515,10 @@ async def _clear_calendar_connection(
     grant = integration.get_secret("refresh_token") or integration.get_secret(
         "access_token"
     )
-    for key in gcal_oauth.TOKEN_SECRETS:
+    for key in calendar_oauth.TOKEN_SECRETS:
         integration.clear_secret(key)
     config = dict(integration.config or {})
-    for key in gcal_oauth.CONNECTION_CONFIG_KEYS:
+    for key in calendar_oauth.CONNECTION_CONFIG_KEYS:
         config.pop(key, None)
     integration.config = config
     result = await db.execute(
@@ -963,12 +970,15 @@ async def connect_integration(
     _require_available(integration)
     _require_directory_admin(integration, current_user)
     _reject_oauth_managed_keys(integration, body.config)
-    if integration.integration_type == gcal_oauth.GOOGLE_CALENDAR_INTEGRATION_TYPE:
-        # Connected means a Google grant and a calendar to publish into, and
-        # only the sign-in produces those. Settings go through PATCH.
+    if integration.integration_type in _CALENDAR_SIGN_IN_LABELS:
+        # Connected means a provider grant and a calendar to publish into,
+        # and only the sign-in produces those. Settings go through PATCH.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Use Connect with Google to connect Google Calendar",
+            detail=(
+                f"Use {_CALENDAR_SIGN_IN_LABELS[integration.integration_type]} "
+                f"to connect {integration.name}"
+            ),
         )
     was_connected = integration.status == "connected" and bool(integration.enabled)
 
@@ -1134,6 +1144,10 @@ async def disconnect_integration(
     if integration.integration_type in CALENDAR_PUBLISH_TYPES:
         # After the commit, so a slow or failing provider cannot hold the
         # disconnect open or undo it: the tokens are already gone from here.
+        # Outlook is never revoked: the Microsoft identity platform has no
+        # endpoint for an app to revoke one grant (see
+        # outlook_calendar_oauth_service), so forgetting it here is all an
+        # app can do.
         revoked = False
         if integration.integration_type == gcal_oauth.GOOGLE_CALENDAR_INTEGRATION_TYPE:
             revoked = await gcal_oauth.revoke_token(calendar_grant)

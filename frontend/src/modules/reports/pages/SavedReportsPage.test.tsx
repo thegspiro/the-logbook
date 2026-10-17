@@ -186,6 +186,51 @@ describe('SavedReportsPage', () => {
     });
   });
 
+  it('switching monthly to weekly sends the weekday on screen, not the old day of the month', async () => {
+    list.mockResolvedValue([saved({ schedule_day: 15 })]);
+    update.mockResolvedValue(saved({ schedule_frequency: 'weekly', schedule_day: 1 }));
+    renderWithRouter(<SavedReportsPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /edit/i }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Day of the month')).toHaveValue('15');
+    await userEvent.selectOptions(within(dialog).getByLabelText('How often'), 'weekly');
+    expect(within(dialog).getByLabelText('Day of the week')).toHaveValue('1');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect(update.mock.calls[0]?.[1]).toMatchObject({ schedule_frequency: 'weekly', schedule_day: 1 });
+  });
+
+  it('keeps a day that is still valid when the frequency changes', async () => {
+    list.mockResolvedValue([saved({ schedule_day: 5 })]);
+    update.mockResolvedValue(saved({ schedule_frequency: 'weekly', schedule_day: 5 }));
+    renderWithRouter(<SavedReportsPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /edit/i }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.selectOptions(within(dialog).getByLabelText('How often'), 'weekly');
+    expect(within(dialog).getByLabelText('Day of the week')).toHaveValue('5');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect(update.mock.calls[0]?.[1]).toMatchObject({ schedule_frequency: 'weekly', schedule_day: 5 });
+  });
+
+  it('clamps a stored day that is out of range for the stored frequency', async () => {
+    list.mockResolvedValue([saved({ schedule_frequency: 'weekly', schedule_day: 15 })]);
+    update.mockResolvedValue(saved({ schedule_frequency: 'weekly', schedule_day: 1 }));
+    renderWithRouter(<SavedReportsPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /edit/i }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Day of the week')).toHaveValue('1');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect(update.mock.calls[0]?.[1]).toMatchObject({ schedule_frequency: 'weekly', schedule_day: 1 });
+  });
+
   it('asks before deleting', async () => {
     remove.mockResolvedValue(undefined);
     renderWithRouter(<SavedReportsPage />);

@@ -2,9 +2,10 @@
 
 **Prefix:** `MSG` · **Iteration:** 25 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03
-(pass 5), 2026-10-07 (pass 6) · **PR:** #1907 (pass 1), pass 2 PR recorded in
-`PROGRESS.md`, #2305 (pass 3), pass 4 PR recorded in `PROGRESS.md`, pass 5 PR
-recorded in `PROGRESS.md`, pass 6 (this PR)
+(pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7) · **PR:** #1907 (pass 1),
+pass 2 PR recorded in `PROGRESS.md`, #2305 (pass 3), pass 4 PR recorded in
+`PROGRESS.md`, pass 5 PR recorded in `PROGRESS.md`, #2984 (pass 6), pass 7
+(this PR)
 
 ## Pass 1 (2026-08-26)
 
@@ -1742,3 +1743,238 @@ the scoped test run, since the session's own startup hook had failed with
 console-script entry point (`alembic upgrade head`) is unaffected and is
 what CI and `npm run db:migrate` actually invoke, so this is an environment
 note, not an application defect, and is out of this feature's scope to fix.
+
+## Pass 7 (2026-10-17) — two standing findings closed by other work, 0 new findings
+
+Picked up as the next unstarted row in the rotation (Feature 24, Meetings &
+minutes, pass 7, had just merged as PR #3365; no open
+`claude/security-review-*` PR existed for Feature 25, confirmed via
+`list_pull_requests`, state=open, before this pass started).
+
+**Backend:** diffed every file this feature's scope covers against pass 6's
+merge (PR #2984) rather than re-read cold, per CLAUDE.md's "match the
+verification to the change." Real delta since pass 6, all reviewed in full:
+
+- **`607e1ef4` / `51f26550` — MSG-12's remaining two sub-cases (the ordinary
+  `failed` path and the throttled-with-no-row path) are fixed.** This is
+  regular feature work, not a security-review commit, but it closes a
+  finding this file has carried as open-pending-a-product-decision since
+  pass 2. The owner's decision: both paths now write (or convert to) a
+  `retrying` `DepartmentMessageDelivery` row with `attempt_count` and
+  `next_attempt_at` (migration `b834afdaffdf`, guarded on the table/columns/
+  index per Pitfall #26, symmetric downgrade); backoff is 5, 10, 20, 40 then
+  80 minutes (`MAX_DELIVERY_RETRIES = 5`, `_RETRY_BASE_DELAY`,
+  `retry_delay()`); a sixth failure is final (`failed`). A throttled
+  email/SMS batch, which used to return before claiming a single recipient
+  and leave no row for anything to find, now calls `_record_throttled` to
+  claim and record one `retrying` row per held-back member
+  (`message_delivery_service.py:268`). A new scheduled task,
+  `run_retry_message_deliveries` (`scheduled_tasks.py:4626`, registered in
+  `SCHEDULE`/`TASK_RUNNERS`/`TASK_INTERVALS_SECONDS` at 300s, all three
+  checked directly — Pitfall #30a's registry pattern, here for a scheduled
+  task rather than a route), re-delivers due rows through
+  `MessageDeliveryService.deliver()`, which reclaims the row via the
+  existing `_reclaim_stale_delivery` idempotency path rather than
+  duplicating it; a due row whose message was deactivated/deleted/expired or
+  whose org is off is retired as `failed` with a reason instead of being
+  left to fill the bounded scan window on every pass, matching the
+  stranded-`pending` sweep's own design. The task resolves its message's
+  audience through `MessagingService._targeted_users(message,
+message.organization_id)` — i.e. every by-id lookup is scoped to the
+  message's own organization, not a caller-supplied one — and
+  `51f26550` added it to `org_scoping_baseline.txt` with the same
+  "system-wide scheduled task, no caller org" reasoning already accepted
+  for `run_recover_stranded_message_deliveries`. The client-facing error
+  string stays on the existing allowlist
+  (`messaging_service.py:_PLAIN_DELIVERY_REASONS`): a provider exception's
+  raw text is still replaced with a generic reason before reaching
+  `GET /messages/{id}/acknowledgments`, so the MSG-6/MSG-7 "no internals in
+  an error string" invariant holds for the new states too. Guard tests:
+  `tests/test_message_delivery_retries.py`,
+  `tests/test_message_delivery_retries_migration.py`, plus updates to
+  `tests/test_message_delivery_service.py` and
+  `tests/test_messaging_service.py` for the new "first failure is retrying,
+  not failed" transition. `docs/KNOWN_LIMITATIONS.md`'s MSG-12 entry already
+  carried the correct ✅ Resolved note (dated 2026-10-11) describing this
+  exact fix — verified against current code rather than trusted, and found
+  accurate; no doc correction needed here.
+- **`d05421bd` — MSG-15 (the environment-string DNS-rebinding gate) is
+  fixed.** `PushService._send_one` now pins every send regardless of
+  `settings.ENVIRONMENT`; the only bypass is the module attribute
+  `push_service._UNPINNED_SENDS_FOR_TESTS` (`push_service.py:208`), which is
+  not a setting — no deployment configuration can reach it, and
+  production/staging pin even if a test process somehow left it set, since
+  `_pin_this_send()` checks `ENVIRONMENT in ("production", "staging")`
+  first and only consults the flag for every other value. Guard test:
+  `tests/test_push_rebinding_guard.py`. `docs/KNOWN_LIMITATIONS.md`'s MSG-15
+  entry already carried the matching ✅ Resolved note — verified accurate.
+- **`a979d14b` (app-review B11, not a security-review commit) —
+  `NotificationRuleUpdate.enabled` now refuses an explicit `null`.**
+  Reviewed because it touches `schemas/notifications.py` and
+  `notification_rules.py`, both in this feature's scope. Before this fix,
+  `PATCH /notifications/rules/{id}` with `enabled: null` stored `NULL` in a
+  nullable column and then raised serializing the response (`enabled` is a
+  plain `bool` on `NotificationRuleResponse`), a 500 that also broke every
+  later `GET` of that organization's rule list. A new `field_validator`
+  rejects an explicit `null` with a 422 and leaves an omitted key alone
+  (`model_dump(exclude_unset=True)`/`apply_updates` semantics, Pitfall #1,
+  are unaffected: the omitted-key path was never the bug). This is a
+  reliability/correctness fix, not a new access-control finding — no
+  permission check was bypassed, and an org could already enable/disable
+  its own rules. The same commit removed an unused `# noqa: F401`
+  re-export of `ENFORCED_TRIGGERS`/`is_enforced`/`NotificationRule`/
+  `NotificationTrigger` from `notification_rules.py`; grepped for any
+  remaining importer of that re-export path and found none, so no dangling
+  import was left behind.
+- **New `EmailKind` members wired through `email_policy.py`
+  (`MINUTES_ACTION_ITEMS`, `MINUTES_CIRCULATED`, `MINUTES_DUTIES`,
+  `DOCUMENT_DUTIES`, `FUNDRAISING_DUTIES`, plus `EVENT_WAITLIST`/
+  `EVENT_CHANGES` from an earlier pass's churn) — checked against Pitfall
+  #19's exact failure mode: a switch with no reader.** Each new kind is
+  correctly classified `required=False` (none are the record-of-notice or
+  account-security class that must stay mandatory), and each has a real
+  caller consulting it through `member_receives_email`/`recipients_for`/
+  `is_required`, confirmed by grep rather than assumed: `MINUTES_ACTION_ITEMS`
+  in `minutes_reminder_service.py` and `minutes_notifications.py`;
+  `MINUTES_CIRCULATED` and `MINUTES_DUTIES` in `minutes_notifications.py`/
+  `minutes_reminder_service.py`; `DOCUMENT_DUTIES` in
+  `admin_only_folder_digest.py`; `FUNDRAISING_DUTIES` in
+  `grant_reminder_notifications.py`; `EVENT_WAITLIST`/`EVENT_CHANGES` in
+  `event_service.py`. None of the new kinds touches `SmsAlert` — correctly,
+  since none is the time-critical, act-immediately class that allowlist is
+  reserved for (confirmed `SmsAlert` still has exactly one member,
+  `URGENT_DEPARTMENT_MESSAGE`, unchanged). `email_policy.py` itself (in this
+  feature's own file set) needed no fix — the module's existing
+  required/optional/master-switch/legacy-preference resolution order
+  already covers every new kind without a special case.
+- **New sender into the shared `email_service.py`/`email_template_service.py`
+  machinery, reviewed for the same injection/escaping invariants MSG-6/
+  MSG-7/MSG-14 established:** `ffbdaa09`'s
+  `EmailService.send_event_cancellation_email` and the inline "Event
+  Updated" email both go through `_render_with_fallback`
+  (`email_service.py:511`) or the primary `render()` path, both of which
+  HTML-escape every context variable by default and only skip escaping for
+  names on the `_RAW_HTML_VARIABLES` allowlist
+  (`email_template_service.py:3985`) — checked that allowlist directly and
+  confirmed no new unescaped variable was added to it this pass.
+  `event_title`, `recipient_name` and `reason` (the only user-influenceable
+  values in the new context) are not on that list, so they are escaped.
+  The sender (`event_service.py:_email_event_cancellation`/
+  `_event_email_recipients`) loads recipients in one query filtered to
+  `User.organization_id == organization_id` and `User.id.in_(ids)`, so a
+  cross-tenant id in `notify_ids` cannot pull in another org's member.
+  `90b69e62`'s Google Workspace welcome-email addition
+  (`append_to_email_html`, `EmailService.send_welcome_email`'s new
+  `appended_html`/`appended_text` parameters) carries a pre-escaped block
+  built by `google_workspace_provisioning_service.google_credentials_html`,
+  which `html.escape()`s both the address and the temporary password before
+  interpolating them — checked directly, not assumed from the docstring's
+  claim of "already escaped."
+- **Mypy-cleanup batches (`265a26be`, `7879398d`, `c926b687`, `51c77a9c`,
+  `0d4d7c5a`, `62828a9e`) touching this feature's files** — read every hunk
+  touching a file in scope, not merely trusted the commit message's
+  "behaviour unchanged" claim. All are type annotations
+  (`UUID` → `UUID | str` on functions already called with `str` ids,
+  `Optional` narrowing behind a filter that already excludes `None`) or a
+  `.rowcount` → `rows_affected()` swap that only changes which exception
+  type is raised on an unexpected `Result`. The one real behavior note —
+  `retry_delay()` keeping its annotated return — matches the already-
+  reviewed MSG-12 fix above; no site in this feature's files changed what
+  it returns on any input it is actually called with.
+- **Frontend:** `git log` path-filtered against pass 6's merge for the six
+  swept paths (`modules/communications`, `modules/notifications`,
+  `pages/NotificationsPage.tsx`, `components/NotificationCard.tsx`,
+  `services/communicationsServices.ts`, `hooks/usePushNotifications.ts`)
+  shows real churn, almost all of it the suggestion-box feature inside
+  `modules/communications` (branching intake questions, rating/time/member/
+  vehicle answer types, routing logic, dialog-scroll and dialog-semantics
+  accessibility fixes) plus two unrelated features whose types happen to
+  live in `communicationsServices.ts` (Locations' `LocationCreate` null-
+  widening for Pitfall #1, and the Department-pulse dashboard-widget
+  layout). Re-ran the same pattern sweep pass 5/6 used
+  (`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+  date-formatting methods, direct `fetch(`) across all six paths — zero
+  matches. Neither of the two misfiled-type commits touches messaging
+  behavior: the Locations change is a type-only widening already following
+  the correct `blankToNull` pattern, and the dashboard-pulse response is
+  explicitly gated by `GET /dashboard/widgets`'s existing access check per
+  its own commit message, not by anything this feature owns. All module
+  axios usage still goes through the shared `apiClient` (`import api from
+'./apiClient'`), not a local instance, so Pitfall #7 does not apply here.
+
+### Re-verified still intact, not re-derived
+
+Every other standing fix (MSG-1 through MSG-9, MSG-13, MSG-14, MSG-16, the
+`cc_emails` legacy-read fix, MSG-11's migration-detector ratchet, W50-23's
+escape/allowlist pattern) — re-confirmed by `git diff` showing zero change at
+each citation since pass 6.
+
+### Confirmed still open — unchanged, by design or pending a product decision
+
+- **MSG-3** — `POST /message-history/test-email` sends to an admin-typed
+  `to_email`, by design (an admin testing deliverability, not a member
+  notification).
+- **MAIL-4** — `POST /email-templates/schedule`'s `to/cc/bcc_emails` accept
+  arbitrary addresses, by design (an admin composing a one-off scheduled
+  send, same trust boundary as MSG-3).
+- **`email_service.py`'s F4** — no SSRF-style validation on an
+  org-configured SMTP host, a deliberate policy decision (an org's own
+  admin configures its own outbound mail host).
+- **The `NotificationRuleCreate`/`Update.config` unbounded-JSON note** —
+  informational; `config: Optional[Any]` with no size guard, low severity
+  (same-org, admin-only write), not re-flagged as a bug.
+
+### Route inventory — re-enumerated, 51 routes (unchanged since pass 5)
+
+`grep -c '@router\.\(get\|post\|put\|patch\|delete\)'` against all four
+endpoint files: 13 + 2 + 20 + 16 = 51, matching pass 5/6 exactly. Spot-checked
+every route's auth dependency directly (not merely counted) — all 51 carry
+`Depends(get_current_user)` or `Depends(require_permission(...))`; no route
+without an auth dependency was found. No permission string changed since
+pass 6.
+
+### Schema & migration notes
+
+`validate_migrations.py --strict`: 612 revisions, single head (`c87efd81c5aa`),
+up from pass 6's 538 — the growth is other features' work plus this pass's
+own already-landed `b834afdaffdf` (MSG-12 retry columns, reviewed above:
+guarded on table/column/index existence per Pitfall #26, `nullable=True` on
+the one nullable column (`next_attempt_at`), symmetric downgrade that writes
+`retrying` rows down to `failed` before dropping the columns it depends on).
+No migration was added by this pass itself — every fix reviewed above had
+already landed on `main` before this pass began; this pass's own commit is
+documentation only (this file, `PROGRESS.md`, and the header/log entries).
+
+## Guard tests added (pass 7)
+
+None added by this pass. The guard tests for both closed findings
+(`tests/test_message_delivery_retries.py`,
+`tests/test_message_delivery_retries_migration.py`,
+`tests/test_push_rebinding_guard.py`) were added by the commits that fixed
+them, outside this review loop; re-run as part of this pass's scoped test
+run (below) and confirmed passing.
+
+## Completion gate (pass 7)
+
+| Check                                                                                           | Result                                                                                     |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                   | clean (0 violations)                                                                       |
+| `black --check app/ tests/ alembic/`                                                            | clean                                                                                      |
+| `isort --check-only app/ tests/ alembic/` (installed 9.0.1, matching CI's pin)                  | clean                                                                                      |
+| `python3 scripts/validate_migrations.py --strict`                                               | PASSED — 612 revisions, single head                                                        |
+| backend tests, scope (`-k "message or notification or email_template or push or email_policy"`) | 1162 passed, 1 skipped (environment-only — `pywebpush`)                                    |
+| `npm run typecheck` (frontend)                                                                  | 0 errors (after `npm ci` synced `node_modules` to the committed lockfile — see note below) |
+| `npm run lint` (frontend, `eslint --max-warnings 10`)                                           | clean, exit 0                                                                              |
+
+No code was changed by this pass, so the gate confirms current `main` is
+clean rather than verifying a diff this pass produced, matching passes 5
+and 6's own rationale. `npm run typecheck` initially failed with
+`TS2307: Cannot find module '@tiptap/react'`/`'@tiptap/starter-kit'` —
+`node_modules/@tiptap` was simply absent although both packages are
+declared in `frontend/package.json` and already resolved in the committed
+`package-lock.json` (added by an unrelated Minutes rich-text-editor
+commit). This is an environment-sync gap, not an application or lockfile
+defect: `npm ci` (never `npm install`, per CLAUDE.md's lockfile-safety
+section) from the repo root installed exactly what the lockfile already
+specified, and `npm run typecheck` was clean immediately after. No
+`package.json`/`package-lock.json` edit was made.

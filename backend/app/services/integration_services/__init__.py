@@ -69,21 +69,13 @@ async def test_integration_connection(integration: Integration) -> str:
             raise Exception("No webhook URL configured")
         return await send_test_webhook(url, secret)
 
-    if itype == "google-calendar":
-        from app.services.integration_services.google_calendar_service import (
-            GoogleCalendarService,
-        )
+    if itype in ("google-calendar", "outlook"):
+        from app.services.calendar_sync_service import default_service_factory
 
-        creds = _get_calendar_credentials(integration)
-        return await GoogleCalendarService(creds).test_connection()
-
-    if itype == "outlook":
-        from app.services.integration_services.outlook_calendar_service import (
-            OutlookCalendarService,
-        )
-
-        creds = _get_calendar_credentials(integration)
-        return await OutlookCalendarService(creds).test_connection()
+        # The reconciler's own credentials, deployment OAuth client and
+        # Outlook tenant included, so an access token that lapsed since the
+        # last pass is refreshed instead of failing the test.
+        return await default_service_factory(integration).test_connection()
 
     if itype == "salesforce":
         from app.services.integration_services.salesforce_service import (
@@ -183,9 +175,9 @@ def _get_calendar_credentials(integration: Integration) -> dict[str, Any]:
     expires_at = config.get("token_expires_at")
     if expires_at:
         creds["token_expires_at"] = expires_at
-    # The Test button checks the department calendar itself: the
+    # The Test button checks the department calendar itself: Google's
     # calendar.app.created scope covers calendars the app made, not the
-    # account's calendar list.
+    # account's calendar list, and it is what publishing writes to.
     calendar_id = config.get("calendar_id")
     if calendar_id:
         creds["calendar_id"] = calendar_id
