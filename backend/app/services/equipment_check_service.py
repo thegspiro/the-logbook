@@ -9,7 +9,7 @@ import hashlib
 import json
 import math
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
 
@@ -4113,10 +4113,15 @@ class EquipmentCheckService:
         organization_id: str,
         item_types: Sequence[Any],
         *,
-        days_ahead: int,
+        days_ahead: Optional[int],
         today: date,
+        item_ids: Optional[Iterable[str]] = None,
     ) -> List[Dict[str, Any]]:
         """Stock on the trucks that expires within ``days_ahead``, or has.
+
+        ``days_ahead=None`` drops the window, so every dated unit aboard is
+        returned; with ``item_ids`` that is how the supply list finds each
+        supply's soonest truck date.
 
         One row per dated lot aboard a position (a position carrying three
         boxes from two lots expires twice), and one per position with no lot
@@ -4127,7 +4132,18 @@ class EquipmentCheckService:
         Each row names where the units are, as the checklist does: the
         apparatus (or "Any <type>", or the template) and the compartment path.
         """
-        horizon = today + timedelta(days=days_ahead)
+        horizon = None if days_ahead is None else today + timedelta(days=days_ahead)
+        only = None if item_ids is None else {str(i) for i in item_ids}
+        if only is not None and not only:
+            return []
+        position_filters = [
+            EquipmentCheckTemplate.organization_id == organization_id,
+            EquipmentCheckTemplate.is_active.is_(True),
+            InventoryItem.organization_id == organization_id,
+            InventoryCategory.item_type.in_(list(item_types)),
+        ]
+        if only is not None:
+            position_filters.append(CheckTemplateItem.inventory_item_id.in_(only))
         positions = (
             await self.db.execute(
                 select(
@@ -4155,12 +4171,7 @@ class EquipmentCheckService:
                     InventoryCategory,
                     InventoryCategory.id == InventoryItem.category_id,
                 )
-                .where(
-                    EquipmentCheckTemplate.organization_id == organization_id,
-                    EquipmentCheckTemplate.is_active.is_(True),
-                    InventoryItem.organization_id == organization_id,
-                    InventoryCategory.item_type.in_(list(item_types)),
-                )
+                .where(*position_filters)
             )
         ).all()
         if not positions:
@@ -4208,7 +4219,7 @@ class EquipmentCheckService:
             if lots:
                 for lot in lots:
                     when = lot.expiration_date
-                    if when is None or when > horizon:
+                    if when is None or (horizon is not None and when > horizon):
                         continue
                     rows.append(
                         {
@@ -4222,7 +4233,7 @@ class EquipmentCheckService:
                     )
                 continue
             when = item.expiration_date if item.has_expiration else None
-            if when is None or when > horizon:
+            if when is None or (horizon is not None and when > horizon):
                 continue
             rows.append(
                 {

@@ -77,6 +77,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const [swapForm, setSwapForm] = useState<SwapFormState>(EMPTY_SWAP_FORM);
   const [submittingSwap, setSubmittingSwap] = useState(false);
   const [availableShifts, setAvailableShifts] = useState<ShiftRecord[]>([]);
+  const [availableShiftsLoading, setAvailableShiftsLoading] = useState(false);
   // Exchange picker: seats the server says both members qualify for. `null`
   // until loaded, so "loading" and "nobody qualifies" read differently.
   const [exchangeCandidates, setExchangeCandidates] = useState<ExchangeCandidate[] | null>(null);
@@ -185,14 +186,29 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     setExchangeCandidates(null);
     setExchangeError(null);
     setShowSwapModal(true);
+    setAvailableShifts([]);
+    setAvailableShiftsLoading(true);
     // Load available shifts for the picker
     try {
       const today = getTodayLocalDate(tz);
       const data = await schedulingService.getShifts({ start_date: today, limit: 50 });
-      // Filter out the current shift
-      setAvailableShifts(data.shifts.filter((s) => s.id !== assignment.shift_id));
+      const shifts = data.shifts.filter((s) => s.id !== assignment.shift_id);
+      setAvailableShifts(shifts);
+      // "Specific Shift" may have been chosen while the list was in flight,
+      // which left it on the 'pick' placeholder; an unchosen target would be
+      // filed as an open giveaway, so settle it on the first shift now.
+      const first = shifts[0];
+      if (first) {
+        setSwapForm((p) =>
+          p.mode === 'shift' && (p.target_shift_id === 'pick' || !p.target_shift_id)
+            ? { ...p, target_shift_id: first.id }
+            : p
+        );
+      }
     } catch {
       // Non-critical — user can still submit open swap
+    } finally {
+      setAvailableShiftsLoading(false);
     }
   };
 
@@ -213,10 +229,22 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
   const selectedExchange = exchangeCandidates?.find((c) => exchangeKey(c) === swapForm.exchange_key);
 
+  const targetShiftChosen = availableShifts.some((s) => s.id === swapForm.target_shift_id);
+  const swapBlockedReason =
+    swapForm.mode === 'shift' && !targetShiftChosen
+      ? availableShiftsLoading
+        ? 'Loading shifts — choose one before submitting.'
+        : 'No upcoming shift is available to ask for. Choose Open Swap instead.'
+      : null;
+
   const handleSwapRequest = async () => {
     if (!swapAssignment) return;
     if (swapForm.mode === 'exchange' && !selectedExchange) {
       toast.error('Choose who to exchange with');
+      return;
+    }
+    if (swapBlockedReason) {
+      toast.error(swapBlockedReason);
       return;
     }
     setSubmittingSwap(true);
@@ -226,7 +254,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
         requesting_shift_id:
           swapForm.mode === 'exchange'
             ? selectedExchange?.shift_id
-            : swapForm.mode === 'shift' && swapForm.target_shift_id && swapForm.target_shift_id !== 'pick'
+            : swapForm.mode === 'shift'
               ? swapForm.target_shift_id
               : undefined,
         target_user_id: swapForm.mode === 'exchange' ? selectedExchange?.user_id : undefined,
@@ -867,7 +895,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                   >
                     {availableShifts.length === 0 && (
                       <option value="pick" disabled>
-                        Loading shifts...
+                        {availableShiftsLoading ? 'Loading shifts...' : 'No shifts available'}
                       </option>
                     )}
                     {availableShifts.map((s) => {
@@ -898,7 +926,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 />
               </div>
             </div>
-            <div className="border-theme-surface-border flex justify-end gap-3 border-t p-6">
+            <div className="border-theme-surface-border flex flex-wrap items-center justify-end gap-3 border-t p-6">
+              {swapBlockedReason && (
+                <p id="swap-blocked-reason" className="text-theme-text-muted mr-auto text-sm">
+                  {swapBlockedReason}
+                </p>
+              )}
               <button onClick={() => setShowSwapModal(false)} className="text-theme-text-secondary px-4 py-2">
                 Cancel
               </button>
@@ -906,7 +939,10 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 onClick={() => {
                   void handleSwapRequest();
                 }}
-                disabled={submittingSwap || (swapForm.mode === 'exchange' && !selectedExchange)}
+                disabled={
+                  submittingSwap || (swapForm.mode === 'exchange' && !selectedExchange) || swapBlockedReason !== null
+                }
+                aria-describedby={swapBlockedReason ? 'swap-blocked-reason' : undefined}
                 className="rounded-lg bg-violet-600 px-4 py-2 text-white hover:bg-violet-700 disabled:opacity-50"
               >
                 {submittingSwap ? 'Submitting...' : 'Submit Request'}

@@ -37,6 +37,13 @@ describe('DateTimeQuarterHour', () => {
     expect(onChange).toHaveBeenCalledWith('2026-09-21T09:07');
   });
 
+  it('emits an empty value when the date is cleared, not a bare time', () => {
+    render(<DateTimeQuarterHour value="2026-09-20T09:30" onChange={onChange} />);
+    fireEvent.change(screen.getByDisplayValue('2026-09-20'), { target: { value: '' } });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('');
+  });
+
   it('offers only quarter hours for a quarter-hour value', () => {
     render(<DateTimeQuarterHour value="2026-09-20T13:00" onChange={onChange} />);
     const options = Array.from(screen.getByLabelText<HTMLSelectElement>('Time minute').options, (o) => o.value);

@@ -10,22 +10,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy import select, text
 
-from app.models.google_workspace import (
+from app.models.directory_account import (
     GOOGLE_WORKSPACE_INTEGRATION,
-    GoogleAccountProvision,
-    GoogleAccountStatus,
+    DirectoryAccountProvision,
+    DirectoryAccountStatus,
 )
 from app.models.integration import Integration
 from app.models.user import Organization, Position, User, UserStatus, user_roles
+from app.services.directory_account_service import (
+    AttentionIssue,
+    DirectoryAccountService,
+)
 from app.services.email_service import EmailService
 from app.services.google_workspace_attention_digest import (
     LAST_DIGEST_KEY,
     SETTINGS_KEY,
     send_google_workspace_attention_digest,
-)
-from app.services.google_workspace_provisioning_service import (
-    AttentionIssue,
-    GoogleWorkspaceProvisioningService,
 )
 from app.services.integration_services.google_workspace_service import (
     DIRECTORY_SCOPES,
@@ -166,12 +166,12 @@ async def _member(db_session, org, name, *, status=UserStatus.ACTIVE) -> User:
     return member
 
 
-async def _record(db_session, org, member, **fields) -> GoogleAccountProvision:
-    row = GoogleAccountProvision(
+async def _record(db_session, org, member, **fields) -> DirectoryAccountProvision:
+    row = DirectoryAccountProvision(
         organization_id=org.id,
         user_id=member.id,
         primary_email=member.email,
-        status=fields.pop("status", GoogleAccountStatus.CREATED.value),
+        status=fields.pop("status", DirectoryAccountStatus.CREATED.value),
         credentials_sent=fields.pop("credentials_sent", True),
         **fields,
     )
@@ -211,7 +211,7 @@ async def _department(db_session):
         db_session,
         org,
         m["failed"],
-        status=GoogleAccountStatus.FAILED.value,
+        status=DirectoryAccountStatus.FAILED.value,
         last_error="No licenses left.",
         last_attempt_at=LONG_AGO,
         created_at=LONG_AGO,
@@ -236,14 +236,16 @@ async def _department(db_session):
         db_session,
         org,
         m["left_failed"],
-        status=GoogleAccountStatus.FAILED.value,
+        status=DirectoryAccountStatus.FAILED.value,
         last_error="No licenses left.",
         last_attempt_at=LONG_AGO,
         created_at=LONG_AGO,
     )
     # Still being created, but only for a few minutes.
     m["fresh"] = await _member(db_session, org, "Fresh")
-    await _record(db_session, org, m["fresh"], status=GoogleAccountStatus.PENDING.value)
+    await _record(
+        db_session, org, m["fresh"], status=DirectoryAccountStatus.PENDING.value
+    )
     await db_session.commit()
     return org, m
 
@@ -252,9 +254,7 @@ async def _department(db_session):
 class TestAttentionList:
     async def test_lists_what_needs_a_person_departures_first(self, db_session):
         org, m = await _department(db_session)
-        items = await GoogleWorkspaceProvisioningService(db_session).attention_items(
-            org.id
-        )
+        items = await DirectoryAccountService(db_session).attention_items(org.id)
         by_member = {i.user_id: i for i in items}
         assert [i.issue for i in items] == [
             AttentionIssue.NOT_SUSPENDED,
@@ -284,13 +284,11 @@ class TestAttentionList:
             db_session,
             org,
             member,
-            status=GoogleAccountStatus.PENDING.value,
+            status=DirectoryAccountStatus.PENDING.value,
             last_attempt_at=NOW - timedelta(hours=2),
         )
         await db_session.commit()
-        items = await GoogleWorkspaceProvisioningService(db_session).attention_items(
-            org.id
-        )
+        items = await DirectoryAccountService(db_session).attention_items(org.id)
         assert [i.issue for i in items] == [AttentionIssue.NOT_SUSPENDED]
         assert items[0].label == "Left, but the account is not suspended"
         assert "check the Google Admin console" in (items[0].detail or "")
@@ -304,20 +302,19 @@ class TestAttentionList:
             db_session,
             org,
             member,
-            status=GoogleAccountStatus.FAILED.value,
+            status=DirectoryAccountStatus.FAILED.value,
             last_attempt_at=NOW - timedelta(minutes=5),
         )
         await db_session.execute(
             text(
-                "UPDATE google_account_provisions SET created_at = :at WHERE id = :id"
+                "UPDATE directory_account_provisions SET created_at = :at "
+                "WHERE id = :id"
             ),
             {"at": LONG_AGO.replace(tzinfo=None), "id": row.id},
         )
         await db_session.commit()
         await db_session.refresh(row)
-        items = await GoogleWorkspaceProvisioningService(db_session).attention_items(
-            org.id
-        )
+        items = await DirectoryAccountService(db_session).attention_items(org.id)
         assert [i.overdue for i in items] == [True]
 
     async def test_a_suspension_waiting_at_upgrade_gets_a_start_time(self, db_session):
@@ -337,6 +334,8 @@ class TestAttentionList:
         assert spec.loader is not None
         migration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(migration)
+        # Renamed by a later revision; the backfill runs against today's name.
+        migration.TABLE = "directory_account_provisions"
         org = await _org(db_session)
         waiting = await _member(
             db_session, org, "Waiting", status=UserStatus.DROPPED_VOLUNTARY
@@ -355,7 +354,7 @@ class TestAttentionList:
                 await db_session.execute(
                     text(
                         "SELECT user_id, suspension_requested_at "
-                        "FROM google_account_provisions WHERE organization_id = :org"
+                        "FROM directory_account_provisions WHERE organization_id = :org"
                     ),
                     {"org": org.id},
                 )
@@ -373,13 +372,11 @@ class TestAttentionList:
             db_session,
             org,
             member,
-            status=GoogleAccountStatus.PENDING.value,
+            status=DirectoryAccountStatus.PENDING.value,
             last_attempt_at=NOW - timedelta(hours=2),
         )
         await db_session.commit()
-        (item,) = await GoogleWorkspaceProvisioningService(db_session).attention_items(
-            org.id
-        )
+        (item,) = await DirectoryAccountService(db_session).attention_items(org.id)
         assert item.issue == AttentionIssue.NOT_CREATED
         assert item.overdue is False
 
@@ -387,12 +384,7 @@ class TestAttentionList:
         org, _ = await _department(db_session)
         other = await _org(db_session)
         await db_session.commit()
-        assert (
-            await GoogleWorkspaceProvisioningService(db_session).attention_items(
-                other.id
-            )
-            == []
-        )
+        assert await DirectoryAccountService(db_session).attention_items(other.id) == []
         assert org.id != other.id
 
     async def test_a_departure_records_when_it_was_asked_for(self, db_session):
@@ -407,8 +399,8 @@ class TestAttentionList:
 
         row = (
             await db_session.execute(
-                select(GoogleAccountProvision).where(
-                    GoogleAccountProvision.user_id == member.id
+                select(DirectoryAccountProvision).where(
+                    DirectoryAccountProvision.user_id == member.id
                 )
             )
         ).scalar_one()
@@ -525,7 +517,7 @@ class TestAttentionDigest:
             db_session,
             org,
             member,
-            status=GoogleAccountStatus.FAILED.value,
+            status=DirectoryAccountStatus.FAILED.value,
             last_attempt_at=RECENTLY,
         )
         await _with_permissions(db_session, org, "admin.access")
@@ -581,7 +573,7 @@ class TestAttentionDigest:
             db_session,
             org,
             member,
-            status=GoogleAccountStatus.FAILED.value,
+            status=DirectoryAccountStatus.FAILED.value,
             last_error="<script>x</script>",
             last_attempt_at=LONG_AGO,
             created_at=LONG_AGO,

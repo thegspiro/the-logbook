@@ -36,6 +36,7 @@ import { crewVisibleTemplates } from './equipmentCheckTemplates';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 const EquipmentCheckForm = lazyWithRetry(() => import('./EquipmentCheckForm'));
 
 // ---------------------------------------------------------------------------
@@ -516,48 +517,42 @@ export const MyChecklistsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      {/* Header — on a phone the one action a member takes from here stays
-          beside the title, and the two links that lead elsewhere fold into a
-          menu, so the list starts on the first screen. */}
-      <div className="flex items-center gap-3">
-        <ClipboardCheck className="text-theme-text-primary h-6 w-6 shrink-0" aria-hidden="true" />
-        <h1 className="text-theme-text-primary min-w-0 flex-1 text-lg font-bold break-words sm:text-xl">
-          My Equipment Checklists
-        </h1>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            onClick={() => void handleOpenTemplatePicker()}
-            className="touch:min-h-[44px] touch:min-w-[44px] inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900"
-          >
-            <Play className="h-3.5 w-3.5" aria-hidden="true" />
-            {/* Shortened on a phone so the title beside it is not squeezed
-                into a clipped word; the full name stays the accessible one. */}
-            <span className="sm:hidden" aria-hidden="true">
-              Unscheduled
-            </span>
-            <span className="sr-only sm:not-sr-only">Unscheduled checklist</span>
-          </button>
-          {/* A whole checklist is the wrong instrument for "we just used two of
-              these". This is the way to record that without starting one. */}
-          <Link
-            to="/inventory/checklists/apparatus-inventory"
-            className="btn-secondary text-theme-text-secondary hidden items-center gap-1.5 px-3 py-1.5 text-xs font-medium sm:inline-flex"
-          >
-            <Truck className="h-3.5 w-3.5" aria-hidden="true" />
-            Apparatus Inventory
-          </Link>
-          {canManage && (
-            <Link
-              to="/inventory/admin/checklists"
-              className="btn-secondary text-theme-text-secondary hidden items-center gap-1.5 px-3 py-1.5 text-xs font-medium sm:inline-flex"
+      {/* On a phone the two links that lead elsewhere fold into a menu, so
+          the list starts on the first screen. */}
+      <OperationsPageHeader
+        icon={ClipboardCheck}
+        title="My Equipment Checklists"
+        actions={
+          <>
+            <button
+              onClick={() => void handleOpenTemplatePicker()}
+              className="btn-primary inline-flex items-center gap-1.5"
             >
-              <Settings className="h-3.5 w-3.5" aria-hidden="true" />
-              Manage Templates
+              <Play className="h-4 w-4" aria-hidden="true" />
+              Unscheduled checklist
+            </button>
+            {/* A whole checklist is the wrong instrument for "we just used two of
+          these". This is the way to record that without starting one. */}
+            <Link
+              to="/inventory/checklists/apparatus-inventory"
+              className="btn-secondary hidden items-center gap-1.5 sm:inline-flex"
+            >
+              <Truck className="h-4 w-4" aria-hidden="true" />
+              Apparatus Inventory
             </Link>
-          )}
-          <HeaderMenu canManage={canManage} />
-        </div>
-      </div>
+            {canManage && (
+              <Link
+                to="/inventory/admin/checklists"
+                className="btn-secondary hidden items-center gap-1.5 sm:inline-flex"
+              >
+                <Settings className="h-4 w-4" aria-hidden="true" />
+                Manage Templates
+              </Link>
+            )}
+            <HeaderMenu canManage={canManage} />
+          </>
+        }
+      />
 
       {/* ============================================================= */}
       {/* Checklists due now and coming up, by day                       */}

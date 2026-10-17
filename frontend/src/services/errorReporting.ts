@@ -67,6 +67,20 @@ const MAX_KEEPALIVE_REPORTS = 10;
 /** Mirrors the backend column widths so a report is never rejected for size. */
 const MAX_ERROR_TYPE_LENGTH = 50;
 const MAX_ERROR_MESSAGE_LENGTH = 2000;
+/** `ErrorLogCreate` in backend/app/api/v1/endpoints/error_logs.py. */
+const MAX_USER_MESSAGE_LENGTH = 500;
+const MAX_STEPS = 20;
+const MAX_STEP_LENGTH = 500;
+const MAX_STEPS_TOTAL_SIZE = 4096;
+/**
+ * The backend refuses a context whose `len(json.dumps(context))` exceeds 4096,
+ * and a refusal is a 422 the client drops. The budget sits under that limit
+ * because the backend re-sanitizes `path` and `page` before measuring, and a
+ * `[REDACTED]` can be longer than the token it replaces.
+ */
+const MAX_CONTEXT_SIZE = 4096;
+const CONTEXT_SIZE_BUDGET = MAX_CONTEXT_SIZE - 256;
+const TRUNCATION_MARKER = '...[truncated]';
 
 export interface ErrorReport {
   errorType: string;
@@ -223,6 +237,152 @@ export function sanitizePath(path: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Size limits
+// ---------------------------------------------------------------------------
+
+/**
+ * Characters one UTF-16 code unit takes in Python's `json.dumps`, which escapes
+ * every non-ASCII character (`ensure_ascii`) — so a non-BMP character, two code
+ * units in JavaScript, is two `\uXXXX` escapes there too.
+ */
+function pyEscapedUnitLength(code: number): number {
+  if (code === 0x22 || code === 0x5c) return 2;
+  if (code === 0x08 || code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d) return 2;
+  if (code < 0x20 || code > 0x7e) return 6;
+  return 1;
+}
+
+function pyStringLength(text: string): number {
+  let length = 2;
+  for (let i = 0; i < text.length; i += 1) length += pyEscapedUnitLength(text.charCodeAt(i));
+  return length;
+}
+
+/**
+ * `len(json.dumps(value))` as the backend computes it, for a value that has
+ * already been through a JSON round trip. Python separates items with ", " and
+ * keys with ": ", where `JSON.stringify` uses no spaces at all.
+ */
+function pyJsonLength(value: unknown): number {
+  if (typeof value === 'string') return pyStringLength(value);
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 2;
+    return 2 + (value.length - 1) * 2 + value.reduce<number>((sum, item) => sum + pyJsonLength(item), 0);
+  }
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value);
+    if (entries.length === 0) return 2;
+    return (
+      2 +
+      (entries.length - 1) * 2 +
+      entries.reduce((sum, [key, item]) => sum + pyStringLength(key) + 2 + pyJsonLength(item), 0)
+    );
+  }
+  return JSON.stringify(value).length;
+}
+
+interface StringSlot {
+  holder: Record<string, unknown> | unknown[];
+  key: string | number;
+  value: string;
+  size: number;
+}
+
+function collectStrings(value: unknown, slots: StringSlot[]): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      if (typeof item === 'string') slots.push({ holder: value, key: index, value: item, size: pyStringLength(item) });
+      else collectStrings(item, slots);
+    });
+  } else if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const [key, item] of Object.entries(record)) {
+      if (typeof item === 'string') slots.push({ holder: record, key, value: item, size: pyStringLength(item) });
+      else collectStrings(item, slots);
+    }
+  }
+}
+
+/** The longest prefix of `text` whose escaped length is at most `maxSize`, quotes included. */
+function prefixWithin(text: string, maxSize: number): string {
+  let size = 2;
+  let end = 0;
+  while (end < text.length) {
+    const next = size + pyEscapedUnitLength(text.charCodeAt(end));
+    if (next > maxSize) break;
+    size = next;
+    end += 1;
+  }
+  // Never split a surrogate pair: half of one is not a character.
+  const last = text.charCodeAt(end - 1);
+  if (end > 0 && last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return text.slice(0, end);
+}
+
+/**
+ * Shrink the context until the backend will accept it, shortening the largest
+ * strings first — a React component stack or a response body, never the page or
+ * the error type that make a report findable. A context that cannot be brought
+ * under the limit that way is replaced by its identifying keys, so the report
+ * itself still arrives.
+ */
+export function fitContextToLimit(
+  context: Record<string, unknown>,
+  budget = CONTEXT_SIZE_BUDGET
+): Record<string, unknown> {
+  const fitted = JSON.parse(JSON.stringify(context)) as Record<string, unknown>;
+  if (pyJsonLength(fitted) <= budget) return fitted;
+
+  fitted['context_truncated'] = true;
+  let size = pyJsonLength(fitted);
+  const slots: StringSlot[] = [];
+  collectStrings(fitted, slots);
+  slots.sort((a, b) => b.size - a.size);
+  const markerSize = pyStringLength(TRUNCATION_MARKER) - 2;
+  for (const slot of slots) {
+    if (size <= budget) break;
+    const excess = size - budget;
+    const target = Math.max(2, slot.size - excess - markerSize);
+    if (target + markerSize >= slot.size) continue;
+    const shortened = prefixWithin(slot.value, target) + TRUNCATION_MARKER;
+    const shortenedSize = pyStringLength(shortened);
+    (slot.holder as Record<string | number, unknown>)[slot.key] = shortened;
+    size += shortenedSize - slot.size;
+  }
+  if (pyJsonLength(fitted) <= budget) return fitted;
+
+  const minimal: Record<string, unknown> = { context_truncated: true };
+  for (const key of ['source', 'page', 'path', 'status', 'method', 'occurrences']) {
+    const item = fitted[key];
+    if (typeof item === 'number' || typeof item === 'boolean') minimal[key] = item;
+    else if (typeof item === 'string') minimal[key] = prefixWithin(item, 512);
+  }
+  return minimal;
+}
+
+function fitSteps(steps: string[]): string[] {
+  const fitted: string[] = [];
+  let total = 0;
+  for (const step of steps.slice(0, MAX_STEPS)) {
+    const capped = step.slice(0, MAX_STEP_LENGTH);
+    if (total + capped.length > MAX_STEPS_TOTAL_SIZE) break;
+    total += capped.length;
+    fitted.push(capped);
+  }
+  return fitted;
+}
+
+/** The payload as the backend's validators will accept it. */
+function fitPayload(payload: ErrorLogPayload): ErrorLogPayload {
+  return {
+    ...payload,
+    user_message: payload.user_message.slice(0, MAX_USER_MESSAGE_LENGTH),
+    troubleshooting_steps: fitSteps(payload.troubleshooting_steps),
+    context: fitContextToLimit(payload.context),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Throttling
 // ---------------------------------------------------------------------------
 
@@ -349,7 +509,9 @@ function buildRequestInit(payload: ErrorLogPayload, keepalive: boolean): Request
     method: 'POST',
     credentials: 'include',
     headers,
-    body: JSON.stringify(payload),
+    // Fitted here, at the one place every report is serialized, so a context
+    // that grew after it was queued (an occurrence count) is measured too.
+    body: JSON.stringify(fitPayload(payload)),
     keepalive,
   };
 }

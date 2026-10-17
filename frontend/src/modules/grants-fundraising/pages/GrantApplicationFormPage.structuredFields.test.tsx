@@ -24,6 +24,9 @@ vi.mock('react-hot-toast', () => ({
   default: { error: (...args: unknown[]) => mockToastError(...args) as unknown, success: vi.fn() },
 }));
 
+// The Assigned To picker loads the roster; these tests are not about it.
+vi.mock('@/services/api', () => ({ userService: { getUsers: () => Promise.resolve([]) } }));
+
 import GrantApplicationFormPage from './GrantApplicationFormPage';
 
 const stored = {

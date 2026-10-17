@@ -23,6 +23,7 @@ import {
   Info,
   PackageX,
   Settings,
+  ShieldCheck,
   Truck,
   Wrench,
 } from 'lucide-react';
@@ -51,6 +52,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
 import { SkeletonCardGrid } from '../../../components/ux';
 import { ScrollCueRow } from '../../../components/ux/ScrollCueRow';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 import { Modal } from '../../../components/Modal';
 
 /** How late a checklist is, as a phrase rather than a signed number. */
@@ -160,44 +162,32 @@ export const FleetBoardPage: React.FC = () => {
   const visible = apparatus.filter((unit) => matchesFilter(unit, activeFilter));
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Truck className="text-theme-text-primary h-6 w-6 shrink-0" aria-hidden="true" />
-          <div>
-            <h1 className="text-theme-text-primary text-xl font-bold">Equipment &amp; Readiness</h1>
-            {fleet && <p className="text-theme-text-muted text-xs">As of {formatDateTime(fleet.generatedAt, tz)}</p>}
-          </div>
-        </div>
-        <div className="hscroll flex items-center gap-2">
-          <Link
-            to="/inventory/checklists/log"
-            className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-          >
-            <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
-            Check log
-          </Link>
-          {canOpenSupply && (
-            <Link
-              to="/inventory/admin/checklists/supply"
-              className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-            >
-              <PackageX className="h-3.5 w-3.5" aria-hidden="true" />
-              Supply
+    <div className="mx-auto max-w-7xl space-y-5">
+      <OperationsPageHeader
+        icon={ShieldCheck}
+        title="Fleet Readiness"
+        subtitle={fleet ? `As of ${formatDateTime(fleet.generatedAt, tz)}` : undefined}
+        actions={
+          <>
+            <Link to="/inventory/checklists/log" className="btn-secondary inline-flex items-center gap-1.5">
+              <ClipboardList className="h-4 w-4" aria-hidden="true" />
+              Check log
             </Link>
-          )}
-          {canManage && (
-            <Link
-              to="/inventory/admin/checklists"
-              className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-            >
-              <Settings className="h-3.5 w-3.5" aria-hidden="true" />
-              Templates
-            </Link>
-          )}
-        </div>
-      </div>
+            {canOpenSupply && (
+              <Link to="/inventory/admin/checklists/supply" className="btn-secondary inline-flex items-center gap-1.5">
+                <PackageX className="h-4 w-4" aria-hidden="true" />
+                Supply
+              </Link>
+            )}
+            {canManage && (
+              <Link to="/inventory/admin/checklists" className="btn-secondary inline-flex items-center gap-1.5">
+                <Settings className="h-4 w-4" aria-hidden="true" />
+                Templates
+              </Link>
+            )}
+          </>
+        }
+      />
 
       {/* Your own checks — the reason most people open this page.
 

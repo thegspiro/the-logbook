@@ -383,6 +383,103 @@ class GoogleWorkspaceConfig(BaseModel):
         return groups
 
 
+_GUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+_COUNTRY_RE = re.compile(r"^[A-Z]{2}$")
+MAX_MICROSOFT_365_GROUPS = 20
+
+
+class Microsoft365Config(BaseModel):
+    """Creates a Microsoft 365 account for each newly converted member.
+
+    An Entra ID application with Microsoft Graph application permissions acts
+    on the tenant through the client credentials flow. ``usage_location`` is
+    the country every new account is given -- Microsoft will not license an
+    account without one -- and ``license_sku_id``, when set, is the license
+    assigned after creation (leave it empty for group-based licensing).
+    ``groups`` takes a group's object ID or, for a Microsoft 365 group, its
+    address; a security group without mail can only be named by its ID.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: str
+    client_id: str
+    client_secret: str = ""
+    domain: str
+    usage_location: str = "US"
+    license_sku_id: str = ""
+    groups: List[str] = Field(default_factory=list)
+
+    @field_validator("tenant_id")
+    @classmethod
+    def _check_tenant(cls, value: str) -> str:
+        from app.utils.microsoft_oauth import MicrosoftOAuthError, validate_tenant_id
+
+        try:
+            return validate_tenant_id(value)
+        except MicrosoftOAuthError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @field_validator("client_id")
+    @classmethod
+    def _check_client(cls, value: str) -> str:
+        from app.utils.microsoft_oauth import MicrosoftOAuthError, validate_client_id
+
+        try:
+            return validate_client_id(value)
+        except MicrosoftOAuthError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @field_validator("client_secret")
+    @classmethod
+    def _check_secret(cls, value: str) -> str:
+        if len(value) > 1024 or any(ord(ch) < 32 for ch in value):
+            raise ValueError("client_secret is not a client secret value")
+        return value
+
+    @field_validator("domain")
+    @classmethod
+    def _check_domain(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if not _DOMAIN_RE.match(cleaned):
+            raise ValueError("domain must be a domain name such as firedept.org")
+        return cleaned
+
+    @field_validator("usage_location")
+    @classmethod
+    def _check_country(cls, value: str) -> str:
+        cleaned = value.strip().upper()
+        if not _COUNTRY_RE.match(cleaned):
+            raise ValueError(
+                "usage_location must be a two-letter country code such as US"
+            )
+        return cleaned
+
+    @field_validator("license_sku_id")
+    @classmethod
+    def _check_sku(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if cleaned and not _GUID_RE.match(cleaned):
+            raise ValueError("license_sku_id must be a license SKU ID (a GUID)")
+        return cleaned
+
+    @field_validator("groups")
+    @classmethod
+    def _check_groups(cls, value: List[str]) -> List[str]:
+        groups: List[str] = []
+        for raw in value:
+            cleaned = raw.strip().lower()
+            if not _GUID_RE.match(cleaned):
+                cleaned = _normalize_email(raw, "groups")
+            if cleaned not in groups:
+                groups.append(cleaned)
+        if len(groups) > MAX_MICROSOFT_365_GROUPS:
+            raise ValueError(
+                f"at most {MAX_MICROSOFT_365_GROUPS} groups can be configured"
+            )
+        return groups
+
+
 # Map integration_type → config schema for strict validation
 INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "slack": SlackConfig,
@@ -403,6 +500,7 @@ INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "paypal": PayPalConfig,
     "claude-mcp": ClaudeMcpConfig,
     "google-workspace": GoogleWorkspaceConfig,
+    "microsoft-365": Microsoft365Config,
 }
 
 # Fields in config that contain secrets and should be stored encrypted

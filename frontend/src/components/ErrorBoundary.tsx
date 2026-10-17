@@ -24,6 +24,9 @@ interface State {
   occurredAt: string | null;
 }
 
+/** Enough of the component stack to name the failing component and its parents. */
+export const MAX_COMPONENT_STACK_LENGTH = 2000;
+
 function isChunkLoadError(error: Error): boolean {
   const msg = error.message.toLowerCase();
   return (
@@ -78,7 +81,9 @@ export class ErrorBoundary extends Component<Props, State> {
     // ordinary render crash.
     errorTracker.logError(error, {
       errorType: isChunkLoadError(error) ? 'CHUNK_LOAD_ERROR' : 'REACT_ERROR_BOUNDARY',
-      additionalContext: { componentStack: errorInfo.componentStack },
+      // The nearest frames come first and are the ones that locate the crash;
+      // a deep tree's full stack alone overruns the report's 4 KB context.
+      additionalContext: { componentStack: (errorInfo.componentStack ?? '').slice(0, MAX_COMPONENT_STACK_LENGTH) },
     });
   }
 

@@ -24,9 +24,13 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  DEMO_COMPLIANCE_CREDENTIALS,
   DEMO_CREDENTIALS,
   DEMO_FORWARDEE_CREDENTIALS,
+  DEMO_GEARLESS_CREDENTIALS,
+  DEMO_TRAINING_OFFICER_CREDENTIALS,
   DEMO_MEMBER_CREDENTIALS,
+  DEMO_SECOND_MEMBER_CREDENTIALS,
   DEMO_SECRETARY_CREDENTIALS,
   DEMO_TREASURER_CREDENTIALS,
   SHOTS,
@@ -375,7 +379,7 @@ async function detectSubjectOutOfFrame(page, shot) {
       };
 }
 
-/** The document-space rectangle the screenshot will cover. */
+/** The rectangle the screenshot will cover, in boundingBox() coordinates. */
 async function captureFrame(page, shot) {
   if (shot.selector) {
     return await page.locator(shot.selector).first().boundingBox();
@@ -390,7 +394,9 @@ async function captureFrame(page, shot) {
       };
     }
     // boundingBox() is relative to the viewport, not the document, so a
-    // viewport shot's frame is the viewport at 0,0 however far it scrolled.
+    // viewport shot's frame starts at 0,0 however far the page is scrolled.
+    // Offsetting it by the scroll position failed every shot that scrolls its
+    // subject into view.
     return {
       x: 0,
       y: 0,
@@ -488,6 +494,10 @@ function makeSessions(browser, baseOptions) {
         // position. Shots that picture what a member sees have to be taken as
         // one, because the officer view of the same route is a different page.
         await login(page, DEMO_MEMBER_CREDENTIALS);
+      } else if (auth === "second-member") {
+        // Another ordinary member, for states the demo member cannot hold at
+        // the same time as the ones other shots photograph.
+        await login(page, DEMO_SECOND_MEMBER_CREDENTIALS);
       } else if (auth === "secretary") {
         // Holds legal.propose and nothing that can publish. Used where the
         // *absence* of a control is the subject: an admin capture of the same
@@ -502,6 +512,19 @@ function makeSessions(browser, baseOptions) {
         // the Approve controls separation of duties hides from the
         // administrator are on screen.
         await login(page, DEMO_TREASURER_CREDENTIALS);
+      } else if (auth === "compliance") {
+        // The Compliance box's only reviewer. The secretary reviews every
+        // other seeded box but not this one.
+        await login(page, DEMO_COMPLIANCE_CREDENTIALS);
+      } else if (auth === "gearless") {
+        // Holds nothing, borrows nothing and has asked for nothing, so My
+        // Issued Gear shows a member's empty page rather than the demo
+        // member's full one.
+        await login(page, DEMO_GEARLESS_CREDENTIALS);
+      } else if (auth === "trainingofficer") {
+        // Holds the Training Officer position, which is what a new training
+        // submission prompts in the inbox.
+        await login(page, DEMO_TRAINING_OFFICER_CREDENTIALS);
       } else if (auth !== "anonymous") {
         throw new Error(`unknown auth mode '${auth}' on shot ${shot.id}`);
       }
@@ -528,8 +551,20 @@ async function login(page, credentials) {
       await signIn(page, credentials);
       break;
     } catch (error) {
-      if (attempt >= 2) throw error;
-      console.log(`  … login attempt ${attempt + 1} timed out, retrying`);
+      // The sign-in limiter counts every attempt from this address, and a
+      // second capture or seeder running against the same backend spends the
+      // same allowance. A refusal says so on the page; waiting out its window
+      // is cheaper than losing the run.
+      const throttled = await page
+        .getByText(/too many/i)
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (attempt >= (throttled ? 6 : 2)) throw error;
+      console.log(
+        `  … login attempt ${attempt + 1} ${throttled ? "rate-limited" : "timed out"}, retrying`,
+      );
+      if (throttled) await page.waitForTimeout(65_000);
     }
   }
 
@@ -781,7 +816,9 @@ async function main() {
         throw new Error("page hit the ErrorBoundary — the app crashed here");
       }
       const pageError = await detectPageError(page);
-      if (pageError) {
+      // `allowPageError` names one exact phrase the pattern mistakes for an
+      // error on that screen; anything else it matches still fails the shot.
+      if (pageError && pageError !== shot.allowPageError) {
         throw new Error(`page rendered an error: "${pageError}"`);
       }
       const overflow = await detectHorizontalOverflow(page);

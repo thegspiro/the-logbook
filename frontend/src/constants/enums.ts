@@ -223,6 +223,13 @@ export const BallotSendJobStatus = {
 } as const;
 export type BallotSendJobStatus = (typeof BallotSendJobStatus)[keyof typeof BallotSendJobStatus];
 
+/** What a background send mails (backend BallotSendJobKind). */
+export const BallotSendJobKind = {
+  BALLOTS: 'ballots',
+  REMINDER: 'reminder',
+} as const;
+export type BallotSendJobKind = (typeof BallotSendJobKind)[keyof typeof BallotSendJobKind];
+
 // ============================================
 // RSVP Status
 // ============================================

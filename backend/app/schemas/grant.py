@@ -354,6 +354,7 @@ class GrantApplicationCreate(GrantApplicationBase):
     """Schema for creating a new grant application"""
 
     opportunity_id: Optional[UUID] = None
+    assigned_to: Optional[UUID] = None
     # Declared on the request schemas, not the shared base, because the
     # response reads both columns back in a looser shape (see below).
     budget_summary: Optional[GrantBudgetSummary] = None
@@ -478,9 +479,12 @@ class GrantBudgetItemBase(BaseModel):
 
 
 class GrantBudgetItemCreate(GrantBudgetItemBase):
-    """Schema for creating a new grant budget item"""
+    """Schema for creating a new grant budget item.
 
-    application_id: UUID
+    The parent application comes from the URL path
+    (``/applications/{app_id}/budget-items``) and nowhere else. The same is
+    true of the expenditure, compliance task and note create schemas below.
+    """
 
 
 class GrantBudgetItemUpdate(BaseModel):
@@ -543,7 +547,6 @@ class GrantExpenditureBase(BaseModel):
 class GrantExpenditureCreate(GrantExpenditureBase):
     """Schema for creating a new grant expenditure"""
 
-    application_id: UUID
     budget_item_id: Optional[UUID] = None
 
 
@@ -612,8 +615,6 @@ class GrantComplianceTaskBase(BaseModel):
 class GrantComplianceTaskCreate(GrantComplianceTaskBase):
     """Schema for creating a new grant compliance task"""
 
-    application_id: UUID
-
 
 class GrantComplianceTaskUpdate(BaseModel):
     """Schema for updating a grant compliance task"""
@@ -662,7 +663,6 @@ class GrantComplianceTaskResponse(GrantComplianceTaskBase):
 class GrantNoteCreate(BaseModel):
     """Schema for creating a new grant note"""
 
-    application_id: UUID
     note_type: GrantNoteTypeLiteral = "general"
     content: str = Field(..., min_length=1)
     note_metadata: Optional[Dict[str, Any]] = Field(

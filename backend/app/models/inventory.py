@@ -782,6 +782,8 @@ class InventoryItem(Base):
         # storage_path, apparatus_places_for_items).
         next_expiration_date: Optional[date]
         days_until_next_expiration: Optional[int]
+        next_expiration_location: Optional[str]
+        next_expiration_where: Optional[str]
         storage_path: Optional[str]
         apparatus_count: Optional[int]
         apparatus_places: Optional[List[str]]

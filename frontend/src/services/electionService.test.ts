@@ -279,6 +279,26 @@ describe('electionService', () => {
     });
   });
 
+  describe('startReminderSendJob', () => {
+    it('should POST the reminder to /elections/:id/reminder-send-jobs', async () => {
+      const job = { id: 'job-2', kind: 'reminder', status: 'queued' };
+      mockPost.mockResolvedValueOnce({ data: job });
+
+      const result = await electionService.startReminderSendJob('el1', { message: 'Polls close at 9' });
+
+      expect(mockPost).toHaveBeenCalledWith('/elections/el1/reminder-send-jobs', { message: 'Polls close at 9' });
+      expect(result).toEqual(job);
+    });
+
+    it('should POST an empty body when no overrides are given', async () => {
+      mockPost.mockResolvedValueOnce({ data: { id: 'job-3' } });
+
+      await electionService.startReminderSendJob('el1');
+
+      expect(mockPost).toHaveBeenCalledWith('/elections/el1/reminder-send-jobs', {});
+    });
+  });
+
   describe('waitForBallotSendJob', () => {
     const outcome = {
       success: true,

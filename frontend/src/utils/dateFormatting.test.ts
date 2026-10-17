@@ -193,6 +193,12 @@ describe('localToUTC', () => {
     expect(result).toBe('2024-06-15T18:30:00.000Z');
   });
 
+  it('returns empty string for a time with no date, instead of a 1900 instant', () => {
+    expect(localToUTC('T09:00', UTC_TZ)).toBe('');
+    expect(localToUTC('T09:00', 'America/New_York')).toBe('');
+    expect(localToUTC('T09:00')).toBe('');
+  });
+
   it('handles a date without time part', () => {
     const result = localToUTC('2024-06-15', UTC_TZ);
     expect(result).toBe('2024-06-15T00:00:00.000Z');

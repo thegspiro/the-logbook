@@ -89,15 +89,25 @@ const makeVendor = (overrides: Partial<InventoryVendor> = {}): InventoryVendor =
 describe('VendorsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetVendors.mockReset();
     mockGetVendors.mockResolvedValue([]);
+    mockCreateVendor.mockReset();
     mockCreateVendor.mockResolvedValue(makeVendor());
+    mockUpdateVendor.mockReset();
     mockUpdateVendor.mockResolvedValue(makeVendor());
+    mockDeactivateVendor.mockReset();
     mockDeactivateVendor.mockResolvedValue(undefined);
+    mockAddVendorContact.mockReset();
     mockAddVendorContact.mockResolvedValue(makeContact());
+    mockDeleteVendorContact.mockReset();
     mockDeleteVendorContact.mockResolvedValue(undefined);
+    mockCheckPermission.mockReset();
     mockCheckPermission.mockReturnValue(true);
+    mockGetUnlinkedVendorNames.mockReset();
     mockGetUnlinkedVendorNames.mockResolvedValue([]);
+    mockAttachVendorName.mockReset();
     mockAttachVendorName.mockResolvedValue({ items_linked: 4, reorders_linked: 2 });
+    mockMergeVendors.mockReset();
     mockMergeVendors.mockResolvedValue({
       items_moved: 12,
       reorders_moved: 3,
@@ -174,6 +184,30 @@ describe('VendorsPage', () => {
           ],
         })
       );
+    });
+  });
+
+  it('will not drop contact details typed without a contact name', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<VendorsPage />);
+    await screen.findByText('No vendors yet');
+
+    await user.click(screen.getByRole('button', { name: /New Vendor/i }));
+    await user.type(screen.getByLabelText('Vendor Name *'), 'Fire Supply Co');
+    await user.type(screen.getByLabelText(/^Phone$/, { selector: '#vendor-contact-phone' }), '555-0100');
+    await user.click(screen.getByRole('button', { name: 'Add Vendor' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Contact name is required to save a contact');
+    expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true');
+    expect(mockCreateVendor).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText('Name'), 'Alex Chen');
+    await user.click(screen.getByRole('button', { name: 'Add Vendor' }));
+
+    await waitFor(() => expect(mockCreateVendor).toHaveBeenCalledTimes(1));
+    expect(mockCreateVendor.mock.calls[0]?.[0]).toMatchObject({
+      name: 'Fire Supply Co',
+      contacts: [{ name: 'Alex Chen', phone: '555-0100', is_primary: true }],
     });
   });
 
