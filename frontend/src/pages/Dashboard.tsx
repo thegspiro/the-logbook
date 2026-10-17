@@ -1454,16 +1454,15 @@ const Dashboard: React.FC = () => {
   const showStandbyHours = !shiftsExcluded || loadingHours || (hours.standby ?? 0) > 0;
   // "Excluded" is the general answer, with no shift in question. A seat opened
   // to this member on one particular shift (an administrative member on a
-  // parade) is only visible per shift, so the tile goes only when every open
-  // shift has been answered as having no seat for them. The list itself is not
-  // enough: a scheduling manager's open-shifts list is the department-wide gap
-  // view, full of shifts they cannot take. A shift not yet answered counts as
-  // possibly takeable, matching the "Not eligible" label further down.
+  // parade) is only visible per shift, so the tile goes only when the open
+  // list is empty too. For a member without scheduling.manage that list is
+  // already seat-level (GET /shifts/open lists only shifts with an unclaimed
+  // seat they can take). A manager's is the department-wide gap view, which
+  // says nothing about what they can claim, so the tile is simply kept for
+  // them: the scheduling screen is where they work anyway, and re-deriving
+  // claimability here would second-guess the backend's own capacity check.
   const showTakeShift =
-    !shiftsExcluded ||
-    loadingOpenShifts ||
-    openShiftsError ||
-    openShiftsInWindow.some((shift) => eligibleByShift[shift.id]?.length !== 0);
+    !shiftsExcluded || loadingOpenShifts || openShiftsError || canViewScheduling || openShiftsInWindow.length > 0;
   const hoursSegments: HoursSegment[] = [
     { label: 'Training', value: hours.training, colorClass: 'bg-theme-accent-green' },
     ...(showStandbyHours

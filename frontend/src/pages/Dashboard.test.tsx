@@ -496,27 +496,31 @@ describe('Dashboard', () => {
 
         renderWithRouter(<Dashboard />);
 
-        expect(await screen.findByRole('button', { name: /Take a Shift/ })).toBeInTheDocument();
+        // The exclusion verdict has to land first: the tile is present on the
+        // initial render, so asserting it before then proves nothing. The
+        // Standby row going away is the visible sign that it has.
+        const card = await screen.findByRole('region', { name: /My hours,/ });
+        await waitFor(() => {
+          expect(within(card).queryByText('Standby')).not.toBeInTheDocument();
+        });
+        expect(screen.getByRole('button', { name: /Take a Shift/ })).toBeInTheDocument();
       });
 
-      it('hides Take a Shift when the open shifts listed have no seat for them', async () => {
-        // A scheduling manager is sent the department-wide gap list, which is
-        // full of shifts they cannot take; per-shift eligibility is the truth.
+      it('keeps Take a Shift for a scheduling manager, whose open list is the department gap view', async () => {
+        mockCheckPermission.mockImplementation((permission: string) =>
+          ['scheduling.view', 'scheduling.manage', 'training.view'].includes(permission)
+        );
         mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: true });
         mockGetMyHoursHistory.mockResolvedValue({ current_month: { hours: 0 } });
-        mockGetOpenShifts.mockResolvedValue([makeShift({ id: 'gap', shift_date: inWindow(4) })]);
-        mockGetEligiblePositionsBulk.mockImplementation((ids: string[]) =>
-          Promise.resolve(Object.fromEntries(ids.map((id) => [id, []])))
-        );
+        mockGetOpenShifts.mockResolvedValue([]);
 
         renderWithRouter(<Dashboard />);
 
+        const card = await screen.findByRole('region', { name: /My hours,/ });
         await waitFor(() => {
-          expect(mockGetEligiblePositionsBulk).toHaveBeenCalledWith(['gap']);
+          expect(within(card).queryByText('Standby')).not.toBeInTheDocument();
         });
-        await waitFor(() => {
-          expect(screen.queryByRole('button', { name: /Take a Shift/ })).not.toBeInTheDocument();
-        });
+        expect(screen.getByRole('button', { name: /Take a Shift/ })).toBeInTheDocument();
       });
 
       it('keeps the Standby row when hours were credited to them anyway', async () => {
