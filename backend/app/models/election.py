@@ -818,8 +818,9 @@ class BallotSendJobStatus(str, Enum):
 
 class BallotSendJobKind(str, Enum):
     """What a background send mails: the ballot itself, or a reminder to
-    the members who have not voted yet. Both mint fresh voting tokens, which
-    is why they share one table and one in-progress guard."""
+    the members who have not voted yet. Both write the election's record of
+    who was sent a ballot, which is why they share one table and one
+    in-progress guard."""
 
     BALLOTS = "ballots"
     REMINDER = "reminder"
@@ -836,8 +837,9 @@ class BallotSendJob(Base):
     interrupts the send.
 
     A queued or running row also blocks a second send for the same election:
-    each send mints new voting tokens, so two overlapping sends mail every
-    member two links of which only the later one works.
+    two overlapping sends mail every member twice, and each writes the
+    election's record of who was sent a ballot from what it read when it
+    started, so whichever finishes last overwrites the other's.
     """
 
     __tablename__ = "ballot_send_jobs"

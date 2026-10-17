@@ -7,8 +7,7 @@ voting token each, and pushes the batch through one SMTP connection with a
 pause between messages. Around forty members that outlasts the browser's
 30-second timeout and, a little later, nginx's 60-second proxy timeout, while
 the server carries on and sends anyway — so the secretary is told it failed
-and is invited to send again, which mints new tokens and voids the links
-already in members' inboxes.
+and is invited to send again, which mails every member a second link.
 
 ``POST /elections/{id}/ballot-send-jobs`` therefore records a
 :class:`BallotSendJob`, returns at once, and the send runs in this process
@@ -19,8 +18,12 @@ after the response. The page polls the row for the outcome. The synchronous
 Remind Non-Voters goes the same way through
 ``POST /elections/{id}/reminder-send-jobs``: a reminder is a ballot send to
 the members who have not voted, with fresh tokens, and outlasts the timeout
-just the same. Both kinds share the table and the one-send-at-a-time guard,
-because two overlapping sends of either kind mint tokens over each other.
+just the same. Both kinds share the table and the one-send-at-a-time guard:
+two overlapping sends of either kind mail members twice, and each writes the
+election's record of who was sent a ballot from what it read when it started,
+so whichever finishes last overwrites the other's. (Earlier links are not
+voided by a resend; only a reminder retires the links of the members it
+reaches.)
 """
 
 import asyncio
@@ -59,8 +62,9 @@ STALE_JOB_AFTER = timedelta(minutes=30)
 
 INTERRUPTED_JOB_ERROR = (
     "This send was interrupted before it finished, most likely by a server "
-    "restart. Some members may have received a ballot. Check who received one "
-    "on the election page before sending again."
+    "restart. Some members may already have received a ballot, and those links "
+    "work. Sending again mails every member a new link; links they already "
+    "have keep working."
 )
 
 SEND_IN_PROGRESS_DETAIL = (

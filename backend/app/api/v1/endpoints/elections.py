@@ -3081,8 +3081,8 @@ async def start_ballot_send_job_endpoint(
 
     The send runs after the response; poll
     ``GET /{election_id}/ballot-send-jobs/{job_id}`` for its outcome. Only one
-    send per election may be in progress: each mints new voting tokens, so
-    overlapping sends would leave members holding links that no longer work.
+    send per election may be in progress: overlapping sends would mail every
+    member twice and overwrite each other's record of who was sent a ballot.
 
     **Authentication required**
     **Requires permission: elections.manage**
