@@ -9022,6 +9022,7 @@ class ElectionService:
         }
         meta = {
             "org_name": organization.name,
+            "logo": organization.logo,
             "generated_at": datetime.now(timezone.utc).astimezone(tz),
         }
 
