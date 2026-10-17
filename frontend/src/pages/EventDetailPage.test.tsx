@@ -33,6 +33,7 @@ vi.mock('../services/api', () => ({
     getEventAttendees: vi.fn(),
     getEventStats: vi.fn(),
     getEligibleMembers: vi.fn(),
+    bulkAddAttendees: vi.fn(),
     createOrUpdateRSVP: vi.fn(),
     cancelEvent: vi.fn(),
     deleteEvent: vi.fn(),
@@ -2027,6 +2028,86 @@ describe('EventDetailPage', () => {
 
       expect(await screen.findByRole('heading', { name: 'Attendance Requests' })).toBeInTheDocument();
       expect(screen.getByText('Phone died at the door')).toBeInTheDocument();
+    });
+  });
+
+  describe('Add all eligible attendees', () => {
+    // BulkAddAttendees.user_ids is capped at 200; one request carrying every
+    // eligible id 422'd for any roster above that.
+    const members = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        id: `m-${i}`,
+        first_name: 'Member',
+        last_name: String(i),
+        email: null,
+      }));
+
+    beforeEach(() => {
+      mockCheckPermission.mockReturnValue(true);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      vi.mocked(eventService.getEligibleMembers).mockReset();
+      vi.mocked(eventService.getEligibleMembers).mockResolvedValue(members(450));
+      vi.mocked(eventService.bulkAddAttendees).mockReset();
+      vi.mocked(eventService.bulkAddAttendees).mockImplementation((_eventId, userIds) =>
+        Promise.resolve({ created_count: userIds.length, errors: [] })
+      );
+      vi.mocked(toast.success).mockReset();
+      vi.mocked(toast.error).mockReset();
+    });
+
+    const addAll = async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: 'Check In' }));
+      await waitFor(() => expect(eventService.getEligibleMembers).toHaveBeenCalledWith('evt-1'));
+      await user.click(await screen.findByRole('button', { name: /Add All Eligible as Going/ }));
+    };
+
+    it('sends at most 200 ids per request and sums what each batch created', async () => {
+      await addAll();
+
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Added 450 members to the event'));
+      const calls = vi.mocked(eventService.bulkAddAttendees).mock.calls;
+      expect(calls.map((call) => call[1].length)).toEqual([200, 200, 50]);
+      expect(calls.every((call) => call[0] === 'evt-1' && call[2] === 'going')).toBe(true);
+      // Every member is sent exactly once across the batches.
+      expect(new Set(calls.flatMap((call) => call[1])).size).toBe(450);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('names the members the backend refused instead of dropping its errors', async () => {
+      vi.mocked(eventService.getEligibleMembers).mockResolvedValue(members(3));
+      vi.mocked(eventService.bulkAddAttendees).mockResolvedValue({
+        created_count: 2,
+        errors: [{ user_id: 'm-1', error: 'Event is at capacity' }],
+      });
+
+      await addAll();
+
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Added 2 members to the event'));
+      expect(toast.error).toHaveBeenCalledWith('1 member was not added. Member 1: Event is at capacity');
+    });
+
+    it('reports a failed batch and how many members it left unadded', async () => {
+      vi.mocked(eventService.bulkAddAttendees)
+        .mockResolvedValueOnce({ created_count: 200, errors: [] })
+        .mockRejectedValueOnce(makeApiError('Attendance has been finalized.', 409));
+
+      await addAll();
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith('Attendance has been finalized. 250 members were not added.')
+      );
+      expect(toast.success).toHaveBeenCalledWith('Added 200 members to the event');
+      // The run stops at the refusal rather than repeating it for the last batch.
+      expect(eventService.bulkAddAttendees).toHaveBeenCalledTimes(2);
     });
   });
 });

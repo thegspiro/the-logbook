@@ -1,5 +1,6 @@
 /**
- * The member's Google Workspace account, and a Retry for whatever is unfinished.
+ * The member's directory account (Google Workspace or Microsoft 365), and a
+ * Retry for whatever is unfinished.
  *
  * The Logbook creates the account when an applicant is converted to a member,
  * after the conversion commits — so a Google failure never undoes the
@@ -21,7 +22,7 @@ import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { GOOGLE_ACCOUNT_STATUS_COLORS, GoogleAccountStatus } from '../../../constants/enums';
 import type { GoogleAccount } from '../types/googleAccount';
-import { retryAction } from '../constants/googleAccount';
+import { directoryVendor, retryAction } from '../constants/googleAccount';
 
 const STATUS_LABELS: Record<GoogleAccountStatus, string> = {
   pending: 'Being created',
@@ -47,6 +48,7 @@ export const GoogleAccountPanel: React.FC<GoogleAccountPanelProps> = ({ userId, 
   const tz = useTimezone();
   const { confirm } = useConfirm();
   const [retrying, setRetrying] = useState(false);
+  const vendor = directoryVendor(account.provider);
 
   const handleRetry = async () => {
     // Only a created account whose password never arrived is reset: nobody
@@ -57,10 +59,10 @@ export const GoogleAccountPanel: React.FC<GoogleAccountPanelProps> = ({ userId, 
       !account.credentials_sent
     ) {
       const ok = await confirm({
-        title: 'Send a new Google password?',
+        title: `Send a new ${vendor} password?`,
         message:
-          'This sets a new temporary password on the Google account and emails it to the member’s personal ' +
-          'address. Google asks them to change it at first sign-in.',
+          `This sets a new temporary password on the ${vendor} account and emails it to the member’s personal ` +
+          `address. ${vendor} asks them to change it at first sign-in.`,
         confirmLabel: 'Send new password',
         cancelLabel: 'Not now',
         variant: 'warning',
@@ -71,9 +73,9 @@ export const GoogleAccountPanel: React.FC<GoogleAccountPanelProps> = ({ userId, 
     try {
       const data = await googleAccountService.retry(userId);
       onChange(data.account);
-      toast.success('Google account updated');
+      toast.success(`${vendor} account updated`);
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'The Google account could not be updated'));
+      toast.error(getErrorMessage(err, `The ${vendor} account could not be updated`));
       void onReload();
     } finally {
       setRetrying(false);
@@ -86,7 +88,7 @@ export const GoogleAccountPanel: React.FC<GoogleAccountPanelProps> = ({ userId, 
     <div className="card p-6">
       <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 text-lg font-semibold">
         <Mail className="h-5 w-5" aria-hidden="true" />
-        Google Workspace
+        {account.provider_name}
       </h2>
       <div className="space-y-3 text-sm">
         <div className="flex flex-wrap items-center gap-2">
@@ -111,7 +113,7 @@ export const GoogleAccountPanel: React.FC<GoogleAccountPanelProps> = ({ userId, 
               ? `Suspended when the member left${
                   account.suspended_at ? ` (${formatDateTime(account.suspended_at, tz)})` : ''
                 }. It is lifted automatically if they return.`
-              : 'It was already suspended in Google when the member left, so The Logbook will not lift it if they return.'}
+              : `It was already suspended in ${vendor} when the member left, so The Logbook will not lift it if they return.`}
           </p>
         )}
         {!account.suspension_settled && (
@@ -129,6 +131,17 @@ export const GoogleAccountPanel: React.FC<GoogleAccountPanelProps> = ({ userId, 
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>{account.suspension_error}</p>
           </div>
+        )}
+        {account.license_pending && (
+          <p className="text-theme-text-secondary">
+            Not licensed yet, so the account has no mailbox. Retry assigns the license.
+          </p>
+        )}
+        {account.managed_on_premises && (
+          <p className="text-theme-text-secondary" data-testid="directory-on-premises">
+            This account is synced from on-premises Active Directory. The Logbook cannot suspend it; disable it in
+            Active Directory when the member leaves.
+          </p>
         )}
         {account.pending_groups.length > 0 && (
           <p className="text-theme-text-secondary">Not yet added to: {account.pending_groups.join(', ')}</p>

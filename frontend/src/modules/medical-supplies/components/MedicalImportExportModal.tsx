@@ -182,7 +182,8 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
             Each row adds a new supply. Name and Category are required, and a category that does not exist yet is
             created as a medical supply category. To record stock with a lot, fill Lot Number, Expiration Date or
             Received Date (YYYY-MM-DD): the row&apos;s Quantity becomes that lot. A row with lot columns whose Name
-            matches a supply already on file adds the lot to it instead, and changes nothing else about it.
+            matches a supply already on file adds the lot to it instead, and changes nothing else about it. Put Yes in
+            Kept on Apparatus Only for equipment with no stock-room spare; such a row takes no lot columns.
           </p>
           <button
             type="button"

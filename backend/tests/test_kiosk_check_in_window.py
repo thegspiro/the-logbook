@@ -15,17 +15,23 @@ import pytest
 from app.models.event import CheckInWindowType
 from app.services.location_service import LocationService
 
-NOW = datetime.now(timezone.utc)
+
+def _now() -> datetime:
+    # Read per event, not frozen at import: the service reads the clock when
+    # the test runs, and a STRICT event 30 minutes out opens once a slow suite
+    # has spent that long between collection and this module.
+    return datetime.now(timezone.utc)
 
 
 def _event(eid, window_type, start_offset_min, **kw):
+    now = _now()
     return SimpleNamespace(
         id=eid,
         check_in_window_type=window_type,
         check_in_minutes_before=kw.get("minutes_before"),
         check_in_minutes_after=kw.get("minutes_after"),
-        start_datetime=NOW + timedelta(minutes=start_offset_min),
-        end_datetime=NOW + timedelta(minutes=start_offset_min + 120),
+        start_datetime=now + timedelta(minutes=start_offset_min),
+        end_datetime=now + timedelta(minutes=start_offset_min + 120),
         actual_start_time=kw.get("actual_start_time"),
         actual_end_time=None,
     )
@@ -66,6 +72,7 @@ class TestKioskCheckInWindow:
         # per-event window filter must still drop it.
         not_open_yet = _event("not-open", CheckInWindowType.FLEXIBLE, 180)
 
+        issued_after = _now()
         result = MagicMock()
         result.scalars.return_value.all.return_value = [early_flexible, not_open_yet]
         db = MagicMock()
@@ -87,7 +94,7 @@ class TestKioskCheckInWindow:
             if key.startswith("start_datetime") and isinstance(value, datetime)
         ]
         assert horizons, "expected a start_datetime bound param in the prefilter"
-        assert all(h >= NOW + timedelta(hours=23) for h in horizons)
+        assert all(h >= issued_after + timedelta(hours=23) for h in horizons)
 
     async def test_prefilter_excludes_draft_events(self):
         result = MagicMock()

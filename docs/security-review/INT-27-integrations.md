@@ -1,6 +1,235 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** #3374+1 (pass 7, this PR); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 7 (2026-10-17) — a whole previously-unreviewed sub-feature (Google Workspace account provisioning) read in full; 0 new findings
+
+Step 0: `list_pull_requests` (state=open) returned no PR whose head branch
+starts with `claude/security-review-` before this pass began — PR #3374
+(Feature 26, Forms, pass 7) had just merged with nothing started for
+Feature 27 since.
+
+**Real delta since pass 6's baseline (`7f521f66`, PR #2988):** `git diff
+7f521f66..HEAD` against every file this feature owns (plus the files found
+below) shows `integrations.py` 1119→1627 L (+2 routes: the department
+iCalendar feed's token issue/rotate), `app/api/public/calendar.py` +172 L
+(a second, new public feed), `app/services/integration_services/ical_service.py`
++48 L (the new feed's HMAC token digest), three new calendar connector files
+(`calendar_common.py`, `google_calendar_oauth_service.py`,
+`google_workspace_service.py`), `outlook_calendar_service.py` substantially
+rewritten (now OAuth-based, was API-key based), and three new migrations
+(`c869ec90a41b` calendar sync mappings, `61dfbcc23cba` Google Workspace
+provisioning records, `64bf75298e89` a timestamp column on the latter).
+
+**Read in full, newly, because `grep -rln "GoogleAccountProvision"
+backend/app/` turned up a sub-feature no prior pass's file list names and
+no dedicated findings doc covers:** `app/api/v1/endpoints/google_workspace.py`
+(227 L, 4 routes — entirely new, first commit `90b69e62`),
+`app/services/google_workspace_provisioning_service.py` (1052 L — the
+account-creation/retry/link-existing/suspension-reconciliation logic),
+`app/models/google_workspace_departure.py` (226 L — the session-level
+`before_flush`/`after_commit` hook that stages a suspend/unsuspend the
+instant any path moves `User.status`/`deleted_at` across the departed
+line), and `app/services/google_workspace_attention_digest.py` (182 L — the
+daily "needs attention" email). This is the Google Workspace integration's
+entire per-member account lifecycle; `GOOGLE_WORKSPACE_INTEGRATION`'s own
+connect/disconnect/patch surface on `integrations.py` was already in pass
+6's scope and is re-verified below, not re-derived.
+
+**Read in full:** the new/changed files above, plus `app/api/public/calendar.py`
+in full (both routes) and `app/services/integration_services/ical_service.py`
+in full. **Spot-verified against pass 6's documented state** (file sizes
+and `git log --since` confirm no commit touched them between 2026-10-07 and
+today): `salesforce_sync.py`, `calcom_sync.py`, `mcp_keys.py`, the three
+webhook files, `models/integration.py`, `schemas/integration.py`'s
+pre-existing classes, `paypal_backfill_service.py`, `integration_health.py`.
+**Out of scope, per pass 6's own established precedent** (dedicated,
+contemporaneous review elsewhere): `app/mcp/oauth.py` and the
+`registry.py`/`principal.py` wiring
+([`MCPO-27-mcp-oauth-server.md`](./MCPO-27-mcp-oauth-server.md)); the MCP
+write tools added since pass 6 (`mcp/tools/medical_supplies.py` and the
+`meetings.py`/`scheduling.py`/`elections.py`/`training.py`/`inventory.py`/
+`documents.py` tool diffs) are each that feature's own write-surface, not
+re-derived here (the pass-5 catch-up that temporarily reviewed MCP write
+tools from this rotation was a one-time gap-fill, not a standing scope
+addition — MCPO-27 and each feature's own pass now cover their own tools).
+
+### Department iCalendar feed (`/org/{token}.ics`) — new, clean
+
+Checklist §1 (intentionally public, token-scoped): the route carries no
+auth dependency by design — calendar apps cannot send cookies — and is
+compensated by an unguessable 48-byte `secrets.token_urlsafe` token,
+checked for a plausible shape (`_plausible_token`, 32–64 chars) **before**
+any DB work, then matched against a stored SHA-256 digest with
+`hmac.compare_digest` (constant-time) rather than a value lookup. A 429
+rate limit (60/min/IP) sits in front of the DB-heavy feed generation.
+Checklist §3/§5 (tenant isolation / exposure): the row found by the token
+carries its own `organization_id`, and `_org_feed_event` is an explicit
+allowlist (title, times, location **name**, type, a link) — no description,
+attendees, RSVPs, custom fields or organizer, so the feed cannot leak more
+than what an anonymous link is meant to carry even though it is served
+with no per-request auth. Checklist §4 (injection): `_escape_ics` folds
+every line-break variant to `\n` (an un-escaped bare `\r` is the known
+ICS-injection vector — a parser that treats a lone CR as a line end lets a
+crafted event title/description inject arbitrary calendar properties) and
+the new `URL:` property strips line breaks without comma/semicolon
+escaping, correctly: `URL` is a `URI` value type under RFC 5545, not
+`TEXT`, so that escaping does not apply to it. The feed is bounded
+(`ORG_FEED_MAX_EVENTS = 2000`, a 30-day-past/365-day-future window).
+Token issue/rotate (`GET`/`POST .../ical-feed{,/rotate}`) are both gated on
+`integrations.manage` and resolve through `_get_org_integration(...,
+lock=True)`, filtering `id` and `organization_id` in one query (14a).
+
+### Google Workspace account provisioning — a whole sub-feature, reviewed for the first time
+
+**Endpoints** (`google_workspace.py`, registered at
+`/integrations/google-workspace`, module-gated on `integrations`):
+`GET /members/{user_id}` and `POST /members/{user_id}/retry` require
+`members.manage`; `GET /attention` requires `integrations.manage`;
+`POST /link-existing` requires **both** `integrations.manage` and
+`admin.access` — correctly, since a linked account is one the department
+will later suspend on the member's behalf (same owner-decided bar as
+connecting the integration). Retry and link-existing are both
+rate-limited (`check_rate_limit`, 10/min and 20/min respectively) ahead of
+their Google calls. Every lookup goes through the service's `_load()`
+helper, which filters `organization_id` **and** (`user_id` or
+`provision_id`) in the same `select()` — 14a satisfied for all four
+routes, including the two that take a client-supplied `user_id` straight
+from the path. No response schema (`GoogleAccountResponse`) carries a
+password or the service-account key; a reset password is only ever
+emailed (`send_credentials_email`), never returned in the API response —
+confirmed by reading `_to_response()`'s explicit field list. Google
+Workspace's own connect/disconnect/patch on `integrations.py` already
+carries `_require_google_workspace_admin` (requires `admin.access` in
+addition to `integrations.manage`, since the service-account key is
+domain-wide) and `_check_google_workspace_ready` (refuses a config that
+could never create an account — no key, or the configured domain doesn't
+match an enabled department-email domain); both re-verified intact,
+unchanged since pass 6 introduced them.
+
+**The departure hook** (`google_workspace_departure.py`) is a
+`Session`-level `before_flush`/`after_commit` pair, not a new externally
+reachable surface: it watches every flush for a `User` whose
+`status`/`deleted_at` crosses the departed line (dropped, archived, or
+hard-deleted) from _any_ code path — "status endpoint, undo-drop,
+reactivation, auto-archive, soft and hard delete, anonymization… and any
+future path" per its own docstring — and stages a suspend/unsuspend
+request on that member's `GoogleAccountProvision` row inside the same
+transaction, so no caller can forget to do it. Google itself is never
+called from inside that transaction; the actual suspend/unsuspend runs
+from an `after_commit` background task (same pattern the audit chain's
+sealer uses), with the `google_workspace_suspension_sync` scheduled task
+as the backstop and `after_soft_rollback` clearing staged work a rolled-back
+transaction never committed. A hard delete is handled specially
+(`_capture_before_hard_delete`): the account row is `ON DELETE CASCADE`,
+so it would be gone before the suspend could read it, and the service
+captures the Google-side key (`google_user_id` or `primary_email`) before
+the delete commits. No new finding — this is a correctness/invariant
+mechanism, not a new attacker-reachable endpoint, and its one externally
+visible effect (a suspend eventually happening) is strictly narrower than
+what the triggering endpoints (drop/delete/archive) already required.
+
+**The attention digest** (`google_workspace_attention_digest.py`) sends at
+most one email per department per day, only to members holding
+`admin.access` (`_administrators`, same permission the rest of this
+sub-feature uses as its bar), and only for items its own list already
+reports overdue — it calls `GoogleWorkspaceProvisioningService.attention_items()`
+rather than re-deriving the overdue computation, with its own docstring
+citing Pitfall #29 for exactly that reason. Every interpolated value in the
+HTML body (`member_name`, `primary_email`, `label`, `detail`, and both
+URLs) is `html.escape`d. The "last sent" marker is written back via
+`copy.deepcopy(organization.settings or {})` before reassignment — Pitfall
+#12's correct pattern for a nested JSON-column mutation, not a shallow
+`dict()` copy.
+
+### Checked, no new finding
+
+- **New migrations**: all three guard the table/column's existence before
+  touching it (`c869ec90a41b` returns early if `integrations` itself
+  doesn't exist yet — a `create_all`-only table, Pitfall #26 — before even
+  checking for its own table; `61dfbcc23cba` and `64bf75298e89` guard the
+  same way). `61dfbcc23cba`'s one `ondelete="SET NULL"` column
+  (`created_by`) is `nullable=True` (Pitfall #2). `64bf75298e89`'s backfill
+  only stamps rows already `suspension_settled = 0`, matching its own
+  docstring's reasoning for why `updated_at` can't substitute.
+  `validate_migrations.py --strict`: single head, confirmed below.
+- **New calendar connectors use the hardened transport**: both
+  `outlook_calendar_service.py` and `google_calendar_oauth_service.py`
+  default their `client_factory` parameter to `create_integration_client`
+  (confirmed by direct read of both files' constructors) — the same
+  SSRF-pinning, deadline-bounded, response-size-capped transport INT-1/7/9
+  closed for this feature's other connectors, not a second, unreviewed
+  HTTP path.
+- **`GoogleWorkspaceConfig` schema** (`schemas/integration.py`): `extra="forbid"`;
+  `service_account_key` is size-capped (`_MAX_SERVICE_ACCOUNT_KEY_BYTES`),
+  parsed as JSON, and checked for `type == "service_account"` plus the
+  three fields Google's own client library requires, so a malformed or
+  non-service-account upload is rejected by the schema, not the connector
+  at call time. `service_account_key` is in `SECRET_CONFIG_KEYS`
+  (`schemas/integration.py:422`) alongside the existing set, so it is
+  encrypted at rest and never echoed back on read, same as every other
+  secret this feature stores.
+- **Frontend** (`IntegrationsPage.tsx`, +606 L since pass 6): the new
+  `service_account_key: gwsServiceAccountKey || undefined` follows the
+  `||`-not-`??` form (Pitfall #1); no `dangerouslySetInnerHTML`, no
+  `window.confirm`/`alert`/`prompt` introduced.
+- **LIKE-pattern usage, CSV export**: none in this feature's scope, same
+  as every prior pass.
+
+### Re-verified from passes 1–6 (all hold)
+
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist in
+  `app/utils/url_validator.py`): unchanged, still an explicit owner
+  decision.
+- **INT-11** (Salesforce "clear the refresh token" has no reachable UI
+  control): **still open, unchanged.** `IntegrationsPage.tsx:708` (moved
+  from pass 6's `:593` as the file grew) still builds
+  `refresh_token: sfRefreshToken || undefined`; no clear control added
+  this pass.
+- Every other pass 1–6 finding (INT-2, INT-3, INT-4, INT-6, INT-8; SOQL
+  injection defense, instance-URL domain pinning, secret handling, webhook
+  replay dedup, module gating, the DNS-rebinding transport pin, the
+  wall-clock deadline, Retry Sync's lock-then-read ordering, the PayPal
+  backfill's idempotency): none of the files carrying them changed since
+  pass 6 per the diff above; re-confirmed by direct read where this pass's
+  own changes touched the same file (`integrations.py`), unchanged
+  elsewhere.
+
+**Route surface**: `integrations.py` 9→11 (+2: `ical-feed`,
+`ical-feed/rotate`, both `integrations.manage` + id-and-org filtered).
+`app/api/public/calendar.py` 1→2 (+1: `/org/{token}.ics`, public,
+token-scoped — see above). `google_workspace.py`: 0→4, new this pass, all
+four gated as described above. `salesforce_sync.py` (9), `calcom_sync.py`
+(1), `mcp_keys.py` (4), the three non-calendar public webhook files (4)
+unchanged from pass 6's count.
+
+## Schema & migration notes (pass 7)
+
+Three migrations since pass 6: `c869ec90a41b` (`calendar_sync_mappings`),
+`61dfbcc23cba` (`google_account_provisions`), `64bf75298e89`
+(`google_account_provisions.suspension_requested_at`, backfilled for rows
+already `suspension_settled = 0`). `validate_migrations.py --strict`: 612
+revisions, single head `c87efd81c5aa`, PASSED.
+
+## Guard tests added
+
+None by this pass — every new mechanism above already shipped with its own
+test coverage before this pass started; re-run as part of the scoped suite
+below and confirmed still passing.
+
+## Completion gate (pass 7)
+
+| Check                                                                                                                                                                                  | Result                                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                          | ✅ 0 violations                                                                                                          |
+| `black --check app/ tests/ alembic/`                                                                                                                                                   | ✅ 2400 files unchanged                                                                                                  |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.1)                                                                                                                            | ✅ clean                                                                                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                      | ✅ 612 revisions, single head, PASSED                                                                                    |
+| backend tests, scope (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key or google_calendar or google_workspace or ical or calendar"`) | ✅ 6980 passed, 21 skipped (environment-only — `pywebpush`, Docker daemon/registry, opt-in API-contract suite), 0 failed |
+| `npm run typecheck` (frontend)                                                                                                                                                         | ✅ 0 errors                                                                                                              |
+| `npm run lint` (frontend)                                                                                                                                                              | ✅ exit 0, 0 warnings                                                                                                    |
 
 ---
 

@@ -22,6 +22,9 @@ vi.mock('../services/api', () => ({
 }));
 vi.mock('react-hot-toast', () => ({ default: { error: vi.fn(), success: vi.fn() } }));
 
+// The Assigned To picker loads the roster; these tests are not about it.
+vi.mock('@/services/api', () => ({ userService: { getUsers: () => Promise.resolve([]) } }));
+
 import GrantApplicationFormPage from './GrantApplicationFormPage';
 
 function optionsOf(select: HTMLElement): string[] {

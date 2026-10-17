@@ -525,3 +525,146 @@ class TestApparatusOnlySchemas:
         assert InventoryItemUpdate(apparatus_only=True).model_dump(
             exclude_unset=True
         ) == {"apparatus_only": True}
+
+
+async def _gauze_row(db_session, dept):
+    result = await ms.list_medical_items(**_list_kwargs(dept, db=db_session))
+    return next(i for i in result.items if str(i.id) == dept.gauze)
+
+
+class TestNextExpiryAcrossShelfAndTrucks:
+    async def test_the_trucks_win_when_their_units_expire_first(self, db_session, dept):
+        gauze = await _gauze_row(db_session, dept)
+
+        # Medic 1's 4 expired two days ago; the shelf's 2 expire in five.
+        assert gauze.next_expiration_date == dept.today - timedelta(days=2)
+        assert gauze.days_until_next_expiration == -2
+        assert gauze.next_expiration_location == "apparatus"
+        assert gauze.next_expiration_where == "Medic 1 › Main Compartment › Jump Bag"
+
+    async def test_the_shelf_wins_when_it_is_sooner(self, db_session, dept):
+        # Empty the expired truck lot: a position holding nothing has nothing
+        # to expire, so the truck's next date becomes +10 against the shelf's +5.
+        await db_session.execute(
+            CheckItemDeployedLot.__table__.update()
+            .where(CheckItemDeployedLot.expiration_date < dept.today)
+            .values(quantity=0)
+        )
+        await db_session.commit()
+
+        gauze = await _gauze_row(db_session, dept)
+
+        assert gauze.days_until_next_expiration == 5
+        assert gauze.next_expiration_location == "shelf"
+        assert gauze.next_expiration_where is None
+
+    async def test_truck_dates_beyond_the_expiring_window_still_count(
+        self, db_session, dept
+    ):
+        await db_session.execute(
+            CheckItemDeployedLot.__table__.update().values(
+                expiration_date=dept.today + timedelta(days=400)
+            )
+        )
+        await db_session.execute(
+            InventoryLot.__table__.delete().where(
+                InventoryLot.inventory_item_id == dept.gauze
+            )
+        )
+        await db_session.commit()
+
+        gauze = await _gauze_row(db_session, dept)
+
+        assert gauze.days_until_next_expiration == 400
+        assert gauze.next_expiration_location == "apparatus"
+
+    async def test_the_truck_lookup_can_be_narrowed_to_some_supplies(
+        self, db_session, dept
+    ):
+        checks = EquipmentCheckService(db_session)
+
+        none = await checks.apparatus_expiring_stock(
+            dept.org_id,
+            list(MEDICAL_ITEM_TYPES),
+            days_ahead=None,
+            today=dept.today,
+            item_ids=[],
+        )
+        gauze = await checks.apparatus_expiring_stock(
+            dept.org_id,
+            list(MEDICAL_ITEM_TYPES),
+            days_ahead=None,
+            today=dept.today,
+            item_ids=[dept.gauze],
+        )
+
+        assert none == []
+        assert [r["days_until_expiration"] for r in gauze] == [-2, 10]
+
+
+class TestOldLotsOfAnApparatusOnlySupply:
+    """Lots left on a supply after it was marked apparatus-only are left out
+    of the expiring list, the tiles and its next expiry — as its shelf already
+    is from its count — and come back if it is unmarked."""
+
+    async def _mark(self, db_session, item_id, value=True):
+        await db_session.execute(
+            InventoryItem.__table__.update()
+            .where(InventoryItem.id == item_id)
+            .values(apparatus_only=value)
+        )
+        await db_session.commit()
+
+    async def test_left_out_of_the_expiring_list(self, db_session, dept):
+        await self._mark(db_session, dept.gauze)
+
+        rows = await ms.list_expiring_medical_stock(
+            days_ahead=30,
+            db=db_session,
+            current_user=SimpleNamespace(id=dept.user_id, organization_id=dept.org_id),
+        )
+
+        # The truck rows stay; the shelf lot does not.
+        assert {r.location for r in rows} == {"apparatus"}
+
+    async def test_left_out_of_the_tiles(self, db_session, dept):
+        await self._mark(db_session, dept.gauze)
+
+        summary = await ms.medical_supply_summary(
+            expiring_within_days=30,
+            db=db_session,
+            current_user=SimpleNamespace(id=dept.user_id, organization_id=dept.org_id),
+        )
+
+        assert summary["expiring_soon"] == 0
+        assert summary["expiring_soon_on_apparatus"] == 1
+
+    async def test_left_out_of_next_expiry(self, db_session, dept):
+        await self._mark(db_session, dept.gauze)
+        await db_session.execute(CheckItemDeployedLot.__table__.delete())
+        await db_session.commit()
+
+        soonest = await InventoryService(db_session).next_lot_expirations(
+            dept.org_id, [dept.gauze]
+        )
+
+        assert soonest == {}
+
+    async def test_unmarking_brings_them_back(self, db_session, dept):
+        await self._mark(db_session, dept.gauze)
+        await self._mark(db_session, dept.gauze, value=False)
+
+        rows = await InventoryService(db_session).get_expiring_lots(
+            dept.org_id, days_ahead=30, item_types=MEDICAL_ITEM_TYPES, today=dept.today
+        )
+
+        assert [str(lot.inventory_item_id) for lot, _ in rows] == [dept.gauze]
+
+    async def test_gear_ignores_the_flag(self, db_session, dept):
+        await self._mark(db_session, dept.rope)
+
+        rows = await InventoryService(db_session).get_expiring_lots(
+            dept.org_id, days_ahead=30, today=dept.today
+        )
+
+        assert dept.rope in {str(lot.inventory_item_id) for lot, _ in rows}

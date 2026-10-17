@@ -130,7 +130,8 @@ export const RoleManagementPage: React.FC = () => {
         setError(null);
         // Checked here so the reason is ours rather than the server's
         // "name: Value is too short" (workflow review W05).
-        if (!formData.name.trim()) {
+        const name = formData.name.trim();
+        if (!name) {
           setError('Give the role a name.');
           return;
         }
@@ -142,14 +143,14 @@ export const RoleManagementPage: React.FC = () => {
         if (editingRole) {
           // Update existing role
           await roleService.updateRole(editingRole.id, {
-            name: formData.name !== editingRole.name ? formData.name : undefined,
+            name: name !== editingRole.name ? name : undefined,
             description: formData.description !== editingRole.description ? formData.description : undefined,
             permissions: formData.permissions,
             priority: formData.priority !== editingRole.priority ? formData.priority : undefined,
           });
         } else {
           // Create new role
-          await roleService.createRole(formData);
+          await roleService.createRole({ ...formData, name });
         }
 
         await fetchData();

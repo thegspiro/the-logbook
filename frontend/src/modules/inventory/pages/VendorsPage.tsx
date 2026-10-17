@@ -104,9 +104,11 @@ const VendorFormModal: React.FC<{
 }> = ({ isOpen, onClose, onSaved, editVendor }) => {
   const [f, setF] = useState<VendorFD>(EMPTY_VENDOR);
   const [saving, setSaving] = useState(false);
+  const [contactNameError, setContactNameError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
+    setContactNameError(null);
     if (editVendor) {
       setF({
         ...EMPTY_VENDOR,
@@ -139,6 +141,14 @@ const VendorFormModal: React.FC<{
       toast.error('Vendor name is required');
       return;
     }
+    // The primary contact is only created when it has a name, so a title,
+    // email or phone typed without one was dropped behind a success toast.
+    const contactDetailTyped = [f.contact_title, f.contact_email, f.contact_phone].some((v) => v.trim());
+    if (!editVendor && contactDetailTyped && !f.contact_name.trim()) {
+      setContactNameError('Contact name is required to save a contact');
+      return;
+    }
+    setContactNameError(null);
     setSaving(true);
     try {
       if (editVendor) {
@@ -392,9 +402,23 @@ const VendorFormModal: React.FC<{
                   id="vendor-contact-name"
                   className={inp}
                   value={f.contact_name}
-                  onChange={(e) => up('contact_name', e.target.value)}
+                  onChange={(e) => {
+                    up('contact_name', e.target.value);
+                    if (e.target.value.trim()) setContactNameError(null);
+                  }}
                   placeholder="Sales rep or service desk"
+                  aria-invalid={contactNameError ? true : undefined}
+                  aria-describedby={contactNameError ? 'vendor-contact-name-error' : undefined}
                 />
+                {contactNameError && (
+                  <p
+                    id="vendor-contact-name-error"
+                    role="alert"
+                    className="mt-1 text-xs text-red-700 dark:text-red-300"
+                  >
+                    {contactNameError}
+                  </p>
+                )}
               </div>
               <div>
                 <label className={lbl} htmlFor="vendor-contact-title">

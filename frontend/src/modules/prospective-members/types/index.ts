@@ -740,11 +740,15 @@ export interface ConvertApplicantResponse {
   membership_number?: string | undefined;
   /** Whether the welcome email carrying the member's password went out. */
   welcome_email_sent: boolean;
-  /** The Google Workspace account outcome, when the integration applied. */
+  /** The directory (Google Workspace or Microsoft 365) account outcome, when
+   *  the integration applied. The key predates Microsoft 365 support. */
   google_account?: ConvertGoogleAccountOutcome | undefined;
 }
 
 export interface ConvertGoogleAccountOutcome {
+  /** 'google' or 'microsoft'; absent from responses before Microsoft 365. */
+  provider?: string | undefined;
+  provider_name?: string | undefined;
   status: GoogleAccountStatus;
   email: string;
   credentials_sent: boolean;

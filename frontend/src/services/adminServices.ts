@@ -1538,6 +1538,12 @@ export const integrationsService = {
     return response.data.authorization_url;
   },
 
+  // The same for Outlook: returns Microsoft's sign-in URL.
+  async startOutlookCalendarConnect(): Promise<string> {
+    const response = await api.post<{ authorization_url: string }>('/integrations/outlook/oauth/start');
+    return response.data.authorization_url;
+  },
+
   // Full-page navigation target for the one-click OAuth connect flow. Not an
   // axios call — the browser navigates here and the backend 302s to Salesforce.
   getSalesforceOAuthUrl(): string {

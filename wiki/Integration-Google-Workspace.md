@@ -9,6 +9,10 @@ Department Email**. The account is created after the conversion commits, so a
 Google failure never undoes a conversion; it is shown on the member's profile
 with a **Retry**.
 
+Departments on Microsoft 365 use the
+[Microsoft 365 integration](Integration-Microsoft-365) instead; only one of
+the two can be connected.
+
 ---
 
 ## Key Features
