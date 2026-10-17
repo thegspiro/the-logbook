@@ -35,7 +35,7 @@ from app.utils.rich_text import (
     FORMAT_HTML,
     normalize_format,
     sanitize_html,
-    section_is_blank,
+    section_is_printed,
 )
 
 
@@ -579,7 +579,7 @@ class DocumentService:
         sections = minutes.get_sections()
         if sections:
             for section in sorted(sections, key=lambda s: s.get("order", 0)):
-                if not section_is_blank(section):
+                if section_is_printed(section):
                     content = section.get("content", "")
                     title = escape(section.get("title", section.get("key", "Section")))
                     parts.append(
@@ -588,6 +588,16 @@ class DocumentService:
                     parts.append(
                         f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">{title}</h4>'
                     )
+                    if section.get("presenter"):
+                        parts.append(
+                            '<div style="font-size:13px; color:#555;">'
+                            f"Presented by {escape(section['presenter'])}</div>"
+                        )
+                    if section.get("not_taken_up"):
+                        parts.append(
+                            '<div style="font-size:14px; color:#555; '
+                            'font-style:italic;">Not taken up.</div>'
+                        )
                     if normalize_format(section.get("format")) == FORMAT_HTML:
                         # Cleaned again on the way out: the stored value was
                         # cleaned on write, and a published page is the last
