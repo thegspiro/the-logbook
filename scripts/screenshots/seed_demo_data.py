@@ -37,6 +37,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from bootstrap_demo import (
+    DEMO_ADMIN_EMAIL,
     DEMO_ADMIN_USERNAME,
     admin_password,
     require_safe_base_url,
@@ -16428,7 +16429,64 @@ class Seeder:
                 except ApiError as exc:
                     self.blocked.append(f"guide 08 IP exception: refused ({exc})")
             result["ip_exception"] = "ok"
+
+        result["saved_reports"] = self._seed_guide08_saved_reports(users)
         return result
+
+    #: (name, report type, period, frequency or None, day, recipient usernames).
+    #: None of the three is PII-gated, so any active member may receive them.
+    GUIDE08_SAVED_REPORTS = [
+        (
+            "Monthly call volume",
+            "call_volume",
+            "previous_month",
+            "monthly",
+            1,
+            [DEMO_ADMIN_USERNAME],
+        ),
+        (
+            "Quarterly apparatus status",
+            "apparatus_status",
+            "previous_quarter",
+            "quarterly",
+            5,
+            [DEMO_ADMIN_USERNAME, TWO_FACTOR_USERNAME],
+        ),
+        ("Year-to-date training", "training_summary", "year_to_date", None, 1, []),
+    ]
+
+    def _seed_guide08_saved_reports(self, users: list[dict]) -> str:
+        """Saved reports for the Saved Reports list and its schedule form."""
+        existing = {str(pick(r, "name")) for r in items(self.api.get("/reports/saved"))}
+        # The member list withholds email addresses, so they are rebuilt the
+        # way seed_members and bootstrap_demo wrote them.
+        emails = {
+            str(pick(u, "username")): f"{pick(u, 'username')}@oakvillefd.example.org"
+            for u in users
+        }
+        emails[DEMO_ADMIN_USERNAME] = DEMO_ADMIN_EMAIL
+        for name, report_type, period, frequency, day, to in self.GUIDE08_SAVED_REPORTS:
+            if name in existing:
+                continue
+            payload: dict[str, Any] = {
+                "name": name,
+                "report_type": report_type,
+                "filters": {"period": period},
+                "is_scheduled": frequency is not None,
+            }
+            if frequency:
+                payload.update(
+                    {
+                        "schedule_frequency": frequency,
+                        "schedule_day": day,
+                        "email_recipients": [emails[u] for u in to if emails.get(u)],
+                    }
+                )
+            try:
+                self.api.post("/reports/saved", payload)
+            except ApiError as exc:
+                self.blocked.append(f"guide 08 saved report {name!r}: {exc}")
+        return "ok"
 
     def seed_member_admin_hours(self) -> dict[str, Any]:
         """Give the demo member a spread of approved hours and a requirement.

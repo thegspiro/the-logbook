@@ -15848,6 +15848,187 @@ export const SHOTS = [
     fullPage: true,
   },
 
+  // ── 08 currency queue, 2026-10-17. Placed by hand: none had a placeholder
+  // the applier recognises.
+  {
+    id: "08-105-pulse-customize",
+    doc: "08-admin-reports.md",
+    line: 1026,
+    anchor: "__placed-by-hand-08-105__",
+    alt: "Customize Department pulse open above the cards: Grant deadlines moved above Budget threshold and Dues retitled Member dues, with Save for me, Save as department default and Close",
+    route: "/dashboard",
+    expect: "Customize Department pulse",
+    // Edited in the panel and never saved.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Customize", exact: true })
+        .click({ timeout: 15_000 });
+      await page.getByText("Customize Department pulse").waitFor();
+      await page
+        .getByRole("button", { name: "Move Grant deadlines up" })
+        .click();
+      await page
+        .getByRole("textbox", { name: "Title for Dues" })
+        .fill("Member dues");
+      await page.waitForTimeout(500);
+    },
+    selector: 'section[aria-labelledby="dashboard-widgets-title"]',
+  },
+  {
+    id: "08-106-pulse-all-hidden",
+    doc: "08-admin-reports.md",
+    line: 1026,
+    anchor: "__placed-by-hand-08-106__",
+    alt: "Department pulse with every card hidden: All cards are hidden. Choose Customize to show some.",
+    route: "/dashboard",
+    expect: "All cards are hidden",
+    // A personal layout with every card hidden, saved for the administrator
+    // and removed afterwards; the demo starts with no personal layout.
+    prepare: async (page) => {
+      const pulse = await guide08Api(page, "GET", "/dashboard/pulse-layout");
+      if (pulse.personal) {
+        throw new Error("the administrator already has a pulse layout");
+      }
+      await guide08Api(page, "PUT", "/dashboard/pulse-layout", {
+        period: null,
+        cards: pulse.layout.cards.map((card) => ({ ...card, visible: false })),
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.getByText("All cards are hidden").waitFor({ timeout: 15_000 });
+    },
+    cleanup: async (page) => {
+      const pulse = await guide08Api(page, "GET", "/dashboard/pulse-layout");
+      if (pulse.personal) {
+        await guide08Api(page, "DELETE", "/dashboard/pulse-layout");
+      }
+    },
+    allowEmptyState: true,
+    selector: 'section[aria-labelledby="dashboard-widgets-title"]',
+  },
+  {
+    id: "08-107-saved-reports",
+    doc: "08-admin-reports.md",
+    line: 904,
+    anchor: "__placed-by-hand-08-107__",
+    alt: "Saved Reports: a monthly call-volume report and a quarterly apparatus report, each with its period, schedule and next email, and an unscheduled year-to-date training summary, with Run and Edit on each",
+    route: "/reports/saved",
+    expect: "Quarterly apparatus status",
+  },
+  {
+    id: "08-108-saved-report-schedule",
+    doc: "08-admin-reports.md",
+    line: 904,
+    anchor: "__placed-by-hand-08-108__",
+    alt: "Editing a saved report: its name, report and reporting period, with Email this report on a schedule ticked, Quarterly on day 5 and two recipients",
+    route: "/reports/saved",
+    expect: { selector: '[aria-labelledby="saved-report-form-title"]' },
+    // Opened, never saved.
+    prepare: async (page) => {
+      await page
+        .locator('li:has(h2:text-is("Quarterly apparatus status"))')
+        .getByRole("button", { name: "Edit" })
+        .click({ timeout: 15_000 });
+      await page
+        .locator('[aria-labelledby="saved-report-form-title"]')
+        .waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "08-109-admin-hours-review-rules",
+    doc: "08-admin-reports.md",
+    line: 1225,
+    anchor: "__placed-by-hand-08-109__",
+    alt: "Admin Hours Review Rules: Let an approver approve their own entries, off, and the percentage a corrected event entry may grow before it goes back for review, 25",
+    route: "/admin-hours/manage",
+    expect: "Let an approver approve their own entries",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Review Rules", exact: true })
+        .click({ timeout: 15_000 });
+      await page
+        .getByText("Let an approver approve their own entries")
+        .waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    id: "08-110-member-position-confirm",
+    doc: "08-admin-reports.md",
+    line: 612,
+    anchor: "__placed-by-hand-08-110__",
+    alt: "Changing the Member position's permissions: the confirmation naming the permission being removed and how many members hold the position, with Apply to members and Keep editing",
+    route: "/settings/roles",
+    expect: "is the position every member holds",
+    // Keep editing, then Cancel: the Member position is never changed.
+    prepare: async (page) => {
+      const card = page.locator('li:has(h3:text-is("Member"))');
+      await card.scrollIntoViewIfNeeded({ timeout: 15_000 });
+      await card.getByRole("button", { name: "Edit", exact: true }).click();
+      const dialog = page.locator('[aria-labelledby="role-modal-title"]');
+      await dialog.waitFor({ timeout: 10_000 });
+      await dialog
+        .locator('label:has(div:text-is("events.view")) input')
+        .click();
+      await dialog.getByRole("button", { name: "Save Changes" }).click();
+      await page.getByText(/is the position every member holds/).waitFor();
+      // The dialogs are fixed; the list behind them was scrolled to the card.
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      const keep = page.getByRole("button", { name: "Keep editing" });
+      if (await keep.isVisible().catch(() => false)) await keep.click();
+      const cancel = page.getByRole("button", { name: "Cancel", exact: true });
+      if (await cancel.isVisible().catch(() => false)) await cancel.click();
+    },
+  },
+  {
+    id: "08-111-role-duplicate-name",
+    doc: "08-admin-reports.md",
+    line: 606,
+    anchor: "__placed-by-hand-08-111__",
+    alt: "Create New Role refused: the dialog's message says a position named captain already exists and asks for a name no other position uses",
+    route: "/settings/roles",
+    expect: "already exists",
+    // Refused by the server, so nothing is created.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Create Custom Role" })
+        .click({ timeout: 15_000 });
+      await page.locator("#role-name").fill("captain");
+      await page.getByRole("button", { name: "Create Role" }).click();
+      await page.getByText(/already exists/).waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const cancel = page.getByRole("button", { name: "Cancel", exact: true });
+      if (await cancel.isVisible().catch(() => false)) await cancel.click();
+    },
+    selector: '[aria-labelledby="role-modal-title"]',
+  },
+  {
+    id: "08-112-command-palette-hub-section",
+    doc: "08-admin-reports.md",
+    line: 729,
+    anchor: "__placed-by-hand-08-112__",
+    alt: "The command palette with Compliance typed: Training Administration's matching sections, among them Compliance Matrix, Annual Report and ISO Readiness, listed under Training Admin",
+    route: "/dashboard",
+    expect: { selector: '[aria-label="Command palette"]' },
+    prepare: async (page) => {
+      await page.keyboard.press("Control+k");
+      const search = page
+        .getByRole("combobox", { name: "Search commands" })
+        .or(page.getByRole("textbox", { name: "Search commands" }));
+      await search.first().waitFor({ timeout: 10_000 });
+      await search.first().fill("Compliance");
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+
   // ── Medical Supplies and Catalog Links (05), approval chains (11) ──
   // The medical rows come from `seed_medical_supplies`; nothing else in the
   // demo files a supply under a medical category.

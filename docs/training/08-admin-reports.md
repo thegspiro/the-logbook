@@ -605,12 +605,16 @@ and permissions, is on the **Role Management** screen.
 > are marked **Same name as another position**, with the internal name shown
 > underneath. Rename one of them.
 
+![Create New Role refused: the dialog's message says a position named captain already exists and asks for a name no other position uses](./images/08-111-role-duplicate-name.png)
+
 > **Changing the Member position asks first.** Every member holds the
 > **Member** position, so adding or removing one of its permissions changes what
 > the whole department can do at once. Saving such a change opens a
 > confirmation that names the permissions being added or removed and how many
 > members hold the position (**Apply to 42 members** / **Keep editing**).
 > Renaming it or changing its description does not ask.
+
+![Changing the Member position's permissions: the confirmation naming the permission being removed and how many members hold the position, with Apply to members and Keep editing](./images/08-110-member-position-confirm.png)
 
 > **Positions with "all of a module" access.** A position can hold access to
 > everything (the IT Manager), or everything in one module — the kind of grant
@@ -732,6 +736,8 @@ Training, Events, Members and Store section you are allowed to see is offered.
 ![Training Administration on a laptop: the headline metrics, Needs attention with its queues, and the seven area cards](./images/08-90-training-admin-hub.png)
 
 ![Members Administration on a phone: the sections as one sideways-scrolling row of chips, with the fade and arrow on the edge that has more, and the chosen section's description under it](./images/08-91-members-admin-hub-phone.png)
+
+![The command palette with Compliance typed: Training Administration's matching sections, among them Compliance Matrix, Annual Report and ISO Readiness, listed under Training Admin](./images/08-112-command-palette-hub-section.png)
 
 ### Who can see the Needs attention list
 
@@ -922,6 +928,10 @@ ran.
   - up to 25 email addresses.
 - **Delete** asks first, and stops the schedule.
 
+![Saved Reports: a monthly call-volume report and a quarterly apparatus report, each with its period, schedule and next email, and an unscheduled year-to-date training summary, with Run and Edit on each](./images/08-107-saved-reports.png)
+
+![Editing a saved report: its name, report and reporting period, with Email this report on a schedule ticked, Quarterly on day 5 and two recipients](./images/08-108-saved-report-schedule.png)
+
 **What the email contains:** a summary — the report's totals and figures and an
 **Open saved reports** link. It never contains a list of members. The full
 report opens in the app, where the reader's own access applies.
@@ -1023,7 +1033,9 @@ see, so saving a card you do not have access to shows you nothing new. If you
 hide every card, the section says "All cards are hidden. Choose Customize to
 show some."
 
-_[Screenshot needed: the Customize panel with two cards reordered and one retitled; and the empty "All cards are hidden" state.]_
+![Customize Department pulse open above the cards: Grant deadlines moved above Budget threshold and Dues retitled Member dues, with Save for me, Save as department default and Close](./images/08-105-pulse-customize.png)
+
+![Department pulse with every card hidden: All cards are hidden. Choose Customize to show some.](./images/08-106-pulse-all-hidden.png)
 
 ### Scheduling Operations tiles
 
@@ -1240,6 +1252,8 @@ Two department-wide rules decide how approvals work:
 
 Only a settings administrator can change these, because the first rule relaxes
 a check on the very people who review admin hours.
+
+![Admin Hours Review Rules: Let an approver approve their own entries, off, and the percentage a corrected event entry may grow before it goes back for review, 25](./images/08-109-admin-hours-review-rules.png)
 
 > **What if a clock-in or entry is refused?**
 >
