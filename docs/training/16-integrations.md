@@ -591,6 +591,8 @@ fields. **Disconnect** stops the link; connecting again makes a new one.
 Only people who can manage integrations see the link or can reset it. Each
 reset is recorded in the audit log.
 
+![The connected iCalendar (ICS) card: the note that anyone with the link can see the department's published events, the feed link with its copy button, and Reset link](./images/16-16-ical-department-feed.png)
+
 **A member's shift feed** is private to each member, and it is not set up on
 the Integrations page. Each member opens **Subscribe to my shifts** at the top
 of **Scheduling > My Shifts**:

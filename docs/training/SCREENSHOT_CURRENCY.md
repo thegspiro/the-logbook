@@ -1,23 +1,40 @@
 # Screenshot currency
 
+## Re-shot or added 2026-10-17
+
+Screens changed by merged work, and most of the October 15 – 16 queue below.
+The demo seeder gained the state these needed: medical categories and
+supplies (sizes, a nested storage area, dated lots, one supply carried on two
+apparatus), two apparatus checklists carrying them, a connected iCalendar
+integration, and an approval chain no request has used.
+
+| Image | Disposition | Notes |
+| ----- | ----------- | ----- |
+| `16-01-integrations-catalog` (re-shot) | **CURRENT** 2026-10-17 | Google Calendar and Microsoft Outlook read **Coming Soon** with their one-way publishing chips; the iCalendar card is connected |
+| `16-16-ical-department-feed` | **CURRENT** 2026-10-17 | New: the connected iCalendar card with the department feed link, copy button and **Reset link** |
+| `12-04-create-application` (re-shot) | **CURRENT** 2026-10-17 | Funding Details carries **Amount Awarded**, and the form's subtitle is the "Only the program name and agency are required" line |
+| `12-15-record-pledge-reminders` | **CURRENT** 2026-10-17 | New: **Record pledge** with **Send reminders** ticked and its help text; filled in, never saved |
+| `11-17-approval-step-delete` | **CURRENT** 2026-10-17 | New: the **Delete step** confirmation's current wording, on a step of the unused **Major Purchase Approval** chain; never confirmed |
+
 ## Queued by the October 15 – 16 documentation pass
 
 Nothing was captured by this pass. The prospective-members set (`15-*`,
 `20-07`, `20-12` to `20-14`) was re-captured by the feature commits and is
-current.
+current. The dispositions below record what the 2026-10-17 batch did with each
+row.
 
 | Image | Disposition | Why |
 | ----- | ----------- | --- |
-| Medical Supplies list (existing capture in 05) | **REPLACE** | Summary tiles are buttons; Size beside names, Next expiry, Where column, Import / export label, bulk Retire bar. _Demo data:_ two supplies ticked, one in a room and area, one on two apparatus |
-| Medical supply dialog, **Where it is** | **NEW** | Storage path and apparatus compartment paths with counts |
-| Medical supply form | **REPLACE** | New Room, Storage area and Size fields |
-| Medical Supplies **Lots** dialog | **NEW** | Lots per supply; manager add and edit |
-| Medical categories page | **REPLACE** | Cards read "Show N supplies"; a category opens to its supplies |
-| Catalog Links, after **Link matches automatically** | **NEW** | Linked list, "check this" marker, Undo; the confirm dialog is neutral, not red |
-| My Checklists on a phone | **NEW** and replace `03-*` phone captures | Day headings, overdue marker, ⋯ menu, no filter |
-| Check form with a count at its minimum | **CHECK** | No CRITICAL warning at or above the minimum |
-| Google Workspace card (16) | **REPLACE** | **Link existing members** action and its preview |
-| Documents admin-only folder confirmation (07) | unchanged placeholder | Still needed |
+| Medical Supplies list | **CURRENT** 2026-10-17 as `05-88-medical-supplies-list` | There was no earlier capture to replace. All supplies tab with two rows ticked and the **Retire selected** bar, sizes beside names, Next expiry and the Where column |
+| Medical supply dialog, **Where it is** | **CURRENT** 2026-10-17 as `05-89-medical-supply-where-lots` | Tourniquet, CAT: its room and the two apparatus compartments carrying it, above its stock lots |
+| Medical supply form | **CURRENT** 2026-10-17 as `05-90-medical-supply-form` | Size, Room and Storage area filled in; never saved |
+| Medical Supplies **Lots** dialog | **CURRENT** 2026-10-17, covered by `05-89` | The Lots button opens the same dialog: Where it is, then Stock lots with the edit and delete controls and the Add lot form |
+| Medical categories page | **CURRENT** 2026-10-17 as `05-91-medical-categories` | Cards read "Show N supplies"; Airway & Oxygen opened to its supplies |
+| Catalog Links, after **Link matches automatically** | **CURRENT** 2026-10-17 as `05-92-catalog-links-auto-linked` | The shot runs a real pass and undoes every link afterwards; the next seed also restores the Rescue 7 lines |
+| My Checklists on a phone | **NOT POSSIBLE** as described | The placeholder asks for the overdue marker, and the member's list never contains a past day: `get_my_checklists` returns shifts dated today or later only, so the marker the page draws for a past day with an unfiled check is never reached. The day headings and the **⋯** menu render; the placeholder is left open until the guide's overdue sentence or the query changes |
+| Check form with a count at its minimum | **CURRENT** 2026-10-17 | Checked: no captured image shows a **CRITICAL — below minimum** warning (`03-70` and `03-72` show counts at par with no critical minimum set), so none pictures the old behaviour |
+| Google Workspace card (16) | **NOT POSSIBLE** in the demo | **Link existing members** appears only on a connected card, and both connecting and its preview call Google with a real service account key |
+| Documents admin-only folder confirmation (07) | **CURRENT** 2026-10-17 as `07-25-folder-admin-only-confirm` | Manage folder on Forms & Templates with Specific positions set to Historian, a position nobody holds; never confirmed |
 
 ## Medical supply inventory switch, re-shot 2026-10-15
 

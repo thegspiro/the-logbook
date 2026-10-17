@@ -769,9 +769,7 @@ _[Finance → Settings → Approval Chains → expand a chain → **Add step**, 
 _[Treasurer or admin holding finance.configure_approvals and positions.view, /finance/settings/approval-chains. The Add step dialog over an expanded purchase-request chain: Step type Approval, Approver type Position, the position picker set to Treasurer, Auto-approve under ($) = 250. The finance.approve help text under Approver type must be visible.]_
 -->
 
-<!-- Screenshot needed:
-_[Treasurer or admin holding finance.configure_approvals, /finance/settings/approval-chains. The Delete step confirmation over a chain with three steps, showing that only a step no request has used can be deleted, and the Delete step / Keep it buttons. Never confirm.]_
--->
+![The Delete step confirmation for a step in an approval chain: it can be deleted only if no request has been routed through it yet, otherwise deleting is refused so the record of who approved or denied it is kept, with Delete step and Keep it buttons](./images/11-17-approval-step-delete.png)
 
 ### Steps nobody can act on
 
