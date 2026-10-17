@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR** (branch `claude/security-review-security-audit-ip`):
+**PR [#3376](https://github.com/thegspiro/the-logbook/pull/3376)** (branch
+`claude/security-review-security-audit-ip`):
 Feature 28 (Security, audit & IP), pass 7. PR #3375 (Feature 27,
 Integrations, pass 7) merged with no next-feature PR open; this pass
 picked it up. 0 fixed by this pass directly, 0 new findings. Diffed all
