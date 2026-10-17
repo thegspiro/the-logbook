@@ -1872,7 +1872,13 @@ export function openCallVolumeReport(mode) {
       .getByRole("button", { name: /Generate Report/i })
       .first()
       .click({ timeout: 15_000 });
-    const label = mode === "count_only" ? /Unit Responses/ : /Total Calls/;
+    // Count-only tracking counts incidents ("Total Calls"); detailed tracking
+    // sums members' shift reports ("Member-Reported Calls"). See
+    // callVolumeLabels in CallVolumeRenderer.tsx.
+    const label =
+      mode === "count_only"
+        ? /^Total Calls$/
+        : /Member-Reported Calls|Total Calls/;
     const card = page.getByText(label).first();
     await card.waitFor({ state: "visible", timeout: 20_000 });
     await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -4819,7 +4825,7 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1138,
     anchor: "Screenshot of an expanded shift report card, its header naming",
-    alt: "A shift report card naming the trainee in its header, with the filing officer in the metadata row beneath it",
+    alt: "A shift report card on Written by me naming the member in its header, expanded to its rating, call types, narrative, skills and tasks",
     route: "/scheduling?tab=shift-reports",
     prepare: async (page) => {
       await expandFirstReportCard(page);
@@ -8509,7 +8515,7 @@ export const SHOTS = [
     line: 291,
     anchor:
       "Screenshot of the Request Shift Swap dialog with Specific Shift chosen",
-    alt: "The Request Shift Swap dialog — the two swap-type cards, the shift picker and the reason field",
+    alt: "The Request Shift Swap dialog — the three swap-type cards (Open Swap, Specific Shift, Exchange With a Member) with Specific Shift chosen, the shift picker and the reason field",
     route: "/scheduling?tab=my-shifts",
     prepare: async (page) => {
       // The Swap button only exists on the Upcoming view, which is the
@@ -8549,7 +8555,7 @@ export const SHOTS = [
     line: 357,
     anchor:
       "Screenshot of the compliance report showing a requirement (e.g., 'Monthly Minimum Shifts:",
-    alt: "Scheduling compliance report with per-member shift totals",
+    alt: "Shift Compliance: the Requirements, Requirement Checks, Checks Met and Checks Not Met cards above each requirement, a requirement nobody is held to reading Not applicable",
     route: "/scheduling/admin/reports",
     // The page opens on Member Hours with an empty picker and "Select a Date
     // Range" where the report goes, so a plain route visit captured a
@@ -9226,11 +9232,9 @@ export const SHOTS = [
     alt: "Scheduling notification settings showing the start-of-shift reminder options",
     route: "/scheduling/admin/settings/notifications",
     // Same page as 03-38; this clips to the reminders block so the two shots
-    // are not the same image under two placeholders. The heading sits in its
-    // own flex row inside the section, so `:has(> h4)` selects that row and
-    // clips to the title alone — the section is its grandparent.
-    selector:
-      'div:has(> div > h4:text-is("Start-of-Shift Reminders")):not(:has(div:has(> div > h4:text-is("Start-of-Shift Reminders"))))',
+    // are not the same image under two placeholders.
+    selector: 'section:has(> div > h4:text-is("Start-of-Shift Reminders"))',
+    expect: { selector: 'h4:text-is("Start-of-Shift Reminders")' },
   },
   {
     id: "03-22-equipment-check-builder",
@@ -10085,6 +10089,8 @@ export const SHOTS = [
     viewport: CLOSEOUT_VIEWPORT,
     selector: CLOSEOUT_WIZARD_CARD,
     fullPage: false,
+    // "no hours recorded" is a member line inside the step, not an empty page.
+    allowEmptyState: true,
   },
   {
     id: "03-46-finalized-badge",
@@ -14858,7 +14864,7 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 423,
     anchor: "Reports → Call Volume for a count-only department",
-    alt: "Call Volume for a count-only department: Unit Responses, Avg Responses/Day and Peak Responses, over the footnote saying an incident two units attended is counted once for each",
+    alt: "Call Volume for a count-only department: Total Calls, Avg Calls/Day and Peak Calls, with no per-unit footnote",
     route: "/reports",
     prepare: openCallVolumeReport("count_only"),
     fullPage: false,

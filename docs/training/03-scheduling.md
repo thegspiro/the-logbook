@@ -930,7 +930,7 @@ car crash. It was one call for the department and one run for each unit.
 Member credit is different again. A member who came on at 0300 was not on the
 2200 call.
 
-![Call Volume for a count-only department: Unit Responses, Avg Responses/Day and Peak Responses, over the footnote saying an incident two units attended is counted once for each](./images/03-82-call-volume-count-only.png)
+![Call Volume for a count-only department: Total Calls, Avg Calls/Day and Peak Calls, with no per-unit footnote](./images/03-82-call-volume-count-only.png)
 
 ![The same department and period in detailed mode: the identical cards read Total Calls, Avg Calls/Day and Peak Calls, and the per-unit footnote is gone](./images/03-83-call-volume-detailed.png)
 
@@ -1073,7 +1073,7 @@ A swap starts from the shift you are giving up.
 | **Specific Shift**         | "Choose which shift you want". Pick a shift under **Select Shift**. If an officer approves, you move to that shift in the same seat, and your original seat becomes open |
 | **Exchange With a Member** | "Trade seats: you take theirs, they take yours". Pick a member's seat under **Exchange With**. Only seats you are both qualified for, in the next 90 days, are listed |
 
-![The Request Shift Swap dialog — the two swap-type cards, the shift picker and the reason field](./images/03-67-swap-request-dialog.png)
+![The Request Shift Swap dialog — the three swap-type cards (Open Swap, Specific Shift, Exchange With a Member) with Specific Shift chosen, the shift picker and the reason field](./images/03-67-swap-request-dialog.png)
 
 The request then appears under **Requests → Swap Requests**, where you can
 follow it or cancel it.
@@ -1671,7 +1671,7 @@ requirement exempts, because they joined before it, are left out. See
 > - An **hours** requirement is graded here from shift attendance only when it
 >   is ticked. The Training screens still grade it from training records.
 
-![Scheduling compliance report with per-member shift totals](./images/03-14-scheduling-reports.png)
+![Shift Compliance: the Requirements, Requirement Checks, Checks Met and Checks Not Met cards above each requirement, a requirement nobody is held to reading Not applicable](./images/03-14-scheduling-reports.png)
 
 > **Tip:** Members on an active leave of absence have their requirements
 > reduced. The report shows the adjusted target and the number of leave months.
@@ -1753,7 +1753,7 @@ turns amber at 3 days and red at 7.
 
 On a phone, the status badges sit on their own row under the name.
 
-![A shift report card naming the trainee in its header, with the filing officer in the metadata row beneath it](./images/03-49-report-card-names.png)
+![A shift report card on Written by me naming the member in its header, expanded to its rating, call types, narrative, skills and tasks](./images/03-49-report-card-names.png)
 
 ![A shift report card at 390px phone width: the member's full name on its own line and the status badges on a row beneath it](./images/03-118-report-card-phone.png)
 
@@ -1898,7 +1898,7 @@ reports are held on the device:
 
 **Save as Draft** needs a connection. Only submitting can be held offline.
 
-![The Shift Reports tab offline banner — reports will be saved locally and submitted when connectivity returns](./images/03-63-offline-banner.png)
+![The Shift Reports tab offline banner — reports are saved on this device and sent automatically when you're back online](./images/03-63-offline-banner.png)
 
 Held reports are not listed one by one. The banner count is how you know they
 are waiting.
