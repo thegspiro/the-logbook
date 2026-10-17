@@ -139,7 +139,6 @@
 03-36-settings-apparatus-skills
 03-37-settings-rating-scale
 03-38-notifications-assignment
-03-39-notifications-reminders
 03-40-settings-position-eligibility
 03-43-time-off-request-form
 03-44-month-calendar

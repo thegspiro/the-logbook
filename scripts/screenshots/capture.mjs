@@ -27,6 +27,7 @@ import {
   DEMO_CREDENTIALS,
   DEMO_FORWARDEE_CREDENTIALS,
   DEMO_MEMBER_CREDENTIALS,
+  DEMO_SECOND_MEMBER_CREDENTIALS,
   DEMO_SECRETARY_CREDENTIALS,
   SHOTS,
 } from "./manifest.mjs";
@@ -388,10 +389,13 @@ async function captureFrame(page, shot) {
         height: document.documentElement.scrollHeight,
       };
     }
-    // boundingBox() is document-space, so the viewport rect has to be too.
+    // boundingBox() is relative to the viewport, not the document, so a
+    // viewport shot's frame starts at 0,0 however far the page is scrolled.
+    // Offsetting it by the scroll position failed every shot that scrolls its
+    // subject into view.
     return {
-      x: window.scrollX,
-      y: window.scrollY,
+      x: 0,
+      y: 0,
       width: window.innerWidth,
       height: window.innerHeight,
     };
@@ -486,6 +490,10 @@ function makeSessions(browser, baseOptions) {
         // position. Shots that picture what a member sees have to be taken as
         // one, because the officer view of the same route is a different page.
         await login(page, DEMO_MEMBER_CREDENTIALS);
+      } else if (auth === "second-member") {
+        // Another ordinary member, for states the demo member cannot hold at
+        // the same time as the ones other shots photograph.
+        await login(page, DEMO_SECOND_MEMBER_CREDENTIALS);
       } else if (auth === "secretary") {
         // Holds legal.propose and nothing that can publish. Used where the
         // *absence* of a control is the subject: an admin capture of the same
@@ -521,8 +529,20 @@ async function login(page, credentials) {
       await signIn(page, credentials);
       break;
     } catch (error) {
-      if (attempt >= 2) throw error;
-      console.log(`  … login attempt ${attempt + 1} timed out, retrying`);
+      // The sign-in limiter counts every attempt from this address, and a
+      // second capture or seeder running against the same backend spends the
+      // same allowance. A refusal says so on the page; waiting out its window
+      // is cheaper than losing the run.
+      const throttled = await page
+        .getByText(/too many/i)
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (attempt >= (throttled ? 6 : 2)) throw error;
+      console.log(
+        `  … login attempt ${attempt + 1} ${throttled ? "rate-limited" : "timed out"}, retrying`,
+      );
+      if (throttled) await page.waitForTimeout(65_000);
     }
   }
 
