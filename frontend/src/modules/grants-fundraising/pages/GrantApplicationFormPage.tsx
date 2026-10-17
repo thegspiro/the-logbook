@@ -26,6 +26,9 @@ import {
 import type { BudgetAmounts, ContactRow } from '../utils/applicationStructuredFields';
 import { toAppError } from '@/utils/errorHandling';
 import { formCoercions } from '@/utils/formValues';
+import { displayNameOf } from '@/utils/memberName';
+import { userService } from '@/services/api';
+import type { User } from '@/types/user';
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
@@ -126,6 +129,7 @@ export const GrantApplicationFormPage: React.FC = () => {
     opportunityId: initialOpportunityIdRef.current,
   }));
   const [opportunities, setOpportunities] = useState<GrantOpportunity[]>([]);
+  const [members, setMembers] = useState<User[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -173,6 +177,18 @@ export const GrantApplicationFormPage: React.FC = () => {
       }
     };
     void loadOpportunities();
+  }, []);
+
+  // Members for the Assigned To picker. The backend stores a member id and
+  // refuses one outside the organization, so a name typed into a box can
+  // never be saved.
+  useEffect(() => {
+    void userService
+      .getUsers()
+      .then(setMembers)
+      .catch(() => {
+        toast.error('Could not load members for the Assigned To list.');
+      });
   }, []);
 
   // Load existing application when editing
@@ -260,7 +276,11 @@ export const GrantApplicationFormPage: React.FC = () => {
     // A blank Amount Awarded is omitted on create but sent as null on edit,
     // so clearing a recorded award actually clears it (the update endpoint
     // treats an omitted key as "leave unchanged").
-    const amountAwarded = formCoercions(isEditing).num(formData.amountAwarded);
+    const coerce = formCoercions(isEditing);
+    const amountAwarded = coerce.num(formData.amountAwarded);
+    // Omitted on create when nobody is picked; null on edit so choosing
+    // "Unassigned" clears the stored member.
+    const assignedTo = coerce.pick(formData.assignedTo);
     const payload: Partial<GrantApplication> = {
       grantProgramName: formData.grantProgramName,
       grantAgency: formData.grantAgency,
@@ -280,7 +300,7 @@ export const GrantApplicationFormPage: React.FC = () => {
       federalAwardId: formData.federalAwardId || null,
       performancePeriodMonths: formData.performancePeriodMonths ? Number(formData.performancePeriodMonths) : null,
       reportingFrequency: formData.reportingFrequency || null,
-      assignedTo: formData.assignedTo || null,
+      ...(assignedTo !== undefined && { assignedTo }),
       priority: formData.priority as GrantApplication['priority'],
       notes: formData.notes || null,
     };
@@ -436,15 +456,26 @@ export const GrantApplicationFormPage: React.FC = () => {
               <label htmlFor="assignedTo" className={labelClass}>
                 Assigned To
               </label>
-              <input
+              <select
                 id="assignedTo"
                 name="assignedTo"
-                type="text"
                 value={formData.assignedTo}
                 onChange={handleChange}
-                className={inputClass}
-                placeholder="e.g. John Smith"
-              />
+                className={selectClass}
+              >
+                <option value="">Unassigned</option>
+                {/* Keeps a stored assignee who is no longer on the member
+                    list selectable, so saving does not silently swap them
+                    for whichever option the browser shows first. */}
+                {formData.assignedTo && !members.some((member) => member.id === formData.assignedTo) && (
+                  <option value={formData.assignedTo}>Current assignee</option>
+                )}
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {displayNameOf(member) || member.username}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

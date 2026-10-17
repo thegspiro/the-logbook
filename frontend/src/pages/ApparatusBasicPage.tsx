@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useDialog } from '../hooks/useDialog';
 import { Truck, Plus, Search, Pencil, Trash2, Loader2, X, Save, Shield, Users, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '../utils/errorHandling';
 import { schedulingService } from '../modules/scheduling/services/api';
 
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -88,6 +89,11 @@ const DEFAULT_POSITIONS_BY_TYPE: Record<string, string[]> = {
   other: ['driver'],
 };
 
+// BasicApparatusCreate's bounds in backend/app/schemas/scheduling.py.
+const UNIT_NUMBER_MAX_LENGTH = 20;
+const NAME_MAX_LENGTH = 100;
+const MIN_STAFFING_MAX = 50;
+
 export default function ApparatusBasicPage() {
   const { confirm } = useConfirm();
   const [apparatusList, setApparatusList] = useState<BasicApparatus[]>([]);
@@ -101,7 +107,8 @@ export default function ApparatusBasicPage() {
     unit_number: '',
     name: '',
     apparatus_type: 'engine',
-    min_staffing: 4,
+    // Held as the box's text so a cleared field reads as blank, not as 0.
+    min_staffing: '4',
     positions: ['officer', 'driver', 'firefighter', 'firefighter'] as string[],
   });
   const [isSaving, setIsSaving] = useState(false);
@@ -141,7 +148,7 @@ export default function ApparatusBasicPage() {
       unit_number: '',
       name: '',
       apparatus_type: 'engine',
-      min_staffing: 4,
+      min_staffing: '4',
       positions: [...(DEFAULT_POSITIONS_BY_TYPE.engine ?? [])],
     });
     setShowModal(true);
@@ -153,7 +160,7 @@ export default function ApparatusBasicPage() {
       unit_number: apparatus.unit_number,
       name: apparatus.name,
       apparatus_type: apparatus.apparatus_type,
-      min_staffing: apparatus.min_staffing || 1,
+      min_staffing: String(apparatus.min_staffing || 1),
       positions: apparatus.positions || [],
     });
     setShowModal(true);
@@ -164,7 +171,7 @@ export default function ApparatusBasicPage() {
       ...prev,
       apparatus_type: type,
       positions: DEFAULT_POSITIONS_BY_TYPE[type] || ['driver'],
-      min_staffing: (DEFAULT_POSITIONS_BY_TYPE[type] || ['driver']).length,
+      min_staffing: String((DEFAULT_POSITIONS_BY_TYPE[type] || ['driver']).length),
     }));
   };
 
@@ -194,8 +201,24 @@ export default function ApparatusBasicPage() {
       toast.error('Unit number is required');
       return;
     }
+    // These mirror BasicApparatusCreate (unit_number max_length=20, name
+    // max_length=100, min_staffing ge=1 le=50), so the form names the problem
+    // instead of the save failing with a bare error.
+    if (form.unit_number.trim().length > UNIT_NUMBER_MAX_LENGTH) {
+      toast.error(`Unit number must be ${UNIT_NUMBER_MAX_LENGTH} characters or fewer`);
+      return;
+    }
     if (!form.name.trim()) {
       toast.error('Name is required');
+      return;
+    }
+    if (form.name.trim().length > NAME_MAX_LENGTH) {
+      toast.error(`Name must be ${NAME_MAX_LENGTH} characters or fewer`);
+      return;
+    }
+    const minStaffing = form.min_staffing.trim() === '' ? Number.NaN : Number(form.min_staffing);
+    if (!Number.isInteger(minStaffing) || minStaffing < 1 || minStaffing > MIN_STAFFING_MAX) {
+      toast.error(`Minimum staffing must be a whole number from 1 to ${MIN_STAFFING_MAX}`);
       return;
     }
     setIsSaving(true);
@@ -204,7 +227,7 @@ export default function ApparatusBasicPage() {
         unit_number: form.unit_number.trim(),
         name: form.name.trim(),
         apparatus_type: form.apparatus_type,
-        min_staffing: form.min_staffing,
+        min_staffing: minStaffing,
         positions: form.positions,
       };
       if (editing) {
@@ -216,8 +239,8 @@ export default function ApparatusBasicPage() {
       }
       setShowModal(false);
       void loadApparatus();
-    } catch {
-      toast.error('Failed to save apparatus');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save apparatus'));
     } finally {
       setIsSaving(false);
     }
@@ -464,15 +487,18 @@ export default function ApparatusBasicPage() {
 
               <div>
                 <label htmlFor="apparatus-basic-min-staffing" className={labelCls}>
-                  Minimum Staffing
+                  Minimum Staffing *
                 </label>
                 <input
                   id="apparatus-basic-min-staffing"
                   type="number"
                   min={1}
-                  max={20}
+                  max={MIN_STAFFING_MAX}
+                  step={1}
+                  required
+                  aria-required="true"
                   value={form.min_staffing}
-                  onChange={(e) => setForm((p) => ({ ...p, min_staffing: Number(e.target.value) }))}
+                  onChange={(e) => setForm((p) => ({ ...p, min_staffing: e.target.value }))}
                   className={inputCls}
                 />
               </div>
