@@ -79,6 +79,7 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { FinanceApprovalPage } from './pages/FinanceApprovalPage';
 
+const PublicMinutesPage = lazyWithRetry(() => import('./pages/PublicMinutesPage'));
 // Public legal pages (privacy policy / terms of service)
 const LegalPage = lazyWithRetry(() => import('./pages/legal/LegalPage'));
 const LearningCenterPage = lazyWithRetry(() => import('./pages/learning/LearningCenterPage'));
@@ -199,6 +200,9 @@ function App() {
                   {/* Legal pages (public) */}
                   <Route path="/privacy" element={<LegalPage />} />
                   <Route path="/terms" element={<LegalPage />} />
+                  {/* Public minutes (no sign-in): the copies the department chose to post */}
+                  <Route path="/public/minutes" element={<PublicMinutesPage />} />
+                  <Route path="/public/minutes/:copyId" element={<PublicMinutesPage />} />
                   {/* Public external-approver page (token-authenticated) */}
                   <Route path="/finance/approvals/:token" element={<FinanceApprovalPage />} />
 

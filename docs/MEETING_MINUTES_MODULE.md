@@ -253,7 +253,8 @@ When approved minutes are published:
 2. **Content escaping**: All user content is passed through `html.escape()` to prevent XSS
 3. **Document creation**: A new `Document` record is created in the "Meeting Minutes" system folder
 4. **Link back**: The minutes record stores the `published_document_id` for cross-reference
-5. **Re-publish**: If the document already exists, it is updated in place with new content (same document id, so links stay valid) and its `under_correction_since` flag, set when the minutes were reopened for correction, is cleared
+5. **Re-publish**: If the document already exists, it is updated in place with new content (same document id, so links stay valid) and its `under_correction_since` flag, set when the minutes were reopened for correction, is cleared. The new copy opens with a note saying which version it replaced and when that one was published
+6. **Public copy**: if the department allows it, a public copy is posted as well — see [Publishing](#publishing-2026-10-17)
 
 ### Published Document Structure
 
@@ -846,6 +847,62 @@ needs_motion, motion_text, documents[{id, name}]}`, at most 60. They are edited
   difference (the agenda moved again) is ignored. Saving the agenda never changes
   minutes already drafted.
 
+### Publishing _(2026-10-17)_
+
+Publishing files the library copy and, if the department's settings allow it,
+posts a public copy beside it. Two department-wide switches under **Minutes →
+Publishing** (written through the organization settings, `settings.manage`;
+anyone who manages minutes can read them) decide what happens. Everything is
+**off by default** and every switch reads as off unless it is literally `true`.
+
+| Setting (`settings.minutes.*`) | Effect                                                                       |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| `public_posting`               | Also post a public copy of published minutes on `/public/minutes`            |
+| `executive_library_publishing` | Executive-session minutes may be published to the library                    |
+| `executive_public_posting`     | Executive-session minutes may be posted publicly (needs both switches above) |
+
+`GET /minutes-records/settings` reports what the server applies, including
+`executive_effective_library` and `executive_effective_public`, so the screen
+states the outcome rather than echoing the switches.
+
+- **Replace, with a note.** Publishing again replaces the library document in
+  place and the public copy in place. Each says which version it replaced and
+  when that one was posted ("This version replaces version 1, posted October 3,
+  2026."). Minutes published before this change carry no recorded version, so
+  their next republish has no note rather than a wrong one.
+- **The public copy is a snapshot, narrower than the PDF.** It is built by
+  naming each field that may go out (`app/utils/minutes_public.py`), never by
+  deleting from the printed copy, so a field added to the PDF later stays
+  private until it is added there. It carries the meeting facts, attendance as
+  counts plus the officers present with their titles, printed sections, motions
+  with who moved and seconded and the result, action items, closed sessions as
+  reason, authority and times, election turnout and counts, and the adoption
+  line and signatures. It leaves out the attendance roll, individual votes,
+  discussion notes, closed-session participants and summaries, attachments and
+  library links. Editing or reopening the minutes does not change what the
+  public sees until the corrected version is published.
+- **Checked twice.** The settings are checked when posting and again on every
+  read of the public page, so switching public posting off, or withdrawing a
+  copy, takes effect at once. Responses are `no-store`.
+- **Taking it down.** `DELETE /minutes-records/{id}/public-posting` withdraws
+  the public copy and leaves the library copy alone. Posting again afterwards is
+  a fresh posting, not a replacement. Reopening minutes marks a standing public
+  copy "being corrected" until the corrected version replaces it or it is
+  withdrawn, the same rule the library copy follows.
+- **Executive sessions.** Refused unless the department allows it. A library
+  copy goes to a separate "Executive Session Minutes" folder visible to library
+  managers only; publishing refuses outright if someone has loosened that
+  folder's visibility. Posting one publicly needs all three switches, and the
+  settings screen asks for confirmation before turning the last one on.
+- **The hosted page.** `/public/minutes` (list) and `/public/minutes/{id}` are
+  served by The Logbook itself, with no sign-in, from
+  `GET /api/public/v1/minutes[/{id}]`. Like the legal pages they answer only on a
+  deployment with exactly one organization (otherwise 404) and only while the
+  Minutes module is enabled. 60 requests a minute per address.
+- **Partial failure.** If posting the public copy fails after the library copy
+  was filed, the library copy stays; publishing again repeats both and is safe
+  to repeat.
+
 ### Start and end times _(2026-10-15)_
 
 `called_to_order_at` and `adjourned_at` are recorded from the **Call to Order**
@@ -916,6 +973,9 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 | `POST`   | `/{id}/approve`                           | `minutes.manage` | Adopt; optional `{adopted_on, adopting_minutes_id, as_amended, moved_by, seconded_by}` |
 | `POST`   | `/{id}/suggestions/{suggestion_id}/apply` | `minutes.manage` | Apply the accepted tracked changes `{accepted: [...], note}`                           |
 | `POST`   | `/{id}/recall`                            | `minutes.manage` | Circulated → draft                                                                     |
+| `POST`   | `/{id}/publish`                           | `minutes.manage` | File the library copy and, where allowed, the public copy; returns `public_posted`     |
+| `GET`    | `/{id}/publishing`                        | `minutes.manage` | Where these minutes stand: library, public, and what the settings allow                |
+| `DELETE` | `/{id}/public-posting`                    | `minutes.manage` | Take the public copy down (library copy untouched)                                     |
 | `GET`    | `/{id}/suggestions`                       | `minutes.view`   | All for a manager; the caller's own otherwise                                          |
 | `POST`   | `/{id}/suggestions`                       | `minutes.view`   | Suggest a change (circulated minutes only)                                             |
 | `PUT`    | `/{id}/suggestions/{suggestion_id}`       | `minutes.manage` | Accept or decline, with a note                                                         |
@@ -948,6 +1008,7 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 | `20261016_1101_f236c56b1b49_minutes_signatures.py`                  | `f236c56b1b49`        | `minutes_signatures` table (idempotent; the downgrade drops it)                                                                       |
 | `20261015_1652_9ce470b513ae_minutes_motions_vote_detail.py`         | `9ce470b513ae`        | `meeting_motions.votes_recused` / `threshold` / `roll_call` (idempotent; the downgrade drops them)                                    |
 | `20261015_1441_b90813f63e25_minutes_action_items_last_reminded.py`  | `b90813f63e25`        | `minutes_action_items.last_reminded_at` (idempotent; the downgrade drops it)                                                          |
+| `20261017_2305_89723c04ae94_minutes_public_copies.py`               | `89723c04ae94`        | `minutes_public_copies` table; `meeting_minutes.published_revision_version` / `published_at` (idempotent; the downgrade drops them)   |
 | `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`    | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)    |
 
 ### Migration Chain

@@ -4329,6 +4329,36 @@ route above should also close this path — most likely by having
 `APPROVED` and requiring the dedicated route (or its replacement) for that
 transition specifically.
 
+## Minutes — Publishing and the Public Page (2026-10-17)
+
+**Open — owner decisions to confirm.** Publishing minutes to the library and the
+public page (see
+[MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#publishing-2026-10-17))
+made these choices. Everything is off until the department switches it on.
+
+- **The public copy is stricter than "the printed copy".** The PDF lists attendees
+  by name, closed-session participants and summaries, and individual votes; a page
+  anyone can open does not. The public copy shows attendance as counts plus the
+  officers present, motions with the totals and result, and closed sessions as
+  reason, authority and times. To show more, add the field to the whitelist in
+  `app/utils/minutes_public.py`.
+- **Executive-session minutes can be posted publicly if the department turns on
+  all three switches.** That was the owner's choice (two switches: library, and
+  public). It is the one setting here that cannot be undone for a reader who has
+  already seen the page; the settings screen asks for confirmation, and each
+  public request re-checks the switches, so turning it off hides the copy at
+  once.
+- **The hosted page answers only on a deployment with one organization**, the
+  same rule as `/privacy` and `/terms`, and only while the Minutes module is
+  enabled. With two or more it returns 404 rather than guess whose minutes to
+  show.
+- **A failure while posting the public copy leaves the library copy filed.**
+  Publishing again repeats both and is safe to repeat.
+- **Minutes published before this change carry no recorded version**, so their
+  next republish has no "replaces version" note.
+
+---
+
 ## MM-17 — `set_meeting_quorum_config` Has No Finalization Guard on Approved Minutes (2026-09-13)
 
 > ✅ **Resolved (2026-10-11), as the owner chose: lock on APPROVED, with a

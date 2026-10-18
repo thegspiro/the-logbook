@@ -798,6 +798,31 @@ class MinutesReminderSettingsResponse(BaseModel):
     overdue_repeat_days: int
     open_items_digest: bool
     signature_slots: List[SignatureSlotResponse] = []
+    public_posting: bool = False
+    executive_library_publishing: bool = False
+    executive_public_posting: bool = False
+    # What the switches add up to for an executive-session meeting, so the
+    # settings screen can say "executive minutes: library only" rather than
+    # work out the three-switch rule itself.
+    executive_effective_library: bool = False
+    executive_effective_public: bool = False
+
+
+class PublishingStatusResponse(BaseModel):
+    """Where one set of minutes stands: library copy, public copy, settings."""
+
+    library_allowed: bool
+    library_published: bool
+    library_version: Optional[int] = None
+    library_published_at: Optional[datetime] = None
+    public_allowed: bool
+    public_posted: bool
+    public_withdrawn: bool
+    public_version: Optional[int] = None
+    public_posted_at: Optional[datetime] = None
+    public_replaced_version: Optional[int] = None
+    public_under_correction: bool
+    public_copy_id: Optional[str] = None
 
 
 class SignatureResponse(BaseModel):

@@ -30,6 +30,7 @@ from app.models.minute import (
     MeetingMinutes,
     MinutesActionItemStatus,
     MinutesMeetingType,
+    MinutesPublicCopy,
     MinutesStatus,
     MinutesTemplate,
     Motion,
@@ -1276,6 +1277,20 @@ class MinuteService:
             published = doc_result.scalar_one_or_none()
             if published is not None:
                 published.under_correction_since = datetime.now(timezone.utc)
+
+        # The public copy, if one is standing, is flagged the same way: it keeps
+        # showing, marked as being corrected, until the corrected version
+        # replaces it or someone withdraws it.
+        public = (
+            await self.db.execute(
+                select(MinutesPublicCopy).where(
+                    MinutesPublicCopy.minutes_id == str(minutes.id),
+                    MinutesPublicCopy.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        if public is not None and public.withdrawn_at is None:
+            public.under_correction_since = datetime.now(timezone.utc)
 
         await self.db.commit()
         refreshed = await self.get_minutes(minutes_id, organization_id, refresh=True)

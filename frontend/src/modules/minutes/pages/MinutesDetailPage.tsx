@@ -20,6 +20,7 @@ import { minutesService } from '../services/api';
 import type { ElectionListItem } from '../../../types/election';
 import { getStatusBadgeClass } from '../../../utils/electionHelpers';
 import { useAuthStore } from '../../../stores/authStore';
+import { PublishingStatusNote } from '../components/PublishingStatusNote';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCalendarDate, formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -34,6 +35,7 @@ import type {
   SectionEntry,
   AdoptionDetails,
   ImportableElection,
+  MinutesPublishingStatus,
 } from '../types/minutes';
 import type { Event as EventDetail, EventListItem } from '../../../types/event';
 import { useConfirm } from '../../../contexts/ConfirmContext';
@@ -129,6 +131,8 @@ export const MinutesDetailPage: React.FC = () => {
 
   // Publishing
   const [publishing, setPublishing] = useState(false);
+  const [publishingStatus, setPublishingStatus] = useState<MinutesPublishingStatus | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // Adopting, and laying an outline over the draft
@@ -395,17 +399,63 @@ export const MinutesDetailPage: React.FC = () => {
 
   // ── Publishing ──
 
+  // Only people who manage minutes may ask where publishing stands, and only
+  // minutes that were ever adopted can have been published.
+  const publishedDocumentId = minutes?.published_document_id;
+  const minutesStatus = minutes?.status;
+  const loadPublishingStatus = useCallback(async () => {
+    if (!minutesId || !canManage || (minutesStatus !== 'approved' && !publishedDocumentId)) {
+      setPublishingStatus(null);
+      return;
+    }
+    try {
+      setPublishingStatus(await minutesService.getPublishingStatus(minutesId));
+    } catch {
+      // The status is a convenience; publishing itself reports its own errors.
+      setPublishingStatus(null);
+    }
+  }, [minutesId, canManage, minutesStatus, publishedDocumentId]);
+
+  useEffect(() => {
+    void loadPublishingStatus();
+  }, [loadPublishingStatus]);
+
   const handlePublish = async () => {
     if (!minutesId) return;
     try {
       setPublishing(true);
-      await minutesService.publishMinutes(minutesId);
+      const result = await minutesService.publishMinutes(minutesId);
       await fetchMinutes();
-      toast.success('Minutes published to Documents');
+      await loadPublishingStatus();
+      toast.success(
+        result.public_posted ? 'Minutes published to Documents and posted publicly' : 'Minutes published to Documents'
+      );
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to publish minutes'));
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const handleWithdrawPublic = async () => {
+    if (!minutesId) return;
+    const ok = await confirm({
+      title: 'Take the public copy down?',
+      message:
+        'The public page stops showing these minutes right away. The copy in Documents stays. Publishing them again posts a fresh public copy.',
+      confirmLabel: 'Take it down',
+      cancelLabel: 'Keep it up',
+    });
+    if (!ok) return;
+    try {
+      setWithdrawing(true);
+      await minutesService.withdrawPublicCopy(minutesId);
+      await loadPublishingStatus();
+      toast.success('The public copy was taken down');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to take the public copy down'));
+    } finally {
+      setWithdrawing(false);
     }
   };
 
@@ -863,6 +913,13 @@ export const MinutesDetailPage: React.FC = () => {
                 re-publish them to replace it.
               </p>
             )}
+            <PublishingStatusNote
+              status={publishingStatus}
+              withdrawing={withdrawing}
+              onWithdraw={() => {
+                void handleWithdrawPublic();
+              }}
+            />
             <div className="flex flex-wrap gap-3">
               {(minutes.status === 'draft' || minutes.status === 'rejected') && (
                 <button

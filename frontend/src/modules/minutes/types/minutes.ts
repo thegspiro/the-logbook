@@ -562,6 +562,35 @@ export interface MinutesReminderSettings {
   overdue_repeat_days: number;
   open_items_digest: boolean;
   signature_slots: SignatureSlot[];
+  /** Also post published minutes on the public minutes page. */
+  public_posting: boolean;
+  executive_library_publishing: boolean;
+  executive_public_posting: boolean;
+  /** What the server will actually do for executive-session minutes, whatever the switches read. */
+  executive_effective_library: boolean;
+  executive_effective_public: boolean;
+}
+
+/** Where one set of minutes stands: the library copy, the public copy, and what the settings allow. */
+export interface MinutesPublishingStatus {
+  library_allowed: boolean;
+  library_published: boolean;
+  library_version: number | null;
+  library_published_at: string | null;
+  public_allowed: boolean;
+  public_posted: boolean;
+  public_withdrawn: boolean;
+  public_version: number | null;
+  public_posted_at: string | null;
+  public_replaced_version: number | null;
+  public_under_correction: boolean;
+  public_copy_id: string | null;
+}
+
+/** What publishing did, so the screen can say posted or not posted. */
+export interface MinutesPublishResult {
+  public_allowed: boolean;
+  public_posted: boolean;
 }
 
 /** A place on adopted minutes for a signature. */

@@ -196,5 +196,10 @@ class PublishedDocumentResponse(UTCResponseBase):
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    # Whether the department's settings allow these minutes to be posted
+    # publicly, and whether a public copy was posted by this publish. The
+    # screen reports these; it does not work them out.
+    public_allowed: bool = False
+    public_posted: bool = False
 
     model_config = ConfigDict(from_attributes=True)

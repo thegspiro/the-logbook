@@ -44,6 +44,7 @@ from app.schemas.minute import (
     MotionCreate,
     MotionResponse,
     MotionUpdate,
+    PublishingStatusResponse,
     SectionEntry,
     SignatureSlotResponse,
     TemplateCreate,
@@ -53,10 +54,12 @@ from app.schemas.minute import (
     TemplateUpdate,
 )
 from app.services.agenda_document_access import narrow_documents
-from app.services.document_service import DocumentService
 from app.services.minute_service import MinuteService
+from app.services.minutes_print_data import adopting_title
+from app.services.minutes_publishing_service import MinutesPublishingService
 from app.services.template_service import TemplateService
 from app.utils.minutes_settings import (
+    load_minutes_publishing_settings,
     load_minutes_reminder_settings,
     load_signature_slots,
 )
@@ -169,7 +172,15 @@ async def get_minutes_settings(
     resolved = await load_minutes_reminder_settings(
         db, str(current_user.organization_id)
     )
+    publishing = await load_minutes_publishing_settings(
+        db, str(current_user.organization_id)
+    )
     return MinutesReminderSettingsResponse(
+        public_posting=publishing.public_posting,
+        executive_library_publishing=publishing.executive_library,
+        executive_public_posting=publishing.executive_public,
+        executive_effective_library=publishing.library_allowed(True),
+        executive_effective_public=publishing.public_allowed(True),
         action_item_reminders=resolved.reminders_enabled,
         reminder_days_before_due=resolved.days_before_due,
         overdue_repeat_days=resolved.overdue_repeat_days,
@@ -831,11 +842,11 @@ async def publish_minutes(
         "Minutes",
     )
 
-    doc_service = DocumentService(db)
     async with handle_service_errors("Failed to publish minutes"):
-        doc = await doc_service.publish_minutes(
-            minutes, current_user.organization_id, current_user.id
+        outcome = await MinutesPublishingService(db).publish(
+            minutes, current_user.organization_id, current_user
         )
+    doc = outcome.document
 
     await log_audit_event(
         db=db,
@@ -846,6 +857,7 @@ async def publish_minutes(
             "minutes_id": minutes_id,
             "document_id": doc.id,
             "title": minutes.title,
+            "public_posted": outcome.public_copy is not None,
         },
         user_id=str(current_user.id),
     )
@@ -869,6 +881,66 @@ async def publish_minutes(
         created_by=doc.uploaded_by,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
+        public_allowed=outcome.public_allowed,
+        public_posted=outcome.public_copy is not None,
+    )
+
+
+@router.get("/{minutes_id}/publishing", response_model=PublishingStatusResponse)
+async def get_publishing_status(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Where these minutes stand: the library copy, the public copy, and whether the
+    department's settings allow each
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    minutes = ensure_found(
+        await MinuteService(db).get_minutes(
+            minutes_id, current_user.organization_id, load_children=False
+        ),
+        "Minutes",
+    )
+    return await MinutesPublishingService(db).status(
+        minutes, current_user.organization_id
+    )
+
+
+@router.delete("/{minutes_id}/public-posting", status_code=204)
+async def withdraw_public_posting(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Take the public copy of these minutes down. The library copy is untouched,
+    and publishing again posts a fresh public copy.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    ensure_found(
+        await MinuteService(db).get_minutes(
+            minutes_id, current_user.organization_id, load_children=False
+        ),
+        "Minutes",
+    )
+    async with handle_service_errors("Failed to withdraw the public copy"):
+        copy = await MinutesPublishingService(db).withdraw(
+            minutes_id, current_user.organization_id, current_user
+        )
+    ensure_found(copy, "Public copy")
+    await log_audit_event(
+        db=db,
+        event_type="minutes_public_withdrawn",
+        event_category="meetings",
+        severity="warning",
+        event_data={"minutes_id": minutes_id},
+        user_id=str(current_user.id),
     )
 
 
@@ -1118,20 +1190,7 @@ def _loaded(obj, relationship: str, attribute: str):
     return getattr(related, attribute) if related is not None else None
 
 
-def _adopting_title(minutes) -> Optional[str]:
-    """The adopting meeting's title, unless it was a closed session: its title
-    can name the matter, and these minutes may be read by every member."""
-    if "adopting_minutes" in sa_inspect(minutes).unloaded:
-        return None
-    adopting = minutes.adopting_minutes
-    if adopting is None:
-        return None
-    kind = (
-        adopting.meeting_type
-        if isinstance(adopting.meeting_type, str)
-        else adopting.meeting_type.value
-    )
-    return None if kind == "executive" else adopting.title
+_adopting_title = adopting_title
 
 
 async def _present_count(service, minutes_id: str, user) -> int:
