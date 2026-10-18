@@ -57,3 +57,26 @@ export function expiryAnswer(item: CheckItemSpec, today = new Date()): Partial<C
     status: days !== null && days < 0 ? 'fail' : 'pass',
   };
 }
+
+/** Withdraws a replacement date, leaving the line to be answered again. */
+export const CLEARED_REPLACEMENT: Partial<CheckItemAnswer> = {
+  expirationFound: undefined,
+  lotFound: undefined,
+  expiryConfirmed: false,
+  status: 'not_checked',
+};
+
+/**
+ * Dating the replacement a crew put in on a line nothing else tracks.
+ *
+ * The new unit is what is aboard now, so an accepted date passes the line —
+ * the replaced box is the one that expired, not this one. `null` for a date
+ * that has already passed, which the server refuses: storing it would only
+ * move the refusal to submit, after the box is back in the cabinet.
+ */
+export function replacementAnswer(date: string, lot: string, today = new Date()): Partial<CheckItemAnswer> | null {
+  if (!date) return CLEARED_REPLACEMENT;
+  const days = daysUntil(date, today);
+  if (days === null || days < 0) return null;
+  return { expirationFound: date, lotFound: lot.trim() || undefined, expiryConfirmed: true, status: 'pass' };
+}

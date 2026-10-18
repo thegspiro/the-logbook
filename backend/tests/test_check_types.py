@@ -1,4 +1,4 @@
-"""The four canonical check-item types, and what the collapse must preserve.
+"""The canonical check-item types, and what the collapse must preserve.
 
 These tests exist because the collapse is irreversible. Once
 ``present``/``pass_fail``/``functional`` have all become ``function`` there is
@@ -16,7 +16,9 @@ from app.utils.check_types import (
     EXPIRY,
     FUNCTION,
     LEVEL,
+    PRESENCE,
     STRUCTURAL_TYPES,
+    describe_status,
     is_check_type,
     legacy_instruction_for,
     normalize_check_type,
@@ -24,14 +26,32 @@ from app.utils.check_types import (
 
 
 class TestCanonicalTypes:
-    def test_there_are_exactly_four(self):
-        """Four answer shapes: a number, a pass/fail, a quantity, a date.
+    def test_there_are_exactly_five(self):
+        """Five answer shapes: a number, a pass/fail, a quantity, a date, and
+        present / absent.
 
         Pinned because the whole redesign rests on an admin picking a type
-        rather than a layout. A fifth type is a design decision, not a
-        refactor, and should fail here first.
+        rather than a layout. Another type is a design decision, not a
+        refactor, and should fail here first. ``presence`` was that decision
+        on 2026-10-18.
         """
-        assert CANONICAL_CHECK_TYPES == (LEVEL, FUNCTION, COUNT, EXPIRY)
+        assert CANONICAL_CHECK_TYPES == (LEVEL, FUNCTION, COUNT, EXPIRY, PRESENCE)
+
+    def test_legacy_present_still_means_pass_fail(self):
+        """The new type does not reclaim the old name.
+
+        ``present`` has normalized to ``function`` since the collapse, and an
+        integration sending it gets the Works control it always got. Reusing
+        the name would silently change that caller's checklist.
+        """
+        assert PRESENCE != "present"
+        assert normalize_check_type("present") == FUNCTION
+
+    def test_presence_status_reads_in_the_crews_words(self):
+        assert describe_status(PRESENCE, "pass") == "present"
+        assert describe_status(PRESENCE, "fail") == "absent"
+        assert describe_status(PRESENCE, "out_of_service") == "out_of_service"
+        assert describe_status(FUNCTION, "fail") == "fail"
 
     @pytest.mark.parametrize(
         ("legacy", "expected"),
@@ -65,7 +85,7 @@ class TestCanonicalTypes:
         assert normalize_check_type(normalize_check_type(canonical)) == canonical
         assert is_check_type(canonical) is True
 
-    @pytest.mark.parametrize("junk", ["", None, "   ", "presence", "unknown"])
+    @pytest.mark.parametrize("junk", ["", None, "   ", "absent", "unknown"])
     def test_unrecognised_reads_as_function(self, junk):
         """Reading an unknown stored value falls back to the answerable shape.
 
@@ -138,8 +158,11 @@ class TestRequestBoundary:
         already wrote; applying it here would silently turn a typo into a
         pass/fail prompt on a safety checklist.
         """
-        with pytest.raises(ValueError, match="presence"):
-            _validate_check_type("presence")
+        with pytest.raises(ValueError, match="absent"):
+            _validate_check_type("absent")
+
+    def test_presence_is_accepted(self):
+        assert _validate_check_type("presence") == PRESENCE
 
     def test_none_passes_through(self):
         """``None`` means "not supplied" on a partial update, not "unknown"."""

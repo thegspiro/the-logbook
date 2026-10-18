@@ -19,7 +19,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.models.user import Organization
-from app.utils.check_types import describe_count
+from app.utils.check_types import describe_count, describe_status
 from app.utils.org_timezone import format_in_org_timezone
 
 _styles = getSampleStyleSheet()
@@ -265,7 +265,13 @@ def _item_with_count(record: Dict[str, Any]) -> str:
         record.get("target_quantity"),
         record.get("count_unit"),
     )
-    return f"{name} ({count})" if count else name
+    if count:
+        return f"{name} ({count})"
+    # A presence line failed because the thing is missing; say so, the way a
+    # count says how many were short.
+    if describe_status(record.get("check_type"), record.get("status")) == "absent":
+        return f"{name} (absent)"
+    return name
 
 
 def generate_failure_log_pdf(
@@ -401,11 +407,14 @@ def generate_check_detail_pdf(
         compartments.setdefault(comp, []).append(item)
 
     for comp_name, comp_items in compartments.items():
-        elements.append(Paragraph(_esc(comp_name), SECTION_STYLE))
+        # Items placed directly on the checklist snapshot no location, and
+        # print without a heading of their own, as the crew saw them.
+        if comp_name:
+            elements.append(Paragraph(_esc(comp_name), SECTION_STYLE))
         header = ["Item", "Type", "Status", "Count", "Notes"]
         rows = [header]
         for it in comp_items:
-            status = it.get("status", "")
+            status = describe_status(it.get("check_type"), it.get("status", ""))
             notes = str(it.get("notes", "") or "")
             if len(notes) > 40:
                 notes = notes[:37] + "..."

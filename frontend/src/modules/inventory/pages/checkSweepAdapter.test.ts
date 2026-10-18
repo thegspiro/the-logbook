@@ -271,3 +271,38 @@ describe('toLapStops — seals', () => {
     expect(stopItems(stops[0] as never).map((i) => i.id)).toEqual(['morphine', 'epi']);
   });
 });
+
+describe('toLapStops — items placed directly on the checklist', () => {
+  it('becomes a stop with no heading, named only for the strip', () => {
+    const stops = toLapStops({
+      compartments: [comp({ id: 'loose', name: '', isInline: true, items: [item({ id: 'chocks' })] })],
+    });
+    expect(stops[0]).toMatchObject({ id: 'loose', isInline: true, name: 'On the checklist' });
+  });
+
+  it('skips an emptied group, which is not a place to stand', () => {
+    const stops = toLapStops({
+      compartments: [comp({ id: 'loose', name: '', isInline: true }), comp({ id: 'cab', sortOrder: 1 })],
+    });
+    expect(stops.map((s) => s.id)).toEqual(['cab']);
+  });
+});
+
+describe('toLapStops — replacement dates', () => {
+  it('lets the crew date a replacement only on a line nothing else tracks', () => {
+    const [stop] = toLapStops({
+      compartments: [
+        comp({
+          id: 'cab',
+          items: [
+            item({ id: 'pads', checkType: 'expiry' }),
+            item({ id: 'epi', checkType: 'expiry', inventoryItemId: 'inv-1' }),
+            item({ id: 'gauze', checkType: 'count' }),
+          ],
+        }),
+      ],
+    });
+    const takes = Object.fromEntries((stop?.items ?? []).map((i) => [i.id, i.takesReplacementDate === true]));
+    expect(takes).toEqual({ pads: true, epi: false, gauze: false });
+  });
+});
