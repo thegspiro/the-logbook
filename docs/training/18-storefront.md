@@ -98,7 +98,9 @@ There are two separate switches, and it is worth knowing why.
    members**.
 
 The second switch lets you take the members' shop offline without hiding the
-console. Use it mid-season, between windows, or while you rebuild the catalog.
+console. While it is off, the **Open ordering** dialog and the open window's card
+on the overview say that members cannot order yet and link to **Settings**, and
+the **Store is offline** badge is a button to the same place. Use it mid-season, between windows, or while you rebuild the catalog.
 You can still work the orders already placed. When it is off, members see
 nothing, and you keep everything.
 

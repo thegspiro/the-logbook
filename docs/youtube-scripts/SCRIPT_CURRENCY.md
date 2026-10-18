@@ -1,5 +1,31 @@
 # Script currency
 
+## Flagged by the 2026-10-16 → 10-18 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-16--18-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 07 (minutes agenda and signing), 12 (elections), 03 (Integrations and the security report), 05 (Medical Supplies on the trucks).
+
+| Script                                  | Beat                              | Was                                                       | Now                                                                                                                                        |
+| --------------------------------------- | --------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **07** (secretary)                      | Minutes outline (new beat)        | Pick an outline                                           | Meeting **Agenda** items (presenter, notes, prepared motion, linked documents) become the sections; **Sync from agenda**; **Not taken up** |
+| **07**                                  | Adopting minutes                  | Adopt, then print and sign on paper                       | **Minutes > Signers** slots; sign in the app with name and password; the PDF carries the signatures                                        |
+| **12** (elections)                      | Sending ballots                   | One request that could time out on a big roster           | **Send Ballot Emails** shows progress and keeps going; one send at a time; **Remind Non-Voters** the same                                  |
+| **12**                                  | Paper ballots                     | Plain blank ballot                                        | Logo, real mark boxes, each contest under its own voting method; item-only ballots print                                                   |
+| **12**                                  | Nominations and dates             | Nominee only emailed                                      | Bell notice opens Nominations; a linked meeting sets the voting window; no write-in on Approve/Deny                                        |
+| **03** (IT)                             | Weekly security report (new beat) | None                                                      | Counts-only email to the IT Manager, Monday 07:00; **Authentication > Security Report**                                                    |
+| **03**                                  | Calendars                         | Google and Outlook cards inert                            | **Connect with Google / Microsoft** creates the department calendar (needs `CALENDAR_SYNC_ENABLED`); department ICS feed                   |
+| **03**                                  | Member accounts                   | Google Workspace only                                     | Microsoft 365 as the other directory; one per department                                                                                   |
+| **03**                                  | Upgrading                         | —                                                         | Weekly report starts by default; `CALENDAR_SYNC_ENABLED`; twelve migrations                                                                |
+| **05** (training officer, if shown)     | Importing past training           | **Import History** tab                                    | **Import Past Training**; new **Sync History** tab on the integrations page                                                                |
+| **05 / 06** (if Medical Supplies shown) | Stock counts                      | Shelf only                                                | Shelf plus trucks; **Kept on apparatus only**; Next expiry names where                                                                     |
+| **06** (member)                         | Dashboard                         | Standby shows department hours; Take a Shift for everyone | Standby is your own; Take a Shift hidden if you cannot hold a seat                                                                         |
+| **06 / 05**                             | Equipment check counts            | Par decides pass and restock                              | **Min to Pass** fails; par sets the restock; unit shown ("8 / 10 each")                                                                    |
+| **03 / 05** (if Operations shown)       | Operations pages                  | Each page its own header                                  | One header and section strip; apparatus and supply worklist rework on a phone                                                              |
+| **04** (finance, if shown)              | Approval chains                   | Delete a used chain                                       | A used chain or step cannot be deleted; turn the chain off                                                                                 |
+| **08** (shorts)                         | Passwords                         | Silent change                                             | Member gets a notice by bell and email                                                                                                     |
+
 ## Flagged by the 2026-10-15 → 10-16 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-15--16-2026).
