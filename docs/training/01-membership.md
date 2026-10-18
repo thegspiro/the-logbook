@@ -145,7 +145,7 @@ details follow the department setting. Your home address and personal email
 stay hidden from other members. Officers who manage members can always see
 every field.
 
-![My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email, phone and mobile the note that the department's own setting has them off for everyone](./images/01-41-profile-visibility.png)
+![My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email and mobile, which the department's own setting has off for everyone, the note "Shared once the department allows it"](./images/01-41-profile-visibility.png)
 
 ### Scan Member ID
 
