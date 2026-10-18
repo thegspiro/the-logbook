@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-auth-session`). PR #3396
+**PR [#3397](https://github.com/thegspiro/the-logbook/pull/3397)** (branch
+`claude/security-review-auth-session`). PR #3396
 (Feature 00, Cross-cutting baseline, pass 10) merged 2026-10-18 clean;
 already recorded in that PR's own history below.
 
