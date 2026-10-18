@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #TBD** (branch `claude/security-review-public-webhooks`). PR #3398
+**PR [#3399](https://github.com/thegspiro/the-logbook/pull/3399)** (branch
+`claude/security-review-public-webhooks`). PR #3398
 (Feature 02, Permissions & roles, pass 10) merged 2026-10-18 clean; already
 recorded in that PR's own history below.
 
