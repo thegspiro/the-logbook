@@ -200,6 +200,26 @@ export function getErrorMessage(error: unknown, fallback = 'An error occurred'):
 }
 
 /**
+ * A toast message for a failed save that says what was being saved and what to
+ * do next.
+ *
+ * A server fault (5xx) carries only "An unexpected error occurred", which
+ * names neither the action nor a next step, so a member tapped the button
+ * again and again. For those the message states the action, says the entries
+ * are still on screen, and keeps the support code so IT can find the cause.
+ * Anything else (validation, permission, a message the server wrote on
+ * purpose) is already specific and is passed through untouched.
+ */
+export function getSaveFailureMessage(error: unknown, action: string): string {
+  const appError = toAppError(error);
+  if (appError.status === undefined || appError.status < 500) {
+    return getErrorMessage(error, `Could not ${action}`);
+  }
+  const code = appError.code ? ` (Error code: ${appError.code})` : '';
+  return `Could not ${action}: the server hit a problem on its end. Your entries are still on this page, so try again in a moment. If it keeps happening, tell IT${code}.`;
+}
+
+/**
  * True when a request never received an answer from the server — the device is
  * offline, DNS/TLS failed, or the client timed out waiting.
  *
