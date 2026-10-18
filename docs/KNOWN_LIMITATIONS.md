@@ -2884,6 +2884,22 @@ Two limitations remain:
   at the moment the lifecycle task fires, both mint tokens for the same
   members. The reminder's one-hour cooldown and `reminder_sent_at` stamp keep
   this to one overlap at most, and only around the pre-close window.
+- **The synchronous endpoints can still race each other directly (ELEC-48,
+  security review pass 10, 2026-10-18).** The "refused with 409" guard above
+  was, until pass 10, a plain read behind a snapshot the auth dependency's own
+  user lookup had already fixed earlier in the same transaction — two requests
+  to `POST /elections/{id}/ballot-send-jobs` arriving together could both see
+  no job in progress and both queue one, even though the endpoint locks the
+  election row (CLAUDE.md pitfall #27: the lock doesn't refresh a snapshot a
+  prior read already fixed). Pass 10 fixed this for the queued path by making
+  the check itself a locking read (`find_active_job`, now `.with_for_update()`)
+  — see `ELEC-06-elections-ballots.md`'s **ELEC-47**. The two **synchronous**
+  endpoints (`send-ballot`, `remind-non-voters`) still take no lock of their
+  own, so two concurrent calls to the _same_ synchronous endpoint, with no job
+  row yet for either to find, both pass the check and both send — the
+  identical double-mail outcome, just not yet closed for that path (ELEC-48,
+  owner decision: lock those endpoints too, or retire them now that the job
+  queue exists for both kinds of send).
 
 **Remind Non-Voters fixed the same way (2026-10-17).** It had the same
 synchronous timeout. `POST /elections/{id}/reminder-send-jobs` now queues it
@@ -5914,6 +5930,24 @@ them in a migration — noting that a status reconcile can change what a departm
 connected — or accept that catalog changes reach new organizations only.
 
 See `docs/app-review/integrations.md` → Pass 5.
+
+## GF2-2 — Seven More Services Flush And Return An Updated Row Without Reloading `updated_at` (2026-10-16)
+
+The grants / fundraising update endpoints answered 500 and discarded the change because a
+server-side `onupdate=func.now()` column expires after the flush and the response model
+cannot lazy-load it in an async session (fixed in that module with
+`reload_updated_at`; see `docs/app-review/grants-fundraising.md` → Pass 5, GF2-1). A
+static scan found seven more `update_*` service methods with the same shape that were not
+driven: `finance_service.update_chain_step`, `inventory_service.update_reorder_request`,
+`label_printer_service.update_printer`, `legal_service.update_draft`,
+`medical_screening_service.update_requirement` and `update_record`,
+`org_chart_service.update_node`.
+
+**Candidates, not confirmed failures.** Each depends on the model carrying `onupdate` and
+on the endpoint not re-fetching before it responds. **Owner decision:** let each
+module's rotation pass drive its own update with a real change (the test pattern is in
+`backend/tests/test_grants_update_endpoints_integration.py`) and apply
+`reload_updated_at` where it fails — or ask for one sweep that drives all seven now.
 
 ## Process
 

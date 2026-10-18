@@ -163,7 +163,7 @@ export const ManualApprovalPanel: React.FC<ManualApprovalPanelProps> = ({
         onSubmit={(notes) => void decide('approve', notes)}
         title="Approve request"
         message="The request will be marked approved."
-        label="Note (optional)"
+        label="Note"
         required={false}
         multiline
         hint="Saved in the audit log."

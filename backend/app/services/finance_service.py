@@ -2226,14 +2226,25 @@ class FinanceService:
         }
 
     async def list_budget_options(
-        self, org_id: str, fiscal_year_id: str, charger_id: Optional[str] = None
+        self,
+        org_id: str,
+        fiscal_year_id: str,
+        charger_id: Optional[str] = None,
+        amounts_for: Optional[str] = None,
+        sees_all_amounts: bool = True,
     ) -> list[dict]:
         """The budget lines a requester may charge, as a label and what is left.
 
         The narrow read behind the request forms' budget picker. A member who
-        holds only ``finance.request`` chooses a line by name and sees the
-        remaining amount, nothing else: the budgeted, spent and encumbered
-        figures, notes and the summary stay behind ``finance.view``.
+        holds only ``finance.request`` chooses a line by name and nothing
+        else: the budgeted, spent and encumbered figures, notes and the
+        summary stay behind ``finance.view``, and so does the amount left.
+
+        ``amount_remaining`` is filled only for a caller who ``sees_all_amounts``
+        (``finance.view`` / ``finance.manage``) or who owns that line
+        (``amounts_for`` is the caller's id; ownership is
+        ``owned_budgets_query``, the one definition of the rule). For anyone
+        else it is None, so the figure never leaves the server.
 
         ``charger_id`` leaves out the restricted lines that member may not
         charge (app/services/finance_budget_access.py); None, for
@@ -2251,6 +2262,12 @@ class FinanceService:
             if charger_id
             else set()
         )
+        owned_ids: set[str] = set()
+        if not sees_all_amounts and amounts_for:
+            owned_result = await self.db.execute(
+                owned_budgets_query(org_id, amounts_for).with_only_columns(Budget.id)
+            )
+            owned_ids = {str(budget_id) for budget_id in owned_result.scalars()}
         result = await self.db.execute(
             select(
                 Budget.id,
@@ -2308,9 +2325,11 @@ class FinanceService:
                 {
                     "id": row.id,
                     "label": label,
-                    "amount_remaining": row.amount_budgeted
-                    - row.amount_spent
-                    - row.amount_encumbered,
+                    "amount_remaining": (
+                        row.amount_budgeted - row.amount_spent - row.amount_encumbered
+                        if sees_all_amounts or str(row.id) in owned_ids
+                        else None
+                    ),
                 }
             )
         return options
