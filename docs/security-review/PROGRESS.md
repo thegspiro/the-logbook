@@ -16,9 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/security-review-core-infrastructure`). PR
-#3391 (Feature 32, Locations & kiosk, pass 7) merged 2026-10-18 ~01:48 UTC
-clean; already recorded in that PR's own history below.
+**PR [#3393](https://github.com/thegspiro/the-logbook/pull/3393)** (branch
+`claude/security-review-core-infrastructure`). PR #3391 (Feature 32,
+Locations & kiosk, pass 7) merged 2026-10-18 ~01:48 UTC clean; already
+recorded in that PR's own history below.
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
 `claude/security-review-`, confirmed via `search_pull_requests`, and the
