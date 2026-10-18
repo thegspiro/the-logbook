@@ -920,9 +920,10 @@ async def list_budget_options(
 
     **Requires permission: finance.request, finance.view or finance.manage**
 
-    Each line is a label (its category, plus its station when it has one)
-    and the amount remaining. That is all a member choosing a line needs, and
-    all they see: the budget pages themselves stay behind the view grant.
+    Each line is a label (its category, plus its station when it has one).
+    The amount remaining is added only for ``finance.view`` / ``finance.manage``
+    holders and for the owner of that line; every other member gets the label
+    alone. The budget pages themselves stay behind the view grant.
     """
     # Registered before `/budgets/{budget_id}` for the reason
     # get_budget_summary gives.
@@ -931,6 +932,9 @@ async def list_budget_options(
         str(current_user.organization_id),
         fiscal_year_id,
         charger_id=_requester_scope(current_user),
+        amounts_for=str(current_user.id),
+        sees_all_amounts=user_has_permission(current_user, "finance.view")
+        or user_has_permission(current_user, "finance.manage"),
     )
 
 
