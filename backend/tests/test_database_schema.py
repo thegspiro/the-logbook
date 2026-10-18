@@ -697,6 +697,32 @@ class TestIndexCoverage:
             unindexed
         )
 
+    def test_no_two_indexes_cover_the_same_columns(self):
+        """
+        A UNIQUE constraint is backed by its own index, so a plain Index on the
+        same columns in the same order serves no read and costs a write on every
+        insert. shift_equipment_checks carried one from 2026-08-22, when
+        uq_shift_equipment_check_shift_template was added over the April
+        idx_shift_equip_check_shift_tmpl.
+        """
+        redundant = []
+        for table_name, table in _tables.items():
+            seen: dict[tuple[str, ...], str] = {}
+            keyed = [(idx.name, idx.columns) for idx in table.indexes] + [
+                (con.name, con.columns)
+                for con in table.constraints
+                if isinstance(con, UniqueConstraint)
+            ]
+            for name, columns in keyed:
+                key = tuple(col.name for col in columns)
+                if key in seen:
+                    redundant.append(f"{table_name}: {seen[key]} and {name} {key}")
+                else:
+                    seen[key] = str(name)
+        assert not redundant, "Indexes covering identical columns:\n" + "\n".join(
+            redundant
+        )
+
     def test_status_columns_are_indexed(self):
         """Status/state enum columns used for filtering should be indexed."""
         status_cols = ["status", "is_active", "active", "enabled", "approval_status"]

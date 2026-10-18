@@ -9858,7 +9858,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_shift_equip_check_org_date` (`organization_id`, `checked_at`)
 - `idx_shift_equip_check_shift_timing` (`shift_id`, `check_timing`)
-- `idx_shift_equip_check_shift_tmpl` (`shift_id`, `template_id`)
 - `idx_shift_equip_check_template` (`template_id`)
 - `idx_shift_equip_check_user` (`checked_by`)
 
