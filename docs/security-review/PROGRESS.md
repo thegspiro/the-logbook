@@ -16,9 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this PR)** (branch `claude/friendly-babbage-jru09t`). PR #3384
-(Feature 31, Scheduled tasks, pass 7) merged 2026-10-17 ~22:26 UTC clean;
-already recorded in that PR's own history below.
+**PR (this PR)** (branch `claude/security-review-core-infrastructure`). PR
+#3391 (Feature 32, Locations & kiosk, pass 7) merged 2026-10-18 ~01:48 UTC
+clean; already recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 33 (Core infrastructure), pass 7. 0 fixes
+needed, 0 new findings: the real delta since pass 6 (`b00f5da3`, PR #3084) is
+a 40-line diff across all three in-scope files — two new fail-closed calendar
+settings in `config.py` (`CALENDAR_SYNC_ENABLED`,
+`GOOGLE_CALENDAR_REDIRECT_URI`, `MICROSOFT_CALENDAR_REDIRECT_URI`, all with
+real readers, spot-checked not fully reviewed — their endpoints belong to a
+different feature), two mypy-driven type annotations in `database.py` (no
+behavior change), a behavior-identical `request.method` → `request.scope["method"]`
+rewrite in `security_middleware.py`'s CSRF check (same mypy commit), and four
+new `EXPORT_ENDPOINTS` entries already reviewed under Feature 28's pass 7 —
+re-verified via the standing drift guard tests, which still pass in both
+directions. **CI3-33-4** (LOW, previously flagged) is now recorded as
+resolved: the four settings it named are `RETIRED_SETTINGS` keys, not live
+fields, and the retiring commit actually predates CI6's own merge — CI6's
+"still open" note for it was stale the moment it was written. See
+`CI7-33-core-infra.md`. Row 33 → ✅ (pending this PR's merge); next is
+Feature 34 (Frontend shared).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 7, PR #3391, merged), preserved for history</summary>
+
+**PR [#3391](https://github.com/thegspiro/the-logbook/pull/3391)** (branch
+`claude/friendly-babbage-jru09t`). PR #3384 (Feature 31, Scheduled tasks,
+pass 7) merged 2026-10-17 ~22:26 UTC clean; already recorded in that PR's own
+history below.
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
 `claude/security-review-`, confirmed via `search_pull_requests`, and the
@@ -47,6 +76,8 @@ files, both model files, `nfc_tag_service.py`, `guest_check_in_service.py`,
 pass 6. Route surface re-enumerated: 15/15 unchanged. See
 `LOC7-32-locations-kiosk.md`. Row 32 → ✅ (pending this PR's merge); next is
 Feature 33 (Core infrastructure).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 7, PR #3384, merged), preserved for history</summary>
@@ -19824,7 +19855,7 @@ here.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
