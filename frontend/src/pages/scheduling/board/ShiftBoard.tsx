@@ -116,6 +116,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   const [confirmedShift, setConfirmedShift] = useState<ShiftRecord | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [myOffers, setMyOffers] = useState<SwapRequest[]>([]);
+  const [nextScheduled, setNextScheduled] = useState<ShiftRecord | null>(null);
 
   const today = useMemo(() => new Date(), []);
 
@@ -226,6 +227,50 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   useEffect(() => {
     void fetchShifts();
   }, [fetchShifts, refreshKey]);
+
+  /**
+   * The first shift after an empty range, so the empty state can point at it.
+   *
+   * Without it a blank week reads as "nothing has been published" — to the
+   * member, and to the officer who has just created a shift for next Monday
+   * and is left looking at "Create the first shift" beside a total of one.
+   * The range end is the fetch's own end (the month, not the grid's spill-over
+   * days), so the shift offered is never one already in the data on screen.
+   */
+  const rangeEndKey = useMemo(() => {
+    if (view === 'week') return toDateKey(weekDates(visibleDate)[6] ?? visibleDate);
+    return toDateKey(new Date(visibleDate.getFullYear(), visibleDate.getMonth() + 1, 0));
+  }, [view, visibleDate]);
+  const rangeIsEmpty = !loading && !error && shifts.length === 0;
+
+  useEffect(() => {
+    if (!rangeIsEmpty) {
+      setNextScheduled(null);
+      return;
+    }
+    let cancelled = false;
+    const [y, m, d] = rangeEndKey.split('-').map(Number);
+    const after = toDateKey(new Date(y ?? 0, (m ?? 1) - 1, (d ?? 0) + 1));
+    schedulingService
+      .getShifts({ start_date: after, limit: 1 })
+      .then((page) => {
+        if (!cancelled) setNextScheduled(page.shifts[0] ?? null);
+      })
+      .catch(() => {
+        // Only a hint: without it the empty state reads as it always has.
+        if (!cancelled) setNextScheduled(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [rangeIsEmpty, rangeEndKey, refreshKey]);
+
+  const goToNextScheduled = useCallback(() => {
+    if (!nextScheduled) return;
+    const date = new Date(`${nextScheduled.shift_date}T12:00:00`);
+    setSelectedDate(date);
+    onVisibleDateChange(date);
+  }, [nextScheduled, onVisibleDateChange]);
 
   /**
    * Re-read while the board is on screen.
@@ -555,7 +600,25 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
               <p className="text-theme-text-secondary text-sm">
                 Nothing is scheduled for this {view === 'week' ? 'week' : 'month'} yet.
               </p>
-              {emptyAction ? (
+              {nextScheduled ? (
+                <>
+                  <p className="text-theme-text-muted mt-1 text-sm">
+                    The next shift on the schedule is on{' '}
+                    {formatCalendarDate(nextScheduled.shift_date, {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                    .
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                    <button type="button" onClick={goToNextScheduled} className="btn-secondary rounded-lg">
+                      Go to the next shift
+                    </button>
+                    {emptyAction}
+                  </div>
+                </>
+              ) : emptyAction ? (
                 <div className="mt-3">{emptyAction}</div>
               ) : (
                 <p className="text-theme-text-muted mt-1 text-sm">

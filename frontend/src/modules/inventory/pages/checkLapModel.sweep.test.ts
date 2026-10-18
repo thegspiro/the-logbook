@@ -28,6 +28,7 @@ import type { CheckItemSpec } from './CheckItemControls';
  */
 const count = (id: string, par: number): CheckItemSpec => ({ id, name: id, checkType: 'count', expectedQuantity: par });
 const fn = (id: string): CheckItemSpec => ({ id, name: id, checkType: 'function' });
+const present = (id: string): CheckItemSpec => ({ id, name: id, checkType: 'presence' });
 const level = (id: string): CheckItemSpec => ({ id, name: id, checkType: 'level', minLevel: 100 });
 const expiry = (id: string): CheckItemSpec => ({ id, name: id, checkType: 'expiry', expirationDate: '2027-01-01' });
 const stop = (id: string, items: CheckItemSpec[], over: Partial<LapStop> = {}): LapStop => ({
@@ -35,6 +36,16 @@ const stop = (id: string, items: CheckItemSpec[], over: Partial<LapStop> = {}): 
   name: id,
   items,
   ...over,
+});
+
+describe('bulkClaim on Present lines', () => {
+  it('claims them as present, not as working', () => {
+    expect(bulkClaim([present('chocks'), present('bottle')])?.label).toBe('All 2 present');
+  });
+
+  it('falls back to all good when mixed with switches', () => {
+    expect(bulkClaim([present('chocks'), fn('lights')])?.label).toBe('All 2 good');
+  });
 });
 
 describe('bulkClaim', () => {

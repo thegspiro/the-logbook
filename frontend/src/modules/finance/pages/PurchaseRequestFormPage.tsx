@@ -5,7 +5,7 @@
  * Uses react-hook-form + zod for validation.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -13,16 +13,25 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE, MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE } from '../utils/moneyLimits';
 import { purchaseRequestService } from '../services/api';
 import { budgetOptionLabel, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
-import { PurchaseRequestPriority } from '../types';
-import type { PurchaseRequest } from '../types';
+import { PurchaseRequestPriority, PurchaseRequestStatus } from '../types';
 import { getSaveFailureMessage } from '@/utils/errorHandling';
-import { blankToNull } from '@/utils/formValues';
+import { useConfirm } from '@/contexts/ConfirmContext';
+import { useTimezone } from '@/hooks/useTimezone';
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import { formatTime } from '@/utils/dateFormatting';
+import { useDraftAutosave } from '../hooks/useDraftAutosave';
+import {
+  canSaveDraft,
+  createPurchaseRequestPayload,
+  updatePurchaseRequestPayload,
+} from '../utils/purchaseRequestDraft';
 
 // =============================================================================
 // Validation Schema
@@ -32,7 +41,11 @@ const purchaseRequestSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   description: z.string().max(2000).optional(),
   vendor: z.string().max(200).optional(),
-  estimatedAmount: z.number({ message: 'Amount is required' }).positive('Amount must be greater than zero'),
+  estimatedAmount: z
+    .number({ message: 'Amount is required' })
+    .positive('Amount must be greater than zero')
+    .min(MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE)
+    .max(MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE),
   priority: z.string().min(1, 'Priority is required'),
   budgetId: z.string().optional(),
   fundCampaignId: z.string().optional(),
@@ -89,11 +102,14 @@ const PurchaseRequestFormPage: React.FC = () => {
   const isEdit = !!id;
 
   const { selectedPurchaseRequest, isLoading, fetchPurchaseRequest, createPurchaseRequest } = useFinanceStore();
+  const { confirm } = useConfirm();
+  const tz = useTimezone();
+  const [baseline, setBaseline] = useState<PurchaseRequestFormData | null>(null);
 
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
     reset,
     watch,
     setValue,
@@ -113,8 +129,28 @@ const PurchaseRequestFormPage: React.FC = () => {
 
   // Fiscal years and the chosen year's budget lines come from the narrow
   // options endpoints, which a member holding only finance.request can read.
-  const fiscalYearId = watch('fiscalYearId');
+  const formValues = watch();
+  const fiscalYearId = formValues.fiscalYearId;
   const { fiscalYears, budgetOptions } = useRequestFormOptions(fiscalYearId);
+
+  // A new request, or a draft being edited, is saved to the server as the
+  // member types. Once it has been submitted it is edited with an explicit
+  // save again, so that a half-typed change is never sent for approval.
+  const autosaving = isEdit ? selectedPurchaseRequest?.status === PurchaseRequestStatus.DRAFT : true;
+  const autosave = useDraftAutosave<PurchaseRequestFormData>({
+    values: formValues,
+    enabled: autosaving,
+    isSavable: canSaveDraft,
+    create: (values) => createPurchaseRequest(createPurchaseRequestPayload(values)),
+    update: (draftId, values) => purchaseRequestService.update(draftId, updatePurchaseRequestPayload(values)),
+    initialId: id ?? null,
+    baseline,
+    dirty: isDirty,
+  });
+  useUnsavedChanges({
+    hasChanges: autosave.hasUnsaved,
+    message: 'Your request has not been saved yet. Are you sure you want to leave?',
+  });
   const { funds, mode: fundMode } = useFundOptions();
 
   // Load purchase request for edit mode
@@ -138,7 +174,7 @@ const PurchaseRequestFormPage: React.FC = () => {
   useEffect(() => {
     if (isEdit && selectedPurchaseRequest) {
       const pr = selectedPurchaseRequest;
-      reset({
+      const loaded: PurchaseRequestFormData = {
         title: pr.title,
         description: pr.description ?? '',
         vendor: pr.vendor ?? '',
@@ -147,53 +183,90 @@ const PurchaseRequestFormPage: React.FC = () => {
         budgetId: pr.budgetId ?? '',
         fundCampaignId: pr.fundCampaignId ?? '',
         fiscalYearId: pr.fiscalYearId,
-      });
+      };
+      reset(loaded);
+      setBaseline(loaded);
     }
   }, [isEdit, selectedPurchaseRequest, reset]);
 
   const onSubmit = async (data: PurchaseRequestFormData) => {
     try {
-      const payload: Partial<PurchaseRequest> = {
-        title: data.title,
-        estimatedAmount: data.estimatedAmount.toFixed(2),
-        priority: data.priority as PurchaseRequestPriority,
-        fiscalYearId: data.fiscalYearId,
-      };
-
-      if (isEdit && id) {
-        // Edit sends every optional field, blank ones as an explicit null, so
-        // removing a vendor or clearing a description actually takes. Omitting
-        // them here would read as "leave alone" once the backend applies the
-        // exclude_unset dump, and the removal would silently not happen.
-        payload.description = blankToNull(data.description);
-        payload.vendor = blankToNull(data.vendor);
-        payload.budgetId = data.budgetId || null;
-        payload.fundCampaignId = data.fundCampaignId || null;
-
-        await purchaseRequestService.update(id, payload);
+      if (!autosaving && id) {
+        await purchaseRequestService.update(id, updatePurchaseRequestPayload(data));
         toast.success('Purchase request updated');
         void navigate(`/finance/purchase-requests/${id}`);
-      } else {
-        // Create omits blanks so they never reach a validator as "".
-        const desc = data.description?.trim();
-        if (desc) payload.description = desc;
-        const vendor = data.vendor?.trim();
-        if (vendor) payload.vendor = vendor;
-        if (data.budgetId) payload.budgetId = data.budgetId;
-        if (data.fundCampaignId) payload.fundCampaignId = data.fundCampaignId;
-
-        const created = await createPurchaseRequest(payload);
-        toast.success('Purchase request created');
-        void navigate(`/finance/purchase-requests/${created.id}`);
+        return;
       }
+      // Validation passed, so the server can hold these values: this creates
+      // the draft if autosave has not yet, or brings it up to date.
+      const savedId = await autosave.flush();
+      if (!savedId) throw new Error('The request could not be saved');
+      toast.success(isEdit ? 'Purchase request updated' : 'Purchase request saved as a draft');
+      void navigate(`/finance/purchase-requests/${savedId}`);
     } catch (err: unknown) {
-      // The edit path calls the service directly rather than going through the
-      // store, so nothing else surfaces its failure.
       // A fixed id so repeated taps replace the toast instead of stacking one
       // per attempt.
       toast.error(getSaveFailureMessage(err, 'save the purchase request'), { id: 'purchase-request-save-error' });
     }
   };
+
+  // Leaving keeps whatever the server can hold. Only entries it cannot hold
+  // yet (no title or amount) would be lost, so only those ask first.
+  const leave = async () => {
+    if (autosave.hasUnsaved) {
+      if (!canSaveDraft(formValues)) {
+        const discard = await confirm({
+          title: 'Leave without saving?',
+          message:
+            'A draft is saved once the request has a title and an amount. What you have entered so far will be lost.',
+          confirmLabel: 'Leave',
+          cancelLabel: 'Keep editing',
+          variant: 'warning',
+        });
+        if (!discard) return;
+      } else {
+        try {
+          await autosave.flush();
+          toast.success('Draft saved');
+        } catch (err: unknown) {
+          toast.error(getSaveFailureMessage(err, 'save the draft'));
+          return;
+        }
+      }
+    }
+    void navigate('/finance/purchase-requests');
+  };
+
+  const discardDraft = async () => {
+    const draftId = autosave.draftId;
+    if (!draftId || isEdit) return;
+    const discard = await confirm({
+      title: 'Discard this draft?',
+      message: 'The draft is withdrawn and cannot be brought back.',
+      confirmLabel: 'Discard draft',
+      cancelLabel: 'Keep draft',
+      variant: 'danger',
+    });
+    if (!discard) return;
+    try {
+      await purchaseRequestService.cancel(draftId);
+    } catch (err: unknown) {
+      toast.error(getSaveFailureMessage(err, 'discard the draft'));
+      return;
+    }
+    autosave.stop();
+    toast.success('Draft discarded');
+    void navigate('/finance/purchase-requests');
+  };
+
+  const saveStatus = (() => {
+    if (!autosaving) return null;
+    if (autosave.status === 'saving') return 'Saving draft…';
+    if (autosave.status === 'error') return 'Could not save the draft. It will try again when you change something.';
+    if (autosave.savedAt && !autosave.hasUnsaved) return `Draft saved at ${formatTime(autosave.savedAt, tz)}`;
+    if (!canSaveDraft(formValues)) return 'Add a title and an amount to start saving a draft.';
+    return 'Saving soon…';
+  })();
 
   if (isLoading && isEdit && !selectedPurchaseRequest) {
     return (
@@ -201,7 +274,7 @@ const PurchaseRequestFormPage: React.FC = () => {
         <Breadcrumbs />
         <button
           type="button"
-          onClick={() => void navigate('/finance/purchase-requests')}
+          onClick={() => void leave()}
           className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -218,7 +291,7 @@ const PurchaseRequestFormPage: React.FC = () => {
       {/* Back link */}
       <button
         type="button"
-        onClick={() => void navigate('/finance/purchase-requests')}
+        onClick={() => void leave()}
         className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -232,8 +305,10 @@ const PurchaseRequestFormPage: React.FC = () => {
         </h1>
         <p className="text-theme-text-secondary mt-1 text-sm">
           {isEdit
-            ? 'You can edit a request until you submit it.'
-            : 'Saved as a draft. Submit it for approval from the next page.'}
+            ? autosaving
+              ? 'Changes to this draft are saved as you type. Submit it for approval from the request page.'
+              : 'You can edit a request until you submit it.'
+            : 'Your request is saved as a draft as you type. Submit it for approval from the next page.'}
         </p>
       </div>
 
@@ -293,7 +368,8 @@ const PurchaseRequestFormPage: React.FC = () => {
             <input
               type="number"
               step="0.01"
-              min="0"
+              min={MIN_MONEY_AMOUNT}
+              max={MAX_MONEY_AMOUNT}
               className={inputClass}
               placeholder="0.00"
               id="pr-estimatedAmount"
@@ -361,22 +437,38 @@ const PurchaseRequestFormPage: React.FC = () => {
         </div>
 
         {/* Actions */}
-        <div className="border-theme-surface-border mt-6 flex items-center justify-end gap-3 border-t pt-6">
-          <button
-            type="button"
-            onClick={() => void navigate('/finance/purchase-requests')}
-            className="touch:min-h-11 border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
-          >
-            <Save className="h-4 w-4" />
-            {isSubmitting ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Request'}
-          </button>
+        <div className="border-theme-surface-border mt-6 border-t pt-6">
+          {saveStatus && (
+            <p aria-live="polite" className="text-theme-text-secondary mb-4 text-sm">
+              {saveStatus}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {autosave.draftId && !isEdit && (
+              <button
+                type="button"
+                onClick={() => void discardDraft()}
+                className="touch:min-h-11 mr-auto px-2 py-2 text-sm font-medium text-red-700 hover:underline dark:text-red-400"
+              >
+                Discard draft
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void leave()}
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 rounded-lg border px-4 py-2 text-sm font-medium"
+            >
+              {autosaving ? 'Close' : 'Cancel'}
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {isSubmitting ? 'Saving...' : isEdit ? 'Save Changes' : 'Save Draft'}
+            </button>
+          </div>
         </div>
       </form>
     </div>

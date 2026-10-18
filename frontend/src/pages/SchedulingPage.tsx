@@ -406,6 +406,10 @@ const SchedulingPage: React.FC = () => {
       // department totals above it.
       setBoardRefreshKey((key) => key + 1);
       void loadSummary();
+      // Show the officer the shift they just made. Left on the current range,
+      // a shift for next week vanished behind an unchanged empty board.
+      const createdOn = parseCalendarDate(shiftForm.startDate);
+      if (createdOn) setCurrentDate(createdOn);
 
       setShiftForm({
         shiftTemplate: defaultTemplate?.id || '',
@@ -594,7 +598,10 @@ const SchedulingPage: React.FC = () => {
                     className="btn-primary inline-flex items-center gap-2 rounded-lg"
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
-                    <span>Create the first shift</span>
+                    {/* "First" only while it is true: an officer whose
+                        shifts sit outside this range is not starting from
+                        nothing, and the board says where the next one is. */}
+                    <span>{summary?.shifts_scheduled ? 'Create a shift' : 'Create the first shift'}</span>
                   </button>
                 ) : undefined
               }

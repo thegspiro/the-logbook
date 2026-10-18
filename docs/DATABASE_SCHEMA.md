@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**316 tables · 5228 columns · 1066 foreign keys**
+**316 tables · 5229 columns · 1066 foreign keys**
 
 ---
 
@@ -95,7 +95,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`apparatus_statuses`](#apparatus_statuses) | `ApparatusStatus` | 17 | Apparatus Status model for tracking vehicle availability |
 | [`apparatus_types`](#apparatus_types) | `ApparatusType` | 14 | Apparatus Type model for categorizing vehicles |
 | [`check_item_deployed_lots`](#check_item_deployed_lots) | `CheckItemDeployedLot` | 11 | A lot physically on the apparatus for one checklist position. |
-| [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 12 | A named section/area within a checklist template. |
+| [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 13 | A named section/area within a checklist template. |
 | [`check_template_items`](#check_template_items) | `CheckTemplateItem` | 28 | An individual item to check within a compartment. |
 | [`driver_exceptions`](#driver_exceptions) | `DriverException` | 17 | A chief-approved, time-boxed exception to the EVOC driving requirement. |
 | [`equipment_check_bulk_delete_requests`](#equipment_check_bulk_delete_requests) | `EquipmentCheckBulkDeleteRequest` | 7 | Durable result ledger for retry-safe atomic template-item deletion. |
@@ -439,7 +439,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 47 | Meeting Minutes model |
+| [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 48 | Meeting Minutes model |
 | [`meeting_motions`](#meeting_motions) | `Motion` | 19 | Motion model |
 | [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 15 | Action Item model |
 | [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 13 | A file kept with a set of minutes: reports, handouts, the signed copy. |
@@ -1633,6 +1633,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `container_type` | VARCHAR(50) | no |  | `compartment` |  |
 | `parent_compartment_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_template_compartments.id` ON DELETE SET NULL |
 | `is_sealed` | BOOL | no |  | `0` |  |
+| `is_inline` | BOOL | no |  | `0` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -6660,6 +6661,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `adopted_as_amended` | BOOL | yes |  |  |  |
 | `adoption_moved_by` | VARCHAR(200) | yes |  |  |  |
 | `adoption_seconded_by` | VARCHAR(200) | yes |  |  |  |
+| `attendance_listing` | VARCHAR(20) | yes |  |  |  |
 | `adopting_minutes_id` | VARCHAR(36) | yes | FK |  | → `meeting_minutes.id` ON DELETE SET NULL |
 | `event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `meeting_id` | VARCHAR(36) | yes | FK |  | → `meetings.id` ON DELETE SET NULL |
@@ -9858,7 +9860,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_shift_equip_check_org_date` (`organization_id`, `checked_at`)
 - `idx_shift_equip_check_shift_timing` (`shift_id`, `check_timing`)
-- `idx_shift_equip_check_shift_tmpl` (`shift_id`, `template_id`)
 - `idx_shift_equip_check_template` (`template_id`)
 - `idx_shift_equip_check_user` (`checked_by`)
 

@@ -13,6 +13,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE, MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE } from '../utils/moneyLimits';
 import { useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
@@ -31,7 +32,11 @@ import { calendarDaysBetween, getTodayLocalDate } from '@/utils/dateFormatting';
 
 const lineItemSchema = z.object({
   description: z.string().min(1, 'Description is required'),
-  amount: z.number({ message: 'Amount is required' }).positive('Amount must be greater than zero'),
+  amount: z
+    .number({ message: 'Amount is required' })
+    .positive('Amount must be greater than zero')
+    .min(MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE)
+    .max(MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE),
   dateIncurred: z.string().min(1, 'Date is required'),
   expenseType: z.string().min(1, 'Expense type is required'),
   merchant: z.string().optional(),
@@ -453,7 +458,8 @@ const ExpenseReportFormPage: React.FC = () => {
                       <input
                         type="number"
                         step="0.01"
-                        min="0"
+                        min={MIN_MONEY_AMOUNT}
+                        max={MAX_MONEY_AMOUNT}
                         className={inputClass}
                         id={`line-${String(index)}-amount`}
                         placeholder="0.00"

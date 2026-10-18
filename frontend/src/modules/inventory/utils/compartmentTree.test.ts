@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { flattenCompartmentTree } from './compartmentTree';
+import { flattenCompartmentTree, insertRootAt } from './compartmentTree';
 import type { CheckTemplateCompartment } from '../types/equipmentCheck';
 
 function comp(over: Partial<CheckTemplateCompartment> & { id: string; name: string }): CheckTemplateCompartment {
@@ -174,5 +174,24 @@ describe('flattenCompartmentTree', () => {
     ]);
     // A cycle leaves nothing at the top level; the guard prevents a hang.
     expect(compartments).toEqual([]);
+  });
+});
+
+describe('insertRootAt', () => {
+  const node = (id: string, parentCompartmentId = '') => ({ id, parentCompartmentId });
+
+  it('puts the new row before the top-level row at that position', () => {
+    const next = insertRootAt([node('cab'), node('rear')], node('loose'), 1);
+    expect(next.map((n) => n.id)).toEqual(['cab', 'loose', 'rear']);
+  });
+
+  it('never lands between a location and what is nested inside it', () => {
+    const next = insertRootAt([node('bag'), node('pocket', 'bag'), node('rear')], node('loose'), 1);
+    expect(next.map((n) => n.id)).toEqual(['bag', 'pocket', 'loose', 'rear']);
+  });
+
+  it('appends past the last row, and goes first at zero', () => {
+    expect(insertRootAt([node('cab')], node('loose'), 5).map((n) => n.id)).toEqual(['cab', 'loose']);
+    expect(insertRootAt([node('cab')], node('loose'), 0).map((n) => n.id)).toEqual(['loose', 'cab']);
   });
 });

@@ -304,6 +304,7 @@ class TestEquipmentCheckReports:
             check_id="c-1",
             status="pass",
             item_name="SCBA",
+            check_type="function",
             quantity_found=None,
             level_reading=None,
             serial_number=None,

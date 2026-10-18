@@ -19,6 +19,8 @@ from app.models.minute import MeetingMinutes, MinutesStatus
 from app.models.user import Organization, User
 from app.services.minutes_record_service import MinutesRecordService
 from app.services.minutes_signature_service import MinutesSignatureService
+from app.utils.minutes_attendance import effective_listing, listed_attendees
+from app.utils.minutes_settings import attendance_listing_in
 from app.utils.motion_votes import vote_summary
 from app.utils.org_timezone import scheduling_timezone
 
@@ -84,6 +86,11 @@ async def build_print_data(
         await db.execute(select(Organization).where(Organization.id == organization_id))
     ).scalar_one_or_none()
     tz = scheduling_timezone(org)
+    # The roll is recorded in full; the department (or these minutes) decides
+    # which statuses a reader of the printed copy is shown.
+    listing = effective_listing(
+        minutes.attendance_listing, attendance_listing_in(org.settings if org else None)
+    )
 
     def local(value: Optional[datetime], fmt: str) -> Optional[str]:
         stamp = _aware(value)
@@ -156,8 +163,9 @@ async def build_print_data(
                 or ("present" if a.get("present", True) else "absent"),
                 "note": a.get("note"),
             }
-            for a in (minutes.attendees or [])
+            for a in listed_attendees(minutes.attendees, listing)
         ],
+        "attendance_listing": listing,
         "quorum_display": (
             ("Quorum met" if minutes.quorum_met else "Quorum NOT met")
             + (f" ({minutes.quorum_count} present)" if minutes.quorum_count else "")
