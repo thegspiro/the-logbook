@@ -42,6 +42,7 @@ from app.services.ballot_send_jobs import (
     STALE_JOB_AFTER,
     BallotSend,
     ReminderSend,
+    find_active_job,
     run_ballot_send_job,
 )
 from app.services.election_service import ElectionService
@@ -212,6 +213,33 @@ async def test_a_completed_job_reports_what_the_send_did(db_session: AsyncSessio
     await db_session.refresh(election)
     assert election.email_sent is True
     assert sorted(election.email_recipients) == sorted(data["users"])
+
+
+@pytest.mark.unit
+class TestFindActiveJobLocksTheRead:
+    """CLAUDE.md pitfall #27: ``_queue_send`` locks the election row before
+    calling ``find_active_job``, but the auth dependency's own user lookup
+    (the same session's first read) already fixed this transaction's
+    REPEATABLE READ snapshot — a plain SELECT here would still answer from
+    before that lock, so two requests queuing a send for the same election
+    could both see no active job and both queue one. Only a locking read is
+    guaranteed to see the latest committed row once the election lock is
+    granted.
+
+    ``db_session`` (one transaction, auto-rolled-back) cannot exercise the
+    real two-connection race, so this asserts the query shape instead — the
+    same way ``test_capacity_locking.py`` does for every other site."""
+
+    async def test_the_query_is_a_locking_read(self):
+        execute_result = MagicMock()
+        execute_result.scalars.return_value.all.return_value = []
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=execute_result)
+
+        await find_active_job(db, _uid(), _uid())
+
+        statement = db.execute.await_args.args[0]
+        assert statement._for_update_arg is not None
 
 
 async def test_a_second_send_is_refused_while_one_is_in_progress(
