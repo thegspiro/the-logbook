@@ -1,6 +1,143 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), pass 9 (this PR)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9)
+
+---
+
+## Pass 10 (2026-10-18) — watchdog pickup: real delta (async ballot/reminder send jobs, nominee bell notice, meeting-aligned voting window, write-in restriction), 0 fixed, 0 new findings
+
+**Scope.** Pass 9 merged as `80d92defd` (PR #3248). `git log --no-merges
+80d92defd..HEAD` over this feature's files (`elections.py`,
+`election_service.py`, `quorum_service.py`, `models/election.py`,
+`schemas/election.py`, `election_ballot_pdf.py`, `mcp/tools/elections.py`,
+`frontend/src/modules/elections/` and `frontend/src/pages/Election*.tsx`):
+12 non-merge commits, all read in full. No election-table migration
+landed (checked by scanning every new migration body for
+`elections`/`candidates`/`votes`/`voting_tokens`/`manual_ballot_batches`
+— none matched; the two new migrations this window belong to this
+feature's own new `ballot_send_jobs` table, reviewed below). One commit
+(`2637084ff`, the Minutes module's roll-call/election-results feature)
+only touches `quorum_service.py` incidentally (1 line) and is Minutes'
+own change, not reviewed here — same shape as pass 9's note about an
+unrelated file sharing this feature's file list.
+
+**The largest change — two new background job endpoints, read against all
+seven checklist dimensions:**
+
+`POST /{election_id}/ballot-send-jobs` and `POST
+/{election_id}/reminder-send-jobs` (commits `63c7a5271`, `66927fccc`) move
+ballot/reminder sends out of the HTTP request (a department-sized send
+outlasts the 30s browser timeout and 60s nginx proxy timeout) into a new
+`ballot_send_jobs` table, polled via `GET
+/{election_id}/ballot-send-jobs/{job_id}`.
+
+- **Auth:** all three endpoints gated by `require_permission(
+"elections.manage")`, same as the pre-existing synchronous
+  `/send-ballot` and `/remind-non-voters`.
+- **Tenancy:** `_queue_send` resolves the election with `.where(
+Election.organization_id == organization_id).with_for_update()` —
+  Pitfall #27's row lock, correctly applied, so two requests racing to
+  queue a send for the same election cannot both find none in progress.
+  `get_job`/`find_active_job`/`_load_job` (`ballot_send_jobs.py`) all
+  filter `BallotSendJob.organization_id == organization_id` directly (the
+  model carries its own `organization_id` column — Pitfall #14a's direct
+  shape), so a job id from another org is a 404, not a leak. The
+  background runner (`_run_job`, outside request context) receives
+  `organization_id` captured at queue time from the authenticated caller
+  and re-filters every query by it — no cross-org read is possible even
+  though the task runs after the request's own session has closed.
+- **Model/migration:** `BallotSendJob.organization_id` is `nullable=False`
+  with `ondelete="CASCADE"`; `requested_by` is `ondelete="SET NULL"` with
+  `nullable=True` (Pitfall #2, correct pairing). Both new migrations
+  (`c87efd81c5aa` table creation, `244b0fd07205` the `kind` column) guard
+  on their parent/own table existing before acting (Pitfall #26) and are
+  additive with a real, reversible downgrade.
+- **Abuse resistance:** a queued/running job older than `STALE_JOB_AFTER`
+  (30 min) is marked failed rather than blocking new sends forever
+  (handles a restart mid-send); one-send-per-election is enforced by the
+  row lock above, not merely by a race-prone read.
+- **Injection/data exposure:** the emailed ballot link is built from the
+  server-configured `settings.FRONTEND_URL`, never `request.base_url` —
+  both `_ballot_base_url` and `_reminder_ballot_url` carry an inline `SEC:`
+  comment on exactly this, guarding against a spoofed `Host` header
+  redirecting a live voting-token link to an attacker's domain. Unchanged
+  from the pre-existing synchronous path; the new job endpoints reuse the
+  same helpers.
+
+**Other real changes, each verified sound:**
+
+- **Nominee bell notice** (`1a8dc1f37`): a third-party nominee now gets an
+  in-app `NotificationLog` row (category `election_nomination`) beside the
+  existing email, not gated on email preferences (so muting election email
+  can't hide a request only the nominee can answer). Written with the
+  caller's own `organization_id`; the nominations-tab link and email body
+  are HTML-escaped (`html_mod.escape`) before embedding, including the new
+  link URL. Insert is committed on its own with its own try/except so a
+  notification failure can't roll back the nomination itself.
+- **Meeting-aligned voting window** (`1a8dc1f37`, frontend only): a
+  linked meeting/event's start/end populate the election's `start_date`/
+  `end_date` on the existing `PATCH` update path — `meeting_id`/`event_id`
+  were already-validated fields before this commit; this change only adds
+  two fields (`start_date`, `end_date`) that election creation has always
+  accepted and validated. No new backend surface.
+- **No write-in on an Approve/Deny item** (`47b6bd3c2`): both server vote
+  paths (`submit_ballot_with_token`, `submit_member_ballot`) now reject a
+  `write_in` choice via the new `_is_approval_item()` helper — a pure
+  validation tightening (previously wrongly accepted), not a weakening.
+- **Refuse ballot emails with nothing to vote on** (`8dc41c332`): `
+send_ballot_emails` now raises before any email goes out if
+  `effective_ballot_items()` is empty — closes W50-91 (a dead-ballot link
+  mailed to members), returned as 400 by all three send paths.
+- **Edit form null-position fix** (`7468e9f9e`): election candidate update
+  no longer rejects a `null` position when the election defines positions
+  — a frontend/validation correctness fix, not a scoping change.
+- **PDF letterhead/style unification** (`afbb11cda`, `2caf7df0a`,
+  `4d22def67`, `19e0ad30a`): visual-only changes to three ReportLab PDF
+  renderers (ballot, certified results, pre-meeting package), including
+  fixing a double-escape bug (values were HTML-escaped twice, printing
+  literal `&amp;`/`&gt;`) down to a single escape. This is a ReportLab
+  Paragraph markup-escape correctness fix, not a browser-rendered
+  HTML/XSS surface — the PDF is generated server-side and never
+  interpreted as live HTML. Each contest's effective voting method
+  (`_effective_voting_method`, already used by both submission routes) is
+  now also used by the printed ballot, so a Ballot Builder item's method
+  override is reflected consistently across every rendering, closing a
+  correctness gap, not opening one.
+
+**Standing items re-verified, all unchanged (none touched by this
+window's delta):**
+
+- **ELEC-12** (`SavedBallotTemplate` list/create unbounded) — still
+  bounded in practice by the unchanged 200/org creation cap.
+- **ELEC-16** (`list_manual_ballot_batches` unbounded) — confirmed by
+  direct read (now at `election_service.py:5282`, shifted from pass 9's
+  `:5196` by this window's earlier insertions, same unpaginated body);
+  accepted as-is per the Owner Decisions section.
+- **ELEC-40** (pre-ELEC-34 dedup collision-avoidance edge case) —
+  `_dedup_position_key`/`_dedup_scoped_item_aliases` (now at
+  `election_service.py:306,373`) unchanged in substance.
+
+**0 new findings; 0 code fixed by this pass.**
+
+### Schema & migration notes (pass 10)
+
+The two new migrations (`c87efd81c5aa`, `244b0fd07205`) belong to this
+feature's new `ballot_send_jobs` table, reviewed above. No
+`elections`/`candidates`/`votes`/`voting_tokens`/`manual_ballot_batches`
+migration landed.
+
+### Completion gate (pass 10)
+
+| Check                                                                      | Result                                                     |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                              | ✅ 0 violations                                            |
+| `black --check app/ tests/ alembic/`                                       | ✅ 2426 files unchanged                                    |
+| `isort --check-only app/ tests/ alembic/`                                  | ✅ clean                                                   |
+| `python3 scripts/validate_migrations.py --strict`                          | ✅ 618 revisions, single head `1117b642643b`               |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)          | ✅ 270 routes, 0 errors, 0 warnings                        |
+| `pytest tests/ -q -k "election or ballot or quorum or candidate or proxy"` | ✅ 1,043 passed, 1 skipped (environment-only, `pywebpush`) |
+| `frontend: npm run typecheck`                                              | ✅ clean                                                   |
+| `frontend: npm run lint`                                                   | ✅ clean                                                   |
 
 ---
 

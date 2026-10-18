@@ -16,10 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3401](https://github.com/thegspiro/the-logbook/pull/3401)** (branch
-`claude/security-review-finance-approvals-p10`). PR #3400
-(Feature 04, Storefront & payments, pass 10) merged 2026-10-18 clean,
-docs-only; already recorded in that PR's own history below.
+**None.** PR #3401 (Feature 05, Finance & approvals, pass 10) merged
+clean 2026-10-18 (docs-only — `PROGRESS.md` +
+`FIN-05-finance-approvals.md` only). Already fully recorded in that PR's
+own history below, so there is nothing further to add here. Rotation row
+05 stays ✅. Confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`, 0 results) that no
+`claude/security-review-*` PR is open. The dedicated `/loop 30m
+/security-review` session was still not reachable via `ListAgents`, so
+this is another watchdog pickup. Proceeding to Feature 06 (Elections &
+ballots), pass 10.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 10, PR #3401, merged), preserved for history</summary>
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
 `claude/security-review-`, confirmed via `search_pull_requests`, and the
@@ -38,6 +47,8 @@ gate; no migration; own 296-line test file. FIN8-05-1 and FIN-30
 re-confirmed **OPEN**, unchanged. See `FIN-05-finance-approvals.md`'s
 **Pass 10** section for the full writeup. Row 05 → ✅ (pending this PR's
 merge); next is Feature 06 (Elections & ballots).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 10, PR #3400, merged), preserved for history</summary>
@@ -20041,7 +20052,7 @@ iteration's commit" rule.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
@@ -20077,6 +20088,57 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-18 — Feature 06 (Elections & ballots, pass 10) — watchdog pickup, real delta (async ballot/reminder send jobs, nominee bell notice, write-in restriction), 0 fixed, 0 new findings
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3401 (Feature 05, Finance & approvals, pass 10) had
+already merged clean, docs-only, closing row 05; rotation row 06 was the
+next `⬜`.
+
+**Baseline:** `80d92defd` (PR #3248's merge, pass 9). **Head:** current
+`main`. 12 non-merge commits touch this feature's scope, all read in
+full — the largest since this rotation's recent "near-zero-delta" passes.
+The significant new surface is two background job endpoints (`POST
+/{id}/ballot-send-jobs`, `POST /{id}/reminder-send-jobs`, polled via `GET
+.../ballot-send-jobs/{job_id}`) that move ballot/reminder sends out of the
+HTTP request to avoid the 30s browser / 60s nginx proxy timeout on a
+department-sized send. Verified sound: all three gated by
+`elections.manage`; the election row is resolved with `.with_for_update()`
+org-scoped before queueing (Pitfall #27's row lock, correctly applied so
+two concurrent requests cannot both queue a send); the new
+`ballot_send_jobs` table carries its own `organization_id` (Pitfall #14a
+direct filter) and every job lookup — including the background runner,
+which runs outside request context — re-filters by the organization_id
+captured at queue time; `requested_by` is `SET NULL`/`nullable=True`
+(Pitfall #2); both new migrations guard on parent/own table existence
+(Pitfall #26) and are additive/reversible; the emailed ballot link still
+uses `settings.FRONTEND_URL`, never the client-controlled `Host` header.
+Other real changes verified sound: a nominee bell notification
+(org-scoped, HTML-escaped, best-effort and independently committed), a
+meeting-linked voting window (frontend-only, reuses already-validated
+`start_date`/`end_date` fields), a write-in restriction on Approve/Deny
+ballot items (validation tightening on both vote-submission paths), a
+refusal to email ballots for an election with nothing to vote on, and a
+PDF letterhead/escaping unification across three ReportLab renderers
+(a markup-escape correctness fix, not a browser-rendered XSS surface). No
+election-table migration landed. The three standing flagged items —
+**ELEC-12**, **ELEC-16**, **ELEC-40** — all re-confirmed unchanged by
+direct read, none touched by this window's delta. See
+`ELEC-06-elections-ballots.md`'s **Pass 10** section for the full
+writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` clean; `validate_migrations.py --strict` passed (618
+revisions, single head); `check_route_permissions.py --strict` 270
+routes, 0 errors/warnings; scoped backend tests (`-k "election or ballot
+or quorum or candidate or proxy"`) 1,043 passed, 1 skipped
+(environment-only, `pywebpush`); frontend `npm run typecheck` and `npm
+run lint` both clean.
+
+Row 06 → ✅ (pending this PR's merge); next is Feature 07 (Users &
+organizations).
 
 ### 2026-10-18 — Feature 05 (Finance & approvals, pass 10) — watchdog pickup, real delta (approval-chain/step delete restriction + audit logging), 0 fixed, 0 new findings; FIN8-05-1/FIN-30 still open
 
