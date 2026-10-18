@@ -1452,6 +1452,17 @@ const Dashboard: React.FC = () => {
   // row is dropped -- unless hours were credited to them anyway (a position
   // changed since), in which case hiding it would understate the total.
   const showStandbyHours = !shiftsExcluded || loadingHours || (hours.standby ?? 0) > 0;
+  // "Excluded" is the general answer, with no shift in question. A seat opened
+  // to this member on one particular shift (an administrative member on a
+  // parade) is only visible per shift, so the tile goes only when the open
+  // list is empty too. For a member without scheduling.manage that list is
+  // already seat-level (GET /shifts/open lists only shifts with an unclaimed
+  // seat they can take). A manager's is the department-wide gap view, which
+  // says nothing about what they can claim, so the tile is simply kept for
+  // them: the scheduling screen is where they work anyway, and re-deriving
+  // claimability here would second-guess the backend's own capacity check.
+  const showTakeShift =
+    !shiftsExcluded || loadingOpenShifts || openShiftsError || canViewScheduling || openShiftsInWindow.length > 0;
   const hoursSegments: HoursSegment[] = [
     { label: 'Training', value: hours.training, colorClass: 'bg-theme-accent-green' },
     ...(showStandbyHours
@@ -1915,11 +1926,11 @@ const Dashboard: React.FC = () => {
                   On a phone they sit *below* the week: at 2am the thumb
                   reaches the bottom third, and the week is what you read. */}
               <div
-                className={`order-3 grid grid-cols-2 gap-3 sm:order-1 ${shiftsExcluded ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}
+                className={`order-3 grid grid-cols-2 gap-3 sm:order-1 ${showTakeShift ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}
               >
                 <button
                   onClick={() => void navigate('/training/submit')}
-                  className={`focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-3.5 rounded-lg bg-red-800 px-4 py-4 text-left text-white shadow-sm transition-colors hover:bg-red-900 focus:ring-2 focus:ring-offset-2 focus:outline-hidden active:bg-red-900 sm:col-span-1 sm:min-h-[88px] ${shiftsExcluded ? 'col-span-1' : 'col-span-2'}`}
+                  className={`focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-3.5 rounded-lg bg-red-800 px-4 py-4 text-left text-white shadow-sm transition-colors hover:bg-red-900 focus:ring-2 focus:ring-offset-2 focus:outline-hidden active:bg-red-900 sm:col-span-1 sm:min-h-[88px] ${showTakeShift ? 'col-span-2' : 'col-span-1'}`}
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/20">
                     <Plus className="h-6 w-6" strokeWidth={2.5} aria-hidden="true" />
@@ -1930,7 +1941,7 @@ const Dashboard: React.FC = () => {
                   </span>
                 </button>
 
-                {!shiftsExcluded && (
+                {showTakeShift && (
                   <button
                     onClick={() => void navigate('/scheduling')}
                     className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
