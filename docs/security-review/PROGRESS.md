@@ -16,10 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**This PR** (branch `claude/security-review-elections-ballots`; number
-recorded in a follow-up commit on this same branch once opened). PR #3401
-(Feature 05, Finance & approvals, pass 10) merged 2026-10-18 clean,
-docs-only; already recorded in that PR's own history below.
+**PR [#3404](https://github.com/thegspiro/the-logbook/pull/3404)** (branch
+`claude/security-review-elections-ballots`). PR #3401 (Feature 05, Finance &
+approvals, pass 10) merged 2026-10-18 clean, docs-only; already recorded in
+that PR's own history below.
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
 `claude/security-review-`, confirmed via `list_pull_requests`, and the
