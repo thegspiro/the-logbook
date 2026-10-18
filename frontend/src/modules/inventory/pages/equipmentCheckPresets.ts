@@ -18,6 +18,7 @@ export const CHECK_TYPES = [
   { value: 'function', label: 'Function' },
   { value: 'count', label: 'Count' },
   { value: 'expiry', label: 'Expiry' },
+  { value: 'presence', label: 'Present' },
   { value: 'text', label: 'Statement' },
   { value: 'header', label: 'Section Header' },
 ] as const;
@@ -31,6 +32,8 @@ export const CHECK_TYPE_HELP: Record<string, string> = {
     'A par level to match. One tap confirms par; the stepper is for when it does not. Short of par becomes a restock line, not a failure.',
   expiry:
     'A date already on record, shown and confirmed rather than retyped, so the check is a glance at the vial. Inside the pull window the line stays amber on every shift until it is replaced.',
+  presence:
+    'Is it on the truck — gloves, a map book, a spare wrench. The crew answers Present or Absent; Absent fails the item without needing a note, because it already says what is wrong.',
   text: 'Read-only statement or instruction. Displayed as informational text — no action required from the member.',
   header: 'Visual section divider to group items. Not a checkable item — just a label to help members navigate.',
 };
@@ -44,6 +47,7 @@ export const CHECK_TYPE_SUMMARY: Record<string, string> = {
   function: 'Switched on and watched; a fail takes a note and a photo.',
   count: 'A par level to match; short of par is a restock, below Min to Pass fails.',
   expiry: 'A date on record, confirmed at a glance.',
+  presence: 'On the truck or not; Absent fails with no note needed.',
   text: 'A read-only statement; nothing to answer.',
   header: 'A section divider; not a checkable item.',
 };

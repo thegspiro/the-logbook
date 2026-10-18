@@ -39,6 +39,9 @@ export const CheckType = {
   /** A date on record, confirmed rather than retyped. Medications, IV fluids,
    *  AED pads, extinguisher inspection. */
   EXPIRY: 'expiry',
+  /** Is it on the truck. Stores pass/fail, answered Present or Absent, and
+   *  Absent explains itself the way a short count does. Gloves, a map book. */
+  PRESENCE: 'presence',
   /** Structural: a section heading. Not a check. */
   HEADER: 'header',
   /** Structural: a statement the crew reads. Not a check. */
@@ -46,8 +49,14 @@ export const CheckType = {
 } as const;
 export type CheckType = (typeof CheckType)[keyof typeof CheckType];
 
-/** The four that actually store an answer, in walking order of the design. */
-export const CANONICAL_CHECK_TYPES = [CheckType.LEVEL, CheckType.FUNCTION, CheckType.COUNT, CheckType.EXPIRY] as const;
+/** The types that actually store an answer, in walking order of the design. */
+export const CANONICAL_CHECK_TYPES = [
+  CheckType.LEVEL,
+  CheckType.FUNCTION,
+  CheckType.COUNT,
+  CheckType.EXPIRY,
+  CheckType.PRESENCE,
+] as const;
 export type CanonicalCheckType = (typeof CANONICAL_CHECK_TYPES)[number];
 
 /** Rows that are layout rather than a question. */
@@ -159,6 +168,23 @@ export function passFloor(
 }
 
 /**
+ * Whether the crew may record a replacement's date on this line.
+ *
+ * Mirrors `EquipmentCheckService._accepts_replacement_date`: a Date line with
+ * no inventory link and no lots aboard, whose date nothing else owns. A
+ * linked line records its new date through the stock swap instead.
+ */
+export function acceptsReplacementDate(
+  item: Pick<CheckTemplateItem, 'checkType' | 'inventoryItemId' | 'lotsAboard'>
+): boolean {
+  return (
+    normalizeCheckType(item.checkType) === CheckType.EXPIRY &&
+    !item.inventoryItemId &&
+    !(item.lotsAboard ?? []).some((lot) => lot.quantity > 0)
+  );
+}
+
+/**
  * A filed count as a crew reads it: `"8 / 10 each, restock 2"`.
  *
  * Mirrors `describe_count` in `backend/app/utils/check_types.py`, which writes
@@ -255,6 +281,7 @@ export const CHECK_TYPE_LABELS: Record<CheckType, string> = {
   function: 'Function',
   count: 'Count',
   expiry: 'Expiry',
+  presence: 'Present',
   text: 'Statement',
   header: 'Section Header',
 };
@@ -265,6 +292,7 @@ export const CHECK_TYPE_STORES: Record<CanonicalCheckType, string> = {
   function: 'stores pass / fail',
   count: 'stores a quantity',
   expiry: 'stores a date',
+  presence: 'stores present / absent',
 };
 
 export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
@@ -559,6 +587,11 @@ export interface CheckTemplateCompartment {
    * move on their own while the bag sits shut.
    */
   isSealed?: boolean;
+  /**
+   * A headingless group: its items sit directly on the checklist, wherever the
+   * group is placed among the locations. Never sealed, nested or named.
+   */
+  isInline?: boolean;
   parentCompartmentId?: string;
   items: CheckTemplateItem[];
   createdAt?: string;
@@ -574,6 +607,8 @@ export interface CheckTemplateCompartmentCreate {
   container_type?: string | undefined;
   is_sealed?: boolean | undefined;
   parent_compartment_id?: string | undefined;
+  /** Fixed at creation; the server coerces an inline group to stay plain. */
+  is_inline?: boolean | undefined;
   items?: CheckTemplateItemCreate[] | undefined;
 }
 

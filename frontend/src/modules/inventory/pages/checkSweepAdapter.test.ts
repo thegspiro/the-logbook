@@ -92,6 +92,33 @@ describe('toLapStops — structure', () => {
   });
 });
 
+describe('toLapStops — items placed on the checklist', () => {
+  it('names the stop for the walk, and skips an emptied group', () => {
+    const stops = toLapStops({
+      compartments: [
+        comp({ id: 'loose', name: '', isInline: true, items: [item({ id: 'radios', checkType: 'function' })] }),
+        comp({ id: 'empty', name: '', isInline: true, sortOrder: 2 }),
+      ],
+    });
+    expect(stops.map((s) => [s.id, s.name])).toEqual([['loose', 'On the checklist']]);
+  });
+
+  it('marks an unlinked Date line as taking a replacement date, and a linked one not', () => {
+    const stops = toLapStops({
+      compartments: [
+        comp({
+          id: 'c',
+          items: [
+            item({ id: 'pads', checkType: 'expiry' }),
+            item({ id: 'epi', checkType: 'expiry', inventoryItemId: 'inv-1' }),
+          ],
+        }),
+      ],
+    });
+    expect(stops[0]?.items.map((i) => i.acceptsReplacement)).toEqual([true, undefined]);
+  });
+});
+
 describe('toLapStops — items', () => {
   it('takes par as the larger column where a template carries both', () => {
     const stops = toLapStops({

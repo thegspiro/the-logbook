@@ -15,6 +15,7 @@ from pydantic.alias_generators import to_camel
 from app.schemas.base import UTCResponseBase
 from app.utils.check_types import (
     CANONICAL_CHECK_TYPES,
+    EXPIRY,
     LEGACY_CHECK_TYPES,
     STRUCTURAL_TYPES,
     normalize_check_type,
@@ -115,6 +116,14 @@ class CheckTemplateItemCreate(BaseModel):
     @classmethod
     def count_unit_is_label(cls, value: Optional[str]) -> Optional[str]:
         return _normalize_count_unit(value)
+
+    @model_validator(mode="after")
+    def date_line_expires(self) -> "CheckTemplateItemCreate":
+        # A Date line is an expiring item by definition; every create path —
+        # single, bulk, preset, import — goes through this schema.
+        if normalize_check_type(self.check_type) == EXPIRY:
+            self.has_expiration = True
+        return self
 
 
 class CheckTemplateItemBulkCreate(BaseModel):
@@ -246,7 +255,24 @@ class CheckTemplateCompartmentCreate(BaseModel):
     container_type: str = Field("compartment", max_length=50)
     is_sealed: bool = False
     parent_compartment_id: Optional[str] = None
+    # Items placed directly on the checklist. Fixed at creation: turning a
+    # named location into a headingless group (or back) is a move of its
+    # items, not an edit of the container.
+    is_inline: bool = False
     items: Optional[List[CheckTemplateItemCreate]] = None
+
+    @model_validator(mode="after")
+    def inline_group_is_plain(self) -> "CheckTemplateCompartmentCreate":
+        # A headingless group has no name to show, no seal to read and no
+        # parent to sit in; coerced rather than refused so a stray flag from
+        # a preset or import cannot fail the whole batch.
+        if self.is_inline:
+            self.name = ""
+            self.is_header = False
+            self.is_sealed = False
+            self.parent_compartment_id = None
+            self.container_type = "compartment"
+        return self
 
 
 class CompartmentReplaceRequest(BaseModel):
@@ -303,6 +329,7 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
     container_type: str = "compartment"
     is_sealed: bool = False
     parent_compartment_id: Optional[str] = None
+    is_inline: bool = False
     items: List[CheckTemplateItemResponse] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -323,10 +350,10 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
             return "compartment"
         return str(v)
 
-    @field_validator("is_sealed", mode="before")
+    @field_validator("is_sealed", "is_inline", mode="before")
     @classmethod
     def coerce_is_sealed(cls, v: object) -> bool:
-        """Rows created before the is_sealed column was added store NULL."""
+        """Rows created before these columns were added store NULL."""
         if v is None:
             return False
         return bool(v)

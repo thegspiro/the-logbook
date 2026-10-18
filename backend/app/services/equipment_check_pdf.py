@@ -19,7 +19,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.models.user import Organization
-from app.utils.check_types import describe_count
+from app.utils.check_types import PRESENCE, describe_count, normalize_check_type
 from app.utils.org_timezone import format_in_org_timezone
 
 _styles = getSampleStyleSheet()
@@ -257,6 +257,16 @@ def generate_compliance_pdf(
     return buf.getvalue()
 
 
+def _status_label(check_type: Optional[str], status: str) -> str:
+    """A result's status in the words the crew answered it in."""
+    if normalize_check_type(check_type) == PRESENCE:
+        if status == "pass":
+            return "PRESENT"
+        if status == "fail":
+            return "ABSENT"
+    return status.upper() if status else "-"
+
+
 def _item_with_count(record: Dict[str, Any]) -> str:
     """The item name, followed by its count when the failure was a count."""
     name = str(record.get("item_name", ""))
@@ -397,7 +407,8 @@ def generate_check_detail_pdf(
     items = check.get("items", [])
     compartments: Dict[str, List[Dict[str, Any]]] = {}
     for item in items:
-        comp = item.get("compartment_name", "General")
+        # Items placed directly on the checklist snapshot no location name.
+        comp = item.get("compartment_name") or "On the checklist"
         compartments.setdefault(comp, []).append(item)
 
     for comp_name, comp_items in compartments.items():
@@ -418,7 +429,7 @@ def generate_check_detail_pdf(
                 [
                     str(it.get("item_name", "")),
                     str(it.get("check_type", "")),
-                    status.upper() if status else "-",
+                    _status_label(it.get("check_type"), status),
                     count or "-",
                     notes,
                 ]

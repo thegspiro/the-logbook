@@ -28,7 +28,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.utils.check_types import COUNT, normalize_check_type
+from app.utils.check_types import COUNT, PRESENCE, normalize_check_type
 from app.utils.member_names import format_display_name
 from app.utils.positions import position_label
 from app.utils.print_document import DocumentRow, DocumentSection, PrintDocument
@@ -296,6 +296,8 @@ def _item_expectation(item) -> Optional[str]:
         if item.required_quantity:
             note += f", min {item.required_quantity}"
         return note
+    if normalize_check_type(check_type) == PRESENCE:
+        return "present / absent"
     if check_type == "level":
         if item.min_level is not None:
             unit = item.level_unit or ""
@@ -399,7 +401,12 @@ async def build_apparatus_check_sheet(
         rows: List[DocumentRow] = []
         walk(compartment, 0, rows)
         if rows:
-            sections.append(DocumentSection(heading=compartment.name, rows=rows))
+            # Items placed directly on the checklist print without a heading,
+            # the way the crew sees them.
+            heading = (
+                None if getattr(compartment, "is_inline", False) else compartment.name
+            )
+            sections.append(DocumentSection(heading=heading, rows=rows))
 
     if not sections:
         sections.append(

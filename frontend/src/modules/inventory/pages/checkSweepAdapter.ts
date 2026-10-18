@@ -31,6 +31,7 @@
  */
 
 import {
+  acceptsReplacementDate,
   CheckType,
   normalizeCheckType,
   passFloor,
@@ -105,6 +106,7 @@ function toItemSpec(item: CheckTemplateItem, source: SweepSource): CheckItemSpec
     ...(expiry !== undefined ? { expirationDate: expiry } : {}),
     ...(item.inventoryItemId !== undefined ? { inventoryItemId: item.inventoryItemId } : {}),
     ...(item.expirationWarningDays !== undefined ? { expirationWarningDays: item.expirationWarningDays } : {}),
+    ...(acceptsReplacementDate(item) ? { acceptsReplacement: true } : {}),
   };
 }
 
@@ -186,7 +188,9 @@ export function toLapStops(source: SweepSource): LapStop[] {
     const seal = toSeal(compartment, source);
     return {
       id: compartment.id,
-      name: compartment.name,
+      // Items placed directly on the checklist have no heading of their own;
+      // the walk still needs a name for the stop and the jump list.
+      name: compartment.isInline ? 'On the checklist' : compartment.name,
       ...(compartment.containerType !== undefined ? { containerType: compartment.containerType } : {}),
       ...(compartment.isSealed ? { isSealed: true } : {}),
       ...(seal !== undefined ? { seal } : {}),
@@ -198,5 +202,9 @@ export function toLapStops(source: SweepSource): LapStop[] {
     };
   };
 
-  return roots.slice().sort(bySortOrder).map(build);
+  return roots
+    .filter((compartment) => !(compartment.isInline && compartment.items.length === 0))
+    .slice()
+    .sort(bySortOrder)
+    .map(build);
 }

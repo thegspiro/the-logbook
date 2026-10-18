@@ -30,6 +30,13 @@ export interface CheckItemAnswer {
   levelReading?: number | undefined;
   /** Expiry type: the date on record was looked at and confirmed. */
   expiryConfirmed?: boolean | undefined;
+  /**
+   * Expiry type: the date printed on a replacement the crew put aboard, as
+   * `YYYY-MM-DD`. Only on a line `acceptsReplacementDate` allows.
+   */
+  expirationFound?: string | undefined;
+  /** Expiry type: the replacement's lot number, when the crew read one. */
+  lotFound?: string | undefined;
   /** Function type: what went wrong, when it did. */
   notes?: string | undefined;
   photoFiles?: File[] | undefined;
@@ -82,6 +89,11 @@ export interface CheckItemSpec {
    */
   inventoryItemId?: string | null | undefined;
   expirationWarningDays?: number | null | undefined;
+  /**
+   * The crew may record a replacement's date here (`acceptsReplacementDate`):
+   * a Date line with no inventory link and no lots aboard.
+   */
+  acceptsReplacement?: boolean | undefined;
 }
 
 interface ControlProps {

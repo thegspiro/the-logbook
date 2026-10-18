@@ -41,8 +41,16 @@ COUNT = "count"
 #: AED pads, extinguisher inspection. Stores a date.
 EXPIRY = "expiry"
 
-#: The four answer shapes a check item can have.
-CANONICAL_CHECK_TYPES = (LEVEL, FUNCTION, COUNT, EXPIRY)
+#: Is it on the truck — gloves, a map book, a spare spanner wrench. Stores
+#: pass/fail like ``function``, but the crew answers Present or Absent, and
+#: Absent explains itself the way a short count does: the record already says
+#: what is wrong. Added 2026-10-18 at the department's request; the legacy
+#: ``present`` value is *not* mapped here — those rows stayed ``function`` with
+#: their instruction preserved, and an admin switches one when they choose.
+PRESENCE = "presence"
+
+#: The answer shapes a check item can have.
+CANONICAL_CHECK_TYPES = (LEVEL, FUNCTION, COUNT, EXPIRY, PRESENCE)
 
 #: Structural rows that are not checks and have no answer to store. They are
 #: deliberately outside the four: they are the layout a type is no longer

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**316 tables · 5228 columns · 1066 foreign keys**
+**316 tables · 5229 columns · 1066 foreign keys**
 
 ---
 
@@ -95,7 +95,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`apparatus_statuses`](#apparatus_statuses) | `ApparatusStatus` | 17 | Apparatus Status model for tracking vehicle availability |
 | [`apparatus_types`](#apparatus_types) | `ApparatusType` | 14 | Apparatus Type model for categorizing vehicles |
 | [`check_item_deployed_lots`](#check_item_deployed_lots) | `CheckItemDeployedLot` | 11 | A lot physically on the apparatus for one checklist position. |
-| [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 12 | A named section/area within a checklist template. |
+| [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 13 | A named section/area within a checklist template. |
 | [`check_template_items`](#check_template_items) | `CheckTemplateItem` | 28 | An individual item to check within a compartment. |
 | [`driver_exceptions`](#driver_exceptions) | `DriverException` | 17 | A chief-approved, time-boxed exception to the EVOC driving requirement. |
 | [`equipment_check_bulk_delete_requests`](#equipment_check_bulk_delete_requests) | `EquipmentCheckBulkDeleteRequest` | 7 | Durable result ledger for retry-safe atomic template-item deletion. |
@@ -1633,6 +1633,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `container_type` | VARCHAR(50) | no |  | `compartment` |  |
 | `parent_compartment_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_template_compartments.id` ON DELETE SET NULL |
 | `is_sealed` | BOOL | no |  | `0` |  |
+| `is_inline` | BOOL | no |  | `0` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 

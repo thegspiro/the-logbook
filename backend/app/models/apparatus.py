@@ -2591,6 +2591,14 @@ class CheckTemplateCompartment(Base):
     is_sealed: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
+    # A headingless group: its items sit directly on the checklist, wherever
+    # the group is placed among the locations. It is still a row here, rather
+    # than items pointing at the template, because every department-isolation
+    # query reaches an item's organization through its compartment. Never
+    # sealed, nested or named — EquipmentCheckService keeps it that way.
+    is_inline: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -2775,6 +2783,7 @@ class CheckTemplateItem(Base):
         lots_aboard: Any
         unit_of_measure: Optional[str]
         _check_compartment_name: Optional[str]
+        _check_template_id: Optional[str]
 
     __table_args__ = (
         Index("idx_check_item_compartment", "compartment_id"),

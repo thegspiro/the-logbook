@@ -504,6 +504,29 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Equipment checks: Present / Absent, crew-dated replacements, items with no location (2026-10-18)
+
+- **A Date line must have a date to publish.** Choosing the Date type now
+  always turns expiration on, and a Date line with no expiration date (and no
+  dated lot aboard) blocks publishing. This is checked when a checklist is
+  published, or saved while it is active. A checklist that is already live
+  keeps working for crews, but the next time an admin saves it they must give
+  each dateless Date line a date or change its type.
+- **Crews can record a replacement's date.** On a Date line not linked to
+  inventory, the member doing the check can enter the date printed on a
+  replacement they put aboard. The line takes that date when the check is
+  submitted, and the checklist's change log records who changed it ("dated").
+  Lines linked to inventory still change only through the stock swap.
+- **New Present answer type.** Crews answer Present or Absent. Absent fails the
+  item with no note required. Existing checklists are not converted; an admin
+  switches a line to Present in the builder. An app that has not been reloaded
+  since the upgrade shows a Present line with Pass / Fail buttons and still
+  files the answer correctly.
+- **Items can sit directly on a checklist**, between locations, with no
+  heading (the builder's **Items** button). Migration `d80493f28236` adds one
+  column, `check_template_compartments.is_inline`, defaulting to false. It
+  rewrites no rows and is safe on a running database.
+
 ### A weekly security report is emailed to the IT Manager (2026-10-16)
 
 Every department now receives a weekly email of **counts** — security alerts by

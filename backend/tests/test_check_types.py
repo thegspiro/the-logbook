@@ -16,6 +16,7 @@ from app.utils.check_types import (
     EXPIRY,
     FUNCTION,
     LEVEL,
+    PRESENCE,
     STRUCTURAL_TYPES,
     is_check_type,
     legacy_instruction_for,
@@ -24,14 +25,16 @@ from app.utils.check_types import (
 
 
 class TestCanonicalTypes:
-    def test_there_are_exactly_four(self):
-        """Four answer shapes: a number, a pass/fail, a quantity, a date.
+    def test_there_are_exactly_five(self):
+        """Five answer shapes: a number, a pass/fail, a quantity, a date, and
+        present/absent.
 
         Pinned because the whole redesign rests on an admin picking a type
-        rather than a layout. A fifth type is a design decision, not a
-        refactor, and should fail here first.
+        rather than a layout. A new type is a design decision, not a
+        refactor, and should fail here first — ``presence`` was that decision,
+        taken by the department on 2026-10-18.
         """
-        assert CANONICAL_CHECK_TYPES == (LEVEL, FUNCTION, COUNT, EXPIRY)
+        assert CANONICAL_CHECK_TYPES == (LEVEL, FUNCTION, COUNT, EXPIRY, PRESENCE)
 
     @pytest.mark.parametrize(
         ("legacy", "expected"),
@@ -65,7 +68,7 @@ class TestCanonicalTypes:
         assert normalize_check_type(normalize_check_type(canonical)) == canonical
         assert is_check_type(canonical) is True
 
-    @pytest.mark.parametrize("junk", ["", None, "   ", "presence", "unknown"])
+    @pytest.mark.parametrize("junk", ["", None, "   ", "presense", "unknown"])
     def test_unrecognised_reads_as_function(self, junk):
         """Reading an unknown stored value falls back to the answerable shape.
 
@@ -138,8 +141,8 @@ class TestRequestBoundary:
         already wrote; applying it here would silently turn a typo into a
         pass/fail prompt on a safety checklist.
         """
-        with pytest.raises(ValueError, match="presence"):
-            _validate_check_type("presence")
+        with pytest.raises(ValueError, match="presense"):
+            _validate_check_type("presense")
 
     def test_none_passes_through(self):
         """``None`` means "not supplied" on a partial update, not "unknown"."""
