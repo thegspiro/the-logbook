@@ -16,16 +16,34 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3401 (Feature 05, Finance & approvals, pass 10) merged
-clean 2026-10-18 (docs-only — `PROGRESS.md` +
-`FIN-05-finance-approvals.md` only). Already fully recorded in that PR's
-own history below, so there is nothing further to add here. Rotation row
-05 stays ✅. Confirmed via `search_pull_requests`
-(`is:open head:claude/security-review-`, 0 results) that no
-`claude/security-review-*` PR is open. The dedicated `/loop 30m
-/security-review` session was still not reachable via `ListAgents`, so
-this is another watchdog pickup. Proceeding to Feature 06 (Elections &
-ballots), pass 10.
+**PR [#3403](https://github.com/thegspiro/the-logbook/pull/3403)** (branch
+`claude/security-review-elections-ballots-p10`). PR #3401
+(Feature 05, Finance & approvals, pass 10) merged 2026-10-18 clean,
+docs-only; already recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 06 (Elections & ballots), pass 10. **0
+fixes, 0 new findings.** Baseline `80d92defd` (PR #3248's merge, pass 9);
+12 non-merge commits touch this feature's scope — the largest real delta
+in several passes. The significant new surface: two background job
+endpoints (`ballot-send-jobs`, `reminder-send-jobs`) that move ballot/
+reminder sends out of the HTTP request, verified sound against all seven
+checklist dimensions (gated by `elections.manage`; election row locked
+org-scoped via `.with_for_update()` before queueing; the new table's
+every lookup — including the background runner outside request context —
+re-filters by `organization_id`; correct `nullable`/`ondelete` pairing;
+both new migrations guard on table existence). Also verified: a
+nominee bell notice (org-scoped, escaped), a meeting-linked voting
+window (frontend-only, reuses already-validated fields), a write-in
+restriction on Approve/Deny items (tightening), a refusal to email an
+empty ballot, and a PDF escaping fix (ReportLab markup, not a browser
+XSS surface). No election-table migration landed. ELEC-12/ELEC-16/
+ELEC-40 re-confirmed **OPEN**, unchanged. See
+`ELEC-06-elections-ballots.md`'s **Pass 10** section for the full
+writeup. Row 06 → ✅ (pending this PR's merge); next is Feature 07
+(Users & organizations).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 10, PR #3401, merged), preserved for history</summary>
