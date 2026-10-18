@@ -145,7 +145,7 @@ async def notify_security_event(
 
         from app.services.email_service import EmailService, wrap_email_body
 
-        html = wrap_email_body(org, subject, f"<p>{message}</p>")
+        html = wrap_email_body(org, subject, f"<p>{html_escape(message)}</p>")
         email_svc = EmailService(organization=org)
         await email_svc.send_email(
             to_emails=[to_email],
