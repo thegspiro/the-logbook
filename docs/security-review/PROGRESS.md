@@ -16,10 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3400](https://github.com/thegspiro/the-logbook/pull/3400)** (branch
-`claude/security-review-storefront-payments`). PR #3399
-(Feature 03, Public surface & webhooks, pass 10) merged 2026-10-18 clean,
-docs-only; already recorded in that PR's own history below.
+**None.** PR #3400 (Feature 04, Storefront & payments, pass 10) merged
+clean 2026-10-18 (docs-only — `PROGRESS.md` +
+`SF-04-storefront-payments.md` only). Already fully recorded in that PR's
+own history below, so there is nothing further to add here. Rotation row
+04 stays ✅. Confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`, 0 results) that no
+`claude/security-review-*` PR is open. The dedicated `/loop 30m
+/security-review` session was still not reachable via `ListAgents`, so
+this is another watchdog pickup. Proceeding to Feature 05 (Finance &
+approvals), pass 10.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 10, PR #3400, merged), preserved for history</summary>
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
 `claude/security-review-`, confirmed via `search_pull_requests`, and the
@@ -36,6 +45,8 @@ SF8-04-3 re-confirmed **OPEN**, unchanged, still an owner decision. See
 `SF-04-storefront-payments.md`'s **Pass 10** section for the full writeup.
 Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
 approvals).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 10, PR #3399, merged), preserved for history</summary>
@@ -20017,7 +20028,7 @@ iteration's commit" rule.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
@@ -20054,6 +20065,42 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-18 — Feature 05 (Finance & approvals, pass 10) — watchdog pickup, real delta (approval-chain/step delete restriction + audit logging), 0 fixed, 0 new findings; FIN8-05-1/FIN-30 still open
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3400 (Feature 04, Storefront & payments, pass 10) had
+already merged clean, docs-only, closing row 04; rotation row 05 was the
+next `⬜`.
+
+**Baseline:** `74a57caba` (PR #3225's merge, pass 9). **Head:** current
+`main`. 2 non-merge commits touch this feature's scope: one dark-mode CSS
+fix (no logic), and one real, substantive change read in full —
+`delete_approval_chain`/`delete_chain_step` now refuse to delete a chain
+or step that any request has been routed through (previously they
+cascade-deleted that request's approval history while the UI claimed it
+was kept), and chain/step update/delete are now audit-logged. Verified
+sound: both callers resolve the chain through the existing org-scoped
+`get_approval_chain` before counting `ApprovalStepRecord` rows (the
+correct parent-resolution shape for a model with no `organization_id`
+column, per repo-tenancy rules); all five endpoints keep their existing
+`finance.configure_approvals` gate; no migration; ships with its own
+296-line test file. The two standing flagged findings — **FIN8-05-1**
+(`decide_request` has no `assert_different_person` check) and **FIN-30**
+(`list_dues_payments` has no limit/offset) — remain OPEN, confirmed
+unchanged (neither file touched by this window's delta). See
+`FIN-05-finance-approvals.md`'s **Pass 10** section for the full writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` clean; `validate_migrations.py --strict` passed (618
+revisions, single head); scoped backend tests (`-k "finance or
+cash_advance or restricted_fund or budget or dues or approval_chain"`)
+1,129 passed, 1 skipped (environment-only, `pywebpush`); frontend `npm run
+typecheck` and `npm run lint` both clean.
+
+Row 05 → ✅ (pending this PR's merge); next is Feature 06 (Elections &
+ballots).
 
 ### 2026-10-18 — Feature 04 (Storefront & payments, pass 10) — watchdog pickup, 0 fixed, 0 new findings; SF8-04-2/SF8-04-3 still open
 
