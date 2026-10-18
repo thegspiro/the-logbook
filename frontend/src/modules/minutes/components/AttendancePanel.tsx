@@ -14,8 +14,15 @@ import { Trash2, UserPlus, Users } from 'lucide-react';
 import { minutesService } from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
-import type { AttendanceStatus, AttendeeEntry } from '../types/minutes';
-import { ATTENDANCE_STATUSES, ATTENDANCE_STATUS_LABELS, statusOf } from '../utils/attendance';
+import type { AttendanceListing, AttendanceStatus, AttendeeEntry } from '../types/minutes';
+import {
+  ATTENDANCE_LISTINGS,
+  ATTENDANCE_LISTING_LABELS,
+  ATTENDANCE_STATUSES,
+  ATTENDANCE_STATUS_LABELS,
+  isListed,
+  statusOf,
+} from '../utils/attendance';
 
 const STATUS_CHIP: Record<AttendanceStatus, string> = {
   present: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
@@ -29,22 +36,51 @@ const STATUS_CHIP: Record<AttendanceStatus, string> = {
 interface AttendancePanelProps {
   minutesId: string;
   attendees: AttendeeEntry[];
+  /** What the minutes name: this set's own choice, else the department's. */
+  listing?: AttendanceListing;
+  /** This set's own choice; null follows the department default. */
+  listingOverride?: AttendanceListing | null;
   canEdit: boolean;
   /** Called after a save so the parent can reload the minutes (quorum moves). */
   onSaved: () => Promise<void> | void;
 }
 
-export const AttendancePanel: React.FC<AttendancePanelProps> = ({ minutesId, attendees, canEdit, onSaved }) => {
+export const AttendancePanel: React.FC<AttendancePanelProps> = ({
+  minutesId,
+  attendees,
+  listing = 'all',
+  listingOverride = null,
+  canEdit,
+  onSaved,
+}) => {
   const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState<AttendeeEntry[]>([]);
   const [guestName, setGuestName] = useState('');
   const [saving, setSaving] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
 
+  // The roll is recorded in full and edited in full; the listing only decides
+  // what a reader of the minutes is shown.
+  const shown = attendees.filter((a) => isListed(statusOf(a), listing));
+  const hiddenCount = attendees.length - shown.length;
   const counts = ATTENDANCE_STATUSES.map((status) => ({
     status,
-    count: attendees.filter((a) => statusOf(a) === status).length,
+    count: shown.filter((a) => statusOf(a) === status).length,
   })).filter((c) => c.count > 0);
+
+  const [savingListing, setSavingListing] = useState(false);
+  const changeListing = async (value: string) => {
+    setSavingListing(true);
+    try {
+      // An explicit null clears the override so the department default applies.
+      await minutesService.updateMinutes(minutesId, { attendance_listing: value === '' ? null : value });
+      await onSaved();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to change how attendance is listed'));
+    } finally {
+      setSavingListing(false);
+    }
+  };
 
   const startEditing = () => {
     setRows(attendees.map((a) => ({ ...a, status: statusOf(a) })));
@@ -118,7 +154,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ minutesId, att
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h3 id="attendance-heading" className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
           <Users className="h-4 w-4" aria-hidden="true" />
-          Attendance ({attendees.length})
+          Attendance ({shown.length})
         </h3>
         {canEdit && !editing && (
           <button type="button" onClick={startEditing} className="btn-secondary touch:min-h-11 text-sm">
@@ -138,7 +174,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ minutesId, att
             <p className="text-theme-text-muted text-xs italic">No roll call recorded.</p>
           ) : (
             <ul className="flex flex-wrap gap-2">
-              {attendees.map((a, i) => {
+              {shown.map((a, i) => {
                 const status = statusOf(a);
                 return (
                   <li
@@ -155,6 +191,41 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ minutesId, att
             </ul>
           )}
         </>
+      )}
+
+      {!editing && canEdit && attendees.length > 0 && (
+        <div className="mt-3">
+          <label htmlFor="attendance-listing" className="form-label">
+            Who these minutes name
+          </label>
+          <select
+            id="attendance-listing"
+            className="form-input sm:w-72"
+            value={listingOverride ?? ''}
+            disabled={savingListing}
+            onChange={(e) => {
+              void changeListing(e.target.value);
+            }}
+          >
+            <option value="">
+              {/* With no override of its own, the listing in force is the department's. */}
+              {listingOverride === null
+                ? `Department default (${ATTENDANCE_LISTING_LABELS[listing].toLowerCase()})`
+                : 'Department default'}
+            </option>
+            {ATTENDANCE_LISTINGS.map((value) => (
+              <option key={value} value={value}>
+                {ATTENDANCE_LISTING_LABELS[value]}
+              </option>
+            ))}
+          </select>
+          {hiddenCount > 0 && (
+            <p className="text-theme-text-muted mt-1 text-xs">
+              {hiddenCount} {hiddenCount === 1 ? 'member is' : 'members are'} recorded but not named on the minutes, the
+              printed copy or the published copy.
+            </p>
+          )}
+        </div>
       )}
 
       {editing && (

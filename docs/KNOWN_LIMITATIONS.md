@@ -4375,6 +4375,26 @@ made these choices. Everything is off until the department switches it on.
 
 ---
 
+## Minutes — Attendance Listing (2026-10-18)
+
+**Open — owner decisions to confirm.** See
+[MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#who-the-minutes-name-2026-10-18).
+
+- **Unset reads as "everyone", not "present only".** The owner preferred present
+  only as the default, but an installation that never chose would otherwise
+  start hiding absences on printed and published copies the moment it upgraded.
+  A department switches to present only under Minutes → Roll listing. To make
+  present only the default for new installs, change `DEFAULT_ATTENDANCE_LISTING`
+  in `app/utils/minutes_attendance.py` (existing installs that never set it
+  would change too).
+- **The listing applies when a copy is shown, not when minutes are adopted.**
+  Changing the department default changes how already adopted minutes print,
+  and a library copy already filed keeps the listing it was published with
+  until it is republished. The sealed approved version is unaffected: it does
+  not depend on the display choice.
+
+---
+
 ## MM-17 — `set_meeting_quorum_config` Has No Finalization Guard on Approved Minutes (2026-09-13)
 
 > ✅ **Resolved (2026-10-11), as the owner chose: lock on APPROVED, with a

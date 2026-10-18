@@ -58,7 +58,9 @@ from app.services.minute_service import MinuteService
 from app.services.minutes_print_data import adopting_title
 from app.services.minutes_publishing_service import MinutesPublishingService
 from app.services.template_service import TemplateService
+from app.utils.minutes_attendance import effective_listing
 from app.utils.minutes_settings import (
+    load_attendance_listing,
     load_minutes_publishing_settings,
     load_minutes_reminder_settings,
     load_signature_slots,
@@ -176,6 +178,9 @@ async def get_minutes_settings(
         db, str(current_user.organization_id)
     )
     return MinutesReminderSettingsResponse(
+        attendance_listing=await load_attendance_listing(
+            db, str(current_user.organization_id)
+        ),
         public_posting=publishing.public_posting,
         executive_library_publishing=publishing.executive_library,
         executive_public_posting=publishing.executive_public,
@@ -1120,6 +1125,7 @@ def _build_response(minutes) -> MinutesResponse:
         called_to_order_at=minutes.called_to_order_at,
         adjourned_at=minutes.adjourned_at,
         attendees=minutes.attendees,
+        attendance_listing=minutes.attendance_listing,
         quorum_met=minutes.quorum_met,
         quorum_count=minutes.quorum_count,
         event_id=minutes.event_id,
@@ -1173,6 +1179,10 @@ async def _respond(db: AsyncSession, user: User, minutes) -> MinutesResponse:
     who could open them; this viewer may not be able to.
     """
     response = _build_response(minutes)
+    response.attendance_listing_effective = effective_listing(
+        minutes.attendance_listing,
+        await load_attendance_listing(db, str(user.organization_id)),
+    )
     await narrow_documents(db, user.organization_id, user, response.sections)
     return response
 
