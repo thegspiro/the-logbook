@@ -56,6 +56,15 @@ describe('PromptDialog', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  // The dialog appends "(optional)" itself; a label that already says so
+  // rendered it twice.
+  it('marks an optional value as optional exactly once', () => {
+    renderDialog({ required: false, label: 'Note' });
+
+    const label = screen.getByText(/^Note/, { selector: 'label' });
+    expect(label.textContent?.match(/\(optional\)/g)).toHaveLength(1);
+  });
+
   it('allows an empty submission when the value is optional', async () => {
     const user = userEvent.setup();
     renderDialog({ required: false });
