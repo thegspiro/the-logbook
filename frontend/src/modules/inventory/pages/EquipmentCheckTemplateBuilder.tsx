@@ -38,6 +38,7 @@ import {
   ArrowRightLeft,
   List,
   Package,
+  PackageSearch,
   Link2,
   MoreHorizontal,
   SlidersHorizontal,
@@ -72,6 +73,7 @@ import { schedulingService } from '@/modules/scheduling';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import {
   canMoveCompartment,
+  insertRootAt,
   moveCompartment as moveCompartmentInTree,
   orderedCompartmentIds,
   orderedCompartments as buildOrderedCompartments,
@@ -138,11 +140,14 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { formatItemSummary } from './itemSummary';
 import { POSITION_LABELS } from '../../../constants/enums';
 
+/** Move-to value for "Directly on the checklist" when no such group exists yet. */
+const MOVE_TO_NEW_INLINE = -1;
+
 /** Sentinel anchor for blockers that live in the details drawer, not on a row. */
 const DETAILS_ANCHOR = '__details__';
 
 /**
- * The four answerable types, as the row's segmented control presents them.
+ * The answerable types, as the row's segmented control presents them.
  *
  * Ordered by how often a checklist uses them rather than by
  * `CANONICAL_CHECK_TYPES`' declaration order, and labelled in the crew's words:
@@ -154,6 +159,7 @@ const CANVAS_CHECK_TYPES = [
   { value: 'count', label: 'Count', Icon: Hash },
   { value: 'level', label: 'Level', Icon: Gauge },
   { value: 'expiry', label: 'Date', Icon: CalendarClock },
+  { value: 'presence', label: 'Present', Icon: PackageSearch },
 ] as const satisfies ReadonlyArray<{ value: CheckType; label: string; Icon: typeof ToggleRight }>;
 
 const inputClass = 'form-input';
@@ -447,6 +453,11 @@ interface CompartmentFormState {
   containerType: string;
   /** Closed with a numbered tamper seal — see CheckTemplateCompartment.isSealed. */
   isSealed: boolean;
+  /**
+   * Items placed directly on the checklist: a group with no heading, no name,
+   * no seal and no locations inside it. See CheckTemplateCompartment.isInline.
+   */
+  isInline: boolean;
   parentCompartmentId: string;
   items: ItemFormState[];
 }
@@ -463,9 +474,28 @@ function emptyCompartment(): CompartmentFormState {
     isHeader: false,
     containerType: 'compartment',
     isSealed: false,
+    isInline: false,
     parentCompartmentId: '',
     items: [],
   };
+}
+
+/** A group for items placed directly on the checklist. */
+function emptyInlineGroup(): CompartmentFormState {
+  return { ...emptyCompartment(), isInline: true };
+}
+
+function isEmptyInlineGroup(comp: CompartmentFormState): boolean {
+  return comp.isInline && comp.items.length === 0;
+}
+
+/**
+ * A Date line with no date to check. Blocks publishing, as the server does: a
+ * crew cannot confirm a date that is not on record. A line linked to
+ * inventory is exempt, because its dates come from the lots aboard.
+ */
+function dateLineMissingDate(item: ItemFormState): boolean {
+  return item.checkType === 'expiry' && !item.expirationDate.trim() && !item.inventoryItemId;
 }
 
 function compartmentFormFromResponse(compartment: CheckTemplateCompartment): CompartmentFormState {
@@ -478,6 +508,7 @@ function compartmentFormFromResponse(compartment: CheckTemplateCompartment): Com
     isHeader: compartment.isHeader ?? false,
     containerType: compartment.containerType ?? 'compartment',
     isSealed: compartment.isSealed ?? false,
+    isInline: compartment.isInline ?? false,
     parentCompartmentId: compartment.parentCompartmentId ?? '',
     items: compartment.items.map(itemFormFromResponse),
   };
@@ -492,6 +523,7 @@ function compartmentCreateFromForm(comp: CompartmentFormState, sortOrder: number
     is_header: comp.isHeader || undefined,
     container_type: comp.containerType || undefined,
     is_sealed: comp.isSealed,
+    is_inline: comp.isInline || undefined,
     parent_compartment_id: comp.parentCompartmentId || undefined,
     items: comp.items.map((item, itemIdx) => itemCreateFromForm(item, itemIdx)),
   };
@@ -829,6 +861,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           isHeader: c.isHeader ?? false,
           containerType: c.containerType ?? 'compartment',
           isSealed: c.isSealed ?? false,
+          isInline: c.isInline ?? false,
           parentCompartmentId: c.parentCompartmentId ?? '',
           items: (c.items ?? []).map((item) => ({
             clientKey: newItemKey(),
@@ -1004,6 +1037,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           isHeader: false,
           containerType: created.containerType ?? 'compartment',
           isSealed: created.isSealed ?? false,
+          isInline: false,
           parentCompartmentId: created.parentCompartmentId ?? '',
           items: [],
         };
@@ -1045,6 +1079,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           isHeader: true,
           containerType: created.containerType ?? 'compartment',
           isSealed: created.isSealed ?? false,
+          isInline: false,
           parentCompartmentId: created.parentCompartmentId ?? '',
           items: [],
         };
@@ -1054,6 +1089,62 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add section header'));
       }
+    });
+
+  /**
+   * Put a group for items placed directly on the checklist at a spot between
+   * top-level rows, or reuse one already there.
+   *
+   * Two groups side by side would read as one list on every crew screen while
+   * being two things to drag in the builder, so a neighbouring group is used
+   * instead — the one above first, since its items end exactly at this spot.
+   * Resolves to the key of the group to add into.
+   */
+  const placeInlineGroup = async (rootIndex: number): Promise<string | null> => {
+    const roots = orderedCompartments.filter(({ depth }) => depth === 0).map(({ comp }) => comp);
+    const adjacent = [roots[rootIndex - 1], roots[rootIndex]].find((candidate) => candidate?.isInline);
+    if (adjacent) return adjacent.id ?? adjacent.clientKey;
+
+    const group = emptyInlineGroup();
+    if (!templateId) {
+      setCompartments((prev) => insertRootAt(prev, group, rootIndex));
+      return group.clientKey;
+    }
+    try {
+      await ensureDraftBeforeStructureEdit();
+      const created = await equipmentCheckService.addCompartment(templateId, {
+        name: '',
+        is_inline: true,
+        sort_order: compartments.length,
+      });
+      const saved: CompartmentFormState = { ...group, id: created.id };
+      savedParentByIdRef.current.set(created.id, '');
+      // The server appends; one reorder puts it where it was asked for. If
+      // that fails the group still exists, at the bottom, which is said.
+      try {
+        await equipmentCheckService.reorderCompartments(
+          templateId,
+          orderedCompartmentIds(insertRootAt(compartmentsRef.current, saved, rootIndex))
+        );
+        setCompartments((prev) => insertRootAt(prev, saved, rootIndex));
+      } catch {
+        setCompartments((prev) => [...prev, saved]);
+        toast.error('Added at the bottom of the checklist. Drag it to where it belongs.');
+      }
+      return created.id;
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to add a place for items'));
+      return null;
+    }
+  };
+
+  const addItemHere = (rootIndex: number) =>
+    runAddCompartment(async () => {
+      const key = await placeInlineGroup(rootIndex);
+      if (!key) return;
+      // After the commit, so the composer it focuses exists.
+      window.setTimeout(() => openAddSurface(key), 0);
+      markDirty();
     });
 
   const updateCompartmentField = (idx: number, patch: Partial<CompartmentFormState>) => {
@@ -1218,6 +1309,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       isHeader: comp.isHeader,
       containerType: comp.containerType,
       isSealed: comp.isSealed,
+      isInline: comp.isInline,
       parentCompartmentId: comp.parentCompartmentId,
       items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest, clientKey: newItemKey() })),
     };
@@ -1444,14 +1536,35 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const moveItemToCompartment = async (fromCompIdx: number, itemIdx: number, toCompIdx: number) => {
     if (fromCompIdx === toCompIdx) return;
-    const fromComp = compartments[fromCompIdx];
     const toComp = compartments[toCompIdx];
-    if (!fromComp || !toComp) return;
+    if (!toComp) return;
+    await moveItemToKey(fromCompIdx, itemIdx, toComp.id ?? toComp.clientKey);
+  };
+
+  /**
+   * "Directly on the checklist", for a checklist with no such group yet: one
+   * is made at the bottom — where an item taken out of a location is easiest
+   * to find again — and the item moves into it.
+   */
+  const moveItemsToChecklist = async (fromCompIdx: number, itemIdxs: number[]) => {
+    const roots = orderedCompartments.filter(({ depth }) => depth === 0).length;
+    const key = await placeInlineGroup(roots);
+    if (!key) return;
+    // The group has to be committed before the move can resolve it.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    for (const itemIdx of itemIdxs) await moveItemToKey(fromCompIdx, itemIdx, key);
+  };
+
+  /** Whether a "Directly on the checklist" destination has to be offered as new. */
+  const hasInlineGroup = compartments.some((candidate) => candidate.isInline && !candidate.parentCompartmentId);
+
+  const moveItemToKey = async (fromCompIdx: number, itemIdx: number, destinationKey: string) => {
+    const fromComp = compartments[fromCompIdx];
+    if (!fromComp) return;
 
     const item = fromComp.items[itemIdx];
     if (!item) return;
     const itemKey = item.id ?? item.clientKey;
-    const destinationKey = toComp.id ?? toComp.clientKey;
 
     const persistAndApply = async () => {
       const current = compartmentsRef.current;
@@ -1503,7 +1616,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       // React has committed this functional update and refreshed the snapshot.
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       markDirty();
-      toast.success(`Moved "${currentItem.name || 'item'}" to ${currentDestination.name || 'compartment'}`);
+      toast.success(
+        currentDestination.isInline
+          ? `Moved "${currentItem.name || 'item'}" directly onto the checklist`
+          : `Moved "${currentItem.name || 'item'}" to ${currentDestination.name || 'compartment'}`
+      );
     };
 
     const queuedMove = itemMoveQueue.current.then(persistAndApply);
@@ -1963,7 +2080,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (!c) return prev;
       const items = c.items.map((item, i) => {
         if (!selected.has(i)) return item;
-        return { ...item, checkType };
+        // A Date line always carries its expiration, as the server records it.
+        return { ...item, checkType, ...(checkType === 'expiry' ? { hasExpiration: true } : {}) };
       });
       next[compartmentIdx] = { ...c, items };
       return next;
@@ -1974,7 +2092,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       for (const itemIdx of selected) {
         const item = comp.items[itemIdx];
         if (item?.id) {
-          scheduleAutoSaveItem(item.id, { check_type: checkType });
+          scheduleAutoSaveItem(item.id, {
+            check_type: checkType,
+            ...(checkType === 'expiry' ? { has_expiration: true } : {}),
+          });
         }
       }
     }
@@ -2140,7 +2261,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   );
 
   // Enhanced updateItemField that triggers auto-save for persisted items
-  const updateItemFieldWithAutoSave = (compartmentIdx: number, itemIdx: number, patch: Partial<ItemFormState>) => {
+  const updateItemFieldWithAutoSave = (compartmentIdx: number, itemIdx: number, requested: Partial<ItemFormState>) => {
+    // Choosing Date turns expiration on. The server does the same on every
+    // write, so this keeps the screen showing what is stored.
+    const patch: Partial<ItemFormState> =
+      requested.checkType === 'expiry' ? { ...requested, hasExpiration: true } : requested;
     updateItemField(compartmentIdx, itemIdx, patch);
 
     const comp = compartments[compartmentIdx];
@@ -2269,7 +2394,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       for (const comp of compartments) {
         if (comp.isHeader) continue;
         for (const item of comp.items) {
-          if (item.hasExpiration && !item.expirationDate.trim()) {
+          // A dateless Date line is a blocker, not a warning; see dateLineMissingDate.
+          if (item.hasExpiration && !item.expirationDate.trim() && item.checkType !== 'expiry') {
             warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
           }
           const orderProblem = item.checkType === 'count' ? countOrderProblem(item) : null;
@@ -2296,7 +2422,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
       setSaving(true);
       try {
-        const compartmentPayloads: CheckTemplateCompartmentCreate[] = compartments
+        // An emptied group of items placed directly on the checklist is dropped
+        // rather than saved: it has no heading to show it exists, so a crew
+        // would never see it and an author would never find it.
+        const keptCompartments = compartments.filter((c) => !isEmptyInlineGroup(c));
+        const compartmentPayloads: CheckTemplateCompartmentCreate[] = keptCompartments
           .filter((c) => !c.id) // Only include unsaved compartments in create payload
           .map(compartmentCreateFromForm);
 
@@ -2318,6 +2448,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             is_active: false,
           });
 
+          for (const comp of compartments) {
+            if (comp.id && isEmptyInlineGroup(comp)) {
+              await ensureDraftBeforeStructureEdit();
+              await equipmentCheckService.deleteCompartment(comp.id);
+              savedParentByIdRef.current.delete(comp.id);
+            }
+          }
+
           // Save any new compartments that haven't been persisted yet
           for (const payload of compartmentPayloads) {
             await ensureDraftBeforeStructureEdit();
@@ -2337,7 +2475,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           // exactly as before (below).
           const compartmentUpdates: Array<{ comp: CompartmentFormState; promise: Promise<unknown> }> = [];
           const itemUpdatePromises: Promise<unknown>[] = [];
-          for (const comp of compartments) {
+          for (const comp of keptCompartments) {
             if (comp.id) {
               compartmentUpdates.push({
                 comp,
@@ -2438,7 +2576,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             apparatus_type: form.apparatusType || undefined,
             apparatus_id: form.apparatusId || undefined,
             is_active: publish,
-            compartments: compartments.map(compartmentCreateFromForm),
+            compartments: keptCompartments.map(compartmentCreateFromForm),
           };
           const created = await equipmentCheckService.createEquipmentCheckTemplate(createPayload);
           setIsDirty(false);
@@ -2607,6 +2745,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       // A vehicle preset describes compartments, not sealed kits; a department
       // that carries a sealed bag marks it after loading the preset.
       isSealed: false,
+      isInline: false,
       parentCompartmentId: '',
       items: comp.items.map((item) => ({
         ...emptyItem(),
@@ -2661,6 +2800,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         isHeader: c.isHeader || undefined,
         containerType: c.containerType || undefined,
         isSealed: c.isSealed,
+        isInline: c.isInline || undefined,
         items: c.items.map((item) => ({
           name: item.name,
           description: item.description,
@@ -2712,6 +2852,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             isHeader?: boolean;
             containerType?: string;
             isSealed?: boolean;
+            isInline?: boolean;
             items?: Array<Record<string, unknown>>;
           }>;
         };
@@ -2743,12 +2884,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
         const imported: CompartmentFormState[] = data.compartments.map((c) => ({
           clientKey: newCompartmentKey(),
-          name: c.name || 'Untitled',
+          // A group placed directly on the checklist has no name to restore,
+          // and "Untitled" would read as one that needs naming.
+          name: c.isInline ? '' : c.name || 'Untitled',
           description: c.description ?? '',
           imageUrl: '',
           isHeader: Boolean(c.isHeader),
           containerType: c.containerType || 'compartment',
           isSealed: Boolean(c.isSealed),
+          isInline: Boolean(c.isInline),
           parentCompartmentId: '',
           items: (c.items ?? []).map((item) => ({
             ...emptyItem(),
@@ -2921,6 +3065,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       isHeader: false,
       containerType: 'compartment',
       isSealed: false,
+      isInline: false,
       parentCompartmentId: '',
       items,
     }));
@@ -2980,7 +3125,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       compartments: compartments.map((c, cIdx) => ({
         id: c.id ?? `preview-comp-${c.clientKey}`,
         templateId: templateId ?? 'preview',
-        name: c.name || 'Untitled Compartment',
+        name: c.isInline ? '' : c.name || 'Untitled Compartment',
+        ...(c.isInline ? { isInline: true } : {}),
         ...(c.description ? { description: c.description } : {}),
         sortOrder: cIdx,
         ...(c.imageUrl ? { imageUrl: c.imageUrl } : {}),
@@ -3147,6 +3293,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     [orderedCompartments]
   );
 
+  /**
+   * How a group placed directly on the checklist is named where a name is
+   * needed — a Move to list. It has none, so it is named by where it sits.
+   */
+  const inlineGroupLabel = useCallback(
+    (group: CompartmentFormState) => {
+      const roots = orderedCompartments.filter(({ depth }) => depth === 0).map(({ comp }) => comp);
+      const inlineCount = roots.filter((candidate) => candidate.isInline).length;
+      if (inlineCount <= 1) return 'Directly on the checklist';
+      const position = roots.indexOf(group);
+      const above = position > 0 ? roots[position - 1] : undefined;
+      return above
+        ? `Directly on the checklist, after ${above.name.trim() || 'an unnamed location'}`
+        : 'Directly on the checklist, at the top';
+    },
+    [orderedCompartments]
+  );
+
   const compartmentPath = useCallback(
     (targetIdx: number) => {
       const names: string[] = [];
@@ -3156,6 +3320,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         visited.add(currentIdx);
         const current: CompartmentFormState | undefined = compartments[currentIdx];
         if (!current) break;
+        if (current.isInline) {
+          names.unshift(inlineGroupLabel(current));
+          break;
+        }
         names.unshift(current.name.trim() || `Untitled ${containerTypeLabel(current.containerType)}`);
         currentIdx = current.parentCompartmentId
           ? compartments.findIndex((candidate) => candidate.id === current.parentCompartmentId)
@@ -3164,7 +3332,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
       return names.join(' / ');
     },
-    [compartments]
+    [compartments, inlineGroupLabel]
   );
 
   /**
@@ -3691,19 +3859,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <input
                   type="checkbox"
                   className={checkboxClass}
-                  checked={item.hasExpiration}
+                  checked={item.hasExpiration || item.checkType === 'expiry'}
+                  // A Date line is its expiration; unticking it would leave a
+                  // date check with nothing to check.
+                  disabled={item.checkType === 'expiry'}
+                  title={item.checkType === 'expiry' ? 'A Date line always has an expiration' : undefined}
                   onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { hasExpiration: e.target.checked })}
                 />
                 <AlertTriangle className="h-3.5 w-3.5" />
                 Has Expiration
               </label>
-              {item.hasExpiration && (
+              {(item.hasExpiration || item.checkType === 'expiry') && (
                 <>
                   <div>
                     <label className={labelClass}>Expiration Date</label>
                     <input
                       type="date"
-                      className={inputClass}
+                      className={`${inputClass} ${dateLineMissingDate(item) ? 'border-amber-500' : ''}`}
+                      aria-invalid={dateLineMissingDate(item)}
                       value={item.expirationDate}
                       onChange={(e) =>
                         updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationDate: e.target.value })
@@ -3879,10 +4052,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         <button type="button" className={mobileMenuItemClass} onClick={() => void duplicateItem(compIdx, itemIdx)}>
           <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
         </button>
-        {compartments.filter(
-          (candidate, candidateIdx) =>
-            !candidate.isHeader && candidateIdx !== compIdx && (!isEditing || !item.id || Boolean(candidate.id))
-        ).length > 0 && (
+        {(!hasInlineGroup ||
+          compartments.filter(
+            (candidate, candidateIdx) =>
+              !candidate.isHeader && candidateIdx !== compIdx && (!isEditing || !item.id || Boolean(candidate.id))
+          ).length > 0) && (
           <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
             <span className="flex items-center gap-3">
               <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Move to compartment
@@ -3891,11 +4065,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               className="form-input min-h-[44px] text-sm"
               value={compIdx}
               aria-label={`Move ${item.name || 'item'} to compartment; current destination ${compartmentPath(compIdx)}`}
-              onChange={(e) => void moveItemToCompartment(compIdx, itemIdx, Number(e.target.value))}
+              onChange={(e) => {
+                const destination = Number(e.target.value);
+                if (destination === MOVE_TO_NEW_INLINE) void moveItemsToChecklist(compIdx, [itemIdx]);
+                else void moveItemToCompartment(compIdx, itemIdx, destination);
+              }}
             >
               <option value={compIdx} disabled>
                 Current: {compartmentPath(compIdx)}
               </option>
+              {!hasInlineGroup && <option value={MOVE_TO_NEW_INLINE}>Directly on the checklist</option>}
               {compartments.map((candidate, candidateIdx) =>
                 !candidate.isHeader && candidateIdx !== compIdx && (!isEditing || !item.id || Boolean(candidate.id)) ? (
                   <option key={candidate.id ?? candidateIdx} value={candidateIdx}>
@@ -4097,7 +4276,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <div
               role="group"
               aria-label={`Check type for ${item.name.trim() || 'item'}`}
-              className="bg-theme-surface-secondary grid min-w-[150px] shrink grow-0 basis-[156px] grid-cols-4 gap-0.5 rounded-lg p-0.5"
+              className="bg-theme-surface-secondary grid min-w-[190px] shrink grow-0 basis-[200px] grid-cols-5 gap-0.5 rounded-lg p-0.5"
             >
               {CANVAS_CHECK_TYPES.map(({ value, label, Icon }) => {
                 const active = item.checkType === value;
@@ -4198,6 +4377,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             )}
             {item.checkType === 'expiry' && (
               <div className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+                {/* A linked line reads its dates off the lots aboard, so only
+                    an unlinked one carries a date of its own here. */}
+                {!item.inventoryItemId && (
+                  <input
+                    type="date"
+                    id={`item-expiry-date-${itemKey}`}
+                    aria-label={`Expiration date for ${item.name.trim() || 'item'}`}
+                    aria-invalid={dateLineMissingDate(item)}
+                    className={`border-theme-input-border bg-theme-input-bg text-theme-text-secondary rounded-md border px-1 py-0.5 text-[11px] ${
+                      dateLineMissingDate(item) ? 'border-amber-500' : ''
+                    }`}
+                    value={item.expirationDate}
+                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationDate: e.target.value })}
+                  />
+                )}
                 <span className={numberFieldClass} title="Days before the expiry date the crew is warned">
                   <input
                     type="number"
@@ -4307,6 +4501,25 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
    * label rather than by a select that asks the author to re-name a parent
    * already on screen two rows up.
    */
+  /**
+   * "Add item here", between two top-level rows. Revealed on hover with a
+   * mouse so a long checklist is not striped with them; always shown on a
+   * touch screen, which cannot hover.
+   */
+  const renderAddItemHere = (rootIndex: number) => (
+    <div className="group flex justify-center py-0.5">
+      <button
+        type="button"
+        disabled={addingCompartment}
+        onClick={() => void addItemHere(rootIndex)}
+        data-testid={`add-item-here-${String(rootIndex)}`}
+        className="text-theme-text-muted hover:text-theme-accent-blue focus-visible:text-theme-accent-blue touch:min-h-11 flex min-h-6 items-center gap-1 rounded px-2 text-[11px] font-medium transition-opacity disabled:opacity-40 pointer-fine:opacity-0 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-hover:opacity-100"
+      >
+        <Plus className="h-3 w-3" aria-hidden="true" /> Add item here
+      </button>
+    </div>
+  );
+
   const renderCompartment = (
     comp: CompartmentFormState,
     idx: number,
@@ -4317,7 +4530,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   ) => {
     const key = comp.id ?? comp.clientKey;
     const anchorId = `comp-row-${comp.id ?? comp.clientKey}`;
-    const isExpanded = expandedCompartments.has(key);
+    // A group placed directly on the checklist is its items; there is no
+    // heading to collapse it under.
+    const isExpanded = comp.isInline || expandedCompartments.has(key);
     const typeLabel = containerTypeLabel(comp.containerType);
     const parentName = comp.parentCompartmentId
       ? compartments.find((c) => c.id === comp.parentCompartmentId)?.name
@@ -4418,360 +4633,411 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     return (
       <div key={key} ref={sortableRef} style={sortableStyle}>
-        {/* Location row */}
-        <div
-          id={anchorId}
-          tabIndex={-1}
-          style={indentPadding}
-          className={`border-theme-surface-border relative flex flex-wrap items-center gap-x-1.5 gap-y-2 border-b px-4 py-3 sm:gap-x-2.5 ${
-            isEmpty || isFlagged ? 'border-l-[3px] border-l-amber-500 bg-amber-500/[0.06]' : ''
-          }`}
-        >
-          {depth > 0 && (
-            <span
-              aria-hidden="true"
-              className="bg-theme-surface-border absolute top-0 bottom-0 w-0.5"
-              style={{ left: 12 + depth * 18 - 22 }}
-            />
-          )}
-          <button
-            type="button"
-            className="text-theme-text-muted/70 hover:text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing disabled:cursor-not-allowed"
-            aria-label={
-              comp.id ? 'Drag to reorder compartment among siblings' : 'Save before dragging this compartment'
-            }
-            disabled={!comp.id}
-            title={!comp.id ? 'Save before dragging unsaved records' : 'Reorder among sibling compartments'}
-            {...(dragHandleProps ?? {})}
+        {comp.isInline ? (
+          // No name, no storage type, no seal: only what moves it and removes
+          // it. Its items below read as rows of the checklist itself.
+          <div
+            id={anchorId}
+            tabIndex={-1}
+            data-testid={`inline-group-${key}`}
+            className="border-theme-surface-border flex items-center gap-2 border-b border-dashed px-4 py-1"
           >
-            <GripVertical className="h-4 w-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => toggleCompartmentExpanded(key)}
-            aria-expanded={isExpanded}
-            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${comp.name || `Untitled ${typeLabel}`}`}
-            className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target flex-shrink-0 p-0.5 sm:min-h-0 sm:min-w-0"
-          >
-            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-
-          <Package
-            className={`hidden h-4 w-4 flex-shrink-0 sm:block ${depth > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-blue-700 dark:text-blue-400'}`}
-            aria-hidden="true"
-          />
-
-          <input
-            id={`comp-name-${key}`}
-            type="text"
-            aria-label="Location name"
-            className={`text-theme-text-primary placeholder:text-theme-text-muted min-w-0 grow basis-0 rounded-md border bg-transparent px-1.5 py-1 font-semibold outline-none focus:border-blue-400 sm:min-w-[112px] sm:basis-[112px] ${
-              depth > 0 ? 'text-sm' : 'text-[15px]'
-            } ${comp.name.trim() ? 'hover:border-theme-surface-border border-transparent' : 'bg-theme-input-bg border-amber-500'}`}
-            placeholder={`Name this ${typeLabel.toLowerCase()}…`}
-            value={comp.name}
-            onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
-          />
-
-          {/* On a phone these drop to a second line under the name, so the
-              name, the count and the menu keep one line to themselves. From
-              640px the wrapper is `display: contents` and its children sit in
-              the row exactly as they did before. */}
-          <div className="order-1 flex min-w-0 basis-full flex-wrap items-center gap-x-3 gap-y-1 pl-1 sm:order-none sm:contents">
-            {parentName && (
-              <span className="text-theme-text-muted max-w-[160px] flex-shrink truncate text-[11px]">
-                inside {parentName}
-              </span>
-            )}
-
-            <select
-              aria-label="Storage type"
-              className="border-theme-surface-border bg-theme-surface text-theme-text-muted touch:min-h-11 flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px]"
-              value={inCustomContainer ? '__custom__' : comp.containerType || 'compartment'}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === '__custom__') {
-                  setCustomContainerKeys((prev) => new Set(prev).add(key));
-                  updateCompartmentField(idx, { containerType: '' });
-                } else {
-                  setCustomContainerKeys((prev) => {
-                    const next = new Set(prev);
-                    next.delete(key);
-                    return next;
-                  });
-                  updateCompartmentField(idx, { containerType: v });
-                }
-              }}
+            <button
+              type="button"
+              className="text-theme-text-muted/70 hover:text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing disabled:cursor-not-allowed"
+              aria-label={comp.id ? 'Drag to move these items' : 'Save before dragging these items'}
+              disabled={!comp.id}
+              title={!comp.id ? 'Save before dragging unsaved records' : 'Move among the locations'}
+              {...(dragHandleProps ?? {})}
             >
-              {CONTAINER_TYPE_PRESETS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-              <option value="__custom__">Custom…</option>
-            </select>
-
-            {inCustomContainer && (
-              <input
-                type="text"
-                className="border-theme-input-border bg-theme-input-bg text-theme-text-primary w-32 flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px] outline-none focus:border-blue-400"
-                placeholder="e.g. Trauma Kit"
-                aria-label="Custom storage type label"
-                value={comp.containerType}
-                onChange={(e) => updateCompartmentField(idx, { containerType: e.target.value })}
-              />
-            )}
-
-            {/* A sealed container's contents cannot change while it sits shut, so
-              the long explanation belongs on hover rather than on the row. */}
-            <label
-              className="text-theme-text-muted touch:min-h-11 flex flex-shrink-0 items-center gap-1.5 text-[11px]"
-              title="A crew that finds the seal intact and matching the last count clears every presence and quantity check inside in one tap. Expiry dates and readings still have to be checked."
-            >
-              <input
-                type="checkbox"
-                className="form-checkbox h-3.5 w-3.5"
-                checked={comp.isSealed}
-                onChange={(e) => updateCompartmentField(idx, { isSealed: e.target.checked })}
-              />
-              Sealed
-            </label>
-
-            {/* Expanded, the items themselves are on screen below. */}
-            {!isLaptop && !isExpanded && !isEmpty && (
-              <span className={`${itemCountBadgeClass} ml-auto`}>
-                {comp.items.length} item{comp.items.length !== 1 ? 's' : ''}
-              </span>
-            )}
-
-            {/* An empty location has the callout's Add items below; a second
-              add button beside it did the same thing. */}
-            {!isLaptop && isExpanded && !isEmpty && (
+              <GripVertical className="h-4 w-4" />
+            </button>
+            <span className="text-theme-text-muted text-[11px]">Directly on the checklist · no heading</span>
+            <div className="ml-auto flex flex-shrink-0 items-center gap-0.5">
               <button
                 type="button"
-                aria-label={`Add item to ${comp.name || 'location'}`}
-                className="ml-auto flex min-h-[44px] shrink-0 items-center gap-1 px-2 text-sm font-semibold text-blue-600 dark:text-blue-400"
-                // Through openAddSurface, not setMobileAddLocations directly: the
-                // action bar's Add item follows whichever location was last
-                // opened, and a handler that skips the funnel leaves it pointing
-                // at the previous one. That is the drift openAddSurface's own
-                // docstring says cannot happen, and this call site was it.
-                onClick={() => openAddSurface(key)}
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" /> Add
-              </button>
-            )}
-          </div>
-
-          <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
-            {/* A phone has no room for these beside the name: the empty
-                notice becomes the callout below the row, and the count moves
-                to the second line. */}
-            {isLaptop &&
-              (isEmpty ? (
-                <>
-                  <span className="flex-shrink-0 text-xs font-semibold text-amber-700 dark:text-amber-400">
-                    Add at least one item to publish
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => openAddSurface(key)}
-                    className="flex min-h-7.5 flex-shrink-0 items-center gap-1.5 rounded-md bg-red-800 px-2.5 text-xs font-semibold text-white hover:bg-red-900"
-                  >
-                    <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add items
-                  </button>
-                </>
-              ) : (
-                <span className={itemCountBadgeClass}>
-                  {comp.items.length} item{comp.items.length !== 1 ? 's' : ''}
-                </span>
-              ))}
-            {isLaptop && requiredCount > 0 && (
-              <span className="flex-shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-600 dark:bg-red-900/30 dark:text-red-400">
-                {requiredCount} req
-              </span>
-            )}
-
-            <div className="hidden flex-shrink-0 items-center gap-0.5 sm:flex">
-              <button
-                type="button"
-                onClick={() => indentCompartment(idx)}
-                disabled={!canIndentCompartment(comp)}
+                onClick={() => void moveCompartment(idx, 'up')}
+                disabled={!canMoveCompartment(compartments, comp.id, 'up')}
                 className="text-theme-text-muted/70 hover:text-theme-text-primary mobile-touch-target rounded p-1 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
-                aria-label={`Nest ${comp.name || 'location'} inside the location above`}
-                title="Nest inside the location above"
+                aria-label="Move these items up"
               >
-                <Indent className="h-3.5 w-3.5" aria-hidden="true" />
+                <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
               <button
                 type="button"
-                onClick={() => outdentCompartment(idx)}
-                disabled={!comp.parentCompartmentId}
+                onClick={() => void moveCompartment(idx, 'down')}
+                disabled={!canMoveCompartment(compartments, comp.id, 'down')}
                 className="text-theme-text-muted/70 hover:text-theme-text-primary mobile-touch-target rounded p-1 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
-                aria-label={`Move ${comp.name || 'location'} out one level`}
-                title="Move out one level"
+                aria-label="Move these items down"
               >
-                <Outdent className="h-3.5 w-3.5" aria-hidden="true" />
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
               <button
                 type="button"
                 onClick={() => void deleteCompartment(idx)}
                 disabled={saveOperationActive}
                 className="text-theme-text-muted/70 mobile-touch-target rounded p-1 hover:text-red-600 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
-                aria-label={`Delete ${comp.name || 'compartment'}`}
+                aria-label={`Delete these ${String(comp.items.length)} item${comp.items.length === 1 ? '' : 's'}`}
               >
                 <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
-
-            <RowActionMenu
-              label={`Actions for ${comp.name || 'compartment'}`}
-              title={comp.name.trim() || `Untitled ${typeLabel.toLowerCase()}`}
+          </div>
+        ) : (
+          <div
+            id={anchorId}
+            tabIndex={-1}
+            style={indentPadding}
+            className={`border-theme-surface-border relative flex flex-wrap items-center gap-x-1.5 gap-y-2 border-b px-4 py-3 sm:gap-x-2.5 ${
+              isEmpty || isFlagged ? 'border-l-[3px] border-l-amber-500 bg-amber-500/[0.06]' : ''
+            }`}
+          >
+            {depth > 0 && (
+              <span
+                aria-hidden="true"
+                className="bg-theme-surface-border absolute top-0 bottom-0 w-0.5"
+                style={{ left: 12 + depth * 18 - 22 }}
+              />
+            )}
+            <button
+              type="button"
+              className="text-theme-text-muted/70 hover:text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing disabled:cursor-not-allowed"
+              aria-label={
+                comp.id ? 'Drag to reorder compartment among siblings' : 'Save before dragging this compartment'
+              }
+              disabled={!comp.id}
+              title={!comp.id ? 'Save before dragging unsaved records' : 'Reorder among sibling compartments'}
+              {...(dragHandleProps ?? {})}
             >
-              <button
-                type="button"
-                className={mobileMenuItemClass}
-                onClick={() => {
-                  openCompartment(key);
-                  window.setTimeout(() => document.getElementById(`comp-name-${key}`)?.focus());
+              <GripVertical className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => toggleCompartmentExpanded(key)}
+              aria-expanded={isExpanded}
+              aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${comp.name || `Untitled ${typeLabel}`}`}
+              className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target flex-shrink-0 p-0.5 sm:min-h-0 sm:min-w-0"
+            >
+              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </button>
+
+            <Package
+              className={`hidden h-4 w-4 flex-shrink-0 sm:block ${depth > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-blue-700 dark:text-blue-400'}`}
+              aria-hidden="true"
+            />
+
+            <input
+              id={`comp-name-${key}`}
+              type="text"
+              aria-label="Location name"
+              className={`text-theme-text-primary placeholder:text-theme-text-muted min-w-0 grow basis-0 rounded-md border bg-transparent px-1.5 py-1 font-semibold outline-none focus:border-blue-400 sm:min-w-[112px] sm:basis-[112px] ${
+                depth > 0 ? 'text-sm' : 'text-[15px]'
+              } ${comp.name.trim() ? 'hover:border-theme-surface-border border-transparent' : 'bg-theme-input-bg border-amber-500'}`}
+              placeholder={`Name this ${typeLabel.toLowerCase()}…`}
+              value={comp.name}
+              onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
+            />
+
+            {/* On a phone these drop to a second line under the name, so the
+              name, the count and the menu keep one line to themselves. From
+              640px the wrapper is `display: contents` and its children sit in
+              the row exactly as they did before. */}
+            <div className="order-1 flex min-w-0 basis-full flex-wrap items-center gap-x-3 gap-y-1 pl-1 sm:order-none sm:contents">
+              {parentName && (
+                <span className="text-theme-text-muted max-w-[160px] flex-shrink truncate text-[11px]">
+                  inside {parentName}
+                </span>
+              )}
+
+              <select
+                aria-label="Storage type"
+                className="border-theme-surface-border bg-theme-surface text-theme-text-muted touch:min-h-11 flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px]"
+                value={inCustomContainer ? '__custom__' : comp.containerType || 'compartment'}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '__custom__') {
+                    setCustomContainerKeys((prev) => new Set(prev).add(key));
+                    updateCompartmentField(idx, { containerType: '' });
+                  } else {
+                    setCustomContainerKeys((prev) => {
+                      const next = new Set(prev);
+                      next.delete(key);
+                      return next;
+                    });
+                    updateCompartmentField(idx, { containerType: v });
+                  }
                 }}
               >
-                <Pencil className="h-4 w-4" aria-hidden="true" /> Rename
-              </button>
-              <button type="button" className={mobileMenuItemClass} onClick={() => void duplicateCompartment(idx)}>
-                <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
-              </button>
-              <button
-                type="button"
-                className={mobileMenuItemClass}
-                disabled={!canMoveCompartment(compartments, comp.id, 'up')}
-                onClick={() => void moveCompartment(idx, 'up')}
+                {CONTAINER_TYPE_PRESETS.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+                <option value="__custom__">Custom…</option>
+              </select>
+
+              {inCustomContainer && (
+                <input
+                  type="text"
+                  className="border-theme-input-border bg-theme-input-bg text-theme-text-primary w-32 flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px] outline-none focus:border-blue-400"
+                  placeholder="e.g. Trauma Kit"
+                  aria-label="Custom storage type label"
+                  value={comp.containerType}
+                  onChange={(e) => updateCompartmentField(idx, { containerType: e.target.value })}
+                />
+              )}
+
+              {/* A sealed container's contents cannot change while it sits shut, so
+              the long explanation belongs on hover rather than on the row. */}
+              <label
+                className="text-theme-text-muted touch:min-h-11 flex flex-shrink-0 items-center gap-1.5 text-[11px]"
+                title="A crew that finds the seal intact and matching the last count clears every presence and quantity check inside in one tap. Expiry dates and readings still have to be checked."
               >
-                <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
-              </button>
-              <button
-                type="button"
-                className={mobileMenuItemClass}
-                disabled={!canMoveCompartment(compartments, comp.id, 'down')}
-                onClick={() => void moveCompartment(idx, 'down')}
-              >
-                <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
-              </button>
-              {comp.id && (
-                <button type="button" className={mobileMenuItemClass} onClick={() => void addCompartment(comp.id)}>
-                  <Package className="h-4 w-4" aria-hidden="true" /> Add a location inside
+                <input
+                  type="checkbox"
+                  className="form-checkbox h-3.5 w-3.5"
+                  checked={comp.isSealed}
+                  onChange={(e) => updateCompartmentField(idx, { isSealed: e.target.checked })}
+                />
+                Sealed
+              </label>
+
+              {/* Expanded, the items themselves are on screen below. */}
+              {!isLaptop && !isExpanded && !isEmpty && (
+                <span className={`${itemCountBadgeClass} ml-auto`}>
+                  {comp.items.length} item{comp.items.length !== 1 ? 's' : ''}
+                </span>
+              )}
+
+              {/* An empty location has the callout's Add items below; a second
+              add button beside it did the same thing. */}
+              {!isLaptop && isExpanded && !isEmpty && (
+                <button
+                  type="button"
+                  aria-label={`Add item to ${comp.name || 'location'}`}
+                  className="ml-auto flex min-h-[44px] shrink-0 items-center gap-1 px-2 text-sm font-semibold text-blue-600 dark:text-blue-400"
+                  // Through openAddSurface, not setMobileAddLocations directly: the
+                  // action bar's Add item follows whichever location was last
+                  // opened, and a handler that skips the funnel leaves it pointing
+                  // at the previous one. That is the drift openAddSurface's own
+                  // docstring says cannot happen, and this call site was it.
+                  onClick={() => openAddSurface(key)}
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" /> Add
                 </button>
               )}
-              {nfcEnabled && comp.id && (
+            </div>
+
+            <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
+              {/* A phone has no room for these beside the name: the empty
+                notice becomes the callout below the row, and the count moves
+                to the second line. */}
+              {isLaptop &&
+                (isEmpty ? (
+                  <>
+                    <span className="flex-shrink-0 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                      Add at least one item to publish
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openAddSurface(key)}
+                      className="flex min-h-7.5 flex-shrink-0 items-center gap-1.5 rounded-md bg-red-800 px-2.5 text-xs font-semibold text-white hover:bg-red-900"
+                    >
+                      <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add items
+                    </button>
+                  </>
+                ) : (
+                  <span className={itemCountBadgeClass}>
+                    {comp.items.length} item{comp.items.length !== 1 ? 's' : ''}
+                  </span>
+                ))}
+              {isLaptop && requiredCount > 0 && (
+                <span className="flex-shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                  {requiredCount} req
+                </span>
+              )}
+
+              <div className="hidden flex-shrink-0 items-center gap-0.5 sm:flex">
+                <button
+                  type="button"
+                  onClick={() => indentCompartment(idx)}
+                  disabled={!canIndentCompartment(comp)}
+                  className="text-theme-text-muted/70 hover:text-theme-text-primary mobile-touch-target rounded p-1 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
+                  aria-label={`Nest ${comp.name || 'location'} inside the location above`}
+                  title="Nest inside the location above"
+                >
+                  <Indent className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => outdentCompartment(idx)}
+                  disabled={!comp.parentCompartmentId}
+                  className="text-theme-text-muted/70 hover:text-theme-text-primary mobile-touch-target rounded p-1 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
+                  aria-label={`Move ${comp.name || 'location'} out one level`}
+                  title="Move out one level"
+                >
+                  <Outdent className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteCompartment(idx)}
+                  disabled={saveOperationActive}
+                  className="text-theme-text-muted/70 mobile-touch-target rounded p-1 hover:text-red-600 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
+                  aria-label={`Delete ${comp.name || 'compartment'}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+
+              <RowActionMenu
+                label={`Actions for ${comp.name || 'compartment'}`}
+                title={comp.name.trim() || `Untitled ${typeLabel.toLowerCase()}`}
+              >
                 <button
                   type="button"
                   className={mobileMenuItemClass}
-                  onClick={() => setNfcCompartment({ id: comp.id ?? '', name: comp.name || 'Compartment' })}
+                  onClick={() => {
+                    openCompartment(key);
+                    window.setTimeout(() => document.getElementById(`comp-name-${key}`)?.focus());
+                  }}
                 >
-                  <Nfc className="h-4 w-4" aria-hidden="true" /> NFC tags
+                  <Pencil className="h-4 w-4" aria-hidden="true" /> Rename
                 </button>
-              )}
-              {comp.items.length > 0 && (
+                <button type="button" className={mobileMenuItemClass} onClick={() => void duplicateCompartment(idx)}>
+                  <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
+                </button>
                 <button
                   type="button"
-                  title="Select all items"
                   className={mobileMenuItemClass}
-                  onClick={() => selectAllItems(idx)}
+                  disabled={!canMoveCompartment(compartments, comp.id, 'up')}
+                  onClick={() => void moveCompartment(idx, 'up')}
                 >
-                  <CheckSquare className="h-4 w-4" aria-hidden="true" /> Select all items
+                  <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
                 </button>
-              )}
-              <button type="button" className={mobileMenuItemClass} onClick={() => void addHeader(idx)}>
-                <Type className="h-4 w-4" aria-hidden="true" /> Add a header row
-              </button>
-              <button
-                type="button"
-                className={mobileMenuItemClass}
-                onClick={() => {
-                  const compKey = getCompKey(idx);
-                  setShowEquipmentPresets((prev) => ({ ...prev, [compKey]: !prev[compKey] }));
-                }}
-              >
-                <Package className="h-4 w-4" aria-hidden="true" /> Add a kit
-              </button>
-              {/* The row carries the name and the storage controls, but the
+                <button
+                  type="button"
+                  className={mobileMenuItemClass}
+                  disabled={!canMoveCompartment(compartments, comp.id, 'down')}
+                  onClick={() => void moveCompartment(idx, 'down')}
+                >
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
+                </button>
+                {comp.id && (
+                  <button type="button" className={mobileMenuItemClass} onClick={() => void addCompartment(comp.id)}>
+                    <Package className="h-4 w-4" aria-hidden="true" /> Add a location inside
+                  </button>
+                )}
+                {nfcEnabled && comp.id && (
+                  <button
+                    type="button"
+                    className={mobileMenuItemClass}
+                    onClick={() => setNfcCompartment({ id: comp.id ?? '', name: comp.name || 'Compartment' })}
+                  >
+                    <Nfc className="h-4 w-4" aria-hidden="true" /> NFC tags
+                  </button>
+                )}
+                {comp.items.length > 0 && (
+                  <button
+                    type="button"
+                    title="Select all items"
+                    className={mobileMenuItemClass}
+                    onClick={() => selectAllItems(idx)}
+                  >
+                    <CheckSquare className="h-4 w-4" aria-hidden="true" /> Select all items
+                  </button>
+                )}
+                <button type="button" className={mobileMenuItemClass} onClick={() => void addHeader(idx)}>
+                  <Type className="h-4 w-4" aria-hidden="true" /> Add a header row
+                </button>
+                <button
+                  type="button"
+                  className={mobileMenuItemClass}
+                  onClick={() => {
+                    const compKey = getCompKey(idx);
+                    setShowEquipmentPresets((prev) => ({ ...prev, [compKey]: !prev[compKey] }));
+                  }}
+                >
+                  <Package className="h-4 w-4" aria-hidden="true" /> Add a kit
+                </button>
+                {/* The row carries the name and the storage controls, but the
                   model still has a description and an image, and the expanded
                   body this replaced was the only place to type them. Without
                   these two they are readable in an export and unreachable in
                   the UI. */}
-              <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
-                <span className="flex items-center gap-3">
-                  <Pencil className="h-4 w-4" aria-hidden="true" /> Description
-                </span>
-                <input
-                  type="text"
-                  className="form-input min-h-[44px] text-sm"
-                  placeholder="Optional description"
-                  aria-label={`Description for ${comp.name || 'location'}`}
-                  value={comp.description}
-                  onChange={(e) => updateCompartmentField(idx, { description: e.target.value })}
-                />
-              </label>
-              <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
-                <span className="flex items-center gap-3">
-                  <Image className="h-4 w-4" aria-hidden="true" /> Image URL
-                </span>
-                <input
-                  type="text"
-                  className="form-input min-h-[44px] text-sm"
-                  placeholder="https://..."
-                  aria-label={`Image URL for ${comp.name || 'location'}`}
-                  value={comp.imageUrl}
-                  onChange={(e) => updateCompartmentField(idx, { imageUrl: e.target.value })}
-                />
-              </label>
-              <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
-                <span className="flex items-center gap-3">
-                  <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Stored inside
-                </span>
-                <select
-                  className="form-input min-h-[44px] text-sm"
-                  value={comp.parentCompartmentId}
-                  aria-label={`Move ${comp.name || 'compartment'} to compartment; current destination ${comp.parentCompartmentId ? compartmentPath(compartments.findIndex((entry) => entry.id === comp.parentCompartmentId)) : 'Top level'}`}
-                  onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
+                <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
+                  <span className="flex items-center gap-3">
+                    <Pencil className="h-4 w-4" aria-hidden="true" /> Description
+                  </span>
+                  <input
+                    type="text"
+                    className="form-input min-h-[44px] text-sm"
+                    placeholder="Optional description"
+                    aria-label={`Description for ${comp.name || 'location'}`}
+                    value={comp.description}
+                    onChange={(e) => updateCompartmentField(idx, { description: e.target.value })}
+                  />
+                </label>
+                <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
+                  <span className="flex items-center gap-3">
+                    <Image className="h-4 w-4" aria-hidden="true" /> Image URL
+                  </span>
+                  <input
+                    type="text"
+                    className="form-input min-h-[44px] text-sm"
+                    placeholder="https://..."
+                    aria-label={`Image URL for ${comp.name || 'location'}`}
+                    value={comp.imageUrl}
+                    onChange={(e) => updateCompartmentField(idx, { imageUrl: e.target.value })}
+                  />
+                </label>
+                <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
+                  <span className="flex items-center gap-3">
+                    <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Stored inside
+                  </span>
+                  <select
+                    className="form-input min-h-[44px] text-sm"
+                    value={comp.parentCompartmentId}
+                    aria-label={`Move ${comp.name || 'compartment'} to compartment; current destination ${comp.parentCompartmentId ? compartmentPath(compartments.findIndex((entry) => entry.id === comp.parentCompartmentId)) : 'Top level'}`}
+                    onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
+                  >
+                    <option value="">Top level{!comp.parentCompartmentId ? ' (current)' : ''}</option>
+                    {storedInsideOptions(compartments, comp).map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                        {comp.parentCompartmentId === option.id ? ' (current)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className={`${mobileDestructiveMenuItemClass} disabled:opacity-40`}
+                  onClick={() => void deleteCompartment(idx)}
+                  disabled={saveOperationActive}
                 >
-                  <option value="">Top level{!comp.parentCompartmentId ? ' (current)' : ''}</option>
-                  {storedInsideOptions(compartments, comp).map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                      {comp.parentCompartmentId === option.id ? ' (current)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className={`${mobileDestructiveMenuItemClass} disabled:opacity-40`}
-                onClick={() => void deleteCompartment(idx)}
-                disabled={saveOperationActive}
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
-              </button>
-            </RowActionMenu>
-          </div>
-
-          {!isLaptop && isEmpty && (
-            <div className="order-2 flex basis-full flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
-              <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
-                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                Add at least one item to publish
-              </p>
-              <button
-                type="button"
-                onClick={() => openAddSurface(key)}
-                className="btn-primary flex shrink-0 items-center gap-1.5 px-3 text-sm font-semibold"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" /> Add items
-              </button>
+                  <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
+                </button>
+              </RowActionMenu>
             </div>
-          )}
-        </div>
+
+            {!isLaptop && isEmpty && (
+              <div className="order-2 flex basis-full flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  Add at least one item to publish
+                </p>
+                <button
+                  type="button"
+                  onClick={() => openAddSurface(key)}
+                  className="btn-primary flex shrink-0 items-center gap-1.5 px-3 text-sm font-semibold"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" /> Add items
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Items and the add composer */}
         {isExpanded && (
@@ -5432,19 +5698,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   );
 
   const setupReady = Boolean(form.name.trim() && form.checkTiming && form.templateType);
-  const structureReady = compartments.some((comp) => !comp.isHeader);
-  const operationalCompartments = compartments.filter((comp) => !comp.isHeader);
+  // An emptied group of items placed directly on the checklist is removed on
+  // save rather than flagged, as the server ignores it at publish — so it
+  // neither counts toward a checklist having something on it nor blocks one.
+  const operationalCompartments = compartments.filter((comp) => !comp.isHeader && !isEmptyInlineGroup(comp));
+  const structureReady = operationalCompartments.length > 0;
   const blockingItems = compartments
     .flatMap((comp) => comp.items)
     .filter(
       (item) =>
         !item.name.trim() ||
         (item.checkType === 'count' && item.requiredQuantity.trim() === '' && item.expectedQuantity.trim() === '') ||
-        (item.checkType === 'level' && item.minLevel.trim() === '')
+        (item.checkType === 'level' && item.minLevel.trim() === '') ||
+        dateLineMissingDate(item)
     ).length;
   const locationsReady =
     structureReady &&
-    compartments.every((comp) => comp.name.trim()) &&
+    compartments.every((comp) => comp.isInline || comp.name.trim()) &&
     operationalCompartments.every((comp) =>
       comp.items.some((item) => item.checkType !== 'header' && item.checkType !== 'text')
     );
@@ -5512,8 +5782,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   }
   for (const [compIdx, comp] of compartments.entries()) {
     const compAnchor = `comp-row-${comp.id ?? comp.clientKey}`;
-    const compLabel = comp.name.trim() || `Untitled ${containerTypeLabel(comp.containerType)}`;
-    if (!comp.name.trim()) {
+    const compLabel = comp.isInline
+      ? 'On the checklist'
+      : comp.name.trim() || `Untitled ${containerTypeLabel(comp.containerType)}`;
+    if (!comp.isInline && !comp.name.trim()) {
       blockers.push({
         id: `comp-name-${comp.clientKey}`,
         title: comp.isHeader ? 'A section has no heading' : 'A location has no name',
@@ -5523,7 +5795,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         focusId: `comp-name-${comp.id ?? comp.clientKey}`,
       });
     }
-    if (!comp.isHeader && !comp.items.some((item) => item.checkType !== 'header' && item.checkType !== 'text')) {
+    if (
+      !comp.isHeader &&
+      !comp.isInline &&
+      !comp.items.some((item) => item.checkType !== 'header' && item.checkType !== 'text')
+    ) {
       blockers.push({
         id: `comp-empty-${comp.clientKey}`,
         title: `${compLabel} is empty`,
@@ -5557,6 +5833,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           anchorId: itemAnchor,
           expandKey: comp.id ?? comp.clientKey,
           focusId: `item-par-${item.id ?? item.clientKey}`,
+          editorTarget: { compartmentKey: comp.clientKey, itemKey: item.clientKey },
+        });
+      }
+      if (dateLineMissingDate(item)) {
+        blockers.push({
+          id: `item-date-${item.clientKey}`,
+          title: `${item.name.trim()} needs an expiration date`,
+          locator: 'A Date line checks the date on record, so it needs one to check',
+          icon: 'alert',
+          anchorId: itemAnchor,
+          expandKey: comp.id ?? comp.clientKey,
+          focusId: `item-expiry-date-${item.id ?? item.clientKey}`,
           editorTarget: { compartmentKey: comp.clientKey, itemKey: item.clientKey },
         });
       }
@@ -6178,16 +6466,27 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 onDragEnd={(event) => void handleCompartmentDragEnd(event)}
               >
                 <SortableContext items={compartmentIds} strategy={verticalListSortingStrategy}>
-                  {orderedCompartments.map(({ comp, idx, depth }) => {
-                    const id = compartmentKey(comp, idx);
-                    return (
-                      <SortableCompartmentWrapper key={id} id={id} disabled={!comp.id}>
-                        {({ listeners: compListeners, setNodeRef, style }) =>
-                          renderCompartment(comp, idx, compListeners, setNodeRef, style, depth)
-                        }
-                      </SortableCompartmentWrapper>
-                    );
-                  })}
+                  {(() => {
+                    // The spot before each top-level row, and one after the
+                    // last. Never inside a location: an item there is the
+                    // location's, and its own composer adds it.
+                    let rootIndex = 0;
+                    return orderedCompartments.map(({ comp, idx, depth }) => {
+                      const id = compartmentKey(comp, idx);
+                      const insertAt = depth === 0 ? rootIndex++ : null;
+                      return (
+                        <React.Fragment key={id}>
+                          {insertAt !== null && renderAddItemHere(insertAt)}
+                          <SortableCompartmentWrapper id={id} disabled={!comp.id}>
+                            {({ listeners: compListeners, setNodeRef, style }) =>
+                              renderCompartment(comp, idx, compListeners, setNodeRef, style, depth)
+                            }
+                          </SortableCompartmentWrapper>
+                        </React.Fragment>
+                      );
+                    });
+                  })()}
+                  {renderAddItemHere(orderedCompartments.filter(({ depth }) => depth === 0).length)}
                 </SortableContext>
               </DndContext>
             </div>
@@ -6473,18 +6772,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     onChange={(event) => {
                       const destination = Number(event.target.value);
                       const selected = [...(selectedItems[mobileSelection.key] ?? [])].sort((a, b) => b - a);
-                      for (const itemIndex of selected)
-                        void moveItemToCompartment(mobileSelection.index, itemIndex, destination);
+                      if (destination === MOVE_TO_NEW_INLINE)
+                        void moveItemsToChecklist(mobileSelection.index, selected);
+                      else
+                        for (const itemIndex of selected)
+                          void moveItemToCompartment(mobileSelection.index, itemIndex, destination);
                       setMobileSelectionMode(mobileSelection.index, false);
                     }}
                   >
                     <option value="" disabled>
                       Move
                     </option>
+                    {!hasInlineGroup && <option value={MOVE_TO_NEW_INLINE}>Directly on the checklist</option>}
                     {compartments.map((compartment, index) =>
                       index !== mobileSelection.index && !compartment.isHeader ? (
                         <option key={compartment.clientKey} value={index}>
-                          {compartment.name || 'Untitled location'}
+                          {compartment.isInline
+                            ? inlineGroupLabel(compartment)
+                            : compartment.name || 'Untitled location'}
                         </option>
                       ) : null
                     )}

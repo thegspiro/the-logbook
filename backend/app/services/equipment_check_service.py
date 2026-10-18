@@ -48,7 +48,13 @@ from app.models.user import Organization, User
 from app.services.auto_reorder_service import AutoReorderService
 from app.services.inventory_service import InventoryService
 from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
-from app.utils.check_types import COUNT, EXPIRY, LEVEL, normalize_check_type
+from app.utils.check_types import (
+    COUNT,
+    EXPIRY,
+    LEVEL,
+    PRESENCE,
+    normalize_check_type,
+)
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import EXACT, STRONG, best_matches, normalize_name
 from app.utils.org_scoping import is_in_org
@@ -59,6 +65,13 @@ from app.utils.org_timezone import (
     today_in,
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+# Keys on a submitted item that only validation writes: a replacement date the
+# crew entered on a line that takes one, already checked not to be past. The
+# leading underscore keeps them out of reach of a request body, which arrives
+# as a schema dump and cannot carry them.
+_REPLACEMENT_DATE = "_replacement_date"
+_REPLACEMENT_LOT = "_replacement_lot"
 
 
 class EquipmentCheckConflictError(ValueError):
@@ -195,22 +208,36 @@ class EquipmentCheckService:
         if not str(value(template, "name", "")).strip():
             errors.append("template name is required")
 
+        def checkable_items(compartment: Any) -> List[Any]:
+            return [
+                item
+                for item in list(value(compartment, "items", []) or [])
+                if value(item, "check_type", "pass_fail") not in ("header", "text")
+            ]
+
+        # An inline group with nothing in it is not a defect a crew would meet:
+        # it renders as nothing, and the builder removes it on save. Flagging
+        # it would block a publish over an invisible row.
+        compartments = [
+            c
+            for c in compartments
+            if not (value(c, "is_inline", False) and not checkable_items(c))
+        ]
+
         operational = [c for c in compartments if not value(c, "is_header", False)]
         if not operational:
             errors.append("at least one operational compartment is required")
 
         for compartment in compartments:
+            is_inline = bool(value(compartment, "is_inline", False))
             label = str(value(compartment, "name", "")).strip()
-            if not label:
+            # Headingless by design, so there is no name to require.
+            if not label and not is_inline:
                 errors.append("every operational compartment needs a name")
             if value(compartment, "is_header", False):
                 continue
             items = list(value(compartment, "items", []) or [])
-            checkable = [
-                item
-                for item in items
-                if value(item, "check_type", "pass_fail") not in ("header", "text")
-            ]
+            checkable = checkable_items(compartment)
             if not checkable:
                 errors.append(
                     f'operational compartment "{label or "Untitled"}" has no checkable items'
@@ -235,6 +262,18 @@ class EquipmentCheckService:
                 ):
                     errors.append(
                         f'level item "{item_label or "Untitled"}" needs a minimum level'
+                    )
+                # A Date line with no date has nothing for the crew to confirm.
+                # A linked line is exempt: its dates come from the lots the
+                # inventory swap puts aboard, not from this column.
+                if (
+                    check_type in ("expiry", "date_lot")
+                    and value(item, "expiration_date") is None
+                    and not value(item, "inventory_item_id")
+                ):
+                    errors.append(
+                        f'date item "{item_label or "Untitled"}" needs an '
+                        "expiration date"
                     )
         return list(dict.fromkeys(errors))
 
@@ -599,6 +638,7 @@ class EquipmentCheckService:
             parent = await self._get_compartment(parent_id, organization_id)
             if not parent or parent.template_id != template_id:
                 raise ValueError("Parent compartment must belong to the same template")
+            self._refuse_inline_parent(parent)
 
         items_data = data.pop("items", None) or []
         # EC2-4: nested items carry the same client-supplied inventory_item_id /
@@ -645,6 +685,7 @@ class EquipmentCheckService:
             await self._validate_compartment_parent(
                 compartment, parent_id, organization_id
             )
+        await self._validate_inline_update(compartment, data)
 
         apply_updates(compartment, data, skip=self.PROTECTED_FIELDS)
 
@@ -914,13 +955,15 @@ class EquipmentCheckService:
         clone = CheckTemplateCompartment(
             id=generate_uuid(),
             template_id=source.template_id,
-            name=f"{source.name} (copy)",
+            # An inline group has no heading to suffix.
+            name="" if getattr(source, "is_inline", False) else f"{source.name} (copy)",
             description=source.description,
             sort_order=sort_order,
             image_url=source.image_url,
             is_header=source.is_header,
             container_type=source.container_type,
             is_sealed=source.is_sealed,
+            is_inline=getattr(source, "is_inline", False),
             parent_compartment_id=source.parent_compartment_id,
         )
         self.db.add(clone)
@@ -1209,6 +1252,10 @@ class EquipmentCheckService:
         # and a null aimed at a NOT NULL column has to surface as a 400 instead
         # of a flush-time IntegrityError.
         apply_updates(item, data, skip=self.PROTECTED_FIELDS)
+        # A Date line always carries a date; an update that only clears the
+        # checkbox cannot turn one into a line with nothing to confirm.
+        if normalize_check_type(getattr(item, "check_type", None)) == EXPIRY:
+            item.has_expiration = True
 
         await self._advance_content_revision(original_template_id)
         if target_compartment:
@@ -1477,6 +1524,14 @@ class EquipmentCheckService:
         """
         if tmpl_item is not None:
             resolved = tmpl_item.expiration_date if tmpl_item.has_expiration else None
+            # A replacement the crew dated on this check is the unit now
+            # aboard. Read from the key only validation writes
+            # (_validate_and_normalize_observation), never from the submitted
+            # expiration_found, so an unvalidated or ineligible date cannot
+            # clear an expiry fail.
+            replaced = item_data.get(_REPLACEMENT_DATE)
+            if replaced is not None:
+                resolved = replaced
         else:
             resolved = item_data.get("expiration_date")
 
@@ -1554,6 +1609,10 @@ class EquipmentCheckService:
         for item_data in items_data:
             tmpl_item_id = item_data.get("template_item_id")
             tmpl_item = template_items_map.get(tmpl_item_id) if tmpl_item_id else None
+            if tmpl_item is not None:
+                await self._apply_replacement_date(
+                    tmpl_item, item_data, organization_id, checked_by, check_id
+                )
             # A check is a recount. quantity_found is a crew standing at the
             # compartment counting, so it outranks whatever the running total
             # had drifted to, and it settles a shortfall report if the truck is
@@ -1582,8 +1641,10 @@ class EquipmentCheckService:
                 serial_number=item_data.get("serial_number"),
                 lot_number=item_data.get("lot_number"),
                 serial_found=None,
-                lot_found=None,
-                expiration_found=None,
+                # Only what validation accepted: a crew-dated replacement on a
+                # line that takes one (_validate_and_normalize_observation).
+                lot_found=item_data.get(_REPLACEMENT_LOT),
+                expiration_found=item_data.get(_REPLACEMENT_DATE),
                 updated_serial=False,
                 photo_urls=item_data.get("photo_urls"),
                 is_expired=item_data.get("is_expired", False),
@@ -1593,6 +1654,65 @@ class EquipmentCheckService:
             self.db.add(check_item)
             created.append(check_item)
         return created
+
+    async def _apply_replacement_date(
+        self,
+        template_item: CheckTemplateItem,
+        item_data: Dict[str, Any],
+        organization_id: str,
+        checked_by: Optional[str],
+        check_id: str,
+    ) -> None:
+        """Make a crew-dated replacement the line's date, and log who did it.
+
+        Without this the line kept its old date and failed every check after
+        the unit had been swapped, until an admin edited the checklist. The
+        change goes in the template's change log naming the member and the
+        check, because it alters what every later crew is told is aboard.
+
+        Deliberately does not advance the content revision: that unpublishes
+        the template, and a crew answering it is not an edit to its contents.
+        """
+        found = item_data.get(_REPLACEMENT_DATE)
+        if found is None or not self._takes_crew_replacement_date(template_item):
+            return
+        lot = item_data.get(_REPLACEMENT_LOT)
+        changes: Dict[str, Any] = {
+            "expiration_date": {
+                "old": (
+                    template_item.expiration_date.isoformat()
+                    if template_item.expiration_date
+                    else None
+                ),
+                "new": found.isoformat(),
+            },
+            "check_id": check_id,
+        }
+        if lot is not None and lot != template_item.lot_number:
+            changes["lot_number"] = {"old": template_item.lot_number, "new": lot}
+            template_item.lot_number = lot
+        template_item.expiration_date = found
+        template_item.has_expiration = True
+        # The snapshot was taken before the swap; it should record the unit
+        # this check left aboard.
+        item_data["expiration_date"] = found
+        if lot is not None:
+            item_data["lot_number"] = lot
+
+        template_id = await self.db.scalar(
+            select(CheckTemplateCompartment.template_id).where(
+                CheckTemplateCompartment.id == template_item.compartment_id
+            )
+        )
+        user = await self.db.get(User, checked_by) if checked_by is not None else None
+        await self._log_item_action(
+            template_id,
+            organization_id,
+            template_item,
+            user,
+            action="replacement_dated",
+            changes=changes,
+        )
 
     def _reconcile_count_observation(
         self,
@@ -1824,6 +1944,22 @@ class EquipmentCheckService:
             item["quantity_found"] = None
         if check_type != LEVEL:
             item["level_reading"] = None
+        # A replacement date is an answer only a crew-dated line takes. Anywhere
+        # else it was always discarded, and still is — an older client may send
+        # one for a linked line, whose dates change only through a lot swap.
+        if not EquipmentCheckService._takes_crew_replacement_date(template_item):
+            item["expiration_found"] = None
+            item["lot_found"] = None
+        elif item.get("expiration_found") is None:
+            item["lot_found"] = None
+        elif item["expiration_found"] < today:
+            raise ValueError(
+                f'The replacement date entered for "{template_item.name}" has '
+                "already passed. Enter the date printed on the unit you put in."
+            )
+        else:
+            item[_REPLACEMENT_DATE] = item["expiration_found"]
+            item[_REPLACEMENT_LOT] = (item.get("lot_found") or "").strip() or None
 
         observation_passes: Optional[bool] = None
         if check_type == COUNT and item.get("quantity_found") is not None:
@@ -1856,7 +1992,7 @@ class EquipmentCheckService:
             elif minimum is not None:
                 observation_passes = True
         elif check_type == EXPIRY:
-            expiration = (
+            expiration = item.get(_REPLACEMENT_DATE) or (
                 template_item.expiration_date if template_item.has_expiration else None
             )
             if expiration is not None:
@@ -1876,6 +2012,23 @@ class EquipmentCheckService:
                 f"Status 'pass' contradicts the authoritative "
                 f"{check_type} observation"
             )
+
+    @staticmethod
+    def _takes_crew_replacement_date(template_item: CheckTemplateItem) -> bool:
+        """Whether a crew may date the unit they put in on this line.
+
+        Only a Date line the inventory does not track. A linked line, or one
+        with lots recorded aboard, has its dates owned by the lot swap, which
+        also moves stock; a date typed on a check would bypass that and leave
+        the record of what is aboard disagreeing with the line.
+
+        Mirrors ``canRecordReplacementDate`` in the check form.
+        """
+        return (
+            normalize_check_type(getattr(template_item, "check_type", None)) == EXPIRY
+            and not getattr(template_item, "inventory_item_id", None)
+            and not EquipmentCheckService._deployed_lots(template_item)
+        )
 
     @classmethod
     def _failure_needs_note(
@@ -1904,6 +2057,15 @@ class EquipmentCheckService:
         if status not in ("fail", "out_of_service"):
             return False
         if quantity_found is not None or level_reading is not None:
+            return False
+        # Absent says what is wrong — it is not on the truck. Out of service on
+        # a presence line still needs one: it is there, so why can't it be used?
+        if (
+            status == "fail"
+            and template_item is not None
+            and normalize_check_type(getattr(template_item, "check_type", None))
+            == PRESENCE
+        ):
             return False
         if template_item is not None:
             dates = [
@@ -2546,11 +2708,22 @@ class EquipmentCheckService:
                         item_data["quantity_found"],
                         organization_id,
                     )
-                # Lot metadata is inventory-owned. Ignore legacy/client
-                # observations when a saved incomplete check is resumed.
+                if tmpl_item is not None:
+                    await self._apply_replacement_date(
+                        tmpl_item,
+                        item_data,
+                        organization_id,
+                        checked_by,
+                        str(check.id),
+                    )
+                # Serials are inventory-owned. A replacement date survives only
+                # where validation kept it: a crew-dated line.
                 existing.serial_found = None
-                existing.lot_found = None
-                existing.expiration_found = None
+                if item_data.get(_REPLACEMENT_DATE) is not None:
+                    existing.lot_found = item_data.get(_REPLACEMENT_LOT)
+                    existing.expiration_found = item_data[_REPLACEMENT_DATE]
+                    if item_data.get(_REPLACEMENT_LOT):
+                        existing.lot_number = item_data["lot_number"]
                 existing.updated_serial = False
                 expiration = self._resolve_expiration({}, tmpl_item)
                 existing.expiration_date = expiration
@@ -3013,6 +3186,7 @@ class EquipmentCheckService:
                     "shift_id": (check.shift_id if check else None),
                     "shift_date": (shift.shift_date if shift else None),
                     "status": item.status,
+                    "check_type": item.check_type,
                     "quantity_found": item.quantity_found,
                     "level_reading": item.level_reading,
                     "serial_number": item.serial_number,
@@ -5553,6 +5727,7 @@ class EquipmentCheckService:
             parent = await self._get_compartment(parent_id, organization_id)
             if not parent or parent.template_id != template_id:
                 raise ValueError("Parent compartment must belong to the same template")
+            self._refuse_inline_parent(parent)
 
         compartment = CheckTemplateCompartment(
             id=generate_uuid(),
@@ -5596,6 +5771,7 @@ class EquipmentCheckService:
             is_header=source.is_header,
             container_type=source.container_type,
             is_sealed=source.is_sealed,
+            is_inline=getattr(source, "is_inline", False),
             parent_compartment_id=parent_id,
         )
         self.db.add(compartment)
@@ -5655,7 +5831,54 @@ class EquipmentCheckService:
             parent = await self._get_compartment(current_id, organization_id)
             if not parent or parent.template_id != compartment.template_id:
                 raise ValueError("Parent compartment must belong to the same template")
+            if current_id == parent_id:
+                self._refuse_inline_parent(parent)
             current_id = parent.parent_compartment_id
+
+    @staticmethod
+    def _refuse_inline_parent(parent: CheckTemplateCompartment) -> None:
+        """An inline group is items on the checklist itself, not a place."""
+        if getattr(parent, "is_inline", False):
+            raise ValueError(
+                "A location cannot be stored inside items placed directly on "
+                "the checklist"
+            )
+
+    async def _validate_inline_update(
+        self, compartment: CheckTemplateCompartment, data: Dict[str, Any]
+    ) -> None:
+        """Hold an update to the inline shape the create schema enforces.
+
+        The update schema cannot check this on its own: whether a compartment
+        may become inline depends on what is already stored — a sealed bag, a
+        nested one, or one with locations inside it.
+        """
+
+        def merged(key: str) -> Any:
+            return data[key] if key in data else getattr(compartment, key, None)
+
+        if not merged("is_inline"):
+            return
+        if merged("is_header"):
+            raise ValueError("Items placed directly on a checklist cannot be a section")
+        if merged("is_sealed"):
+            raise ValueError("Items placed directly on a checklist cannot be sealed")
+        if merged("parent_compartment_id"):
+            raise ValueError(
+                "Items placed directly on a checklist cannot sit inside a location"
+            )
+        child = await self.db.scalar(
+            select(CheckTemplateCompartment.id)
+            .where(CheckTemplateCompartment.parent_compartment_id == compartment.id)
+            .limit(1)
+        )
+        if child is not None:
+            raise ValueError(
+                "A location with locations inside it cannot become items placed "
+                "directly on the checklist"
+            )
+        # Headingless by definition; see CheckTemplateCompartmentCreate.
+        data["name"] = ""
 
     async def _get_compartment(
         self, compartment_id: str, organization_id: str
@@ -5851,6 +6074,9 @@ class EquipmentCheckService:
                 line = wi["name"]
                 if wi.get("out_of_service"):
                     line += " (out of service)"
+                elif normalize_check_type(wi.get("check_type")) == PRESENCE:
+                    # Missing from the truck, which is what the officer acts on.
+                    line += " (absent)"
                 if "expected" in wi and "found" in wi:
                     line += f" — expected {wi['expected']}, found {wi['found']}"
                     if wi.get("unit"):
@@ -6504,6 +6730,7 @@ class EquipmentCheckService:
                     "shift_id": (str(check.shift_id) if check else ""),
                     "shift_date": shift_date_val,
                     "status": item.status,
+                    "check_type": item.check_type,
                     "quantity_found": item.quantity_found,
                     "level_reading": item.level_reading,
                     "serial_number": item.serial_number,

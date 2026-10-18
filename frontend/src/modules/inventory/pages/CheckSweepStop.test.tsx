@@ -782,3 +782,60 @@ describe('marking a count not applicable', () => {
     expect(screen.getByTestId('tally-value-gauze')).toHaveTextContent('7');
   });
 });
+
+describe('a Present line', () => {
+  const chocks: CheckItemSpec = { id: 'chocks', name: 'Wheel chocks', checkType: 'presence' };
+
+  it('asks whether it is aboard, not whether it works', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([chocks]);
+    await user.click(screen.getByRole('button', { name: 'Wheel chocks is absent' }));
+    expect(onAnswer).toHaveBeenCalledWith('chocks', { status: 'fail' });
+    expect(screen.queryByRole('button', { name: 'Wheel chocks does not work' })).not.toBeInTheDocument();
+  });
+
+  it('opens no fault detail when absent — missing explains itself', () => {
+    setup([chocks], { chocks: { status: 'fail' } });
+    expect(screen.queryByLabelText('What happened')).not.toBeInTheDocument();
+  });
+});
+
+describe('dating a replacement on a line nothing else tracks', () => {
+  const pads: CheckItemSpec = {
+    id: 'pads',
+    name: 'AED pads',
+    checkType: 'expiry',
+    expirationDate: YESTERDAY,
+    takesReplacementDate: true,
+  };
+
+  it('records the new unit and passes the line', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([pads]);
+    await user.click(screen.getByTestId('replacement-open-pads'));
+    fireEvent.change(screen.getByTestId('replacement-date-pads'), { target: { value: FAR } });
+    expect(onAnswer).toHaveBeenCalledWith(
+      'pads',
+      expect.objectContaining({ expirationFound: FAR, status: 'pass', expiryConfirmed: true })
+    );
+  });
+
+  it('refuses a date that has already passed', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([pads]);
+    await user.click(screen.getByTestId('replacement-open-pads'));
+    fireEvent.change(screen.getByTestId('replacement-date-pads'), { target: { value: '2020-01-01' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('already passed');
+    expect(onAnswer).not.toHaveBeenCalledWith('pads', expect.objectContaining({ expirationFound: '2020-01-01' }));
+  });
+
+  it('is not offered on a line whose date is fine', () => {
+    setup([{ ...pads, expirationDate: FAR }]);
+    expect(screen.queryByTestId('replacement-open-pads')).not.toBeInTheDocument();
+  });
+
+  it('is not offered where inventory owns the dates', () => {
+    setup([{ ...pads, takesReplacementDate: false }]);
+    expect(screen.queryByTestId('replacement-open-pads')).not.toBeInTheDocument();
+  });
+});
