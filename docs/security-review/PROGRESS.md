@@ -16,21 +16,51 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3404](https://github.com/thegspiro/the-logbook/pull/3404)** (branch
-`claude/security-review-elections-ballots`). PR #3401 (Feature 05, Finance &
-approvals, pass 10) merged 2026-10-18 clean, docs-only; already recorded in
-that PR's own history below.
+**PR [#3410](https://github.com/thegspiro/the-logbook/pull/3410)** (branch
+`claude/security-review-users-organizations-p10`). PR #3404
+(Feature 06, Elections & ballots, pass 10) merged 2026-10-18 clean — not
+docs-only (fixed ELEC-47, a real locking-read bug in the new
+ballot-send-jobs guard, plus its guard test), but already fully recorded
+in that PR's own history below.
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
-`claude/security-review-`, confirmed via `list_pull_requests`, and the
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
 dedicated `/loop 30m /security-review` session was not reachable via
-`ListAgents`) reviewed Feature 06 (Elections & ballots), pass 10. **1 fix
-applied, 1 new finding flagged.** Baseline `80d92def` (PR #3248's merge,
-pass 9). This window's delta was substantive (unlike the last several
-passes' 0/0): a new background-job system for ballot/reminder sends
-(`app/services/ballot_send_jobs.py`, new), replacing the synchronous
-sends that outlasted the browser/nginx timeout at department scale.
-**ELEC-47 (MEDIUM, FIXED):** the new one-send-per-election guard
+`ListAgents`) reviewed Feature 07 (Users & organizations), pass 10. **0
+fixes, 0 new findings.** Baseline `7add73bc4` (PR #3250's merge, pass 9);
+7 non-merge commits touch this feature's scope, 3 of them Minutes-module
+settings fields riding on the shared `OrganizationSettingsUpdate` schema
+aggregator (additive, no logic). The 4 real changes — PHI read auditing
+on `member_leaves.py`, two new `members.manage`-gated status-change-reason
+endpoints (org-scoped via the existing `_load_member` helper), the
+undo-drop window now anchored to a drop's effective date (tightens, not
+weakens, an existing week-long window), and a server-validated
+`separation_date` on the existing status-change endpoint — all verified
+sound. USR-5 and USR-8 re-confirmed **OPEN**, unchanged. See
+`USR-07-users-organizations.md`'s **Pass 10** section for the full
+writeup. Row 07 → ✅ (pending this PR's merge); next is Feature 08
+(Membership pipeline).
+
+**Note on PR #3403:** an earlier watchdog pickup of rotation row 06
+raced #3404 within minutes and was closed by the owner as a duplicate —
+its own review had missed ELEC-47 (asserted the overlap guard was
+"correctly applied" without reading `find_active_job` closely enough to
+see it was a non-locking read). No further action needed; #3404 is the
+PR that was kept and merged.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 10, PR #3404, merged), preserved for history</summary>
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 06 (Elections & ballots), pass 10. **1
+fix applied, 1 new finding flagged.** Baseline `80d92def` (PR #3248's
+merge, pass 9). This window's delta was substantive (unlike the last
+several passes' 0/0): a new background-job system for ballot/reminder
+sends (`app/services/ballot_send_jobs.py`, new), replacing the
+synchronous sends that outlasted the browser/nginx timeout at department
+scale. **ELEC-47 (MEDIUM, FIXED):** the new one-send-per-election guard
 (`find_active_job`) was a plain, non-locking read — CLAUDE.md pitfall
 #27's exact shape, since the auth dependency's own user lookup on the
 same session already fixed this transaction's REPEATABLE READ snapshot
@@ -47,6 +77,8 @@ them too or retire them. Mirrored in `KNOWN_LIMITATIONS.md`'s "Elections
 `ELEC-06-elections-ballots.md`'s **Pass 10** section for the full
 writeup. Row 06 → ✅ (pending this PR's merge); next is Feature 07
 (Users & organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 10, PR #3401, merged), preserved for history</summary>
@@ -20074,7 +20106,7 @@ iteration's commit" rule.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
@@ -20109,6 +20141,52 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-18 — Feature 07 (Users & organizations, pass 10) — watchdog pickup, real delta (PHI read auditing, new status-change-reason endpoints, undo-drop window hardening), 0 fixed, 0 new findings
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3404 (Feature 06, Elections & ballots, pass 10) had
+already merged, closing row 06 (not docs-only — fixed ELEC-47, a real
+locking-read race in the new ballot-send-jobs guard; already fully
+recorded in that PR's own commits). A duplicate watchdog pickup of the
+same row (PR #3403) had raced it minutes earlier and was closed by the
+owner — its review had missed ELEC-47. Rotation row 07 was the next `⬜`.
+
+**Baseline:** `7add73bc4` (PR #3250's merge, pass 9). **Head:** current
+`main`. 7 non-merge commits touch this feature's scope; 3 are Minutes-
+module (Feature 24) settings fields riding on the shared
+`OrganizationSettingsUpdate` schema aggregator (additive `Optional[...]`
+fields only, no logic). The 4 real changes, all verified sound: PHI read
+auditing on `member_leaves.py` (HIPAA §164.312(b), ids/counts only, never
+the reason text); two new `members.manage`-gated status-change-reason
+endpoints resolving the target through the existing org-scoped
+`_load_member` helper; the undo-drop window now anchored to a drop's
+effective date rather than when it was recorded (tightens, not weakens,
+the existing week-long window, and the new anchor can only shift
+backward); and a server-validated `separation_date` on the existing
+status-change endpoint (future dates and pre-service dates refused by
+`resolve_org_today` / the service layer). All 79 routes across the four
+principal files re-enumerated (`member_status.py` 14→16 for the two new
+routes, the rest unchanged); no new unescaped LIKE, raw `csv.writer`, or
+`window.confirm`/`alert`/`prompt`. **USR-5** and **USR-8**, both standing
+flagged/accepted items, re-confirmed unchanged — neither touched by this
+window's delta. See `USR-07-users-organizations.md`'s **Pass 10** section
+for the full writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` clean; `validate_migrations.py --strict` passed (619
+revisions, single head); `check_route_permissions.py --strict` 272
+routes, 0 errors/warnings; scoped backend tests (pass 9's own selection
+string) 1,576 passed, 1 skipped (environment-only, `pywebpush`) — a first
+run against the pre-migration local database gave 17 unrelated Minutes-
+module failures (`meeting_minutes.published_revision_version` unknown
+column); `alembic upgrade head` resolved it, the same stale-schema
+pattern pass 9 documented; frontend `npm run typecheck` and `npm run
+lint` both clean.
+
+Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
+pipeline).
 
 ### 2026-10-18 — Feature 06 (Elections & ballots, pass 10) — watchdog pickup, new ballot-send-job queue; ELEC-47 locking-read race fixed, ELEC-48 flagged
 
