@@ -16,10 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR pending** — branch `claude/security-review-cross-cutting-baseline`, not
-yet opened as of this commit (opened as a second commit on this same branch
-once the PR exists, per Step 8). PR #3394 (Feature 34, Frontend shared, pass 9) merged 2026-10-18 ~03:46 UTC clean; already recorded in that PR's own
-history below.
+**PR [#3396](https://github.com/thegspiro/the-logbook/pull/3396)** (branch
+`claude/security-review-cross-cutting-baseline`). PR #3394 (Feature 34,
+Frontend shared, pass 9) merged 2026-10-18 ~03:46 UTC clean; already
+recorded in that PR's own history below.
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
 `claude/security-review-`, confirmed via `search_pull_requests`, and the
