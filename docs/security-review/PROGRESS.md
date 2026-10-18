@@ -16,16 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3400 (Feature 04, Storefront & payments, pass 10) merged
-clean 2026-10-18 (docs-only — `PROGRESS.md` +
-`SF-04-storefront-payments.md` only). Already fully recorded in that PR's
-own history below, so there is nothing further to add here. Rotation row
-04 stays ✅. Confirmed via `search_pull_requests`
-(`is:open head:claude/security-review-`, 0 results) that no
-`claude/security-review-*` PR is open. The dedicated `/loop 30m
-/security-review` session was still not reachable via `ListAgents`, so
-this is another watchdog pickup. Proceeding to Feature 05 (Finance &
-approvals), pass 10.
+**PR [#3401](https://github.com/thegspiro/the-logbook/pull/3401)** (branch
+`claude/security-review-finance-approvals-p10`). PR #3400
+(Feature 04, Storefront & payments, pass 10) merged 2026-10-18 clean,
+docs-only; already recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 05 (Finance & approvals), pass 10. **0
+fixes, 0 new findings.** Baseline `74a57caba` (PR #3225's merge, pass 9);
+2 non-merge commits touch this feature's scope — one dark-mode CSS fix,
+and one real change: `delete_approval_chain`/`delete_chain_step` now
+refuse to delete a chain/step any request has been routed through
+(previously cascade-deleted its approval history), plus new audit
+logging on chain/step update/delete. Verified sound: both callers resolve
+the chain through the existing org-scoped `get_approval_chain` first
+(correct parent-resolution shape for a model with no `organization_id`
+column); all five endpoints keep their `finance.configure_approvals`
+gate; no migration; own 296-line test file. FIN8-05-1 and FIN-30
+re-confirmed **OPEN**, unchanged. See `FIN-05-finance-approvals.md`'s
+**Pass 10** section for the full writeup. Row 05 → ✅ (pending this PR's
+merge); next is Feature 06 (Elections & ballots).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04, Storefront & payments, pass 10, PR #3400, merged), preserved for history</summary>
