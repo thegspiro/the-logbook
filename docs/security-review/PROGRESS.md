@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR #TBD** (branch `claude/security-review-permissions-roles`). PR #3397
+(Feature 01, Auth & session lifecycle, pass 10) merged 2026-10-18 clean;
+already recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 02 (Permissions & roles), pass 10. **0
+fixes, 0 new findings.** Delta since pass 9's baseline (`eee8be13`, PR
+#3212) is 620 commits (320 non-merge), but of the twelve scoped files only
+two carry any diff — `role_service.py` (+2/-2) and
+`operational_rank_service.py` (+9/-7), both mypy-driven null-safety
+hardening (`priority or 0`, `result.scalar() or 0`, a loop-variable rename)
+with no behavior change and no touch to any permission gate, org-scoping,
+or audit path. The other ten tracked files, including all four endpoint
+routers, are byte-identical to pass 9. See
+`PERM-02-permissions-roles.md`'s **Pass 10** section for the full writeup.
+Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public surface &
+webhooks).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 10, PR #3397, merged), preserved for history</summary>
+
 **PR [#3397](https://github.com/thegspiro/the-logbook/pull/3397)** (branch
 `claude/security-review-auth-session`). PR #3396
 (Feature 00, Cross-cutting baseline, pass 10) merged 2026-10-18 clean;
@@ -44,6 +67,8 @@ guard test (`test_inline_fallback_escapes_message_html`) asserting a
 `<script>` payload reaches the template escaped. See
 `AUTH-01-auth-session.md`'s **Pass 10** section for the full writeup. Row 01
 → ✅ (pending this PR's merge); next is Feature 02 (Permissions & roles).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 10, PR #3396, merged), preserved for history</summary>
@@ -19934,7 +19959,7 @@ iteration's commit" rule.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
@@ -19974,6 +19999,55 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-18 — Feature 02 (Permissions & roles, pass 10) — watchdog pickup, 0 fixed, 0 new findings
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3397 (Feature 01, Auth & session lifecycle, pass 10)
+had already merged clean, closing row 01; rotation row 02 was the next
+`⬜`.
+
+**Baseline:** `eee8be13` (PR #3212's merge, pass 9). **Head:** current
+`main`. 620 commits (320 non-merge) between them, but of the twelve scoped
+files only two carry any diff — `role_service.py` (+2/-2) and
+`operational_rank_service.py` (+9/-7) — confirmed individually by
+`git diff --stat` against every tracked path, not assumed from a
+commit-log skim. The other ten, including all four endpoint routers
+(`roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`) and
+`core/permissions.py` itself, are byte-identical to pass 9.
+
+Both diffs are mypy-driven null-safety hardening, not new logic: an
+explicit `Dict[str, Any]` type annotation and `priority=source.priority or
+0` on a role clone (safe — `Role.priority` is `Optional[int]` where higher
+is more powerful, so defaulting a `None` to `0` can only lower, never
+escalate, a cloned role) in `role_service.py`; `(result.scalar() or 0) > 0`
+on a seed-guard count and a loop-variable rename (`row` → `member_row`,
+five sites, no logic change) in `operational_rank_service.py`. Neither
+touches a permission gate, org-scoping, or audit path.
+
+Route inventory re-enumerated: still 28 routes across the four routers,
+same gates as pass 9 (confirmed unchanged since all four files carry zero
+diff). OR-gate alternatives (`members.manage`,
+`organization.update_settings`) re-confirmed not seeded to `member`/
+`firefighter`, unchanged since `core/permissions.py` has zero diff.
+
+Standing open items: none — PERM-1, PERM-2, PERM-5 and PERM-9 all remain
+closed, confirmed byte-identical to pass 9's state. No
+`KNOWN_LIMITATIONS.md` change needed.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
+alembic/` (CI's pinned versions); `validate_migrations.py --strict` — 618
+revisions, single head `1117b642643b`; `check_route_permissions.py
+--strict` — 270 routes, 0 errors/0 warnings; scoped backend tests (`-k
+"permission or role or rank or officer or org_chart"`) — 1379 passed, 1
+skipped (environment-only: `pywebpush`); standing guard suite (12 files,
+run directly) — 224 passed; frontend `npm run typecheck`/`npm run lint`
+both clean (no frontend files touched this pass).
+
+Findings doc: [`PERM-02-permissions-roles.md`](./PERM-02-permissions-roles.md)'s
+**Pass 10** section. Rotation row 02 → ✅. Next: Feature 03 (Public surface
+& webhooks).
 
 ### 2026-10-18 — Feature 01 (Auth & session lifecycle, pass 10) — watchdog pickup, 1 fixed, 0 new findings
 
