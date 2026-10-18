@@ -190,6 +190,14 @@ class Settings(BaseSettings):
         """
         args: dict = {
             "connect_timeout": self.DB_CONNECT_TIMEOUT,
+            # Every DATETIME is stored and read as UTC (see _stamp_utc in
+            # app/core/database.py), but server_default=func.now() is
+            # evaluated in the session's zone, which falls back to the MySQL
+            # server's TZ (America/New_York in the shipped compose files).
+            # Without this, created_at was stored as local wall-clock time and
+            # read back as UTC, hours off from Python-written columns such as
+            # approved_at.
+            "init_command": "SET time_zone = '+00:00'",
         }
         if self.DB_SSL:
             import ssl

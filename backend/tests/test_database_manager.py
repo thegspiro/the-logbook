@@ -126,3 +126,23 @@ class TestDisconnectResetsConnectionState:
         assert manager.is_connected is False
         assert manager.engine is None
         assert manager.session_factory is None
+
+
+class TestConnectionsAreUtc:
+    """created_at comes from server_default=func.now(); the app reads every
+    DATETIME as UTC, so each connection must evaluate NOW() in UTC regardless
+    of the MySQL server's own TZ."""
+
+    def test_connect_args_pin_the_session_time_zone_to_utc(self):
+        args = settings.get_db_connect_args()
+
+        assert args["init_command"] == "SET time_zone = '+00:00'"
+
+    def test_utc_pin_is_kept_when_ssl_is_enabled(self, monkeypatch):
+        monkeypatch.setattr(settings, "DB_SSL", True)
+        monkeypatch.setattr(settings, "DB_SSL_CA", "")
+
+        args = settings.get_db_connect_args()
+
+        assert args["init_command"] == "SET time_zone = '+00:00'"
+        assert "ssl" in args
