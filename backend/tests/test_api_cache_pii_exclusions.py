@@ -79,6 +79,7 @@ PII_FIELDS = {
     "reviewer_name",
     "assignee_name",
     "instructor_name",
+    "performed_by_name",
     "member_notes",
     "first_name",
     "last_name",

@@ -16,6 +16,43 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR TBD** (branch `claude/security-review-frontend-shared`). PR #3393
+(Feature 33, Core infrastructure, pass 7) merged clean; already recorded
+above/below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 34 (Frontend shared), pass 9. **1 fixed, 0
+flagged.** Diffed every feature-owned file against pass 8's baseline
+(`3f429ede`, PR #3093): `apiCache.ts` gained 3 lines (2 already-landed
+`UNCACHEABLE_PREFIXES` entries, 1 already-landed `UNCACHEABLE_SUBSTRINGS`
+entry, all re-verified correct), `apiClient.ts` gained a 503-retry refinement
+(behavior-safe, re-verified), a new global store (`practicalSkillsStore.ts`,
+explicitly not an access control, re-verified clean), and `ProtectedRoute.tsx`/
+`createApiClient.ts` are byte-identical. A repo-wide sweep for new `api.get`
+call sites through the global cached client found one real gap, fixed this
+pass: **FE9-34-1** (MEDIUM) — the new `GET /inventory/items/{id}/maintenance`
+call resolves `performed_by_name` (a technician's display name) plus
+free-text condition/vendor notes, and neither `UNCACHEABLE_PREFIXES` nor
+`UNCACHEABLE_SUBSTRINGS` matched it. Fixed by adding `/maintenance` to
+`UNCACHEABLE_SUBSTRINGS`, plus strengthened the backend ratchet
+(`test_api_cache_pii_exclusions.py`'s `PII_FIELDS`) with `performed_by_name`
+so it can catch a future regression independently. Every other new call site
+found in the sweep (new reads under `/users/`, `/elections`, `/documents`,
+`/dashboard/pulse-layout`, `/security/weekly-report`, `/medical-supplies/*`,
+`/training/submissions/crew/*`, and every module-scoped `createApiClient()`
+instance) was confirmed already correctly handled — either matched by an
+existing prefix/substring, or correctly left cacheable (not member PII, per
+this pass's own check or a sibling feature's prior finding). See
+`FE9-34-frontend-shared.md`. Row 34 → ✅ (pending this PR's merge). Row 34 is
+the rotation table's last row (00–34); per the table's own preamble the next
+iteration wraps back to Feature 00 (Cross-cutting baseline) for a fresh pass
+over the whole application.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 7, PR #3393, merged), preserved for history</summary>
+
 **PR [#3393](https://github.com/thegspiro/the-logbook/pull/3393)** (branch
 `claude/security-review-core-infrastructure`). PR #3391 (Feature 32,
 Locations & kiosk, pass 7) merged 2026-10-18 ~01:48 UTC clean; already
@@ -41,6 +78,8 @@ fields, and the retiring commit actually predates CI6's own merge — CI6's
 "still open" note for it was stale the moment it was written. See
 `CI7-33-core-infra.md`. Row 33 → ✅ (pending this PR's merge); next is
 Feature 34 (Frontend shared).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 7, PR #3391, merged), preserved for history</summary>
@@ -19857,7 +19896,7 @@ here.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.

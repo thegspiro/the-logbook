@@ -635,6 +635,10 @@ describe('apiCache', () => {
       expect(isCacheable('/inventory/summary')).toBe(true);
     });
 
+    it('returns false for /inventory/items/{id}/maintenance (performed_by_name + free text)', () => {
+      expect(isCacheable('/inventory/items/123/maintenance')).toBe(false);
+    });
+
     it('returns false for /inventory/items/colors (unconstrained free-text field)', () => {
       // color is Optional[str] with only a 50-char cap and no fixed vocabulary
       // (backend/app/schemas/inventory.py); normalize_color only collapses

@@ -189,6 +189,9 @@ const UNCACHEABLE_SUBSTRINGS = [
   // /inventory/checkout to this request's option list.
   '/ical-feed', // the department events feed URL carries its bearer token; a cached
   // copy would keep showing the old link for 90s after a reset.
+  '/maintenance', // GET /inventory/items/{id}/maintenance resolves performed_by_name
+  // (the technician's display name) plus free-text description/condition notes —
+  // the same member-attributed-record shape as '/issuances' and '/history' above.
 ] as const;
 
 interface CacheEntry {
