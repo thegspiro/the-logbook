@@ -2717,6 +2717,40 @@ end-of-shift checks are outstanding. How a crew runs a check is described in
 [Shifts & Scheduling → Equipment Checks](./03-scheduling.md#equipment-checks).
 This section covers building checklists, the settings, and the fleet views.
 
+### One header across Operations
+
+Every Operations page (My Issued Gear, Inventory, Medical Supplies, My
+Checklists, Fleet Readiness, Apparatus Inventory, Apparatus and Facilities) now
+opens with the same title row: icon, title, a one-line description and the page's
+actions on the right. Under it, a strip of **Operations sections** links to the
+other pages you may open. The strip is made of links, not tabs, so each section
+has its own address you can bookmark, and it shows only what your permissions
+allow. On a page below a section, such as one apparatus, the strip shows a trail
+in Operations' terms. The side and top navigation draw from the same list, so
+the three can no longer offer different sections.
+
+_[Screenshot to create: the Operations section strip under the page title, on
+Fleet Readiness at 1280px, with the current section marked. Replaces the old
+per-page headers wherever a guide 05 or 06 image shows the page title.]_
+
+### Phone layouts for the apparatus screens
+
+- **One apparatus** on a phone: back arrow, unit name and readiness on one row,
+  the recent-check strip at full width, and four equal tabs pinned under the
+  header. Each recent check has an **In my checklists** link that opens your
+  checklists with that shift on top. A failing item appears once ("Found on 2
+  checks, last Oct 12 by J. Smith", with a 2× badge) instead of once per check.
+- **Expiring on Apparatus** (the supply worklist) on a phone: one **back** link
+  instead of a two-line trail, and the counts are filter chips: **All**, **Needs
+  restock**, **Used or short**, **Expired**. Tap the active chip to clear it. An
+  item shows its rig, compartment, expiry and lot, the ready count, and full-size
+  **Add** and **Manage** buttons; ready lots open behind a toggle. **By
+  apparatus** puts a heading per rig. **Add stock** opens a sheet with Quantity
+  and Lot side by side and the amount on the truck now above them.
+
+_[Screenshots to create, at 390px: the apparatus detail header and pinned tabs;
+the supply worklist with its count chips; the Add stock sheet. None exist.]_
+
 ### Where checklists live
 
 | Screen                    | Where to find it                                     | Who can open it                                                            |
@@ -2962,6 +2996,38 @@ off the main item list.
 - Creating or editing a medical category or item, and retiring an item, are
   recorded in the audit log, with who made the change.
 - Officers who manage medical supplies retire medical items from this page.
+
+### Stock on the apparatus counts too
+
+A medical supply's **ready stock is the shelf plus the trucks**. Units aboard an
+apparatus count from their in-date lots, else the last count, else the position's
+target (shown as uncounted). **Low stock**, the daily alert email and automatic
+reorder all read that one figure, so a supply that is plentiful on the rigs and
+empty on the shelf is no longer flagged, and a rig that runs short lowers the
+total. Gear is unchanged: it is still judged on the shelf alone.
+
+- On the list, **On hand** reads "+12 on trucks (1 uncounted position)". The low
+  flag comes from the server, so the page and the email agree.
+- **Next expiry** takes the soonest of the shelf and the trucks, expired units
+  included, and says where ("Medic 1 > Jump Bag", or the storage path).
+- The **Expiring** tab lists truck stock beside shelf lots, and the tiles split
+  them ("3 shelf · 2 on trucks").
+- Auto-reorder is also checked after a daily check, a **report used** and a
+  recount, because usage on a truck is what lowers the total.
+
+**Kept on apparatus only.** Some equipment has no spare in a stock room: a LUCAS
+device or a cardiac monitor lives on the ambulance. Tick **Kept on apparatus
+only** on the supply's form. Its shelf counts as zero, the list reads "N on M
+apparatus" in place of a shelf count, the **Where it is** dialog shows where it
+is carried with no stock-lot controls, and it is left out of **Receive delivery**.
+Old shelf lots left from before you ticked it are hidden from the Expiring list
+and tiles, not deleted; unticking brings them back. The CSV import and export
+carry the setting as a **Kept on Apparatus Only** column (Yes or No; any other
+value is refused rather than guessed).
+
+_[Screenshots to create: the Medical Supplies list showing "+12 on trucks" and a
+Next expiry that names a truck; the supply form with Kept on apparatus only
+ticked; the Expiring tab with the shelf/truck split on its tiles.]_
 
 ### Deleting a medical supply category
 

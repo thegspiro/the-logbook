@@ -1474,6 +1474,35 @@ Record each formal motion with:
   are taken from the event's **check-ins**, not its RSVPs. Write the minutes
   from the meeting's card as above.
 
+**Agenda items become the minutes outline.** A meeting can carry a structured
+agenda. On **Minutes → Meetings**, select the clipboard icon on the meeting's
+card (**Agenda**; it needs permission to manage meetings). For each item enter a
+title, an optional **presenter** and notes, tick **Needs a motion and a second**
+and type the prepared motion wording if one is ready, and link library
+documents (you can only link a file in a folder you could open yourself). Move,
+add or remove items with the arrows and buttons beside them; there can be up to
+60.
+
+When minutes are created from a meeting that has agenda items, the sections are
+those items, in order, each carrying its presenter, notes, prepared motion and
+linked documents. They replace the outline's sections, so Call to Order and
+Adjournment are agenda items like any other if you want them; the outline still
+supplies the header and footer, and you are not asked to choose one. A meeting
+with no agenda items behaves as before.
+
+- **Sync from agenda** on draft minutes lists what changed in the agenda since
+  the minutes were started (new, changed, removed, reordered items). Tick the
+  changes to apply. Text you have written is never touched: an item removed from
+  the agenda whose section holds text keeps the section as an ordinary one.
+  Saving the agenda never alters minutes already drafted.
+- **Not taken up.** A section left blank can be marked **The meeting did not
+  take this up**. It stays in the record and prints as _Not taken up_ instead of
+  vanishing.
+
+_[Screenshots to create: the Agenda dialog on a meeting with three items, one
+with a prepared motion and a linked document; the Sync from the agenda dialog
+with one new and one changed item; a section marked Not taken up.]_
+
 **Linked events.** Minutes can be linked to an event, and **Unlink** removes
 the link for good.
 
@@ -1613,6 +1642,24 @@ suggestions and the sections stay open.
 attendance by status, quorum, sections, motions, action items, filed election
 results and the attachment list, and — once adopted — the approver, version and
 fingerprint.
+
+**Signing adopted minutes.** Once minutes are adopted, the people named in the
+department's signature slots sign them in the app. The slots default to a
+**Recording Secretary** and a **Presiding Officer**, both open to anyone who
+manages minutes; a settings administrator can rename them or name positions
+instead (up to six) under **Minutes → Signers**. To sign, type your name as it
+stands on your account and confirm your password, so the signature belongs to a
+person at the keyboard. An account that signs in only through single sign-on
+cannot sign. A slot is signed once, a person may sign more than one slot, and
+the person who circulated or adopted the minutes may sign too. A signature is
+tied to the adopted version and prints on the PDF. If the minutes are reopened
+and corrected, the new version starts unsigned and the earlier signatures stay
+on file against the text they were given for. Signing is rate-limited, since it
+is a place a password could be guessed from a signed-in session.
+
+_[Screenshots to create: Minutes → Signers with the two default slots; the Sign
+dialog (name and password); the Signatures panel on adopted minutes with one slot
+signed and one open.]_
 
 **Outlines (the standard order of business).** **Minutes > Outlines**
 (`minutes.manage`) edits the department's standard sections for each meeting

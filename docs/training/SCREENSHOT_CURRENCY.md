@@ -1,5 +1,50 @@
 # Screenshot currency
 
+## Queued by the October 16 – 18 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-16--18-2026).
+Nothing was captured by this pass. The 2026-10-17 pipeline run (sections below)
+re-shot most guides; these rows are screens that run could not have pictured
+(merged after it, or never in its manifest) and images it took **before** a
+later change landed. Placeholders for the new ones are in the guides as
+`_[Screenshot to create: …]_`.
+
+### New screens to create
+
+| Guide | Screen to capture | Notes |
+| ----- | ----------------- | ----- |
+| 04 | Meeting **Agenda** dialog with three items, one with a prepared motion and a linked document | Minutes > Meetings, clipboard icon; needs `meetings.manage` |
+| 04 | **Sync from the agenda** dialog with one new and one changed item | Draft minutes made from a meeting whose agenda was then edited |
+| 04 | A minutes section marked **The meeting did not take this up**, and its _Not taken up_ print line | |
+| 04 | **Minutes > Signers** with the two default slots | |
+| 04 | **Sign** dialog (name and password) and the **Signatures** panel with one slot signed, one open | Adopted minutes; use a demo password |
+| 08 | **Organization Settings > Authentication > Security Report**: weekday and hour pickers, recipient line, Last sent | Capture twice: IT Manager held, and the administrator-fallback notice |
+| 14 | **Send Ballot Emails** dialog while the background send runs (progress), and the refusal when a send is already running | Seed a large roster or hold the job open |
+| 14 | A printed blank ballot (page 1): logo, mark boxes, a ranked contest and an approval contest | PDF render, not a browser shot |
+| 16 | Google Calendar card after **Connect with Google**, and the Outlook card after **Connect with Microsoft** | `CALENDAR_SYNC_ENABLED` on; mock the provider redirect, never connect a real account |
+| 16 | Microsoft 365 connect form (tenant, client, secret, domain, usage location, licence, groups) | Demo values only |
+| 16 | The Google or Microsoft **accounts needing attention** list | |
+| 02 | Training integrations page, **Sync History** tab with one run expanded | |
+| 05 | Medical supply form with **Kept on apparatus only** ticked | |
+| 05 | Expiring tab with the "3 shelf · 2 on trucks" tile split | |
+| 05 | At 390px: one apparatus (compact header, pinned tabs), the supply worklist with count chips, the **Add stock** sheet | |
+
+### Existing images to replace or confirm
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| Operations pages in guide 05 (`05-*` of Fleet Readiness, My Checklists, Inventory items, My Issued Gear, Medical Supplies, Apparatus Inventory) | **REPLACE** | Shot before the shared Operations header and section strip (2026-10-17 02:35 UTC) |
+| `05-88-medical-supplies-list` | **REPLACE** | Shot before truck stock: On hand now reads "+N on trucks", Next expiry names where it is |
+| `05-90-medical-supply-form` | **REPLACE** | Gains the **Kept on apparatus only** checkbox |
+| `05-89-medical-supply-where-lots` | **CHECK** | An apparatus-only supply shows no stock-lot controls |
+| `00-04-dashboard-overview`, `00-07-dashboard-panels`, `00-20-member-dashboard` | **CHECK** | Standby now shows the member's own hours; **Take a Shift** and Standby are absent for a member who cannot hold a seat |
+| Training Admin tab strip (any `02-*` showing it) | **REPLACE** | **Import History** is now **Import Past Training** |
+| `03-*` equipment check builder and count-line shots | **CHECK** | Columns are labelled Par, Min to Pass and Critical Min, with a unit selector and an out-of-order warning |
+| `14-24-ballot-send-skipped` | **CHECK** | The send now runs as a job; the banner is unchanged but the dialog that precedes it is not |
+| `18-02-store-admin`, `18-03-order-windows` | **REPLACE** | Open window card says members cannot order yet while the store is off; the offline badge is a button; countdown rounds down |
+| `18-*` catalog item form | **CHECK** | The **Status** field now says drafts are not shown to members |
+| `00-19-change-password` | **CHECK** | Text only: the notice and email are described beneath it |
+
 ## Guides 00, 06, 10 and 11 re-shot or added 2026-10-17
 
 Rows elsewhere in this file that these resolve are marked **CURRENT**

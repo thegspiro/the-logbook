@@ -141,6 +141,12 @@ password.
 2. Enter your **new password** twice.
 3. Select **Change Password**.
 
+When the change goes through, you get a security notice in the bell and by
+email so you would know if it was not you. The change is recorded in the audit
+log, and so is a refused attempt, with the reason (wrong current password,
+changed too recently, too weak, found in a breach, reused, or the same as the
+current one), never the password itself.
+
 ![The change password form with its three fields and the strength requirements](./images/00-19-change-password.png)
 
 **Password rules.** The form lists every rule and ticks each one as you type.
@@ -318,7 +324,12 @@ your department uses.
   **Training**, **Standby** and **Administrative**. All four count from the
   first of this month, in your department's time zone. Under each number, the
   card says what it counts. Your all-time training hours are on **My
-  Training**.
+  Training**. **Standby** is your own credited shift time, the same figure as
+  **Shift Scheduling → My Hours**; it was briefly showing the whole
+  department's shift hours to a member with none of their own. A member whose
+  positions cannot hold a shift seat (for example an administrative member) no
+  longer sees **Take a Shift** or a Standby row, unless hours were credited to
+  them anyway.
 - **Quick stats.** Total and active members, upcoming events and training
   compliance (see below).
 - **Upcoming events** and **upcoming shifts.** What's next for you.
