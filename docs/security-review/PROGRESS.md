@@ -16,9 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR TBD** (branch `claude/security-review-frontend-shared`). PR #3393
-(Feature 33, Core infrastructure, pass 7) merged clean; already recorded
-above/below.
+**PR [#3395](https://github.com/thegspiro/the-logbook/pull/3395)** (branch
+`claude/friendly-babbage-yine2b`). **Note for the next iteration's Step 0:**
+this branch is this scheduled session's designated git branch, not a
+dedicated `claude/security-review-*` one — a `search_pull_requests` for
+`head:claude/security-review-` will **not** find it. Check this row, or
+list all open PRs, before concluding none is open. PR #3393 (Feature 33,
+Core infrastructure, pass 7) merged clean; already recorded below.
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
 `claude/security-review-`, confirmed via `search_pull_requests`, and the
