@@ -132,6 +132,16 @@ describe('ManualApprovalPanel', () => {
       expect(onDecided).toHaveBeenCalledTimes(1);
     });
 
+    it('marks the note as optional once, not twice', async () => {
+      const user = userEvent.setup();
+      renderPanel();
+
+      await user.click(screen.getByRole('button', { name: 'Approve' }));
+
+      const label = await screen.findByText(/^Note/, { selector: 'label' });
+      expect(label.textContent?.match(/\(optional\)/g)).toHaveLength(1);
+    });
+
     it('sends no note when none is typed', async () => {
       const user = userEvent.setup();
       renderPanel();
