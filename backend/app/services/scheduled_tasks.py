@@ -564,7 +564,7 @@ SCHEDULE = {
         "cron": "*/5 * * * *",
     },
     "mark_overdue_dues": {
-        "description": "Mark fully-unpaid member dues past their due date as overdue (nothing else sets this status)",
+        "description": "Persist the overdue status on fully-unpaid member dues past their due date (the dues screens already report them as overdue)",
         "frequency": "daily",
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
@@ -6603,10 +6603,10 @@ async def run_google_workspace_suspension_sync(db: AsyncSession) -> Dict[str, An
 async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
     """Mark fully-unpaid dues past their due date as OVERDUE.
 
-    Nothing else transitions a dues record into the OVERDUE state, so without
-    this the dues summary always reports zero overdue, a status="overdue"
-    filter returns nothing, and members past their due date are never flagged.
-    Runs daily. Only PENDING (fully unpaid) records are moved — a partially
+    Reads already report a past-due PENDING record as overdue (see
+    ``effective_dues_status``); this persists that status so the stored column
+    catches up. Recalculating a record from its payment ledger is the only
+    other writer of OVERDUE. Runs daily. Only PENDING (fully unpaid) records are moved — a partially
     paid record keeps its PARTIAL status so the payment information is not lost,
     and its balance still shows in the amount-based outstanding total.
     """
@@ -6615,15 +6615,14 @@ async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
     from sqlalchemy import update as sa_update
 
     from app.models.finance import DuesStatus, MemberDues
+    from app.services.finance_service import dues_past_due_unpaid_clause
 
     now = datetime.now(dt_timezone.utc)
+    # The same predicate the dues list and summary report through, so what
+    # this persists is exactly what those screens already showed.
     result = await db.execute(
         sa_update(MemberDues)
-        .where(
-            MemberDues.status == DuesStatus.PENDING,
-            MemberDues.due_date < now,
-            MemberDues.amount_paid < MemberDues.amount_due,
-        )
+        .where(dues_past_due_unpaid_clause(now))
         .values(status=DuesStatus.OVERDUE)
     )
     await db.commit()

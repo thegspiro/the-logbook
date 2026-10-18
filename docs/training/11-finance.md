@@ -1364,9 +1364,9 @@ A dues schedule defines the terms of a recurring fee:
 | **Notes**     | Optional notes about the schedule                                                              |
 
 > **No grace period, late fee or membership-type filter.** None of these can be
-> set. No late fee is ever charged. A daily check marks unpaid dues Overdue the
-> day after the due date. **Generate dues** bills every active member,
-> whatever their membership type.
+> set. No late fee is ever charged. Dues with nothing paid show as Overdue the
+> day after the due date; part-paid dues stay Partial. **Generate dues** bills
+> every active member, whatever their membership type.
 
 ### Frequencies
 
