@@ -13,7 +13,7 @@ rather than building the motion. That needs three things:
 
 Nothing is backfilled: motions already recorded keep their result, and minutes
 already made get their prepared motions when next edited. This revision also
-merges the two heads ``main`` carried when it was written.
+merges the three heads ``main`` carried when it was written.
 
 Each step is skipped when ``meeting_motions`` is not there yet (``create_all``
 builds it from the model, which already declares all of this) or the change is
@@ -21,7 +21,7 @@ already made. The downgrade deletes pending motions first, since they carry no
 record and the shorter enum could not hold them, then drops the two columns.
 
 Revision ID: 751a14709cc4
-Revises: 6dc58d6997df, 7e5d6cf3292c
+Revises: 6dc58d6997df, 7e5d6cf3292c, e99f068be43e
 Create Date: 2026-10-18 21:52:00.000000
 
 """
@@ -33,7 +33,9 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "751a14709cc4"
-down_revision: Union[str, Sequence[str], None] = ("6dc58d6997df", "7e5d6cf3292c")
+# fmt: off
+down_revision: Union[str, Sequence[str], None] = ("6dc58d6997df", "7e5d6cf3292c", "e99f068be43e")
+# fmt: on
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
