@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #TBD** (branch `claude/security-review-permissions-roles`). PR #3397
+**PR [#3398](https://github.com/thegspiro/the-logbook/pull/3398)** (branch
+`claude/security-review-permissions-roles`). PR #3397
 (Feature 01, Auth & session lifecycle, pass 10) merged 2026-10-18 clean;
 already recorded in that PR's own history below.
 
