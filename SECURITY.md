@@ -837,6 +837,7 @@ Currently no formal bug bounty program, but we may offer:
 
 #### Weekly
 
+- [ ] Read the weekly security report email (IT Manager), then follow its links into the alerts and audit logs
 - [ ] Review audit logs for anomalies
 - [ ] Check backup status
 - [ ] Review failed login attempts

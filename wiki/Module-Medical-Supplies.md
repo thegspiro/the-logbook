@@ -125,6 +125,19 @@ substances.
   (for example through **Receive delivery**); nothing is flagged as expiring
   until a supply has dated lots.
 
+## Where a supply is kept, and the trucks
+
+A supply records its **room and storage area** (the **Where it is** dialog adds
+every apparatus and compartment that carries it). The list sorts, filters by
+location and retires several supplies at once (**Retire selected**).
+
+Ready stock is **shelf plus trucks**, so Low stock, the alert email and automatic
+reorder see the whole department's holding. **Kept on apparatus only** is for
+equipment with no shelf spare, such as a cardiac monitor: its shelf counts as
+zero and it is left out of Receive delivery. Next expiry and the Expiring tab
+include truck stock and say where each unit is. Details: the module doc
+[`MEDICAL_SUPPLIES_MODULE.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/MEDICAL_SUPPLIES_MODULE.md#stock-on-the-apparatus-2026-10-16).
+
 ## On-hand comes from the lots
 
 For any item that has lots, on-hand is the sum of its **in-date** lots — not the

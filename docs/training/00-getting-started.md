@@ -141,6 +141,12 @@ password.
 2. Enter your **new password** twice.
 3. Select **Change Password**.
 
+When the change goes through, you get a security notice in the bell and by
+email so you would know if it was not you. The change is recorded in the audit
+log, and so is a refused attempt, with the reason (wrong current password,
+changed too recently, too weak, found in a breach, reused, or the same as the
+current one), never the password itself.
+
 ![The change password form with its three fields and the strength requirements](./images/00-19-change-password.png)
 
 **Password rules.** The form lists every rule and ticks each one as you type.
@@ -166,9 +172,7 @@ was changed, and you have been signed out everywhere. Sign in with your new
 password."_ This is expected, not an error. Sign in again with your new
 password.
 
-<!-- Screenshot needed:
-_[Throwaway demo member (never a real member) at /login, immediately after changing the password on My Account → Password: the sign-in page showing the green notice "Your password was changed, and you have been signed out everywhere. Sign in with your new password." Leave the username and password fields empty.]_
--->
+![The sign-in page with the green notice "Your password was changed, and you have been signed out everywhere. Sign in with your new password." above empty username and password fields](./images/00-27-login-password-changed.png)
 
 **Your department may also require two-step sign-in.** If it does, The Logbook
 takes you to the **Security** tab after you change your password, so you can
@@ -190,9 +194,7 @@ Your department can choose to show the menu as a **bar across the top** of the
 screen instead. If the top bar runs out of room, the menu groups that don't
 fit move under **More** at its right-hand end.
 
-<!-- Screenshot needed:
-_[Administrator (all modules on) at /dashboard, 1280×900 viewport, with Navigation Layout set to Top bar: the More dropdown open at the right-hand end of the top bar, showing at least one overflowed group under its own label with separators between groups. The page must not scroll sideways.]_
--->
+![The menu as a bar across the top at 1280px: groups that do not fit sit under More at its right-hand end, open here with each overflowed group under its own label and separators between them](./images/00-28-top-bar-more-menu.png)
 
 ### When the app asks "Are you sure?"
 
@@ -309,7 +311,7 @@ The dashboard is the first page you see after signing in. It has two tabs:
 The two tabs never mix. Nothing on **Personal** is someone else's, and nothing
 on **My Department** is shown as yours.
 
-![The dashboard's personal tab: the member's own attention items, shifts, hours and issued gear, under a tab strip whose other tab is the leadership view](./images/00-24-dashboard-my-department.png)
+![The dashboard's personal tab: the member's own attention items, shifts and hours, under a tab strip whose other tab is the leadership view](./images/00-24-dashboard-my-department.png)
 
 ![The same dashboard on its department-wide tab: department-wide scheduling and asset cards, with none of the member's own equipment on screen](./images/00-25-dashboard-organization.png)
 
@@ -322,7 +324,12 @@ your department uses.
   **Training**, **Standby** and **Administrative**. All four count from the
   first of this month, in your department's time zone. Under each number, the
   card says what it counts. Your all-time training hours are on **My
-  Training**.
+  Training**. **Standby** is your own credited shift time, the same figure as
+  **Shift Scheduling → My Hours**; it was briefly showing the whole
+  department's shift hours to a member with none of their own. A member whose
+  positions cannot hold a shift seat (for example an administrative member) no
+  longer sees **Take a Shift** or a Standby row, unless hours were credited to
+  them anyway.
 - **Quick stats.** Total and active members, upcoming events and training
   compliance (see below).
 - **Upcoming events** and **upcoming shifts.** What's next for you.
@@ -396,9 +403,9 @@ that event is archived. Notifications about anything else stay.
 
 ![The same inbox after finalizing the event's attendance: the validation prompt gone, the unrelated shift-assignment notification still there](./images/19-32-notification-after-action.png)
 
-<!-- Screenshot needed:
-_[Admin at /notifications?tab=inbox, with everything unpinned first: at least two unread notifications of one category (for example two attendance-validation prompts from ended events) collapsed into a stack showing "N attendance validations", "Latest: …", the "N unread" badge and Mark all read, beside ordinary single cards. Then a second capture of the same stack expanded to its individual cards. Do not press Mark all read.]_
--->
+![The notifications inbox with nothing pinned: unread notifications of one kind folded into stacks, such as "5 attendance validations" with its Latest line, unread badge and Mark all read, beside an ordinary single card](./images/00-29-notification-stacks.png)
+
+![The same inbox with the attendance-validations stack expanded to its individual cards; Mark all read not pressed](./images/00-30-notification-stack-expanded.png)
 
 ---
 
@@ -423,7 +430,7 @@ Contacts**, **Appearance**, **Notifications** and **App**. Here you can:
 Some details on the **Account** tab, such as your membership number, rank and
 station, are greyed out. Only an officer can change those.
 
-![Account Settings on its Account tab — the tab row leads to password, security, emergency contacts, appearance and notifications](./images/00-09-account-settings.png)
+![My Account on its Account tab — the tab row leads to Password, Security, Privacy, Emergency Contacts, Appearance, Notifications and App](./images/00-09-account-settings.png)
 
 **Phone numbers.** Use digits, with spaces, dashes, dots or brackets if you
 like, and a `+` at the start for an international number. A number needs 7 to
@@ -437,9 +444,7 @@ your account safe even if someone learns your password. When you turn it on,
 you get a set of **recovery codes**. Each one works once, if you ever lose
 your phone. Save them somewhere safe and private.
 
-<!-- Screenshot needed:
-_[A throwaway demo member created for the capture (never a real member) at /account?tab=security, right after Verify & enable: the "Save your recovery codes" panel with the code grid, Copy codes and Done. The codes are secrets: use a disposable account and regenerate or blur them afterwards; do not capture the QR code or the manual key.]_
--->
+![My Account, Security, right after Verify & enable: the Save your recovery codes panel with its grid of ten codes, Copy codes and Done. The codes are made up for the picture](./images/00-31-mfa-recovery-codes.png)
 
 > **Your privacy choices.** Privacy choices and the data download are on the
 > **Privacy** tab. None of them is required to be a member. If you have never

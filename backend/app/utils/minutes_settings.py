@@ -35,6 +35,23 @@ these defaults.
     secretary and a presiding officer, so an upgrade changes nothing a
     department had set up.
 
+``public_posting``
+    Whether published minutes are also posted on the department's public
+    minutes page. **Off unless set to a literal ``True``**: this is a door to
+    the public, so an absent, mistyped or malformed value must read as shut.
+
+``executive_library_publishing``
+    Whether executive-session minutes may be published to the Documents
+    library at all. Off unless a literal ``True``. When on they are filed in a
+    leadership-only folder, never in the folder every member can read.
+
+``executive_public_posting``
+    Whether executive-session minutes may be posted publicly. Off unless a
+    literal ``True``, and only effective when ``public_posting`` and
+    ``executive_library_publishing`` are on too (see
+    ``MinutesPublishingSettings.public_allowed``), so one stray switch cannot
+    open it.
+
 Every value is read defensively. The JSON is unvalidated and an exception here
 would take out the daily task for the whole organization over one mistyped
 setting, so anything malformed reads as its default.
@@ -59,6 +76,10 @@ DIGEST_FLAG = "open_items_digest"
 # week is measured from what was sent rather than from a process that forgets
 # its last run on every restart.
 LAST_DIGEST_KEY = "last_open_items_digest_on"
+
+PUBLIC_POSTING_FLAG = "public_posting"
+EXECUTIVE_LIBRARY_FLAG = "executive_library_publishing"
+EXECUTIVE_PUBLIC_FLAG = "executive_public_posting"
 
 SIGNATURE_SLOTS_KEY = "signature_slots"
 MAX_SIGNATURE_SLOTS = 6
@@ -169,3 +190,48 @@ async def load_signature_slots(
         select(Organization.settings).where(Organization.id == str(organization_id))
     )
     return signature_slots_in(result.scalar_one_or_none())
+
+
+@dataclass(frozen=True)
+class MinutesPublishingSettings:
+    public_posting: bool
+    executive_library: bool
+    executive_public: bool
+
+    def library_allowed(self, is_executive: bool) -> bool:
+        """Whether minutes of this kind may be filed in the library."""
+        return self.executive_library if is_executive else True
+
+    def public_allowed(self, is_executive: bool) -> bool:
+        """Whether minutes of this kind may be posted on the public page.
+
+        Executive-session minutes need all three switches. The public one on its
+        own does nothing: a copy that cannot be filed in the library cannot be
+        published, so it cannot be posted either.
+        """
+        if not self.public_posting:
+            return False
+        if is_executive:
+            return self.executive_library and self.executive_public
+        return True
+
+
+def minutes_publishing_settings_in(settings: Any) -> MinutesPublishingSettings:
+    """Resolve the publishing switches; every one reads as off unless ``True``."""
+    section = settings.get(MINUTES_SETTINGS_KEY) if isinstance(settings, dict) else None
+    if not isinstance(section, dict):
+        section = {}
+    return MinutesPublishingSettings(
+        public_posting=section.get(PUBLIC_POSTING_FLAG) is True,
+        executive_library=section.get(EXECUTIVE_LIBRARY_FLAG) is True,
+        executive_public=section.get(EXECUTIVE_PUBLIC_FLAG) is True,
+    )
+
+
+async def load_minutes_publishing_settings(
+    db: AsyncSession, organization_id: str
+) -> MinutesPublishingSettings:
+    result = await db.execute(
+        select(Organization.settings).where(Organization.id == str(organization_id))
+    )
+    return minutes_publishing_settings_in(result.scalar_one_or_none())

@@ -152,6 +152,9 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/inventory/items': { permissions: ['inventory.manage'] },
   '/inventory/storage-areas': { label: 'Storage Areas', permissions: ['inventory.manage'] },
   '/onboarding/modules': {},
+  // An ancestor only because a posted set of minutes sits beneath the public
+  // list; no gate, since the page is open to anyone the department chose to show it to.
+  '/public/minutes': {},
   // A leaf, registered for its label: the segment is "closeout" and the page
   // calls itself "Shift Close-Out", so the fallback would give the trail and
   // the heading two different names for one screen.

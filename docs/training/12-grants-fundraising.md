@@ -585,6 +585,8 @@ emails off under their email preferences (_Grants and fundraising reminders_),
 unless your department has made them required. To stop reminders for one
 pledge, edit it and untick **Send reminders**.
 
+![The Record pledge dialog with a donor, an amount pledged and a due date filled in, and Send reminders ticked above its note that fundraising managers are emailed 14 days and 1 day before the due date and the donor never is](./images/12-15-record-pledge-reminders.png)
+
 ### Pledge Statuses
 
 | Status          | Meaning                           |

@@ -117,7 +117,7 @@ the **Requirements** tab to see them. Each row shows the name, **Active** or
 **Inactive**, the screening type, how often it repeats ("Every 12 months" or
 "One-time"), any roles you listed, and the description.
 
-![Medical screening requirements tab with frequency and grace period](./images/13-02-requirements-tab.png)
+![Medical screening Requirements tab listing each requirement with its screening type, frequency and description](./images/13-02-requirements-tab.png)
 
 ### Requirement Fields
 
@@ -176,9 +176,7 @@ the **Requirements** tab to see them. Each row shows the name, **Active** or
 - The records stay in each member's screening history. To stop a requirement
   counting without losing it, untick **Active** instead.
 
-<!-- Screenshot needed:
-_[Admin with medical_screening.manage, /medical-screening, Requirements tab. Click the delete button on a seeded requirement that has records filed under it and capture the Delete Requirement confirmation, reading "Screening records filed under it are kept, but will no longer be linked to a requirement.", with both buttons visible. Never confirm. No member names or results in frame.]_
--->
+![The Delete Requirement confirmation for Annual NFPA 1582 Physical: screening records filed under it are kept but will no longer be linked to a requirement, and it cannot be undone, with Cancel and Delete Requirement](./images/13-08-delete-requirement-confirm.png)
 
 ### Role-Based Requirements
 
@@ -304,7 +302,7 @@ Things to know about the form:
 - **Linked Requirement** appears only when you add a record. Editing a record
   never changes who it belongs to or which requirement it is linked to.
 
-![The Add Screening Record dialog](./images/13-07-add-record-linkage-notice.png)
+![The Add Screening Record dialog with Record is for set to Member and a member chosen, above Linked Requirement and Screening Type](./images/13-07-add-record-linkage-notice.png)
 
 ### Self-Recorded Screenings
 

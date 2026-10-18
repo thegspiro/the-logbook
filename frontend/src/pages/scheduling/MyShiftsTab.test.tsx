@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { MyShiftsTab } from './MyShiftsTab';
@@ -14,6 +14,7 @@ const mockGetOpenShifts = vi.fn();
 const mockGetMyHoursHistory = vi.fn();
 const mockGetExchangeCandidates = vi.fn();
 const mockCreateSwapRequest = vi.fn();
+const mockGetShifts = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
@@ -27,7 +28,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     // loadData awaits this alongside getMyAssignments; without it the call
     // throws and the whole load falls into its catch, leaving an empty list.
     getMyAttendanceHistory: vi.fn().mockResolvedValue([]),
-    getShifts: vi.fn().mockResolvedValue({ shifts: [], total: 0 }),
+    getShifts: (...args: unknown[]) => mockGetShifts(...args) as unknown,
     createSwapRequest: (...args: unknown[]) => mockCreateSwapRequest(...args) as unknown,
     getExchangeCandidates: (...args: unknown[]) => mockGetExchangeCandidates(...args) as unknown,
     createTimeOff: vi.fn().mockResolvedValue({}),
@@ -64,6 +65,8 @@ describe('MyShiftsTab', () => {
     vi.clearAllMocks();
     mockGetMyAssignments.mockResolvedValue([]);
     mockGetMyShifts.mockResolvedValue({ shifts: [], total: 0 });
+    mockGetShifts.mockReset();
+    mockGetShifts.mockResolvedValue({ shifts: [], total: 0 });
     mockGetMyHoursHistory.mockReset();
     mockGetMyHoursHistory.mockResolvedValue({
       year: 2026,
@@ -270,6 +273,73 @@ describe('MyShiftsTab', () => {
       await user.click(specific);
       expect(specific).toHaveAttribute('aria-pressed', 'true');
       expect(open).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    describe('asking for a specific shift', () => {
+      const target = {
+        id: 'shift-x',
+        shift_date: day(10),
+        start_time: `${day(10)}T12:00:00Z`,
+        end_time: `${day(10)}T23:00:00Z`,
+      };
+
+      beforeEach(() => {
+        mockCreateSwapRequest.mockReset();
+        mockCreateSwapRequest.mockResolvedValue({});
+      });
+
+      it('settles on the first shift once the list arrives, and sends it', async () => {
+        // Chosen before the list loads, the target used to stay on the 'pick'
+        // placeholder and the request went out as an open giveaway.
+        let resolveShifts: (value: unknown) => void = () => {};
+        mockGetShifts.mockReturnValue(
+          new Promise((resolve) => {
+            resolveShifts = resolve;
+          })
+        );
+        const user = userEvent.setup();
+        renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+        const [swap] = await screen.findAllByRole('button', { name: /^Swap shift on / });
+        await user.click(swap as HTMLElement);
+        await user.click(await screen.findByRole('button', { name: /Specific Shift/ }));
+
+        const submit = screen.getByRole('button', { name: 'Submit Request' });
+        expect(submit).toBeDisabled();
+        expect(screen.getByText(/Loading shifts — choose one before submitting/)).toBeInTheDocument();
+
+        await act(async () => {
+          resolveShifts({ shifts: [target], total: 1 });
+        });
+
+        expect(screen.getByLabelText('Select Shift')).toHaveValue('shift-x');
+        expect(submit).toBeEnabled();
+        await user.click(submit);
+
+        await waitFor(() => expect(mockCreateSwapRequest).toHaveBeenCalledTimes(1));
+        expect(mockCreateSwapRequest.mock.calls[0]?.[0]).toEqual({
+          offering_shift_id: 'shift-a',
+          requesting_shift_id: 'shift-x',
+          target_user_id: undefined,
+          reason: undefined,
+        });
+      });
+
+      it('will not submit when no shift is available, and says why', async () => {
+        const user = userEvent.setup();
+        renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+        const [swap] = await screen.findAllByRole('button', { name: /^Swap shift on / });
+        await user.click(swap as HTMLElement);
+        await waitFor(() => expect(mockGetShifts).toHaveBeenCalledTimes(1));
+        await user.click(await screen.findByRole('button', { name: /Specific Shift/ }));
+
+        expect(await screen.findByText(/No upcoming shift is available to ask for/)).toBeInTheDocument();
+        const submit = screen.getByRole('button', { name: 'Submit Request' });
+        expect(submit).toBeDisabled();
+        await user.click(submit);
+        expect(mockCreateSwapRequest).not.toHaveBeenCalled();
+      });
     });
 
     describe('exchanging with a member', () => {

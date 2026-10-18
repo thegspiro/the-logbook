@@ -492,19 +492,19 @@ async def _attach_medical_list_extras(
     if not items:
         return
     ids = [str(i.id) for i in items]
-    soonest = await service.next_lot_expirations(org_id, ids)
-    today = await resolve_org_today(db, org_id) if soonest else None
+    today = await resolve_org_today(db, org_id)
+    on_shelf = await service.next_lot_expirations(org_id, ids)
+    checks = EquipmentCheckService(db)
+    aboard = await _soonest_aboard(checks, org_id, ids, today)
     areas = await service.storage_area_index(org_id)
     rooms = await service.location_names(org_id)
-    carriers = await EquipmentCheckService(db).apparatus_places_for_items(org_id, ids)
+    carriers = await checks.apparatus_places_for_items(org_id, ids)
     stock = await service.stock_breakdown(org_id, items)
     for item in items:
-        expires = soonest.get(str(item.id))
-        item.next_expiration_date = expires
-        item.days_until_next_expiration = (
-            (expires - today).days if expires and today else None
-        )
         item.storage_path = service.storage_path(item, areas, rooms)
+        _set_next_expiry(
+            item, on_shelf.get(str(item.id)), aboard.get(str(item.id)), today
+        )
         carried = carriers.get(str(item.id))
         item.apparatus_count = carried["count"] if carried else 0
         item.apparatus_places = carried["places"] if carried else []
@@ -516,6 +516,54 @@ async def _attach_medical_list_extras(
         item.is_low_stock = service.is_at_or_below_reorder_point(
             parts["shelf"] + parts["apparatus"], item.reorder_point
         )
+
+
+async def _soonest_aboard(
+    checks: EquipmentCheckService, org_id: str, ids: List[str], today: date
+) -> Dict[str, Dict[str, Any]]:
+    """Each supply's soonest-expiring row aboard an apparatus.
+
+    Rows holding no units are skipped, as an empty shelf lot is: a position
+    counted at zero has nothing on it to expire.
+    """
+    rows = await checks.apparatus_expiring_stock(
+        org_id, list(MEDICAL_ITEM_TYPES), days_ahead=None, today=today, item_ids=ids
+    )
+    soonest: Dict[str, Dict[str, Any]] = {}
+    # Sorted soonest first, so the first row seen for a supply is its answer.
+    for row in rows:
+        if (row["quantity"] or 0) > 0:
+            soonest.setdefault(row["inventory_item_id"], row)
+    return soonest
+
+
+def _set_next_expiry(
+    item: Any,
+    shelf_date: Optional[date],
+    truck_row: Optional[Dict[str, Any]],
+    today: date,
+) -> None:
+    """The soonest of the shelf's and the trucks' next expiry, and where.
+
+    A tie goes to the shelf: it is the stock the officer reading the list
+    manages directly.
+    """
+    truck_date = truck_row["expiration_date"] if truck_row else None
+    if truck_date is not None and (shelf_date is None or truck_date < shelf_date):
+        item.next_expiration_date = truck_date
+        item.next_expiration_location = "apparatus"
+        item.next_expiration_where = truck_row["where"] if truck_row else None
+    elif shelf_date is not None:
+        item.next_expiration_date = shelf_date
+        item.next_expiration_location = "shelf"
+        item.next_expiration_where = item.storage_path
+    else:
+        item.next_expiration_date = None
+        item.next_expiration_location = None
+        item.next_expiration_where = None
+    item.days_until_next_expiration = (
+        (item.next_expiration_date - today).days if item.next_expiration_date else None
+    )
 
 
 async def _low_stock_ids(service: InventoryService, organization_id: Any) -> List[str]:
@@ -561,6 +609,8 @@ _MEDICAL_EXPORT_COLUMNS = [
     # see the general export's column of the same name.
     "Ready Lot Stock",
     "Reorder Point",
+    # "Yes" for a supply kept on the apparatus only (no stock room).
+    "Kept on Apparatus Only",
     "Status",
     "Condition",
     "Manufacturer",
@@ -624,6 +674,14 @@ _TEMPLATE_LOT_ROWS: Dict[str, List[Dict[str, str]]] = {
 _REORDER_POINT_HEADERS = {"reorder point", "reorder_point", "reorderpoint"}
 _UNIT_HEADERS = {"unit of measure", "unit_of_measure", "unitofmeasure", "unit"}
 _ITEM_TYPE_HEADERS = {"item type", "item_type", "itemtype", "type"}
+_APPARATUS_ONLY_HEADERS = {
+    "kept on apparatus only",
+    "apparatus only",
+    "apparatus_only",
+    "apparatusonly",
+}
+_YES = {"yes", "y", "true", "1"}
+_NO = {"no", "n", "false", "0"}
 _LOT_HEADERS = {
     "lot number": "lot_number",
     "lot_number": "lot_number",
@@ -664,6 +722,7 @@ def _medical_export_row(item: InventoryItem) -> List[Any]:
             else ""
         ),
         item.reorder_point if item.reorder_point is not None else "",
+        "Yes" if item.apparatus_only else "No",
         _enum_text(item.status),
         _enum_text(item.condition),
         item.manufacturer or "",
@@ -710,6 +769,16 @@ def _parse_medical_extras(row: Dict[str, Any]) -> tuple[Dict[str, Any], Optional
             if len(value) > 50:
                 return {}, "Unit of measure must be 50 characters or fewer"
             fields["unit_of_measure"] = value
+        elif normalized in _APPARATUS_ONLY_HEADERS:
+            # Refused rather than read as "no": a typo here would otherwise
+            # file a LUCAS device as shelf stock and flag it low at once.
+            answer = value.lower()
+            if answer in _YES:
+                fields["apparatus_only"] = True
+            elif answer in _NO:
+                fields["apparatus_only"] = False
+            else:
+                return {}, (f"Kept on Apparatus Only must be Yes or No, not '{value}'")
     return fields, None
 
 
@@ -969,6 +1038,11 @@ async def import_medical_items_csv(
     records two lots rather than two supplies. Otherwise the supply is created
     and the lot becomes its first stock. Lot rows are pool-tracked.
 
+    'Kept on Apparatus Only' (Yes or No; blank is No) marks a supply with no
+    stock room behind it. Such a row may carry a Quantity of 0, and may not
+    carry lot columns; nor may a lot row name a supply already kept on the
+    apparatus only.
+
     **Authentication required**
     **Requires permission: inventory.manage_medical or inventory.manage**
     """
@@ -1053,6 +1127,11 @@ async def import_medical_items_csv(
     # Updated as rows create supplies, so a later row naming one adds a lot to
     # it instead of creating a duplicate.
     pool_by_name = await service.pool_item_ids_by_name(org_id, MEDICAL_ITEM_TYPES)
+    # Supplies a lot may be added to. One kept on the apparatus only has no
+    # stock room, and a lot recorded against it would be ignored everywhere.
+    kept_in_stock = set(
+        await service.item_ids_kept_in_stock(org_id, MEDICAL_ITEM_TYPES)
+    )
 
     imported = 0
     lots_added = 0
@@ -1089,6 +1168,19 @@ async def import_medical_items_csv(
             failed += 1
             continue
         if lot_fields is not None:
+            if item_data.get("apparatus_only"):
+                errors.append(
+                    {
+                        "row": row_num,
+                        "error": (
+                            "A supply kept on the apparatus only has no stock "
+                            "lots. Clear the lot columns, or set Kept on "
+                            "Apparatus Only to No."
+                        ),
+                    }
+                )
+                failed += 1
+                continue
             if item_data.get("tracking_type") == "individual":
                 errors.append(
                     {
@@ -1117,6 +1209,18 @@ async def import_medical_items_csv(
             ).model_dump(exclude_unset=True)
 
             existing_id = pool_by_name.get(normalize_name(item_data["name"]))
+            if existing_id is not None and existing_id not in kept_in_stock:
+                errors.append(
+                    {
+                        "row": row_num,
+                        "error": (
+                            f"'{item_data['name']}' is kept on the apparatus "
+                            "only, so it has no stock lots to add to"
+                        ),
+                    }
+                )
+                failed += 1
+                continue
             if existing_id is not None:
                 # Only the lot is written: the row names a supply already on
                 # file, and the import never edits one.
@@ -1246,6 +1350,7 @@ async def import_medical_items_csv(
 
         if lot_fields is not None:
             pool_by_name.setdefault(normalize_name(new_item.name), str(new_item.id))
+            kept_in_stock.add(str(new_item.id))
             lot = await service.add_lot(
                 item_id=str(new_item.id),
                 organization_id=org_id,

@@ -65,6 +65,15 @@ const gatesForPath = (source: string, navPath: string): string[][] => {
 const NAV_SURFACES = ['components/layout/SideNavigation.tsx', 'components/layout/TopNavigation.tsx'] as const;
 
 /**
+ * Where the Operations rows are written. Both navigation surfaces and the
+ * section strip on every Operations page draw them from this one list, so the
+ * gate checks below read it rather than the surfaces — and the first test
+ * proves the surfaces really do draw from it, or a hand-written copy could
+ * slip back in beside the list without any gate check seeing it.
+ */
+const OPERATIONS_SURFACES = ['components/layout/operationsNavigation.ts'] as const;
+
+/**
  * Slice exactly one nav entry, by its label.
  *
  * `gatesForPath` reads a fixed window either side of the path, which bleeds
@@ -88,9 +97,18 @@ const paletteCommand = (source: string, id: string): string => {
 };
 
 describe('navigation gates match the routes they target', () => {
+  it('draws the Operations rows on both surfaces from the one shared list', () => {
+    for (const surface of NAV_SURFACES) {
+      expect(read(surface), `${surface}: Operations rows are not the shared list`).toContain(
+        'subItems: operationsNavItems(isModuleOn)'
+      );
+    }
+    expect(read('components/operations/OperationsPageHeader.tsx')).toContain('operationsNavItems(isModuleOn)');
+  });
+
   it('shares the Facilities route gate with every discovery surface', () => {
     const constantName = 'FACILITY_ENTRY_PERMISSIONS';
-    for (const surface of [...NAV_SURFACES, 'components/ux/CommandPalette.tsx']) {
+    for (const surface of [...OPERATIONS_SURFACES, 'components/ux/CommandPalette.tsx']) {
       const source = read(surface);
       const entry = surface.includes('CommandPalette')
         ? paletteCommand(source, 'facilities')
@@ -110,7 +128,7 @@ describe('navigation gates match the routes they target', () => {
     // all until then — which, with ProtectedRoute answering a permission
     // failure with a full-page Access Denied rather than a redirect, would
     // have made it a link to a dead end for most of the department.
-    for (const surface of NAV_SURFACES) {
+    for (const surface of OPERATIONS_SURFACES) {
       const source = read(surface);
       const entry = navEntry(source, 'Apparatus');
       expect(entry, `${surface}: Apparatus does not use the shared route gate`).toContain(
@@ -144,7 +162,7 @@ describe('navigation gates match the routes they target', () => {
     // that departments without the apparatus module still need for shift
     // staffing. Gating it on `apparatus.view` would take unit definitions away
     // from exactly the departments that have nothing else.
-    for (const surface of NAV_SURFACES) {
+    for (const surface of OPERATIONS_SURFACES) {
       const source = read(surface);
       const at = source.indexOf("path: '/apparatus-basic'");
       expect(at, `${surface}: no /apparatus-basic entry`).toBeGreaterThan(-1);
@@ -155,7 +173,7 @@ describe('navigation gates match the routes they target', () => {
   });
 
   it('offers /medical-supplies only on permissions its route accepts', () => {
-    for (const surface of NAV_SURFACES) {
+    for (const surface of OPERATIONS_SURFACES) {
       const gates = gatesForPath(read(surface), '/medical-supplies');
       expect(gates.length, `${surface} should carry one /medical-supplies entry`).toBe(1);
       const gate = gates[0] ?? [];
@@ -172,7 +190,7 @@ describe('navigation gates match the routes they target', () => {
   it('does not advertise the stock room on the everyone-grant', () => {
     // `inventory.view` is held by the seeded member and firefighter roles, so
     // including it would put the supply room back in every member's nav.
-    for (const surface of NAV_SURFACES) {
+    for (const surface of OPERATIONS_SURFACES) {
       const gate = gatesForPath(read(surface), '/medical-supplies')[0] ?? [];
       expect(gate, `${surface}: /medical-supplies is gated on the everyone-grant`).not.toContain('inventory.view');
     }
@@ -260,13 +278,12 @@ describe('navigation gates match the routes they target', () => {
 
   it('gates every surface that offers the gear catalogue on inventory.manage', () => {
     // Nav rows.
-    for (const surface of NAV_SURFACES) {
+    for (const surface of OPERATIONS_SURFACES) {
       const gates = gatesForPath(read(surface), '/inventory');
       expect(gates.length, `${surface} should carry a /inventory entry`).toBeGreaterThan(0);
-      // TopNavigation's Operations *group* also carries path: '/inventory', for
-      // active-state matching only — a group with subItems renders a dropdown
-      // button, never a link — so not every occurrence is a navigable row.
-      // What must hold is that the row itself is manage-gated.
+      // The row itself must be manage-gated. (TopNavigation's Operations
+      // *group* also carries path: '/inventory', for active-state matching
+      // only; it is a dropdown button, never a link, and is not in this list.)
       expect(
         gates.some((g) => g.includes('inventory.manage')),
         `${surface}: no /inventory entry gated on inventory.manage`

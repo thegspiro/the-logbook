@@ -47,7 +47,7 @@ details other members can see: work email, personal email, phone, mobile and
 mailing address. Leadership can always see everything. Your date of birth and
 emergency contacts are never shown to other members.
 
-![Account security settings showing the privacy choices section](./images/17-01-privacy-choices.png)
+![My Account, Privacy tab: Profile visibility for each contact detail, then the Privacy Choices checkboxes for photo use, public roster listing and text message notifications, and Your Data](./images/17-01-privacy-choices.png)
 
 Three things worth knowing:
 
@@ -84,16 +84,16 @@ You can download everything The Logbook stores about you at any time.
 
 ### What is in the export
 
-| Included                                                                    | Not included                                                    |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Profile, contact details, emergency contacts                                | Your password (only an unreadable scrambled form is ever kept)  |
-| Training records, certifications, qualifications                            | Your two-factor authentication secret and backup codes          |
-| Shift, event, and meeting attendance                                        | Password-reset links and calendar-feed links                    |
-| Admin hours, leaves of absence                                              | Other members' records                                          |
-| Medical screening records about you                                         | Reviewer-only internal notes on evaluations                     |
-| Skill tests, dues, equipment assigned to you                                | Shift-report results your department hides from trainees        |
-| Your privacy choices                                                        |                                                                 |
-| A **summary** of your audit history (how many entries, first and last date) | The full audit entries themselves                               |
+| Included                                                                    | Not included                                                   |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Profile, contact details, emergency contacts                                | Your password (only an unreadable scrambled form is ever kept) |
+| Training records, certifications, qualifications                            | Your two-factor authentication secret and backup codes         |
+| Shift, event, and meeting attendance                                        | Password-reset links and calendar-feed links                   |
+| Admin hours, leaves of absence                                              | Other members' records                                         |
+| Medical screening records about you                                         | Reviewer-only internal notes on evaluations                    |
+| Skill tests, dues, equipment assigned to you                                | Shift-report results your department hides from trainees       |
+| Your privacy choices                                                        |                                                                |
+| A **summary** of your audit history (how many entries, first and last date) | The full audit entries themselves                              |
 
 **Shift reports follow the same rule as the screen.** Your department can hide
 some officer-written parts of a shift report from trainees: the performance
@@ -152,7 +152,7 @@ own record.
 
 ![A colleague's profile as an officer: compliance summary, training and certification history and emergency contacts all present](./images/17-03-profile-as-officer.png)
 
-![The same profile as an ordinary member: contact details and assigned gear remain, while the compliance summary, training history and emergency contacts are not rendered](./images/17-04-profile-as-member.png)
+![The same profile as an ordinary member: Contact Information reads that no contact details are shared, beside Membership; there is no ID Card button, and the compliance summary, training history and emergency contacts are not rendered](./images/17-04-profile-as-member.png)
 
 **Above: an officer. Below: an ordinary member, on the same record.** The
 account-security details listed above are not on this screen for anybody. They
@@ -340,14 +340,14 @@ than being fixed.
 Retention is set per **record class**. Each class has a default and a
 **minimum** that cannot be undercut:
 
-| Record class                | What it covers                                                              | Default      | Minimum |
-| --------------------------- | --------------------------------------------------------------------------- | ------------ | ------- |
-| Message history             | Delivery records for sent emails and texts (recipients, subjects, status)   | 90 days      | 30 days |
-| Notification logs           | In-app, email and text notification delivery records                        | Keep forever | 30 days |
-| Error reports               | The error reports on the Error Monitoring page                              | 180 days     | 30 days |
-| Form submissions            | Public and internal form responses, which may hold applicants' details      | Keep forever | 90 days |
-| Guest check-ins             | Names, emails and phone numbers of non-members who signed in at events      | Keep forever | 90 days |
-| Practice skills-test runs   | Practice attempts only. Official skills-test results are never removed      | 1 year       | 30 days |
+| Record class              | What it covers                                                            | Default      | Minimum |
+| ------------------------- | ------------------------------------------------------------------------- | ------------ | ------- |
+| Message history           | Delivery records for sent emails and texts (recipients, subjects, status) | 90 days      | 30 days |
+| Notification logs         | In-app, email and text notification delivery records                      | Keep forever | 30 days |
+| Error reports             | The error reports on the Error Monitoring page                            | 180 days     | 30 days |
+| Form submissions          | Public and internal form responses, which may hold applicants' details    | Keep forever | 90 days |
+| Guest check-ins           | Names, emails and phone numbers of non-members who signed in at events    | Keep forever | 90 days |
+| Practice skills-test runs | Practice attempts only. Official skills-test results are never removed    | 1 year       | 30 days |
 
 A daily job applies the schedule. A class set to _keep forever_ is never
 deleted automatically.
@@ -448,9 +448,7 @@ prove the member was compliant at the time.
 
 ---
 
-<!-- Screenshot needed:
-_[As an administrator (members.manage) at /members/:userId for a Dropped (Voluntary) demo member: the Membership card showing Rank, Member type, Member since, then Status reading "Dropped Voluntary" with the red "Anonymize member" link beneath it. Clip to the card. Do not open the dialog.]_
--->
+![The Membership card on a dropped member's profile, as an administrator: Rank, Member type, Platoon and Member since, then Status reading Dropped Voluntary with the red Anonymize member link beneath it](./images/17-05-dropped-member-anonymize.png)
 
 ## Audit Records and Retention (Admin)
 
@@ -556,18 +554,18 @@ putting her name back into it would defeat the purpose.
 
 ## Troubleshooting
 
-| Symptom                                                                  | Resolution                                                                                                                                                                                          |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Download my data" shows an error about too many requests                | You can export three times per hour, because building the file reads every module's records. Wait an hour.                                                                                         |
-| A privacy choice shows "(not answered)" even though I remember answering | The label shows the stored choice. If you answered on a different account (for example a duplicate made during onboarding), the choice is there. Ask an administrator to check for duplicates.     |
-| Anonymize is refused with "Only departed members can be anonymized"      | The member is still active. Change their status to dropped or archived first, then try again.                                                                                                      |
-| Anonymize is refused with "Member is already anonymized"                 | It has already been done for this record. Anonymization is irreversible and happens only once.                                                                                                     |
-| Anonymize says "User not found" for a member I can see                   | The member belongs to a different department on the same installation. You can only act on members of your own department.                                                                        |
-| I cannot find where to change how long records are kept                  | There is no retention screen. Your IT administrator changes the schedule. See [Records Retention](#records-retention-admin).                                                                       |
-| A retention value was refused as below the minimum                       | Each record class has a minimum (30 days for most, 90 days for form submissions and guest check-ins). Choose a value at or above it.                                                                |
-| Old message history is not being deleted even though retention is set    | The job runs daily. Check the class is not set to _keep forever_, and that the records really are older than the retention period. The period is counted from the date the message was sent.       |
-| Documents older than our retention schedule are still present            | Intentional. Documents and meeting minutes are never deleted automatically. Disposing of official records is a decision for a person.                                                              |
-| An export is missing a module we use                                     | The export covers every record holding personal details about the member. If something is really missing, report it as a bug.                                                                     |
+| Symptom                                                                  | Resolution                                                                                                                                                                                     |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Download my data" shows an error about too many requests                | You can export three times per hour, because building the file reads every module's records. Wait an hour.                                                                                     |
+| A privacy choice shows "(not answered)" even though I remember answering | The label shows the stored choice. If you answered on a different account (for example a duplicate made during onboarding), the choice is there. Ask an administrator to check for duplicates. |
+| Anonymize is refused with "Only departed members can be anonymized"      | The member is still active. Change their status to dropped or archived first, then try again.                                                                                                  |
+| Anonymize is refused with "Member is already anonymized"                 | It has already been done for this record. Anonymization is irreversible and happens only once.                                                                                                 |
+| Anonymize says "User not found" for a member I can see                   | The member belongs to a different department on the same installation. You can only act on members of your own department.                                                                     |
+| I cannot find where to change how long records are kept                  | There is no retention screen. Your IT administrator changes the schedule. See [Records Retention](#records-retention-admin).                                                                   |
+| A retention value was refused as below the minimum                       | Each record class has a minimum (30 days for most, 90 days for form submissions and guest check-ins). Choose a value at or above it.                                                           |
+| Old message history is not being deleted even though retention is set    | The job runs daily. Check the class is not set to _keep forever_, and that the records really are older than the retention period. The period is counted from the date the message was sent.   |
+| Documents older than our retention schedule are still present            | Intentional. Documents and meeting minutes are never deleted automatically. Disposing of official records is a decision for a person.                                                          |
+| An export is missing a module we use                                     | The export covers every record holding personal details about the member. If something is really missing, report it as a bug.                                                                  |
 
 ---
 

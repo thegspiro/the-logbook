@@ -1504,3 +1504,332 @@ Step 0 of the rotation process, the prior iteration's merge-recording edits
 to `PROGRESS.md` that ride along on this branch). Every real code delta
 since pass 5 was landed by other work and independently re-verified here,
 not authored by this pass.
+
+## Pass 7 (2026-10-17)
+
+**Backend, current line counts (all read in full this pass):**
+`app/api/v1/endpoints/meetings.py` (623 L, unchanged), `minutes.py` (1,379 L,
+was 1,143), `minutes_records.py` (1,366 L — **new file this pass's scope
+list, not reviewed by pass 6 at all**), `app/services/meetings_service.py`
+(688 L, was 655), `minute_service.py` (1,589 L, was 1,005),
+`quorum_service.py` (172 L, was 159), `attendance_dashboard_service.py`
+(334 L, was 333 — see Scope), `minutes_signature_service.py` (277 L —
+**new**), `minutes_reminder_service.py` (447 L — **new**),
+`minutes_record_service.py` (1,355 L — **new**), `minutes_notifications.py`
+(186 L — **new**), `app/schemas/minute.py` (1,156 L, was ~900 by line-count
+inference), `app/schemas/meetings.py` (228 L, unchanged), `app/models/minute.py`
+(1,325 L, was ~700), `app/models/meeting.py` (309 L, unchanged),
+`app/utils/minutes_pdf.py` (520 L — grew substantially), `minutes_settings.py`
+(171 L), `minutes_snapshot.py` (203 L — new), `minutes_attendance.py` (78 L),
+`app/mcp/tools/meetings.py` (727 L, was 712 — still 7 `@logbook_tool`
+registrations, no new tool; see Scope).
+**Frontend:** `frontend/src/modules/minutes/` in full — 15,318 lines across
+40+ source/test files (pass 6 reviewed 4 files). `services/meetingsServices.ts`
+no longer exists as a separate path; the module's own `services/api.ts`
+calls both `/meetings` and `/minutes-records` (see Route inventory).
+**Migrations:** 8 new revisions since pass 6, all under
+`backend/alembic/versions/`: `4d8807bdd737` (`documents.under_correction_since`,
+reviewed pass 6-adjacent as "MM-17 residual"), `8efc77d4c0c3` (attendance
+status settlement + `minutes_action_items`/`minutes_attachments`/
+`minutes_election_results`/`minutes_revisions`), `f2c5e55e7dda` (adoption
+fields, `minutes_closed_sessions`, `minutes_suggestions`, motion→ballot FK),
+`48f403b2631f` (suggestion tracked-change columns), `bb60bd43bede` (motion
+section + adoption mover/seconder), `b90813f63e25`
+(`last_reminded_at`), `9ce470b513ae` (`votes_recused`/`threshold`/
+`roll_call`), `f236c56b1b49` (`minutes_signatures`). Chain validated at 612
+revisions, single head.
+
+### Scope — a note on how this delta was established
+
+`git log` on this feature's files since pass 6's cutoff (2026-10-07 14:40
+UTC) returns the 19 commits the task brief already enumerated, plus merge
+noise. This repository's history contains megacommits with **no parent**
+(`git show -s --format="%H %P"` returns an empty parent list — e.g.
+`afd68744`, `a5a2890e`), which are grafts from squashed branch merges, not
+genuine root commits. A byte-diff against pass 6's reviewed state via its
+PR's merge commit was attempted and abandoned: neither `PR #2983`'s merge
+commit nor pass 5's `c23c100b4` is reachable as an ancestor of some of these
+grafted commits, so `git diff <base>..HEAD` on this file set cannot be
+computed reliably. In its place, every file above was **read in full at its
+current state** (not diffed), and every one of the 19 commits (plus the two
+that only touch migrations/frontend routing,`c1aa8294` and `a5a2890e`'s true
+content) was inspected individually with `git show` to attribute each
+behavioral change to its actual commit rather than inferred from a diff.
+This is slower than a diff-based pass but produces the same guarantee: every
+line now in these files has been read by this pass.
+
+**`minutes_records.py` and three of the four "new" services are not actually
+new code introduced since pass 6 — they are files pass 6's own scope list
+omitted.** `minutes_records.py`'s module docstring ("They share
+`/minutes-records` with `minutes.py`") and the fact that both routers are
+mounted at the identical `/minutes-records` prefix (`app/api/v1/api.py:358-367`)
+show this file already existed and carried real routes (attachments,
+election results, revisions, carry-forward) before pass 6 — pass 6's table
+claimed "25/25" `minutes.py` routes and never mentions `minutes_records.py`
+at all. This pass's enumeration (below) is the first to cover it. Likewise
+`c1aa8294` ("meeting attendance dashboard screen") is **frontend-only** — it
+adds the `/minutes/attendance` page and route-registry entries for an
+endpoint (`GET /meetings/attendance/dashboard`) that already existed and was
+already reviewed as "Verified good" in earlier passes; `attendance_dashboard_
+service.py`'s one-line growth (333→334 L) is unrelated incidental change, not
+new dashboard logic.
+
+**Genuinely new since pass 6, read and reviewed as new surface:** e-signatures
+(`minutes_signature_service.py`, `minutes_signatures` table, `SignDialog.tsx`),
+motion roll-call/threshold/recusals (`votes_recused`/`threshold`/`roll_call`
+columns, `app/utils/motion_votes.py`, `MotionVoteFields.tsx`), action-item
+assignment and reminders (`a5a2890e`'s W52-6/7 self-service update path,
+`minutes_reminder_service.py`, `last_reminded_at`), review-and-adoption with
+member suggestions/tracked changes (`minutes_suggestions` table +
+`app/utils/redline.py` apply/compute-changes, `TrackedChanges.tsx`,
+`SuggestChangeForm.tsx`), closed sessions (`minutes_closed_sessions` table,
+`ClosedSessionsPanel.tsx`), motion-to-ballot links and election results
+(`minutes_election_results` table, `ElectionResultsPanel.tsx`), attachments
+and revisions (`minutes_attachments`/`minutes_revisions` tables,
+`AttachmentsPanel.tsx`, `RevisionsPanel.tsx`), carry-forward
+(`CarryForwardDialog.tsx`), outlines (`OutlineEditorModal.tsx`,
+`OutlinePickerDialog.tsx`, `OutlinesPage.tsx`), rich-text sections
+(`app/utils/rich_text.py`'s `nh3`-based allowlist sanitizer,
+`components/ux/RichText.tsx`/`RichTextEditor.tsx`, TipTap), the published-
+document correction notice (`66e8c1bd`, already closed as "MM-17 residual"
+before this pass), and the quorum-config finalization guard + reopen flow
+that this pass confirms **closes MM-17** (see below).
+
+### Route inventory (73/73, re-enumerated top to bottom, not spot-checked)
+
+| File                 | Routes | Auth/permission pattern                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `meetings.py`        | 17     | Every route `require_permission(...)`; reads OR `meetings.view`/`minutes.view`, writes `meetings.manage`. No bare `get_current_user`.                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `minutes.py`         | 28     | 27 of 28 `require_permission(...)` (reads `minutes.view`, writes `minutes.manage`). One exception: `PUT /{minutes_id}/action-items/{item_id}` uses `get_current_active_user` with the `minutes.manage` check made **in code** (`can_manage = _has_permission(...)`), documented inline as deliberate (W52-7: the item's own assignee may act without holding the module permission).                                                                                                                                                                   |
+| `minutes_records.py` | 28     | 26 of 28 `require_permission(...)` (`minutes.view` for every read, `minutes.manage` for every write — including `sign_minutes`, which additionally requires `minutes.view` **and** the signature slot's own role/permission rule checked in `MinutesSignatureService.can_sign`). Two exceptions, both self-scoped `/mine`-shaped reads: `GET /action-items/mine` (`get_current_active_user`, filtered to `ActionItem.assignee_id == current_user.id` — never another member's items) and the identical pattern is not repeated elsewhere in this file. |
+
+Total: 17 + 28 + 28 = **73 routes**, every one gated by either a permission
+string or (for the two self-scoped/assignee exceptions) an explicit,
+documented in-code check against the caller's own id. No `.view` permission
+gates a mutation; no route is reachable with only `get_current_user`/
+`get_current_active_user` and no further check. The 7 MCP tools in
+`app/mcp/tools/meetings.py` are unchanged in count and permission tuples
+from pass 6 (`("meetings.view", "minutes.view", "meetings.manage",
+"minutes.manage")` on all seven) and still hard-code `restricted=True`
+regardless of the caller's actual permission level — a deliberate
+conservative choice already credited in pass 5/6, re-confirmed unchanged.
+
+### MM-9 — re-verified: now RESOLVED by an owner decision landed outside this rotation
+
+Pass 6 (and 2–5) left MM-9 OPEN: `MeetingsService.approve_meeting` set
+`APPROVED` unconditionally from any status with no actor comparison, and
+`update_meeting` could flip `status` straight to `approved` via a plain
+`PATCH`. Reading the current code (`meetings_service.py:261-292, 310-335`)
+finds both gaps closed:
+
+- `approve_meeting` now refuses unless the meeting is `PENDING_APPROVAL`
+  (400 `"Only a meeting pending approval can be approved; submit it for
+approval first"`, or `"This meeting is already approved"` for a repeat
+  call) — `approved_by`/`approved_at` can no longer be silently re-stamped
+  or stamped from an unexpected prior state.
+- `update_meeting` explicitly rejects a `PATCH` whose `status` would move a
+  non-approved meeting to `approved` (400 `"A meeting cannot be marked
+approved by editing it; submit it for approval and use Approve instead"`),
+  closing the pass-3-identified second path into the same gap. Moving to
+  `pending_approval` via `PATCH` is still allowed and **is** the submit step
+  (there is no separate `/submit` route for `Meeting`, unlike `MeetingMinutes`).
+
+**Separation of duties was deliberately not added**, per an explicit
+in-code comment (`meetings_service.py:319-321`: "approval stays a
+single-actor action") — the same officer may still submit and approve a
+`Meeting` record, unlike `MeetingMinutes`' `approve_minutes`
+(`assert_different_person`). This matches `docs/KNOWN_LIMITATIONS.md`'s MM-9
+entry, already updated (2026-10-11) by the commit that made this change,
+which this pass independently confirms by reading the live code rather than
+trusting that entry's own say-so. **Disposition: RESOLVED** (state-machine
+half fixed; separation-of-duties half is a documented, deliberate product
+choice, not a gap). No code change needed from this pass.
+
+### MM-17 — re-verified: RESOLVED, and the "MM-17 residual" commit is a separate, narrower fix layered on top
+
+Read `set_meeting_quorum_config` at its current location
+(`minutes.py:1210-1317`) in full. The guard pass 6 found missing is present:
+
+```python
+if minutes.status == MinutesStatus.APPROVED.value:
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=(
+            "Approved minutes are locked. Reopen them to correct the "
+            "quorum settings."
+        ),
+    )
+```
+
+This is not an isolated patch: `MinuteService.reopen_minutes`
+(`minute_service.py:935-1013`) is the correction path it points to —
+`minutes.manage`, a required reason, returns minutes to `DRAFT` with
+approval/submission cleared, records the prior approver/time into the
+`minutes_reopened` audit event, and (separately) flags the published
+document as "Being corrected." Every sibling mutation
+(`update_minutes`, `add_motion`/`update_motion`/`delete_motion`,
+`add_action_item`/`delete_action_item`, and — new since pass 6 —
+`MinutesRecordService._require_editable` used by attachments, election
+results, closed sessions and suggestion-apply) enforces the identical
+`DRAFT`/`REJECTED`-only rule, so the finalization guard is now the
+consistent rule across the whole record, not a one-off fix to the one
+endpoint pass 4–6 kept finding unfixed.
+
+**The commit this task brief names, `66e8c1bd` ("MM-17 residual"), is a
+different, narrower fix layered on top — not the fix that closes the core
+concern.** Reading its diff directly: it touches only `publish_minutes`'
+response (`under_correction_since` field) and `reopen_minutes`' stamping of
+`documents.under_correction_since` on the already-published document. The
+quorum-config guard itself (`"Approved minutes are locked..."`) was
+introduced earlier, in the same landing that added `reopen_minutes` and the
+state machine generally (first traceable in this history's graph at
+`afd68744`, 2026-10-12, which also contains the MM-9 fix above — see Scope
+for why this repository's grafted history makes a single attributing commit
+hash unreliable to cite as _the_ origin). **Disposition: RESOLVED.** Core
+concern (quorum config silently rewritable on an `APPROVED` record) is
+closed; the "residual" commit closes a second, cosmetic concern (a stale
+published document looking current during a correction) that was never part
+of MM-17's own text. `docs/KNOWN_LIMITATIONS.md`'s MM-17 entry already
+documents both resolutions accurately and needs no correction.
+
+### New findings from this pass's own review of the new surface
+
+**None confirmed as defects.** Each item below was checked and found to
+already follow this codebase's established pattern; recorded here (not as
+`MM-18`+) because nothing was found broken, per this file's own convention
+of only assigning an id to an actual gap:
+
+- **Motion voting after adoption** (the class MM-17 named as a specific risk
+  to check): `update_motion`/`delete_motion`/`add_motion` all reject calls
+  on minutes that are not `DRAFT`/`REJECTED` (`minute_service.py:1027-1134`).
+  A roll call or recusal count cannot be altered once minutes are approved
+  without first reopening — same guard as every other content mutation.
+- **Tracked-changes/suggestions applying silent edits to approved minutes:**
+  `add_suggestion` only accepts a new suggestion while minutes are
+  `SUBMITTED`; `resolve_suggestion` refuses once `APPROVED`;
+  `apply_suggestion` (the only call that writes a section) requires
+  `DRAFT`/`REJECTED` via `_require_editable` and is gated at
+  `minutes.manage` — a plain `minutes.view` holder can only _propose_ and
+  never apply. No path writes a section from a suggestion without a
+  `minutes.manage` holder's explicit apply call.
+- **Action-item self-service update (W52-6/7) as a privilege-escalation
+  vector:** `update_action_item`'s `as_assignee` path (i) 404s rather than
+  403s on someone else's item (no existence oracle across members), (ii)
+  restricts the editable field set to `{"status", "completion_notes"}` via
+  `PermissionError` on any other field, and (iii) on `APPROVED` minutes
+  additionally intersects with the same allowlist the `minutes.manage` path
+  uses — so an assignee cannot use their narrower grant to write a field a
+  manager themselves could not write on approved minutes.
+- **New-assignee validation (W52-6, MM-4/XC-1 class):** both `add_action_item`
+  and `update_action_item` resolve a client-supplied `assignee_id` through
+  `_active_assignee_name`, which is a single org + `is_active` filtered
+  query — an inactive member or one from another org cannot be assigned, and
+  the single query means the error can't be used as an existence oracle
+  across the two failure reasons.
+- **E-signatures prove identity server-side, not merely client-asserted:**
+  `MinutesSignatureService.sign` requires the typed name to match the
+  signer's own `full_name`/`display_name` (case/whitespace-insensitive) **and**
+  a correct password re-entry (`verify_password` against the stored hash),
+  rate-limited at a dedicated `minutes_signing` scope (10/60s, 300s lockout)
+  separate from login's budget. A slot's eligibility (`can_sign`) is checked
+  before any signature is recorded, and a race for the same slot is caught by
+  a DB-level `UniqueConstraint` + `IntegrityError` handler, not a check-then-write
+  gap.
+- **Closed sessions are compliance metadata, not a confidentiality leak:**
+  `MinutesClosedSession`'s fields (`reason`, `legal_basis`, `started_at`/
+  `ended_at`, `participants`, `summary` — explicitly documented as "what may
+  be said publicly") record _that_ a closed session happened, its stated
+  legal basis and who attended — the public-record facts most U.S.
+  open-meetings statutes already require a body to state before closing a
+  session — not the substantive discussion inside it. No field stores
+  closed-session deliberation content. Visibility still follows the parent
+  minutes' own visibility rule (`minutes.view` + non-`executive` + `SUBMITTED`/
+  `APPROVED` for a restricted caller), so a closed session held during an
+  otherwise-public meeting is exactly as visible as the minutes recording it,
+  consistent with how open-meetings law treats the fact-of-closure as public
+  even when the content is not.
+- **Rich-text sections (TipTap) — stored and rendered XSS:** server-side,
+  every section write funnels through `app/utils/rich_text.py`'s
+  `sanitize_html`/`canonical`, an `nh3` (Rust `ammonia`) allowlist of 11 tags
+  and `href`-only links restricted to `http`/`https`/`mailto`, capped at
+  100,000 characters. Client-side, `components/ux/RichText.tsx` re-sanitizes
+  with DOMPurify before the one `dangerouslySetInnerHTML` in this feature's
+  render path, which is explicitly commented as "safe by construction."
+  PDF export (`minutes_pdf.py`) escapes every plain field via `html.escape`
+  and renders rich-text sections only through the shared sanitizer's
+  `_PdfBlocks` mapping to ReportLab-safe inline tags — never raw user HTML.
+- **MCP exposure of the new fields:** `app/mcp/tools/meetings.py`'s `_motion()`
+  helper (read by both `get_meeting_agenda` and `get_minutes`) exposes
+  `votes_for`/`votes_against`/`votes_abstain` but **not** `roll_call` or
+  `votes_recused` — an individual member's recorded vote is not surfaced to
+  an MCP-connected integration even though it is visible in the web UI to a
+  `minutes.manage` holder. A deliberate narrower exposure, not a gap.
+- **New migrations (8):** every altered/created table follows
+  `_has_table`/`_columns` existence guards (Pitfall #26); every new
+  `ondelete="SET NULL"` FK (`meeting_minutes.adopting_minutes_id`,
+  `meeting_motions.election_id`, `minutes_action_items.carried_from_id`,
+  `minutes_signatures.signer_id`, and the `_user_fk()` helper's columns
+  across `minutes_closed_sessions`/`minutes_suggestions`/`minutes_attachments`/
+  `minutes_election_results`/`minutes_revisions`) is paired with
+  `nullable=True`; every downgrade is symmetric. `8efc77d4c0c3`'s
+  `_normalize`/`_settle_attendees` attendee-shape backfill is inlined per
+  Pitfall #20 rather than importing the service-layer equivalent.
+
+### Looked at, not a finding — carried forward from pass 5/6, re-confirmed unchanged
+
+- `minute_service.get_stats`'s "this month" count still reads the server's
+  UTC clock (now further down the file; same shape, same disposition).
+- `AttendanceDashboardService.list_waivers`'s per-waiver name lookup is
+  still an N+1, bounded by one meeting's waiver count.
+- `AttendanceDashboardService.grant_waiver`'s find-or-create still has no
+  lock (duplicate-row race, not a security bypass).
+
+### App-review items re-checked (not this rotation's findings, cited per task brief)
+
+- **MM5-4** (`docs/app-review/meetings-minutes.md`) — section edits
+  (`update_minutes`) still replace the whole `sections` array; no `ETag`/
+  `updated_at` precondition exists on `PUT /{minutes_id}`. Still open,
+  still a correctness/lost-update concern rather than a security one under
+  this checklist's seven dimensions (no cross-tenant or privilege angle —
+  both editors are already authorized `minutes.manage` holders on the same
+  org's record). Left FLAGGED, unchanged, per the task brief's guidance not
+  to re-fix an app-review item that is primarily a UX/correctness concern.
+- **MM2-3** (LOW, other schemas' `status`/`priority` free strings) — still
+  flagged in the app-review doc as needing per-field verification; not
+  re-verified field-by-field this pass since it sits outside this rotation's
+  scope and was already explicitly deferred as a focused follow-up by the
+  app-review track itself.
+
+### Guard tests added
+
+None. No new finding required one. The existing suite already covers this
+pass's area of focus: `tests/test_meetings_service.py`,
+`test_meetings_audit_trail.py`, `test_minute_service.py`,
+`test_quorum_service.py`, `test_minutes_quorum_config_validation.py`, and
+(per the 875-test scoped run below) a large body of new tests landed with
+the features themselves — e.g. signature flow, suggestion apply-conflict,
+closed-session CRUD, carry-forward, reminder classification — all passing
+against current code.
+
+### Completion gate (pass 7)
+
+| Check                                                                                                                       | Result                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.3.0, CI's pin)                                                                             | clean (0 violations)                                                                                                                                                                                     |
+| `black --check app/ tests/ alembic/` (26.5.1, CI's pin)                                                                     | clean (2,400 files unchanged)                                                                                                                                                                            |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                                                 | clean                                                                                                                                                                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                           | PASSED — 612 revisions, single head `c87efd81c5aa`                                                                                                                                                       |
+| backend tests, scope (`-k "meeting or minute or quorum or attendance_dashboard or motion or roll_call or election_result"`) | 875 passed, 1 skipped (pre-existing, `pywebpush`) — up from pass 6's 330                                                                                                                                 |
+| `python3 scripts/check_route_permissions.py --strict` (dimension-1 cross-check)                                             | 270 routes checked, 0 errors, 0 warnings                                                                                                                                                                 |
+| `cd frontend && npm run typecheck`                                                                                          | 0 errors (required `npm ci` from the repo root first — this sandbox's `node_modules` predated the `@tiptap/*` dependencies the rich-text editor added; a bare `npm install` was not used, per CLAUDE.md) |
+| `cd frontend && npm run lint`                                                                                               | exit 0                                                                                                                                                                                                   |
+| `cd frontend && npx vitest run src/modules/minutes`                                                                         | 337 passed, 40 test files                                                                                                                                                                                |
+
+No source file under this feature's scope was changed by this pass — every
+real behavioral delta since pass 6 (the state-machine fixes for MM-9/MM-17,
+and all of the genuinely new surface listed under Scope) was landed by other
+work and independently re-verified here against all seven `CHECKLIST.md`
+dimensions, not authored by this pass. The diff this pass contributes is
+this findings file, `docs/security-review/PROGRESS.md`, and
+`docs/KNOWN_LIMITATIONS.md` (no change needed there — both entries already
+accurately reflect the resolved state, re-confirmed rather than rewritten).

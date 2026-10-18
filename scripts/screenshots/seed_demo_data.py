@@ -37,6 +37,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from bootstrap_demo import (
+    DEMO_ADMIN_EMAIL,
     DEMO_ADMIN_USERNAME,
     admin_password,
     require_safe_base_url,
@@ -567,6 +568,22 @@ def items(result: Any, *keys: str) -> list[dict]:
             if isinstance(value, list):
                 return value
     return []
+
+
+def flatten_storage_areas(result: Any) -> list[dict]:
+    """Every storage area, nested ones included.
+
+    The list endpoint returns the top level only, with each area's children
+    nested under ``children``; a lookup by name over the bare list misses every
+    shelf inside a cabinet and creates it again on the next run.
+    """
+    flat: list[dict] = []
+    pending = list(items(result, "storage_areas"))
+    while pending:
+        area = pending.pop(0)
+        flat.append(area)
+        pending.extend(area.get("children") or [])
+    return flat
 
 
 def pick(record: dict, *names: str) -> Any:
@@ -2636,6 +2653,438 @@ class Seeder:
             ):
                 raise
 
+    # -- guide 04: attendance requests, handovers and room tags -------
+
+    GUIDE04_PETITION_EVENT_TITLE = "Pump Panel Practice"
+    GUIDE04_PETITIONER_USERNAME = "okittredge"
+    GUIDE04_PETITION_REASON = (
+        "My phone died before I could scan the code. I ran the second pump "
+        "panel with Engine 2 for the whole session."
+    )
+    GUIDE04_FINALIZED_EVENT_TITLE = "Apparatus Committee Meeting"
+    GUIDE04_ATTENDEES = ("rduarte", "ecaldwell", "vbrennan", "cfrazier")
+    GUIDE04_ALTERNATE_USERNAME = "lnakamura"
+    GUIDE04_TAG_ROOM_PREFIX = "Volunteer Office"
+    GUIDE04_TAG_ROOM_EVENTS = (
+        "Driver Training Classroom",
+        "Officer Candidate Study Group",
+    )
+
+    def seed_guide04_event_states(self) -> dict[str, Any]:
+        """States guide 04 pictures that nothing else in the demo produces.
+
+        * An event that ended a few hours ago with a pending attendance
+          request from one member and no check-in for the demo member, so
+          the same event shows the organizer's request card and the member's
+          "I was there" prompt. A request is one per member per event and
+          cannot be re-dated, so once the event is older than a day it is
+          deleted (which takes the request with it) and rebuilt.
+        * One past meeting with its attendance finalized, for the edit form's
+          locked-fields notice. A business meeting, so finalizing writes no
+          training records into the demo members' histories.
+        * An alternate organizer on the recurring series, for the details
+          card's "Organized by" row.
+        * Two events in one room whose check-in windows overlap right now,
+          for the room tag's "Which event are you here for?" chooser. A room
+          refuses overlapping bookings, so they are back to back: the first
+          is in progress, and the second starts when it ends and is already
+          open on a four-hour Flexible lead. (An event that has ended but is
+          still open on a Window check-in would not do: the room lookup drops
+          every event past its scheduled end.)
+        """
+        result: dict[str, Any] = {}
+        users = {
+            str(pick(u, "username")): u
+            for u in items(self.api.get("/users?limit=200"), "users")
+        }
+        events = items(self.api.get("/events?limit=200"), "events")
+        by_title = {str(e.get("title")): e for e in events}
+
+        result["petition"] = self._guide04_petition_event(users, by_title)
+        result["finalized"] = self._guide04_finalized_event(users, by_title)
+        result["alternate"] = self._guide04_series_alternate(users, events)
+        result["room pair"] = self._guide04_room_pair(by_title)
+        result["meeting minutes"] = self._guide04_meeting_minutes()
+        result["short outline"] = self._guide04_short_outline()
+        return result
+
+    GUIDE04_SHORT_OUTLINE_NAME = "Business Meeting — Short Form"
+
+    def _guide04_short_outline(self) -> str:
+        """A second, non-default business outline, so Make default shows.
+
+        Every outline the department starts with is its type's default, and
+        the Outlines page offers Make default only on one that is not.
+        """
+        outlines = items(self.api.get("/minutes-records/templates"), "templates")
+        if any(pick(o, "name") == self.GUIDE04_SHORT_OUTLINE_NAME for o in outlines):
+            return "already there"
+        sections = [
+            ("call_to_order", "Call to Order", True, False),
+            ("roll_call", "Roll Call / Attendance", True, False),
+            ("approval_of_previous", "Approval of Previous Minutes", False, True),
+            ("chief_report", "Chief's Report", False, False),
+            ("new_business", "New Business", False, False),
+            ("adjournment", "Adjournment", True, True),
+        ]
+        self.api.post(
+            "/minutes-records/templates",
+            {
+                "name": self.GUIDE04_SHORT_OUTLINE_NAME,
+                "description": "For a business meeting with no committee reports.",
+                "meeting_type": "business",
+                "is_default": False,
+                "sections": [
+                    {
+                        "order": order,
+                        "key": key,
+                        "title": title,
+                        "required": required,
+                        "needs_motion": needs_motion,
+                    }
+                    for order, (key, title, required, needs_motion) in enumerate(
+                        sections
+                    )
+                ],
+            },
+        )
+        return "created"
+
+    # Meeting title -> whether its minutes are carried through to adoption.
+    # The other is left circulated for review, so the Minutes page shows a
+    # set in each state under the meeting it was written from.
+    GUIDE04_MINUTES_FOR_MEETINGS = {
+        "July Business Meeting": True,
+        "Officer Meeting — Budget Review": False,
+    }
+
+    # What the secretary wrote in the sections an outline marks required;
+    # submitting refuses minutes with a required section left empty.
+    GUIDE04_SECTION_TEXT = {
+        "call_to_order": "Called to order by the presiding officer.",
+        "roll_call": "Members present as recorded in the attendance list. Quorum met.",
+        "adjournment": "Moved and seconded to adjourn. Carried without objection.",
+    }
+
+    def _guide04_fill_required_sections(self, minutes: dict) -> dict:
+        if str(pick(minutes, "status") or "") != "draft":
+            return minutes
+        minutes_id = pick(minutes, "id")
+        detail = self.api.get(f"/minutes-records/{minutes_id}")
+        sections = list(pick(detail, "sections") or [])
+        changed = False
+        for section in sections:
+            if section.get("required") and not str(section.get("content") or ""):
+                section["content"] = self.GUIDE04_SECTION_TEXT.get(
+                    str(section.get("key")), "Recorded as presented."
+                )
+                changed = True
+        if not changed:
+            return detail
+        return self.api.put(f"/minutes-records/{minutes_id}", {"sections": sections})
+
+    def _guide04_circulate_with_closed_session(self, minutes: dict) -> dict:
+        """Circulate these minutes with one recorded closed session.
+
+        A closed session can be recorded only on a draft, so minutes an
+        earlier run circulated without one are recalled, given it, and
+        circulated again.
+        """
+        minutes_id = pick(minutes, "id")
+        sessions = items(
+            self.api.get(f"/minutes-records/{minutes_id}/closed-sessions"),
+            "closed_sessions",
+        )
+        status = str(pick(minutes, "status") or "")
+        if sessions and status == "submitted":
+            return minutes
+        if status == "submitted":
+            minutes = self.api.post(f"/minutes-records/{minutes_id}/recall")
+        if not sessions:
+            detail = self.api.get(f"/minutes-records/{minutes_id}")
+            meeting_start = datetime.fromisoformat(
+                str(pick(detail, "meeting_date")).replace("Z", "+00:00")
+            )
+            if meeting_start.tzinfo is None:
+                meeting_start = meeting_start.replace(tzinfo=timezone.utc)
+            motion = self.api.post(
+                f"/minutes-records/{minutes_id}/motions",
+                {
+                    "motion_text": (
+                        "Motion to enter closed session to discuss a personnel "
+                        "matter."
+                    ),
+                    "moved_by": "Rafael Duarte",
+                    "seconded_by": "Esme Caldwell",
+                    "status": "passed",
+                    "votes_for": 4,
+                    "votes_against": 0,
+                },
+            )
+            entered = meeting_start + timedelta(minutes=48)
+            self.api.post(
+                f"/minutes-records/{minutes_id}/closed-sessions",
+                {
+                    "reason": "Personnel matter: a member's return-to-duty plan",
+                    "legal_basis": "Department bylaws, Article VI, Section 3",
+                    "started_at": iso(entered),
+                    "ended_at": iso(entered + timedelta(minutes=22)),
+                    "motion_id": pick(motion, "id"),
+                    "participants": [
+                        {"name": "Dana Ruiz"},
+                        {"name": "Rafael Duarte"},
+                        {"name": "Esme Caldwell"},
+                        {
+                            "name": "Callum Frazier",
+                            "joined_at": iso(entered),
+                            "left_at": iso(entered + timedelta(minutes=10)),
+                        },
+                    ],
+                    "summary": "No action was taken.",
+                },
+            )
+        return self.api.post(f"/minutes-records/{minutes_id}/submit")
+
+    def _guide04_meeting_minutes(self) -> str:
+        meetings = {
+            str(pick(m, "title")): m
+            for m in items(self.api.get("/meetings?limit=100"), "meetings")
+        }
+        linked = {
+            str(pick(m, "meeting_id", "meetingId")): m
+            for m in items(self.api.get("/minutes-records?limit=100"), "minutes")
+            if pick(m, "meeting_id", "meetingId")
+        }
+        done = []
+        for title, adopt in self.GUIDE04_MINUTES_FOR_MEETINGS.items():
+            meeting = meetings.get(title)
+            if not meeting:
+                continue
+            meeting_id = str(pick(meeting, "id"))
+            minutes = linked.get(meeting_id) or self.api.post(
+                f"/minutes-records/from-meeting/{meeting_id}"
+            )
+            minutes = self._guide04_fill_required_sections(minutes)
+            if adopt:
+                minutes = self._finish_minutes(minutes)
+            else:
+                minutes = self._guide04_circulate_with_closed_session(minutes)
+            done.append(f"{title}: {pick(minutes, 'status')}")
+        return "; ".join(done) or "no seeded meetings"
+
+    def _guide04_add_attendees(self, event_id: str, users: dict) -> None:
+        """Put a few members on the roster as going, without checking them in.
+
+        A manager's check-in is stamped with the moment it is made, and these
+        events are already over when the seeder reaches them. Checked in
+        here, every one of them would read as arriving hours (or days) after
+        the start and drag the analytics page's average check-in time with
+        it.
+        """
+        for username in self.GUIDE04_ATTENDEES:
+            user = users.get(username)
+            if not user:
+                continue
+            try:
+                self.api.post(
+                    f"/events/{event_id}/add-attendee",
+                    {"user_id": pick(user, "id"), "checked_in": False},
+                )
+            except ApiError as exc:
+                # Already on the roster from an earlier run.
+                if exc.code not in (400, 409):
+                    raise
+
+    def _guide04_petition_event(self, users: dict, by_title: dict) -> str:
+        existing = by_title.get(self.GUIDE04_PETITION_EVENT_TITLE)
+        if existing and pick(existing, "id"):
+            ends = str(pick(existing, "end_datetime", "endDatetime") or "")
+            if ends and ends < iso(NOW - timedelta(hours=20)):
+                self.api.delete(f"/events/{pick(existing, 'id')}")
+                existing = None
+        if existing and pick(existing, "id"):
+            event_id = str(pick(existing, "id"))
+        else:
+            end = (NOW - timedelta(hours=3)).replace(minute=0, second=0, microsecond=0)
+            event = self.api.post(
+                "/events",
+                {
+                    "title": self.GUIDE04_PETITION_EVENT_TITLE,
+                    "description": (
+                        "Hands-on pump panel operation for engine company "
+                        "drivers, at the drafting pit behind Station 1."
+                    ),
+                    "event_type": "training",
+                    "location": "Station 1 - Headquarters",
+                    "start_datetime": iso(end - timedelta(hours=2)),
+                    "end_datetime": iso(end),
+                    "requires_rsvp": False,
+                    "is_mandatory": False,
+                    "send_reminders": False,
+                    "is_draft": False,
+                },
+            )
+            event_id = str(pick(event, "id"))
+        self._guide04_add_attendees(event_id, users)
+
+        petitioner = users.get(self.GUIDE04_PETITIONER_USERNAME)
+        if not petitioner:
+            return "petitioner not found"
+        current = self.api.get(f"/events/{event_id}")
+        start = datetime.fromisoformat(
+            str(pick(current, "start_datetime", "startDatetime")).replace("Z", "+00:00")
+        )
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        session = self.member_session(
+            self.base_url, str(pick(petitioner, "id")), self.GUIDE04_PETITIONER_USERNAME
+        )
+        standing = session.get(f"/events/{event_id}/attendance-petitions/mine")
+        if pick(standing, "petition"):
+            return "request already pending"
+        session.post(
+            f"/events/{event_id}/attendance-petitions",
+            {
+                "reason": self.GUIDE04_PETITION_REASON,
+                "requested_check_in_at": iso(start + timedelta(minutes=10)),
+                "requested_check_out_at": iso(start + timedelta(hours=2)),
+            },
+        )
+        return "request raised"
+
+    def _guide04_finalized_event(self, users: dict, by_title: dict) -> str:
+        existing = by_title.get(self.GUIDE04_FINALIZED_EVENT_TITLE)
+        if existing and pick(existing, "id"):
+            event_id = str(pick(existing, "id"))
+        else:
+            start = (NOW - timedelta(days=4)).replace(
+                hour=23, minute=0, second=0, microsecond=0
+            )
+            event = self.api.post(
+                "/events",
+                {
+                    "title": self.GUIDE04_FINALIZED_EVENT_TITLE,
+                    "description": (
+                        "Review of the engine replacement specification and "
+                        "the ladder truck's annual service findings."
+                    ),
+                    "event_type": "business_meeting",
+                    "location": "Station 1 - Headquarters",
+                    "start_datetime": iso(start),
+                    "end_datetime": iso(start + timedelta(hours=2)),
+                    "requires_rsvp": False,
+                    "is_mandatory": False,
+                    "send_reminders": False,
+                    "is_draft": False,
+                },
+            )
+            event_id = str(pick(event, "id"))
+        # The list carries no finalized marker; only the detail does.
+        detail = self.api.get(f"/events/{event_id}")
+        if pick(detail, "attendance_finalized_at", "attendanceFinalizedAt"):
+            return "already finalized"
+        self._guide04_add_attendees(event_id, users)
+        self.api.post(f"/events/{event_id}/finalize-attendance", {})
+        return "finalized"
+
+    def _guide04_series_alternate(self, users: dict, events: list[dict]) -> str:
+        alternate = users.get(self.GUIDE04_ALTERNATE_USERNAME)
+        admin = users.get(DEMO_ADMIN_USERNAME)
+        if not (alternate and admin):
+            return "alternate or administrator not found"
+        upcoming = sorted(
+            (
+                e
+                for e in events
+                if e.get("title") == self.RECURRING_SERIES_TITLE
+                and str(pick(e, "start_datetime", "startDatetime") or "") > iso(NOW)
+            ),
+            key=lambda e: str(pick(e, "start_datetime", "startDatetime")),
+        )
+        if not upcoming:
+            return "no upcoming occurrence"
+        event_id = pick(upcoming[0], "id")
+        detail = self.api.get(f"/events/{event_id}")
+        if pick(detail, "alternate_organizer_id", "alternateOrganizerId"):
+            return "alternate already set"
+        self.api.post(
+            f"/events/{event_id}/transfer",
+            {
+                "organizer_id": pick(admin, "id"),
+                "alternate_organizer_id": pick(alternate, "id"),
+                "scope": "future",
+            },
+        )
+        return "alternate set"
+
+    def _guide04_room_pair(self, by_title: dict) -> str:
+        room = next(
+            (
+                loc
+                for loc in items(self.api.get("/locations?limit=100"), "locations")
+                if str(pick(loc, "name") or "").startswith(self.GUIDE04_TAG_ROOM_PREFIX)
+            ),
+            None,
+        )
+        if not room:
+            return "room not found"
+        first_title, second_title = self.GUIDE04_TAG_ROOM_EVENTS
+        first = by_title.get(first_title)
+        second = by_title.get(second_title)
+        # Re-dated together once the first one is within half an hour of its
+        # end, which is when the pair stops being open at the same time.
+        first_end = str(pick(first or {}, "end_datetime", "endDatetime") or "")
+        stale = not first_end or first_end < iso(NOW + timedelta(minutes=30))
+        if first and second and not stale:
+            return "windows still open"
+        anchor = NOW.replace(second=0, microsecond=0)
+        handover = anchor + timedelta(hours=3)
+        second_window = {
+            "start_datetime": iso(handover + timedelta(minutes=1)),
+            "end_datetime": iso(handover + timedelta(hours=2)),
+            "check_in_window_type": "flexible",
+            "check_in_minutes_before": 240,
+        }
+        first_window = {
+            "start_datetime": iso(anchor - timedelta(hours=1)),
+            "end_datetime": iso(handover),
+            "check_in_window_type": "flexible",
+            "check_in_minutes_before": 60,
+        }
+        common = {
+            "event_type": "training",
+            "location_id": pick(room, "id"),
+            "location": None,
+            "requires_rsvp": False,
+            "is_mandatory": False,
+            "send_reminders": False,
+            "is_draft": False,
+        }
+        # The second event moves first: its old dates are behind the new ones,
+        # so the first event's new dates cannot collide with them.
+        for title, event, window, description in (
+            (
+                second_title,
+                second,
+                second_window,
+                "Study session for the company officer written exam.",
+            ),
+            (
+                first_title,
+                first,
+                first_window,
+                "Classroom portion of the driver operator course.",
+            ),
+        ):
+            if event and pick(event, "id"):
+                self.api.patch(f"/events/{pick(event, 'id')}", window)
+            else:
+                self.api.post(
+                    "/events",
+                    {"title": title, "description": description, **common, **window},
+                )
+        return "windows opened"
+
     # -- scheduling --------------------------------------------------
 
     SHIFT_TEMPLATES = [
@@ -3396,6 +3845,11 @@ class Seeder:
                     self.api.get("/admin-hours/entries?limit=200"), "entries"
                 )
                 if str(pick(e, "status")) == "pending"
+                # The guide-08 correction entries stay pending on purpose and
+                # must not take one of the queue's slots, or each re-run would
+                # approve one more of the entries counted above.
+                and str(pick(e, "description") or "")
+                not in {d for _, d, _ in self.GUIDE08_HOURS_CORRECTIONS}
             ),
             key=lambda e: str(pick(e, "clock_in_at", "clockInAt") or ""),
             reverse=True,
@@ -4690,7 +5144,8 @@ class Seeder:
                 # becomes an issuance, an individual one a checkout — and the
                 # request then carries a reference to whichever it made.
                 self.api.put(
-                    f"/inventory/requests/{request_id}/fulfill", {"quantity": 1}
+                    f"/inventory/requests/{request_id}/fulfill",
+                    {"fulfillment_type": request_type, "quantity": 1},
                 )
             created.append(request)
         return {"requests": created}
@@ -4901,6 +5356,364 @@ class Seeder:
             "apparatus_id": pick(medic, "id"),
             "linked_positions": len(positions),
         }
+
+    # -- medical supply inventory (the Medical Supplies page) --
+
+    # The supply-tracking catalog above is filed as consumable gear, so the
+    # Medical Supplies page -- which lists medical categories only -- was an
+    # empty state. These are medical categories and supplies in their own
+    # right, shaped for guide 05's Medical Supplies section: two masks that
+    # differ only by size, one supply below its reorder point, a supply with a
+    # lot inside the expiring window, supplies filed under a room and a nested
+    # storage area, and one carried on two apparatus.
+    MEDICAL_CATEGORIES = [
+        ("Airway & Oxygen", "Masks, cannulas and ventilation."),
+        ("Bleeding Control", "Tourniquets and hemostatic dressings."),
+        ("Immobilization", "Collars and splints."),
+    ]
+    MEDICAL_ROOM = "Station 1 - Headquarters"
+    MEDICAL_CABINET = "EMS Supply Cabinet"
+    MEDICAL_SHELF = "Shelf 2"
+
+    # name, category, size, unit, reorder point, also called, filed on the
+    # shelf (else the room only), lots (lot number, days to expiry, quantity)
+    MEDICAL_ITEMS = [
+        (
+            "Oxygen Mask, Non-Rebreather",
+            "Airway & Oxygen",
+            "Adult",
+            "Each",
+            10,
+            [],
+            True,
+            [("NRB-A-2603", 410, 18), ("NRB-A-2511", 240, 6)],
+        ),
+        (
+            "Oxygen Mask, Non-Rebreather",
+            "Airway & Oxygen",
+            "Pediatric",
+            "Each",
+            6,
+            [],
+            True,
+            [("NRB-P-2509", 200, 4)],
+        ),
+        (
+            "Bag Valve Mask",
+            "Airway & Oxygen",
+            "Adult",
+            "Each",
+            4,
+            ["BVM", "Ambu bag"],
+            True,
+            [("BVM-2604", 700, 6)],
+        ),
+        (
+            "Nasal Cannula",
+            "Airway & Oxygen",
+            "Adult",
+            "Each",
+            10,
+            [],
+            True,
+            [("NC-2602", 380, 30)],
+        ),
+        (
+            "Tourniquet, CAT",
+            "Bleeding Control",
+            None,
+            "Each",
+            8,
+            [],
+            False,
+            [("CAT-2512", 520, 12)],
+        ),
+        (
+            "Hemostatic Gauze",
+            "Bleeding Control",
+            None,
+            "Each",
+            6,
+            [],
+            True,
+            [("HG-2511", 21, 4), ("HG-2607", 600, 8)],
+        ),
+        (
+            "Cervical Collar, Adjustable",
+            "Immobilization",
+            "Adult",
+            "Each",
+            4,
+            [],
+            False,
+            [],
+        ),
+    ]
+
+    # The apparatus checklists that carry medical supplies. Tourniquet is on
+    # both, so its Where cell shows two apparatus. On Rescue 7, BVM, Nasal
+    # Cannula and Oxygen Mask stay unlinked for Catalog Links to find: BVM
+    # matches by an "also called" name (a strong match, marked "check this"),
+    # Nasal Cannula exactly, and Oxygen Mask ties between the adult and the
+    # pediatric mask, so the automatic pass skips it.
+    MEDICAL_CHECKLISTS = [
+        (
+            "R-7",
+            "Rescue 7 EMS Bag Check",
+            "Jump Bag",
+            [
+                ("Tourniquet, CAT", "Tourniquet, CAT", 2),
+                ("BVM", None, None),
+                ("Nasal Cannula", None, None),
+                ("Oxygen Mask", None, None),
+            ],
+        ),
+        (
+            "B-5",
+            "Brush 5 Trauma Kit Check",
+            "Trauma Kit",
+            [
+                ("Tourniquet, CAT", "Tourniquet, CAT", 2),
+                ("Trauma dressings sealed", None, None),
+            ],
+        ),
+    ]
+
+    def seed_medical_supplies(self, apparatus: list[dict]) -> dict[str, Any]:
+        """Medical categories, supplies, lots, storage and two checklists."""
+        categories = {
+            str(pick(c, "name")): pick(c, "id")
+            for c in items(
+                self.api.get("/medical-supplies/categories?active_only=false"),
+                "categories",
+            )
+        }
+        for name, description in self.MEDICAL_CATEGORIES:
+            if name not in categories:
+                created = self.api.post(
+                    "/medical-supplies/categories",
+                    # The router files it as medical whatever this says; the
+                    # schema still requires the field.
+                    {"name": name, "description": description, "item_type": "medical"},
+                )
+                categories[name] = pick(created, "id")
+
+        room_id, shelf_id = self._medical_storage()
+
+        existing = {
+            (str(pick(i, "name")), pick(i, "size")): i
+            for i in items(self.api.get("/medical-supplies/items?limit=200"), "items")
+        }
+        catalog: dict[str, dict] = {}
+        created = 0
+        for (
+            name,
+            category,
+            size,
+            unit,
+            reorder,
+            also_called,
+            on_shelf,
+            lots,
+        ) in self.MEDICAL_ITEMS:
+            item = existing.get((name, size))
+            if item is None:
+                payload: dict[str, Any] = {
+                    "name": name,
+                    "category_id": categories.get(category),
+                    "unit_of_measure": unit,
+                    "condition": "good",
+                    "status": "available",
+                    "tracking_type": "pool",
+                    # Below the reorder point when it has no dated lots, so
+                    # the Low stock tile counts something undated too.
+                    "quantity": 1 if lots else 3,
+                    "reorder_point": reorder,
+                }
+                if size:
+                    payload["size"] = size
+                if also_called:
+                    payload["also_called"] = also_called
+                if room_id:
+                    payload["location_id"] = room_id
+                if on_shelf and shelf_id:
+                    payload["storage_area_id"] = shelf_id
+                item = self.api.post("/medical-supplies/items", payload)
+                created += 1
+            catalog.setdefault(name, item)
+            item_id = pick(item, "id")
+            have = {
+                pick(lot, "lot_number", "lotNumber")
+                for lot in items(
+                    self.api.get(f"/medical-supplies/items/{item_id}/lots"), "lots"
+                )
+            }
+            for lot_number, days, quantity in lots:
+                if lot_number in have:
+                    continue
+                self.api.post(
+                    f"/medical-supplies/items/{item_id}/lots",
+                    {
+                        "lot_number": lot_number,
+                        "expiration_date": str(TODAY + timedelta(days=days)),
+                        "quantity": quantity,
+                        "received_date": str(TODAY - timedelta(days=45)),
+                    },
+                )
+            if lots:
+                # A pool item cannot be created with a quantity below 1, and
+                # that unit lands as an undated, unnumbered lot. A supply
+                # stocked entirely from dated lots should not carry it.
+                for lot in items(
+                    self.api.get(f"/medical-supplies/items/{item_id}/lots"), "lots"
+                ):
+                    if not pick(lot, "lot_number", "lotNumber") and not pick(
+                        lot, "expiration_date", "expirationDate"
+                    ):
+                        self.api.delete(f"/medical-supplies/lots/{pick(lot, 'id')}")
+
+        templates = self._medical_checklists(apparatus, catalog)
+        self._publish_seeded_templates()
+        return {"created": created, "templates": templates}
+
+    def _medical_storage(self) -> tuple[str | None, str | None]:
+        """A cabinet with a shelf nested in it, in the station's own room."""
+        options = self.api.get("/medical-supplies/storage-options")
+        room_id = next(
+            (
+                pick(r, "id")
+                for r in items(options, "rooms")
+                if pick(r, "name") == self.MEDICAL_ROOM
+            ),
+            None,
+        )
+        if not room_id:
+            return None, None
+        areas = flatten_storage_areas(self.api.get("/inventory/storage-areas"))
+
+        def find(name: str) -> str | None:
+            return next((pick(a, "id") for a in areas if pick(a, "name") == name), None)
+
+        cabinet_id = find(self.MEDICAL_CABINET)
+        # Earlier runs looked the shelf up over the top level only, missed it
+        # inside the cabinet, and made another each time. Drop the empty
+        # copies; the one holding supplies stays.
+        shelves = [a for a in areas if pick(a, "name") == self.MEDICAL_SHELF]
+        if len(shelves) > 1:
+            keep = max(shelves, key=lambda a: pick(a, "item_count") or 0)
+            for extra in shelves:
+                if extra is not keep and not pick(extra, "item_count"):
+                    self.api.delete(f"/inventory/storage-areas/{pick(extra, 'id')}")
+            areas = [a for a in areas if a is keep or a not in shelves]
+        if not cabinet_id:
+            cabinet_id = pick(
+                self.api.post(
+                    "/inventory/storage-areas",
+                    {
+                        "name": self.MEDICAL_CABINET,
+                        "label": "EMS-01",
+                        "storage_type": "cabinet",
+                        "location_id": room_id,
+                        "sort_order": 10,
+                    },
+                ),
+                "id",
+            )
+        shelf_id = find(self.MEDICAL_SHELF)
+        if not shelf_id:
+            shelf_id = pick(
+                self.api.post(
+                    "/inventory/storage-areas",
+                    {
+                        "name": self.MEDICAL_SHELF,
+                        "label": "EMS-01-2",
+                        "storage_type": "shelf",
+                        "parent_id": cabinet_id,
+                        "location_id": room_id,
+                    },
+                ),
+                "id",
+            )
+        return room_id, shelf_id
+
+    def _medical_checklists(
+        self, apparatus: list[dict], catalog: dict[str, dict]
+    ) -> list[str]:
+        by_unit = {
+            str(pick(a, "unit_number", "unitNumber") or ""): pick(a, "id")
+            for a in apparatus
+        }
+        existing = {
+            str(pick(t, "name")): t
+            for t in items(self.api.get("/equipment-checks/templates"), "templates")
+        }
+        names: list[str] = []
+        for unit, name, compartment, contents in self.MEDICAL_CHECKLISTS:
+            apparatus_id = by_unit.get(unit)
+            if not apparatus_id:
+                continue
+            names.append(name)
+            template = existing.get(name)
+            if template is None:
+                self.api.post(
+                    "/equipment-checks/templates",
+                    {
+                        "name": name,
+                        "description": "Medical supplies carried on this unit.",
+                        "check_timing": "start_of_shift",
+                        "apparatus_id": apparatus_id,
+                        "is_active": True,
+                        "compartments": [
+                            {
+                                "name": compartment,
+                                "sort_order": 0,
+                                "items": [
+                                    {
+                                        "name": position,
+                                        "sort_order": order,
+                                        "check_type": (
+                                            "quantity" if target else "pass_fail"
+                                        ),
+                                        "is_required": True,
+                                        "required_quantity": target,
+                                        "expected_quantity": target,
+                                        "has_expiration": bool(linked),
+                                        "expiration_warning_days": 30,
+                                        **(
+                                            {
+                                                "inventory_item_id": pick(
+                                                    catalog[linked], "id"
+                                                )
+                                            }
+                                            if linked and linked in catalog
+                                            else {}
+                                        ),
+                                    }
+                                    for order, (position, linked, target) in enumerate(
+                                        contents
+                                    )
+                                ],
+                            }
+                        ],
+                    },
+                )
+                continue
+            # Re-seeding puts the Catalog Links lines back: the automatic pass
+            # that `05-` pictures links them, and its Undo is the shot's own
+            # cleanup, but a capture that died half way must not leave the
+            # next one with nothing to link.
+            detail = self.api.get(f"/equipment-checks/templates/{pick(template, 'id')}")
+            meant_unlinked = {p for p, linked, _ in contents if not linked}
+            for comp in items(detail, "compartments"):
+                for line in items(comp, "items"):
+                    if pick(line, "name") in meant_unlinked and pick(
+                        line, "inventory_item_id", "inventoryItemId"
+                    ):
+                        self.api.put(
+                            f"/equipment-checks/items/{pick(line, 'id')}",
+                            {"inventory_item_id": None},
+                        )
+        return names
 
     def _supply_category(self) -> str | None:
         """A consumable category, created if the department has none."""
@@ -5449,6 +6262,263 @@ class Seeder:
                 )
             )
         return chains
+
+    UNUSED_CHAIN_NAME = "Major Purchase Approval"
+
+    def seed_unused_approval_chain(self) -> dict[str, Any]:
+        """A three-step chain no request has been routed through.
+
+        Guide 11 pictures the Delete step confirmation over a chain whose steps
+        can actually be deleted. Every seeded default chain has routed
+        requests, so deleting one of their steps is refused; this chain sits
+        above every seeded request's amount and is never the default, so it
+        stays unused.
+        """
+        chains = items(self.api.get("/finance/approval-chains"), "approval_chains")
+        if any(pick(c, "name") == self.UNUSED_CHAIN_NAME for c in chains):
+            return {"created": False}
+        self.api.post(
+            "/finance/approval-chains",
+            {
+                "name": self.UNUSED_CHAIN_NAME,
+                "description": "Purchases of $25,000 or more.",
+                "applies_to": "purchase_request",
+                "min_amount": 25000,
+                "is_default": False,
+                "steps": [
+                    {
+                        "step_order": order,
+                        "name": step_name,
+                        "step_type": "approval",
+                        "approver_type": "position",
+                        "approver_value": position,
+                        "required": True,
+                    }
+                    for order, step_name, position in (
+                        (1, "Company officer review", "captain"),
+                        (2, "Treasurer review", "treasurer"),
+                        (3, "Chief approval", "fire_chief"),
+                    )
+                ],
+            },
+        )
+        return {"created": True}
+
+    #: Holds the Treasurer position, so guide 11 can picture the approvals
+    #: screens as the person who runs them rather than as the administrator,
+    #: who raised every seeded request and so may not approve any of them.
+    TREASURER_USERNAME = "aosei"
+    UNROUTED_REQUEST_TITLE = "Hose tester calibration"
+    TREASURER_EXPENSE_TITLE = "EMS refresher mileage"
+    TREASURER_CHECK_PAYEE = "Oakville Hardware Supply"
+
+    def seed_guide11_finance_states(self) -> dict[str, Any]:
+        """States guide 11 pictures that the ordinary finance seed does not.
+
+        * A Treasurer. The seeded expense and check chains route their first
+          step to the treasurer position; without a holder every one of those
+          steps reads "No active member can act on this step".
+        * An expense report and a check request waiting on that Treasurer, so
+          "Requests waiting on you" has rows the Treasurer can approve beside
+          the ones marked Not assigned to you.
+        * One purchase request pending with no approval steps, for the "No
+          approval chain applies to this request" panel.
+
+        All three are submitted with the default purchase-request chain
+        switched off, and it is switched back on in `finally`; a request keeps
+        the routing it was submitted under. Switching it off is what makes the
+        purchase request unrouted, and it is also the only way to route the
+        other two through their own chains: the resolver accepts a
+        purchase-request chain for every request type and keeps the first of
+        two equally specific defaults, so the seeded expense report and check
+        request went to the purchase-request chain's company officer step.
+        """
+        result: dict[str, Any] = {
+            "treasurer": self._ensure_role(self.TREASURER_USERNAME, "Treasurer"),
+            "email_step": self._add_email_approver_step(),
+            "sub_lines": self._add_category_sub_lines(),
+        }
+        requests = items(
+            self.api.get("/finance/purchase-requests"), "purchase_requests"
+        )
+        reports = items(self.api.get("/finance/expense-reports"), "expense_reports")
+        checks = items(self.api.get("/finance/check-requests"), "check_requests")
+        todo_request = not any(
+            pick(r, "title") == self.UNROUTED_REQUEST_TITLE for r in requests
+        )
+        todo_report = not any(
+            pick(r, "title") == self.TREASURER_EXPENSE_TITLE for r in reports
+        )
+        todo_check = not any(
+            pick(c, "payeeName", "payee_name") == self.TREASURER_CHECK_PAYEE
+            for c in checks
+        )
+        if not (todo_request or todo_report or todo_check):
+            return result
+        fiscal_year_id = next(
+            (pick(r, "fiscalYearId", "fiscal_year_id") for r in requests), None
+        )
+        budget_id = next((pick(r, "budgetId", "budget_id") for r in requests), None)
+        if not fiscal_year_id:
+            self.blocked.append("guide 11: no purchase request to borrow a year from")
+            return result
+        budget = {"budget_id": budget_id} if budget_id else {}
+        chains = items(self.api.get("/finance/approval-chains"), "approval_chains")
+        defaults = [
+            str(pick(c, "id"))
+            for c in chains
+            if pick(c, "appliesTo", "applies_to") == "purchase_request"
+            and pick(c, "isActive", "is_active")
+            and not pick(c, "minAmount", "min_amount")
+        ]
+        for chain_id in defaults:
+            self.api.put(f"/finance/approval-chains/{chain_id}", {"is_active": False})
+        try:
+            if todo_request:
+                request = self.api.post(
+                    "/finance/purchase-requests",
+                    {
+                        "fiscal_year_id": fiscal_year_id,
+                        **budget,
+                        "title": self.UNROUTED_REQUEST_TITLE,
+                        "description": "Annual calibration of the hose test pressure gauge.",
+                        "vendor": "Tidewater Fire Service",
+                        "estimated_amount": 640,
+                        "priority": "medium",
+                    },
+                )
+                self.api.post(
+                    f"/finance/purchase-requests/{pick(request, 'id')}/submit"
+                )
+                result["unrouted"] = True
+            if todo_report:
+                report = self.api.post(
+                    "/finance/expense-reports",
+                    {
+                        "fiscal_year_id": fiscal_year_id,
+                        "title": self.TREASURER_EXPENSE_TITLE,
+                        "description": "Round trip to the regional EMS refresher.",
+                        "line_items": [
+                            {
+                                **budget,
+                                "description": "Mileage, 184 miles",
+                                "amount": 123.28,
+                                "date_incurred": iso(NOW - timedelta(days=6)),
+                                "expense_type": "mileage",
+                            }
+                        ],
+                    },
+                )
+                self._submit_expense_report_with_receipts(report)
+                result["expense_report"] = True
+            if todo_check:
+                check = self.api.post(
+                    "/finance/check-requests",
+                    {
+                        "fiscal_year_id": fiscal_year_id,
+                        **budget,
+                        "payee_name": self.TREASURER_CHECK_PAYEE,
+                        "payee_address": "48 Main Street, Oakville, VA 22046",
+                        "amount": 412.60,
+                        "memo": "Station 1 shop supplies",
+                        "purpose": "Station 1 shop supplies",
+                    },
+                )
+                self.api.post(f"/finance/check-requests/{pick(check, 'id')}/submit")
+                result["check_request"] = True
+        finally:
+            for chain_id in defaults:
+                self.api.put(
+                    f"/finance/approval-chains/{chain_id}", {"is_active": True}
+                )
+        return result
+
+    def _add_category_sub_lines(self) -> int:
+        """Two sub-lines under Personal Protective Equipment.
+
+        The Budget Categories list is pictured as a tree, and the guide's own
+        example of a restricted line is officer brass kept for the
+        Quartermaster. No budget is drawn against either, so the budget pages
+        other shots picture are unchanged.
+        """
+        categories = items(self.api.get("/finance/budget-categories"), "categories")
+        parent = next(
+            (
+                c
+                for c in categories
+                if pick(c, "name") == "Personal Protective Equipment"
+            ),
+            None,
+        )
+        if not parent:
+            return 0
+        names = {pick(c, "name") for c in categories}
+        roles = self.api.get("/roles")
+        role_ids = {
+            pick(r, "slug"): str(pick(r, "id"))
+            for r in (roles if isinstance(roles, list) else items(roles, "roles"))
+        }
+        planned = [
+            (
+                "Officer brass",
+                "Collar brass and badges for officers.",
+                {
+                    "owner_position_id": role_ids.get("quartermaster"),
+                    "charge_access": "restricted",
+                    "charge_position_ids": [
+                        role_ids[slug]
+                        for slug in ("quartermaster", "captain")
+                        if slug in role_ids
+                    ],
+                },
+            ),
+            ("Station boots", "Station boot reimbursements for members.", {}),
+        ]
+        created = 0
+        for name, description, extra in planned:
+            if name in names:
+                continue
+            self.api.post(
+                "/finance/budget-categories",
+                {
+                    "name": name,
+                    "description": description,
+                    "parent_category_id": str(pick(parent, "id")),
+                    **{k: v for k, v in extra.items() if v},
+                },
+            )
+            created += 1
+        return created
+
+    def _add_email_approver_step(self) -> bool:
+        """Give the unused Major Purchase chain a fourth step, approved by email.
+
+        The chains page is pictured with one chain expanded, and the guide
+        describes an Email approver beside the position ones. That chain has
+        routed no request, so the step changes nobody's approvals, and the
+        Delete step confirmation guide 11 pictures on it still offers deletion.
+        """
+        chains = items(self.api.get("/finance/approval-chains"), "approval_chains")
+        chain = next(
+            (c for c in chains if pick(c, "name") == self.UNUSED_CHAIN_NAME), None
+        )
+        if not chain:
+            return False
+        steps = pick(chain, "steps") or []
+        if any(pick(st, "approverType", "approver_type") == "email" for st in steps):
+            return False
+        self.api.post(
+            f"/finance/approval-chains/{pick(chain, 'id')}/steps",
+            {
+                "step_order": len(steps) + 1,
+                "name": "Board sign-off",
+                "step_type": "approval",
+                "approver_type": "email",
+                "approver_value": "board@oakvillefd.example.org",
+                "required": True,
+            },
+        )
+        return True
 
     def seed_expense_reports(self, finance: dict) -> list[dict]:
         """Reimbursement claims, which the expense report detail pictures."""
@@ -6917,6 +7987,392 @@ class Seeder:
             self.blocked.append(
                 f"time-off history: {raised} of {self.TIME_OFF_HISTORY_MIN} raised"
             )
+
+    # ------------------------------------------------------------------
+    # Guide 03 (scheduling): outside apparatus, exchanges, history import
+    # ------------------------------------------------------------------
+
+    #: Placeholder departments. The guide asks for invented names, never a real
+    #: neighbouring department, so these name no actual fire company.
+    OUTSIDE_AGENCIES = (
+        (
+            "Township Fire Company",
+            (("Engine 21", "engine", True), ("Tanker 23", "tanker", False)),
+        ),
+        ("Lakeside Volunteer Rescue", (("Ambulance 58", "ambulance", True),)),
+    )
+
+    #: The ordinary member the guide-03 member-view shots sign in as, beside
+    #: the demo member: they file no shift reports and have one approved
+    #: exchange, so their Requests and Shift Reports tabs are the "nothing
+    #: pending" states the guide pictures. Mirrors
+    #: ``DEMO_SECOND_MEMBER_CREDENTIALS`` in manifest.mjs.
+    SECOND_MEMBER_USERNAME = "snolan"
+
+    #: The member who raises the pending exchange the officer's Requests tab
+    #: reviews. Not the demo member, whose own Requests tab several shots
+    #: photograph in a known state.
+    EXCHANGE_REQUESTER_USERNAME = "rduarte"
+
+    HISTORY_IMPORT_FILENAME = "station-log-august-2026.csv"
+
+    def seed_guide03_scheduling(self) -> None:
+        """State the scheduling guide pictures that nothing else seeds."""
+        self._seed_outside_apparatus()
+        self._seed_member_exchanges()
+        self._seed_history_import_draft()
+        self._seed_earlier_month_report()
+
+    def _user_ids_by_username(self) -> dict[str, str]:
+        return {
+            str(pick(u, "username")): str(pick(u, "id"))
+            for u in items(self.api.get("/users?limit=200"), "users")
+            if pick(u, "id")
+        }
+
+    def _seed_outside_apparatus(self) -> None:
+        """Two outside departments, and shifts members logged on their units.
+
+        The Outside Apparatus settings section, the member's "Shifts with
+        other departments" card and the Member Hours report's outside tables
+        all read these. One unit is turned off, which the settings shot shows,
+        and one of the demo member's entries is rejected, so the card carries a
+        **Not counted** row with its reason. Entries are logged before the unit
+        is turned off: a member cannot pick an inactive unit, and the history
+        a department keeps from before it retired one is the realistic case.
+        """
+        agencies = {
+            str(pick(a, "name")): a
+            for a in items(
+                self.api.get("/scheduling/external-hours/agencies"), "agencies"
+            )
+        }
+        units: dict[str, str] = {}
+        retire: list[str] = []
+        for agency_name, apparatus in self.OUTSIDE_AGENCIES:
+            agency = agencies.get(agency_name) or self.api.post(
+                "/scheduling/external-hours/agencies", {"name": agency_name}
+            )
+            have = {str(pick(u, "name")): u for u in (pick(agency, "apparatus") or [])}
+            for unit_name, unit_type, active in apparatus:
+                unit = have.get(unit_name) or self.api.post(
+                    f"/scheduling/external-hours/agencies/{pick(agency, 'id')}"
+                    "/apparatus",
+                    {"name": unit_name, "apparatus_type": unit_type},
+                )
+                units[unit_name] = str(pick(unit, "id"))
+                if not active and pick(unit, "is_active") is not False:
+                    retire.append(units[unit_name])
+
+        existing = items(self.api.get("/scheduling/external-hours?limit=100"), "items")
+        if not existing:
+            ids = self._user_ids_by_username()
+            demo = Api(self.base_url)
+            demo.login_as(DEMO_MEMBER_USERNAME, DEMO_MEMBER_PASSWORD)
+
+            def log(
+                session: Api,
+                days_ago: int,
+                start_hour: int,
+                hours: int,
+                unit: str,
+                role: str,
+                notes: str = "",
+            ) -> dict:
+                day = TODAY - timedelta(days=days_ago)
+                start = datetime.combine(
+                    day, time(start_hour), tzinfo=ORG_TIMEZONE
+                ).astimezone(timezone.utc)
+                end = start + timedelta(hours=hours)
+                return session.post(
+                    "/scheduling/external-hours",
+                    {
+                        "start_at": start.isoformat().replace("+00:00", "Z"),
+                        "end_at": end.isoformat().replace("+00:00", "Z"),
+                        "external_apparatus_id": units[unit],
+                        "role": role,
+                        **({"notes": notes} if notes else {}),
+                    },
+                )
+
+            log(demo, 6, 7, 12, "Engine 21", "Firefighter")
+            log(demo, 13, 19, 12, "Ambulance 58", "EMT", "Covered their night car.")
+            rejected = log(demo, 20, 8, 10, "Tanker 23", "Driver")
+            other_name = "vbrennan"
+            if ids.get(other_name):
+                other = self.member_session(self.base_url, ids[other_name], other_name)
+                log(other, 9, 7, 24, "Engine 21", "Firefighter")
+                log(other, 24, 18, 12, "Tanker 23", "Firefighter")
+            self.api.post(
+                f"/scheduling/external-hours/{pick(rejected, 'id')}/reject",
+                {
+                    "reason": (
+                        "Township's roster has you on standby that day, not "
+                        "on the tanker. See Lt. Vance if that is wrong."
+                    )
+                },
+            )
+        for unit_id in retire:
+            self.api.patch(
+                f"/scheduling/external-hours/apparatus/{unit_id}",
+                {"is_active": False},
+            )
+
+    def _seed_member_exchanges(self) -> None:
+        """One approved exchange, and one pending exchange for the officer.
+
+        The approved one belongs to the second member, whose Requests tab then
+        shows the default Pending view empty with its "Showing pending requests
+        only" line. The pending one is what the officer's Requests tab reviews.
+        Both trade seats on shifts weeks out, so the near-term rosters other
+        shots photograph keep their crews.
+        """
+        ids = self._user_ids_by_username()
+        swaps = items(
+            self.api.get("/scheduling/swap-requests?limit=200"),
+            "requests",
+            "swap_requests",
+        )
+        avoid = {ids.get(DEMO_MEMBER_USERNAME), ids.get(DEMO_ADMIN_USERNAME)}
+
+        def raise_exchange(username: str, reason: str) -> dict | None:
+            user_id = ids.get(username)
+            if not user_id:
+                self.blocked.append(f"guide 03 exchanges: no member {username}")
+                return None
+            if any(
+                str(pick(s, "requesting_user_id", "requestingUserId")) == user_id
+                for s in swaps
+            ):
+                return None
+            session = self.member_session(self.base_url, user_id, username)
+            horizon = str(TODAY + timedelta(days=21))
+            mine = sorted(
+                (
+                    s
+                    for s in items(
+                        session.get("/scheduling/my-shifts?limit=50"), "shifts"
+                    )
+                    if str(pick(s, "shift_date", "shiftDate") or "") >= horizon
+                ),
+                key=lambda s: str(pick(s, "shift_date", "shiftDate") or ""),
+            )
+            for shift in mine:
+                candidates = [
+                    c
+                    for c in session.get(
+                        f"/scheduling/shifts/{pick(shift, 'id')}/exchange-candidates"
+                    )
+                    or []
+                    if str(pick(c, "shift_date") or "") >= horizon
+                    and str(pick(c, "user_id")) not in avoid
+                ]
+                if candidates:
+                    pair = candidates[0]
+                    return session.post(
+                        "/scheduling/swap-requests",
+                        {
+                            "offering_shift_id": pick(shift, "id"),
+                            "requesting_shift_id": pick(pair, "shift_id"),
+                            "target_user_id": pick(pair, "user_id"),
+                            "reason": reason,
+                        },
+                    )
+            self.blocked.append(
+                f"guide 03 exchanges: {username} has no seat to exchange"
+            )
+            return None
+
+        approved = raise_exchange(
+            self.SECOND_MEMBER_USERNAME,
+            "Daughter's recital is that evening; this keeps both crews whole.",
+        )
+        if approved and pick(approved, "id"):
+            self.api.post(
+                f"/scheduling/swap-requests/{pick(approved, 'id')}/review",
+                {"status": "approved", "reviewer_notes": "Both seats covered."},
+            )
+        raise_exchange(
+            self.EXCHANGE_REQUESTER_USERNAME,
+            "Swapping so I can make the county EMS refresher that day.",
+        )
+
+    EARLIER_REPORT_NOTE = "Guide 03: last month's engine shift"
+
+    def _seed_earlier_month_report(self) -> None:
+        """One shift report about a shift in the previous calendar month.
+
+        "Reports written per month" draws only when the officer's reports span
+        more than one month, and every report ``seed_shift_reports`` files is
+        against the rolling roster, which mid-month lies wholly in the current
+        one. So the chart never rendered. The roster has no crewed shift last
+        month, so this creates one, records a member's attendance (a report can
+        only be about someone who was on the shift) and files the report.
+        Never about the demo member or the second member, whose report views
+        other shots photograph.
+        """
+        analytics = self.api.get("/training/shift-reports/officer-analytics") or {}
+        if len(pick(analytics, "monthly") or []) > 1:
+            return
+        ids = self._user_ids_by_username()
+        trainee_id = ids.get("mbell")
+        if not trainee_id:
+            self.blocked.append("guide 03: no member to report on last month")
+            return
+        day = TODAY.replace(day=1) - timedelta(days=10)
+        existing = [
+            sh
+            for sh in items(
+                self.api.get(f"/scheduling/shifts?start_date={day}&end_date={day}"),
+                "shifts",
+            )
+            if pick(sh, "notes") == self.EARLIER_REPORT_NOTE
+        ]
+        start = datetime.combine(day, time(7), tzinfo=ORG_TIMEZONE)
+        end = start + timedelta(hours=12)
+        if existing:
+            shift_id = str(pick(existing[0], "id"))
+        else:
+            shift = self.api.post(
+                "/scheduling/shifts",
+                {
+                    "shift_date": str(day),
+                    "start_time": iso(start.astimezone(timezone.utc)),
+                    "end_time": iso(end.astimezone(timezone.utc)),
+                    "notes": self.EARLIER_REPORT_NOTE,
+                },
+            )
+            shift_id = str(pick(shift, "id"))
+            self.api.post(
+                f"/scheduling/shifts/{shift_id}/attendance",
+                {
+                    "user_id": trainee_id,
+                    "checked_in_at": iso(start.astimezone(timezone.utc)),
+                    "checked_out_at": iso(end.astimezone(timezone.utc)),
+                },
+            )
+        self.api.post(
+            "/training/shift-reports",
+            {
+                "shift_id": shift_id,
+                "shift_date": str(day),
+                "trainee_id": trainee_id,
+                "hours_on_shift": 12.0,
+                "calls_responded": 2,
+                "performance_rating": 4,
+                "officer_narrative": (
+                    "Solid shift on the engine. Ran the pump on the alarm "
+                    "call and kept the crew informed."
+                ),
+            },
+        )
+
+    def _seed_history_import_draft(self) -> None:
+        """A draft shift-history import, never committed.
+
+        The import screens show what a department's old records look like
+        before they reach the schedule: exact and approximate name matches, a
+        member no longer on the roster, and a shift on another department's
+        unit. Committing would write past shifts into every hours figure other
+        guides photograph, so the draft stays a draft.
+        """
+        drafts = items(self.api.get("/scheduling/history-import"), "imports")
+        if any(
+            pick(d, "source_filename", "sourceFilename") == self.HISTORY_IMPORT_FILENAME
+            for d in drafts
+        ):
+            return
+        rows = [
+            (
+                "member_name",
+                "unit",
+                "agency",
+                "position",
+                "date",
+                "start_time",
+                "end_time",
+                "call_count",
+            ),
+            ("Marcus Bell", "E-1", "", "Driver", "2026-08-03", "07:00", "19:00", "3"),
+            (
+                "Priya Raman",
+                "E-1",
+                "",
+                "Firefighter",
+                "2026-08-03",
+                "07:00",
+                "19:00",
+                "3",
+            ),
+            ("Ruiz, Dana", "E-1", "", "Officer", "2026-08-03", "07:00", "19:00", "3"),
+            (
+                "Tobias Lindqvist",
+                "L-4",
+                "",
+                "Officer",
+                "2026-08-04",
+                "08:00",
+                "20:00",
+                "1",
+            ),
+            ("H. Vance", "L-4", "", "Firefighter", "2026-08-04", "08:00", "20:00", "1"),
+            (
+                "Nadia Belhaj",
+                "L-4",
+                "",
+                "Firefighter",
+                "2026-08-04",
+                "08:00",
+                "20:00",
+                "1",
+            ),
+            (
+                "Sofia Marchetti",
+                "E-2",
+                "",
+                "Driver",
+                "2026-08-05",
+                "19:00",
+                "07:00",
+                "2",
+            ),
+            (
+                "Owen Kitteridge",
+                "E-2",
+                "",
+                "Officer",
+                "2026-08-05",
+                "19:00",
+                "07:00",
+                "2",
+            ),
+            (
+                "Gary Whitmore",
+                "E-2",
+                "",
+                "Firefighter",
+                "2026-08-05",
+                "19:00",
+                "07:00",
+                "2",
+            ),
+            (
+                "Emeka Adeyemi",
+                "Engine 21",
+                "Township Fire Company",
+                "Firefighter",
+                "2026-08-09",
+                "07:00",
+                "19:00",
+                "4",
+            ),
+        ]
+        text = "".join(",".join(f'"{cell}"' for cell in row) + "\r\n" for row in rows)
+        self.api.post_multipart(
+            "/scheduling/history-import",
+            {"timezone": "America/New_York"},
+            [("file", self.HISTORY_IMPORT_FILENAME, text.encode(), "text/csv")],
+        )
 
     def seed_shift_reports(self, members: list[dict]) -> list[dict]:
         """Filed, draft, pending-review and flagged shift completion reports.
@@ -14006,6 +15462,655 @@ class Seeder:
             return
         self.api.patch(f"/inventory/items/{pick(coat, 'id')}", {"quantity": 0})
 
+    # -- guide 05: states the inventory guide's later screenshots picture ----
+
+    # A shelf nested inside the Quartermaster Shelving, so that area holds both
+    # items and another area (what the Delete dialog refuses on), and so the
+    # NFC shots have a small shelf with two known items on it.
+    GUIDE05_PARENT_AREA = "Quartermaster Shelving"
+    GUIDE05_SHELF = "Top Shelf"
+    GUIDE05_SHELF_ITEMS = ("Structural Coat — M", "Structural Coat — S")
+    # Tag serials are invented and only ever shown as their last four
+    # characters. The first is the one the NFC shots type.
+    GUIDE05_TAGS = (
+        ("Structural Coat — M", "04C3A91F2B6E80", "Inside left cuff", False),
+        ("Structural Coat — M", "04D7752E8A1F33", "Collar", True),
+        ("Structural Coat — S", "04A9C3E5F70B12", "Inside right cuff", False),
+        ("SCBA Spare Cylinder", "04E1186C3D9A57", "Valve guard", False),
+    )
+    GUIDE05_POOL_ITEM = "Firefighting Gloves"
+    GUIDE05_POOL_HOLDERS = ((DEMO_MEMBER_USERNAME, 2), ("rduarte", 1), ("vbrennan", 2))
+    # The member with nothing issued, lent or requested. Their shirt size on
+    # file is one the department never stocks the polo in, which is what makes
+    # the request form offer it as "not stocked".
+    GEARLESS_MEMBER_USERNAME = "dokonkwo"
+    GUIDE05_UNSTOCKED_PRODUCT = "Department Polo"
+    GUIDE05_UNSTOCKED_SIZE = "XXL"
+    GUIDE05_REORDER_NAME = "Rescue Rope, 150 ft"
+
+    def seed_guide05_states(self) -> None:
+        """Records the second batch of guide-05 screenshots picture.
+
+        Each part is idempotent on the state it makes rather than on a marker,
+        so a re-run adds nothing. NFC tracking has to be on for the tag, tap
+        and audit calls, and is switched back off at the end: the demo ships
+        with it off, as the guide says a department does.
+        """
+        catalog = items(self.api.get("/inventory/items?limit=500"), "items")
+        by_name = {pick(i, "name"): i for i in catalog}
+
+        shelf_id = self._guide05_shelf()
+        self.api.patch(
+            "/organization/settings", {"inventory": {"nfc_tracking_enabled": True}}
+        )
+        try:
+            if shelf_id:
+                self._guide05_nfc(shelf_id, by_name)
+        finally:
+            self.api.patch(
+                "/organization/settings",
+                {"inventory": {"nfc_tracking_enabled": False}},
+            )
+        self._guide05_pool_issuances(by_name)
+        self._guide05_requests(by_name)
+        self._guide05_gearless_member()
+        self._guide05_unlinked_order()
+
+    def _guide05_shelf(self) -> str | None:
+        areas = flatten_storage_areas(self.api.get("/inventory/storage-areas"))
+        parent = next(
+            (a for a in areas if pick(a, "name") == self.GUIDE05_PARENT_AREA), None
+        )
+        if parent is None:
+            return None
+        shelf = next(
+            (
+                a
+                for a in areas
+                if pick(a, "name") == self.GUIDE05_SHELF
+                and pick(a, "parent_id") == pick(parent, "id")
+            ),
+            None,
+        )
+        if shelf is None:
+            shelf = self.api.post(
+                "/inventory/storage-areas",
+                {
+                    "name": self.GUIDE05_SHELF,
+                    "label": "QM-01-T",
+                    "storage_type": "shelf",
+                    "parent_id": pick(parent, "id"),
+                    "location_id": pick(parent, "location_id"),
+                },
+            )
+        return pick(shelf, "id")
+
+    def _guide05_nfc(self, shelf_id: str, by_name: dict[str, dict]) -> None:
+        # Put away by tap, so each coat's Last Seen reads "Moved from Turnout
+        # Gear Racks to Top Shelf" rather than nothing.
+        for name in self.GUIDE05_SHELF_ITEMS:
+            item = by_name.get(name)
+            if item and pick(item, "storage_area_id") != shelf_id:
+                self.api.post(
+                    "/inventory/nfc/put-away",
+                    {"item_id": pick(item, "id"), "storage_area_id": shelf_id},
+                )
+
+        for name, serial, label, lost in self.GUIDE05_TAGS:
+            item = by_name.get(name)
+            if item is None:
+                continue
+            item_id = pick(item, "id")
+            tags = items(self.api.get(f"/inventory/items/{item_id}/nfc-tags"), "items")
+            if any(pick(t, "label") == label for t in tags):
+                continue
+            tag = self.api.post(
+                f"/inventory/items/{item_id}/nfc-tags",
+                {"tag_uid": serial, "credential_type": "serial", "label": label},
+            )
+            if lost:
+                self.api.patch(
+                    f"/inventory/nfc-tags/{pick(tag, 'id')}", {"status": "lost"}
+                )
+
+        # One saved audit of the shelf, so the coat's Last Seen also carries a
+        # "Found on Top Shelf during a shelf audit" row and the shelf reads as
+        # audited on the schedule.
+        audits = items(self.api.get("/inventory/nfc/audits"), "items", "audits")
+        if not any(pick(a, "storage_area_id") == shelf_id for a in audits):
+            coat = by_name.get(self.GUIDE05_SHELF_ITEMS[0])
+            if coat:
+                self.api.post(
+                    "/inventory/nfc/audits",
+                    {
+                        "storage_area_id": shelf_id,
+                        "tapped": [{"item_id": pick(coat, "id")}],
+                    },
+                )
+
+        # On the schedule: the audited shelf monthly (next due in a month), and
+        # the never-audited Uniform Bins quarterly (due now).
+        areas = flatten_storage_areas(self.api.get("/inventory/storage-areas"))
+        bins = next((a for a in areas if pick(a, "name") == "Uniform Bins"), None)
+        for area_id, frequency in (
+            (shelf_id, "monthly"),
+            (pick(bins or {}, "id"), "quarterly"),
+        ):
+            if area_id:
+                self.api.put(
+                    f"/inventory/storage-areas/{area_id}/audit-schedule",
+                    {"audit_frequency": frequency},
+                )
+
+    def _guide05_pool_issuances(self, by_name: dict[str, dict]) -> None:
+        """Gloves issued to three members, and a return notice for two pairs."""
+        gloves = by_name.get(self.GUIDE05_POOL_ITEM)
+        if gloves is None:
+            return
+        item_id = pick(gloves, "id")
+        issuances = self.api.get(f"/inventory/items/{item_id}/issuances") or []
+        holders = {
+            str(pick(i, "user_id")): i for i in issuances if not pick(i, "returned_at")
+        }
+        member_issuance = None
+        for username, quantity in self.GUIDE05_POOL_HOLDERS:
+            user_id = self._user_id(username)
+            if not user_id:
+                continue
+            issuance = holders.get(user_id)
+            if issuance is None:
+                issuance = self.api.post(
+                    f"/inventory/items/{item_id}/issue",
+                    {
+                        "user_id": user_id,
+                        "quantity": quantity,
+                        "issue_reason": "Replacement pairs",
+                        "override_allowance": True,
+                    },
+                )
+            if username == DEMO_MEMBER_USERNAME:
+                member_issuance = issuance
+        if member_issuance is None:
+            return
+
+        open_returns = items(
+            self.api.get("/inventory/return-requests?status=requested"), "items"
+        )
+        if any(pick(r, "item_id") == item_id for r in open_returns):
+            return
+        member = self.member_session(
+            self.base_url, self._user_id(DEMO_MEMBER_USERNAME), DEMO_MEMBER_USERNAME
+        )
+        member.post(
+            "/inventory/return-requests",
+            {
+                "return_type": "issuance",
+                "item_id": item_id,
+                "issuance_id": pick(member_issuance, "id"),
+                "quantity_returning": 2,
+                "reported_condition": "good",
+                "member_notes": "Both pairs are worn through at the palm.",
+            },
+        )
+
+    def _guide05_requests(self, by_name: dict[str, dict]) -> None:
+        """The demo member's requests: one issued, one declined with a note,
+        and one awaiting review for a size the department does not stock."""
+        existing = items(self.api.get("/inventory/requests?limit=200"), "requests")
+        names = {pick(r, "item_name") for r in existing}
+        member = None
+
+        def session() -> Api:
+            nonlocal member
+            if member is None:
+                member = self.member_session(
+                    self.base_url,
+                    self._user_id(DEMO_MEMBER_USERNAME),
+                    DEMO_MEMBER_USERNAME,
+                )
+            return member
+
+        shirt = by_name.get("Job Shirt")
+        if shirt and "Job Shirt" not in names:
+            request = session().post(
+                "/inventory/requests",
+                {
+                    "item_name": "Job Shirt",
+                    "item_id": pick(shirt, "id"),
+                    "quantity": 1,
+                    "requested_duration": "ongoing",
+                    "priority": "normal",
+                    "reason": "My only job shirt tore on the ladder drill.",
+                },
+            )
+            request_id = pick(request, "id")
+            self.api.put(
+                f"/inventory/requests/{request_id}/review",
+                {"status": "approved", "review_notes": "Issued from stock."},
+            )
+            self.api.put(
+                f"/inventory/requests/{request_id}/fulfill",
+                {
+                    "fulfillment_type": "issuance",
+                    "quantity": 1,
+                    "override_allowance": True,
+                },
+            )
+
+        gloves = by_name.get(self.GUIDE05_POOL_ITEM)
+        if gloves and self.GUIDE05_POOL_ITEM not in names:
+            request = session().post(
+                "/inventory/requests",
+                {
+                    "item_name": self.GUIDE05_POOL_ITEM,
+                    "item_id": pick(gloves, "id"),
+                    "quantity": 1,
+                    "requested_duration": "ongoing",
+                    "priority": "normal",
+                    "reason": "A spare pair for the car.",
+                },
+            )
+            self.api.put(
+                f"/inventory/requests/{pick(request, 'id')}/review",
+                {
+                    "status": "denied",
+                    "review_notes": (
+                        "Two pairs are already issued to you. Bring a worn pair "
+                        "in and we will swap it."
+                    ),
+                },
+            )
+
+        polo = next(
+            (
+                i
+                for name, i in by_name.items()
+                if (name or "").startswith(self.GUIDE05_UNSTOCKED_PRODUCT)
+            ),
+            None,
+        )
+        if polo and self.GUIDE05_UNSTOCKED_PRODUCT not in names:
+            session().post(
+                "/inventory/requests",
+                {
+                    "item_name": self.GUIDE05_UNSTOCKED_PRODUCT,
+                    "category_id": pick(polo, "category_id"),
+                    "quantity": 1,
+                    "requested_duration": "ongoing",
+                    "priority": "normal",
+                    "requested_size": self.GUIDE05_UNSTOCKED_SIZE,
+                    "reason": "For the open house next month.",
+                },
+            )
+
+    def _guide05_gearless_member(self) -> None:
+        """Sign the gearless member in once, and give them an unstocked size.
+
+        The session is what clears the must-change-password flag every created
+        account carries, so the capture can sign in as them.
+        """
+        user_id = self._user_id(self.GEARLESS_MEMBER_USERNAME)
+        if not user_id:
+            return
+        self.member_session(self.base_url, user_id, self.GEARLESS_MEMBER_USERNAME)
+        prefs = {}
+        try:
+            prefs = self.api.get(f"/inventory/members/{user_id}/size-preferences") or {}
+        except ApiError as exc:
+            if exc.code != 404:
+                raise
+        if pick(prefs, "shirt_size") == self.GUIDE05_UNSTOCKED_SIZE.lower():
+            return
+        self.api.call(
+            "PUT",
+            f"/inventory/members/{user_id}/size-preferences",
+            {
+                "shirt_size": self.GUIDE05_UNSTOCKED_SIZE.lower(),
+                "shirt_style": "polo",
+                "jacket_size": "m",
+                "glove_size": "m",
+                "boot_size": "8",
+                "boot_width": "D",
+                "hat_size": "7",
+            },
+        )
+
+    def _guide05_unlinked_order(self) -> None:
+        """A reorder placed with the vendor but never linked to an item."""
+        existing = items(self.api.get("/inventory/reorder-requests"), "requests")
+        if any(pick(r, "item_name") == self.GUIDE05_REORDER_NAME for r in existing):
+            return
+        order = self.api.post(
+            "/inventory/reorder-requests",
+            {
+                "item_name": self.GUIDE05_REORDER_NAME,
+                "quantity_requested": 2,
+                "vendor": "Allegheny Rescue Supply",
+                "estimated_unit_cost": "189.00",
+                "urgency": "normal",
+                "notes": "Replacing the two ropes retired after the annual inspection.",
+            },
+        )
+        for action in ("approve", "mark_ordered"):
+            order = self.api.post(
+                f"/inventory/reorder-requests/{pick(order, 'id')}/transition",
+                {
+                    "action": action,
+                    "expected_version": pick(order, "version") or 1,
+                    **(
+                        {
+                            "vendor": "Allegheny Rescue Supply",
+                            "purchase_order_number": "PO-2026-0418",
+                        }
+                        if action == "mark_ordered"
+                        else {}
+                    ),
+                },
+            )
+
+    # -- guide 02: states the training guide's screenshots picture ----------
+
+    # A submission the officer approved after lowering its hours, and one sent
+    # back for changes. Both are the demo member's, so the notices land in the
+    # inbox the member shots sign in to.
+    GUIDE02_CHANGED_COURSE = "S-190: Introduction to Wildland Fire Behavior"
+    GUIDE02_RETURNED_COURSE = "Vehicle Extrication Awareness"
+    # Submissions still waiting on an officer, each filed by a different member
+    # so the Training Officer's inbox stacks two prompts rather than one.
+    GUIDE02_PENDING = (
+        ("cfrazier", "Hazardous Materials Awareness Refresher", 3.0),
+        ("rduarte", "Rapid Intervention Crew Operations", 6.0),
+    )
+    # The member holding the Training Officer position, who is prompted in the
+    # inbox for each submission. The demo department otherwise has nobody in
+    # it, and a department with nobody in the position gets no prompt.
+    # Must match DEMO_TRAINING_OFFICER_CREDENTIALS in manifest.mjs.
+    TRAINING_OFFICER_USERNAME = "hvance"
+    TRAINING_OFFICER_POSITION = "Training Officer"
+    GUIDE02_SESSION_TITLE = "Ventilation Drill"
+    GUIDE02_SESSION_ATTENDEES = (DEMO_MEMBER_USERNAME, "cfrazier", "rduarte")
+    GUIDE02_LEAVE_REASON = "Recovering from a shoulder injury (off duty)."
+
+    def seed_guide02_states(self) -> None:
+        """Records the training guide's screenshots picture.
+
+        Each part is idempotent on the state it makes, so a re-run adds
+        nothing unless that state has moved on (an approval decided or past
+        its deadline is replaced).
+        """
+        self._guide02_submission_decisions()
+        self._guide02_pending_submissions()
+        self._guide02_pending_approval()
+        self._guide02_leave_month()
+        self._guide02_earlier_year()
+
+    def _guide02_submission_decisions(self) -> None:
+        user_id = self._user_id(DEMO_MEMBER_USERNAME)
+        if not user_id:
+            return
+        member = self.member_session(self.base_url, user_id, DEMO_MEMBER_USERNAME)
+        mine = {
+            pick(s, "course_name")
+            for s in items(member.get("/training/submissions/my"), "submissions")
+        }
+        if self.GUIDE02_CHANGED_COURSE not in mine:
+            submission = member.post(
+                "/training/submissions",
+                {
+                    "course_name": self.GUIDE02_CHANGED_COURSE,
+                    "training_type": "continuing_education",
+                    "description": "NWCG online course, then the classroom day.",
+                    "completion_date": str(TODAY - timedelta(days=12)),
+                    "hours_completed": 3.0,
+                    "instructor": "Virginia Department of Forestry",
+                },
+            )
+            # Approving with lower hours is what sends the "approved with
+            # changes" notice; a plain approval tells the member nothing.
+            self.api.post(
+                f"/training/submissions/{pick(submission, 'id')}/review",
+                {
+                    "action": "approve",
+                    "override_hours": 2.0,
+                    "reviewer_notes": (
+                        "The certificate shows a two-hour online module; the "
+                        "classroom day is credited separately."
+                    ),
+                },
+            )
+        if self.GUIDE02_RETURNED_COURSE not in mine:
+            submission = member.post(
+                "/training/submissions",
+                {
+                    "course_name": self.GUIDE02_RETURNED_COURSE,
+                    "training_type": "continuing_education",
+                    "description": "County rescue squad's evening class.",
+                    "completion_date": str(TODAY - timedelta(days=6)),
+                    "hours_completed": 4.0,
+                    "instructor": "Fairfax County Rescue Squad",
+                },
+            )
+            self.api.post(
+                f"/training/submissions/{pick(submission, 'id')}/review",
+                {
+                    "action": "revision_requested",
+                    "reviewer_notes": (
+                        "Please attach the sign-in sheet or certificate, and "
+                        "add the instructor's name as it appears on it."
+                    ),
+                },
+            )
+
+    def _guide02_training_officer(self) -> Api | None:
+        """Put a member in the Training Officer position and sign them in.
+
+        The session also clears the must-change-password flag, so the capture
+        can sign in as them.
+        """
+        username = self.TRAINING_OFFICER_USERNAME
+        if not self._ensure_role(username, self.TRAINING_OFFICER_POSITION):
+            return None
+        return self.member_session(self.base_url, self._user_id(username), username)
+
+    def _guide02_pending_submissions(self) -> None:
+        """Submissions awaiting approval, each with the officer's prompt.
+
+        A prompt is written when a submission arrives, so one filed before the
+        position was held has none. Such a submission is withdrawn and filed
+        again rather than left promptless.
+        """
+        officer = self._guide02_training_officer()
+        prompts = set()
+        if officer is not None:
+            prompts = {
+                str(pick(log, "subject") or "")
+                for log in items(officer.get("/notifications/my?limit=100"), "logs")
+            }
+        pending = {
+            pick(s, "course_name"): s
+            for s in items(self.api.get("/training/submissions/pending"))
+        }
+        users = items(self.api.get("/users?limit=200"), "users")
+        for username, course, hours in self.GUIDE02_PENDING:
+            user = next((u for u in users if pick(u, "username") == username), None)
+            if user is None:
+                continue
+            name = f"{pick(user, 'first_name')} {pick(user, 'last_name')}"
+            prompted = f"Training submission awaiting approval — {name}" in prompts
+            existing = pending.get(course)
+            if existing is not None and (prompted or officer is None):
+                continue
+            member = self.member_session(self.base_url, str(pick(user, "id")), username)
+            if existing is not None:
+                member.delete(f"/training/submissions/{pick(existing, 'id')}")
+            member.post(
+                "/training/submissions",
+                {
+                    "course_name": course,
+                    "training_type": "continuing_education",
+                    "completion_date": str(TODAY - timedelta(days=4)),
+                    "hours_completed": hours,
+                    "instructor": "Northern Virginia Fire Academy",
+                },
+            )
+
+    def _guide02_pending_approval(self) -> None:
+        """A finished training session whose credit waits on an officer.
+
+        The session requires instructor confirmation, so finalizing it leaves
+        a pending approval with a link token instead of crediting the members.
+        Replaced when the approval is no longer pending or its deadline is
+        near, so the approval page always has something to approve.
+        """
+        events = items(
+            self.api.get("/events?event_type=training&include_drafts=true&limit=500"),
+            "events",
+        )
+        for event in events:
+            if pick(event, "title") != self.GUIDE02_SESSION_TITLE:
+                continue
+            try:
+                summary = self.api.get(
+                    f"/training/sessions/by-event/{pick(event, 'id')}/approval"
+                )
+            except ApiError as exc:
+                if exc.code != 404:
+                    raise
+                summary = {}
+            deadline = str(pick(summary, "approval_deadline") or "")[:10]
+            if (
+                pick(summary, "status") == "pending"
+                and not pick(summary, "expired")
+                and deadline > str(TODAY + timedelta(days=3))
+            ):
+                return
+            # A finalized event cannot be deleted until its attendance is
+            # reopened, which also withdraws the stale approval.
+            event_id = pick(event, "id")
+            try:
+                self.api.post(
+                    f"/events/{event_id}/reopen-attendance",
+                    {"reason": "Replacing the screenshot fixture"},
+                )
+            except ApiError as exc:
+                if exc.code not in (400, 409):
+                    raise
+            self.api.delete(f"/events/{event_id}")
+
+        # Sent as UTC, as everywhere else in this file: the API stores the wall
+        # time it is given.
+        start = datetime.combine(
+            TODAY - timedelta(days=2), time(19, 0), tzinfo=ORG_TIMEZONE
+        ).astimezone(timezone.utc)
+        end = start + timedelta(hours=3)
+        session = self.api.post(
+            "/training/sessions",
+            {
+                "title": self.GUIDE02_SESSION_TITLE,
+                "description": "Vertical and horizontal ventilation on the "
+                "acquired structure.",
+                "location": "Station 1 Training Ground",
+                "start_datetime": iso(start),
+                "end_datetime": iso(end),
+                "requires_rsvp": False,
+                "course_name": "Ventilation Operations",
+                "training_type": "skills_practice",
+                "credit_hours": 3.0,
+                "instructor": "Capt. Ortiz",
+                "auto_create_records": True,
+                "require_completion_confirmation": True,
+                "approval_deadline_days": 30,
+            },
+        )
+        event_id = pick(session, "event_id")
+        # Different arrival and departure times, so the roster's credited
+        # minutes differ row to row.
+        for username, late, early in zip(
+            self.GUIDE02_SESSION_ATTENDEES, (0, 10, 25), (0, 0, 40)
+        ):
+            user_id = self._user_id(username)
+            if not user_id:
+                continue
+            self.api.post(
+                f"/events/{event_id}/add-attendee",
+                {"user_id": user_id, "status": "going", "checked_in": True},
+            )
+            self.api.patch(
+                f"/events/{event_id}/rsvps/{user_id}/override",
+                {
+                    "override_check_in_at": iso(start + timedelta(minutes=late)),
+                    "override_check_out_at": iso(end - timedelta(minutes=early)),
+                },
+            )
+        self.api.post(f"/training/sessions/{pick(session, 'id')}/finalize")
+
+    def _guide02_leave_month(self) -> None:
+        """A month of leave inside this year, for the monthly-hours strip.
+
+        Two months back, so it sits in a calendar-year requirement's window and
+        has finished. Skipped in January and February, when that month would
+        fall in the previous year.
+        """
+        if TODAY.month < 3:
+            return
+        user_id = self._user_id(DEMO_MEMBER_USERNAME)
+        if not user_id:
+            return
+        leaves = items(self.api.get(f"/users/{user_id}/leaves-of-absence"))
+        if any(pick(lv, "reason") == self.GUIDE02_LEAVE_REASON for lv in leaves):
+            return
+        first = date(TODAY.year, TODAY.month - 2, 1)
+        last = date(TODAY.year, TODAY.month - 1, 1) - timedelta(days=1)
+        self.api.post(
+            "/users/leaves-of-absence",
+            {
+                "user_id": user_id,
+                "leave_type": "medical",
+                "reason": self.GUIDE02_LEAVE_REASON,
+                "start_date": str(first),
+                "end_date": str(last),
+            },
+        )
+
+    # Last year's records for the demo member, so the History tab has an
+    # earlier year to show closed beneath this one.
+    GUIDE02_EARLIER_RECORDS = (
+        ("Ropes and Knots Workshop", "skills_practice", 4.0, 9, 20),
+        ("Hazmat Operations Refresher", "refresher", 8.0, 3, 14),
+        ("Vehicle Rescue Awareness", "continuing_education", 6.0, 5, 2),
+    )
+
+    def _guide02_earlier_year(self) -> None:
+        user_id = self._user_id(DEMO_MEMBER_USERNAME)
+        if not user_id:
+            return
+        year = TODAY.year - 1
+        on_file = {
+            (pick(r, "course_name"), str(pick(r, "completion_date") or "")[:4])
+            for r in items(
+                self.api.get(f"/training/records?user_id={user_id}&limit=200"),
+                "records",
+            )
+        }
+        for course, kind, hours, month, day in self.GUIDE02_EARLIER_RECORDS:
+            if (course, str(year)) in on_file:
+                continue
+            self.api.post(
+                "/training/records",
+                {
+                    "user_id": user_id,
+                    "course_name": course,
+                    "training_type": kind,
+                    "hours_completed": hours,
+                    "credit_hours": hours,
+                    "completion_date": str(date(year, month, day)),
+                    "status": "completed",
+                    "passed": True,
+                    "instructor": "Capt. Owen Kittredge",
+                    "location": "Training & Administration Center",
+                },
+            )
+
     def seed_meeting_stage_applicant(self) -> None:
         pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
         pipeline = next(
@@ -14093,6 +16198,261 @@ class Seeder:
                 f"meeting-stage applicant: on {prospect.get('current_step_name')!r}, "
                 f"not {self.MEETING_STAGE_NAME!r}"
             )
+
+    # ── Guide 15 states: checklist, sign-offs, withdrawn and inactive ──────
+    #
+    # A fourth pipeline, so none of these touch the default pipeline the other
+    # prospective-member shots are composed around. Its Onboarding stage could
+    # have carried the checklist, but `15-09-convert-modal` opens Convert on
+    # whoever sits there, and a two-item checklist would put a gate in front
+    # of that shot. The Withdrawn and Inactive tabs and the stat cards are per
+    # pipeline, so closed applicants parked here leave the default pipeline's
+    # header as it is.
+    GUIDE15_PIPELINE_NAME = "Reinstatement Pipeline"
+    GUIDE15_CHECKLIST_STAGE = "Return-to-Duty Checklist"
+    GUIDE15_CHECKLIST_ITEMS = ("Turnout gear fitted and issued", "SCBA fit test passed")
+    GUIDE15_APPROVAL_STAGE = "Chief and President approval"
+    # Office keys, the form a stage preset stores: a Fire Chief answers to
+    # "chief" through the office catalog (see _approval_roles_held).
+    GUIDE15_APPROVERS = ("chief", "president")
+    # Signs as President, then gives the position back: nobody in the demo
+    # holds it, and a member left holding it would gain its administrative
+    # grants and a "Needs you" row on their dashboard. The office is already
+    # hers (seed_officers), so she is the one a reader would expect.
+    GUIDE15_PRESIDENT_USERNAME = "smarchetti"
+    GUIDE15_CHECKLIST_APPLICANT = ("Nadia", "Ferreira", "nadia.ferreira@example.org")
+    GUIDE15_APPROVAL_APPLICANT = ("Dana", "Whitcomb", "dana.whitcomb@example.org")
+    GUIDE15_CLOSED_APPLICANTS = (
+        (
+            "Kofi",
+            "Mensah",
+            "kofi.mensah@example.org",
+            "withdrawn",
+            "Accepted a job out of state and moves in December.",
+        ),
+        (
+            "Lena",
+            "Park",
+            "lena.park@example.org",
+            "withdrawn",
+            "Rotating shifts at work leave no time for drills this year; "
+            "may reapply in the spring.",
+        ),
+        (
+            "Tomas",
+            "Reyes",
+            "tomas.reyes@example.org",
+            "inactive",
+            "No reply to three calls and two emails since August.",
+        ),
+        (
+            "Hannah",
+            "Cole",
+            "hannah.cole@example.org",
+            "inactive",
+            "Paperwork never returned.",
+        ),
+    )
+
+    def seed_guide15_states(self) -> None:
+        pipeline = self._guide15_pipeline()
+        pipeline_id = str(pick(pipeline, "id"))
+        steps = {
+            pick(s, "name"): s
+            for s in items(
+                self.api.get(f"/prospective-members/pipelines/{pipeline_id}/steps"),
+                "steps",
+            )
+        }
+
+        checklist = self._guide15_applicant(
+            self.GUIDE15_CHECKLIST_APPLICANT, pipeline_id
+        )
+        # Ticks are held by the drawer until the Advance that completes the
+        # stage, so the applicant is left with none: the capture ticks one in
+        # the browser and never advances.
+        if checklist.get("current_step_name") not in (
+            self.GUIDE15_CHECKLIST_STAGE,
+            self.GUIDE15_APPROVAL_STAGE,
+        ):
+            self.api.post(
+                f"/prospective-members/prospects/{pick(checklist, 'id')}/advance", {}
+            )
+
+        signer = self._guide15_applicant(self.GUIDE15_APPROVAL_APPLICANT, pipeline_id)
+        for _ in range(2):
+            if signer.get("current_step_name") == self.GUIDE15_APPROVAL_STAGE:
+                break
+            self.api.post(
+                f"/prospective-members/prospects/{pick(signer, 'id')}/advance",
+                {"completed_items": list(self.GUIDE15_CHECKLIST_ITEMS)},
+            )
+            signer = self._guide15_applicant(
+                self.GUIDE15_APPROVAL_APPLICANT, pipeline_id
+            )
+        approval_step = steps.get(self.GUIDE15_APPROVAL_STAGE)
+        if (
+            signer.get("current_step_name") != self.GUIDE15_APPROVAL_STAGE
+            or not approval_step
+        ):
+            self.blocked.append(
+                f"guide 15 states: {self.GUIDE15_APPROVAL_APPLICANT[0]} is on "
+                f"{signer.get('current_step_name')!r}, not the approval stage"
+            )
+        else:
+            self._guide15_president_signs(signer, str(pick(approval_step, "id")))
+
+        for first, last, email, wanted, reason in self.GUIDE15_CLOSED_APPLICANTS:
+            prospect = self._guide15_applicant((first, last, email), pipeline_id)
+            if prospect.get("status") != wanted:
+                self.api.post(
+                    f"/prospective-members/prospects/{pick(prospect, 'id')}/status",
+                    {"status": wanted, "reason": reason},
+                )
+
+    def _guide15_pipeline(self) -> dict:
+        pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
+        found = next(
+            (p for p in pipelines if p.get("name") == self.GUIDE15_PIPELINE_NAME), None
+        )
+        if found is not None:
+            return found
+        stages = [
+            (
+                "Reinstatement Request",
+                "manual_approval",
+                "The former member's request and the reason they left.",
+                {},
+            ),
+            (
+                self.GUIDE15_CHECKLIST_STAGE,
+                "checklist",
+                "Gear and fit testing before they ride again.",
+                {
+                    "items": [
+                        {"label": label} for label in self.GUIDE15_CHECKLIST_ITEMS
+                    ],
+                    "require_all": True,
+                },
+            ),
+            (
+                self.GUIDE15_APPROVAL_STAGE,
+                "multi_approval",
+                "Require Chief and President to both approve.",
+                {
+                    "required_approvers": list(self.GUIDE15_APPROVERS),
+                    "require_notes": False,
+                    "approval_order": "any",
+                },
+            ),
+        ]
+        return self.api.post(
+            "/prospective-members/pipelines",
+            {
+                "name": self.GUIDE15_PIPELINE_NAME,
+                "description": "Former members returning to the department.",
+                "is_default": False,
+                "is_active": True,
+                "steps": [
+                    {
+                        "name": name,
+                        "description": description,
+                        "step_type": step_type,
+                        "is_first_step": order == 0,
+                        "is_final_step": order == len(stages) - 1,
+                        "sort_order": order,
+                        "required": True,
+                        "config": config,
+                    }
+                    for order, (name, step_type, description, config) in enumerate(
+                        stages
+                    )
+                ],
+            },
+        )
+
+    def _guide15_applicant(self, who: tuple[str, str, str], pipeline_id: str) -> dict:
+        """The applicant by email, created on the pipeline when missing.
+
+        Re-read from the list rather than returned from the create: only the
+        list rows carry ``current_step_name``, which every caller branches on.
+        """
+        first, last, email = who
+
+        def lookup() -> dict | None:
+            found = items(
+                self.api.get(f"/prospective-members/prospects?limit=5&search={email}"),
+                "prospects",
+            )
+            return next((p for p in found if p.get("email") == email), None)
+
+        prospect = lookup()
+        if prospect is None:
+            self.api.post(
+                "/prospective-members/prospects",
+                {
+                    "first_name": first,
+                    "last_name": last,
+                    "email": email,
+                    "address_city": "Oakville",
+                    "address_state": "VA",
+                    "address_zip": "22046",
+                    "interest_reason": "Former member asking to return.",
+                    "referral_source": "Former member",
+                    "desired_membership_type": "active",
+                    "pipeline_id": pipeline_id,
+                },
+            )
+            prospect = lookup()
+        if prospect is None:
+            raise RuntimeError(f"guide 15 states: {email} not found after create")
+        return prospect
+
+    def _guide15_president_signs(self, prospect: dict, step_id: str) -> None:
+        detail = self.api.get(f"/prospective-members/prospects/{pick(prospect, 'id')}")
+        progress = next(
+            (
+                p
+                for p in detail.get("step_progress") or []
+                if str(pick(p, "step_id")) == step_id
+            ),
+            {},
+        )
+        signed = {
+            str(a.get("role", "")).casefold()
+            for a in (progress.get("action_result") or {}).get("approvals") or []
+            if isinstance(a, dict)
+        }
+        if "president" in signed:
+            return
+        username = self.GUIDE15_PRESIDENT_USERNAME
+        if not self._ensure_role(username, "President"):
+            self.blocked.append(f"guide 15 states: could not make {username} President")
+            return
+        try:
+            member = self.member_session(
+                self.base_url, self._user_id(username), username
+            )
+            member.post(
+                f"/prospective-members/prospects/{pick(prospect, 'id')}/approve-step",
+                {"step_id": step_id, "role": "president"},
+            )
+        finally:
+            self._remove_role(username, "President")
+
+    def _remove_role(self, username: str, role_name: str) -> None:
+        user_id = self._user_id(username)
+        roles = self.api.get("/roles")
+        role_id = next(
+            (
+                str(pick(r, "id"))
+                for r in (roles if isinstance(roles, list) else items(roles, "roles"))
+                if pick(r, "name") == role_name
+            ),
+            "",
+        )
+        if user_id and role_id:
+            self.api.delete(f"/users/{user_id}/roles/{role_id}")
 
     # A third pipeline, holding one applicant who is on no stage, for
     # `20-07-applicant-place-on-stage`. The Not on a stage panel renders only
@@ -15914,6 +18274,289 @@ class Seeder:
     # carries 4 approved hours, so the bar sits at half.
     MEMBER_HOURS_REQUIREMENT = ("Fundraising", 8)
 
+    #: The demo member's two entries that guide 08's "My Hours" shots picture:
+    #: (category, description, rejection reason or None). One stays pending, so
+    #: it shows Edit and Withdraw; the other is returned with a reason, so it
+    #: shows the red "Rejected: …" line and Edit & resubmit.
+    GUIDE08_HOURS_CORRECTIONS = [
+        ("Station Maintenance", "Hose tower light replacement", None),
+        (
+            "Administrative Work",
+            "Pre-plan walk-through at Oakville Mall",
+            "Pre-plan walk-throughs are logged as training, not administrative"
+            " hours",
+        ),
+    ]
+
+    #: Documentation-range address (RFC 5737), so the IP Security shots can
+    #: never picture a real client address.
+    GUIDE08_IP_EXCEPTION = "203.0.113.24"
+
+    #: Raised in the default Compliance box by an ordinary member, answering
+    #: its intake questions, so the box's reviewer has a submission whose
+    #: answers show. Not the demo member: their My submissions list is
+    #: pictured, and this would join it.
+    COMPLIANCE_SUBMITTER_USERNAME = "snolan"
+    COMPLIANCE_SUBMISSION_TITLE = "Bay door sensor on Engine 1 is not reversing"
+
+    def seed_guide07_states(self) -> dict[str, Any]:
+        """States guide 07 pictures that nothing else in the demo produces.
+
+        * One submission in the default Compliance box, answering both of its
+          intake questions (Safety, which opens the follow-up "Is anyone at
+          immediate risk?", then No), for the reviewer's view of intake
+          answers. Raised named, by an ordinary member. Its reviewer, the
+          Compliance Officer, is signed in once through ``member_session`` so
+          the capture harness can sign in as them without meeting a forced
+          password change.
+        """
+        result: dict[str, Any] = {}
+        reviewer_id = self._user_id(COMPLIANCE_OFFICER_USERNAME)
+        submitter_id = self._user_id(self.COMPLIANCE_SUBMITTER_USERNAME)
+        if not reviewer_id or not submitter_id:
+            self.blocked.append("guide 07: compliance reviewer or submitter missing")
+            return result
+        reviewer = self.member_session(
+            self.base_url, reviewer_id, COMPLIANCE_OFFICER_USERNAME
+        )
+        titles = {
+            pick(s, "title")
+            for s in items(reviewer.get("/suggestions/review?limit=200"), "items")
+        }
+        if self.COMPLIANCE_SUBMISSION_TITLE in titles:
+            return result
+        submitter = self.member_session(
+            self.base_url, submitter_id, self.COMPLIANCE_SUBMITTER_USERNAME
+        )
+        box_id = next(
+            (
+                str(pick(b, "id"))
+                for b in items(submitter.get("/suggestions/boxes"), "boxes")
+                if pick(b, "name") == "Compliance"
+            ),
+            "",
+        )
+        if not box_id:
+            self.blocked.append("guide 07: the default Compliance box is not open")
+            return result
+        submitter.post_multipart(
+            f"/suggestions/boxes/{box_id}/submissions",
+            {
+                "title": self.COMPLIANCE_SUBMISSION_TITLE,
+                "details": (
+                    "The safety reverse on bay 1 did not trip when I walked "
+                    "under the door during this morning's check. I stopped it "
+                    "by hand and taped off the bay. The door contractor has "
+                    "not been called yet."
+                ),
+                "anonymous": "false",
+                "answers": json.dumps(
+                    {
+                        "compliance_concern_type": "safety",
+                        "compliance_immediate_risk": "no",
+                    }
+                ),
+            },
+            [],
+        )
+        result["compliance_submission"] = "created"
+        return result
+
+    def seed_guide08_admin_states(self) -> dict[str, Any]:
+        """States guide 08 pictures that nothing else in the demo produces.
+
+        * The demo member's My Hours list with a pending manual entry and a
+          returned one, both inside the current month because the page opens
+          on This month. Raised by the member (an entry credits its caller)
+          and the second rejected by the administrator with a reason.
+        * One pending IP exception request, raised by an ordinary member from a
+          documentation-range address, for the Pending Requests tab.
+        """
+        result: dict[str, Any] = {}
+        users = items(self.api.get("/users?limit=200"), "users")
+        member = next(
+            (u for u in users if pick(u, "username") == DEMO_MEMBER_USERNAME), None
+        )
+        categories = {
+            str(pick(c, "name")): str(pick(c, "id"))
+            for c in items(self.api.get("/admin-hours/categories"), "categories")
+        }
+        if member and categories:
+            existing = {
+                str(pick(e, "description") or ""): e
+                for e in items(
+                    self.api.get("/admin-hours/entries?limit=300"), "entries"
+                )
+            }
+            session = self.member_session(
+                self.base_url, str(pick(member, "id")), DEMO_MEMBER_USERNAME
+            )
+            first_of_month = TODAY.replace(day=1)
+            for index, (name, description, reason) in enumerate(
+                self.GUIDE08_HOURS_CORRECTIONS
+            ):
+                entry = existing.get(description)
+                category_id = categories.get(name)
+                if entry is None and category_id:
+                    day = max(first_of_month, TODAY - timedelta(days=2 + index))
+                    start = datetime.combine(
+                        day, time(hour=13 + index), tzinfo=ORG_TIMEZONE
+                    )
+                    try:
+                        entry = session.post(
+                            "/admin-hours/entries",
+                            {
+                                "category_id": category_id,
+                                "clock_in_at": iso(start.astimezone(timezone.utc)),
+                                "clock_out_at": iso(
+                                    (start + timedelta(hours=2)).astimezone(
+                                        timezone.utc
+                                    )
+                                ),
+                                "description": description,
+                            },
+                        )
+                    except ApiError as exc:
+                        self.blocked.append(f"guide 08 hours: entry refused ({exc})")
+                        continue
+                if (
+                    entry is not None
+                    and reason
+                    and str(pick(entry, "status")) == "pending"
+                ):
+                    try:
+                        self.api.post(
+                            f"/admin-hours/entries/{pick(entry, 'id')}/review",
+                            {"action": "reject", "rejection_reason": reason},
+                        )
+                    except ApiError as exc:
+                        self.blocked.append(f"guide 08 hours: reject refused ({exc})")
+            result["hours"] = "ok"
+
+        requester = next(
+            (u for u in users if pick(u, "username") == DEMO_PEER_EXAMINER_USERNAME),
+            None,
+        )
+        if requester:
+            pending = items(
+                self.api.get("/ip-security/exceptions/pending"), "exceptions"
+            )
+            if not any(
+                pick(x, "ipAddress", "ip_address") == self.GUIDE08_IP_EXCEPTION
+                for x in pending
+            ):
+                session = self.member_session(
+                    self.base_url,
+                    str(pick(requester, "id")),
+                    DEMO_PEER_EXAMINER_USERNAME,
+                )
+                try:
+                    session.post(
+                        "/ip-security/exceptions",
+                        {
+                            "ip_address": self.GUIDE08_IP_EXCEPTION,
+                            "reason": "Signing in from the hotel during the state"
+                            " fire school conference.",
+                            "requested_duration_days": 5,
+                            "use_case": "travel",
+                        },
+                    )
+                except ApiError as exc:
+                    self.blocked.append(f"guide 08 IP exception: refused ({exc})")
+            result["ip_exception"] = "ok"
+
+        result["saved_reports"] = self._seed_guide08_saved_reports(users)
+        return result
+
+    #: (name, report type, period, frequency or None, day, recipient usernames).
+    #: None of the three is PII-gated, so any active member may receive them.
+    GUIDE08_SAVED_REPORTS = [
+        (
+            "Monthly call volume",
+            "call_volume",
+            "previous_month",
+            "monthly",
+            1,
+            [DEMO_ADMIN_USERNAME],
+        ),
+        (
+            "Quarterly apparatus status",
+            "apparatus_status",
+            "previous_quarter",
+            "quarterly",
+            5,
+            [DEMO_ADMIN_USERNAME, TWO_FACTOR_USERNAME],
+        ),
+        ("Year-to-date training", "training_summary", "year_to_date", None, 1, []),
+    ]
+
+    def _seed_guide08_saved_reports(self, users: list[dict]) -> str:
+        """Saved reports for the Saved Reports list and its schedule form."""
+        existing = {str(pick(r, "name")) for r in items(self.api.get("/reports/saved"))}
+        # The member list withholds email addresses, so they are rebuilt the
+        # way seed_members and bootstrap_demo wrote them.
+        emails = {
+            str(pick(u, "username")): f"{pick(u, 'username')}@oakvillefd.example.org"
+            for u in users
+        }
+        emails[DEMO_ADMIN_USERNAME] = DEMO_ADMIN_EMAIL
+        for name, report_type, period, frequency, day, to in self.GUIDE08_SAVED_REPORTS:
+            if name in existing:
+                continue
+            payload: dict[str, Any] = {
+                "name": name,
+                "report_type": report_type,
+                "filters": {"period": period},
+                "is_scheduled": frequency is not None,
+            }
+            if frequency:
+                payload.update(
+                    {
+                        "schedule_frequency": frequency,
+                        "schedule_day": day,
+                        "email_recipients": [emails[u] for u in to if emails.get(u)],
+                    }
+                )
+            try:
+                self.api.post("/reports/saved", payload)
+            except ApiError as exc:
+                self.blocked.append(f"guide 08 saved report {name!r}: {exc}")
+        return "ok"
+
+    def seed_guide01_member_states(self) -> dict[str, Any]:
+        """Give one member two profile edits on the same day (guide 01).
+
+        `01-08-member-audit-history` pictures entries showing the time beside
+        the date, which only reads as a difference when two edits share a day.
+        `seed_member_changes` records one rank change per member, so Callum
+        Frazier gets a station edit and a platoon edit. Each saves the value he
+        already holds: the audit records the fields an edit saved, and nothing
+        any other guide pictures about him moves.
+
+        Skipped once any day already holds two of his profile updates.
+        """
+        users = items(self.api.get("/users?limit=200"), "users")
+        member = next((u for u in users if u.get("username") == "cfrazier"), None)
+        user_id = pick(member or {}, "id")
+        if not user_id:
+            return {"skipped": "cfrazier is not on the roster"}
+        history = items(
+            self.api.get(
+                f"/users/{user_id}/audit-history"
+                "?event_type=profile_update&page_size=100"
+            ),
+            "entries",
+        )
+        per_day: dict[str, int] = {}
+        for entry in history:
+            day = str(entry.get("timestamp") or "")[:10]
+            per_day[day] = per_day.get(day, 0) + 1
+        if any(count >= 2 for day, count in per_day.items() if day):
+            return {"skipped": "two same-day profile updates already on file"}
+        for field in ("station", "platoon"):
+            self.api.patch(f"/users/{user_id}/profile", {field: member.get(field)})
+        return {"profile_updates": 2}
+
     def seed_member_admin_hours(self) -> dict[str, Any]:
         """Give the demo member a spread of approved hours and a requirement.
 
@@ -16260,6 +18903,33 @@ class Seeder:
             )
         return {"issued": issued, "member_id": member_id}
 
+    ICAL_INTEGRATION_TYPE = "ical"
+
+    def seed_ical_feed(self) -> dict[str, Any]:
+        """Connect the iCalendar card so it shows the department events feed.
+
+        Guide 16 pictures the feed link, its copy button and Reset link on the
+        card, and the panel renders only on a connected iCalendar integration.
+        Connecting is what mints the feed token; a re-seed leaves a connected
+        card alone so the link does not change between runs.
+        """
+        integration = next(
+            (
+                i
+                for i in items(self.api.get("/integrations"), "integrations")
+                if pick(i, "integration_type") == self.ICAL_INTEGRATION_TYPE
+            ),
+            None,
+        )
+        if not integration:
+            return {"blocked": "no ical integration row"}
+        if pick(integration, "status") == "connected" and pick(integration, "enabled"):
+            return {"connected": "already"}
+        self.api.post(
+            f"/integrations/{pick(integration, 'id')}/connect", {"config": {}}
+        )
+        return {"connected": "now"}
+
     def seed_label_printers(self) -> int:
         """Two registered printers, one per command language, one default.
 
@@ -16287,6 +18957,7 @@ class Seeder:
         self.step("enable all modules", self.enable_all_modules)
         members = self.step("members", self.seed_members) or []
         self.step("member changes", lambda: self.seed_member_changes(members))
+        self.step("guide 01 member states", self.seed_guide01_member_states)
         facilities = self.step("facilities", self.seed_facilities) or []
         stations = self.step("stations", lambda: self.seed_locations(facilities)) or []
         self.step("rooms", lambda: self.seed_rooms(facilities))
@@ -16439,6 +19110,7 @@ class Seeder:
             self.seed_event_validation_notification,
         )
         self.step("early check-in event", self.seed_early_checkin_event)
+        self.step("guide 04 event states", self.seed_guide04_event_states)
         if self.bulk_prospects:
             pipelines = prospect_data.get("pipelines") or []
             self.step(
@@ -16456,6 +19128,7 @@ class Seeder:
         # the default pipeline by name, so order is not load-bearing, but the
         # vote outcomes above are the steps that assume one pipeline.
         self.step("meeting-stage applicant", self.seed_meeting_stage_applicant)
+        self.step("guide 15 states", self.seed_guide15_states)
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
         self.step("compliance profiles", self.seed_compliance_profiles)
@@ -16474,6 +19147,7 @@ class Seeder:
         # Daily Check first — it selects by name now, but ordering that does not
         # depend on that fix is one less thing to get wrong later.
         self.step("supply tracking", lambda: self.seed_supply_tracking(apparatus))
+        self.step("medical supplies", lambda: self.seed_medical_supplies(apparatus))
         self.step("shift reports", lambda: self.seed_shift_reports(members))
         # After the reports: the pair-picker above skips recruits, so crewing
         # one onto the ladder now leaves their Evaluate control live.
@@ -16490,11 +19164,17 @@ class Seeder:
             "close-out wizard fixture",
             lambda: self.seed_call_tracking_closeout(members),
         )
+        self.step("guide 03 scheduling states", self.seed_guide03_scheduling)
         self.step("label printers", self.seed_label_printers)
         self.step("id cards", self.seed_id_cards)
+        self.step("ical feed", self.seed_ical_feed)
+        self.step("unused approval chain", self.seed_unused_approval_chain)
+        self.step("guide 11 finance states", self.seed_guide11_finance_states)
         self.step("unsized shift", self.seed_unsized_shift)
         self.step("sealed compartments", self.seed_sealed_compartments)
         self.step("member admin hours", self.seed_member_admin_hours)
+        self.step("guide 07 states", self.seed_guide07_states)
+        self.step("guide 08 admin states", self.seed_guide08_admin_states)
         self.step("profile visibility mix", self.seed_profile_visibility_mix)
         self.step("retired call type", self.seed_retired_call_type)
         self.step("long department message", self.seed_long_department_message)
@@ -16504,6 +19184,10 @@ class Seeder:
         self.step("photo consent", self.seed_photo_consent)
         self.step("waitlisted event", self.seed_waitlisted_event)
         self.step("out-of-stock size", self.seed_out_of_stock_size)
+        # Last: it parks two coats on a new shelf and issues gloves, which no
+        # earlier step expects to find moved or issued.
+        self.step("guide 05 states", self.seed_guide05_states)
+        self.step("guide 02 states", self.seed_guide02_states)
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

@@ -155,6 +155,10 @@ const RecordCrewTrainingPage: React.FC = () => {
       setError('Enter what the training covered.');
       return;
     }
+    if (!completionDate) {
+      setError('Enter the date the training took place.');
+      return;
+    }
     if (!Number.isFinite(hours) || hours <= 0) {
       setError('Enter how long the training ran.');
       return;
@@ -362,13 +366,14 @@ const RecordCrewTrainingPage: React.FC = () => {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <label htmlFor="crew-date" className={labelClass}>
-                  Date
+                  Date <span aria-hidden="true">*</span>
                 </label>
                 <input
                   id="crew-date"
                   type="date"
                   className={inputClass}
                   value={completionDate}
+                  required
                   max={getTodayLocalDate(tz)}
                   onChange={(e) => setCompletionDate(e.target.value)}
                 />

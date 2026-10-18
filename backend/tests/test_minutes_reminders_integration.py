@@ -28,11 +28,33 @@ from tests.minutes_support import (
 
 pytestmark = [pytest.mark.integration]
 
-TODAY = datetime.now(timezone.utc).date()
+
+def _today() -> date:
+    # Read per call, not frozen at import: collection can finish before
+    # midnight UTC and the test run after it, and the service under test
+    # reads the clock when it runs.
+    return datetime.now(timezone.utc).date()
 
 
 def _midnight(day: date) -> str:
     return datetime(day.year, day.month, day.day, tzinfo=timezone.utc).isoformat()
+
+
+@pytest.fixture(autouse=True)
+def _one_calendar_day(monkeypatch):
+    """Give the test and the service the same "today".
+
+    The service asks for the department's date when it runs; the fixtures
+    below build due dates from ``_today()``. Computed separately, they agree only
+    until a run crosses midnight UTC: a suite that starts at 23:50 and takes a
+    quarter of an hour sees the fixtures built for one day and the service
+    deciding for the next, and a reminder due "tomorrow" is suddenly due today.
+    """
+    day = _today()
+    monkeypatch.setitem(globals(), "_today", lambda: day)
+    monkeypatch.setattr(
+        "app.services.minutes_reminder_service.org_today", lambda organization: day
+    )
 
 
 @pytest.fixture
@@ -69,7 +91,7 @@ def _item(description: str, assignee, days_from_today: int | None) -> dict[str, 
         "assignee_id": str(assignee.id),
     }
     if days_from_today is not None:
-        item["due_date"] = _midnight(TODAY + timedelta(days=days_from_today))
+        item["due_date"] = _midnight(_today() + timedelta(days=days_from_today))
     return item
 
 
@@ -324,7 +346,7 @@ class TestOpenItemsDigest:
 
         org = await _org(world)
         stored = dict(org.settings["minutes"])
-        stored["last_open_items_digest_on"] = (TODAY - timedelta(days=7)).isoformat()
+        stored["last_open_items_digest_on"] = (_today() - timedelta(days=7)).isoformat()
         org.settings = {**org.settings, "minutes": stored}
         await world.db.flush()
         assert await self._digest(world) == 2
@@ -342,7 +364,7 @@ class TestOpenItemsDigest:
         world.db.expire_all()
         saved = (await _org(world)).settings["minutes"]
         assert saved["overdue_repeat_days"] == 14
-        assert saved["last_open_items_digest_on"] == TODAY.isoformat()
+        assert saved["last_open_items_digest_on"] == _today().isoformat()
 
     async def test_nothing_is_sent_when_nothing_is_open(self, world, mail):
         await _approved(world, [])
@@ -390,6 +412,12 @@ async def test_unadopted_minutes_stay_out_of_the_list(world, mail):
     ) == 0
 
 
+def _drop_publishing(body):
+    """Publishing has its own tests; this file checks the reminder fields."""
+    for key in [k for k in body if k.startswith(("executive_", "public_"))]:
+        body.pop(key)
+
+
 class TestSettingsEndpoint:
     async def test_it_reports_the_defaults_when_nothing_is_set(self, world):
         async with _client(world.db, world.secretary) as c:
@@ -398,6 +426,7 @@ class TestSettingsEndpoint:
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert body.pop("signature_slots")
+        _drop_publishing(body)
         assert body == {
             "action_item_reminders": True,
             "reminder_days_before_due": 3,
@@ -421,6 +450,7 @@ class TestSettingsEndpoint:
             body = (await c.get("/minutes/settings")).json()
 
         body.pop("signature_slots")
+        _drop_publishing(body)
         assert body == {
             "action_item_reminders": False,
             "reminder_days_before_due": 0,

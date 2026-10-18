@@ -97,3 +97,16 @@ describe('integrationsService.linkExistingGoogleMembers', () => {
     expect(mockPost).toHaveBeenCalledWith(url, null, { params: { apply: true, expected: 0 } });
   });
 });
+
+describe('integrationsService.getGoogleWorkspaceAttention', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+  });
+
+  it('reads the list from the attention endpoint', async () => {
+    mockGet.mockResolvedValue({ data: { items: [{ user_id: 'u1' }] } });
+    const items = await integrationsService.getGoogleWorkspaceAttention();
+    expect(mockGet).toHaveBeenCalledWith('/integrations/google-workspace/attention');
+    expect(items).toEqual([{ user_id: 'u1' }]);
+  });
+});

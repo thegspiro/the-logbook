@@ -2,10 +2,10 @@
 
 The feed URL is a bearer link that ends up in members' calendar apps, so what
 it carries is an allowlist (title, times, location name, type, link back) and
-what it reaches is one department's published events. Google Calendar and
-Outlook publishing is not built, so behind CALENDAR_SYNC_ENABLED those two
-cards read "coming soon" and cannot be connected — including a row an older
-release left "connected" with no credentials.
+what it reaches is one department's published events. While
+CALENDAR_SYNC_ENABLED is off, the Google Calendar and Outlook cards read
+"coming soon" and cannot be connected — including a row an older release left
+"connected" with no credentials.
 """
 
 import uuid

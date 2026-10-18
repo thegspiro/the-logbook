@@ -3,6 +3,12 @@ import { DialogPanel } from '../components/ux/DialogPanel';
 import { McpServiceKeyPanel } from '../components/integrations/McpServiceKeyPanel';
 import { McpOAuthPanel } from '../components/integrations/McpOAuthPanel';
 import { IcalFeedPanel } from '../components/integrations/IcalFeedPanel';
+import { CalendarPublishPanel } from '../components/integrations/CalendarPublishPanel';
+import {
+  CALENDAR_PROVIDERS,
+  calendarConnectError,
+  calendarProviderFor,
+} from '../components/integrations/calendarProviders';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import {
   Plug,
@@ -57,6 +63,7 @@ import {
   type SalesforcePreviewResult,
   type CalcomBooking,
   type GoogleWorkspaceLinkResult,
+  type GoogleWorkspaceAttentionItem,
 } from '../services/api';
 import type { McpStatus } from '../services/adminServices';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -174,6 +181,12 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     color: 'text-emerald-700 dark:text-emerald-400',
     bgColor: 'bg-emerald-500/10',
     features: ['Account per new member', 'Org unit & groups', 'Administrator only'],
+  },
+  'microsoft-365': {
+    icon: <Users className="h-6 w-6" />,
+    color: 'text-sky-700 dark:text-sky-400',
+    bgColor: 'bg-sky-500/10',
+    features: ['Account per new member', 'License & groups', 'Administrator only'],
   },
   'claude-mcp': {
     icon: <Bot className="h-6 w-6" />,
@@ -314,12 +327,23 @@ const CONFIG_TYPES = new Set([
   'paypal',
   'claude-mcp',
   'google-workspace',
+  'microsoft-365',
 ]);
 
-// Its service-account key can create accounts anywhere in the department's
-// Google domain, so the backend requires admin.access on top of
-// integrations.manage to connect, change or disconnect it.
-const ADMIN_ONLY_TYPES = new Set(['google-workspace']);
+// Connected by a provider sign-in rather than a form: the card body
+// (CalendarPublishPanel) carries its own Connect and Disconnect buttons.
+const OAUTH_PANEL_TYPES = new Set(CALENDAR_PROVIDERS.map((p) => p.integrationType));
+
+// The directories that give converted members an account. Either one's
+// credential can create accounts anywhere in the department's domain, so the
+// backend requires admin.access on top of integrations.manage to connect,
+// change or disconnect it; and only one is connected at a time.
+const DIRECTORY_VENDORS: Record<string, string> = {
+  'google-workspace': 'Google',
+  'microsoft-365': 'Microsoft',
+};
+const ADMIN_ONLY_TYPES = new Set(Object.keys(DIRECTORY_VENDORS));
+const isDirectory = (integrationType: string): boolean => integrationType in DIRECTORY_VENDORS;
 
 /**
  * Entries that are features of The Logbook itself rather than links to an
@@ -432,6 +456,13 @@ const IntegrationsPage: React.FC = () => {
   const [gwsDomain, setGwsDomain] = useState('');
   const [gwsOrgUnitPath, setGwsOrgUnitPath] = useState('/');
   const [gwsGroups, setGwsGroups] = useState('');
+  const [msTenantId, setMsTenantId] = useState('');
+  const [msClientId, setMsClientId] = useState('');
+  const [msClientSecret, setMsClientSecret] = useState('');
+  const [msDomain, setMsDomain] = useState('');
+  const [msUsageLocation, setMsUsageLocation] = useState('US');
+  const [msLicenseSkuId, setMsLicenseSkuId] = useState('');
+  const [msGroups, setMsGroups] = useState('');
   // The connect form doubles as the settings form for a connected Claude
   // (MCP) integration. Reconnecting is not an option there: disconnect
   // revokes the service key and ends every member connection.
@@ -525,6 +556,25 @@ const IntegrationsPage: React.FC = () => {
     }
   }, [location.search, navigate, loadIntegrations]);
 
+  // The same return leg for the calendar cards: ?google_calendar=connected,
+  // ?outlook_calendar_error=<code> and so on. The list loads on mount, so it
+  // already shows the new connection.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    for (const provider of CALENDAR_PROVIDERS) {
+      const errorCode = params.get(`${provider.queryKey}_error`);
+      if (params.get(provider.queryKey) === 'connected') {
+        toast.success(`${provider.name} connected. Events will appear in the new calendar within a few minutes.`);
+      } else if (errorCode) {
+        toast.error(`${provider.name} was not connected. ${calendarConnectError(provider, errorCode)}`);
+      } else {
+        continue;
+      }
+      void navigate('/integrations', { replace: true });
+      return;
+    }
+  }, [location.search, navigate]);
+
   const getUI = (type: string) => INTEGRATION_UI[type] ?? DEFAULT_UI;
 
   const filteredIntegrations = integrations.filter((i) => {
@@ -599,6 +649,18 @@ const IntegrationsPage: React.FC = () => {
         ? stored['group_emails'].filter((g): g is string => typeof g === 'string').join('\n')
         : ''
     );
+    // The client secret is never echoed back either.
+    setMsTenantId(typeof stored['tenant_id'] === 'string' ? stored['tenant_id'] : '');
+    setMsClientId(typeof stored['client_id'] === 'string' ? stored['client_id'] : '');
+    setMsClientSecret('');
+    setMsDomain(typeof stored['domain'] === 'string' ? stored['domain'] : '');
+    setMsUsageLocation(typeof stored['usage_location'] === 'string' ? stored['usage_location'] : 'US');
+    setMsLicenseSkuId(typeof stored['license_sku_id'] === 'string' ? stored['license_sku_id'] : '');
+    setMsGroups(
+      Array.isArray(stored['groups'])
+        ? stored['groups'].filter((g): g is string => typeof g === 'string').join('\n')
+        : ''
+    );
     setEditingSettings(false);
   };
 
@@ -646,6 +708,21 @@ const IntegrationsPage: React.FC = () => {
           domain: gwsDomain.trim(),
           org_unit_path: gwsOrgUnitPath.trim() || '/',
           group_emails: gwsGroups
+            .split(/[\s,]+/)
+            .map((g) => g.trim())
+            .filter(Boolean),
+        };
+      case 'microsoft-365':
+        return {
+          tenant_id: msTenantId.trim(),
+          client_id: msClientId.trim(),
+          // Blank means "keep the stored secret" on a settings save.
+          client_secret: msClientSecret.trim() || undefined,
+          domain: msDomain.trim(),
+          usage_location: msUsageLocation.trim().toUpperCase() || 'US',
+          // Sent even when blank: clearing it switches to group-based licensing.
+          license_sku_id: msLicenseSkuId.trim(),
+          groups: msGroups
             .split(/[\s,]+/)
             .map((g) => g.trim())
             .filter(Boolean),
@@ -807,6 +884,34 @@ const IntegrationsPage: React.FC = () => {
   };
 
   const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [googleAttention, setGoogleAttention] = useState<GoogleWorkspaceAttentionItem[]>([]);
+  const [showGoogleAttention, setShowGoogleAttention] = useState(false);
+  // At most one directory is connected; its name words the list and the link.
+  const connectedDirectory = integrations.find(
+    (i) => isDirectory(i.integration_type) && i.status === ConnectionStatus.CONNECTED
+  );
+  const googleWorkspaceConnected = connectedDirectory !== undefined;
+  const directoryName = connectedDirectory?.name ?? 'Google Workspace';
+  const directoryVendor = DIRECTORY_VENDORS[connectedDirectory?.integration_type ?? ''] ?? 'Google';
+
+  useEffect(() => {
+    if (!canManage || !googleWorkspaceConnected) {
+      setGoogleAttention([]);
+      return;
+    }
+    let cancelled = false;
+    integrationsService
+      .getGoogleWorkspaceAttention()
+      .then((items) => {
+        if (!cancelled) setGoogleAttention(items);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) toast.error(getErrorMessage(err, `Could not load ${directoryName} accounts needing attention`));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, googleWorkspaceConnected, directoryName]);
 
   const handleLinkExistingGoogle = async () => {
     setLinkingGoogle(true);
@@ -817,17 +922,17 @@ const IntegrationsPage: React.FC = () => {
         return;
       }
       const confirmed = await confirm({
-        title: `Link ${preview.linked} existing ${preview.linked === 1 ? 'member' : 'members'} to Google?`,
-        message: `Each one's Logbook email is already an account in Google Workspace. Once linked, The Logbook suspends that account when the member leaves and lifts its own suspension if they return; it changes nothing else about the account. ${describeGoogleLinkSkips(preview)}`,
+        title: `Link ${preview.linked} existing ${preview.linked === 1 ? 'member' : 'members'} to ${directoryVendor}?`,
+        message: `Each one's Logbook email is already an account in ${directoryName}. Once linked, The Logbook suspends that account when the member leaves and lifts its own suspension if they return; it changes nothing else about the account. ${describeGoogleLinkSkips(preview)}`,
         confirmLabel: 'Link accounts',
         cancelLabel: 'Not now',
         variant: 'warning',
       });
       if (!confirmed) return;
       const result = await integrationsService.linkExistingGoogleMembers(preview.linked);
-      toast.success(`Linked ${result.linked} ${result.linked === 1 ? 'member' : 'members'} to Google Workspace`);
+      toast.success(`Linked ${result.linked} ${result.linked === 1 ? 'member' : 'members'} to ${directoryName}`);
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not link existing members to Google Workspace'));
+      toast.error(getErrorMessage(err, `Could not link existing members to ${directoryName}`));
     } finally {
       setLinkingGoogle(false);
     }
@@ -1388,8 +1493,136 @@ const IntegrationsPage: React.FC = () => {
             <p className="text-theme-text-muted text-xs">
               In the Google Admin console, open Security &rarr; API controls &rarr; Domain-wide delegation and authorize
               the service account&apos;s client ID for <code>https://www.googleapis.com/auth/admin.directory.user</code>{' '}
-              and <code>https://www.googleapis.com/auth/admin.directory.group.member</code>. Each account created uses a
-              Workspace license.
+              and <code>https://www.googleapis.com/auth/admin.directory.group.member</code>. Also authorize the
+              read-only <code>https://www.googleapis.com/auth/admin.directory.orgunit.readonly</code> so{' '}
+              <strong>Test</strong> can confirm the organizational unit exists; only Test uses it. Each account created
+              uses a Workspace license.
+            </p>
+          </div>
+        );
+
+      case 'microsoft-365':
+        return (
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="ms-tenant" className={labelClass}>
+                Directory (tenant) ID
+              </label>
+              <input
+                id="ms-tenant"
+                type="text"
+                value={msTenantId}
+                onChange={(e) => setMsTenantId(e.target.value)}
+                placeholder="00000000-0000-0000-0000-000000000000"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="ms-client" className={labelClass}>
+                Application (client) ID
+              </label>
+              <input
+                id="ms-client"
+                type="text"
+                value={msClientId}
+                onChange={(e) => setMsClientId(e.target.value)}
+                placeholder="00000000-0000-0000-0000-000000000000"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="ms-secret" className={labelClass}>
+                Client secret value
+              </label>
+              <input
+                id="ms-secret"
+                type="password"
+                autoComplete="off"
+                value={msClientSecret}
+                onChange={(e) => setMsClientSecret(e.target.value)}
+                className={inputClass}
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                {editingSettings
+                  ? 'A secret is stored. Enter one only to replace it, for example before it expires.'
+                  : 'The secret value (not its ID) from the app registration. It is stored encrypted and never shown again.'}
+              </p>
+            </div>
+            <div>
+              <label htmlFor="ms-domain" className={labelClass}>
+                Domain
+              </label>
+              <input
+                id="ms-domain"
+                type="text"
+                value={msDomain}
+                onChange={(e) => setMsDomain(e.target.value)}
+                placeholder="firedept.org"
+                className={inputClass}
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Must match the department email domain in Organization Settings, and be a verified domain in Microsoft
+                365. Accounts are created at those addresses.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="ms-location" className={labelClass}>
+                Usage location
+              </label>
+              <input
+                id="ms-location"
+                type="text"
+                maxLength={2}
+                value={msUsageLocation}
+                onChange={(e) => setMsUsageLocation(e.target.value)}
+                placeholder="US"
+                className="form-input w-24"
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                The two-letter country every new account gets. Microsoft will not license an account without one.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="ms-sku" className={labelClass}>
+                License SKU ID (optional)
+              </label>
+              <input
+                id="ms-sku"
+                type="text"
+                value={msLicenseSkuId}
+                onChange={(e) => setMsLicenseSkuId(e.target.value)}
+                placeholder="00000000-0000-0000-0000-000000000000"
+                className={inputClass}
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                The license each new account is given; without one it has no mailbox. Leave empty if a group below
+                licenses its members (group-based licensing). <strong>Test</strong> shows how many are left.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="ms-groups" className={labelClass}>
+                Add new members to these groups (optional)
+              </label>
+              <textarea
+                id="ms-groups"
+                rows={3}
+                value={msGroups}
+                onChange={(e) => setMsGroups(e.target.value)}
+                placeholder={'members@firedept.org\n00000000-0000-0000-0000-000000000000'}
+                className={inputClass}
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                One per line, up to 20: a Microsoft 365 group&apos;s address, or a security group&apos;s object ID.
+                Distribution lists, mail-enabled security groups and dynamic groups cannot be used; Test rejects them.
+              </p>
+            </div>
+            <p className="text-theme-text-muted text-xs">
+              In Entra ID, register an application, add a client secret, and grant it these Microsoft Graph application
+              permissions with admin consent: <code>User.ReadWrite.All</code>,{' '}
+              <code>User-PasswordProfile.ReadWrite.All</code>, <code>User.RevokeSessions.All</code>,{' '}
+              <code>GroupMember.ReadWrite.All</code> and, with a license, <code>LicenseAssignment.ReadWrite.All</code>.
+              Then assign the application the <strong>User Administrator</strong> role. Each licensed account uses a
+              Microsoft 365 license.
             </p>
           </div>
         );
@@ -1839,6 +2072,7 @@ const IntegrationsPage: React.FC = () => {
           {filteredIntegrations.map((integration) => {
             const ui = getUI(integration.integration_type);
             const activation = isActivation(integration.integration_type);
+            const calendarProvider = calendarProviderFor(integration.integration_type);
             return (
               <div
                 key={integration.id}
@@ -1883,6 +2117,18 @@ const IntegrationsPage: React.FC = () => {
                 {integration.integration_type === 'ical' &&
                   integration.status === ConnectionStatus.CONNECTED &&
                   canManage && <IcalFeedPanel integrationId={integration.id} />}
+                {calendarProvider && integration.status !== 'coming_soon' && canManage && (
+                  <CalendarPublishPanel
+                    provider={calendarProvider}
+                    integration={integration}
+                    onUpdated={(updated) =>
+                      setIntegrations((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+                    }
+                    onDisconnected={() => {
+                      void loadIntegrations();
+                    }}
+                  />
+                )}
                 <div className="flex flex-wrap justify-end gap-2">
                   {integration.status !== 'coming_soon' && canManage && (
                     <RouterLink
@@ -1910,8 +2156,7 @@ const IntegrationsPage: React.FC = () => {
                   {integration.status === ConnectionStatus.CONNECTED && canManage && (
                     <>
                       {(integration.integration_type === 'claude-mcp' ||
-                        (integration.integration_type === 'google-workspace' &&
-                          canChange(integration.integration_type))) && (
+                        (isDirectory(integration.integration_type) && canChange(integration.integration_type))) && (
                         <button
                           onClick={() => {
                             resetFormState(integration);
@@ -1925,23 +2170,32 @@ const IntegrationsPage: React.FC = () => {
                           <span>Settings</span>
                         </button>
                       )}
-                      {integration.integration_type === 'google-workspace' &&
-                        canChange(integration.integration_type) && (
-                          <button
-                            onClick={() => {
-                              void handleLinkExistingGoogle();
-                            }}
-                            disabled={linkingGoogle}
-                            className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {linkingGoogle ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                            ) : (
-                              <Link className="h-3.5 w-3.5" aria-hidden="true" />
-                            )}
-                            <span>Link existing members</span>
-                          </button>
-                        )}
+                      {isDirectory(integration.integration_type) && googleAttention.length > 0 && (
+                        <button
+                          onClick={() => setShowGoogleAttention(!showGoogleAttention)}
+                          aria-expanded={showGoogleAttention}
+                          className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-amber-500/10 px-3 py-1.5 text-sm text-amber-800 transition-colors hover:bg-amber-500/20 dark:text-amber-300"
+                        >
+                          <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>{googleAttention.length} need attention</span>
+                        </button>
+                      )}
+                      {isDirectory(integration.integration_type) && canChange(integration.integration_type) && (
+                        <button
+                          onClick={() => {
+                            void handleLinkExistingGoogle();
+                          }}
+                          disabled={linkingGoogle}
+                          className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {linkingGoogle ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Link className="h-3.5 w-3.5" aria-hidden="true" />
+                          )}
+                          <span>Link existing members</span>
+                        </button>
+                      )}
                       {integration.integration_type === 'salesforce' && (
                         <button
                           onClick={() => setShowSyncPanel(!showSyncPanel)}
@@ -1974,44 +2228,47 @@ const IntegrationsPage: React.FC = () => {
                           <span>Test</span>
                         </button>
                       )}
-                      {canChange(integration.integration_type) && (
-                        <button
-                          onClick={() => {
-                            void handleDisconnect(integration.id);
-                          }}
-                          // Disconnecting the Claude integration unmounts the key
-                          // panel; mid-issue that would lose the one-time plaintext.
-                          disabled={mcpBusy && integration.integration_type === 'claude-mcp'}
-                          title={
-                            mcpBusy && integration.integration_type === 'claude-mcp'
-                              ? 'Wait for the current key request to finish'
-                              : undefined
-                          }
-                          className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
-                        >
-                          <Settings className="h-3.5 w-3.5" />
-                          <span>{activation ? 'Deactivate' : 'Disconnect'}</span>
-                        </button>
-                      )}
+                      {canChange(integration.integration_type) &&
+                        !OAUTH_PANEL_TYPES.has(integration.integration_type) && (
+                          <button
+                            onClick={() => {
+                              void handleDisconnect(integration.id);
+                            }}
+                            // Disconnecting the Claude integration unmounts the key
+                            // panel; mid-issue that would lose the one-time plaintext.
+                            disabled={mcpBusy && integration.integration_type === 'claude-mcp'}
+                            title={
+                              mcpBusy && integration.integration_type === 'claude-mcp'
+                                ? 'Wait for the current key request to finish'
+                                : undefined
+                            }
+                            className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                          >
+                            <Settings className="h-3.5 w-3.5" />
+                            <span>{activation ? 'Deactivate' : 'Disconnect'}</span>
+                          </button>
+                        )}
                     </>
                   )}
                   {integration.status === 'available' && canManage && !canChange(integration.integration_type) && (
                     <span className="text-theme-text-muted text-xs">An organization administrator connects this</span>
                   )}
-                  {integration.status === 'available' && canChange(integration.integration_type) && (
-                    <button
-                      type="button"
-                      data-integration-connect={integration.id}
-                      onClick={() => {
-                        resetFormState(integration);
-                        setShowConnectModal(integration.id);
-                      }}
-                      className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-indigo-600/20 px-4 py-1.5 text-sm text-indigo-700 transition-colors hover:bg-indigo-600/30"
-                    >
-                      {activation ? <Check className="h-3.5 w-3.5" /> : <Plug className="h-3.5 w-3.5" />}
-                      <span>{activation ? 'Activate' : 'Connect'}</span>
-                    </button>
-                  )}
+                  {integration.status === 'available' &&
+                    canChange(integration.integration_type) &&
+                    !OAUTH_PANEL_TYPES.has(integration.integration_type) && (
+                      <button
+                        type="button"
+                        data-integration-connect={integration.id}
+                        onClick={() => {
+                          resetFormState(integration);
+                          setShowConnectModal(integration.id);
+                        }}
+                        className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-indigo-600/20 px-4 py-1.5 text-sm text-indigo-700 transition-colors hover:bg-indigo-600/30"
+                      >
+                        {activation ? <Check className="h-3.5 w-3.5" /> : <Plug className="h-3.5 w-3.5" />}
+                        <span>{activation ? 'Activate' : 'Connect'}</span>
+                      </button>
+                    )}
                 </div>
               </div>
             );
@@ -2029,6 +2286,64 @@ const IntegrationsPage: React.FC = () => {
               <McpOAuthPanel onBusyChange={setMcpOAuthBusy} configVersion={mcpConfigVersion} />
             </>
           )}
+
+        {/* Directory accounts needing attention */}
+        {showGoogleAttention && googleWorkspaceConnected && googleAttention.length > 0 && (
+          <div className="card mt-6 p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="rounded-lg bg-amber-500/10 p-2 text-amber-800 dark:text-amber-300">
+                  <AlertCircle className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="text-theme-text-primary font-semibold">{directoryName} accounts needing attention</h3>
+                  <p className="text-theme-text-muted text-xs">
+                    Open a member to see the reason and retry. Anything waiting over a day is also emailed to
+                    administrators each morning.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowGoogleAttention(false)}
+                className="text-theme-text-muted hover:text-theme-text-primary"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <ul
+              className="divide-theme-surface-border divide-y"
+              aria-label={`${directoryName} accounts needing attention`}
+            >
+              {googleAttention.map((item) => (
+                <li key={item.user_id} className="py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <RouterLink
+                        to={`/members/${item.user_id}`}
+                        className="text-theme-text-primary text-sm font-medium underline"
+                      >
+                        {item.member_name}
+                      </RouterLink>
+                      <p className="text-theme-text-secondary text-xs">
+                        {item.label} · {item.primary_email}
+                      </p>
+                      {item.detail && <p className="text-theme-text-muted text-xs">{item.detail}</p>}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      {item.overdue && (
+                        <span className="badge bg-amber-500/10 text-amber-800 dark:text-amber-300">Over a day</span>
+                      )}
+                      {item.since && (
+                        <p className="text-theme-text-muted text-xs">Since {formatDateTime(item.since, tz)}</p>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Cal.com Bookings Panel */}
         {showBookingsPanel &&
@@ -2439,7 +2754,7 @@ const IntegrationsPage: React.FC = () => {
                           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-indigo-700" />
                           <p className="text-sm text-indigo-700">
                             {editingSettings
-                              ? selectedIntegration.integration_type === 'google-workspace'
+                              ? isDirectory(selectedIntegration.integration_type)
                                 ? 'Saved settings apply to the next member converted. Accounts already created are not changed.'
                                 : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
                               : activation

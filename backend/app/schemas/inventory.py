@@ -806,11 +806,15 @@ class InventoryItemResponse(InventoryItemBase):
     # the item has no lots — there is nothing to prefer over `quantity`.
     lot_stock: Optional[int] = None
     is_lot_stocked: bool = False
-    # The soonest expiry among lots still holding stock (expired ones
-    # included), and its distance from the department's today. Set by the
-    # medical supply list only; other lists leave both empty.
+    # The soonest expiry among units still in stock (expired ones included),
+    # on the shelf or aboard an apparatus, and its distance from the
+    # department's today; then which of the two it is and where ("Medic 1 ›
+    # Jump Bag", or the storage path). Set by the medical supply list only;
+    # other lists leave all four empty.
     next_expiration_date: Optional[date] = None
     days_until_next_expiration: Optional[int] = None
+    next_expiration_location: Optional[Literal["shelf", "apparatus"]] = None
+    next_expiration_where: Optional[str] = None
     # Where it is: "Station 1 › Supply Room › Shelf 2" from the item's room
     # and storage area, and how many apparatus checklists carry it. Set by the
     # medical supply list only; other lists leave both empty.
@@ -2534,6 +2538,9 @@ class ReorderRequestUpdate(BaseModel):
     # W41-5: link (or relink) the inventory item, which receiving requires.
     # Refused once stock has been received against the current link.
     item_id: Optional[UUID] = None
+    # Null clears the category; a non-null id must belong to the caller's org
+    # (checked by the service, as on create).
+    category_id: Optional[UUID] = None
     item_name: Optional[str] = Field(None, min_length=1, max_length=255)
     quantity_requested: Optional[int] = Field(None, ge=1)
     quantity_received: Optional[int] = Field(None, ge=0)

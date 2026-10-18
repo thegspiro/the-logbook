@@ -21,11 +21,14 @@ vi.mock('../../modules/scheduling/services/api', () => ({
   },
 }));
 
+// Permissions the signed-in user holds; a member (none) unless a test says so.
+const mockPermissions = vi.hoisted(() => ({ granted: new Set<string>() }));
+
 vi.mock('../../stores/authStore', () => {
   // Callable and carrying getState, as the real store is: consumers that read
   // it outside React (the org-scoped scheduling settings cache) use the latter.
   const state = () => ({
-    checkPermission: () => false,
+    checkPermission: (permission: string) => mockPermissions.granted.has(permission),
     user: { id: 'user-1', first_name: 'Test', last_name: 'User' },
   });
   return { useAuthStore: Object.assign(() => state(), { getState: state }) };
@@ -88,6 +91,7 @@ describe('OpenShiftsTab', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPermissions.granted = new Set();
     mockGetOpenShifts.mockResolvedValue(mockShifts);
     mockGetShifts.mockResolvedValue({ shifts: mockShifts, total: 2 });
     mockGetEligiblePositions.mockResolvedValue({ positions: [], is_excluded: false });
@@ -180,6 +184,41 @@ describe('OpenShiftsTab', () => {
 
     await waitFor(() => {
       expect(mockSignupForShift).toHaveBeenCalledWith('shift-2', { position: 'officer' });
+    });
+  });
+
+  // ==========================================================================
+  // A shift that has already run has no seat left to fill
+  // ==========================================================================
+  describe('a shift that has already ended', () => {
+    // A twelve-hour shift viewed two hours after it ended: the reported case,
+    // where a scheduling admin was offered a live Sign Up button.
+    const ended = {
+      ...mockShifts[0],
+      id: 'shift-ended',
+      start_time: new Date(Date.now() - 14 * 60 * 60 * 1000).toISOString(),
+      end_time: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      apparatus_unit_number: 'L4',
+    };
+
+    beforeEach(() => {
+      mockGetOpenShifts.mockReset();
+      mockGetOpenShifts.mockResolvedValue([ended]);
+    });
+
+    it('offers a scheduling admin no Sign Up button', async () => {
+      mockPermissions.granted = new Set(['scheduling.manage']);
+      renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
+
+      expect(await screen.findByText('This shift has already run.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Sign up for shift on / })).not.toBeInTheDocument();
+    });
+
+    it('offers a member no Sign Up button either', async () => {
+      renderWithRouter(<OpenShiftsTab onViewShift={mockOnViewShift} />);
+
+      expect(await screen.findByText('This shift has already run.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Sign up for shift on / })).not.toBeInTheDocument();
     });
   });
 

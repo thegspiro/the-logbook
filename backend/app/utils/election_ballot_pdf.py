@@ -11,18 +11,22 @@ attest.
 Kept separate from the service so the layout logic lives in one place and
 can be unit-tested without a database (same convention as
 ``pre_meeting_package_pdf``).
+
+The page shares its letterhead, palette and heading band with the certified
+results (``election_pdf_style``), so the two documents read as one set.
 """
 
-import html
 from io import BytesIO
 from typing import Any, Dict, List
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
+    Flowable,
     HRFlowable,
+    KeepTogether,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -30,18 +34,20 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-_GRID = colors.HexColor("#9ca3af")
-_MUTED = colors.HexColor("#6b7280")
-
-_ROW_STYLE = TableStyle(
-    [
-        ("FONTSIZE", (0, 0), (-1, -1), 11),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.25, _GRID),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]
+from app.utils.election_pdf_style import (
+    CONTENT_WIDTH,
+    GRID,
+    INK,
+    SIDE_MARGIN,
+    VERTICAL_MARGIN,
+    base_styles,
+    esc,
+    heading_band,
+    letterhead,
+    panel,
 )
+
+_MARK_COL = 0.6 * inch
 
 # One instruction line per voting method; {n} = max votes per position.
 _INSTRUCTIONS = {
@@ -55,8 +61,74 @@ _INSTRUCTIONS = {
 }
 
 
-def _esc(value: Any) -> str:
-    return html.escape(str(value)) if value is not None else ""
+class _MarkBox(Flowable):
+    """An empty outlined box for the voter to mark.
+
+    Drawn as a vector rectangle rather than typed as a glyph: the built-in
+    PDF fonts have no "☐" (U+2610), so the character printed as a solid
+    black block — the opposite of a box to mark.
+    """
+
+    def __init__(self, width: float, height: float) -> None:
+        super().__init__()
+        self.box_width = width
+        self.box_height = height
+
+    def wrap(self, availWidth: float, availHeight: float) -> tuple[float, float]:
+        return self.box_width, self.box_height
+
+    def draw(self) -> None:
+        self.canv.setStrokeColor(INK)
+        self.canv.setFillColor(colors.white)
+        self.canv.setLineWidth(1.2)
+        self.canv.roundRect(
+            0, 0, self.box_width, self.box_height, radius=2, stroke=1, fill=1
+        )
+
+
+def _contest(
+    heading: str,
+    notes: List[str],
+    rows: List[List[Any]],
+    styles: Dict[str, ParagraphStyle],
+) -> KeepTogether:
+    """One race or question: shaded heading band, instructions, choices.
+
+    Kept together so a contest never starts at the bottom of one page and
+    finishes on the next, where a voter can miss the remaining choices.
+    """
+    head = heading_band(heading, notes, styles)
+    parts: List[Any] = [head]
+    if rows:
+        parts.append(
+            Table(
+                rows,
+                colWidths=[_MARK_COL, CONTENT_WIDTH - _MARK_COL],
+                style=TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+                        ("LINEBELOW", (0, 0), (-1, -2), 0.5, GRID),
+                        ("LINEBELOW", (0, -1), (-1, -1), 1, INK),
+                        ("TOPPADDING", (0, 0), (-1, -1), 8),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ]
+                ),
+            )
+        )
+    parts.append(Spacer(1, 14))
+    return KeepTogether(parts)
+
+
+def _instruction(method: str, max_votes: int) -> str:
+    """The marking instruction for one contest under *method*.
+
+    Mirrors the electronic ballot's ``itemForm``: approval has no cap, a
+    multi-vote limit applies to every other single-choice method.
+    """
+    if method not in ("ranked_choice", "approval") and max_votes > 1:
+        return f"Mark UP TO {max_votes} boxes per position."
+    return _INSTRUCTIONS.get(method, _INSTRUCTIONS["simple_majority"])
 
 
 def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
@@ -64,114 +136,119 @@ def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> B
 
     *data*: ``election`` (title, voting_method, max_votes_per_position,
     allow_write_ins), ``positions`` — ordered list of
-    ``{name, candidates: [names]}`` — and optional ``approval_items``,
+    ``{name, candidates: [names], voting_method}``, where ``voting_method``
+    is the contest's effective method (the election's when omitted) — and
+    optional ``approval_items``,
     ordered ``{title, description}`` questions answered Approve / Deny.
-    *meta*: ``org_name``, ``generated_at`` (display string).
+    *meta*: ``org_name``, ``generated_at`` (display string), and optional
+    ``logo`` — the organization's stored logo data URI.
     """
     election = data.get("election", {})
     method = election.get("voting_method") or "simple_majority"
     max_votes = int(election.get("max_votes_per_position") or 1)
-    ranked = method == "ranked_choice"
 
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
         pagesize=letter,
-        topMargin=0.6 * inch,
-        bottomMargin=0.6 * inch,
-        leftMargin=0.7 * inch,
-        rightMargin=0.7 * inch,
+        topMargin=VERTICAL_MARGIN,
+        bottomMargin=VERTICAL_MARGIN,
+        leftMargin=SIDE_MARGIN,
+        rightMargin=SIDE_MARGIN,
         title="Official Ballot",
     )
 
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "BallotTitle", parent=styles["Title"], fontSize=16, spaceAfter=2
-    )
-    sub_style = ParagraphStyle(
-        "BallotSub", parent=styles["Normal"], fontSize=9, textColor=_MUTED
-    )
-    pos_style = ParagraphStyle(
-        "BallotPos",
-        parent=styles["Heading2"],
+    styles = base_styles("Ballot")
+    styles["choice"] = ParagraphStyle(
+        "BallotChoice",
+        parent=styles["panel"],
         fontSize=12,
-        spaceBefore=10,
-        spaceAfter=2,
-    )
-    instr_style = ParagraphStyle(
-        "BallotInstr",
-        parent=styles["Normal"],
-        fontSize=8,
-        textColor=_MUTED,
-        spaceAfter=4,
+        leading=15,
     )
 
     story: List[Any] = [
-        Paragraph(_esc(meta.get("org_name")) or "Official Ballot", title_style),
-        Paragraph(f"OFFICIAL BALLOT — {_esc(election.get('title'))}", sub_style),
+        letterhead(
+            meta.get("org_name"),
+            "OFFICIAL BALLOT",
+            [Paragraph(esc(election.get("title")), styles["election"])],
+            meta.get("logo"),
+            styles,
+            "Official Ballot",
+        ),
         Spacer(1, 8),
-        HRFlowable(width="100%", thickness=1, color=_GRID),
+        HRFlowable(width="100%", thickness=2, color=INK),
+        Spacer(1, 8),
+        panel(
+            [
+                Paragraph(
+                    "<b>Instructions:</b> Use a pen with dark ink. Follow "
+                    "the instruction under each heading. Do not sign or "
+                    "otherwise identify yourself on this ballot.",
+                    styles["panel"],
+                )
+            ]
+        ),
+        Spacer(1, 16),
     ]
 
-    instruction = _INSTRUCTIONS.get(method, _INSTRUCTIONS["simple_majority"])
-    if not ranked and max_votes > 1 and method != "approval":
-        instruction = f"Mark UP TO {max_votes} boxes per position."
-
     for position in data.get("positions", []):
-        story.append(Paragraph(_esc(position.get("name")), pos_style))
-        story.append(Paragraph(instruction, instr_style))
+        # A Ballot Builder item can override the election's method; the
+        # service resolves that override the way vote submission does, so
+        # paper asks for what the electronic ballot accepts.
+        contest_method = position.get("voting_method") or method
+        instruction = _instruction(contest_method, max_votes)
+        # A ranked contest takes a written number, so its box is wider.
+        box = (
+            (0.42 * inch, 0.28 * inch)
+            if contest_method == "ranked_choice"
+            else (0.22 * inch, 0.22 * inch)
+        )
 
-        mark_cell = "____" if ranked else "☐"  # rank line or empty box
-        rows = [
-            [mark_cell, Paragraph(_esc(name), styles["Normal"])]
+        rows: List[List[Any]] = [
+            [_MarkBox(*box), Paragraph(esc(name), styles["choice"])]
             for name in position.get("candidates", [])
         ]
         if election.get("allow_write_ins"):
             for _ in range(2):
                 rows.append(
                     [
-                        mark_cell,
+                        _MarkBox(*box),
                         Paragraph(
-                            "Write-in: ______________________________",
-                            styles["Normal"],
+                            "Write-in: ____________________________________",
+                            styles["choice"],
                         ),
                     ]
                 )
-        if rows:
-            story.append(
-                Table(
-                    rows,
-                    colWidths=[0.5 * inch, 6.0 * inch],
-                    style=_ROW_STYLE,
-                )
-            )
+        story.append(_contest(esc(position.get("name")), [instruction], rows, styles))
 
     # Approval items are yes/no questions, so they take a fixed Approve /
     # Deny pair regardless of the election's voting method: a ranked or
     # multi-vote instruction would make no sense on a motion.
     for item in data.get("approval_items", []):
-        story.append(Paragraph(_esc(item.get("title")), pos_style))
+        notes = []
         if item.get("description"):
-            story.append(Paragraph(_esc(item.get("description")), instr_style))
-        story.append(Paragraph("Mark ONE box.", instr_style))
-        story.append(
-            Table(
-                [
-                    ["☐", Paragraph("Approve", styles["Normal"])],
-                    ["☐", Paragraph("Deny", styles["Normal"])],
-                ],
-                colWidths=[0.5 * inch, 6.0 * inch],
-                style=_ROW_STYLE,
-            )
-        )
+            notes.append(esc(item.get("description")))
+        notes.append("Mark ONE box.")
+        rows = [
+            [
+                _MarkBox(0.22 * inch, 0.22 * inch),
+                Paragraph("Approve", styles["choice"]),
+            ],
+            [
+                _MarkBox(0.22 * inch, 0.22 * inch),
+                Paragraph("Deny", styles["choice"]),
+            ],
+        ]
+        story.append(_contest(esc(item.get("title")), notes, rows, styles))
 
-    story.append(Spacer(1, 16))
-    story.append(HRFlowable(width="100%", thickness=1, color=_GRID))
+    story.append(Spacer(1, 4))
+    story.append(HRFlowable(width="100%", thickness=0.75, color=GRID))
+    story.append(Spacer(1, 4))
     story.append(
         Paragraph(
-            f"Generated {_esc(meta.get('generated_at'))} — fold and place "
+            f"Generated {esc(meta.get('generated_at'))} — fold and place "
             f"this ballot in the ballot box. Do not sign your name.",
-            sub_style,
+            styles["footer"],
         )
     )
 

@@ -571,8 +571,15 @@ def is_pool_without_stock(item_data: Dict[str, Any]) -> bool:
     One definition, because ``create_items_bulk`` and the CSV import are two
     callers of the same rule and drifting them apart is how the CSV path
     silently lost it once already.
+
+    A supply kept on the apparatus only has no shelf to count, so a zero is
+    what its row should say, not a mis-parse.
     """
-    return item_data.get("tracking_type") == "pool" and item_data.get("quantity", 1) < 1
+    return (
+        item_data.get("tracking_type") == "pool"
+        and item_data.get("quantity", 1) < 1
+        and not item_data.get("apparatus_only")
+    )
 
 
 class InventoryService:
@@ -2147,6 +2154,25 @@ class InventoryService:
         )
 
     @classmethod
+    def _shelf_lots_count(cls, organization_id: UUID | str):
+        """Filter keeping the items whose stock-room lots count.
+
+        Everything except a medical supply kept on the apparatus only: its
+        shelf is 0 in ``stock_breakdown``, so lots left over from before it was
+        marked are not listed as expiring, counted in the tiles or shown as
+        its next expiry either. The rows are untouched, so unmarking the
+        supply brings them back. Gear ignores the flag, as it does there.
+        Needs ``InventoryItem`` in the query.
+        """
+        return or_(
+            InventoryItem.apparatus_only.is_(False),
+            InventoryItem.category_id.is_(None),
+            InventoryItem.category_id.not_in(
+                cls._category_ids_of_type(organization_id, set(MEDICAL_ITEM_TYPES))
+            ),
+        )
+
+    @classmethod
     def _outside_domains(
         cls, organization_id: UUID | str, exclude_item_types: Iterable[ItemType]
     ):
@@ -3184,6 +3210,11 @@ class InventoryService:
             # Validate pool quantity constraints
             if item.tracking_type == TrackingType.POOL and "quantity" in update_data:
                 new_qty = update_data["quantity"]
+                # A pool item's quantity is its whole stock record, so an
+                # explicit null cannot mean "clear" here; refuse it by name
+                # rather than letting the comparison below raise a TypeError.
+                if new_qty is None:
+                    return None, "Pool item quantity is required"
                 if new_qty < 0:
                     return None, "Pool item quantity cannot be negative"
 
@@ -9420,7 +9451,9 @@ class InventoryService:
 
         A retired item's lots are left out, as the dashboard's expiring count
         already leaves them: the item is off every list, so the lots could
-        be neither acted on from here nor told apart from live stock.
+        be neither acted on from here nor told apart from live stock. So are
+        the lots of a medical supply kept on the apparatus only
+        (``_shelf_lots_count``).
         """
         if today is None:
             today = await resolve_org_today(self.db, organization_id)
@@ -9434,6 +9467,7 @@ class InventoryService:
                 InventoryLot.quantity > 0,
                 InventoryLot.expiration_date.isnot(None),
                 InventoryLot.expiration_date <= cutoff,
+                self._shelf_lots_count(organization_id),
             )
         )
         if item_types:
@@ -9677,7 +9711,8 @@ class InventoryService:
         Expired lots count: a lot past its date with units left in it is the
         most urgent thing on the shelf, and leaving it out would show the next
         good date over stock that has to be pulled. Empty lots and lots with
-        no date have nothing to report.
+        no date have nothing to report, and nor do the lots of a medical
+        supply kept on the apparatus only (``_shelf_lots_count``).
         """
         ids = {str(i) for i in item_ids}
         if not ids:
@@ -9686,11 +9721,13 @@ class InventoryService:
             select(
                 InventoryLot.inventory_item_id, func.min(InventoryLot.expiration_date)
             )
+            .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
             .where(
                 InventoryLot.organization_id == str(organization_id),
                 InventoryLot.inventory_item_id.in_(ids),
                 InventoryLot.quantity > 0,
                 InventoryLot.expiration_date.is_not(None),
+                self._shelf_lots_count(organization_id),
             )
             .group_by(InventoryLot.inventory_item_id)
         )

@@ -45,6 +45,8 @@ import {
   PipelineSection,
   EmailSection,
   FormSection,
+  MIN_TEMPLATE_DAYS_BEFORE,
+  MAX_TEMPLATE_DAYS_BEFORE,
 } from './events-settings';
 import type { OrgMember, EventRequestFormSummary } from './events-settings';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
@@ -122,6 +124,7 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
   const [newTemplateSubject, setNewTemplateSubject] = useState('');
   const [newTemplateBody, setNewTemplateBody] = useState('');
   const [newTemplateTrigger, setNewTemplateTrigger] = useState('');
+  const [newTemplateDaysBefore, setNewTemplateDaysBefore] = useState('');
 
   // Form generation
   const [generatingForm, setGeneratingForm] = useState(false);
@@ -482,6 +485,22 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
       return;
     }
 
+    // The reminder task matches a days_before_event template to its offset by
+    // trigger_days_before alone, so one saved without it is never sent.
+    const isDaysBefore = newTemplateTrigger === 'days_before_event';
+    const daysBefore = Number(newTemplateDaysBefore.trim());
+    if (
+      isDaysBefore &&
+      (!/^\d+$/.test(newTemplateDaysBefore.trim()) ||
+        daysBefore < MIN_TEMPLATE_DAYS_BEFORE ||
+        daysBefore > MAX_TEMPLATE_DAYS_BEFORE)
+    ) {
+      toast.error(
+        `Enter how many days before the event to send it, as a whole number from ${MIN_TEMPLATE_DAYS_BEFORE} to ${MAX_TEMPLATE_DAYS_BEFORE}.`
+      );
+      return;
+    }
+
     try {
       setSaving(true);
       const template = await eventRequestService.createEmailTemplate({
@@ -489,12 +508,14 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
         subject: newTemplateSubject.trim(),
         body_html: newTemplateBody.trim(),
         trigger: newTemplateTrigger || undefined,
+        trigger_days_before: isDaysBefore ? daysBefore : undefined,
       });
       setEmailTemplates((prev) => [...prev, template]);
       setNewTemplateName('');
       setNewTemplateSubject('');
       setNewTemplateBody('');
       setNewTemplateTrigger('');
+      setNewTemplateDaysBefore('');
       setShowTemplateForm(false);
       toast.success('Email template created.');
     } catch {
@@ -647,6 +668,8 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
             onNewTemplateBodyChange={setNewTemplateBody}
             newTemplateTrigger={newTemplateTrigger}
             onNewTemplateTriggerChange={setNewTemplateTrigger}
+            newTemplateDaysBefore={newTemplateDaysBefore}
+            onNewTemplateDaysBeforeChange={setNewTemplateDaysBefore}
           />
         );
       case 'metrics':

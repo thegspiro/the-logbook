@@ -18,6 +18,7 @@ from typing import Any, NoReturn, Optional
 
 from loguru import logger
 from sqlalchemy import (
+    ColumnElement,
     Integer,
     String,
     and_,
@@ -290,6 +291,51 @@ class ApprovalTokenNotValidError(ValueError):
     """
 
 
+# One definition of "overdue" for a dues record: nothing paid toward it and its
+# due date has passed. The stored status reaches OVERDUE only when the daily
+# mark_overdue_dues task persists it, so between runs a record can still be
+# stored as PENDING after its date. Every read that reports or filters on
+# status goes through these instead of the bare column, so the dues screen,
+# its summary and the task cannot disagree about the same record. A partially
+# paid record stays PARTIAL by design: its payment information is not lost.
+def dues_past_due_unpaid_clause(now: datetime) -> ColumnElement[bool]:
+    """SQL form: a stored-PENDING record that is in fact overdue at ``now``."""
+    return and_(
+        MemberDues.status == DuesStatus.PENDING,
+        MemberDues.due_date < now,
+        MemberDues.amount_paid < MemberDues.amount_due,
+    )
+
+
+def dues_overdue_clause(now: datetime) -> ColumnElement[bool]:
+    """SQL form: every record whose effective status is OVERDUE at ``now``."""
+    return or_(
+        MemberDues.status == DuesStatus.OVERDUE,
+        dues_past_due_unpaid_clause(now),
+    )
+
+
+def effective_dues_status(
+    status: DuesStatus | str,
+    due_date: Optional[datetime],
+    amount_paid: Decimal,
+    amount_due: Decimal,
+    now: datetime,
+) -> DuesStatus:
+    """Python form of the same rule, for a row already loaded."""
+    stored = DuesStatus(status)
+    if (
+        stored == DuesStatus.PENDING
+        and due_date is not None
+        # MySQL DATETIME comes back naive; the column is written as UTC.
+        and (due_date if due_date.tzinfo else due_date.replace(tzinfo=timezone.utc))
+        < now
+        and amount_paid < amount_due
+    ):
+        return DuesStatus.OVERDUE
+    return stored
+
+
 def _apply_payment_totals(dues: MemberDues) -> None:
     """Re-derive the aggregate columns on ``dues`` from its payment ledger.
 
@@ -324,7 +370,15 @@ def _apply_payment_totals(dues: MemberDues) -> None:
     elif dues.amount_paid > 0:
         dues.status = DuesStatus.PARTIAL
     else:
-        dues.status = DuesStatus.PENDING
+        # A past-due record with nothing paid (a waiver reversed after the
+        # date) is OVERDUE, not PENDING awaiting the next daily task run.
+        dues.status = effective_dues_status(
+            DuesStatus.PENDING,
+            dues.due_date,
+            dues.amount_paid,
+            dues.amount_due,
+            datetime.now(timezone.utc),
+        )
 
 
 # The column names of QuickBooks Online's journal-entry import, which maps a
@@ -2597,17 +2651,22 @@ class FinanceService:
         amount: Decimal,
         budget_category_id: Optional[str] = None,
     ) -> Optional[ApprovalChain]:
-        """Find the most specific matching approval chain"""
+        """Find the most specific matching approval chain.
+
+        Only chains configured for ``entity_type`` are candidates. A purchase
+        request chain names the approvers for buying something; it is not a
+        fallback for an expense report or a check request, and borrowing it
+        sent reimbursements and payouts to approvers nobody had assigned to
+        them. With no chain for the type, this returns None and the caller
+        leaves the request to be decided by hand.
+        """
         query = (
             select(ApprovalChain)
             .options(selectinload(ApprovalChain.steps))
             .where(
                 ApprovalChain.organization_id == org_id,
                 ApprovalChain.is_active.is_(True),
-                or_(
-                    ApprovalChain.applies_to == entity_type,
-                    ApprovalChain.applies_to == ApprovalEntityType.PURCHASE_REQUEST,
-                ),
+                ApprovalChain.applies_to == entity_type,
             )
         )
         result = await self.db.execute(query)
@@ -2622,12 +2681,6 @@ class FinanceService:
 
         for chain in chains:
             score = 0
-            # Must match entity type
-            if (
-                chain.applies_to != entity_type
-                and chain.applies_to != ApprovalEntityType.PURCHASE_REQUEST
-            ):
-                continue
 
             # Check amount range
             if chain.min_amount is not None and amount < chain.min_amount:
@@ -5646,7 +5699,15 @@ class FinanceService:
             query = query.where(MemberDues.dues_schedule_id == schedule_id)
         if user_id:
             query = query.where(MemberDues.user_id == user_id)
-        if status:
+        now = datetime.now(timezone.utc)
+        if status == DuesStatus.OVERDUE:
+            query = query.where(dues_overdue_clause(now))
+        elif status == DuesStatus.PENDING:
+            query = query.where(
+                MemberDues.status == DuesStatus.PENDING,
+                ~dues_past_due_unpaid_clause(now),
+            )
+        elif status:
             query = query.where(MemberDues.status == status)
         query = (
             query.order_by(MemberDues.due_date.desc(), MemberDues.id)
@@ -5660,6 +5721,9 @@ class FinanceService:
                 column.key: getattr(dues, column.key)
                 for column in MemberDues.__table__.columns
             }
+            data["status"] = effective_dues_status(
+                dues.status, dues.due_date, dues.amount_paid, dues.amount_due, now
+            )
             name = format_display_name(first_name, last_name, preferred_name)
             data["member_name"] = name or username or None
             rows.append(data)
@@ -5861,6 +5925,7 @@ class FinanceService:
         result = await self.db.execute(query)
         all_dues = list(result.scalars().all())
 
+        now = datetime.now(timezone.utc)
         total_expected = sum((d.amount_due for d in all_dues), Decimal("0.00"))
         total_collected = sum((d.amount_paid for d in all_dues), Decimal("0.00"))
         total_waived = sum(
@@ -5880,7 +5945,12 @@ class FinanceService:
             "collection_rate": round(float(collection_rate), 2),
             "members_paid": sum(1 for d in all_dues if d.status == DuesStatus.PAID),
             "members_overdue": sum(
-                1 for d in all_dues if d.status == DuesStatus.OVERDUE
+                1
+                for d in all_dues
+                if effective_dues_status(
+                    d.status, d.due_date, d.amount_paid, d.amount_due, now
+                )
+                == DuesStatus.OVERDUE
             ),
             "members_waived": sum(1 for d in all_dues if d.status == DuesStatus.WAIVED),
         }

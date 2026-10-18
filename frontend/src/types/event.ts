@@ -300,20 +300,24 @@ export interface EndEventResult extends TrainingCreditReport {
 
 export interface EventCreate {
   title: string;
-  description?: string | undefined;
+  // The `| null` fields below (all Optional on the backend) are shared with
+  // the event form's edit payload, where null clears a stored value: an update
+  // reads an omitted key as "leave alone" (CLAUDE.md pitfall #1). A create
+  // omits blanks instead.
+  description?: string | null | undefined;
   /** Omitted, the organizer is the member creating the event. */
   organizer_id?: string | undefined;
   alternate_organizer_id?: string | undefined;
   event_type: EventType;
-  custom_category?: string | undefined;
-  location_id?: string | undefined;
-  location?: string | undefined;
-  location_details?: string | undefined;
+  custom_category?: string | null | undefined;
+  location_id?: string | null | undefined;
+  location?: string | null | undefined;
+  location_details?: string | null | undefined;
   start_datetime: string;
   end_datetime: string;
   requires_rsvp?: boolean | undefined;
-  rsvp_deadline?: string | undefined;
-  max_attendees?: number | undefined;
+  rsvp_deadline?: string | null | undefined;
+  max_attendees?: number | null | undefined;
   allowed_rsvp_statuses?: RSVPStatus[] | undefined;
   is_mandatory?: boolean | undefined;
   mandatory_membership_types?: string[] | undefined;
@@ -342,17 +346,17 @@ export interface EventCreate {
 
 export interface EventUpdate {
   title?: string | undefined;
-  description?: string | undefined;
+  description?: string | null | undefined;
   event_type?: EventType | undefined;
-  custom_category?: string | undefined;
-  location_id?: string | undefined;
-  location?: string | undefined;
-  location_details?: string | undefined;
+  custom_category?: string | null | undefined;
+  location_id?: string | null | undefined;
+  location?: string | null | undefined;
+  location_details?: string | null | undefined;
   start_datetime?: string | undefined;
   end_datetime?: string | undefined;
   requires_rsvp?: boolean | undefined;
-  rsvp_deadline?: string | undefined;
-  max_attendees?: number | undefined;
+  rsvp_deadline?: string | null | undefined;
+  max_attendees?: number | null | undefined;
   allowed_rsvp_statuses?: RSVPStatus[] | undefined;
   is_mandatory?: boolean | undefined;
   mandatory_membership_types?: string[] | undefined;
@@ -389,8 +393,9 @@ export interface ManagerAddAttendee {
 }
 
 export interface RSVPOverride {
-  override_check_in_at?: string;
-  override_check_out_at?: string;
+  /** null clears the override; an omitted key leaves it as stored. */
+  override_check_in_at?: string | null;
+  override_check_out_at?: string | null;
   override_duration_minutes?: number;
 }
 
@@ -643,13 +648,13 @@ export interface EventTemplateCreate {
 
 export interface RecurringEventCreate {
   title: string;
-  description?: string | undefined;
+  description?: string | null | undefined;
   organizer_id?: string | undefined;
   alternate_organizer_id?: string | undefined;
   event_type?: EventType | undefined;
-  location_id?: string | undefined;
-  location?: string | undefined;
-  location_details?: string | undefined;
+  location_id?: string | null | undefined;
+  location?: string | null | undefined;
+  location_details?: string | null | undefined;
   start_datetime: string;
   end_datetime: string;
   recurrence_pattern: RecurrencePattern;
@@ -661,8 +666,8 @@ export interface RecurringEventCreate {
   recurrence_month?: number | undefined;
   recurrence_exceptions?: string[] | undefined;
   requires_rsvp?: boolean | undefined;
-  rsvp_deadline?: string | undefined;
-  max_attendees?: number | undefined;
+  rsvp_deadline?: string | null | undefined;
+  max_attendees?: number | null | undefined;
   is_mandatory?: boolean | undefined;
   mandatory_membership_types?: string[] | undefined;
 
@@ -681,7 +686,7 @@ export interface RecurringEventCreate {
   require_checkout?: boolean | undefined;
   allow_guest_check_in?: boolean | undefined;
   guest_check_in_creates_prospect?: boolean | undefined;
-  custom_category?: string | undefined;
+  custom_category?: string | null | undefined;
   custom_fields?: Record<string, string | number | boolean | null> | undefined;
   attachments?: EventAttachment[] | undefined;
   allowed_rsvp_statuses?: RSVPStatus[] | undefined;

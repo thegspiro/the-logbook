@@ -157,7 +157,11 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
     const parsedMaxAttendees = parseInt(maxAttendees, 10);
     if (parsedMaxAttendees > 0) data.max_attendees = parsedMaxAttendees;
     else if (isEdit) data.max_attendees = null;
+    // [] rather than null: the column is NOT NULL JSON. An event created from a
+    // template with no schedule falls back to the organization's event-reminder
+    // rule at send time, exactly as a create that omitted the field does.
     if (parsedReminders.length > 0) data.reminder_schedule = parsedReminders;
+    else if (isEdit) data.reminder_schedule = [];
     if (checkInWindowType) data.check_in_window_type = checkInWindowType as 'flexible' | 'strict' | 'window';
     else if (isEdit) data.check_in_window_type = null;
     const parsedMinsBefore = parseInt(checkInMinutesBefore, 10);

@@ -37,6 +37,12 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:25 AM — the weekly list of document folders only full administrators can open
 25 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=admin_only_folder_digest
 
+# Daily at 7:35 AM — Google Workspace accounts waiting over a day for an administrator
+35 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=google_workspace_attention_digest
+
+# Hourly — the weekly security and audit report to the IT Manager (each department sets its own day and hour; this only checks whether one is due)
+0 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=weekly_security_report
+
 # Every 15 minutes — process delayed inventory change notifications
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_notifications
 
@@ -291,6 +297,16 @@ SCHEDULE = {
         "frequency": "daily check, weekly send",
         "recommended_time": "07:25",
         "cron": "25 7 * * *",
+    },
+    "weekly_security_report": {
+        "description": (
+            "Email the IT Manager a weekly count of security alerts, "
+            "application errors and audit log health, on each department's "
+            "chosen day and hour"
+        ),
+        "frequency": "hourly check, weekly send",
+        "recommended_time": "every hour",
+        "cron": "0 * * * *",
     },
     "inventory_notifications": {
         "description": "Process delayed inventory change notifications — consolidate and send one email per member for changes older than 1 hour",
@@ -548,7 +564,7 @@ SCHEDULE = {
         "cron": "*/5 * * * *",
     },
     "mark_overdue_dues": {
-        "description": "Mark fully-unpaid member dues past their due date as overdue (nothing else sets this status)",
+        "description": "Persist the overdue status on fully-unpaid member dues past their due date (the dues screens already report them as overdue)",
         "frequency": "daily",
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
@@ -558,6 +574,17 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
+    },
+    "google_workspace_attention_digest": {
+        "description": (
+            "Email administrators (admin.access) the Google Workspace accounts "
+            "waiting over a day: a departed member not yet suspended, an "
+            "account never created or left unfinished. At most once a day per "
+            "department, and only while one is overdue"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:35",
+        "cron": "35 7 * * *",
     },
     "google_workspace_suspension_sync": {
         "description": "Finish Google Workspace suspensions (and their lifting) that a member's departure or return left unsettled, and retry failed ones",
@@ -1086,6 +1113,16 @@ async def run_minutes_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
         return reminders + digests
 
     return await _for_each_org(db, "minutes_action_item_reminders", _process)
+
+
+async def run_weekly_security_report(db: AsyncSession) -> Dict[str, Any]:
+    """Email the IT Manager the weekly security and audit report when it is due."""
+    from app.services.security_weekly_report import send_weekly_security_report
+
+    async def _process(db_session, org):
+        return await send_weekly_security_report(db_session, org)
+
+    return await _for_each_org(db, "weekly_security_report", _process)
 
 
 async def run_admin_only_folder_digest(db: AsyncSession) -> Dict[str, Any]:
@@ -6539,26 +6576,37 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
     }
 
 
-async def run_google_workspace_suspension_sync(db: AsyncSession) -> Dict[str, Any]:
-    """Backstop for the departure hook's after-commit sync (see
-    app/models/google_workspace_departure.py). Each row is org-scoped and
-    locked while it is reconciled, so a run that overlaps the after-commit
-    task finds it settled and does nothing."""
-    from app.services.google_workspace_provisioning_service import (
-        GoogleWorkspaceProvisioningService,
+async def run_google_workspace_attention_digest(db: AsyncSession) -> Dict[str, Any]:
+    """Email administrators the Google Workspace accounts waiting over a day."""
+    from app.services.google_workspace_attention_digest import (
+        send_google_workspace_attention_digest,
     )
 
-    attempted = await GoogleWorkspaceProvisioningService(db).sync_pending_suspensions()
+    async def _process(db_session: AsyncSession, org: Organization) -> int:
+        return await send_google_workspace_attention_digest(db_session, org)
+
+    return await _for_each_org(db, "google_workspace_attention_digest", _process)
+
+
+async def run_google_workspace_suspension_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Backstop for the departure hook's after-commit sync (see
+    app/models/directory_account_departure.py). Each row is org-scoped and
+    locked while it is reconciled, so a run that overlaps the after-commit
+    task finds it settled and does nothing. The task keeps its Google-era
+    name: it is the identifier schedules and run history already use."""
+    from app.services.directory_account_service import DirectoryAccountService
+
+    attempted = await DirectoryAccountService(db).sync_pending_suspensions()
     return {"task": "google_workspace_suspension_sync", "attempted": attempted}
 
 
 async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
     """Mark fully-unpaid dues past their due date as OVERDUE.
 
-    Nothing else transitions a dues record into the OVERDUE state, so without
-    this the dues summary always reports zero overdue, a status="overdue"
-    filter returns nothing, and members past their due date are never flagged.
-    Runs daily. Only PENDING (fully unpaid) records are moved — a partially
+    Reads already report a past-due PENDING record as overdue (see
+    ``effective_dues_status``); this persists that status so the stored column
+    catches up. Recalculating a record from its payment ledger is the only
+    other writer of OVERDUE. Runs daily. Only PENDING (fully unpaid) records are moved — a partially
     paid record keeps its PARTIAL status so the payment information is not lost,
     and its balance still shows in the amount-based outstanding total.
     """
@@ -6567,15 +6615,14 @@ async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
     from sqlalchemy import update as sa_update
 
     from app.models.finance import DuesStatus, MemberDues
+    from app.services.finance_service import dues_past_due_unpaid_clause
 
     now = datetime.now(dt_timezone.utc)
+    # The same predicate the dues list and summary report through, so what
+    # this persists is exactly what those screens already showed.
     result = await db.execute(
         sa_update(MemberDues)
-        .where(
-            MemberDues.status == DuesStatus.PENDING,
-            MemberDues.due_date < now,
-            MemberDues.amount_paid < MemberDues.amount_due,
-        )
+        .where(dues_past_due_unpaid_clause(now))
         .values(status=DuesStatus.OVERDUE)
     )
     await db.commit()
@@ -7492,6 +7539,7 @@ TASK_RUNNERS = {
     "action_item_reminders": run_action_item_reminders,
     "minutes_action_item_reminders": run_minutes_action_item_reminders,
     "admin_only_folder_digest": run_admin_only_folder_digest,
+    "weekly_security_report": run_weekly_security_report,
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
@@ -7528,6 +7576,7 @@ TASK_RUNNERS = {
     "salesforce_auto_sync": run_salesforce_auto_sync,
     "calendar_sync": run_calendar_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
+    "google_workspace_attention_digest": run_google_workspace_attention_digest,
     "google_workspace_suspension_sync": run_google_workspace_suspension_sync,
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
     "admin_hours_auto_close": run_admin_hours_auto_close,
@@ -7589,6 +7638,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "minutes_action_item_reminders": 86400,
     # Checked daily; sends at most weekly per org (see admin_only_folder_digest).
     "admin_only_folder_digest": 86400,
+    # Checked hourly because each department picks its own hour; it sends at
+    # most once a week (see security_weekly_report.is_due).
+    "weekly_security_report": 3600,
     "inventory_low_stock_alerts": 86400,
     "inventory_overdue_alerts": 86400,
     # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).
@@ -7608,6 +7660,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "rolling_recurrence_extend": 86400,
     "trainee_report_escalation": 86400,
     "mark_overdue_dues": 86400,
+    # Checked daily; sends at most once a day per org, only while overdue.
+    "google_workspace_attention_digest": 86400,
     "google_workspace_suspension_sync": 900,
     "mark_overdue_maintenance": 86400,
     "admin_hours_auto_close": 1800,

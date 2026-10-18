@@ -123,6 +123,13 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/', label: 'Welcome / landing', isPublic: true },
       { path: '/privacy', label: 'Privacy Policy', isPublic: true },
       { path: '/terms', label: 'Terms of Service', isPublic: true },
+      {
+        path: '/public/minutes',
+        label: 'Public minutes',
+        note: 'Only after the department turns public posting on',
+        isPublic: true,
+      },
+      { path: '/public/minutes/:copyId', label: 'Public minutes (one set)', isPublic: true },
       { path: '/f/:slug', label: 'Public form submission', isPublic: true },
       { path: '/ballot', label: 'Ballot voting', note: 'Token-based; reached from a ballot email', isPublic: true },
       { path: '/application-status/:token', label: 'Application status', isPublic: true },
