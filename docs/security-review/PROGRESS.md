@@ -16,16 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3410 (Feature 07, Users & organizations, pass 10) merged
-clean 2026-10-18, docs-only (`PROGRESS.md` +
-`USR-07-users-organizations.md` only). Already fully recorded in that
-PR's own history below, so there is nothing further to add here.
-Rotation row 07 stays ✅. Confirmed via `search_pull_requests`
-(`is:open head:claude/security-review-`, 0 results) that no
-`claude/security-review-*` PR is open. The dedicated `/loop 30m
-/security-review` session was still not reachable via `ListAgents`, so
-this is another watchdog pickup. Proceeding to Feature 08 (Membership
-pipeline), pass 10.
+**PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)** (branch
+`claude/security-review-membership-pipeline-p11`). PR #3410
+(Feature 07, Users & organizations, pass 10) merged 2026-10-18 clean,
+docs-only; already recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 08 (Membership pipeline), its own pass 11
+(this file runs one pass ahead of its lap-mates). **0 fixes, 0 new
+findings.** Baseline `b260c519e` (PR #3255's merge, pass 10); 5
+non-merge commits touch this feature's scope — a new directory-account
+provisioning engine (Google Workspace / Microsoft 365) hooked into
+`transfer_prospect`. Verified sound: org-scoped throughout; the
+temporary directory-account password has no storage column at all and
+is only ever a transient return value; provisioning runs only after the
+conversion's own transaction commits, so a directory failure can't roll
+it back; no response carries the password; `transfer_prospect` keeps its
+existing permission gate (53 routes, unchanged). MP-22 re-confirmed
+**OPEN**, unchanged. See `MP-08-membership-pipeline.md`'s **Pass 11**
+section for the full writeup. Row 08 → ✅ (pending this PR's merge); next
+is Feature 09 (Medical screening, PHI).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 10, PR #3410, merged), preserved for history</summary>
