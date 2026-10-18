@@ -16,16 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3399 (Feature 03, Public surface & webhooks, pass 10) merged
-clean 2026-10-18 (docs-only — `PROGRESS.md` +
-`PUB-03-public-surface-webhooks.md` only). Already fully recorded in that
-PR's own history below, so there is nothing further to add here. Rotation
-row 03 stays ✅. Confirmed via `search_pull_requests`
-(`is:open head:claude/security-review-`, 0 results) that no
-`claude/security-review-*` PR is open. The dedicated `/loop 30m
-/security-review` session was still not reachable via `ListAgents`, so this
-is another watchdog pickup. Proceeding to Feature 04 (Storefront &
-payments), pass 10.
+**PR [#3400](https://github.com/thegspiro/the-logbook/pull/3400)** (branch
+`claude/security-review-storefront-payments`). PR #3399
+(Feature 03, Public surface & webhooks, pass 10) merged 2026-10-18 clean,
+docs-only; already recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 04 (Storefront & payments), pass 10. **0
+fixes, 0 new findings.** Baseline `a137bedf` (PR #3223's merge, pass 9); 4
+non-merge commits touch this feature's scope, all frontend-only (a
+required-price form guard, store-window/draft messaging copy, a dark-mode
+CSS fix, and `WindowFormModal` adopting the shared `blankToNull`-style
+helpers so a cleared field reaches the already-correct
+`exclude_unset=True` update contract as an explicit `null`). No backend
+file in scope changed; no storefront migration landed. SF8-04-2 and
+SF8-04-3 re-confirmed **OPEN**, unchanged, still an owner decision. See
+`SF-04-storefront-payments.md`'s **Pass 10** section for the full writeup.
+Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
+approvals).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 10, PR #3399, merged), preserved for history</summary>
