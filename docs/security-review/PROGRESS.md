@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3399](https://github.com/thegspiro/the-logbook/pull/3399)** (branch
+`claude/security-review-public-webhooks`). PR #3398
+(Feature 02, Permissions & roles, pass 10) merged 2026-10-18 clean; already
+recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 03 (Public surface & webhooks), pass 10.
+**0 fixes, 0 new findings.** Delta since pass 9's baseline (`1ac706d9`, PR
+#3215) is 605 commits (314 non-merge), but of the feature's files only one
+carries any diff: `calendar.py` (+152/-20), adding a genuinely new
+unauthenticated route — a department-wide events ICS feed,
+`GET /public/v1/calendar/org/{token}.ics`. Reviewed fresh rather than
+diffed: token-protected via the same SHA-256-digest/`hmac.compare_digest`
+pattern (and the same multi-row constant-time lookup shape) already
+reviewed for `public_portal_security.py`'s API-key auth, org-scoped once
+the token resolves an `Integration` row, rate-limited (60/min/IP) before
+any DB work, an explicit field allowlist (no description/attendees/
+organizer), existing ICS-escaping reused unchanged, and a bounded/capped
+event query. All three webhook receivers and every other file in scope are
+byte-identical to pass 9. Ships with its own 426-line test file
+(`test_department_ical_feed.py`, written by the feature commit, not this
+pass) directly asserting the allowlist, org-isolation, bad-token 404s, and
+audited token rotation. See `PUB-03-public-surface-webhooks.md`'s **Pass
+10** section for the full writeup. Row 03 → ✅ (pending this PR's merge);
+next is Feature 04 (Storefront & payments).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 10, PR #3398, merged), preserved for history</summary>
+
 **PR [#3398](https://github.com/thegspiro/the-logbook/pull/3398)** (branch
 `claude/security-review-permissions-roles`). PR #3397
 (Feature 01, Auth & session lifecycle, pass 10) merged 2026-10-18 clean;
@@ -36,6 +67,8 @@ routers, are byte-identical to pass 9. See
 `PERM-02-permissions-roles.md`'s **Pass 10** section for the full writeup.
 Row 02 → ✅ (pending this PR's merge); next is Feature 03 (Public surface &
 webhooks).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01, Auth & session lifecycle, pass 10, PR #3397, merged), preserved for history</summary>
@@ -19961,7 +19994,7 @@ iteration's commit" rule.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
@@ -20000,6 +20033,54 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-18 — Feature 03 (Public surface & webhooks, pass 10) — watchdog pickup, a new unauth route reviewed fresh, 0 fixed, 0 new findings
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3398 (Feature 02, Permissions & roles, pass 10) had
+already merged clean, closing row 02; rotation row 03 was the next `⬜`.
+
+**Baseline:** `1ac706d9` (PR #3215's merge, pass 9). **Head:** current
+`main` (`4838c5b2`, PR #3398's merge). 605 commits (314 non-merge) between
+them, but of the feature's scoped files only one carries any diff —
+`calendar.py` (+152/-20) — confirmed by `git diff --stat` against every
+tracked path (`api/public/*`, `public_portal_security.py`, the webhook
+service, `webhook_replay.py`). All three webhook receivers and every other
+public-surface file are byte-identical to pass 9.
+
+That one diff is a genuinely new unauthenticated route, not a tweak to an
+existing one: `GET /public/v1/calendar/org/{token}.ics`, a department-wide
+published-events ICS feed sitting behind a new `ical` integration.
+Reviewed fresh against all seven checklist dimensions rather than skimmed
+as a small diff: token auth reuses the same SHA-256-digest +
+`hmac.compare_digest` pattern as the personal feed, with the multi-row
+constant-time lookup shape already reviewed and accepted for
+`authenticate_api_key` in `public_portal_security.py`; org-scoping runs
+through the resolved `Integration` row's `organization_id`, not a
+client-supplied value; rate-limiting (60/min/IP, shared `_rate_limit_feed`
+dependency) runs before the token-matching loop; the response is an
+explicit field allowlist (no description, attendees, RSVPs, organizer);
+ICS injection is closed by the existing, unchanged `_escape_ics` pipeline;
+the event query is window- and count-bounded (`ORG_FEED_MAX_EVENTS =
+2000`) with `selectinload` avoiding N+1. The feature commit that added
+this route also added `backend/tests/test_department_ical_feed.py`
+(426 lines) directly asserting the allowlist, cross-org isolation,
+bad-token 404s, and audited token rotation/disconnect — reviewed and
+confirmed to actually exercise what it claims, not merely present.
+
+Standing open items: none new. No `KNOWN_LIMITATIONS.md` change needed.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/
+tests/ alembic/` (CI's pinned versions); `validate_migrations.py --strict`
+— 618 revisions, single head `1117b642643b`; `check_route_permissions.py
+--strict` — 270 routes, 0 errors/0 warnings; scoped backend tests
+(`-k "calendar or ical or public_portal or webhook or finance_approval"`)
+— 1155 passed, 1 skipped (environment-only, `pywebpush`); frontend
+`typecheck`/`lint` — both clean (no frontend file in this feature's scope
+or this pass's diff). Full writeup in
+`PUB-03-public-surface-webhooks.md`'s **Pass 10** section. Row 03 → ✅
+(pending this PR's merge); next is Feature 04 (Storefront & payments).
 
 ### 2026-10-18 — Feature 02 (Permissions & roles, pass 10) — watchdog pickup, 0 fixed, 0 new findings
 
