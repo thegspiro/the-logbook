@@ -1344,6 +1344,28 @@ class MinutesSettingsUpdate(BaseModel):
             "secretary and a presiding officer."
         ),
     )
+    public_posting: Optional[bool] = Field(
+        None,
+        description=(
+            "Also post published minutes on the department's public minutes "
+            "page. Absent reads as off."
+        ),
+    )
+    executive_library_publishing: Optional[bool] = Field(
+        None,
+        description=(
+            "Allow executive-session minutes to be published to the library "
+            "(leadership-only folder). Absent reads as off."
+        ),
+    )
+    executive_public_posting: Optional[bool] = Field(
+        None,
+        description=(
+            "Allow executive-session minutes to be posted publicly. Needs "
+            "public posting and executive library publishing on as well. "
+            "Absent reads as off."
+        ),
+    )
 
     model_config = ConfigDict(extra="allow")
 

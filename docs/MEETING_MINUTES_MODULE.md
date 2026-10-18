@@ -253,7 +253,8 @@ When approved minutes are published:
 2. **Content escaping**: All user content is passed through `html.escape()` to prevent XSS
 3. **Document creation**: A new `Document` record is created in the "Meeting Minutes" system folder
 4. **Link back**: The minutes record stores the `published_document_id` for cross-reference
-5. **Re-publish**: If the document already exists, it is updated in place with new content (same document id, so links stay valid) and its `under_correction_since` flag, set when the minutes were reopened for correction, is cleared
+5. **Re-publish**: If the document already exists, it is updated in place with new content (same document id, so links stay valid) and its `under_correction_since` flag, set when the minutes were reopened for correction, is cleared. The new copy opens with a note saying which version it replaced and when that one was published
+6. **Public copy**: if the department allows it, a public copy is posted as well — see [Publishing](#publishing-2026-10-17)
 
 ### Published Document Structure
 
@@ -693,7 +694,8 @@ footer settings, and one outline per meeting type is the default.
   only when a meeting type has more than one outline.
 - **Apply an outline** (`POST /{id}/apply-outline {template_id}`) on a draft lays
   an outline over it: its sections in its order, keeping every section that
-  already has text and any section the outline lacks.
+  already has text and any section the outline lacks. An agenda-born section
+  and one marked _not taken up_ are kept even while empty.
 - Outline sections are validated on save: unique lowercase keys, order
   renumbered. The editor will not save an outline with no sections; the API
   still accepts an empty list, as it always has.
@@ -784,14 +786,122 @@ Once minutes are adopted, the people the department names sign them, in the app.
   or adopted the minutes, since signing is a separate attestation from adopting.
   A slot is signed once; a person may sign more than one slot.
 - **What a signature is tied to**: the adopted version current when it was given.
-  It records that revision's SHA-256 and the panel flags a signature whose hash
-  no longer matches (`intact`). **Reopening the minutes supersedes the revision
+  It records that revision's SHA-256 and the panel flags a signature whose
+  stored hash no longer matches the revision row it was given on (`intact`):
+  that catches a signature or revision record being altered, not a recomputation
+  of the live text, which the revision's own integrity check covers. **Reopening the minutes supersedes the revision
   and leaves its signatures on file against the text they were given for; the
   corrected version starts unsigned** and must be signed again.
 - **Printed**: the PDF's approval block lists each signature with the name and
   the time. The published copy does not carry them yet.
 - Signatures can only be added; there is no way to withdraw one except reopening
   the minutes.
+
+### Agenda becomes the outline _(2026-10-16)_
+
+A meeting's agenda can be kept as structured items, and the minutes drafted from
+the meeting are laid out as those items.
+
+- **Items** (`meetings.agenda_items`, JSON): `{key, title, presenter, notes,
+needs_motion, motion_text, documents[{id, name}]}`, at most 60. They are edited
+  from **Minutes → Meetings → (clipboard icon) Agenda** by someone with
+  `meetings.manage`. `key` is assigned once and kept; it is what makes an item the
+  same item after a rename. The free-text `agenda` is untouched and is still what
+  the older screens and the pre-meeting package read; a meeting with no items
+  behaves exactly as before.
+- **Drafting** (`POST /minutes/from-meeting/{id}`): with items, the minutes'
+  sections are the items in order (`agenda-<key>`), each carrying the presenter,
+  the item's notes as starting text, the prepared motion wording and flag, and the
+  linked documents. **They replace the outline's sections**; the outline still
+  supplies the header, footer and template link. Call to Order and Adjournment are
+  therefore agenda items like any other when a department wants them. A meeting
+  with agenda items skips the "choose an outline" question.
+- **Linked documents**: a library file may be linked only if it is in the
+  caller's organization **and in a folder the caller could open themselves**, and
+  the stored name comes from the library, never from the request. The name is
+  then **narrowed again for each reader**: every meeting and minutes response
+  shows a viewer only the links to files _they_ could open, so a title in a
+  leadership-only folder never reaches a member who could not open the file. The
+  stored copy is not changed. An editor who cannot see some links does not
+  unlink them by saving: on an update, links the editor could not have seen are
+  kept, and only a link they could see and removed is removed. The section links
+  to the Documents page; opening a file is still governed by the folder's own
+  rules.
+- **Sections cannot be forged**: `agenda_key` and `documents` on a section are
+  set by the server. A client saving sections gets them taken back from the
+  stored section by key, and a section the record does not already hold as
+  agenda-born carries neither.
+- **Not taken up**: a section left blank can be ticked "The meeting did not take
+  this up". It stays in the record, shown (and printed, published and sealed) as
+  _Not taken up_ rather than disappearing as an empty section. The section's
+  presenter and this flag are part of the sealed snapshot **only when set**, so
+  earlier records verify unchanged; linked documents are reference, not record,
+  and are not sealed.
+- **Sync from agenda** (`GET/POST /{id}/agenda-sync`, `minutes.manage`, draft or
+  rejected minutes drafted from a meeting): the preview lists what changed since
+  the minutes were started, as `add`, `update` (title, presenter, motion,
+  documents), `remove` and `reorder`, and the secretary applies the ones they
+  choose. **Text written in a section is never touched.** Removing an item whose
+  section holds text detaches the section (it becomes an ordinary one) instead of
+  deleting it; an empty one is deleted. A change id that no longer names a
+  difference (the agenda moved again) is ignored. Saving the agenda never changes
+  minutes already drafted.
+
+### Publishing _(2026-10-17)_
+
+Publishing files the library copy and, if the department's settings allow it,
+posts a public copy beside it. Two department-wide switches under **Minutes →
+Publishing** (written through the organization settings, `settings.manage`;
+anyone who manages minutes can read them) decide what happens. Everything is
+**off by default** and every switch reads as off unless it is literally `true`.
+
+| Setting (`settings.minutes.*`) | Effect                                                                       |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| `public_posting`               | Also post a public copy of published minutes on `/public/minutes`            |
+| `executive_library_publishing` | Executive-session minutes may be published to the library                    |
+| `executive_public_posting`     | Executive-session minutes may be posted publicly (needs both switches above) |
+
+`GET /minutes-records/settings` reports what the server applies, including
+`executive_effective_library` and `executive_effective_public`, so the screen
+states the outcome rather than echoing the switches.
+
+- **Replace, with a note.** Publishing again replaces the library document in
+  place and the public copy in place. Each says which version it replaced and
+  when that one was posted ("This version replaces version 1, posted October 3,
+  2026."). Minutes published before this change carry no recorded version, so
+  their next republish has no note rather than a wrong one.
+- **The public copy is a snapshot, narrower than the PDF.** It is built by
+  naming each field that may go out (`app/utils/minutes_public.py`), never by
+  deleting from the printed copy, so a field added to the PDF later stays
+  private until it is added there. It carries the meeting facts, attendance as
+  counts plus the officers present with their titles, printed sections, motions
+  with who moved and seconded and the result, action items, closed sessions as
+  reason, authority and times, election turnout and counts, and the adoption
+  line and signatures. It leaves out the attendance roll, individual votes,
+  discussion notes, closed-session participants and summaries, attachments and
+  library links. Editing or reopening the minutes does not change what the
+  public sees until the corrected version is published.
+- **Checked twice.** The settings are checked when posting and again on every
+  read of the public page, so switching public posting off, or withdrawing a
+  copy, takes effect at once. Responses are `no-store`.
+- **Taking it down.** `DELETE /minutes-records/{id}/public-posting` withdraws
+  the public copy and leaves the library copy alone. Posting again afterwards is
+  a fresh posting, not a replacement. Reopening minutes marks a standing public
+  copy "being corrected" until the corrected version replaces it or it is
+  withdrawn, the same rule the library copy follows.
+- **Executive sessions.** Refused unless the department allows it. A library
+  copy goes to a separate "Executive Session Minutes" folder visible to library
+  managers only; publishing refuses outright if someone has loosened that
+  folder's visibility. Posting one publicly needs all three switches, and the
+  settings screen asks for confirmation before turning the last one on.
+- **The hosted page.** `/public/minutes` (list) and `/public/minutes/{id}` are
+  served by The Logbook itself, with no sign-in, from
+  `GET /api/public/v1/minutes[/{id}]`. Like the legal pages they answer only on a
+  deployment with exactly one organization (otherwise 404) and only while the
+  Minutes module is enabled. 60 requests a minute per address.
+- **Partial failure.** If posting the public copy fails after the library copy
+  was filed, the library copy stays; publishing again repeats both and is safe
+  to repeat.
 
 ### Start and end times _(2026-10-15)_
 
@@ -863,6 +973,9 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 | `POST`   | `/{id}/approve`                           | `minutes.manage` | Adopt; optional `{adopted_on, adopting_minutes_id, as_amended, moved_by, seconded_by}` |
 | `POST`   | `/{id}/suggestions/{suggestion_id}/apply` | `minutes.manage` | Apply the accepted tracked changes `{accepted: [...], note}`                           |
 | `POST`   | `/{id}/recall`                            | `minutes.manage` | Circulated → draft                                                                     |
+| `POST`   | `/{id}/publish`                           | `minutes.manage` | File the library copy and, where allowed, the public copy; returns `public_posted`     |
+| `GET`    | `/{id}/publishing`                        | `minutes.manage` | Where these minutes stand: library, public, and what the settings allow                |
+| `DELETE` | `/{id}/public-posting`                    | `minutes.manage` | Take the public copy down (library copy untouched)                                     |
 | `GET`    | `/{id}/suggestions`                       | `minutes.view`   | All for a manager; the caller's own otherwise                                          |
 | `POST`   | `/{id}/suggestions`                       | `minutes.view`   | Suggest a change (circulated minutes only)                                             |
 | `PUT`    | `/{id}/suggestions/{suggestion_id}`       | `minutes.manage` | Accept or decline, with a note                                                         |
@@ -871,6 +984,8 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 | `PUT`    | `/{id}/closed-sessions/{session_id}`      | `minutes.manage` | Edit                                                                                   |
 | `DELETE` | `/{id}/closed-sessions/{session_id}`      | `minutes.manage` | Remove                                                                                 |
 | `POST`   | `/{id}/apply-outline`                     | `minutes.manage` | Lay an outline over a draft                                                            |
+| `GET`    | `/{id}/agenda-sync`                       | `minutes.manage` | What the meeting's agenda now asks of these minutes' sections                          |
+| `POST`   | `/{id}/agenda-sync`                       | `minutes.manage` | Apply the chosen agenda changes to draft minutes                                       |
 | `POST`   | `/from-meeting/{meeting_id}?template_id=` | `minutes.manage` | Create minutes from a meeting, optionally from an outline                              |
 | `GET`    | `/templates`, `/templates/{id}`           | `minutes.view`   | Outlines                                                                               |
 | `POST`   | `/templates`                              | `minutes.manage` | Create an outline                                                                      |
@@ -889,9 +1004,11 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 | `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`            | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them) |
 | `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py`      | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)      |
 | `20261015_0910_48f403b2631f_minutes_suggestions_tracked_changes.py` | `48f403b2631f`        | Tracked-change columns on `minutes_suggestions` (idempotent; the downgrade drops them)                                                |
+| `20261016_2141_38a57d984653_meeting_agenda_items.py`                | `38a57d984653`        | `meetings.agenda_items` JSON column (idempotent; the downgrade drops it and the items with it)                                        |
 | `20261016_1101_f236c56b1b49_minutes_signatures.py`                  | `f236c56b1b49`        | `minutes_signatures` table (idempotent; the downgrade drops it)                                                                       |
 | `20261015_1652_9ce470b513ae_minutes_motions_vote_detail.py`         | `9ce470b513ae`        | `meeting_motions.votes_recused` / `threshold` / `roll_call` (idempotent; the downgrade drops them)                                    |
 | `20261015_1441_b90813f63e25_minutes_action_items_last_reminded.py`  | `b90813f63e25`        | `minutes_action_items.last_reminded_at` (idempotent; the downgrade drops it)                                                          |
+| `20261017_2305_89723c04ae94_minutes_public_copies.py`               | `89723c04ae94`        | `minutes_public_copies` table; `meeting_minutes.published_revision_version` / `published_at` (idempotent; the downgrade drops them)   |
 | `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`    | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)    |
 
 ### Migration Chain

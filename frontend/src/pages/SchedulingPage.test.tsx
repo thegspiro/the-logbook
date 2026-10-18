@@ -25,7 +25,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getMyShifts: vi.fn().mockResolvedValue([]),
     getOpenShifts: vi.fn().mockResolvedValue([]),
     getShift: vi.fn(),
-    createShift: vi.fn().mockResolvedValue({ id: 'new' }),
+    createShift: vi.fn(),
     getMySwapRequests: vi.fn().mockResolvedValue([]),
   },
   // A pure helper the create form calls on the template list; the real one just
@@ -497,6 +497,8 @@ describe('SchedulingPage', () => {
       // Without apparatus the form asks for none, so a date and a template
       // are all it needs to submit.
       useSchedulingStore.setState({ shiftApparatus: [] });
+      vi.mocked(schedulingService.createShift).mockReset();
+      vi.mocked(schedulingService.createShift).mockResolvedValue({ id: 'new' } as never);
       renderWithRouter(<SchedulingPage />);
 
       await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
@@ -553,6 +555,66 @@ describe('SchedulingPage', () => {
       // Custom Times heads a pair of fields rather than naming one, so it is a
       // group rather than a label.
       expect(screen.getByRole('group', { name: /Custom Times/ })).toBeInTheDocument();
+    });
+  });
+  /**
+   * A hand-created shift inherits its template's equipment checklists only
+   * through `template_id`; without it the shift had no checklists at all.
+   */
+  describe('creating a shift from a template', () => {
+    const mockCreateShift = vi.mocked(schedulingService.createShift);
+
+    beforeEach(() => {
+      mockCreateShift.mockReset();
+      mockCreateShift.mockResolvedValue({ id: 'new-shift' } as never);
+      mockCheckPermission.mockReturnValue(true);
+    });
+
+    afterEach(() => {
+      act(() => {
+        useSchedulingStore.setState({ templates: [], templatesLoaded: false });
+      });
+    });
+
+    async function createFromForm() {
+      const user = userEvent.setup();
+      renderWithRouter(<SchedulingPage />);
+      await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+      fireEvent.change(within(dialog).getByLabelText(/Start Date/), { target: { value: '2099-03-04' } });
+      await user.click(within(dialog).getByRole('button', { name: 'Create Shift' }));
+      await waitFor(() => expect(mockCreateShift).toHaveBeenCalledTimes(1));
+      return mockCreateShift.mock.calls[0]?.[0];
+    }
+
+    it('sends the id of a template loaded from the backend', async () => {
+      useSchedulingStore.setState({
+        templates: [
+          {
+            id: 'tmpl-engine-day',
+            name: 'Engine Day',
+            is_active: true,
+            is_default: true,
+            start_time_of_day: '07:00',
+            end_time_of_day: '19:00',
+            duration_hours: 12,
+          },
+        ] as never,
+        templatesLoaded: true,
+      });
+
+      const payload = await createFromForm();
+
+      expect(payload).toMatchObject({ shift_date: '2099-03-04', template_id: 'tmpl-engine-day' });
+    });
+
+    it('sends no template id for a built-in fallback template', async () => {
+      useSchedulingStore.setState({ templates: [], templatesLoaded: true });
+
+      const payload = await createFromForm();
+
+      expect(payload).toMatchObject({ shift_date: '2099-03-04' });
+      expect(payload).not.toHaveProperty('template_id');
     });
   });
 });

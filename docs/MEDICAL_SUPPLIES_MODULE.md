@@ -350,6 +350,31 @@ event), and the maintenance form no longer offers it.
 
 ---
 
+## Stock on the apparatus _(2026-10-16)_
+
+A medical supply's ready stock is **shelf plus trucks**
+(`InventoryService.stock_breakdown`): in-date deployed lots, else the last count,
+else the position's target (tallied as uncounted). The low-stock list, the Low
+stock tile, the daily alert email and automatic reorder read that one figure;
+gear keeps judging the shelf alone. Auto-reorder is also checked after a daily
+check, a "report used" and a recount. The list's On hand shows "+N on trucks" and
+takes Low from the server (`is_low_stock`).
+
+- **Expiring**: `GET /medical-supplies/expiring-stock` lists truck stock beside
+  shelf lots; `/lots/expiring` is unchanged. The summary adds
+  `expiring_soon_on_apparatus` and `expired_on_apparatus` and keeps its existing
+  fields. Next expiry takes the soonest of the shelf and the trucks and reports
+  `next_expiration_location` and `next_expiration_where`; a tie goes to the shelf.
+- **Apparatus only** (`inventory_items.apparatus_only`, default false; migration
+  `0bbf263a5ff0`, guarded, downgrade drops the column): the shelf counts as 0,
+  the list shows "N on M apparatus", the lots dialog has no stock-lot controls,
+  and Receive delivery leaves it out (`exclude_apparatus_only`). Shelf lots left
+  from before are excluded from Expiring, the tiles and Next expiry by one
+  filter, `InventoryService._shelf_lots_count`; rows are untouched, so unmarking
+  restores them. CSV carries "Kept on Apparatus Only" (Yes/No); an unreadable
+  value is refused, an apparatus-only row may carry Quantity 0, and lot columns
+  on such a row are refused.
+
 ## Alerts
 
 Low-stock and expiring-supply alerts reach both domains; **NFPA retirement

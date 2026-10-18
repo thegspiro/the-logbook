@@ -267,6 +267,7 @@ class TestDonationParentLockOrdering:
         db = MagicMock()
         db.execute = execute
         db.flush = AsyncMock(side_effect=lambda: order.append("FLUSH"))
+        db.refresh = AsyncMock()
         svc = FundraisingService(db)
         svc._update_campaign_total = AsyncMock()
         svc._update_donor_stats = AsyncMock()

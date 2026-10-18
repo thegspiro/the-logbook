@@ -2103,6 +2103,31 @@ members will meet. The operator's reference is
   list. If that list cannot be reached, the password change goes through —
   the other rules still apply.
 
+### The weekly security report
+
+Every department gets a weekly email of **counts**: security alerts by severity
+and type, application errors by type, and whether the audit log's tamper-check
+chain verified. It links to **Security Alerts** and the **Audit Log** and names
+no member, username or event. A quiet week sends a short all-clear, so a missing
+email means the scheduler or mail is broken, not that the week was calm.
+
+- **On by default, Monday 07:00** on the department's clock. Change the day and
+  hour, or turn it off, under **Organization Settings → Authentication →
+  Security Report**, then **Save**. A department that has never saved the page
+  still receives it.
+- **Who gets it:** active members who hold the **IT Manager** position. If no one
+  does, active full administrators receive it, and the page says so and shows how
+  many people it goes to and when it last went. It is a required email, so a
+  recipient cannot switch it off in their own preferences.
+- **It needs the scheduler.** A server that does not run scheduled tasks sends
+  nothing. After an upgrade the first report waits for the next scheduled day and
+  hour.
+
+_[Screenshot to create: Organization Settings → Authentication → Security Report,
+with the weekday and hour pickers, the recipient line and "Last sent". Capture
+once with the IT Manager position held and once with the administrator fallback
+notice showing.]_
+
 ### Too many sign-in attempts
 
 Sign-in, registration, password reset and staying signed in are each limited to
@@ -2207,6 +2232,11 @@ every department on the installation, so starting one by hand is for the
 installation's owner only. A department controls what a task does for it
 through that feature's own settings — for example, the automatic tier
 advancement switch — not by turning the task off.
+
+One department's failure does not stop the others. A task that fails for one
+department (a database rollback, a bad integration) is recorded for that
+department and the task carries on with the rest, including Salesforce
+auto-sync, which now continues past the integration that failed.
 
 > **What if a task seems not to have run?** After the server restarts, a task
 > may take one cycle to run again. A failed run for your department appears on

@@ -542,6 +542,9 @@ class TestColumnConstraints:
             # minutes_signatures: the row is the signature, stamped when it is
             # given and never updated.
             "signed_at",
+            # minutes_public_copies: the row is the public posting, stamped
+            # when first posted; a repost replaces it in place.
+            "posted_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():

@@ -40,7 +40,7 @@ import type { Location, LocationCreate } from '../services/api';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useAuthStore } from '../stores/authStore';
 import { copyToClipboard } from '../utils/clipboard';
-import { getErrorDetail } from '../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 import { formCoercions } from '../utils/formValues';
 
 // Group locations: top-level = stations (has address, no room_number), children = rooms (have room_number or building)
@@ -70,6 +70,17 @@ function groupLocations(locations: Location[]): { stations: Location[]; rooms: M
   }
 
   return { stations, rooms };
+}
+
+/**
+ * LocationCreate.capacity is `ge=1`, so a 0 or a fraction is refused with a 422
+ * after the form has closed over the user's input. Blank means "not recorded".
+ */
+function capacityError(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  return Number.isInteger(n) && n >= 1 ? null : 'Capacity must be a whole number of at least 1, or left blank';
 }
 
 type StationMode = 'single_station' | 'multi_station' | null;
@@ -102,6 +113,7 @@ interface WizardRoom {
   room_number: string;
   floor: string;
   capacity: string;
+  saved?: boolean; // true once the room is persisted
 }
 
 type WizardStep = 'mode' | 'stations' | 'rooms' | 'done';
@@ -195,29 +207,34 @@ function LocationSetupWizard({
         toast.error('Every station needs a name');
         return;
       }
+      // groupLocations treats a location as a station only when it has an
+      // address; one saved without would be filed under "Other Locations" and
+      // the rooms added to it next would have no card to appear under.
+      if (!s.address.trim()) {
+        toast.error('Every station needs a street address');
+        return;
+      }
     }
     setIsSaving(true);
     try {
-      const newStations = [...stations];
-      for (let i = 0; i < newStations.length; i++) {
-        const s = newStations[i];
-        if (!s) continue;
-        if (!s.saved) {
-          const created = await locationsService.createLocation({
-            name: s.name.trim(),
-            ...(s.address.trim() ? { address: s.address.trim() } : {}),
-            ...(s.city.trim() ? { city: s.city.trim() } : {}),
-            ...(s.state.trim() ? { state: s.state.trim() } : {}),
-            ...(s.zip.trim() ? { zip: s.zip.trim() } : {}),
-          });
-          newStations[i] = { ...s, saved: true, savedId: created.id };
-        }
+      for (let i = 0; i < stations.length; i++) {
+        const s = stations[i];
+        if (!s || s.saved) continue;
+        const created = await locationsService.createLocation({
+          name: s.name.trim(),
+          address: s.address.trim(),
+          ...(s.city.trim() ? { city: s.city.trim() } : {}),
+          ...(s.state.trim() ? { state: s.state.trim() } : {}),
+          ...(s.zip.trim() ? { zip: s.zip.trim() } : {}),
+        });
+        // Marked as each one lands, so a failure further down the list leaves
+        // the earlier stations saved and a retry does not post them twice.
+        setStations((prev) => prev.map((p, j) => (j === i ? { ...p, saved: true, savedId: created.id } : p)));
       }
-      setStations(newStations);
       setActiveStationIdx(0);
       setStep('rooms');
-    } catch {
-      toast.error('Failed to save station');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save station'));
     } finally {
       setIsSaving(false);
     }
@@ -229,6 +246,11 @@ function LocationSetupWizard({
   const addRoom = () => {
     if (!roomForm.name.trim()) {
       toast.error('Room name is required');
+      return;
+    }
+    const roomCapacityError = capacityError(roomForm.capacity);
+    if (roomCapacityError) {
+      toast.error(roomCapacityError);
       return;
     }
     const updated = new Map(roomsByStation);
@@ -266,20 +288,31 @@ function LocationSetupWizard({
       for (const [stationIdx, roomList] of roomsByStation.entries()) {
         const station = stations[stationIdx];
         if (!station) continue;
-        for (const room of roomList) {
+        for (let roomIdx = 0; roomIdx < roomList.length; roomIdx++) {
+          const room = roomList[roomIdx];
+          if (!room || room.saved) continue;
           await locationsService.createLocation({
             name: room.name.trim(),
             building: station.name.trim(),
             ...(room.room_number.trim() ? { room_number: room.room_number.trim() } : {}),
             ...(room.floor.trim() ? { floor: room.floor.trim() } : {}),
-            ...(room.capacity ? { capacity: Number(room.capacity) } : {}),
+            ...(room.capacity.trim() ? { capacity: Number(room.capacity) } : {}),
+          });
+          // Marked as each one lands, so a retry after a failure part-way
+          // through posts only the rooms that did not save.
+          setRoomsByStation((prev) => {
+            const next = new Map(prev);
+            next.set(
+              stationIdx,
+              (prev.get(stationIdx) || []).map((r, j) => (j === roomIdx ? { ...r, saved: true } : r))
+            );
+            return next;
           });
         }
       }
       setStep('done');
     } catch (err: unknown) {
-      const detail = getErrorDetail(err);
-      toast.error(detail || 'Failed to save rooms');
+      toast.error(getErrorMessage(err, 'Failed to save rooms'));
     } finally {
       setIsSaving(false);
     }
@@ -439,8 +472,11 @@ function LocationSetupWizard({
                     )}
                     <div className="space-y-3">
                       <div>
-                        <label className={labelCls}>Station Name / Number *</label>
+                        <label htmlFor={`wizard-station-${idx}-name`} className={labelCls}>
+                          Station Name / Number *
+                        </label>
                         <input
+                          id={`wizard-station-${idx}-name`}
                           type="text"
                           value={station.name}
                           onChange={(e) => updateStation(idx, 'name', e.target.value)}
@@ -450,8 +486,11 @@ function LocationSetupWizard({
                         />
                       </div>
                       <div>
-                        <label className={labelCls}>Street Address</label>
+                        <label htmlFor={`wizard-station-${idx}-address`} className={labelCls}>
+                          Street Address *
+                        </label>
                         <input
+                          id={`wizard-station-${idx}-address`}
                           type="text"
                           value={station.address}
                           onChange={(e) => updateStation(idx, 'address', e.target.value)}
@@ -462,8 +501,11 @@ function LocationSetupWizard({
                       </div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <div>
-                          <label className={labelCls}>City</label>
+                          <label htmlFor={`wizard-station-${idx}-city`} className={labelCls}>
+                            City
+                          </label>
                           <input
+                            id={`wizard-station-${idx}-city`}
                             type="text"
                             value={station.city}
                             onChange={(e) => updateStation(idx, 'city', e.target.value)}
@@ -472,8 +514,11 @@ function LocationSetupWizard({
                           />
                         </div>
                         <div>
-                          <label className={labelCls}>State</label>
+                          <label htmlFor={`wizard-station-${idx}-state`} className={labelCls}>
+                            State
+                          </label>
                           <input
+                            id={`wizard-station-${idx}-state`}
                             type="text"
                             value={station.state}
                             onChange={(e) => updateStation(idx, 'state', e.target.value)}
@@ -482,8 +527,11 @@ function LocationSetupWizard({
                           />
                         </div>
                         <div>
-                          <label className={labelCls}>Zip</label>
+                          <label htmlFor={`wizard-station-${idx}-zip`} className={labelCls}>
+                            Zip
+                          </label>
                           <input
+                            id={`wizard-station-${idx}-zip`}
                             type="text"
                             inputMode="numeric"
                             autoComplete="postal-code"
@@ -588,13 +636,17 @@ function LocationSetupWizard({
                           )}
                         </div>
                       </div>
-                      <button
-                        onClick={() => removeRoom(idx)}
-                        aria-label="Remove room"
-                        className="text-theme-text-muted p-1 transition-colors hover:text-red-500"
-                      >
-                        <X className="h-4 w-4" aria-hidden="true" />
-                      </button>
+                      {room.saved ? (
+                        <span className="text-xs text-green-700 dark:text-green-400">Saved</span>
+                      ) : (
+                        <button
+                          onClick={() => removeRoom(idx)}
+                          aria-label="Remove room"
+                          className="text-theme-text-muted p-1 transition-colors hover:text-red-500"
+                        >
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -658,6 +710,8 @@ function LocationSetupWizard({
                     <input
                       id="wizard-room-capacity"
                       type="number"
+                      min="1"
+                      step="1"
                       value={roomForm.capacity}
                       onChange={(e) => setRoomForm((p) => ({ ...p, capacity: e.target.value }))}
                       placeholder="25"
@@ -1094,11 +1148,11 @@ export default function LocationsPage() {
       toast.error('Station name is required');
       return;
     }
-    // groupLocations decides "station" by the presence of an address. Clearing
-    // it on an existing station would demote it to "Other Locations" and leave
-    // every room filed under its name with no card to render under, so the
-    // page would appear to lose them.
-    if (editingStation && !stationForm.address.trim()) {
+    // groupLocations decides "station" by the presence of an address. A new
+    // station without one, or an existing one with it cleared, lands under
+    // "Other Locations" and every room filed under its name has no card to
+    // render under, so the page would appear to lose them.
+    if (!stationForm.address.trim()) {
       toast.error('A station needs a street address');
       return;
     }
@@ -1189,6 +1243,11 @@ export default function LocationsPage() {
   const handleSaveRoom = async () => {
     if (!roomForm.name.trim()) {
       toast.error('Room name is required');
+      return;
+    }
+    const roomCapacityError = capacityError(roomForm.capacity);
+    if (roomCapacityError) {
+      toast.error(roomCapacityError);
       return;
     }
     setIsSavingRoom(true);
@@ -1601,11 +1660,13 @@ export default function LocationsPage() {
               </div>
               <div>
                 <label htmlFor="station-address" className={labelCls}>
-                  Street Address
+                  Street Address *
                 </label>
                 <input
                   type="text"
                   id="station-address"
+                  required
+                  aria-required="true"
                   value={stationForm.address}
                   onChange={(e) => setStationForm((p) => ({ ...p, address: e.target.value }))}
                   placeholder="123 Main Street"
@@ -1762,6 +1823,8 @@ export default function LocationsPage() {
                 <input
                   id="room-form-capacity"
                   type="number"
+                  min="1"
+                  step="1"
                   value={roomForm.capacity}
                   onChange={(e) => setRoomForm((p) => ({ ...p, capacity: e.target.value }))}
                   placeholder="Maximum occupancy"

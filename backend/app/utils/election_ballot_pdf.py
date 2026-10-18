@@ -120,12 +120,25 @@ def _contest(
     return KeepTogether(parts)
 
 
+def _instruction(method: str, max_votes: int) -> str:
+    """The marking instruction for one contest under *method*.
+
+    Mirrors the electronic ballot's ``itemForm``: approval has no cap, a
+    multi-vote limit applies to every other single-choice method.
+    """
+    if method not in ("ranked_choice", "approval") and max_votes > 1:
+        return f"Mark UP TO {max_votes} boxes per position."
+    return _INSTRUCTIONS.get(method, _INSTRUCTIONS["simple_majority"])
+
+
 def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
     """Render the blank ballot, returning a BytesIO at position 0.
 
     *data*: ``election`` (title, voting_method, max_votes_per_position,
     allow_write_ins), ``positions`` — ordered list of
-    ``{name, candidates: [names]}`` — and optional ``approval_items``,
+    ``{name, candidates: [names], voting_method}``, where ``voting_method``
+    is the contest's effective method (the election's when omitted) — and
+    optional ``approval_items``,
     ordered ``{title, description}`` questions answered Approve / Deny.
     *meta*: ``org_name``, ``generated_at`` (display string), and optional
     ``logo`` — the organization's stored logo data URI.
@@ -133,7 +146,6 @@ def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> B
     election = data.get("election", {})
     method = election.get("voting_method") or "simple_majority"
     max_votes = int(election.get("max_votes_per_position") or 1)
-    ranked = method == "ranked_choice"
 
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -179,26 +191,28 @@ def render_printable_ballot_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> B
         Spacer(1, 16),
     ]
 
-    instruction = _INSTRUCTIONS.get(method, _INSTRUCTIONS["simple_majority"])
-    if not ranked and max_votes > 1 and method != "approval":
-        instruction = f"Mark UP TO {max_votes} boxes per position."
-
-    def mark() -> _MarkBox:
-        # A ranked ballot takes a written number, so its box is wider.
-        if ranked:
-            return _MarkBox(0.42 * inch, 0.28 * inch)
-        return _MarkBox(0.22 * inch, 0.22 * inch)
-
     for position in data.get("positions", []):
+        # A Ballot Builder item can override the election's method; the
+        # service resolves that override the way vote submission does, so
+        # paper asks for what the electronic ballot accepts.
+        contest_method = position.get("voting_method") or method
+        instruction = _instruction(contest_method, max_votes)
+        # A ranked contest takes a written number, so its box is wider.
+        box = (
+            (0.42 * inch, 0.28 * inch)
+            if contest_method == "ranked_choice"
+            else (0.22 * inch, 0.22 * inch)
+        )
+
         rows: List[List[Any]] = [
-            [mark(), Paragraph(esc(name), styles["choice"])]
+            [_MarkBox(*box), Paragraph(esc(name), styles["choice"])]
             for name in position.get("candidates", [])
         ]
         if election.get("allow_write_ins"):
             for _ in range(2):
                 rows.append(
                     [
-                        mark(),
+                        _MarkBox(*box),
                         Paragraph(
                             "Write-in: ____________________________________",
                             styles["choice"],

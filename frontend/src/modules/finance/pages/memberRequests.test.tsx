@@ -181,6 +181,17 @@ describe('request forms pick a budget line by name and amount left', () => {
     expect(budgetOptions).toHaveBeenCalledWith('fy-1');
   });
 
+  it('shows the name alone when the server sends no amount', async () => {
+    budgetOptions.mockResolvedValue([
+      { id: 'b-1', label: 'Training', amountRemaining: null },
+      { id: 'b-2', label: 'Apparatus (Station 2)', amountRemaining: '80.50' },
+    ]);
+    renderAt('/finance/purchase-requests/new', '/finance/purchase-requests/new', PurchaseRequestFormPage);
+
+    expect(await screen.findByRole('option', { name: 'Training' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Apparatus (Station 2) — $80.50 remaining' })).toBeInTheDocument();
+  });
+
   it('on the check request form', async () => {
     renderAt('/finance/check-requests/new', '/finance/check-requests/new', CheckRequestFormPage);
 

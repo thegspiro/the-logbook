@@ -38,6 +38,7 @@ import { Breadcrumbs, PromptDialog } from '../components/ux';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
+import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electionMeetingWindow';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 import { groupVoidedVotes } from '../utils/electionForensics';
 import {
@@ -301,27 +302,58 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       // PATCH is applied with exclude_unset: an omitted key leaves the old
       // link in place, so every "clear" position must be an explicit null.
-      const updateData: Pick<ElectionUpdate, 'meeting_id' | 'event_id' | 'meeting_date'> = {};
+      const updateData: Pick<ElectionUpdate, 'meeting_id' | 'event_id' | 'meeting_date' | 'start_date' | 'end_date'> =
+        {};
+      let meetingTimes: MeetingWindow = { start: null, end: null };
       if (source === 'meeting') {
         const meeting = availableMeetings.find((m) => m.id === id);
         updateData.meeting_id = id;
         updateData.event_id = null;
         updateData.meeting_date = meeting?.meeting_date ?? null;
+        if (meeting) meetingTimes = meetingWindow(meeting);
       } else if (source === 'event') {
         const event = upcomingEvents.find((e) => e.id === id);
         updateData.meeting_id = null;
         updateData.event_id = id;
         updateData.meeting_date = event?.start_datetime ?? null;
+        if (event) meetingTimes = eventWindow(event, tz);
       } else {
         updateData.meeting_id = null;
         updateData.event_id = null;
         updateData.meeting_date = null;
       }
 
+      // Voting runs during the meeting it is linked to, so the window follows
+      // the meeting's — but only while the dates can still change (the server
+      // refuses a start date once voting opens), and only to a start still
+      // ahead. Without an end time the election keeps its current length.
+      const datesEditable = election.status === ElectionStatus.DRAFT || election.status === ElectionStatus.NOMINATIONS;
+      const start = meetingTimes.start ? localToUTC(meetingTimes.start, tz) : '';
+      const aligned = datesEditable && !!start && new Date(start).getTime() > Date.now();
+      if (aligned) {
+        const currentLength = new Date(election.end_date).getTime() - new Date(election.start_date).getTime();
+        updateData.start_date = start;
+        updateData.end_date = meetingTimes.end
+          ? localToUTC(meetingTimes.end, tz)
+          : new Date(new Date(start).getTime() + (currentLength > 0 ? currentLength : 60 * 60 * 1000)).toISOString();
+      }
+
       const updated = await electionService.updateElection(electionId, updateData);
       setElection(updated);
       setShowMeetingSelector(false);
-      toast.success('Meeting link updated');
+      if (aligned) {
+        toast.success(
+          `Meeting linked. Voting now runs ${formatDateTime(updated.start_date, tz)} – ${formatDateTime(updated.end_date, tz)}.`
+        );
+      } else if (source && datesEditable) {
+        toast.success(
+          meetingTimes.start
+            ? 'Meeting linked. Dates unchanged because the meeting has already started.'
+            : 'Meeting linked. Dates unchanged because the meeting has no start time.'
+        );
+      } else {
+        toast.success('Meeting link updated');
+      }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update meeting link'));
     }
@@ -871,9 +903,11 @@ export const ElectionDetailPage: React.FC = () => {
       // Dedicated endpoint: the server recomputes the non-voter list at
       // send time (no stale client-side list) and stamps reminder_sent_at,
       // which suppresses the automatic pre-close reminder.
-      const response = await electionService.remindNonVoters(electionId, {
+      const job = await electionService.startReminderSendJob(electionId, {
         message: message || 'This is a reminder to cast your vote. The voting window will be closing soon.',
       });
+      const response = await electionService.waitForBallotSendJob(electionId, job.id, () => !isMountedRef.current);
+      if (!response) return;
 
       setShowRemindModal(false);
       // The server stamps reminder_sent_at on a delivered send; the stamp and
@@ -1475,6 +1509,7 @@ export const ElectionDetailPage: React.FC = () => {
                       : ''
                 }
                 onChange={(e) => void handleMeetingChange(e.target.value)}
+                aria-label="Linked meeting or event"
                 className="form-input shadow-xs"
               >
                 <option value="">No linked meeting</option>
@@ -1642,9 +1677,12 @@ export const ElectionDetailPage: React.FC = () => {
                     </>
                   )}
 
+                  {/* A ballot built only in the Ballot Builder (motions, membership
+                      votes) has no plain positions but still prints: the server
+                      accepts positions or ballot items, and so does the button. */}
                   {election.status !== ElectionStatus.CLOSED &&
                     election.status !== ElectionStatus.CANCELLED &&
-                    (election.positions?.length ?? 0) > 0 && (
+                    ((election.positions?.length ?? 0) > 0 || (election.ballot_items?.length ?? 0) > 0) && (
                       <button
                         onClick={() => {
                           void handleDownloadPrintableBallot();

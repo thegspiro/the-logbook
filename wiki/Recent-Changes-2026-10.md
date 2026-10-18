@@ -5,6 +5,70 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 16 – 18, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-16--18-2026).
+Predecessor: [October 15 – 16](#recent-changes-october-15--16-2026).
+
+**The headline:** large elections no longer time out when ballots are emailed,
+minutes can be built from the meeting's agenda and signed in the app, Google
+Calendar and Outlook can publish the department's events, and a weekly security
+report now reaches the IT Manager.
+
+### Read this first
+
+**If you run the server:** twelve new migrations, all additive; `alembic heads`
+should report one head, `1117b642643b`. Calendar publishing stays off until you
+set `CALENDAR_SYNC_ENABLED`. The weekly security report starts on its own, so
+make sure the scheduler runs (otherwise nothing is sent). Ballot sends run inside
+the web process, so a restart mid-send leaves that send marked interrupted.
+
+**If you administer a department:**
+
+- **Security report.** Counts only, Monday 07:00 to whoever holds the IT Manager
+  position (administrators if no one does). Change or turn it off under
+  **Organization Settings > Authentication > Security Report**.
+- **Equipment checks.** **Min to Pass** now fails a count line and **par** only
+  sets how much to restock. Review any checklist that used par as its pass mark.
+- **Elections.** **Send Ballot Emails** and **Remind Non-Voters** run in the
+  background and show progress. Linking a meeting sets the voting window to it.
+  Printed ballots show your logo and follow each contest's own voting method.
+- **Minutes.** Give a meeting an **Agenda** and its minutes start laid out as
+  those items; **Sync from agenda** brings in later changes without touching what
+  you wrote. Adopted minutes are signed under **Minutes > Signers** slots.
+- **Integrations.** Connect Google Calendar or Outlook with a sign-in. A
+  department connects Google Workspace **or** Microsoft 365 for member accounts.
+- **Medical Supplies.** Stock on the trucks now counts toward Low stock and the
+  reorder; tick **Kept on apparatus only** for equipment with no shelf spare.
+- **Finance.** A chain or step that requests have used cannot be deleted; turn
+  the chain off instead.
+
+**If you are a member:** the dashboard's Standby row shows your own hours, and
+members who cannot hold a shift seat no longer see **Take a Shift**. Event
+cancellations and changes now reach you by email, and a password change sends you
+a notice.
+
+### What changed, by area
+
+| Area             | Change                                                                                             |
+| ---------------- | -------------------------------------------------------------------------------------------------- |
+| Elections        | Background ballot and reminder sends; printed ballot logo, mark boxes and per-contest method       |
+| Elections        | Nominee bell notice; meeting-aligned voting window; no write-in on Approve/Deny                    |
+| Minutes          | Agenda items become the outline; Sync from agenda; Not taken up; adopted minutes signed in the app |
+| Integrations     | Google Calendar and Outlook connect; department events feed; Microsoft 365 account provisioning    |
+| Training         | Sync History tab; Import History renamed Import Past Training                                      |
+| Medical Supplies | Truck stock counted and expired; Kept on apparatus only; CSV carries the setting                   |
+| Equipment checks | Min to Pass fails a count; par sets the restock; count units                                       |
+| Operations       | One page header and section strip; phone layouts for one apparatus and the supply worklist         |
+| Security         | Weekly security report; password-change audit and notice; security-notice email escapes its text   |
+| Events, grants   | Cancellation and change emails; grant compliance and pledge reminders; Amount Awarded field        |
+| Forms            | Cleared fields save and failed creates keep their input in many create and edit forms              |
+
+Screenshots to capture and video beats to redo are queued in the repository's
+`docs/training/SCREENSHOT_CURRENCY.md` and `docs/youtube-scripts/SCRIPT_CURRENCY.md`.
+
 ## Recent changes: October 15 – 16, 2026
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering

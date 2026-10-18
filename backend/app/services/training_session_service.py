@@ -718,6 +718,11 @@ class TrainingSessionService:
                 training_type=TrainingType(session_data.training_type),
                 credit_hours=session_data.credit_hours,
                 instructor=session_data.instructor,
+                instructor_id=(
+                    str(session_data.instructor_id)
+                    if session_data.instructor_id
+                    else None
+                ),
                 issues_certification=session_data.issues_certification,
                 certification_number_prefix=session_data.certification_number_prefix,
                 issuing_agency=session_data.issuing_agency,

@@ -849,6 +849,9 @@ class TestReopenMinutes:
             submitted_at=approved_at,
         )
         service.get_minutes = AsyncMock(return_value=minutes)
+        no_public_copy = MagicMock()
+        no_public_copy.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = no_public_copy
 
         result = await service.reopen_minutes(minutes.id, org_id)
 

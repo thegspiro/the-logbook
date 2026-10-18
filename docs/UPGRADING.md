@@ -504,6 +504,33 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A weekly security report is emailed to the IT Manager (2026-10-16)
+
+Every department now receives a weekly email of **counts** — security alerts by
+severity and type, application errors by type, and whether the audit log's hash
+chain verified — with links to the Security Alerts and Audit Log pages. It
+carries no member names, usernames or event descriptions. A quiet week sends a
+short all-clear, so a missing email means the scheduler or mail is broken.
+
+- **On by default, Monday 07:00 on the department's clock.** Change the day and
+  hour, or turn it off, under **Organization Settings > Authentication >
+  Security Report**. Nothing is stored until someone saves, so an installation
+  upgrading today starts receiving it without any action.
+- **Recipients:** active members who hold the **IT Manager** position; if no
+  one does, active full administrators. The settings page says which. It is a
+  required email, so a recipient cannot switch it off in their own preferences.
+- **Needs the scheduler.** The `weekly_security_report` task is checked hourly
+  (`0 * * * *` on a host cron setup, listed with the other tasks in
+  `scheduled_tasks.py`). A deployment that does not run scheduled tasks sends
+  nothing.
+- **First send:** a department is not sent last week's slot at upgrade time; it
+  waits for its next scheduled day and hour.
+- **Single-department installs** also count alerts raised before sign-in (for
+  example repeated failed logins), which have no organization and appear in no
+  department's alert list on a shared install.
+
+No migration; the setting lives in the organization's existing settings JSON.
+
 ### Equipment-check counts: short of par is a restock, not a failure (2026-10-16)
 
 A count line on an equipment checklist now answers two questions with two

@@ -5,6 +5,153 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 16 – 18, 2026
+
+Net changes merged to `main` from the close of the
+[October 15 – 16 pass](#change-audit-october-15--16-2026) to 2026-10-18 ~12:10 UTC,
+written against `8bb9a74d`. That pass was written against `cef8a679` (2026-10-16
+07:45 UTC); about fourteen commits merged between 09:00 and 13:00 UTC that day
+were not in it and are covered here. About 90 non-merge commits outside the
+security-review ledgers, the screenshot pipeline and the regenerated schema
+doc. Themes: **Elections** (background ballot sends, printed ballots, nominee
+notices), **Meeting Minutes** (agenda items become the outline, signing),
+**calendar and directory integrations** (Google Calendar and Outlook connect,
+department ICS feed, Microsoft 365 accounts), **Medical Supplies** on the
+apparatus, **equipment-check counts**, a **weekly security report**, a shared
+**Operations header** and phone layouts, and a run of **create/edit-form fixes**.
+`CHANGELOG.md` is closed; this section and its wiki handoff are the record.
+
+Wiki handoff:
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-16--18-2026).
+
+**Migration route.** Twelve revisions, all additive and guarded, each with a real
+downgrade: `f236c56b1b49` (minutes signatures table), `0bbf263a5ff0`
+(`inventory_items.apparatus_only`), `c869ec90a41b` (`calendar_sync_mappings`),
+`64bf75298e89` (`suspension_requested_at` on Google accounts), `12e20092c1a8`
+(count unit and par snapshot on check items), `38a57d984653`
+(`meetings.agenda_items`), `c87efd81c5aa` (`ballot_send_jobs`), `73594b326e68`
+(`directory_account_provisions`), `244b0fd07205` (`ballot_send_jobs.kind`),
+`d3bb8f81ed07` (`license_pending`, `managed_on_premises`) and two merge revisions
+(`fccdac60063f`, `1117b642643b`, no schema change). `alembic heads` should report
+the single head `1117b642643b`. A forked-head repair also shipped in the
+reports-analytics security pass.
+
+### Read this first
+
+1. **A weekly security report now goes to the IT Manager by default.** Counts only
+   (alerts, errors, audit-chain verification), Monday 07:00 on the department's
+   clock, to the IT Manager position or, failing that, full administrators. It
+   needs the scheduler, and a required email cannot be switched off by the
+   recipient. Change or disable it under **Organization Settings > Authentication
+   > Security Report**. Recorded in `UPGRADING.md`.
+2. **Equipment-check count lines change verdicts.** **Min to Pass** (or **Critical
+   Min** when it is blank) fails a line; **par** only drives restock, swaps and
+   the supply worklist, and never fails anything. A par-only line that used to
+   fail for being one short now passes with a restock. Filed results keep their
+   verdicts. Recorded in `UPGRADING.md`.
+3. **Ballot and reminder emails send in the background.** A send returns at once
+   and is polled; only one send per election runs at a time (a second is refused
+   with 409). The job runs in the web process, not a worker, so a restart
+   mid-send is reported as interrupted after 30 minutes. Ballot links are now
+   committed before any mail goes out. See `KNOWN_LIMITATIONS.md` (Elections —
+   Background Ballot Sends Live in the Web Process).
+4. **Calendar publishing is off by default.** `CALENDAR_SYNC_ENABLED` (passed
+   through the Compose files) must be set before **Connect with Google** or
+   **Connect with Microsoft** works; rows an older release left "connected" read
+   _coming soon_. The connect flows request only app-created-calendar scope and
+   create a dedicated `<Organization> Events` calendar. The department
+   iCalendar feed (`/api/public/v1/calendar/org/{token}.ics`) is issued when the
+   iCalendar integration connects; it carries titles, times, location name and a
+   link only.
+5. **A department connects Google Workspace or Microsoft 365, not both.** Microsoft
+   365 provisioning has not run against a live tenant (`KNOWN_LIMITATIONS.md`);
+   accounts synced from on-premises Active Directory are flagged, never changed.
+6. **Event cancellations, changes and organizer notices are now emailed** under a
+   new optional member email kind, **Event changes and cancellations** (on by
+   default, a department can require it). Grant compliance tasks and pledges get
+   daily email reminders under **Fundraising duties** (officers, on by default).
+   Neither needs a migration.
+7. **A finance approval chain or step that requests have used can no longer be
+   deleted.** The admin is told to turn the chain off instead; chain and step
+   edits are now audited.
+8. **Password changes are audited and the member is told** by a bell notice and an
+   email (refusals are recorded with the control that refused, never a password).
+
+### User-visible changes, by area
+
+| Area             | Change                                                                                                                                                                                            | Where documented                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Elections        | Ballot and reminder emails send in the background with progress; tokens saved first; only one send at a time                                                                                      | training 14; wiki `Module-Elections`, `Module-Elections-Developer`            |
+| Elections        | Printed ballot: logo, real mark boxes, each contest under its own voting method; certified results and pre-meeting PDFs share the letterhead; **Print Blank Ballots** works for item-only ballots | training 14                                                                   |
+| Elections        | Nominee gets a bell notice; linking a meeting sets the voting window; position suggestions include department positions; no write-in on Approve/Deny                                              | training 14                                                                   |
+| Minutes          | Agenda items (presenter, notes, prepared motion, linked documents) become the minutes outline; **Sync from agenda**; **Not taken up**                                                             | training 04; `MEETING_MINUTES_MODULE.md`                                      |
+| Minutes          | Adopted minutes are signed in the app (**Minutes > Signers**; name plus password)                                                                                                                 | training 04; `MEETING_MINUTES_MODULE.md`                                      |
+| Integrations     | Google Calendar and Outlook connect by sign-in; department ICS feed; calendar sync every 5 minutes                                                                                                | training 16; wiki `Configuration-Environment`                                 |
+| Integrations     | Microsoft 365 account provisioning for converted members; Google attention list and admin email                                                                                                   | training 16; wiki `Integration-Microsoft-365`, `Integration-Google-Workspace` |
+| Training         | **Sync History** tab on the external-training page; **Import History** renamed **Import Past Training**                                                                                           | training 02, 16; wiki `Module-Training-Developer`                             |
+| Medical Supplies | Ready stock is shelf plus trucks; **Kept on apparatus only**; Next expiry and CSV include trucks                                                                                                  | training 05; `MEDICAL_SUPPLIES_MODULE.md`; wiki `Module-Medical-Supplies`     |
+| Equipment checks | Min to Pass fails a count; par sets the restock; count units; builder labels and warnings                                                                                                         | training 03; `UPGRADING.md`                                                   |
+| Operations       | One page header and section strip across eight pages; phone layouts for one apparatus and the supply worklist                                                                                     | training 05                                                                   |
+| Dashboard        | Standby shows the member's own hours; Take a Shift and Standby hidden from members who cannot hold a seat                                                                                         | training 00                                                                   |
+| Store            | Offline notice, drafts explained, one countdown                                                                                                                                                   | training 18                                                                   |
+| Facilities       | Photos and documents upload in one step                                                                                                                                                           | training 06; `UPGRADING.md`                                                   |
+| Admin            | Weekly security report card; one department's task failure no longer stops the rest                                                                                                               | training 08; `UPGRADING.md`                                                   |
+| Events           | Cancellation, change and organizer-notice emails; post-event validation goes to organizers                                                                                                        | training 04, 07                                                               |
+| Grants           | Daily compliance and pledge reminders; **Amount Awarded** on the application                                                                                                                      | training 12                                                                   |
+| Finance          | Used approval chains and steps cannot be deleted                                                                                                                                                  | training 11                                                                   |
+| Account          | Password change notice and audit; privacy choices path corrected                                                                                                                                  | training 00                                                                   |
+| Forms            | Cleared fields save and failed creates keep their input across API keys, saved reports, IP exceptions, grants, events, locations, patterns, products, vendors                                     | no screen changed                                                             |
+
+Security-review passes (scheduled tasks 7, locations and kiosk 7, onboarding 7,
+reports and analytics 9 with RPT2-29-2 resolved, security audit and IP, core
+infrastructure 7, frontend shared with an `apiCache` exclusion for `/maintenance`
+routes, cross-cutting baseline 10, auth and session with a fix that HTML-escapes
+the security-notice email, permissions and roles, public webhooks, storefront
+payments) are recorded in `docs/security-review/PROGRESS.md`.
+
+### Documentation changes in this pass
+
+| File                                                                              | Change                                                                              |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `docs/training/00-getting-started.md`                                             | Standby row and Take a Shift; password-change notice                                |
+| `docs/training/04-events-meetings.md`                                             | Agenda items, Sync from agenda, Not taken up; signing adopted minutes               |
+| `docs/training/05-inventory.md`                                                   | Operations header; phone layouts; stock on the apparatus and Kept on apparatus only |
+| `docs/training/08-admin-reports.md`                                               | Weekly security report; scheduled-task isolation                                    |
+| `docs/training/14-elections.md`                                                   | Background sends, nominee notice, meeting window, printed ballots, write-in rule    |
+| `docs/training/18-storefront.md`                                                  | Store offline wording                                                               |
+| `docs/training/21-october-2026-release-changes.md`                                | Index for this window                                                               |
+| `docs/MEDICAL_SUPPLIES_MODULE.md`, `wiki/Module-Medical-Supplies.md`              | Stock on the apparatus; closes the earlier storage gap                              |
+| `docs/training/SCREENSHOT_CURRENCY.md`, `docs/youtube-scripts/SCRIPT_CURRENCY.md` | Queues                                                                              |
+| `wiki/Recent-Changes-2026-10.md`, `wiki/Home.md`                                  | Wiki handoff                                                                        |
+
+Already updated by the feature commits and checked: training 02, 03, 06, 07, 11,
+12, 16, `KNOWN_LIMITATIONS.md`, `UPGRADING.md`, `COMMUNICATIONS_MODULE.md`,
+`FINANCE_MODULE.md`, `GRANTS_FUNDRAISING_MODULE.md`, wiki `Module-Events`,
+`Module-Grants-Fundraising`, `Security-Audit-Logging`, `Integration-Microsoft-365`.
+
+### Screenshots
+
+A screenshot-pipeline run on 2026-10-17 re-shot or added images for guides 00 to
+08, 10, 11, 13 to 17 and marked those rows **CURRENT** in place. This pass
+queues what that run could not cover (new screens from commits merged
+after it, and changes it predates). See
+[`training/SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md#queued-by-the-october-16--18-documentation-pass).
+Nothing was captured by this pass.
+
+### Scripts
+
+Flagged in [`youtube-scripts/SCRIPT_CURRENCY.md`](./youtube-scripts/SCRIPT_CURRENCY.md).
+Nothing was re-recorded.
+
+### Open items found while writing this pass
+
+- `docs/training/SCREENSHOT_STATUS.md` is generated and was not regenerated.
+- The `Module-Elections` wiki page covers the background send; the printed-ballot
+  per-contest wording is only in training 14.
+- Microsoft 365 provisioning is unproven against a live tenant, and SCH-18
+  (unbounded `member_call_counts`) still awaits an owner-picked cap
+  (`KNOWN_LIMITATIONS.md`).
+
 ## Change audit: October 15 – 16, 2026
 
 Net changes merged to `main` from the close of the

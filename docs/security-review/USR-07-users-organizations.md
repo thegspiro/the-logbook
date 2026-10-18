@@ -1,6 +1,113 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-13 (pass 8, watchdog pickup) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-13 (pass 8, watchdog pickup), 2026-10-14 (pass 9, PR [#3250](https://github.com/thegspiro/the-logbook/pull/3250) — omitted from this line by that pass, corrected here), 2026-10-18 (pass 10) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4), [#2602](https://github.com/thegspiro/the-logbook/pull/2602) (pass 6)
+
+---
+
+## Pass 10 (2026-10-18) — watchdog pickup: real delta (PHI read auditing, new status-change-reason endpoints, undo-drop window + separation-date hardening), 0 fixed, 0 new findings
+
+**Scope.** Pass 9 merged as `7add73bc4` (PR #3250). `git log --no-merges
+7add73bc4..HEAD` over the twelve declared files (`endpoints/users.py`,
+`endpoints/organizations.py`, `endpoints/member_status.py`,
+`endpoints/member_leaves.py`, `services/user_service.py`,
+`services/organization_service.py`, `services/member_leave_service.py`,
+`models/user.py`, `schemas/user.py`, `schemas/organization.py`,
+`mcp/tools/members.py`, `mcp/tools/organization.py`): 7 non-merge commits,
+all read in full. No user/organization-table migration landed (checked by
+scanning every new migration body for `users`/`organizations`/
+`member_status`/`member_leave` — none matched; the new head
+`89723c04ae94` and its siblings all belong to the Minutes module's own
+signatures/public-copies/reminders tables).
+
+**3 of the 7 commits only touch `schemas/organization.py`, and only to add
+fields to the Minutes module's own settings sub-schema** (`public_posting`
+/ `executive_library_publishing` / `executive_public_posting` on
+`MinutesSettingsUpdate`, a new `SignatureSlotSetting` + `signature_slots`
+field, `reminder_days_before_due` / `overdue_repeat_days` /
+`open_items_digest`) — all `Optional[...] = None` with simple
+Field-level constraints (regex/length/range), nested under the shared
+`OrganizationSettingsUpdate` aggregator, which is why they show up in this
+feature's file list despite being Minutes' (Feature 24) own surface. No
+logic in `organizations.py`/`organization_service.py` touched; same shape
+as pass 9's note about an unrelated file sharing this feature's declared
+list.
+
+**The 4 real changes, each verified sound:**
+
+- **PHI read auditing (`c498e4bc1`).** `member_leaves.py` gains
+  `_audit_leave_read()`, called from `list_leaves_of_absence` (every read)
+  and `get_member_leaves` (only when `not is_own` — a member reading their
+  own leave history isn't audited as accessing someone else's PHI). Every
+  event carries ids and a record count, never the leave's free-text reason
+  — satisfies HIPAA §164.312(b) without logging the PHI itself. Pure
+  audit-logging addition; no auth/tenancy/exposure change.
+- **New status-change-reason endpoints (`1a305b736`).** `GET
+/users/{id}/status-change` and `PATCH
+/users/{id}/status-change-reason` are both gated by
+  `require_permission("members.manage")` and resolve the target through
+  the existing `_load_member(db, user_id, organization_id, for_update=...)`
+  helper — direct org-scoping (Pitfall #14a) via `User.organization_id ==
+organization_id`, excluding soft-deleted rows, with `for_update=True` on
+  the write path. The PATCH refuses when there's no status change on
+  record to attach a reason to, strips/nulls a blank reason, and audits
+  with both the previous and new reason text alongside the original
+  `member_status_changed` entry. No new exposure: the reason was already
+  readable by a `members.manage` holder via the member record itself.
+- **Undo-drop window counts from the drop's effective date
+  (`5ee95c2d4`).** Previously a back-dated drop still got the full
+  `UNDO_DROP_WINDOW_DAYS` counted from _when it was recorded_, so a drop
+  entered three weeks late could be silently erased from service history
+  well past when a department would expect that to still be possible —
+  tightening, not weakening, an existing business rule. The new anchor
+  calculation is capped so it can never run _later_ than the original
+  window (`anchor = changed - timedelta(days=backdated_days)` only shifts
+  backward), closing the exact loophole the commit names: editing a
+  stint's end afterwards in Service History to stretch the undo window.
+  Both call sites (`get_undo_drop_availability`, `undo_member_drop`) are
+  unchanged in their org-scoping/permission gates — only the availability
+  calculation itself changed.
+- **Separation-date on status change (`0929c7fea`).** `change_member_status`
+  (existing endpoint, existing `members.manage`-gated route, unchanged
+  this commit) now accepts an optional `separation_date`, validated
+  server-side against `today` (`resolve_org_today`, not client time) and
+  refused with 400 if in the future; a date before the member's current
+  service began is refused via the service layer's own `ValueError` → 400. `status_changed_at` (audit/undo-window anchor) is left alone;
+  only the service-stint close date moves. No new permission surface.
+
+**All 79 routes across the four principal files re-enumerated mechanically**
+(32/24/16/7 — `member_status.py` grew from 14 to 16 for the two new
+status-change-reason routes above; the other three files are unchanged
+counts from pass 9). No route re-gated, no `.ilike()`/`.like()` without
+`escape=`, no raw `csv.writer`, no `window.confirm`/`alert`/`prompt`
+introduced this window (grepped the four substantive commits directly).
+
+**Standing items re-verified, both unchanged (neither file in this
+window's delta):**
+
+- **USR-5** (unbounded lists, narrowed/accepted by the owner) —
+  `get_archived_members` (now `member_status.py:1012`, line drift only
+  from this window's own insertions landing above it),
+  `list_users_with_roles` (`users.py:870`, file untouched this window),
+  `MemberLeaveService.list_leaves` (`member_leave_service.py:160`, file
+  untouched this window) all unchanged in shape.
+- **USR-8** (`GET /users` sends the full roster record to every
+  `members.view` holder, narrowed/accepted by the owner) — `users.py` and
+  `UserListResponse` untouched this window.
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.**
+
+### Completion gate (pass 10)
+
+| Check                                                             | Result                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                     | ✅ 0 violations                                                                                                                                                                                                                                                                                                                                                                |
+| `black --check app/ tests/ alembic/`                              | ✅ 2438 files unchanged                                                                                                                                                                                                                                                                                                                                                        |
+| `isort --check-only app/ tests/ alembic/`                         | ✅ clean                                                                                                                                                                                                                                                                                                                                                                       |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ 619 revisions, single head `89723c04ae94`                                                                                                                                                                                                                                                                                                                                   |
+| `python3 scripts/check_route_permissions.py --strict` (repo root) | ✅ 272 routes, 0 errors, 0 warnings                                                                                                                                                                                                                                                                                                                                            |
+| `pytest tests/ -q -k "<pass 9's own selection string>"`           | ✅ 1,576 passed, 1 skipped (environment-only, `pywebpush`) — a first run against a local database still at the pre-migration head gave 17 failures (`meeting_minutes.published_revision_version` unknown column, an unrelated Minutes-module migration this session hadn't applied); after `alembic upgrade head` the same selection was clean, same pattern pass 9 documented |
+| `frontend: npm run typecheck`                                     | ✅ clean                                                                                                                                                                                                                                                                                                                                                                       |
+| `frontend: npm run lint`                                          | ✅ clean                                                                                                                                                                                                                                                                                                                                                                       |
 
 ---
 

@@ -25,7 +25,6 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     HRFlowable,
-    KeepTogether,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -35,16 +34,19 @@ from reportlab.platypus import (
 
 from app.utils.election_pdf_style import (
     CONTENT_WIDTH,
-    GRID,
     INK,
     MUTED,
     SIDE_MARGIN,
     VERTICAL_MARGIN,
     base_styles,
     esc,
-    heading_band,
+    key_value_table,
     letterhead,
+    padded,
+    page_footer,
     panel,
+    ruled_table,
+    section,
 )
 
 _TIE_POLICY_LABELS = {
@@ -61,63 +63,14 @@ _BATCH_STATUS_LABELS = {
 }
 
 
-def _results_table(
-    data: List[List[Any]], fractions: List[float], bold_rows: List[int]
-) -> Table:
-    """A ruled table under a bold header row, columns sized as fractions.
-
-    No dark header fill and no vertical grid: both print as heavy blocks on
-    a black-and-white copier. The section's gray band sits directly above,
-    so the header row itself stays white to read as separate from it. *bold_rows* (data indexes, header is 0) mark
-    the rows a reader is looking for, such as the winners.
-    """
-    commands: List[Any] = [
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("TEXTCOLOR", (0, 0), (-1, -1), INK),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LINEBELOW", (0, 0), (-1, 0), 1, INK),
-        ("LINEBELOW", (0, 1), (-1, -2), 0.5, GRID),
-        ("LINEBELOW", (0, -1), (-1, -1), 1, INK),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-    ]
-    for row in bold_rows:
-        commands.append(("FONTNAME", (0, row), (-1, row), "Helvetica-Bold"))
-    return Table(
-        data,
-        colWidths=[CONTENT_WIDTH * f for f in fractions],
-        repeatRows=1,
-        style=TableStyle(commands),
-    )
-
-
-def _padded(paragraphs: List[Paragraph]) -> Table:
-    """Body text inset to line up with the heading and table text above."""
-    return Table(
-        [[p] for p in paragraphs],
-        colWidths=[CONTENT_WIDTH],
-        style=TableStyle(
-            [
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, 0), 8),
-            ]
-        ),
-    )
-
-
-def _section(heading: str, body: List[Any], styles: Dict[str, Any]) -> KeepTogether:
-    """A heading band and what follows it, never split from each other."""
-    return KeepTogether([heading_band(heading, [], styles), *body, Spacer(1, 14)])
-
-
 def _quorum_cell(results: Dict[str, Any]) -> str:
     """Quorum row text. ``quorum_met`` is None when the election has no
-    quorum rule, and that must not print as "Met" (W50-48)."""
+    quorum rule, and that must not print as "Met" (W50-48).
+
+    Returned unescaped: it lands in a bare table cell, which prints its text
+    literally, so escaping it would put "&amp;" on the page."""
     if results.get("quorum_detail"):
-        return esc(results["quorum_detail"])
+        return str(results["quorum_detail"])
     met = results.get("quorum_met")
     if met is None:
         return "No quorum requirement"
@@ -212,27 +165,9 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
         ["Quorum", _quorum_cell(results)],
     ]
     story.append(
-        _section(
+        section(
             "Turnout &amp; Quorum",
-            [
-                Table(
-                    turnout_rows,
-                    colWidths=[CONTENT_WIDTH * 0.35, CONTENT_WIDTH * 0.65],
-                    style=TableStyle(
-                        [
-                            ("FONTSIZE", (0, 0), (-1, -1), 10),
-                            ("TEXTCOLOR", (0, 0), (-1, -1), INK),
-                            ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                            ("LINEBELOW", (0, 0), (-1, -2), 0.5, GRID),
-                            ("LINEBELOW", (0, -1), (-1, -1), 1, INK),
-                            ("TOPPADDING", (0, 0), (-1, -1), 6),
-                            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                        ]
-                    ),
-                )
-            ],
+            [key_value_table(turnout_rows)],
             styles,
         )
     )
@@ -276,7 +211,7 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
                     outcome,
                 ]
             )
-        body: List[Any] = [_results_table(rows, [0.52, 0.14, 0.14, 0.2], winners)]
+        body: List[Any] = [ruled_table(rows, [0.52, 0.14, 0.14, 0.2], winners)]
         if position.get("is_tie"):
             policy = data.get("election", {}).get("tie_policy") or "co_winners"
             tie_heading = "TIE" if policy == "co_winners" else "UNRESOLVED TIE"
@@ -292,7 +227,7 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
                     ]
                 ),
             ]
-        story.append(_section(heading, body, styles))
+        story.append(section(heading, body, styles))
 
     # ── Paper-ballot batches ─────────────────────────────────────────
     batches = data.get("batches", [])
@@ -319,9 +254,9 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
                 ]
             )
         story.append(
-            _section(
+            section(
                 "Paper-Ballot Batches",
-                [_results_table(rows, [0.34, 0.12, 0.27, 0.27], [])],
+                [ruled_table(rows, [0.34, 0.12, 0.27, 0.27], [])],
                 styles,
             )
         )
@@ -385,9 +320,9 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
             )
         integrity_body.append(Paragraph(text + ".", styles["meta"]))
     story.append(
-        _section(
+        section(
             "Integrity Verification",
-            [_padded(integrity_body)],
+            [padded(integrity_body)],
             styles,
         )
     )
@@ -421,10 +356,10 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
         ),
     )
     story.append(
-        _section(
+        section(
             "Certification",
             [
-                _padded(
+                padded(
                     [
                         Paragraph(
                             "We certify that the results above are true and "
@@ -441,21 +376,7 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
         )
     )
 
-    title = str(election.get("title") or "")
-
-    def page_footer(canvas: Any, document: Any) -> None:
-        # The certificate is filed as loose pages, so each one names the
-        # election it belongs to and where it falls in the set.
-        canvas.saveState()
-        canvas.setFont("Helvetica", 8)
-        canvas.setFillColor(MUTED)
-        canvas.drawCentredString(
-            letter[0] / 2,
-            VERTICAL_MARGIN / 2,
-            f"Certified Election Results · {title} · Page {document.page}",
-        )
-        canvas.restoreState()
-
-    doc.build(story, onFirstPage=page_footer, onLaterPages=page_footer)
+    footer = page_footer(f"Certified Election Results · {election.get('title') or ''}")
+    doc.build(story, onFirstPage=footer, onLaterPages=footer)
     buf.seek(0)
     return buf

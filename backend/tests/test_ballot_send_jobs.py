@@ -20,18 +20,32 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.elections import (
+    RemindNonVotersRequest,
     get_ballot_send_job_endpoint,
 )
+from app.api.v1.endpoints.elections import remind_non_voters as remind_endpoint
 from app.api.v1.endpoints.elections import send_ballot_emails as send_ballot_endpoint
-from app.api.v1.endpoints.elections import start_ballot_send_job_endpoint
-from app.models.election import BallotSendJob, BallotSendJobStatus, Election
+from app.api.v1.endpoints.elections import (
+    start_ballot_send_job_endpoint,
+    start_reminder_send_job_endpoint,
+)
+from app.models.election import (
+    BallotSendJob,
+    BallotSendJobKind,
+    BallotSendJobStatus,
+    Election,
+)
 from app.schemas.election import EmailBallot
 from app.services.ballot_send_jobs import (
     INTERRUPTED_JOB_ERROR,
     SEND_IN_PROGRESS_DETAIL,
     STALE_JOB_AFTER,
+    BallotSend,
+    ReminderSend,
+    find_active_job,
     run_ballot_send_job,
 )
+from app.services.election_service import ElectionService
 
 pytestmark = [pytest.mark.integration]
 
@@ -141,12 +155,12 @@ async def _queue(db_session: AsyncSession, data: dict, **email) -> MagicMock:
 
 
 async def _run(db_session: AsyncSession, start: MagicMock, send_batch) -> str:
-    args, kwargs = start.call_args
+    job_id, org_id, send = start.call_args.args
     with patch(SEND_BATCH, new=send_batch):
         await run_ballot_send_job(
-            *args, **kwargs, session_factory=_session_factory(db_session)
+            job_id, org_id, send, session_factory=_session_factory(db_session)
         )
-    return args[0]
+    return job_id
 
 
 async def test_queueing_records_a_job_and_hands_it_to_the_runner(
@@ -156,14 +170,17 @@ async def test_queueing_records_a_job_and_hands_it_to_the_runner(
 
     start = await _queue(db_session, data, subject="Vote now")
 
-    job_id, org_id = start.call_args.args
+    job_id, org_id, send = start.call_args.args
     assert org_id == data["org_id"]
-    assert start.call_args.kwargs["subject"] == "Vote now"
-    assert start.call_args.kwargs["base_ballot_url"].endswith("/ballot")
+    assert isinstance(send, BallotSend)
+    assert send.subject == "Vote now"
+    assert send.base_ballot_url is not None
+    assert send.base_ballot_url.endswith("/ballot")
     job = await db_session.get(BallotSendJob, job_id)
     assert job is not None
     assert job.election_id == data["election_id"]
     assert job.requested_by == data["users"][0]
+    assert job.kind == BallotSendJobKind.BALLOTS.value
 
 
 async def test_a_completed_job_reports_what_the_send_did(db_session: AsyncSession):
@@ -196,6 +213,33 @@ async def test_a_completed_job_reports_what_the_send_did(db_session: AsyncSessio
     await db_session.refresh(election)
     assert election.email_sent is True
     assert sorted(election.email_recipients) == sorted(data["users"])
+
+
+@pytest.mark.unit
+class TestFindActiveJobLocksTheRead:
+    """CLAUDE.md pitfall #27: ``_queue_send`` locks the election row before
+    calling ``find_active_job``, but the auth dependency's own user lookup
+    (the same session's first read) already fixed this transaction's
+    REPEATABLE READ snapshot — a plain SELECT here would still answer from
+    before that lock, so two requests queuing a send for the same election
+    could both see no active job and both queue one. Only a locking read is
+    guaranteed to see the latest committed row once the election lock is
+    granted.
+
+    ``db_session`` (one transaction, auto-rolled-back) cannot exercise the
+    real two-connection race, so this asserts the query shape instead — the
+    same way ``test_capacity_locking.py`` does for every other site."""
+
+    async def test_the_query_is_a_locking_read(self):
+        execute_result = MagicMock()
+        execute_result.scalars.return_value.all.return_value = []
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=execute_result)
+
+        await find_active_job(db, _uid(), _uid())
+
+        statement = db.execute.await_args.args[0]
+        assert statement._for_update_arg is not None
 
 
 async def test_a_second_send_is_refused_while_one_is_in_progress(
@@ -352,3 +396,182 @@ async def test_queueing_refuses_an_election_that_is_not_open(
         )
     ).scalar_one()
     assert count == 0
+
+
+async def _queue_reminder(db_session: AsyncSession, data: dict, **body) -> MagicMock:
+    start = MagicMock()
+    with patch(START_JOB, new=start):
+        response = await start_reminder_send_job_endpoint(
+            election_id=uuid.UUID(data["election_id"]),
+            payload=RemindNonVotersRequest(**body) if body else None,
+            db=db_session,
+            current_user=_user(data),
+        )
+    assert response.kind == BallotSendJobKind.REMINDER.value
+    assert response.status == BallotSendJobStatus.QUEUED.value
+    return start
+
+
+async def test_a_reminder_job_reminds_the_non_voters_and_reports_it(
+    db_session: AsyncSession,
+):
+    data = await _make_election(db_session)
+    start = await _queue_reminder(db_session, data, subject="Last call")
+    send = start.call_args.args[2]
+    assert isinstance(send, ReminderSend)
+    assert send.subject == "Last call"
+    assert send.requested_by == data["users"][0]
+
+    job_id = await _run(
+        db_session, start, AsyncMock(side_effect=lambda b: [True] * len(b))
+    )
+
+    response = await get_ballot_send_job_endpoint(
+        election_id=uuid.UUID(data["election_id"]),
+        job_id=uuid.UUID(job_id),
+        db=db_session,
+        current_user=_user(data),
+    )
+    assert response.kind == BallotSendJobKind.REMINDER.value
+    assert response.status == BallotSendJobStatus.COMPLETED.value
+    assert response.result is not None
+    assert response.result.recipients_count == 2
+    assert response.result.message == "Reminder sent to 2 non-voter(s)"
+    election = (
+        await db_session.execute(
+            select(Election).where(Election.id == data["election_id"])
+        )
+    ).scalar_one()
+    await db_session.refresh(election)
+    assert election.reminder_sent_at is not None
+
+
+async def test_ballots_and_reminders_cannot_run_over_each_other(
+    db_session: AsyncSession,
+):
+    # Both mint fresh tokens, so either kind blocks the other.
+    data = await _make_election(db_session)
+    await _queue(db_session, data)
+
+    with patch(START_JOB, new=MagicMock()) as start, pytest.raises(
+        HTTPException
+    ) as exc:
+        await start_reminder_send_job_endpoint(
+            election_id=uuid.UUID(data["election_id"]),
+            payload=None,
+            db=db_session,
+            current_user=_user(data),
+        )
+    assert exc.value.status_code == 409
+    start.assert_not_called()
+
+    send_batch = AsyncMock(side_effect=lambda b: [True] * len(b))
+    with patch(SEND_BATCH, new=send_batch), pytest.raises(HTTPException) as exc:
+        await remind_endpoint(
+            election_id=uuid.UUID(data["election_id"]),
+            payload=None,
+            db=db_session,
+            current_user=_user(data),
+        )
+    assert exc.value.status_code == 409
+    assert send_batch.await_count == 0
+
+    other = await _make_election(db_session)
+    await _queue_reminder(db_session, other)
+    with patch(START_JOB, new=MagicMock()), pytest.raises(HTTPException) as exc:
+        await start_ballot_send_job_endpoint(
+            election_id=uuid.UUID(other["election_id"]),
+            email_data=EmailBallot(),
+            db=db_session,
+            current_user=_user(other),
+        )
+    assert exc.value.status_code == 409
+
+
+async def test_a_reminder_inside_the_cooldown_is_refused_before_queueing(
+    db_session: AsyncSession,
+):
+    data = await _make_election(db_session)
+    await db_session.execute(
+        text("UPDATE elections SET reminder_sent_at = :now WHERE id = :id"),
+        {"now": datetime.now(timezone.utc), "id": data["election_id"]},
+    )
+
+    with patch(START_JOB, new=MagicMock()) as start, pytest.raises(
+        HTTPException
+    ) as exc:
+        await start_reminder_send_job_endpoint(
+            election_id=uuid.UUID(data["election_id"]),
+            payload=None,
+            db=db_session,
+            current_user=_user(data),
+        )
+    assert exc.value.status_code == 400
+    assert "already sent recently" in exc.value.detail
+    start.assert_not_called()
+    count = (
+        await db_session.execute(
+            text("SELECT COUNT(*) FROM ballot_send_jobs WHERE election_id = :id"),
+            {"id": data["election_id"]},
+        )
+    ).scalar_one()
+    assert count == 0
+
+
+async def test_a_reminder_for_an_election_that_is_not_open_is_refused(
+    db_session: AsyncSession,
+):
+    data = await _make_election(db_session, status="closed")
+
+    with patch(START_JOB, new=MagicMock()) as start, pytest.raises(
+        HTTPException
+    ) as exc:
+        await start_reminder_send_job_endpoint(
+            election_id=uuid.UUID(data["election_id"]),
+            payload=None,
+            db=db_session,
+            current_user=_user(data),
+        )
+    assert exc.value.status_code == 400
+    start.assert_not_called()
+
+
+async def test_the_synchronous_reminder_reports_as_before(db_session: AsyncSession):
+    data = await _make_election(db_session)
+
+    with patch(SEND_BATCH, new=AsyncMock(side_effect=lambda b: [True] * len(b))):
+        response = await remind_endpoint(
+            election_id=uuid.UUID(data["election_id"]),
+            payload=None,
+            db=db_session,
+            current_user=_user(data),
+        )
+
+    assert response.success is True
+    assert response.recipients_count == 2
+    assert response.message == "Reminder sent to 2 non-voter(s)"
+
+
+async def test_tokens_are_saved_before_any_ballot_mail_goes_out(
+    db_session: AsyncSession,
+):
+    # A send that dies mid-batch must not leave mailed links with no stored
+    # token behind them: the tokens are committed before the batch starts.
+    data = await _make_election(db_session)
+    send_batch = AsyncMock(side_effect=RuntimeError("worker restarted mid-send"))
+
+    with patch(SEND_BATCH, new=send_batch), pytest.raises(RuntimeError):
+        await ElectionService(db_session).send_ballot_emails(
+            election_id=uuid.UUID(data["election_id"]),
+            organization_id=data["org_id"],
+            base_ballot_url="https://example.test/ballot",
+        )
+    await db_session.rollback()
+
+    count = (
+        await db_session.execute(
+            text("SELECT COUNT(*) FROM voting_tokens WHERE election_id = :id"),
+            {"id": data["election_id"]},
+        )
+    ).scalar_one()
+    assert count == 2

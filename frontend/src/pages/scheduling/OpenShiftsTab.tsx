@@ -17,7 +17,7 @@ import { formatTime, formatDateCustom } from '../../utils/dateFormatting';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
-import { signupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
+import { shiftEndInstant, signupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../../modules/scheduling/hooks/useSignupWindow';
 
 interface OpenShiftsTabProps {
@@ -35,6 +35,21 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
   const signupViewer = useMemo(() => ({ canAssign, canManage }), [canAssign, canManage]);
   const tz = useTimezone();
   const signupWindow = useSignupWindow();
+
+  // A scheduling admin is never bounded by the signup window — that is the
+  // records path — so `signupClosedReason` alone left a live Sign Up button on
+  // a shift that had already run, for exactly the viewer whose fallback
+  // (`createAssignment`) the server accepts. This board offers seats to fill;
+  // once a shift is over there is nothing left to fill, for anyone. The server
+  // stops listing ended shifts too; this covers a board left open past the end.
+  const boardClosedReason = useCallback(
+    (shift: ShiftRecord): string | null => {
+      const end = shiftEndInstant(shift, signupWindow);
+      if (end !== null && end <= Date.now()) return 'This shift has already run.';
+      return signupClosedReason(shift, signupWindow, signupViewer);
+    },
+    [signupWindow, signupViewer]
+  );
 
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,7 +139,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
 
   const handleSignup = async (shiftId: string) => {
     const target = shifts.find((s) => s.id === shiftId);
-    const closed = target ? signupClosedReason(target, signupWindow, signupViewer) : null;
+    const closed = target ? boardClosedReason(target) : null;
     if (closed) {
       toast.error(canAssign ? closed : `${closed} Ask a duty officer to add you.`);
       return;
@@ -248,7 +263,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                 </h3>
                 <div className="space-y-3">
                   {dayShifts?.map((shift) => {
-                    const signupClosed = signupClosedReason(shift, signupWindow, signupViewer);
+                    const signupClosed = boardClosedReason(shift);
                     // Named per shift: a day can carry several, and every row's
                     // buttons otherwise read alike to a screen reader.
                     const when = `${formatDateCustom(dateObj, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}, ${formatTime(shift.start_time, tz)}${shift.apparatus_unit_number ? ` (${shift.apparatus_unit_number})` : ''}`;
@@ -443,7 +458,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                       disabled={
                         signingUp ||
                         eligibilityLoading ||
-                        (targetShift ? signupClosedReason(targetShift, signupWindow, signupViewer) !== null : false) ||
+                        (targetShift ? boardClosedReason(targetShift) !== null : false) ||
                         (isOutreachSignup ? !signupRole : !eligiblePositions.includes(signupPosition))
                       }
                       className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"

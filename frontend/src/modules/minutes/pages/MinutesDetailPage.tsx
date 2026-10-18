@@ -20,6 +20,7 @@ import { minutesService } from '../services/api';
 import type { ElectionListItem } from '../../../types/election';
 import { getStatusBadgeClass } from '../../../utils/electionHelpers';
 import { useAuthStore } from '../../../stores/authStore';
+import { PublishingStatusNote } from '../components/PublishingStatusNote';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCalendarDate, formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -34,12 +35,14 @@ import type {
   SectionEntry,
   AdoptionDetails,
   ImportableElection,
+  MinutesPublishingStatus,
 } from '../types/minutes';
 import type { Event as EventDetail, EventListItem } from '../../../types/event';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { saveBlob } from '../../../utils/saveBlob';
 import { PanelDisclosure } from '../components/PanelDisclosure';
 import { AdoptDialog } from '../components/AdoptDialog';
+import { AgendaSyncDialog } from '../components/AgendaSyncDialog';
 import { AttachmentsPanel } from '../components/AttachmentsPanel';
 import { AttendancePanel } from '../components/AttendancePanel';
 import { CarryForwardDialog } from '../components/CarryForwardDialog';
@@ -128,6 +131,8 @@ export const MinutesDetailPage: React.FC = () => {
 
   // Publishing
   const [publishing, setPublishing] = useState(false);
+  const [publishingStatus, setPublishingStatus] = useState<MinutesPublishingStatus | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // Adopting, and laying an outline over the draft
@@ -135,6 +140,7 @@ export const MinutesDetailPage: React.FC = () => {
   const [adopting, setAdopting] = useState(false);
   const [hasAcceptedSuggestions, setHasAcceptedSuggestions] = useState(false);
   const [showApplyOutline, setShowApplyOutline] = useState(false);
+  const [showAgendaSync, setShowAgendaSync] = useState(false);
   const [applyingOutline, setApplyingOutline] = useState(false);
 
   // Closed elections a motion can be tied to; loaded when the motion form opens
@@ -293,6 +299,18 @@ export const MinutesDetailPage: React.FC = () => {
     }
   };
 
+  // Sent as a full sections list like every other section edit; an omitted
+  // flag would read as "taken up", so the unchecked state is sent explicitly.
+  const handleSetNotTakenUp = async (sectionKey: string, notTakenUp: boolean) => {
+    if (!minutesId || !minutes) return;
+    try {
+      const sections = minutes.sections.map((s) => (s.key === sectionKey ? { ...s, not_taken_up: notTakenUp } : s));
+      setMinutes(await minutesService.updateMinutes(minutesId, { sections }));
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update the section'));
+    }
+  };
+
   // A time is a field of its own on the minutes, not part of a section. Sent as
   // an explicit null to clear it, since an omitted key means "leave it alone".
   const handleSaveTime = async (field: 'called_to_order_at' | 'adjourned_at', iso: string | null) => {
@@ -381,17 +399,63 @@ export const MinutesDetailPage: React.FC = () => {
 
   // ── Publishing ──
 
+  // Only people who manage minutes may ask where publishing stands, and only
+  // minutes that were ever adopted can have been published.
+  const publishedDocumentId = minutes?.published_document_id;
+  const minutesStatus = minutes?.status;
+  const loadPublishingStatus = useCallback(async () => {
+    if (!minutesId || !canManage || (minutesStatus !== 'approved' && !publishedDocumentId)) {
+      setPublishingStatus(null);
+      return;
+    }
+    try {
+      setPublishingStatus(await minutesService.getPublishingStatus(minutesId));
+    } catch {
+      // The status is a convenience; publishing itself reports its own errors.
+      setPublishingStatus(null);
+    }
+  }, [minutesId, canManage, minutesStatus, publishedDocumentId]);
+
+  useEffect(() => {
+    void loadPublishingStatus();
+  }, [loadPublishingStatus]);
+
   const handlePublish = async () => {
     if (!minutesId) return;
     try {
       setPublishing(true);
-      await minutesService.publishMinutes(minutesId);
+      const result = await minutesService.publishMinutes(minutesId);
       await fetchMinutes();
-      toast.success('Minutes published to Documents');
+      await loadPublishingStatus();
+      toast.success(
+        result.public_posted ? 'Minutes published to Documents and posted publicly' : 'Minutes published to Documents'
+      );
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to publish minutes'));
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const handleWithdrawPublic = async () => {
+    if (!minutesId) return;
+    const ok = await confirm({
+      title: 'Take the public copy down?',
+      message:
+        'The public page stops showing these minutes right away. The copy in Documents stays. Publishing them again posts a fresh public copy.',
+      confirmLabel: 'Take it down',
+      cancelLabel: 'Keep it up',
+    });
+    if (!ok) return;
+    try {
+      setWithdrawing(true);
+      await minutesService.withdrawPublicCopy(minutesId);
+      await loadPublishingStatus();
+      toast.success('The public copy was taken down');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to take the public copy down'));
+    } finally {
+      setWithdrawing(false);
     }
   };
 
@@ -849,6 +913,13 @@ export const MinutesDetailPage: React.FC = () => {
                 re-publish them to replace it.
               </p>
             )}
+            <PublishingStatusNote
+              status={publishingStatus}
+              withdrawing={withdrawing}
+              onWithdraw={() => {
+                void handleWithdrawPublic();
+              }}
+            />
             <div className="flex flex-wrap gap-3">
               {(minutes.status === 'draft' || minutes.status === 'rejected') && (
                 <button
@@ -996,6 +1067,15 @@ export const MinutesDetailPage: React.FC = () => {
             <h2 className="text-theme-text-primary text-lg font-semibold">Meeting Sections</h2>
             {canManage && isEditable && (
               <div className="flex flex-wrap gap-2">
+                {minutes.meeting_id && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAgendaSync(true)}
+                    className="btn-secondary touch:min-h-11 text-sm"
+                  >
+                    Sync from agenda
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowApplyOutline(true)}
@@ -1105,6 +1185,11 @@ export const MinutesDetailPage: React.FC = () => {
                               {openSuggestionCount(section.key) === 1 ? 'suggestion' : 'suggestions'}
                             </span>
                           )}
+                          {section.not_taken_up && (
+                            <span className="bg-theme-surface-secondary text-theme-text-primary ml-2 rounded-sm px-2 py-0.5 text-xs font-medium">
+                              Not taken up
+                            </span>
+                          )}
                           {section.required && sectionIsBlank(section) && isEditable && (
                             <span className="ml-2 rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-400">
                               Required
@@ -1152,6 +1237,25 @@ export const MinutesDetailPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {(section.presenter || (section.documents ?? []).length > 0) && (
+                      <div className="text-theme-text-muted mb-2 space-y-1 text-xs">
+                        {section.presenter && <p>Presented by {section.presenter}</p>}
+                        {(section.documents ?? []).length > 0 && (
+                          <p>
+                            Documents:{' '}
+                            {(section.documents ?? []).map((doc, n) => (
+                              <React.Fragment key={doc.id}>
+                                {n > 0 && ', '}
+                                <Link to="/documents" className="text-blue-700 underline dark:text-blue-400">
+                                  {doc.name || 'Document'}
+                                </Link>
+                              </React.Fragment>
+                            ))}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     {isEditing ? (
                       <div>
                         <RichTextEditor
@@ -1185,6 +1289,8 @@ export const MinutesDetailPage: React.FC = () => {
                         format={section.format}
                         className="text-theme-text-secondary text-sm"
                       />
+                    ) : section.not_taken_up ? (
+                      <p className="text-theme-text-muted text-sm italic">Not taken up.</p>
                     ) : (
                       <p className="text-theme-text-muted text-sm italic">
                         No content yet.{' '}
@@ -1200,6 +1306,20 @@ export const MinutesDetailPage: React.FC = () => {
                           </button>
                         )}
                       </p>
+                    )}
+
+                    {canManage && isEditable && sectionIsBlank(section) && (
+                      <label className="mt-2 flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(section.not_taken_up)}
+                          onChange={(e) => {
+                            void handleSetNotTakenUp(section.key, e.target.checked);
+                          }}
+                          className="form-checkbox"
+                        />
+                        <span className="text-theme-text-secondary">The meeting did not take this up</span>
+                      </label>
                     )}
 
                     {(section.key === 'call_to_order' || section.key === 'adjournment') && (
@@ -1668,6 +1788,16 @@ export const MinutesDetailPage: React.FC = () => {
           onClose={() => setShowApplyOutline(false)}
           onChoose={(id) => {
             void handleApplyOutline(id);
+          }}
+        />
+
+        <AgendaSyncDialog
+          isOpen={showAgendaSync}
+          minutesId={minutes.id}
+          onClose={() => setShowAgendaSync(false)}
+          onApplied={async () => {
+            await fetchMinutes();
+            toast.success('Agenda synced. Nothing you had written was changed.');
           }}
         />
 

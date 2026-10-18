@@ -160,6 +160,12 @@ const hasVisibleCustomFields = (event: Event, sessionReported: boolean): boolean
 /** Past this many, the uncredited toast counts the rest instead of naming them. */
 const MAX_NAMED_UNCREDITED = 5;
 
+/** The backend's BULK_ADD_MAX_SIZE: `BulkAddAttendees.user_ids` is capped at 200. */
+const BULK_ADD_BATCH_SIZE = 200;
+
+/** Past this many, the bulk-add failure toast counts the rest instead of naming them. */
+const BULK_ADD_ERRORS_SHOWN = 5;
+
 const pluralize = (count: number, singular: string, plural = `${singular}s`): string =>
   `${count} ${count === 1 ? singular : plural}`;
 
@@ -497,19 +503,57 @@ export const EventDetailPage: React.FC = () => {
       return;
     }
 
+    const ids = notRsvpd.map((m) => m.id);
+    const nameById = new Map(notRsvpd.map((m) => [m.id, `${m.first_name} ${m.last_name}`.trim()]));
+    let createdCount = 0;
+    const rowErrors: Array<{ user_id: string; error: string }> = [];
+    let batchFailure: { message: string; notAttempted: number } | null = null;
+
+    setBulkAddLoading(true);
     try {
-      setBulkAddLoading(true);
-      const result = await eventService.bulkAddAttendees(
-        eventId,
-        notRsvpd.map((m) => m.id),
-        'going'
-      );
-      toast.success(`Added ${result.created_count} members to the event`);
-      await fetchRSVPs();
-      await fetchStats();
-      await fetchEligibleMembers();
-    } catch (err) {
-      toast.error(getErrorDetail(err) || 'Failed to bulk add attendees');
+      // The endpoint refuses more than BULK_ADD_MAX_SIZE ids per request.
+      // Batches run one at a time so a lock or permission refusal stops the
+      // run instead of being repeated by every remaining batch at once.
+      for (let start = 0; start < ids.length; start += BULK_ADD_BATCH_SIZE) {
+        const batch = ids.slice(start, start + BULK_ADD_BATCH_SIZE);
+        try {
+          const result = await eventService.bulkAddAttendees(eventId, batch, 'going');
+          createdCount += result.created_count;
+          rowErrors.push(...result.errors);
+        } catch (err) {
+          batchFailure = {
+            message: (getErrorDetail(err) || 'Failed to bulk add attendees').replace(/\.$/, ''),
+            notAttempted: ids.length - start,
+          };
+          break;
+        }
+      }
+
+      if (createdCount > 0 || (rowErrors.length === 0 && !batchFailure)) {
+        toast.success(`Added ${createdCount} members to the event`);
+      }
+      if (rowErrors.length > 0) {
+        const shown = rowErrors
+          .slice(0, BULK_ADD_ERRORS_SHOWN)
+          .map((e) => `${nameById.get(e.user_id) || e.user_id}: ${e.error}`);
+        const more = rowErrors.length - shown.length;
+        toast.error(
+          `${pluralize(rowErrors.length, 'member was', 'members were')} not added. ${shown.join('; ')}${
+            more > 0 ? `; and ${more} more` : ''
+          }`
+        );
+      }
+      if (batchFailure) {
+        toast.error(
+          `${batchFailure.message}. ${pluralize(batchFailure.notAttempted, 'member was', 'members were')} not added.`
+        );
+      }
+
+      if (createdCount > 0) {
+        await fetchRSVPs();
+        await fetchStats();
+        await fetchEligibleMembers();
+      }
     } finally {
       setBulkAddLoading(false);
     }

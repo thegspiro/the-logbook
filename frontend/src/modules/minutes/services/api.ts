@@ -7,6 +7,7 @@
 
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
+  AgendaSyncPreview,
   MeetingMinutes,
   Motion,
   MotionCreate,
@@ -15,6 +16,8 @@ import type {
   ActionItemAssignee,
   ActionItemCreate,
   MinutesStats,
+  MinutesPublishingStatus,
+  MinutesPublishResult,
   MinutesReminderSettings,
   MinutesSignature,
   SignatureStatus,
@@ -106,8 +109,19 @@ export const minutesService = {
 
   // ── Publishing ──
 
-  async publishMinutes(minutesId: string): Promise<void> {
-    await api.post(`/minutes-records/${minutesId}/publish`);
+  async publishMinutes(minutesId: string): Promise<MinutesPublishResult> {
+    const response = await api.post<MinutesPublishResult>(`/minutes-records/${minutesId}/publish`);
+    return response.data;
+  },
+
+  async getPublishingStatus(minutesId: string): Promise<MinutesPublishingStatus> {
+    const response = await api.get<MinutesPublishingStatus>(`/minutes-records/${minutesId}/publishing`);
+    return response.data;
+  },
+
+  /** Take the public copy down. The library copy is untouched. */
+  async withdrawPublicCopy(minutesId: string): Promise<void> {
+    await api.delete(`/minutes-records/${minutesId}/public-posting`);
   },
 
   // ── Motions ──
@@ -344,6 +358,18 @@ export const minutesService = {
     const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/apply-outline`, {
       template_id: outlineId,
     });
+    return response.data;
+  },
+
+  /** What the meeting's agenda now asks of these minutes' sections. */
+  async getAgendaSync(minutesId: string): Promise<AgendaSyncPreview> {
+    const response = await api.get<AgendaSyncPreview>(`/minutes-records/${minutesId}/agenda-sync`);
+    return response.data;
+  },
+
+  /** Apply the chosen agenda changes (by the ids the preview gave) to draft minutes. */
+  async applyAgendaSync(minutesId: string, accept: string[]): Promise<MeetingMinutes> {
+    const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/agenda-sync`, { accept });
     return response.data;
   },
 

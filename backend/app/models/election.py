@@ -816,6 +816,16 @@ class BallotSendJobStatus(str, Enum):
     FAILED = "failed"
 
 
+class BallotSendJobKind(str, Enum):
+    """What a background send mails: the ballot itself, or a reminder to
+    the members who have not voted yet. Both write the election's record of
+    who was sent a ballot, which is why they share one table and one
+    in-progress guard."""
+
+    BALLOTS = "ballots"
+    REMINDER = "reminder"
+
+
 class BallotSendJob(Base):
     """One request to email ballots, run in the background.
 
@@ -827,8 +837,9 @@ class BallotSendJob(Base):
     interrupts the send.
 
     A queued or running row also blocks a second send for the same election:
-    each send mints new voting tokens, so two overlapping sends mail every
-    member two links of which only the later one works.
+    two overlapping sends mail every member twice, and each writes the
+    election's record of who was sent a ballot from what it read when it
+    started, so whichever finishes last overwrites the other's.
     """
 
     __tablename__ = "ballot_send_jobs"
@@ -850,6 +861,12 @@ class BallotSendJob(Base):
     )
     requested_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=BallotSendJobKind.BALLOTS.value,
+        server_default=BallotSendJobKind.BALLOTS.value,
     )
     status: Mapped[str] = mapped_column(
         String(20),

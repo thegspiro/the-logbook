@@ -40,6 +40,23 @@ def _midnight(day: date) -> str:
     return datetime(day.year, day.month, day.day, tzinfo=timezone.utc).isoformat()
 
 
+@pytest.fixture(autouse=True)
+def _one_calendar_day(monkeypatch):
+    """Give the test and the service the same "today".
+
+    The service asks for the department's date when it runs; the fixtures
+    below build due dates from ``_today()``. Computed separately, they agree only
+    until a run crosses midnight UTC: a suite that starts at 23:50 and takes a
+    quarter of an hour sees the fixtures built for one day and the service
+    deciding for the next, and a reminder due "tomorrow" is suddenly due today.
+    """
+    day = _today()
+    monkeypatch.setitem(globals(), "_today", lambda: day)
+    monkeypatch.setattr(
+        "app.services.minutes_reminder_service.org_today", lambda organization: day
+    )
+
+
 @pytest.fixture
 async def world(db_session: AsyncSession) -> _World:
     return await build_world(db_session)
@@ -395,6 +412,12 @@ async def test_unadopted_minutes_stay_out_of_the_list(world, mail):
     ) == 0
 
 
+def _drop_publishing(body):
+    """Publishing has its own tests; this file checks the reminder fields."""
+    for key in [k for k in body if k.startswith(("executive_", "public_"))]:
+        body.pop(key)
+
+
 class TestSettingsEndpoint:
     async def test_it_reports_the_defaults_when_nothing_is_set(self, world):
         async with _client(world.db, world.secretary) as c:
@@ -403,6 +426,7 @@ class TestSettingsEndpoint:
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert body.pop("signature_slots")
+        _drop_publishing(body)
         assert body == {
             "action_item_reminders": True,
             "reminder_days_before_due": 3,
@@ -426,6 +450,7 @@ class TestSettingsEndpoint:
             body = (await c.get("/minutes/settings")).json()
 
         body.pop("signature_slots")
+        _drop_publishing(body)
         assert body == {
             "action_item_reminders": False,
             "reminder_days_before_due": 0,

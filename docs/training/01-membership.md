@@ -101,11 +101,9 @@ includes archived members, because those are the records officers look after.
 
 ![Member directory listing members with their status and contact columns](./images/01-01-member-directory.png)
 
-![The Member Directory as an ordinary member: name, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes](./images/01-40-member-directory-member.png)
+![The Member Directory as an ordinary member: name, rank, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes](./images/01-40-member-directory-member.png)
 
-<!-- Screenshot needed:
-_[As an administrator (members.manage) at /members on a desktop width: the Members table with the status filter set to Archived, showing at least one archived member's row with the green Reactivate icon beside Edit and Delete in Actions. Needs an archived member in the demo seed. Do not open the Reactivate dialog.]_
--->
+![The Members table filtered to Archived: a former member's row with the green Reactivate icon beside Edit and Delete](./images/01-42-archived-member-row.png)
 
 **Member statuses:**
 
@@ -147,7 +145,7 @@ details follow the department setting. Your home address and personal email
 stay hidden from other members. Officers who manage members can always see
 every field.
 
-![My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email, phone and mobile the note that the department's own setting has them off for everyone](./images/01-41-profile-visibility.png)
+![My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email and mobile, which the department's own setting has off for everyone, the note "Shared once the department allows it"](./images/01-41-profile-visibility.png)
 
 ### Scan Member ID
 
@@ -235,9 +233,7 @@ Organization settings.
 Print one **Test card** first to check the alignment. Cards print in black
 only, so they look the same on a black-only ribbon as on a colour one.
 
-<!-- Screenshot needed:
-_[Administrator (members.manage) at /members/print-id-cards with two demo members selected: the Orientation, Sides and Code options, the Save as department layout button, and the "Accept old badges" switch at the bottom. Check the route in the page before capturing.]_
--->
+![Print ID Cards for two members with Front and back chosen: the Orientation, Sides and Code choices, Test card and Save as department layout, the duplex printing note, and the Accept old badges switch at the bottom](./images/01-43-print-id-cards.png)
 
 ### Badge Codes
 
@@ -270,9 +266,9 @@ codes scan.
 Inventory checkout always refuses a member whose account is not active,
 whichever badge they show.
 
-<!-- Screenshot needed:
-_[Administrator at /members/<demo member id>/id-card: the badge with its QR code, showing the membership number as text, and the "Reissue badge" button; a second frame with the "Reissue this badge?" confirmation open. Demo member only; do not confirm.]_
--->
+![A member's digital ID card: membership number as text, the badge code under its barcode, the QR code, and the Print ID Card and Reissue badge buttons](./images/01-44-member-id-card.png)
+
+![The Reissue this badge? confirmation: every printed badge and the phone card stop scanning, with Keep current badge and Reissue badge](./images/01-45-reissue-badge-confirm.png)
 
 ---
 
@@ -519,9 +515,7 @@ department, so a temporary password can't be sent. Set one here and give it
 to the member." The Logbook also refuses any new account that asks for a
 welcome email while email cannot be sent.
 
-<!-- Screenshot needed:
-_[As an administrator (users.create + members.manage) on an install with email not configured, at /members/admin?tab=add: the Account Password block with Set initial password ticked and disabled and the "Required: email isn't set up for this department…" hint visible. Leave the password fields empty; do not capture any typed password.]_
--->
+![Add Member's Account Password block on a department without email: Set initial password ticked and locked, the note saying why, and the empty password fields with their rules](./images/01-46-add-member-password-no-email.png)
 
 ### The Membership Number on Add Member
 
@@ -639,9 +633,7 @@ be longer than 50 characters is refused straight away. If you take the year
 out of a pattern, the yearly restart turns off in the same save. If nobody
 changes these settings, numbers look like `FD-0001`.
 
-<!-- Screenshot needed:
-_[Members Admin → Settings → Membership IDs with numbering and auto-generation on → the **Year and number** preset applied: Number pattern `{YYYY}-{SEQ}`, Minimum digits 3, **Restart the count each year** on, **The year follows** set to **Our fiscal year** starting in July and named by **The year it ends in**, and the line "The next member will be numbered 2027-001." with "Next: 2027-001" in the panel header.]_
--->
+![Membership ID Number settings with the Year and number preset: pattern {YYYY}-{SEQ}, three digits, the count restarting each year on a fiscal year from July named by the year it ends in, and the next member numbered 2027-001](./images/01-47-membership-id-fiscal-year.png)
 
 #### Numbers Are Never Reissued
 
@@ -921,9 +913,7 @@ name or relationship is pointed out on the page before you save.
 > access every member needs, so it can only be removed from an archived
 > member."
 
-<!-- Screenshot needed:
-_[As an administrator (members.manage) at /members/admin, Member Management tab: a demo member's Reset Password dialog with a weak password typed (for example Abcdefgh1234!) so the Password rules list shows "No runs like 123 or abc" unmet. Never submit, and never capture a real password.]_
--->
+![Reset Password for a member with a weak password typed (masked): the Password rules list ticks the length and character rules and leaves No runs like 123 or abc unmet](./images/01-48-reset-password-rules.png)
 
 ---
 
@@ -1065,9 +1055,7 @@ What is kept stays linked to a placeholder named "Former Member".
 > roster. Like a deactivated member, they no longer appear anywhere in the app
 > and cannot be reactivated.
 
-<!-- Screenshot needed:
-_[As an administrator (members.manage) at /members/:userId for a Dropped or Archived demo member: the Anonymize Member dialog showing the warning sentence, the red Removed panel, the Kept panel with the "Former Member" note, the empty "Type <name> to confirm" field and the disabled Anonymize button. Clip to the dialog. Never type the name or confirm — the action is irreversible and would remove the demo member. Needs a dropped or archived member in the seed.]_
--->
+![The Anonymize Member dialog for an archived former member: the warning, what is removed, what is kept under Former Member, and the typed confirmation with Anonymize still disabled](./images/01-49-anonymize-member.png)
 
 ## Prospective Members Pipeline
 
@@ -1417,9 +1405,7 @@ you might show the tracker only after someone passes their interview.
 | The stage is marked as the final stage                                        | It never completes itself, because completing the final stage is the department's approval                                                                             |
 | The applicant started on the stage, was placed on it, or was moved back to it | The on/off setting still applies, but no link email is sent and the stage waits for you to complete it. Only arriving by finishing the stage before it sends the email |
 
-<!-- Screenshot needed:
-_[As a Membership Coordinator (prospective_members.manage) at /prospective-members/settings: a pipeline selected and Add Stage open with the Enable Status Page tile chosen, showing the "Enables the public status page" panel with its override sentence, "Enable public status page at this stage" ticked, and "Message in the link email (optional)" filled with a sample welcome line.]_
--->
+![Add Stage with Enable Status Page chosen: the panel saying it enables the public status page and overrides the pipeline setting, Enable public status page at this stage ticked, and a welcome line in the link email message](./images/01-50-status-page-stage.png)
 
 ### Pipeline Configuration
 
@@ -1721,9 +1707,7 @@ See [Former Members Who Rejoin](#former-members-who-rejoin).
 
 ![The Change Member Status dialog with a drop status selected and its property-return note](./images/01-29-status-change-modal.png)
 
-<!-- Screenshot needed:
-_[As an administrator (members.manage) at /members/:userId for a Dropped (Voluntary) demo member: the Change Member Status dialog with Active selected, showing the Earlier service radios (department default marked), Return date and Last day of previous service. Never press Update Status. Needs a dropped member in the seed.]_
--->
+![Change Member Status for a member who left voluntarily, with Active selected: Earlier service with its recorded length, Continue prior service (marked as the department default) and Restart at zero, and the Return date](./images/01-51-rejoin-status-dialog.png)
 
 ### Undoing a Drop Made by Mistake
 
@@ -2139,9 +2123,7 @@ The whole list is saved at once, and it must make sense:
 > on file. Their service still counts from their hire date, including the time
 > away. Fix it by editing their Service History.
 
-<!-- Screenshot needed:
-_[As an administrator (members.manage) at /members/:userId for a demo member who rejoined under Restart at zero: the Service History card in its read view, showing the Credited service and Prior service (not counted) tiles and two stints — an earlier one tagged "Dropped (voluntary)" and "Not counted", and a current one ending "present". Needs a seeded rejoin with stints. Clip to the card.]_
--->
+![The Service History card of a member who rejoined under Restart at zero: Credited service and Prior service (not counted) tiles, an earlier stint marked Dropped (voluntary) and Not counted, and the current stint ending present](./images/01-52-service-history-restart.png)
 
 ---
 

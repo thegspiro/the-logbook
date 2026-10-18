@@ -15,6 +15,7 @@ export interface ShiftCreate {
   shift_date: string; // ISO date
   start_time: string; // ISO datetime
   end_time?: string | undefined;
+  template_id?: string | undefined;
   apparatus_id?: string | undefined;
   station_id?: string | undefined;
   shift_officer_id?: string | undefined;

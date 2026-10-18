@@ -382,10 +382,16 @@ const SchedulingPage: React.FC = () => {
       const templatePositions = resolveTemplatePositions(template.positions);
       const shiftPositions = apparatusPositions?.length ? apparatusPositions : templatePositions;
 
+      // The fallback templates exist only in this file, so their ids name no
+      // row the backend could resolve; only a stored template carries the
+      // equipment checklists the shift should inherit.
+      const isStoredTemplate = backendTemplates.some((t) => t.id === template.id);
+
       await schedulingService.createShift({
         shift_date: shiftForm.startDate,
         start_time: startDateTime,
         end_time: endDateTime,
+        ...(isStoredTemplate ? { template_id: template.id } : {}),
         ...(shiftForm.notes ? { notes: shiftForm.notes } : {}),
         ...(shiftForm.apparatus_id ? { apparatus_id: shiftForm.apparatus_id } : {}),
         ...(shiftForm.shift_officer_id ? { shift_officer_id: shiftForm.shift_officer_id } : {}),

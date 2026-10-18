@@ -1,6 +1,6 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), pass 9 (this PR)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 (this PR)
 
 ---
 
@@ -263,6 +263,202 @@ No application code was changed this pass — the gate confirms the mypy-driven
 delta since pass 8 left the codebase clean; `npm run typecheck`/`npm run lint`
 were not re-run since the frontend elections surface has zero diff in this
 window (per CLAUDE.md's "Match the Verification to the Change").
+
+---
+
+## Pass 10 (2026-10-18)
+
+**Scoping.** Step 0 (via GitHub, not the tracker): `list_pull_requests`
+(state=open) returned no `claude/security-review-*` branch, and the dedicated
+`/loop 30m /security-review` session was not reachable (`ListAgents`) — a
+watchdog pickup. PR #3401 (Feature 05, Finance & approvals, pass 10) had
+already merged; `PROGRESS.md`'s rotation table already showed row 05 ✅, so
+nothing to clear beyond the Open PR row, which rides into this PR's own
+commit. Proceeded to Feature 06, the next `⬜` row.
+
+**Baseline and delta.** Pass 9 merged as `80d92def` (PR #3248,
+2026-10-14T19:5x UTC; confirmed an ancestor of `origin/main` via
+`git merge-base --is-ancestor`). `git diff --stat 80d92def..origin/main`
+across the feature's established domain found, this time, a real change: a
+new background-job system for ballot/reminder sends (`app/services/
+ballot_send_jobs.py`, new — 538 lines; two new migrations creating and then
+extending `ballot_send_jobs`; `elections.py` +248/-156; `models/election.py`
++96; `schemas/election.py` +20; `election_service.py` +158/-30; the frontend
+elections surface's `ElectionDetailPage.tsx`/`ElectionsPage.tsx` for polling
+and meeting-window alignment). This is substantive, so it was read in full
+rather than diffed line-by-line against pass 9's (nonexistent) prior art.
+
+**What the feature does and why.** Emailing ballots to a whole department
+(minting one voting token per member, one SMTP send per message, a pause
+between messages) ran inside the HTTP request and outlasted the browser's
+30-second timeout — and nginx's 60-second proxy timeout — at around forty
+members, while the server kept sending anyway; the secretary saw a failure
+and was invited to send again, mailing every member a second link.
+`POST /{election_id}/ballot-send-jobs` and `POST /{election_id}/
+reminder-send-jobs` now record a `BallotSendJob` row and return `202` at
+once; the send runs after the response as an `asyncio.create_task` kept in a
+module-level strong-reference set (`_running_tasks`, so the task cannot be
+garbage-collected mid-flight — asyncio itself holds only a weak reference),
+opening its own DB session via `async_session_factory` (correctly, since the
+request's session is closed by the time the task runs). The synchronous
+`POST /{election_id}/send-ballot` and the pre-existing remind-non-voters path
+are kept (API callers, and parity for anything not yet moved to polling) and
+now share the exact same `perform_ballot_send`/`perform_reminder_send`
+functions, so both report identically.
+
+**Verified sound:**
+
+- **Org scoping (checklist §14a/14b).** Every query in `ballot_send_jobs.py`
+  filters `organization_id` — `find_active_job`, `get_job` (also filters
+  `election_id`, so a job cannot be read through a different election's url),
+  `_load_job`, and `_run_job`'s own re-fetch of the `Election` row. The queued
+  endpoint (`_queue_send` in `elections.py`) resolves the election through an
+  org-scoped, locked `select` before ever touching a job row — the correct
+  shape, and the one `get_ballot_send_job_endpoint` also follows.
+- **The migrations** (`c87efd81c5aa`, `244b0fd07205`) are both guarded on
+  their parent tables existing (pitfall #26) and the column not already
+  present; `requested_by` is `ForeignKey(..., ondelete="SET NULL")` with
+  `nullable=True` (pitfall #2); `organization_id`/`election_id` are
+  `ondelete="CASCADE"`, not nullable, matching the model.
+- **The server-configured `FRONTEND_URL`**, never the client `Host` header,
+  still builds every ballot/reminder link (`_ballot_base_url`,
+  `_reminder_ballot_url`) — unchanged from pass 9's own review of this
+  invariant, now centralized rather than duplicated.
+- **The permission gate** (`elections.manage`) is unchanged and applied to
+  all three new routes.
+- **W50-91** (new, FIXED on arrival): `send_ballot_emails` now refuses to
+  queue a send for an election with no ballot items and no plain positions
+  before it does any work — previously such a send mailed working-looking
+  links to a ballot with nothing to vote on.
+
+### ELEC-47 — MEDIUM — the one-send-per-election guard was a plain read behind an already-fixed snapshot, so two concurrent requests could both queue a send — 🔧 FIXED (this pass)
+
+**File:** `backend/app/services/ballot_send_jobs.py:344-368` (`find_active_job`),
+called from `elections.py`'s `_queue_send` (and from `send_ballot_emails` /
+`remind_non_voters`).
+
+**This module's own docstring states the invariant it needs:** "two
+overlapping sends mail every member twice, and each writes the election's
+record of who was sent a ballot from what it read when it started, so
+whichever finishes last overwrites the other's" — and `_queue_send`'s comment
+says the fix is "Locked so two requests arriving together cannot both find no
+job in progress and both queue one." The lock it takes is real
+(`select(Election)...with_for_update()`), but this is CLAUDE.md pitfall #27's
+exact shape ("Lock the parent, not the rows being counted... make the count
+itself a locking read... every one of these checks runs behind an endpoint
+that already loaded the parent, so the snapshot predates the lock"):
+`current_user: User = Depends(require_permission(...))` resolves through
+`get_current_user` → `AuthService(db).get_user_from_token(token)`, a plain
+read on the **same session** (FastAPI caches `Depends(get_db)` per request)
+that runs _before_ the endpoint body — so it is this transaction's actual
+first read, fixing its REPEATABLE READ snapshot before `_queue_send`'s own
+`with_for_update()` on `Election` ever executes. `find_active_job`'s
+`select(BallotSendJob)...` (no `with_for_update()`) is therefore a plain,
+non-locking read: it answers from that pre-existing snapshot regardless of
+which row the election lock just waited on.
+
+**Failure scenario:** two requests to `POST /{election_id}/ballot-send-jobs`
+for the same election arrive close together (a double-click, or two admins).
+Both resolve `current_user` first (fixing each transaction's snapshot before
+either reaches the election lock). Request A acquires the `Election`
+row lock, finds no active job, creates and commits a `BallotSendJob`, and
+releases the lock. Request B's own lock acquisition was blocked until A
+committed, so B now holds the lock and calls `find_active_job` — but B's
+snapshot was fixed (by B's own auth lookup) before A's commit, so the plain
+SELECT does not see A's new row. B also finds "no active job", creates a
+second `BallotSendJob`, and both run: every member is mailed twice with two
+different voting tokens, and whichever job's `send_ballot_emails` call
+finishes last silently overwrites the election's `email_sent`/
+`email_recipients` record of who was sent a ballot — the exact outcome this
+module exists to prevent. The same gap applies to `remind_non_voters`
+racing a queued send, and to two concurrent `/send-ballot` or
+`/remind-non-voters` calls racing each other through the same stale-read
+path (see the FLAGGED item below for the part this fix does not reach).
+
+**Fix:** `find_active_job`'s query now ends in `.with_for_update()`. A
+locking read always reads the latest committed row for the table it locks,
+regardless of the transaction's existing snapshot, so once `_queue_send`'s
+election lock is granted (necessarily after the first request committed),
+this read correctly sees the job the first request just created. No
+behavior change in the non-racing case — same rows, same ordering, now read
+with a row lock that (for this table) nothing else contends for.
+
+**Guard:** `db_session`'s single auto-rolled-back transaction per test cannot
+exercise a genuine two-connection race (the same limitation
+`test_capacity_locking.py`'s own docstring notes), so
+`TestFindActiveJobLocksTheRead::test_the_query_is_a_locking_read` in
+`tests/test_ballot_send_jobs.py` instead asserts the query shape directly —
+`statement._for_update_arg is not None` on the captured `Select`, the same
+pattern `test_application_self_withdraw.py` and `test_capacity_locking.py`
+use for this exact class of invariant.
+
+### ELEC-48 — LOW — the synchronous send endpoints still race each other directly, with no job row for either side to lock against — 🚩 FLAGGED (new finding, owner decision needed)
+
+**File:** `backend/app/api/v1/endpoints/elections.py` — `send_ballot_emails`
+(≈3007-3053) and `remind_non_voters` (≈3401-3435).
+
+ELEC-47's fix closes the race for the **queued** path (`_queue_send`), which
+already took an `Election` row lock before deciding. The two **synchronous**
+endpoints take no lock of their own: `send_ballot_emails` reads `Election`
+with a plain `select` (no `with_for_update()`), and `remind_non_voters`'s
+endpoint body does not read `Election` at all before calling
+`find_active_job` (the service method it eventually calls does, also
+unlocked). Two concurrent calls to the _same_ synchronous endpoint, with no
+`BallotSendJob` row yet for either to find or lock against, both pass
+`find_active_job`'s check (locking or not — there is nothing to lock) and
+both send inline, which is the identical double-mail/overwritten-
+`email_sent`-record outcome ELEC-47 describes.
+
+This is not a regression this pass introduced: before `BallotSendJob`
+existed, these two endpoints had no overlap guard of any kind, so this is a
+narrowing of a pre-existing gap (now closed only against the new queued
+path) rather than a widening of one. Closing it fully means giving the two
+synchronous endpoints the same `Election`-row lock `_queue_send` takes — a
+larger, deliberate change to two long-lived endpoints' locking behavior that
+a correctness-only fix pass shouldn't make unannounced, and one the owner may
+prefer to resolve differently (e.g. retiring the synchronous endpoints in
+favor of the job queue now that both exist, rather than adding locking to
+code on its way out). Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+**Standing items re-verified, unchanged:**
+
+- **ELEC-12** (`SavedBallotTemplate` list/create unbounded) — untouched by
+  this window's diff; still bounded by the unchanged 200/org creation cap.
+- **ELEC-16** (`list_manual_ballot_batches` unbounded) — outside every hunk
+  this window's diff touches; accepted as-is per the Owner Decisions section.
+- **ELEC-40** (pre-ELEC-34 dedup collision-avoidance edge case) —
+  `_dedup_position_key`/`_dedup_scoped_item_aliases` are outside every hunk
+  this window's diff touches.
+- **ELEC-14, ELEC-28/W50-10/W50-11** — resolved in prior passes; this
+  window's diff does not touch any of the files those resolutions live in.
+
+**1 fix applied (ELEC-47), 1 new finding flagged (ELEC-48).**
+
+## Guard tests added (pass 10)
+
+- `tests/test_ballot_send_jobs.py::TestFindActiveJobLocksTheRead` — asserts
+  `find_active_job`'s statement carries a `FOR UPDATE` lock, guarding ELEC-47
+  against reintroduction.
+
+## Completion gate (pass 10)
+
+| Check                                                                                                                       | Result                                              |
+| --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                               | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/`                                                                                        | ✅ clean                                            |
+| `isort --check-only app/ tests/ alembic/`                                                                                   | ✅ clean                                            |
+| `python3 scripts/validate_migrations.py --strict`                                                                           | ✅ 618 revisions, single head `1117b642643b`        |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                           | ✅ 270 routes, 0 errors, 0 warnings                 |
+| `pytest tests/test_ballot_send_jobs.py -q`                                                                                  | ✅ 16 passed                                        |
+| `pytest tests/ -q -k "election or ballot or quorum or candidate or proxy" -m "not integration and not slow and not docker"` | ✅ 599 passed, 1 skipped (pre-existing, `py_vapid`) |
+| `pytest tests/test_ballot_send_jobs.py -q -m "integration or unit"`                                                         | ✅ 16 passed (against the real database)            |
+
+`npm run typecheck`/`npm run lint` were not re-run: this pass's only code
+change is the one-line backend locking fix and its test; the frontend
+elections surface's own diff since pass 9 (polling, meeting-window
+alignment) was merged and CI-tested by the PR that introduced it, and is
+unchanged by this pass (per CLAUDE.md's "Match the Verification to the
+Change").
 
 ---
 

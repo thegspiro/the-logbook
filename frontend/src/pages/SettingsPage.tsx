@@ -57,6 +57,7 @@ import EmailSettingsSection from '../components/settings/EmailSettingsSection';
 import StorageSettingsSection from '../components/settings/StorageSettingsSection';
 import AuthSettingsSection from '../components/settings/AuthSettingsSection';
 import { MfaPolicyCard } from '../components/settings/MfaPolicyCard';
+import { WeeklySecurityReportCard } from '../components/settings/WeeklySecurityReportCard';
 import LabelPrintersSection from '../components/settings/LabelPrintersSection';
 import DepartmentEmailSection from '../components/settings/DepartmentEmailSection';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
@@ -79,7 +80,16 @@ type SectionKey = 'general' | 'modules' | 'email' | 'departmentEmail' | 'storage
  * validate against, and the shell keys the rail off the active section anyway.
  */
 type SubPageKey =
-  'profile' | 'contact' | 'addresses' | 'standard' | 'additional' | 'visibility' | 'ids' | 'signin' | 'mfa';
+  | 'profile'
+  | 'contact'
+  | 'addresses'
+  | 'standard'
+  | 'additional'
+  | 'visibility'
+  | 'ids'
+  | 'signin'
+  | 'mfa'
+  | 'securityReport';
 
 const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
   {
@@ -125,6 +135,7 @@ const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
     subPages: [
       { key: 'signin', label: 'Sign-in', hint: 'Local accounts and SSO' },
       { key: 'mfa', label: 'MFA Policy', hint: 'Who must enroll' },
+      { key: 'securityReport', label: 'Security Report', hint: 'Weekly email to IT' },
     ],
   },
 ];
@@ -1351,6 +1362,18 @@ export const SettingsPage: React.FC = () => {
             <div>
               <SettingsPanelHead title="MFA Policy" description="Two-factor requirements for the department." />
               <MfaPolicyCard />
+            </div>
+          );
+        }
+
+        if (activeSubPage === 'securityReport') {
+          return (
+            <div>
+              <SettingsPanelHead
+                title="Weekly Security Report"
+                description="A weekly email to the IT Manager summarizing alerts, errors and audit log health."
+              />
+              <WeeklySecurityReportCard />
             </div>
           );
         }

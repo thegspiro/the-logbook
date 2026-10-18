@@ -16,23 +16,42 @@ Two variants share one renderer:
 Kept separate from the service so the layout logic lives in one place and
 can be unit-tested without a database (same convention as
 ``impact_plan_pdf.render_impact_plan_pdf``).
+
+It shares the ballot's and certified results' letterhead, grayscale palette,
+heading bands and table style (``election_pdf_style``): the three are
+filed together with the minutes and should read as one set.
 """
 
-import html
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, List, Optional
 
-from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.platypus import (
+    Flowable,
+    HRFlowable,
+    KeepTogether,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+)
 
-_HEADER_BG = colors.HexColor("#1f2937")
-_ROW_ALT = colors.HexColor("#f3f4f6")
-_GRID = colors.HexColor("#d1d5db")
-_MUTED = colors.HexColor("#6b7280")
+from app.utils.election_pdf_style import (
+    INK,
+    MUTED,
+    SIDE_MARGIN,
+    VERTICAL_MARGIN,
+    base_styles,
+    esc,
+    heading_band,
+    key_value_table,
+    letterhead,
+    padded,
+    page_footer,
+    ruled_table,
+    section,
+)
 
 _VOTING_METHOD_LABELS = {
     "simple_majority": "Simple majority (one choice per position)",
@@ -56,48 +75,6 @@ _VOTER_TYPE_LABELS = {
     "life": "Life members",
     "probationary": "Probationary members",
 }
-
-
-def _esc(value: Any) -> str:
-    """Escape arbitrary text for use inside reportlab mini-HTML paragraphs."""
-    return html.escape(str(value)) if value is not None else ""
-
-
-def _styled_table(data: List[List[Any]], col_widths: List[float]) -> Table:
-    style = TableStyle(
-        [
-            ("BACKGROUND", (0, 0), (-1, 0), _HEADER_BG),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("GRID", (0, 0), (-1, -1), 0.5, _GRID),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, _ROW_ALT]),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ]
-    )
-    return Table(data, colWidths=col_widths, repeatRows=1, style=style)
-
-
-def _plain_table(rows: List[List[Any]], col_widths: List[float]) -> Table:
-    """Two-column label/value table without a header row."""
-    style = TableStyle(
-        [
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("GRID", (0, 0), (-1, -1), 0.5, _GRID),
-            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, _ROW_ALT]),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ]
-    )
-    return Table(rows, colWidths=col_widths, style=style)
 
 
 def _fmt_dt(value: Optional[datetime]) -> str:
@@ -187,6 +164,23 @@ def summarize_item_eligibility(
     return summary
 
 
+def _subhead(text: str, styles: Dict[str, ParagraphStyle]) -> Paragraph:
+    return Paragraph(text, styles["subhead"])
+
+
+def _kv(rows: List[List[str]], styles: Dict[str, ParagraphStyle]) -> Flowable:
+    """Label/value rows with the value as wrapping, escaped text.
+
+    The value goes in a Paragraph rather than a bare string: a bare table
+    cell is printed literally, so escaping it put "&gt;" on the page, and an
+    unescaped Paragraph would read a "<" in a meeting title as markup.
+    """
+    return key_value_table(
+        [[label, Paragraph(esc(value), styles["cell"])] for label, value in rows],
+        label_fraction=0.3,
+    )
+
+
 def render_pre_meeting_package_pdf(
     data: Dict[str, Any],
     meta: Dict[str, Any],
@@ -200,45 +194,45 @@ def render_pre_meeting_package_pdf(
       ``roster`` (summary counts + ``eligible`` / ``ineligible`` /
       ``overrides`` lists, plus ``items`` from
       :func:`summarize_item_eligibility`).
-    *meta*: ``org_name``, ``generated_at`` (datetime, org-local).
+    *meta*: ``org_name``, ``generated_at`` (datetime, org-local), and
+    optional ``logo`` — the organization's stored logo data URI.
     """
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
         pagesize=letter,
-        topMargin=0.6 * inch,
-        bottomMargin=0.6 * inch,
-        leftMargin=0.5 * inch,
-        rightMargin=0.5 * inch,
+        topMargin=VERTICAL_MARGIN,
+        bottomMargin=VERTICAL_MARGIN,
+        leftMargin=SIDE_MARGIN,
+        rightMargin=SIDE_MARGIN,
         title="Pre-Meeting Package",
     )
 
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "PkgTitle", parent=styles["Title"], fontSize=18, spaceAfter=2
+    styles = base_styles("Pkg")
+    styles["body"] = ParagraphStyle(
+        "PkgBody", parent=styles["panel"], fontSize=10, leading=14
     )
-    sub_style = ParagraphStyle(
-        "PkgSub", parent=styles["Normal"], fontSize=9, textColor=_MUTED
+    styles["cell"] = ParagraphStyle(
+        "PkgCell", parent=styles["panel"], fontSize=10, leading=12
     )
-    section_style = ParagraphStyle(
-        "PkgSection",
-        parent=styles["Heading2"],
-        fontSize=12,
-        spaceBefore=14,
-        spaceAfter=6,
+    styles["meta"] = ParagraphStyle(
+        "PkgMeta",
+        parent=styles["panel"],
+        fontSize=9,
+        leading=12,
+        textColor=MUTED,
+        spaceBefore=2,
     )
-    item_title_style = ParagraphStyle(
-        "PkgItemTitle",
-        parent=styles["Heading3"],
-        fontSize=10,
-        spaceBefore=8,
-        spaceAfter=2,
-    )
-    body_style = ParagraphStyle(
-        "PkgBody", parent=styles["Normal"], fontSize=8.5, leading=11
-    )
-    cell_style = ParagraphStyle(
-        "PkgCell", parent=styles["Normal"], fontSize=8, leading=10
+    styles["subhead"] = ParagraphStyle(
+        "PkgSubhead",
+        parent=styles["panel"],
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        leading=14,
+        leftIndent=8,
+        spaceBefore=10,
+        spaceAfter=4,
+        keepWithNext=True,
     )
 
     election: Dict[str, Any] = data.get("election") or {}
@@ -247,41 +241,53 @@ def render_pre_meeting_package_pdf(
     candidates: List[Dict[str, Any]] = data.get("candidates") or []
     roster: Dict[str, Any] = data.get("roster") or {}
 
-    story: List[Any] = []
-
     # ---- Header ----
-    story.append(Paragraph("Pre-Meeting Package", title_style))
     generated_at: datetime = meta.get("generated_at") or datetime.utcnow()
-    org_name = meta.get("org_name") or ""
-    story.append(
-        Paragraph(
-            f"{_esc(org_name)} &middot; Generated {_esc(_fmt_dt(generated_at))}",
-            sub_style,
-        )
-    )
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(_esc(election.get("title")), section_style))
+    story: List[Any] = [
+        letterhead(
+            meta.get("org_name"),
+            "PRE-MEETING PACKAGE",
+            [
+                Paragraph(esc(election.get("title")), styles["election"]),
+                Paragraph(f"Generated {esc(_fmt_dt(generated_at))}", styles["meta"]),
+            ],
+            meta.get("logo"),
+            styles,
+            "Pre-Meeting Package",
+        ),
+        Spacer(1, 8),
+        HRFlowable(width="100%", thickness=2, color=INK),
+        Spacer(1, 10),
+    ]
     if election.get("description"):
-        story.append(Paragraph(_esc(election.get("description")), body_style))
+        story += [
+            padded([Paragraph(esc(election.get("description")), styles["body"])]),
+            Spacer(1, 14),
+        ]
 
     # ---- Meeting ----
     if meeting:
-        story.append(Paragraph("Meeting", section_style))
-        meeting_rows = [
-            ["Meeting", _esc(meeting.get("title"))],
-            ["Type", _esc(meeting.get("meeting_type") or "—")],
-            ["Date", _esc(meeting.get("date_display") or "—")],
-            ["Location", _esc(meeting.get("location") or "—")],
+        meeting_body: List[Any] = [
+            _kv(
+                [
+                    ["Meeting", meeting.get("title") or ""],
+                    ["Type", meeting.get("meeting_type") or "—"],
+                    ["Date", meeting.get("date_display") or "—"],
+                    ["Location", meeting.get("location") or "—"],
+                ],
+                styles,
+            )
         ]
-        story.append(_plain_table(meeting_rows, [1.4 * inch, 5.6 * inch]))
         if meeting.get("agenda"):
-            story.append(Paragraph("Agenda", item_title_style))
             # Preserve line breaks from the free-text agenda field
-            agenda_html = _esc(meeting["agenda"]).replace("\n", "<br/>")
-            story.append(Paragraph(agenda_html, body_style))
+            agenda_html = esc(meeting["agenda"]).replace("\n", "<br/>")
+            meeting_body += [
+                _subhead("Agenda", styles),
+                padded([Paragraph(agenda_html, styles["body"])]),
+            ]
+        story.append(section("Meeting", meeting_body, styles))
 
     # ---- Voting window / election configuration ----
-    story.append(Paragraph("Election Configuration", section_style))
     victory_condition: Optional[str] = election.get("victory_condition")
     # A missing condition is never a key, so "" falls through to the "—" default
     # exactly as a None lookup would.
@@ -312,18 +318,16 @@ def render_pre_meeting_package_pdf(
         )
 
     config_rows = [
-        ["Voting opens", _esc(election.get("start_display") or "—")],
-        ["Voting closes", _esc(election.get("end_display") or "—")],
+        ["Voting opens", election.get("start_display") or "—"],
+        ["Voting closes", election.get("end_display") or "—"],
         [
             "Voting method",
-            _esc(
-                _VOTING_METHOD_LABELS.get(
-                    election.get("voting_method") or "",
-                    election.get("voting_method") or "—",
-                )
+            _VOTING_METHOD_LABELS.get(
+                election.get("voting_method") or "",
+                election.get("voting_method") or "—",
             ),
         ],
-        ["Victory condition", _esc(victory)],
+        ["Victory condition", victory],
         [
             "Ballot secrecy",
             (
@@ -336,7 +340,7 @@ def render_pre_meeting_package_pdf(
             "Write-in candidates",
             "Allowed" if election.get("allow_write_ins") else "Not allowed",
         ],
-        ["Quorum", _esc(quorum)],
+        ["Quorum", quorum],
         [
             "Proxy voting",
             (
@@ -345,73 +349,116 @@ def render_pre_meeting_package_pdf(
                 else "Not enabled"
             ),
         ],
-        ["Runoffs", _esc(runoffs)],
+        ["Runoffs", runoffs],
     ]
-    story.append(_plain_table(config_rows, [1.4 * inch, 5.6 * inch]))
+    story.append(section("Election Configuration", [_kv(config_rows, styles)], styles))
 
     # ---- Ballot preview ----
-    story.append(
-        Paragraph(f"Ballot Preview ({len(ballot_items)} items)", section_style)
-    )
+    # Each block is one item (or position) kept whole; the band is bound to
+    # the first so it never sits alone at the foot of a page, without
+    # dragging the whole preview — which can run for pages — along with it.
+    preview: List[Any] = []
     if not ballot_items:
         # Positional election without structured ballot items — group by position
         positions: List[str] = election.get("positions") or []
         if positions:
             for position in positions:
-                story.append(Paragraph(_esc(position), item_title_style))
                 pos_candidates = [
                     c for c in candidates if c.get("position") == position
                 ]
-                _append_candidates(story, pos_candidates, body_style)
+                preview.append(
+                    KeepTogether(
+                        [
+                            _subhead(esc(position), styles),
+                            _candidate_list(pos_candidates, styles),
+                        ]
+                    )
+                )
         elif candidates:
-            story.append(Paragraph("Candidates", item_title_style))
-            _append_candidates(story, candidates, body_style)
+            preview.append(
+                KeepTogether(
+                    [
+                        _subhead("Candidates", styles),
+                        _candidate_list(candidates, styles),
+                    ]
+                )
+            )
         else:
-            story.append(
-                Paragraph("No ballot items or candidates configured.", body_style)
+            preview.append(
+                padded(
+                    [
+                        Paragraph(
+                            "No ballot items or candidates configured.",
+                            styles["body"],
+                        )
+                    ]
+                )
             )
     else:
         for idx, item in enumerate(ballot_items, start=1):
-            story.append(
-                Paragraph(f"{idx}. {_esc(item.get('title'))}", item_title_style)
-            )
+            item_parts: List[Any] = [
+                _subhead(f"{idx}. {esc(item.get('title'))}", styles)
+            ]
+            lines: List[Paragraph] = []
             if item.get("description"):
-                story.append(Paragraph(_esc(item["description"]), body_style))
-            detail_bits = [f"Eligible to vote: {_esc(_eligibility_summary(item))}"]
+                lines.append(Paragraph(esc(item["description"]), styles["body"]))
+            detail_bits = [f"Eligible to vote: {esc(_eligibility_summary(item))}"]
             if item.get("victory_condition"):
                 item_victory = _VICTORY_LABELS.get(
                     item["victory_condition"], item["victory_condition"]
                 )
                 if item.get("victory_percentage"):
                     item_victory += f" ({item['victory_percentage']}%)"
-                detail_bits.append(f"Passes by: {_esc(item_victory)}")
-            story.append(
-                Paragraph(
-                    f"<font color='#6b7280'>{' &middot; '.join(detail_bits)}</font>",
-                    body_style,
-                )
-            )
+                detail_bits.append(f"Passes by: {esc(item_victory)}")
+            lines.append(Paragraph(" &middot; ".join(detail_bits), styles["note"]))
+            item_parts.append(padded(lines))
             item_candidates = _candidates_for_item(item, candidates)
             if item_candidates:
-                _append_candidates(story, item_candidates, body_style)
+                item_parts.append(_candidate_list(item_candidates, styles))
             elif item.get("vote_type") == "approval":
-                story.append(
-                    Paragraph(
-                        "<i>Approve / Deny / Abstain vote</i>",
-                        body_style,
+                item_parts.append(
+                    padded(
+                        [
+                            Paragraph(
+                                "<i>Approve / Deny / Abstain vote</i>", styles["body"]
+                            )
+                        ]
                     )
                 )
+            preview.append(KeepTogether(item_parts))
+    story.append(
+        KeepTogether(
+            [
+                heading_band(f"Ballot Preview ({len(ballot_items)} items)", [], styles),
+                preview[0],
+            ]
+        )
+    )
+    story += preview[1:]
+    story.append(Spacer(1, 14))
 
     # ---- Eligible voters ----
     eligible: List[Dict[str, Any]] = roster.get("eligible") or []
-    story.append(Paragraph("Voter Eligibility", section_style))
-    summary_rows = [
-        ["Active members", str(roster.get("total_members", 0))],
-        ["Eligible to vote", str(roster.get("total_eligible", 0))],
-        ["Not eligible", str(roster.get("total_ineligible", 0))],
-        ["Eligibility overrides granted", str(roster.get("total_overrides", 0))],
-    ]
-    story.append(_plain_table(summary_rows, [2.6 * inch, 1.4 * inch]))
+    story.append(
+        section(
+            "Voter Eligibility",
+            [
+                key_value_table(
+                    [
+                        ["Active members", str(roster.get("total_members", 0))],
+                        ["Eligible to vote", str(roster.get("total_eligible", 0))],
+                        ["Not eligible", str(roster.get("total_ineligible", 0))],
+                        [
+                            "Eligibility overrides granted",
+                            str(roster.get("total_overrides", 0)),
+                        ],
+                    ],
+                    label_fraction=0.45,
+                )
+            ],
+            styles,
+        )
+    )
 
     # ---- Per-item eligibility ----
     # The counts above are election-level ("receives a ballot"); an
@@ -420,50 +467,50 @@ def render_pre_meeting_package_pdf(
     item_summary: List[Dict[str, Any]] = roster.get("items") or []
     any_item_blocked = any(row.get("blocked_count") for row in item_summary)
     if item_summary:
-        story.append(Paragraph("Eligibility by Ballot Item", item_title_style))
+        story.append(_subhead("Eligibility by Ballot Item", styles))
         rows: List[List[Any]] = [["Ballot Item", "Eligible", "Not eligible", "Why not"]]
         for row in item_summary:
             eligible_text = str(row.get("eligible_count", 0))
             if row.get("eligible_by_override"):
                 eligible_text += f" ({row['eligible_by_override']} by override)"
             why = "; ".join(
-                f"{_esc(r.get('reason'))}: {r.get('count', 0)}"
+                f"{esc(r.get('reason'))}: {r.get('count', 0)}"
                 for r in row.get("blocked_reasons") or []
             )
             rows.append(
                 [
-                    Paragraph(_esc(row.get("title")), cell_style),
-                    eligible_text,
+                    Paragraph(esc(row.get("title")), styles["cell"]),
+                    Paragraph(eligible_text, styles["cell"]),
                     str(row.get("blocked_count", 0)),
-                    Paragraph(why or "—", cell_style),
+                    Paragraph(why or "—", styles["cell"]),
                 ]
             )
-        story.append(
-            _styled_table(rows, [2.6 * inch, 1.1 * inch, 0.9 * inch, 2.4 * inch])
-        )
+        story.append(ruled_table(rows, [0.34, 0.2, 0.14, 0.32], []))
 
-    story.append(Paragraph(f"Eligible Voters ({len(eligible)})", item_title_style))
+    story.append(_subhead(f"Eligible Voters ({len(eligible)})", styles))
     if eligible:
         rows = [["Member", "Membership Type", ""]]
         for member in eligible:
             rows.append(
                 [
-                    Paragraph(_esc(member.get("full_name")), cell_style),
-                    _esc(member.get("membership_type") or "—"),
+                    Paragraph(esc(member.get("full_name")), styles["cell"]),
+                    Paragraph(
+                        esc(member.get("membership_type") or "—"), styles["cell"]
+                    ),
                     "override" if member.get("has_override") else "",
                 ]
             )
-        story.append(_styled_table(rows, [3.2 * inch, 2.2 * inch, 1.0 * inch]))
+        story.append(ruled_table(rows, [0.48, 0.34, 0.18], []))
     else:
-        story.append(Paragraph("No eligible voters found.", body_style))
+        story.append(padded([Paragraph("No eligible voters found.", styles["body"])]))
 
     # ---- Full variant: ineligibility detail + overrides ----
     if include_ineligibility_detail:
         ineligible: List[Dict[str, Any]] = roster.get("ineligible") or []
         story.append(
-            Paragraph(
+            _subhead(
                 f"Ineligible Members ({len(ineligible)}) — leadership detail",
-                item_title_style,
+                styles,
             )
         )
         if ineligible:
@@ -471,25 +518,35 @@ def render_pre_meeting_package_pdf(
             for member in ineligible:
                 rows.append(
                     [
-                        Paragraph(_esc(member.get("full_name")), cell_style),
+                        Paragraph(esc(member.get("full_name")), styles["cell"]),
                         Paragraph(
-                            _esc(member.get("reason") or "Not eligible"),
-                            cell_style,
+                            esc(member.get("reason") or "Not eligible"),
+                            styles["cell"],
                         ),
                     ]
                 )
-            story.append(_styled_table(rows, [2.4 * inch, 4.6 * inch]))
+            story.append(ruled_table(rows, [0.34, 0.66], []))
         elif any_item_blocked:
             story.append(
-                Paragraph(
-                    "None — every active member receives a ballot; the members "
-                    "blocked on individual items are listed below.",
-                    body_style,
+                padded(
+                    [
+                        Paragraph(
+                            "None — every active member receives a ballot; the "
+                            "members blocked on individual items are listed below.",
+                            styles["body"],
+                        )
+                    ]
                 )
             )
         else:
             story.append(
-                Paragraph("None — every active member is eligible.", body_style)
+                padded(
+                    [
+                        Paragraph(
+                            "None — every active member is eligible.", styles["body"]
+                        )
+                    ]
+                )
             )
 
         # Who is blocked on each item, and why — leadership detail, like the
@@ -499,64 +556,68 @@ def render_pre_meeting_package_pdf(
             if not blocked:
                 continue
             story.append(
-                Paragraph(
-                    f"Not eligible for {_esc(row.get('title'))} ({len(blocked)})",
-                    item_title_style,
+                _subhead(
+                    f"Not eligible for {esc(row.get('title'))} ({len(blocked)})",
+                    styles,
                 )
             )
             rows = [["Member", "Reason"]]
             for member in blocked:
                 rows.append(
                     [
-                        Paragraph(_esc(member.get("full_name")), cell_style),
-                        Paragraph(_esc(member.get("reason")), cell_style),
+                        Paragraph(esc(member.get("full_name")), styles["cell"]),
+                        Paragraph(esc(member.get("reason")), styles["cell"]),
                     ]
                 )
-            story.append(_styled_table(rows, [2.4 * inch, 4.6 * inch]))
+            story.append(ruled_table(rows, [0.34, 0.66], []))
 
         overrides: List[Dict[str, Any]] = roster.get("overrides") or []
         if overrides:
-            story.append(
-                Paragraph(f"Eligibility Overrides ({len(overrides)})", item_title_style)
-            )
+            story.append(_subhead(f"Eligibility Overrides ({len(overrides)})", styles))
             rows = [["Member", "Reason", "Granted By"]]
             for record in overrides:
                 rows.append(
                     [
-                        Paragraph(_esc(record.get("full_name")), cell_style),
-                        Paragraph(_esc(record.get("reason") or "—"), cell_style),
+                        Paragraph(esc(record.get("full_name")), styles["cell"]),
+                        Paragraph(esc(record.get("reason") or "—"), styles["cell"]),
                         Paragraph(
-                            _esc(record.get("overridden_by_name") or "—"),
-                            cell_style,
+                            esc(record.get("overridden_by_name") or "—"),
+                            styles["cell"],
                         ),
                     ]
                 )
-            story.append(_styled_table(rows, [2.0 * inch, 3.0 * inch, 2.0 * inch]))
+            story.append(ruled_table(rows, [0.3, 0.42, 0.28], []))
 
     # ---- Footer ----
-    story.append(Spacer(1, 12))
-    story.append(
+    story += [
+        Spacer(1, 16),
+        HRFlowable(width="100%", thickness=0.75, color=MUTED),
+        Spacer(1, 4),
         Paragraph(
             "Generated by The Logbook. Figures reflect voter eligibility at "
             "generation time; eligibility is re-checked when each vote is cast.",
-            sub_style,
-        )
-    )
+            styles["footer"],
+        ),
+    ]
 
-    doc.build(story)
+    footer = page_footer(f"Pre-Meeting Package · {election.get('title') or ''}")
+    doc.build(story, onFirstPage=footer, onLaterPages=footer)
     buf.seek(0)
     return buf
 
 
-def _append_candidates(
-    story: List[Any], candidates: List[Dict[str, Any]], body_style: ParagraphStyle
-) -> None:
-    """Append a candidate list (with optional statements) to the story."""
+def _candidate_list(
+    candidates: List[Dict[str, Any]], styles: Dict[str, ParagraphStyle]
+) -> Flowable:
+    """A candidate list (with optional statements), inset under its item."""
     if not candidates:
-        story.append(Paragraph("<i>No candidates nominated yet.</i>", body_style))
-        return
+        return padded(
+            [Paragraph("<i>No candidates nominated yet.</i>", styles["body"])]
+        )
+    lines = []
     for c in candidates:
-        line = f"&bull; <b>{_esc(c.get('name'))}</b>"
+        line = f"&bull; <b>{esc(c.get('name'))}</b>"
         if c.get("statement"):
-            line += f" — {_esc(c['statement'])}"
-        story.append(Paragraph(line, body_style))
+            line += f" — {esc(c['statement'])}"
+        lines.append(Paragraph(line, styles["body"]))
+    return padded(lines)

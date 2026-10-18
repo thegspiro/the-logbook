@@ -32,6 +32,7 @@ Most members never open this page. The parts a member may meet are the
 6. [Cal.com — Interview Scheduling](#calcom--interview-scheduling)
 7. [PayPal — Store Payment Reconciliation](#paypal--store-payment-reconciliation)
 8. [Google Workspace — Member Accounts](#google-workspace--member-accounts)
+   - [Microsoft 365 — Member Accounts](#microsoft-365--member-accounts)
 9. [Calendar Integrations](#calendar-integrations)
 10. [Messaging Integrations](#messaging-integrations)
 11. [Weather Alerts](#weather-alerts)
@@ -79,44 +80,45 @@ The page shows:
 
 ### Currently Available
 
-| Category           | Integration        | What it does today                                                                             |
-| ------------------ | ------------------ | ---------------------------------------------------------------------------------------------- |
-| **Calendar**       | iCalendar (ICS)    | A subscribe link to the department's published events — see [below](#icalendar-ics-feed)       |
-| **Messaging**      | Slack              | Posts new events, shifts and training records to a channel                                     |
-| **Messaging**      | Discord            | The same, to a Discord channel                                                                 |
-| **Messaging**      | Microsoft Teams    | The same, to a Teams channel                                                                   |
-| **CRM**            | Salesforce         | Sends members, training and events to Salesforce; can update contact details                   |
-| **Documents**      | Documenso          | Sends documents for e-signature (an open-source DocuSign alternative)                          |
-| **Scheduling**     | Cal.com            | Shows bookings and moves applicants on after a meeting                                         |
-| **Payments**       | PayPal             | Matches incoming store payments to Department Store orders                                     |
-| **Automation**     | Generic Webhooks   | Sends a signed test message to a web address — nothing else yet                                |
-| **Safety**         | NWS Weather Alerts | Checks your weather zone code — alerts are not shown yet                                       |
-| **Access Control** | NFC ID Cards       | ID cards with a tap-in chip, and a check-in station that reads them                            |
-| **Access Control** | Google Workspace   | Creates a Google account for each applicant converted to a member; suspends it when they leave |
-| **AI Assistants**  | Claude (MCP)       | Lets Claude answer questions about your department                                             |
+| Category           | Integration        | What it does today                                                                               |
+| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------ |
+| **Calendar**       | iCalendar (ICS)    | A subscribe link to the department's published events — see [below](#icalendar-ics-feed)         |
+| **Messaging**      | Slack              | Posts new events, shifts and training records to a channel                                       |
+| **Messaging**      | Discord            | The same, to a Discord channel                                                                   |
+| **Messaging**      | Microsoft Teams    | The same, to a Teams channel                                                                     |
+| **CRM**            | Salesforce         | Sends members, training and events to Salesforce; can update contact details                     |
+| **Documents**      | Documenso          | Sends documents for e-signature (an open-source DocuSign alternative)                            |
+| **Scheduling**     | Cal.com            | Shows bookings and moves applicants on after a meeting                                           |
+| **Payments**       | PayPal             | Matches incoming store payments to Department Store orders                                       |
+| **Automation**     | Generic Webhooks   | Sends a signed test message to a web address — nothing else yet                                  |
+| **Safety**         | NWS Weather Alerts | Checks your weather zone code — alerts are not shown yet                                         |
+| **Access Control** | NFC ID Cards       | ID cards with a tap-in chip, and a check-in station that reads them                              |
+| **Access Control** | Google Workspace   | Creates a Google account for each applicant converted to a member; suspends it when they leave   |
+| **Access Control** | Microsoft 365      | Creates and licenses a Microsoft 365 account for each new member; blocks sign-in when they leave |
+| **AI Assistants**  | Claude (MCP)       | Lets Claude answer questions about your department                                               |
 
 ### Coming Soon
 
 These cards carry a **Coming Soon** badge and have no **Connect** button.
 Nothing can be set up for them yet.
 
-| Integration                   | Planned for                                                        |
-| ----------------------------- | ------------------------------------------------------------------ |
-| Active911                     | Dispatch alerts and mapping                                        |
-| CSV Import/Export             | Member import, training export                                     |
-| ESO Solutions                 | ePCR data exchange                                                 |
-| FirstWatch                    | Dispatch analytics                                                 |
-| Generic ePCR Import           | CSV or NEMSIS XML from any vendor                                  |
-| Google Calendar               | One-way event publishing (see [Google Calendar](#google-calendar)) |
-| Google Maps                   | Hydrant mapping and pre-plans                                      |
-| ImageTrend                    | ePCR sync and run reports                                          |
-| Microsoft Outlook             | One-way event publishing                                           |
-| NEMSIS Response Module Export | NEMSIS 3.5 for state EMS                                           |
-| NFIRS Export                  | NFIRS 5.0 for state fire marshal                                   |
-| NREMT Verification            | Certification status verification                                  |
-| PulsePoint                    | CPR alerts and AED locations                                       |
-| WhatsApp Business             | Notifications and group messages                                   |
-| Zapier                        | Connect to 5,000+ apps                                             |
+| Integration                   | Planned for                                                            |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| Active911                     | Dispatch alerts and mapping                                            |
+| CSV Import/Export             | Member import, training export                                         |
+| ESO Solutions                 | ePCR data exchange                                                     |
+| FirstWatch                    | Dispatch analytics                                                     |
+| Generic ePCR Import           | CSV or NEMSIS XML from any vendor                                      |
+| Google Calendar               | One-way event publishing (see [Google Calendar](#google-calendar))     |
+| Google Maps                   | Hydrant mapping and pre-plans                                          |
+| ImageTrend                    | ePCR sync and run reports                                              |
+| Microsoft Outlook             | One-way event publishing (see [Microsoft Outlook](#microsoft-outlook)) |
+| NEMSIS Response Module Export | NEMSIS 3.5 for state EMS                                               |
+| NFIRS Export                  | NFIRS 5.0 for state fire marshal                                       |
+| NREMT Verification            | Certification status verification                                      |
+| PulsePoint                    | CPR alerts and AED locations                                           |
+| WhatsApp Business             | Notifications and group messages                                       |
+| Zapier                        | Connect to 5,000+ apps                                                 |
 
 Several modules already have their own CSV exports on their own pages, such as
 members, admin hours, finance and compliance reports.
@@ -543,6 +545,26 @@ Only accounts The Logbook created or linked are suspended. To cover members who 
 
 See [Google Workspace Integration](../../wiki/Integration-Google-Workspace.md) for setup steps and account states.
 
+### Microsoft 365 — Member Accounts
+
+**Microsoft 365** does the same for departments on Microsoft: an account at the department email address for each new member, licensed and added to your groups, with sign-in blocked when they leave. A department connects **either** Google Workspace **or** Microsoft 365, not both. Only an organization administrator (`admin.access`) can connect, change or disconnect it.
+
+| Field                       | Description                                                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Directory (tenant) ID**   | From the Entra ID app registration's Overview page.                                                                                                                 |
+| **Application (client) ID** | From the same page.                                                                                                                                                 |
+| **Client secret value**     | The secret's value, not its ID. Stored encrypted, never shown. Replace it before it expires.                                                                        |
+| **Domain**                  | Must match **Organization Settings → Department Email** and be verified in Microsoft 365.                                                                           |
+| **Usage location**          | The two-letter country every new account gets (`US` by default). Microsoft will not license an account without one.                                                 |
+| **License SKU ID**          | _(optional)_ The license each new account is given. Leave empty when a group below licenses its members.                                                            |
+| **Groups**                  | _(optional)_ Up to 20 security groups (by object ID) or Microsoft 365 groups. **Test** rejects distribution lists, mail-enabled security groups and dynamic groups. |
+
+The app registration needs the Microsoft Graph application permissions `User.ReadWrite.All`, `User-PasswordProfile.ReadWrite.All`, `User.RevokeSessions.All`, `GroupMember.ReadWrite.All` and, with a license, `LicenseAssignment.ReadWrite.All`, with admin consent, and the **User Administrator** role.
+
+Conversion, the member's profile, **N need attention** and **Link existing members** work as for Google Workspace. Two differences: an account whose license could not be assigned is kept and its profile offers **Retry**; and an account synced from on-premises Active Directory is never blocked from here — the profile says to disable it in Active Directory.
+
+See [Microsoft 365 Integration](../../wiki/Integration-Microsoft-365.md) for setup steps and account states.
+
 ---
 
 ## Calendar Integrations
@@ -600,11 +622,48 @@ calendar, which members must subscribe to again.
 
 ### Microsoft Outlook
 
-Microsoft Outlook cannot be connected yet. It reads **Coming Soon** while
-`CALENDAR_SYNC_ENABLED` is off, and with it on there is still no sign-in
-screen for it. It is planned as one-way publishing to a calendar The Logbook
-creates in the department's Microsoft 365 account. Until then, use the
-[department events feed](#icalendar-ics-feed).
+Outlook works the same way as Google Calendar. The Logbook creates one
+calendar for the department, named after it, in a Microsoft 365 (work or
+school) account an administrator signs in with, and publishes the
+department's events to it, **one way**. Share that calendar with members from
+Outlook so they can add it. Nothing is read back from Outlook, and no contacts
+or emails are exchanged.
+
+**Before you start (server operator).** The card reads **Coming Soon** until
+the server's `CALENDAR_SYNC_ENABLED` setting is turned on; it is off by
+default. The sign-in uses the server's Microsoft (Azure AD) app — the same
+`AZURE_AD_CLIENT_ID` and `AZURE_AD_CLIENT_SECRET` as "Sign in with
+Microsoft", though that sign-in does not have to be turned on. The app needs
+the delegated Microsoft Graph permission **Calendars.ReadWrite** and the
+callback address
+`https://<your site>/api/v1/integrations/outlook/oauth/callback` added as a
+**Web** redirect URI (or set `MICROSOFT_CALENDAR_REDIRECT_URI` to the exact
+address). The sign-in goes to the server's `AZURE_AD_TENANT_ID` tenant, or to
+any work or school account when that is not set; personal Outlook.com
+accounts are not offered. A department can use its own app instead by saving
+its client ID, client secret and tenant ID on the integration.
+
+**Connecting** (needs the integrations management permission):
+
+1. On the Microsoft Outlook card, select **Connect with Microsoft**.
+2. Choose the Microsoft 365 account that should own the department calendar
+   (it needs an Exchange Online mailbox), and accept the permissions.
+3. You come back to the Integrations page. The card shows the account, the
+   new calendar's name and **Last published**.
+
+The sign-in must be finished within ten minutes, in the same browser, by the
+person who started it. **What is published**, **Sync event descriptions** and
+**Reconnect required** work exactly as for
+[Google Calendar](#google-calendar); select **Reconnect with Microsoft** to
+sign in again.
+
+**Disconnecting** stops publishing and removes the sign-in from The Logbook.
+Microsoft has no way for an app to hand back a single sign-in, so the access
+ends when it expires; to end it at once, remove The Logbook under **My Apps**
+in the Microsoft account (or in Entra ID). The calendar stays in the account
+with the events already on it; delete it in Outlook if the department no
+longer wants it. Connecting again creates a new calendar, which must be shared
+with members again.
 
 ### iCalendar (ICS) Feed
 
@@ -949,9 +1008,7 @@ Split it into three boxes rather than pasting it whole:
 | API Key      | the part after `key=`                        |
 | API Secret   | the part after `secret=`                     |
 
-<!-- Screenshot needed:
-_[Training Officer or admin (training.manage) at /training/admin?page=setup&tab=integrations → Add Provider → Target Solutions, details step: API Base URL with its helper text, API Key and API Secret \* holding only obviously fake values (demo-key / demo-secret) or empty, Enable Auto-Sync switched on (it starts off) with Pull new completions: Every hour and Daily 30-day review at 02:00 with its timezone helper. Never save, and never type a real key or secret.]_
--->
+![Configure Provider for Target Solutions: Display Name, API Base URL empty with its helper text giving the Training Records API address, API Key and API Secret holding demo values, and under Sync Settings Enable Auto-Sync on, Pull new completions Every hour and Daily 30-day review at 02:00 with the department-timezone note](./images/16-17-target-solutions-details.png)
 
 The key and secret are stored securely and never shown again. A base address
 that still contains a key, secret or other sign-in code is refused, because the
@@ -1003,9 +1060,7 @@ the same policy twice in a day appears twice. The second one that day is kept in
 the **Import Queue** marked **duplicate** and never becomes a training record.
 An acknowledgment on a later day, such as next year's, is recorded as usual.
 
-<!-- Screenshot needed:
-_[Training Admin → Settings & Data → Integrations → add a Target Solutions provider: the form with **API Base URL** `https://app.targetsolutions.com/tsapp/api/`, **API Key** and **API Secret \*** filled with placeholder values, and under **Sync Settings** **Enable Auto-Sync** on, **Pull new completions** set to **Every hour** and **Daily 30-day review at** 02:00. Use a demo key, never a real one.]_
--->
+![The Target Solutions provider form filled in: API Base URL https://app.targetsolutions.com/tsapp/api/, API Key and API Secret with placeholder values, and Enable Auto-Sync on with Pull new completions Every hour and Daily 30-day review at 02:00](./images/16-18-target-solutions-filled.png)
 
 ### Syncing on a schedule
 

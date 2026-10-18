@@ -539,7 +539,7 @@ const OrganizationSetup: React.FC = () => {
     // Required fields
     if (!formData.name.trim()) {
       errors.name = 'Organization name is required';
-    } else if (formData.name.length < 2) {
+    } else if (formData.name.trim().length < 2) {
       errors.name = 'Organization name must be at least 2 characters';
     }
 
@@ -735,7 +735,9 @@ const OrganizationSetup: React.FC = () => {
       // Only publish the organization name after the server has successfully
       // created it. Publishing before the request made downstream route guards
       // treat a failed submission as a completed organization step.
-      setDepartmentName(formData.name);
+      // Stored trimmed, exactly as it was sent: the navigation step resends
+      // this value to the server, which measures it after stripping.
+      setDepartmentName(payload.name);
       // Published on the same terms and for the same reason as the name: the
       // position step several screens later must offer the ranks and positions
       // this agency actually has, and a failed submission must not leave that

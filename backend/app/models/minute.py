@@ -646,6 +646,14 @@ class MeetingMinutes(Base):
     published_document_id: Mapped[Optional[str]] = mapped_column(
         String(36), nullable=True
     )
+    # Which adopted version the library copy shows, and when it was filed, so a
+    # republish can say "replaces version N, published <date>".
+    published_revision_version: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    published_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Legacy content sections (kept for backward compat with existing data)
     agenda: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -1181,6 +1189,66 @@ class MinutesSignature(Base):
         Index("ix_minutes_signatures_minutes_id", "minutes_id"),
         Index("ix_minutes_signatures_revision_id", "revision_id"),
         Index("ix_minutes_signatures_organization_id", "organization_id"),
+    )
+
+
+class MinutesPublicCopy(Base):
+    """The copy of a set of minutes posted on the department's public page.
+
+    A snapshot taken when the minutes were published, not a live view: editing
+    or reopening the minutes later does not change what the public sees until
+    the corrected version is published over it. One row per set of minutes,
+    replaced in place, with a note of the version it replaced.
+
+    ``content`` holds only what the public page may show (see
+    ``app/utils/minutes_public.py``); the full record stays in the minutes.
+    """
+
+    __tablename__ = "minutes_public_copies"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    minutes_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("meeting_minutes.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    meeting_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    meeting_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    content: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    revision_version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    posted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    posted_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # The version this copy replaced, if any, shown on the page as a note.
+    replaced_version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    replaced_posted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Set when the minutes are reopened for a correction; the page says so
+    # until the corrected version replaces this one.
+    under_correction_since: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # A withdrawn copy is not served; the row is kept as the record that it was
+    # posted and taken down.
+    withdrawn_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    withdrawn_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_minutes_public_copies_organization_id", "organization_id"),
+        Index("ix_minutes_public_copies_listing", "organization_id", "withdrawn_at"),
     )
 
 

@@ -678,15 +678,17 @@ export const electionService = {
   },
 
   /**
-   * Send a reminder ballot email (fresh voting link) to eligible voters
-   * who have not voted yet. Stamps reminder_sent_at server-side, which
-   * also suppresses the automatic pre-close reminder.
+   * Queue a reminder ballot email (fresh voting link) to eligible voters who
+   * have not voted yet. The send runs on the server after this returns; follow
+   * it with {@link waitForBallotSendJob}. Stamps reminder_sent_at server-side,
+   * which also suppresses the automatic pre-close reminder. Answers 409 while
+   * any ballot send or reminder for the election is still running.
    */
-  async remindNonVoters(
+  async startReminderSendJob(
     electionId: string,
     payload?: { subject?: string; message?: string }
-  ): Promise<EmailBallotResponse> {
-    const response = await api.post<EmailBallotResponse>(`/elections/${electionId}/remind-non-voters`, payload ?? {});
+  ): Promise<BallotSendJob> {
+    const response = await api.post<BallotSendJob>(`/elections/${electionId}/reminder-send-jobs`, payload ?? {});
     return response.data;
   },
 
