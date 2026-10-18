@@ -16,6 +16,8 @@ import type {
   ActionItemAssignee,
   ActionItemCreate,
   MinutesStats,
+  MinutesPublishingStatus,
+  MinutesPublishResult,
   MinutesReminderSettings,
   MinutesSignature,
   SignatureStatus,
@@ -107,8 +109,19 @@ export const minutesService = {
 
   // ── Publishing ──
 
-  async publishMinutes(minutesId: string): Promise<void> {
-    await api.post(`/minutes-records/${minutesId}/publish`);
+  async publishMinutes(minutesId: string): Promise<MinutesPublishResult> {
+    const response = await api.post<MinutesPublishResult>(`/minutes-records/${minutesId}/publish`);
+    return response.data;
+  },
+
+  async getPublishingStatus(minutesId: string): Promise<MinutesPublishingStatus> {
+    const response = await api.get<MinutesPublishingStatus>(`/minutes-records/${minutesId}/publishing`);
+    return response.data;
+  },
+
+  /** Take the public copy down. The library copy is untouched. */
+  async withdrawPublicCopy(minutesId: string): Promise<void> {
+    await api.delete(`/minutes-records/${minutesId}/public-posting`);
   },
 
   // ── Motions ──

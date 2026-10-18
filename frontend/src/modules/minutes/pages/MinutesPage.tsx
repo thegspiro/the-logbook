@@ -23,6 +23,7 @@ import {
   ListOrdered,
   Bell,
   PenLine,
+  Globe,
 } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { Link, useNavigate } from 'react-router';
@@ -32,6 +33,7 @@ import { minutesService } from '../services/api';
 import { AgendaEditorDialog } from '../components/AgendaEditorDialog';
 import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
+import { PublishingSettingsDialog } from '../components/PublishingSettingsDialog';
 import { ReminderSettingsDialog } from '../components/ReminderSettingsDialog';
 import { SignerSettingsDialog } from '../components/SignerSettingsDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -96,6 +98,7 @@ const MinutesPage: React.FC = () => {
   // the backend, not meetings.manage — check the same permission the API does.
   const canManage = checkPermission('minutes.manage');
   const [showReminderSettings, setShowReminderSettings] = useState(false);
+  const [showPublishingSettings, setShowPublishingSettings] = useState(false);
   const [showSignerSettings, setShowSignerSettings] = useState(false);
   // The attendance dashboard's endpoint is gated on meetings.manage.
   const canViewAttendance = checkPermission('meetings.manage');
@@ -356,6 +359,16 @@ const MinutesPage: React.FC = () => {
               >
                 <Bell className="h-4 w-4" aria-hidden="true" />
                 <span>Reminders</span>
+              </button>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setShowPublishingSettings(true)}
+                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
+              >
+                <Globe className="h-4 w-4" aria-hidden="true" />
+                <span>Publishing</span>
               </button>
             )}
             {canManage && (
@@ -770,7 +783,13 @@ const MinutesPage: React.FC = () => {
 
         {/* Create Minutes Modal */}
         {canManage && (
-          <ReminderSettingsDialog isOpen={showReminderSettings} onClose={() => setShowReminderSettings(false)} />
+          <>
+            <ReminderSettingsDialog isOpen={showReminderSettings} onClose={() => setShowReminderSettings(false)} />
+            <PublishingSettingsDialog
+              isOpen={showPublishingSettings}
+              onClose={() => setShowPublishingSettings(false)}
+            />
+          </>
         )}
 
         {canManage && <SignerSettingsDialog isOpen={showSignerSettings} onClose={() => setShowSignerSettings(false)} />}
