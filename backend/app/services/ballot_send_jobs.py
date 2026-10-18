@@ -346,6 +346,16 @@ async def find_active_job(
 ) -> Optional[BallotSendJob]:
     """The send still in progress for this election, if any.
 
+    A locking read (CLAUDE.md pitfall #27): ``_queue_send`` already locks the
+    election row before calling this, but a plain SELECT here would still
+    answer from the snapshot taken at the transaction's first read — which,
+    behind the auth dependency's own user lookup on this same session, predates
+    that lock. Two requests queuing a send for the same election could then
+    both see no active job and both queue one. ``FOR UPDATE`` always reads the
+    latest committed row, so once the second request's election lock is
+    granted (after the first commits), this sees the job the first just
+    created.
+
     A queued or running row older than ``STALE_JOB_AFTER`` belonged to a
     process that died mid-send; it is marked failed here, in the caller's
     transaction, so it stops blocking the next send and its poller learns
@@ -357,6 +367,7 @@ async def find_active_job(
         .where(BallotSendJob.organization_id == str(organization_id))
         .where(BallotSendJob.status.in_(_ACTIVE_STATUSES))
         .order_by(BallotSendJob.created_at.desc())
+        .with_for_update()
     )
     now = datetime.now(timezone.utc)
     active: Optional[BallotSendJob] = None
