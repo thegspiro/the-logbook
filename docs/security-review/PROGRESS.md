@@ -16,16 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3420 (Feature 08, Membership pipeline, pass 11) merged
-clean 2026-10-18, docs-only (`PROGRESS.md` +
-`MP-08-membership-pipeline.md` only). Already fully recorded in that
-PR's own history below, so there is nothing further to add here.
-Rotation row 08 stays ✅. Confirmed via `search_pull_requests`
-(`is:open head:claude/security-review-`, 0 results) that no
-`claude/security-review-*` PR is open. The dedicated `/loop 30m
-/security-review` session was still not reachable via `ListAgents`, so
-this is another watchdog pickup. Proceeding to Feature 09 (Medical
-screening, PHI), pass 10.
+**PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)** (branch
+`claude/security-review-medical-screening-p10`). PR #3420
+(Feature 08, Membership pipeline, pass 11) merged 2026-10-18 clean,
+docs-only; already recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 09 (Medical screening, PHI), pass 10. **0
+fixes, 0 new findings.** Baseline `7a16ea19c` (PR #3256's merge, pass 9);
+exactly 1 non-merge commit touches this feature's scope, frontend-only
+(a falsy-coercion bug where an entered `0` grace-period saved as `30`;
+no PHI, auth, or tenancy touched). MS-14 and MS-15 re-confirmed **OPEN**,
+unchanged. **Separately** (unrelated to this feature): this pass's
+completion gate surfaced a 3-way forked Alembic chain blocking
+`alembic upgrade head` repo-wide, fixed in its own standalone PR
+(**#3426**, now open) rather than folded in here. See
+`MS-09-medical-screening.md`'s **Pass 10** section for the full writeup.
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 11, PR #3420, merged), preserved for history</summary>
