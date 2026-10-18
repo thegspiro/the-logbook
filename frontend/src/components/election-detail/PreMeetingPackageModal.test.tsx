@@ -35,6 +35,19 @@ describe('PreMeetingPackageModal', () => {
     ]);
   });
 
+  it('says a send in progress goes to each recipient separately and carries on if the page is left', () => {
+    render(<PreMeetingPackageModal {...defaultProps} sending />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(/to each recipient separately/);
+    expect(screen.getByRole('status')).toHaveTextContent(/If you leave this page the send carries on/);
+  });
+
+  it('says nothing about progress before the send starts', () => {
+    render(<PreMeetingPackageModal {...defaultProps} />);
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('disables send until recipients exist', () => {
     render(<PreMeetingPackageModal {...defaultProps} />);
 

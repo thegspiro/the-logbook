@@ -740,20 +740,28 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  /** Emails the pre-meeting package PDF to the secretary-edited list. */
+  /** Emails the pre-meeting package PDF to the secretary-edited list, one message per address. */
   const handleSendPackage = async (recipientEmails: string[], message: string, includeFullRoster: boolean) => {
     if (!electionId || recipientEmails.length === 0) return;
 
     try {
       setIsSendingPackage(true);
       setPackageError(null);
-      const result = await electionService.sendPreMeetingPackage(electionId, {
+      const job = await electionService.startPackageSendJob(electionId, {
         recipient_emails: recipientEmails,
         message: message.trim() || undefined,
         include_full_roster: includeFullRoster,
       });
+      const result = await electionService.waitForBallotSendJob(electionId, job.id, () => !isMountedRef.current);
+      if (!result) return;
       setShowPackageModal(false);
-      toast.success(result.message);
+      // A partly delivered package names the addresses it missed; that needs
+      // to stay on screen long enough to be read, not flash past as a success.
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message, { duration: 15000 });
+      }
     } catch (err: unknown) {
       setPackageError(describePackageSendError(err, recipientEmails, 'Failed to send pre-meeting package'));
     } finally {

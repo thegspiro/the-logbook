@@ -436,21 +436,21 @@ describe('electionService', () => {
     });
   });
 
-  // --- sendPreMeetingPackage ---
-  describe('sendPreMeetingPackage', () => {
-    it('should POST the edited recipient list to /elections/:id/send-package', async () => {
+  // --- startPackageSendJob ---
+  describe('startPackageSendJob', () => {
+    it('should POST the edited recipient list to /elections/:id/package-send-jobs', async () => {
       const payload = {
         recipient_emails: ['sue@dept.org', 'counsel@lawfirm.example'],
         message: 'See attached',
         include_full_roster: true,
       };
-      const response = { success: true, message: 'sent', sent_count: 2 };
-      mockPost.mockResolvedValueOnce({ data: response });
+      const job = { id: 'job-4', kind: 'package', status: 'queued' };
+      mockPost.mockResolvedValueOnce({ data: job });
 
-      const result = await electionService.sendPreMeetingPackage('el1', payload);
+      const result = await electionService.startPackageSendJob('el1', payload);
 
-      expect(mockPost).toHaveBeenCalledWith('/elections/el1/send-package', payload);
-      expect(result).toEqual(response);
+      expect(mockPost).toHaveBeenCalledWith('/elections/el1/package-send-jobs', payload);
+      expect(result).toEqual(job);
     });
   });
 
