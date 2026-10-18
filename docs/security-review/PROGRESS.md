@@ -16,6 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this PR)** (branch `claude/security-review-auth-session`). PR #3396
+(Feature 00, Cross-cutting baseline, pass 10) merged 2026-10-18 clean;
+already recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 01 (Auth & session lifecycle), pass 10.
+**1 fix, 0 new OPEN/FLAGGED findings.** Delta since pass 9's baseline
+(`28850d09`, PR #3210) is 631 commits (326 non-merge) across the whole repo,
+but only two of the twelve scoped files changed: `auth.py` (+59/-2) and
+`auth_service.py` (+35/-6), both from a single non-security-review commit
+adding HIPAA §164.312(b) audit logging + a member-facing security
+notification to `/auth/change-password` and `/auth/reset-password`.
+**AUTH-22 (LOW, fixed):** that notification's email path
+(`app/utils/security_notifications.py`) escapes the message before
+embedding it in the HTML template on the `BackgroundTasks` path but not on
+the no-`background_tasks` inline-fallback path (the shape every current
+caller besides the password ones uses when running from a scheduled task)
+— violating `wrap_email_body`'s own documented "pre-escaped HTML" contract.
+No caller currently passes attacker-controlled text through the unescaped
+path, so this was not live-exploitable today, but it is a latent stored-XSS
+trap for the next caller. Added the missing `html_escape()` call plus a
+guard test (`test_inline_fallback_escapes_message_html`) asserting a
+`<script>` payload reaches the template escaped. See
+`AUTH-01-auth-session.md`'s **Pass 10** section for the full writeup. Row 01
+→ ✅ (pending this PR's merge); next is Feature 02 (Permissions & roles).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00, Cross-cutting baseline, pass 10, PR #3396, merged), preserved for history</summary>
+
 **PR [#3396](https://github.com/thegspiro/the-logbook/pull/3396)** (branch
 `claude/security-review-cross-cutting-baseline`). PR #3394 (Feature 34,
 Frontend shared, pass 9) merged 2026-10-18 ~03:46 UTC clean; already
@@ -36,6 +67,8 @@ callers: 6, not 9 — methodology note, not a regression, see
 `SEC-00-cross-cutting-baseline.md`'s **Pass 10** section for the full
 writeup). Row 00 → ✅ (pending this PR's merge); next is Feature 01 (Auth &
 session lifecycle).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 34, Frontend shared, pass 9, PR #3394, merged), preserved for history</summary>
@@ -19899,7 +19932,7 @@ iteration's commit" rule.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
@@ -19940,6 +19973,83 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-18 — Feature 01 (Auth & session lifecycle, pass 10) — watchdog pickup, 1 fixed, 0 new findings
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3396 (Feature 00, Cross-cutting baseline, pass 10) had
+already merged clean, closing row 00; rotation row 01 was the next `⬜`.
+
+**Baseline:** `28850d09` (PR #3210's merge, pass 9). **Head:** current
+`main`. 631 commits (326 non-merge) between them, but of the twelve scoped
+files (nine backend, three frontend) only two changed: `auth.py` (+59/-2)
+and `auth_service.py` (+35/-6), both from one regular-engineering commit
+adding HIPAA §164.312(b) audit logging and a member-facing security
+notification (email + in-app) to `/auth/change-password` and
+`/auth/reset-password`. The other ten files are byte-identical to pass 9.
+
+Both changed files reviewed against all seven checklist dimensions: no new
+route, no permission change, both endpoints keep their existing auth
+dependency/rate limit (`get_current_active_user` + `rate_limit_password_change()`
+on change-password; the existing token-scoped rate limit on reset-password).
+The success-path audit row for a password reset now carries the member
+resolved server-side from the reset token (`AuthService.last_reset_user`),
+never a client-supplied id; a refused reset still writes platform-level
+(no user attribution), preserving the no-enumeration-via-audit-log property
+AUTH-7 already established elsewhere in this file. No password or secret is
+ever written to the audit trail or the notification. The new
+`_audit_sign_in`/commit-before-raise pattern used by both endpoints is the
+same already-reviewed shape `_audit_refused_sign_in` established, not a new
+pattern.
+
+**AUTH-22 (LOW, fixed):** read the notification's shared implementation,
+`app/utils/security_notifications.py::notify_security_event`, in full since
+it is a new caller of this feature's code. Its `BackgroundTasks` path
+(every `auth.py` caller, including the two new ones) escapes `message` with
+`html.escape()` before handing it to `wrap_email_body`, whose own docstring
+requires "pre-escaped HTML for the content area" — but the inline fallback
+path (taken when no `background_tasks` is supplied, the shape
+`scheduled_tasks.py`'s password-expiry notifier uses) built the same HTML
+without escaping. No current caller passes attacker-reachable text through
+that unescaped path — every message today is a static string or built from
+server-controlled values (a day count, a formatted date) — so this was not
+exploitable as written, but it is a documented-contract violation and a
+stored-XSS trap for the next caller who passes through user-influenced
+text. Added the missing `html_escape()` call and a new guard test,
+`test_inline_fallback_escapes_message_html` in
+`tests/test_security_notifications.py`, asserting a `<script>` payload
+reaches the template escaped on the inline path specifically.
+
+Route inventory re-enumerated: still 28 routes, still 16 public / 12
+private, still exactly `ALLOWLISTED_PUBLIC`'s entries — neither changed
+endpoint is a route-gating change, both already required
+`get_current_active_user`/a valid reset token before this commit.
+
+Standing open items: none — AUTH-15, AUTH-17 and AUTH-21 were all already
+closed as of pass 8/9 and `docs/KNOWN_LIMITATIONS.md` carries no entry for
+any of the three or for AUTH-22 (fixed outright, not an owner-decision
+item). Nothing re-litigated.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
+alembic/` (CI's pinned versions); `validate_migrations.py --strict` — 618
+revisions, single head `1117b642643b`; `check_route_permissions.py
+--strict` — 270 routes, 0 errors/0 warnings; scoped backend tests (`-k
+"auth or mfa or oauth or consent or suspicious_ip or dependencies or
+permission or authentik or password or security_notification"`) — 1198
+passed, 2 skipped (environment-only: `pywebpush`, Docker registry); standing
+guards (`endpoint_auth_coverage`, `org_scoping_ratchet`, `capacity_locking`,
+`like_escaping`, `mfa_verification_consumes`, `auth_lockout_race`,
+`auth_gate_remediation_paths`, `auth_refresh_rotation`,
+`password_expiry_gate`, `sign_in_audit`) run directly — 118 passed;
+frontend `npm run typecheck`/`npm run lint` both clean (after `npm ci` from
+the repo root to pick up `@tiptap/*`, declared in `package.json` but
+missing from this sandbox's `node_modules` — an environment gap unrelated
+to this feature, not a code defect).
+
+Findings doc: [`AUTH-01-auth-session.md`](./AUTH-01-auth-session.md)'s
+**Pass 10** section. No `KNOWN_LIMITATIONS.md` change needed. Rotation row
+01 → ✅. Next: Feature 02 (Permissions & roles).
 
 ### 2026-10-18 — Feature 00 (Cross-cutting baseline, pass 10) — watchdog pickup, rotation lap reset, 0 fixed, 0 new findings
 
