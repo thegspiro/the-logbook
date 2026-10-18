@@ -3781,7 +3781,7 @@ When a member declines or is removed:
 
 - **My Upcoming Shifts** on the dashboard hides shifts you declined and
   shifts that were cancelled. **Open Shifts** hides shifts you already signed
-  up for.
+  up for, and shifts that have already ended, even one dated today.
 - If you cancelled a sign-up, you can sign up for the same shift again.
 - A shift's head count leaves out cancelled and no-show members.
 

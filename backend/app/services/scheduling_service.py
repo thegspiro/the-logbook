@@ -278,6 +278,25 @@ def closeout_backlog_halves(
     return ended, open_ended
 
 
+def shift_not_over_criteria(settings: Dict[str, Any], now: datetime):
+    """Shifts that have not yet ended, as one clause — what an open-shift list
+    may offer.
+
+    The exact complement of ``closeout_backlog_halves``'s two "ended" halves:
+    a shift with an ``end_time`` is over at it, and an open-ended one is over a
+    cushion after its start. The open-shift board filtered only by
+    ``shift_date``, so a shift dated today that ended at 20:00 was still listed
+    — with a live Sign Up button for a scheduling admin — at 22:00. Comparing
+    instants in UTC, rather than the calendar day, is what keeps a shift that
+    crosses midnight listed until it actually ends.
+    """
+    cushion = timedelta(hours=open_ended_cushion_hours(settings))
+    return or_(
+        and_(Shift.end_time.isnot(None), Shift.end_time >= now),
+        and_(Shift.end_time.is_(None), Shift.start_time >= now - cushion),
+    )
+
+
 def closeout_backlog_criteria(
     organization_id: Any, settings: Dict[str, Any], now: datetime
 ):
@@ -1685,14 +1704,27 @@ class SchedulingService:
         end_date: date,
         apparatus_id: Optional[str] = None,
         max_candidates: int = 500,
+        now: Optional[datetime] = None,
     ) -> List[Shift]:
         """Shifts in the window that could still be signed up for.
 
         The SQL half of ``get_open_shifts`` and ``get_claimable_shifts``, which
         differ only in how they judge a candidate. Date range, finalized status,
-        and apparatus are filtered here so neither fetches rows it will
-        discard; ``max_candidates`` only bounds pathological data.
+        apparatus, and whether the shift has already ended are filtered here so
+        neither fetches rows it will discard; ``max_candidates`` only bounds
+        pathological data.
+
+        The date window alone is not enough: it is calendar days, so it keeps
+        every shift dated today however long ago it ended. A shift that is over
+        has no gap left to fill, for a member or for the department.
         """
+        now = now or datetime.now(timezone.utc)
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        settings = (org.settings or {}) if org else {}
         query = (
             select(Shift)
             .where(Shift.organization_id == str(organization_id))
@@ -1700,6 +1732,7 @@ class SchedulingService:
             .where(Shift.shift_date <= end_date)
             .where(Shift.is_finalized.is_(False))
             .where(Shift.status != ShiftStatus.CANCELLED)
+            .where(shift_not_over_criteria(settings, now))
         )
         if apparatus_id:
             query = query.where(Shift.apparatus_id == apparatus_id)
