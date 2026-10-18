@@ -994,7 +994,7 @@ Purchase request numbers are made automatically in the form **PR-YYYY-0001**. YY
 | **Facility**         | No       | If the purchase is for a specific fire station or facility            |
 | **Notes**            | No       | Additional notes for approvers                                        |
 
-4. Select **Create Request**. The request is saved as a **Draft** — the form says so: _"Saved as a draft. Submit it for approval from the next page."_ Editing a draft later saves with **Save Changes**.
+4. The request is saved as a **Draft** on its own as you type, as soon as it has a title, a fiscal year and an amount above zero; the line under the form shows _"Draft saved at …"_. **Save Draft** saves the latest entries and opens the request, where you submit it for approval. **Close** leaves the form with the draft kept, and asks first only when what you have entered cannot be saved yet. **Discard draft** withdraws a saved draft. A draft you reopen from the list keeps saving as you edit; once a request is submitted, changes are saved with **Save Changes**.
 
 ![Create Purchase Request form with budget, vendor, and priority fields](./images/11-08-create-purchase-request.png)
 
@@ -1874,7 +1874,7 @@ At the June board meeting the board adopts FY 2027, and the Treasurer clicks **R
 
 1. The captain opens **Finance > Purchase Requests** and selects **New Purchase Request**.
 2. Fills in: Title "Hose Coupling Replacements", Budget "Equipment > Tools", Estimated Amount $350, Vendor "Fire Supply Co.", Priority "Medium".
-3. Selects **Create Request**, then **Submit for Approval** on the draft.
+3. Selects **Save Draft**, then **Submit for Approval** on the draft.
 4. The $350 request matches the "Small Purchases" chain (under $500) -- only Captain approval is needed.
 5. The captain cannot approve their own request. A Position step sends no email, so the other captain sees it on **Finance > Approvals**.
 6. The other captain approves it there. The request moves to **Approved** and $350 is **encumbered** against the Tools budget.
