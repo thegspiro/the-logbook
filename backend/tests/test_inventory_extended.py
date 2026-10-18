@@ -1097,6 +1097,14 @@ class TestPoolWithoutStockRule:
             is False
         )
 
+    def test_a_supply_kept_on_the_apparatus_only_has_no_shelf_to_count(self):
+        assert (
+            is_pool_without_stock(
+                {"tracking_type": "pool", "quantity": 0, "apparatus_only": True}
+            )
+            is False
+        )
+
     @pytest.mark.asyncio
     async def test_the_bulk_path_still_refuses_it(self, db_session, setup_org_and_user):
         """create_items_bulk keeps the rule even though create_item dropped it."""

@@ -88,6 +88,21 @@ describe('RemindNonVotersModal count sentence and cooldown (W50-64)', () => {
   });
 });
 
+describe('RemindNonVotersModal while sending', () => {
+  it('says the reminder carries on if the page is left, since it runs on the server', () => {
+    renderModal({ sending: true });
+
+    expect(screen.getByRole('status')).toHaveTextContent(/If you leave this page the send carries on/);
+    expect(screen.getByRole('button', { name: 'Sending...' })).toBeDisabled();
+  });
+
+  it('says nothing about progress before the send starts', () => {
+    renderModal();
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
 describe('reminderCooldownRemainingMinutes', () => {
   const now = NOW.getTime();
 

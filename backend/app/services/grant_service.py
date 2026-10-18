@@ -32,7 +32,7 @@ from app.models.grant import (
 )
 from app.models.user import User
 from app.utils.grant_spending import spending_warnings
-from app.utils.model_updates import apply_updates
+from app.utils.model_updates import apply_updates, reload_updated_at
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import (
     resolve_local_range_utc,
@@ -190,9 +190,7 @@ class GrantService:
             return None
         apply_updates(opportunity, data, skip={"organization_id", "id"})
         await self.db.flush()
-        # W68: onupdate expires updated_at at the flush, and the response model
-        # reading it lazily raised MissingGreenlet — a 500 after the write.
-        await self.db.refresh(opportunity)
+        await reload_updated_at(self.db, opportunity)
         return opportunity
 
     async def delete_opportunity(
@@ -749,7 +747,7 @@ class GrantService:
             return None
         apply_updates(item, data, skip={"application_id", "id"})
         await self.db.flush()
-        await self.db.refresh(item)  # see update_opportunity (W68)
+        await reload_updated_at(self.db, item)
         return item
 
     async def delete_budget_item(self, item_id: str, organization_id: str) -> bool:
@@ -1147,7 +1145,7 @@ class GrantService:
             self.db.add(note)
 
         await self.db.flush()
-        await self.db.refresh(task)  # see update_opportunity (W68)
+        await reload_updated_at(self.db, task)
         return task
 
     async def delete_compliance_task(self, task_id: str, organization_id: str) -> bool:

@@ -36,6 +36,8 @@ from app.api.v1.endpoints import (
     facilities,
     finance,
     forms,
+    google_calendar_oauth,
+    google_workspace,
     grants,
     integrations,
     inventory,
@@ -70,6 +72,7 @@ from app.api.v1.endpoints import (
     operational_ranks,
     org_chart,
     organizations,
+    outlook_calendar_oauth,
     platform_analytics,
     reports,
     roles,
@@ -454,6 +457,18 @@ api_router.include_router(
     dependencies=module_gate("integrations", "Integrations"),
 )
 api_router.include_router(
+    google_calendar_oauth.router,
+    prefix="/integrations/google-calendar",
+    tags=["integrations"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
+    outlook_calendar_oauth.router,
+    prefix="/integrations/outlook",
+    tags=["integrations"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
     calcom_sync.router,
     prefix="/integrations/calcom",
     tags=["calcom"],
@@ -475,6 +490,12 @@ api_router.include_router(
     mcp_oauth.router,
     prefix="/mcp-oauth",
     tags=["claude-mcp"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
+    google_workspace.router,
+    prefix="/integrations/google-workspace",
+    tags=["google-workspace"],
     dependencies=module_gate("integrations", "Integrations"),
 )
 api_router.include_router(

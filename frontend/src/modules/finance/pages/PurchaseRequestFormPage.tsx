@@ -21,7 +21,7 @@ import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { PurchaseRequestPriority } from '../types';
 import type { PurchaseRequest } from '../types';
-import { getErrorMessage } from '@/utils/errorHandling';
+import { getSaveFailureMessage } from '@/utils/errorHandling';
 import { blankToNull } from '@/utils/formValues';
 
 // =============================================================================
@@ -189,7 +189,9 @@ const PurchaseRequestFormPage: React.FC = () => {
     } catch (err: unknown) {
       // The edit path calls the service directly rather than going through the
       // store, so nothing else surfaces its failure.
-      toast.error(getErrorMessage(err, 'Could not save the purchase request'));
+      // A fixed id so repeated taps replace the toast instead of stacking one
+      // per attempt.
+      toast.error(getSaveFailureMessage(err, 'save the purchase request'), { id: 'purchase-request-save-error' });
     }
   };
 

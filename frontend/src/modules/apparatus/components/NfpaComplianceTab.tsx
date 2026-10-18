@@ -52,6 +52,9 @@ const StandingBadge: React.FC<{ status: NfpaStanding }> = ({ status }) => {
 export const NfpaComplianceTab: React.FC<NfpaComplianceTabProps> = ({ apparatusId, timezone, onOpenMaintenance }) => {
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canEdit = checkPermission('apparatus.manage') || checkPermission('apparatus.edit');
+  // Narrower than canEdit: the backend lets an editor add and change items but
+  // reserves DELETE /apparatus/nfpa-compliance/{id} for apparatus.manage.
+  const canRemove = checkPermission('apparatus.manage');
 
   const [summary, setSummary] = useState<ApparatusNfpaSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -227,14 +230,16 @@ export const NfpaComplianceTab: React.FC<NfpaComplianceTabProps> = ({ apparatusI
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget(record)}
-                          className="btn-icon text-theme-text-muted hover:text-red-600"
-                          aria-label={`Remove ${record.standardCode} ${record.sectionReference}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {canRemove && (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(record)}
+                            className="btn-icon text-theme-text-muted hover:text-red-600"
+                            aria-label={`Remove ${record.standardCode} ${record.sectionReference}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </>
                     )}
                   </div>

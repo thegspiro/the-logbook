@@ -1,8 +1,102 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10) · **PR:** #1807 (pass 1)
 
 ---
+
+## Pass 10 (2026-10-18) — watchdog pickup: delta re-verify, 0 fixed, 0 new findings; SF8-04-2/SF8-04-3 re-confirmed open, unchanged
+
+**Scope.** Diffed pass 9's own merge (`a137bedf`, PR #3223) against current
+`HEAD` across the same declared file set (`storefront.py`,
+`storefront_service.py`, `storefront_notification_service.py`,
+`storefront_preview_service.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, the `frontend/src/modules/storefront/` tree, and any
+migration touching storefront/embroidery/personalization tables).
+
+**Unshallowed before trusting the delta.** The sandbox's clone was shallow
+(`git rev-parse --is-shallow-repository` → `true`) — the same risk pass 9's
+own note and the Apparatus & NFC pass 14 note both warn about. `git fetch
+--unshallow` resolved it before any `git log` range was trusted.
+
+**4 non-merge commits since pass 9 touch this scope, all read in full — all
+frontend-only, none behind the `storefront.manage` permission boundary:**
+
+1. **`53e37f9a3` — product form: price becomes required, not silently `$0`.**
+   `ProductFormModal.tsx` now rejects a blank/non-numeric price client-side
+   (`Enter a price (type 0 for a free item)`) instead of coercing it to `0`.
+   Purely a UX guard — the backend already enforces `price: Decimal =
+Field(..., ge=0)` as a required field on `StoreProductCreate`
+   (`schemas/storefront.py:263`) independently of what the client sends, so
+   this closes a UX footgun, not a security gap. No backend file in scope
+   changed.
+2. **`6c2bddcb5` — store-window and draft-product messaging.** Copy-only
+   changes in `StoreWindowCard.tsx`, `StoreWindowsTab.tsx`, `StoreAdminPage.tsx`
+   and `ProductFormModal.tsx`: explains when the store is actually closed
+   (the "Store is live for members" switch, distinct from "Open ordering"),
+   that a Draft product isn't shown to members, and rounds the open-window
+   countdown consistently. No data-fetching, auth, or permission logic
+   touched — confirmed by reading every hunk of the diff, not just the
+   commit message.
+3. **`37c057558` — `WindowFormModal`: send explicit `null` to clear a field.**
+   Reviewed in full (see below) — this is the one commit with payload-shape
+   implications, verified safe.
+4. **`1d51336af` — dark-mode CSS only.** `StoreProductCard.tsx`'s category
+   badge switches from a translucent 6%-white fill to the `surface-opaque`
+   utility. No logic change.
+
+**`37c057558` in detail — frontend now matches an update contract the backend
+already had.** `WindowFormModal.tsx`'s save payload switched from `value ||
+undefined` to the shared `formCoercions`/`text`/`pick` helpers so a cleared
+`description`/`opensAt`/`closesAt`/`expectedDeliveryDate`/
+`pickupInstructions`/`notes` is sent as an explicit `null` rather than
+omitted. Verified this is not a new capability, only a frontend bug fix
+landing on an already-correct backend contract:
+
+- `StoreOrderWindowUpdate` (`schemas/storefront.py:508-524`) already typed
+  every one of these fields `Optional[...] = None` — nothing added or
+  widened server-side.
+- The endpoint (`storefront.py:906-923`) already called
+  `payload.model_dump(exclude_unset=True)` — the correct "omitted key means
+  keep" / "explicit null means clear" contract (CLAUDE.md Pitfall #1's
+  update-path rule) was already in place before this commit; the frontend
+  was simply the half that hadn't caught up.
+- `StorefrontService.update_window` (`storefront_service.py:719-743`) resolves
+  the window through an org-scoped `get_window(window_id, organization_id)`
+  before calling `apply_updates(window, data)` — no bypass of tenancy. The
+  `offerings` replacement path validates every `product_id` through
+  `assert_in_org` (`:764`) before inserting a `StoreWindowProduct` row —
+  Pitfall #14c intact, unchanged by this commit.
+- The route itself is still gated by
+  `require_permission("storefront.manage")` (`storefront.py:911`), unchanged.
+
+No regression, no new exposure — a pre-existing backend contract correctly
+adopted by a previously-lagging frontend form.
+
+**No migrations** touching storefront/embroidery/personalization tables
+landed in this window (confirmed via `--diff-filter=AM` on the versions
+directory, scanning each new/changed file's content for the feature's
+keywords — none matched).
+
+**Re-verified unchanged, by direct read (file not in this window's delta):**
+`update_order_status`'s settlement branch still reads via a plain
+`get_order()` (no `for_update`) at `storefront_service.py:1866`, writing
+`amount_paid`/`payment_status` from that unlocked read — **SF8-04-2 stays
+OPEN (flagged)**, exactly as pass 9 described it. `waive_order_payment`
+still has no `_is_settled()` guard and still reads unlocked at `:2095` —
+**SF8-04-3 stays OPEN (flagged)**, likewise unchanged. Both remain an owner
+decision, not a low-risk mechanical fix, per pass 8's original rationale
+(mirrored in `KNOWN_LIMITATIONS.md`). The five self-settlement
+separation-of-duties guards (`record_payment`, `mark_order_paid`,
+`waive_order_payment`, `refund_order`, `update_order_status`'s
+`settles_payment` branch) all still call `assert_different_person` before any
+mutation — confirmed by direct read of each, none touched this window.
+PayPal webhook signature verification and replay guard untouched (file not
+in this window's delta). All 48 routes' permission gates unchanged (no
+backend route file in this window's delta touched a `Depends`).
+
+**0 fixed, 0 new findings.**
+
+## Pass 9 (2026-10-14) — watchdog pickup: delta re-verify, 0 fixed, 0 new findings; SF8-04-2/SF8-04-3 re-confirmed open, unchanged
 
 ## Pass 9 (2026-10-14) — watchdog pickup: delta re-verify, 0 fixed, 0 new findings; SF8-04-2/SF8-04-3 re-confirmed open, unchanged
 

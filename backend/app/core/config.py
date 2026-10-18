@@ -190,6 +190,14 @@ class Settings(BaseSettings):
         """
         args: dict = {
             "connect_timeout": self.DB_CONNECT_TIMEOUT,
+            # Every DATETIME is stored and read as UTC (see _stamp_utc in
+            # app/core/database.py), but server_default=func.now() is
+            # evaluated in the session's zone, which falls back to the MySQL
+            # server's TZ (America/New_York in the shipped compose files).
+            # Without this, created_at was stored as local wall-clock time and
+            # read back as UTC, hours off from Python-written columns such as
+            # approved_at.
+            "init_command": "SET time_zone = '+00:00'",
         }
         if self.DB_SSL:
             import ssl
@@ -1358,6 +1366,32 @@ class Settings(BaseSettings):
     # Comma-separated allowed email domains (empty = any verified email that
     # matches an existing local user).
     AUTHENTIK_ALLOWED_DOMAINS: str = ""
+
+    # ============================================
+    # Calendar publishing (Google Calendar / Outlook)
+    # ============================================
+    # One-way publishing of department events to a dedicated Google or
+    # Outlook calendar. While this is off the two catalog cards report
+    # "coming soon" and cannot be connected, a row an older release left
+    # "connected" is presented the same way (it never held credentials), and
+    # the calendar_sync scheduled task does nothing. Turning it on makes the
+    # cards connectable through "Connect with Google" and "Connect with
+    # Microsoft" (OAuth sign-ins that create the department's calendar),
+    # after which the task publishes every five minutes. The department
+    # iCalendar (ICS) feed does not depend on this switch.
+    CALENDAR_SYNC_ENABLED: bool = False
+    # Absolute URL Google redirects back to after the Google Calendar
+    # consent screen. Must exactly match an "Authorized redirect URI" on the
+    # OAuth client (GOOGLE_CLIENT_ID, or the department's own), e.g.
+    # https://app.example.org/api/v1/integrations/google-calendar/oauth/callback
+    # Leave unset to derive it from the incoming request's base URL.
+    GOOGLE_CALENDAR_REDIRECT_URI: str | None = None
+    # Absolute URL Microsoft redirects back to after the Outlook sign-in.
+    # Must exactly match a "Web" redirect URI on the app registration
+    # (AZURE_AD_CLIENT_ID, or the department's own), e.g.
+    # https://app.example.org/api/v1/integrations/outlook/oauth/callback
+    # Leave unset to derive it from the incoming request's base URL.
+    MICROSOFT_CALENDAR_REDIRECT_URI: str | None = None
 
     # ============================================
     # Claude (MCP) OAuth 2.1 authorization server

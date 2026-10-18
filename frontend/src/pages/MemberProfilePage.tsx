@@ -35,7 +35,7 @@ import { useRanks } from '../hooks/useRanks';
 import { useProfileVisibility } from '../hooks/useProfileVisibility';
 import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
-import { formatCalendarDate, formatDate } from '../utils/dateFormatting';
+import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { isAdministrativeMember, membershipTypeLabel } from '../utils/membership';
 import type { UserWithRoles } from '../types/role';
@@ -58,11 +58,15 @@ import { VisibilityControl } from '../components/member-profile/VisibilityContro
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
 import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
+import { GoogleAccountPanel } from '../modules/membership/components/GoogleAccountPanel';
+import { DIRECTORY_INTEGRATIONS } from '../modules/membership/constants/googleAccount';
+import { useMemberGoogleAccount } from '../modules/membership/hooks/useMemberGoogleAccount';
 import { ReactivateMemberModal } from '../components/ReactivateMemberModal';
 import { AnonymizeMemberModal } from '../components/AnonymizeMemberModal';
 import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
+import { StatusChangeReason } from '../components/member-profile/StatusChangeReason';
 import { QualificationsSection } from '../components/member-profile/QualificationsSection';
 import { UndoDropControl } from '../components/member-profile/UndoDropControl';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
@@ -163,6 +167,7 @@ export const MemberProfilePage: React.FC = () => {
   const [statusChanging, setStatusChanging] = useState(false);
   const [newStatus, setNewStatus] = useState<string>('');
   const [statusReason, setStatusReason] = useState('');
+  const [separationDate, setSeparationDate] = useState('');
 
   // Module enablement checks
   const trainingEnabled = isModuleEnabled('training');
@@ -359,6 +364,9 @@ export const MemberProfilePage: React.FC = () => {
   // on that basis alone.
   const { isConnected: isIntegrationConnected, loading: integrationsLoading } = useConnectedIntegrations();
   const idCardsEnabled = !integrationsLoading && isIntegrationConnected(NFC_ID_CARDS_INTEGRATION);
+  const googleWorkspaceEnabled =
+    !integrationsLoading && DIRECTORY_INTEGRATIONS.some((type) => isIntegrationConnected(type));
+  const googleAccount = useMemberGoogleAccount(userId, canManageMembers && googleWorkspaceEnabled);
 
   const handleOpenStatusModal = () => {
     if (!user) return;
@@ -370,6 +378,7 @@ export const MemberProfilePage: React.FC = () => {
     }
     setNewStatus(user.status);
     setStatusReason('');
+    setSeparationDate(getTodayLocalDate(tz));
     setStatusModalOpen(true);
   };
 
@@ -381,6 +390,9 @@ export const MemberProfilePage: React.FC = () => {
   const statusDialogMayRejoin = statusModalOpen && isSeparatedStatus(user?.status);
   const rejoin = useRejoinServiceOptions(userId ?? null, statusDialogMayRejoin, tz);
   const isRejoining = statusDialogMayRejoin && newStatus !== '' && !isSeparatedStatus(newStatus);
+  // The reverse: a current member dropped or retired has their service stint
+  // closed, on the date the officer gives here rather than always today.
+  const isLeaving = statusModalOpen && !isSeparatedStatus(user?.status) && isSeparatedStatus(newStatus);
 
   const handleStatusChange = async () => {
     if (!userId || !newStatus || !user) return;
@@ -393,6 +405,7 @@ export const MemberProfilePage: React.FC = () => {
         new_status: newStatus,
         reason: statusReason.trim() || undefined,
         ...(isRejoining ? rejoin.options : {}),
+        ...(isLeaving ? { separation_date: separationDate || undefined } : {}),
       });
       // Re-fetch user to get the updated status
       await fetchUserData(userId);
@@ -700,10 +713,12 @@ export const MemberProfilePage: React.FC = () => {
   // still reserve two-thirds of the page for nothing.
   const showAdminHours = Boolean(adminHoursSummary && adminHoursSummary.totalEntries > 0) || adminHoursLoading;
   const showIdCards = Boolean(canManageIdCards && userId && idCardsEnabled);
+  const showGoogleAccount = Boolean(googleAccount.account && userId);
   const hasLeftColumn =
     (trainingEnabled && canViewTargetTraining) ||
     showAdminHours ||
     showIdCards ||
+    showGoogleAccount ||
     (inventoryModuleEnabled && canViewTargetInventory);
   const hasQuickStats =
     (trainingEnabled && canViewTargetTraining) ||
@@ -938,6 +953,17 @@ export const MemberProfilePage: React.FC = () => {
                 hides itself when the organization has cards turned off. */}
               {showIdCards && userId && (
                 <MemberIdCardsPanel userId={userId} memberName={user ? displayNameOf(user) : undefined} />
+              )}
+
+              {/* Google Workspace account created at conversion. Officers
+                only, and only for a member The Logbook made one for. */}
+              {showGoogleAccount && userId && googleAccount.account && (
+                <GoogleAccountPanel
+                  userId={userId}
+                  account={googleAccount.account}
+                  onChange={googleAccount.setAccount}
+                  onReload={googleAccount.reload}
+                />
               )}
 
               {/* Assigned Inventory - the member's own kit, or a quartermaster's
@@ -1305,6 +1331,7 @@ export const MemberProfilePage: React.FC = () => {
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                     </div>
+                    {userId && <StatusChangeReason userId={userId} tz={tz} refreshKey={user.status} />}
                     {user.status === UserStatus.ACTIVE && (
                       <p className="text-theme-text-muted mt-1 text-xs">
                         You see this because you manage members. Other members see a status only when it is not Active.
@@ -1481,6 +1508,30 @@ export const MemberProfilePage: React.FC = () => {
                   />
                 </div>
                 {isRejoining && <RejoinServiceFields state={rejoin} disabled={statusChanging} />}
+                {isLeaving && (
+                  <div>
+                    <label
+                      htmlFor="status-separation-date"
+                      className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                    >
+                      Effective date
+                    </label>
+                    <input
+                      id="status-separation-date"
+                      type="date"
+                      value={separationDate}
+                      min={user?.hire_date ?? undefined}
+                      max={getTodayLocalDate(tz)}
+                      onChange={(e) => setSeparationDate(e.target.value)}
+                      disabled={statusChanging}
+                      aria-describedby="status-separation-date-hint"
+                      className="form-input px-3 text-sm focus:ring-blue-500"
+                    />
+                    <p id="status-separation-date-hint" className="text-theme-text-muted mt-1 text-xs">
+                      The day they left. Their service history ends on this date.
+                    </p>
+                  </div>
+                )}
                 {(newStatus === UserStatus.DROPPED_VOLUNTARY || newStatus === UserStatus.DROPPED_INVOLUNTARY) && (
                   <p className="rounded-md border border-yellow-500/20 bg-yellow-500/10 p-2 text-xs text-yellow-600 dark:text-yellow-400">
                     Dropping a member creates a property return report and may send an email notification.

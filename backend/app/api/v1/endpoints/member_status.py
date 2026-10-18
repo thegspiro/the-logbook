@@ -8,7 +8,7 @@ report is automatically generated, saved to documents, and optionally emailed.
 
 import copy
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -36,7 +36,11 @@ from app.services.member_service_history_service import (
     is_separated,
 )
 from app.utils.membership import LEGACY_MEMBERSHIP_TYPES, is_administrative
-from app.utils.org_timezone import resolve_org_today
+from app.utils.org_timezone import (
+    local_date,
+    resolve_org_today,
+    resolve_scheduling_timezone,
+)
 
 router = APIRouter()
 
@@ -159,6 +163,16 @@ class MemberStatusChangeRequest(RejoinServiceOptions):
         ..., description="New status value (e.g. 'dropped_voluntary')"
     )
     reason: str | None = Field(None, description="Reason for the status change")
+    separation_date: date | None = Field(
+        None,
+        description=(
+            "The day the member left; defaults to today on the department's "
+            "calendar. Used only when the change takes a member out of "
+            "membership (to dropped or retired), where it closes their "
+            "service stint. It does not move status_changed_at, which records "
+            "when the change was made."
+        ),
+    )
     send_property_return_email: bool = Field(
         True, description="Email the property return report to the member"
     )
@@ -376,8 +390,26 @@ async def change_member_status(
     previous = UserStatus(previous_status)
     service_credit = None
     today = await resolve_org_today(db, current_user.organization_id)
+    separation_date = None
     if not is_separated(previous) and is_separated(new_status):
-        await history.record_separation(member, new_status, today, str(current_user.id))
+        separation_date = request.separation_date or today
+        if separation_date > today:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The effective date cannot be in the future.",
+            )
+        try:
+            await history.record_separation(
+                member,
+                new_status,
+                separation_date,
+                str(current_user.id),
+                officer_dated=request.separation_date is not None,
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+            )
     elif is_separated(previous) and not is_separated(new_status):
         service_credit = request.service_credit or await history.get_rejoin_default(
             str(current_user.organization_id)
@@ -396,7 +428,11 @@ async def change_member_status(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
             )
 
-    # Update the status and record when it changed
+    # Update the status and record when it changed. status_changed_at stays
+    # the moment of the change even when the separation is back-dated: the
+    # property-return reminder schedule counts from it, and must not open a
+    # return deadline already overdue. The undo-drop window is the exception
+    # -- it counts from the effective date (see _undo_drop_availability).
     member.status = new_status
     member.status_changed_at = datetime.now(timezone.utc)
     member.status_change_reason = request.reason
@@ -416,6 +452,11 @@ async def change_member_status(
             "new_status": new_status.value,
             "reason": request.reason,
             **({"service_credit": service_credit.value} if service_credit else {}),
+            **(
+                {"separation_date": separation_date.isoformat()}
+                if separation_date
+                else {}
+            ),
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -622,7 +663,9 @@ class UndoDropRequest(BaseModel):
     reason: str | None = Field(None, max_length=500)
 
 
-def _undo_drop_availability(member: User) -> UndoDropAvailability:
+async def _undo_drop_availability(
+    db: AsyncSession, member: User
+) -> UndoDropAvailability:
     if member.status not in DROPPED_STATUSES:
         return UndoDropAvailability(
             available=False, detail="Only a dropped member's drop can be undone."
@@ -636,7 +679,24 @@ def _undo_drop_availability(member: User) -> UndoDropAvailability:
         )
     if changed.tzinfo is None:
         changed = changed.replace(tzinfo=timezone.utc)
-    until = changed + timedelta(days=UNDO_DROP_WINDOW_DAYS)
+
+    # The window counts from the drop's effective date, the day the member
+    # actually left, not the day an officer recorded it: a drop entered three
+    # weeks late is three weeks old. It keeps the time of day of the recording,
+    # so a drop that was not back-dated keeps exactly the window it always had.
+    # It is never later than the recording, though -- the stint's end can be
+    # edited in the service history afterwards, and that must not stretch the
+    # undo into the backdating tool the week was chosen to prevent.
+    effective = await MemberServiceHistoryService(db).separation_date(
+        member, UserStatus(member.status)
+    )
+    anchor = changed
+    if effective is not None:
+        tz = await resolve_scheduling_timezone(db, member.organization_id)
+        backdated_days = (local_date(changed, tz) - effective).days
+        if backdated_days > 0:
+            anchor = changed - timedelta(days=backdated_days)
+    until = anchor + timedelta(days=UNDO_DROP_WINDOW_DAYS)
     if datetime.now(timezone.utc) > until:
         return UndoDropAvailability(
             available=False,
@@ -678,7 +738,7 @@ async def get_undo_drop_availability(
     member = await _load_member(
         db, user_id, current_user.organization_id, for_update=False
     )
-    return _undo_drop_availability(member)
+    return await _undo_drop_availability(db, member)
 
 
 @router.post("/{user_id}/undo-drop", response_model=MemberStatusChangeResponse)
@@ -691,7 +751,7 @@ async def undo_member_drop(
     """
     Undo a drop made by mistake (W15-3).
 
-    Within a week of the drop, puts the member back in the status they should
+    Within a week of the drop's effective date, puts the member back in the status they should
     have (Active unless told otherwise) and reopens the service stint the drop
     closed, so their length of service runs on as if the drop had not
     happened. Unlike a rejoin, no gap and no new stint are recorded. The
@@ -716,7 +776,7 @@ async def undo_member_drop(
     member = await _load_member(
         db, user_id, current_user.organization_id, for_update=True
     )
-    availability = _undo_drop_availability(member)
+    availability = await _undo_drop_availability(db, member)
     if not availability.available:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=availability.detail
@@ -989,6 +1049,106 @@ async def get_archived_members(
             for m in members
         ],
     }
+
+
+# ==================== Status Change Reason ====================
+
+
+class StatusChangeRecord(BaseModel):
+    """A member's most recent status change, as recorded on their account."""
+
+    user_id: str
+    status: str
+    status_changed_at: datetime | None = None
+    status_change_reason: str | None = None
+
+
+class StatusChangeReasonUpdate(BaseModel):
+    reason: str | None = Field(
+        None,
+        max_length=2000,
+        description="The corrected reason; blank or null clears it",
+    )
+
+
+def _status_change_record(member: User) -> StatusChangeRecord:
+    return StatusChangeRecord(
+        user_id=str(member.id),
+        status=getattr(member.status, "value", member.status),
+        status_changed_at=member.status_changed_at,
+        status_change_reason=member.status_change_reason,
+    )
+
+
+@router.get("/{user_id}/status-change", response_model=StatusChangeRecord)
+async def get_status_change(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    When this member's status last changed, and the reason recorded for it.
+
+    Requires `members.manage` permission.
+    """
+    member = await _load_member(
+        db, user_id, current_user.organization_id, for_update=False
+    )
+    return _status_change_record(member)
+
+
+@router.patch("/{user_id}/status-change-reason", response_model=StatusChangeRecord)
+async def update_status_change_reason(
+    user_id: UUID,
+    request: StatusChangeReasonUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("members.manage")),
+):
+    """
+    Correct the reason recorded for this member's most recent status change.
+
+    Only the wording changes: the status, when it changed, and anything the
+    change set in motion (service history, the property return report, the
+    undo-drop window) are untouched. The reason as first written stays in the
+    audit log's original `member_status_changed` entry, and this edit is
+    logged alongside it with both versions.
+
+    Requires `members.manage` permission.
+    """
+    member = await _load_member(
+        db, user_id, current_user.organization_id, for_update=True
+    )
+    # A reason belongs to a change. With none on record there is nothing for
+    # it to explain, and storing one would read as though a change happened.
+    if member.status_changed_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This member has no recorded status change to give a reason for.",
+        )
+
+    previous_reason = member.status_change_reason
+    new_reason = (request.reason or "").strip() or None
+    if new_reason != previous_reason:
+        member.status_change_reason = new_reason
+        await db.commit()
+        await db.refresh(member)
+        await log_audit_event(
+            db=db,
+            event_type="member_status_reason_updated",
+            event_category="user_management",
+            severity="info",
+            event_data={
+                "target_user_id": str(member.id),
+                "member_name": member.full_name,
+                "status": getattr(member.status, "value", member.status),
+                "previous_reason": previous_reason,
+                "new_reason": new_reason,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return _status_change_record(member)
 
 
 # ==================== Membership Tier Management ====================

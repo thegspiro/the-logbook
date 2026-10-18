@@ -7,7 +7,7 @@ asked for, without reading what the send returned.
 
 import pytest
 
-from app.api.v1.endpoints.elections import ballot_send_message
+from app.services.ballot_send_jobs import ballot_send_message
 
 pytestmark = pytest.mark.unit
 

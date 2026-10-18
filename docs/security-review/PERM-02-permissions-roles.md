@@ -1,9 +1,108 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), pass 9 (this PR)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4), #2538 (pass 5), #2596 (pass 6), #2933 (pass 7), #3097 (pass 8), #3212 (pass 9), pass 10 (this PR)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 10 (2026-10-18, watchdog pickup) — 0 fixed, 0 new findings
+
+Watchdog pickup: Step 0 confirmed via `search_pull_requests` that no
+`claude/security-review-*` PR was open anywhere on the repo, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`. The prior iteration (Feature 01, Auth & session lifecycle,
+pass 10, PR #3397) merged clean. Rotation row 02 was the next `⬜`.
+
+**Baseline:** `eee8be13` (PR #3212's merge, pass 9). **Head:** current
+`main` (`ccb4b805`, PR #3397's merge). 620 commits (320 non-merge) between
+them. Of the twelve files this feature tracks (`dependencies.py`,
+`core/permissions.py`, `roles.py` + `role_service.py`,
+`operational_ranks.py` + `operational_rank_service.py`, `officers.py` +
+`officer_service.py`, `org_chart.py` + `org_chart_service.py`,
+`admin_continuity_service.py`, and the rank/role-assignment handlers in
+`users.py`), confirmed by `git diff --stat` against every tracked path
+individually (not assumed from a commit-log skim) — only two carry any
+diff at all: `role_service.py` (+2/-2) and `operational_rank_service.py`
+(+9/-7). The other ten are byte-identical to pass 9's baseline.
+
+### The two changed files, reviewed
+
+Both diffs are from the same class of change: mypy-driven null-safety
+hardening, not new logic.
+
+- **`role_service.py`:**
+  - `changes = {}` gained an explicit `Dict[str, Dict[str, Any]]`
+    annotation — no behavior change.
+  - `clone_role`'s `priority=source.priority` became
+    `priority=source.priority or 0`. `Role.priority` is
+    `Mapped[Optional[int]]` ("Higher priority = more powerful",
+    `app/models/user.py:764`) — a cloned role whose source had a `None`
+    priority now gets `0` instead of propagating `None`. `0` is the
+    **lowest** end of this scale, so this cannot escalate a cloned role's
+    effective priority; it only prevents a `None` from reaching whatever
+    numeric comparison/ordering consumes `priority` downstream. Verified
+    safe, not a finding.
+- **`operational_rank_service.py`:**
+  - `seed_defaults`'s existing-row guard changed `result.scalar() > 0` to
+    `(result.scalar() or 0) > 0` — defends the same `COUNT(*)` check
+    against a `None` scalar the same way pass 9 found in `role_service.py`'s
+    sibling `remove_role_from_user` (`rows_affected()`) and Feature 01 pass
+    9 found in `auth_service.py`. Same narrowing-not-widening direction:
+    a `None` now reads as "0 existing rows" (seed proceeds) rather than
+    raising `TypeError` — not a path that can be reached with a non-empty
+    table, since `COUNT(*)` only returns `None` if the query itself errors
+    before returning a row, which SQLAlchemy would surface as an exception
+    rather than a bare `None` in practice; the hardening is defensive, not
+    closing a live hole.
+  - `validate_ranks`' member-lookup loop renamed its loop variable `row` to
+    `member_row` throughout (five reference sites) — pure rename, confirmed
+    by reading all five call sites; the logic (compare each member's stored
+    `rank` string against the canonical code map, flag mismatches) is
+    unchanged.
+
+Neither file's permission gate, org-scoping, or audit-logging surface is
+touched. No new route, no permission-string change, no migration.
+
+### Re-verified, not re-derived
+
+- **Route inventory** — re-enumerated directly against the four endpoint
+  files (`roles.py`, `operational_ranks.py`, `officers.py`,
+  `org_chart.py`), all four confirmed byte-identical to pass 9 via
+  `git diff --stat` (zero lines). Same 28 routes, same gates as pass 9:
+  `roles.py` (13), `operational_ranks.py` (7, OR-gate
+  `settings.manage`/`members.manage` on the four mutating routes, the
+  independent `settings.manage`-only `_refuse_ordering` gate on
+  `sort_order`/`/reorder`), `officers.py` (3, `settings.manage`/
+  `organization.update_settings`), `org_chart.py` (5, `GET ""` auth-only by
+  design, four mutations on `orgchart.manage`/`settings.manage`).
+- **OR-gate alternatives** — `members.manage` and
+  `organization.update_settings` re-confirmed not seeded to `member` or
+  `firefighter` across all `DEFAULT_POSITIONS` entries; unchanged since
+  pass 9 because `core/permissions.py` carries zero diff since baseline.
+- **PERM-1, PERM-2 (fixed), PERM-5 and PERM-9 (both closed)** all
+  byte-identical to their pass-9 state (`operational_ranks.py`,
+  `admin_continuity_service.py`, and this file's own "Route inventory"
+  section all carry zero diff since `eee8be13`).
+
+No finding this pass. Rotation row 02 moves to `✅`.
+
+### Completion gate (pass 10)
+
+| Check                                                                            | Result                                                                             |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.3.0, CI's pin)                                  | ✅ 0 violations                                                                    |
+| `black --check app/ tests/ alembic/` (26.5.1, CI's pin)                          | ✅ 2426 files unchanged                                                            |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                      | ✅ clean                                                                           |
+| `python3 scripts/validate_migrations.py --strict`                                | ✅ single head `1117b642643b`, 618 revisions                                       |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                | ✅ 270 routes, 0 errors, 0 warnings                                                |
+| standing guard suite (12 files, run directly)                                    | ✅ 224 passed                                                                      |
+| scoped backend tests (`-k "permission or role or rank or officer or org_chart"`) | ✅ 1379 passed, 1 skipped (environment-only: `py_vapid`/`pywebpush` not installed) |
+| `cd frontend && npm run typecheck`                                               | ✅ 0 errors                                                                        |
+| `cd frontend && npm run lint`                                                    | ✅ 0 errors, 0 warnings (no frontend files touched this pass)                      |
+
+No source file needed a fix this pass.
 
 ---
 

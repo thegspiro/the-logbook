@@ -65,6 +65,13 @@ def _clean_rich_text(value: str, what: str) -> str:
     return cleaned
 
 
+class SectionDocument(BaseModel):
+    """A Documents-library file linked from an agenda item."""
+
+    id: str = Field(..., min_length=1, max_length=36)
+    name: str = Field(default="", max_length=255)
+
+
 class SectionEntry(BaseModel):
     """A single content section within minutes or a template"""
 
@@ -92,6 +99,29 @@ class SectionEntry(BaseModel):
         default="",
         max_length=MAX_MOTION_TEXT,
         description="Copied from the outline; the wording the motion starts with",
+    )
+
+    presenter: str = Field(
+        default="",
+        max_length=200,
+        description="Who reports on this item; set from the agenda item",
+    )
+    not_taken_up: bool = Field(
+        default=False,
+        description="The meeting never reached this item. It stays in the "
+        "record, marked so, rather than disappearing as an empty section",
+    )
+    agenda_key: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="The agenda item this section was made from. Server-set: "
+        "a value sent by a client is replaced from the stored section",
+    )
+    documents: List[SectionDocument] = Field(
+        default_factory=list,
+        max_length=10,
+        description="Documents-library files linked from the agenda item. "
+        "Server-set, like agenda_key",
     )
 
     @model_validator(mode="after")
@@ -276,6 +306,19 @@ class TemplateListItem(UTCResponseBase):
 # ============================================
 
 
+class RollCallEntry(BaseModel):
+    """One member's vote in a roll call.
+
+    ``user_id`` is filled in by the server from the minutes' own roll and is
+    ignored on the way in: a vote belongs to the person the minutes record as
+    present, not to whoever the request names.
+    """
+
+    name: str = Field(..., min_length=1, max_length=200)
+    vote: Literal["yes", "no", "abstain", "recuse"]
+    user_id: Optional[str] = None
+
+
 class MotionBase(BaseModel):
     """Base motion schema"""
 
@@ -298,6 +341,19 @@ class MotionBase(BaseModel):
     votes_for: Optional[int] = Field(None, ge=0)
     votes_against: Optional[int] = Field(None, ge=0)
     votes_abstain: Optional[int] = Field(None, ge=0)
+    votes_recused: Optional[int] = Field(None, ge=0)
+    threshold: Optional[Literal["majority_cast", "majority_present", "two_thirds"]] = (
+        Field(
+            None,
+            description="What the motion needed to carry; a majority of the votes "
+            "cast when unset",
+        )
+    )
+    roll_call: Optional[List[RollCallEntry]] = Field(
+        None,
+        description="Each member's vote. When given, the vote totals are "
+        "counted from it and any totals sent with it are ignored",
+    )
     election_id: Optional[str] = Field(
         None, max_length=36, description="The ballot that decided this motion"
     )
@@ -330,6 +386,11 @@ class MotionUpdate(BaseModel):
     votes_for: Optional[int] = Field(None, ge=0)
     votes_against: Optional[int] = Field(None, ge=0)
     votes_abstain: Optional[int] = Field(None, ge=0)
+    votes_recused: Optional[int] = Field(None, ge=0)
+    threshold: Optional[Literal["majority_cast", "majority_present", "two_thirds"]] = (
+        None
+    )
+    roll_call: Optional[List[RollCallEntry]] = None
     order: Optional[int] = Field(None, ge=0)
     election_id: Optional[str] = Field(None, max_length=36)
     ballot_item_id: Optional[str] = Field(None, max_length=100)
@@ -342,6 +403,11 @@ class MotionResponse(MotionBase):
     minutes_id: str
     order: int
     election_title: Optional[str] = None
+    suggested_status: Optional[str] = Field(
+        None,
+        description="passed or failed when the counts and threshold decide it; "
+        "the recorded status is the secretary's",
+    )
     created_at: datetime
     updated_at: datetime
 
@@ -593,6 +659,7 @@ class MinutesResponse(UTCResponseBase):
     attendees: Optional[List[AttendeeEntry]] = None
     quorum_met: Optional[bool] = None
     quorum_count: Optional[int] = None
+    meeting_id: Optional[str] = None
     event_id: Optional[str] = None
     template_id: Optional[str] = None
     sections: List[SectionEntry] = []
@@ -677,6 +744,119 @@ class ApplyOutline(BaseModel):
     """Which outline to lay over draft minutes"""
 
     template_id: str = Field(..., min_length=1, max_length=36)
+
+
+class AgendaSyncField(BaseModel):
+    """One field an agenda item would change on its section."""
+
+    field: str
+    before: Any = None
+    after: Any = None
+
+
+class AgendaSyncChange(BaseModel):
+    """A difference between the meeting's agenda and the minutes' sections."""
+
+    id: str
+    type: Literal["add", "update", "remove", "reorder"]
+    key: str
+    title: str
+    has_content: bool = Field(
+        description="The section already holds text; a removal detaches it "
+        "instead of deleting it"
+    )
+    fields: List[AgendaSyncField] = []
+
+
+class AgendaSyncPreview(BaseModel):
+    meeting_id: str
+    changes: List[AgendaSyncChange]
+
+
+class AgendaSyncApply(BaseModel):
+    """The changes the secretary chose, by the ids the preview gave."""
+
+    accept: List[str] = Field(default_factory=list, max_length=200)
+
+
+class SignatureSlotResponse(BaseModel):
+    """A place on the adopted minutes for a signature."""
+
+    key: str
+    title: str
+    position_slug: Optional[str] = None
+
+
+class MinutesReminderSettingsResponse(BaseModel):
+    """The department's action item reminder settings, as the server resolves them.
+
+    Keys match the ``minutes`` section of ``PATCH /organization/settings``.
+    """
+
+    action_item_reminders: bool
+    reminder_days_before_due: int
+    overdue_repeat_days: int
+    open_items_digest: bool
+    signature_slots: List[SignatureSlotResponse] = []
+    public_posting: bool = False
+    executive_library_publishing: bool = False
+    executive_public_posting: bool = False
+    # What the switches add up to for an executive-session meeting, so the
+    # settings screen can say "executive minutes: library only" rather than
+    # work out the three-switch rule itself.
+    executive_effective_library: bool = False
+    executive_effective_public: bool = False
+
+
+class PublishingStatusResponse(BaseModel):
+    """Where one set of minutes stands: library copy, public copy, settings."""
+
+    library_allowed: bool
+    library_published: bool
+    library_version: Optional[int] = None
+    library_published_at: Optional[datetime] = None
+    public_allowed: bool
+    public_posted: bool
+    public_withdrawn: bool
+    public_version: Optional[int] = None
+    public_posted_at: Optional[datetime] = None
+    public_replaced_version: Optional[int] = None
+    public_under_correction: bool
+    public_copy_id: Optional[str] = None
+
+
+class SignatureResponse(BaseModel):
+    id: str
+    slot_key: str
+    slot_title: str
+    signed_name: str
+    signed_at: datetime
+    intact: bool = Field(
+        True,
+        description="The signature was given on the version now on file",
+    )
+
+    model_config = _response_config
+
+
+class SignatureStatusSlot(SignatureSlotResponse):
+    can_sign: bool = False
+    signature: Optional[SignatureResponse] = None
+
+
+class SignatureStatusResponse(BaseModel):
+    """Each slot and who has signed it, for the current adopted version."""
+
+    version: Optional[int] = None
+    slots: List[SignatureStatusSlot] = []
+
+
+class SignRequest(BaseModel):
+    """A signature: the slot, the signer's name as typed, and their password."""
+
+    slot_key: str = Field(..., min_length=1, max_length=50)
+    signed_name: str = Field(..., min_length=1, max_length=200)
+    password: str = Field(..., min_length=1, max_length=1000, repr=False)
 
 
 class MinutesReject(BaseModel):

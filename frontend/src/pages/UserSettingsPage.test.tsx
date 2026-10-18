@@ -263,7 +263,11 @@ describe('UserSettingsPage', () => {
       window.history.pushState({}, '', '/account?tab=privacy');
       renderWithRouter(<UserSettingsPage />);
 
-      expect(await screen.findByText('Off for everyone (department setting)')).toBeInTheDocument();
+      // The member's email switch is on (the default), so the label beside it
+      // must not read "Off for everyone" — it says when it will be shared.
+      expect(await screen.findByText('Shared once the department allows it')).toBeInTheDocument();
+      expect(screen.getByRole('switch', { name: 'Work email visibility' })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.queryByText('Off for everyone (department setting)')).not.toBeInTheDocument();
     });
 
     it('leaves the Security tab to two-factor authentication', async () => {

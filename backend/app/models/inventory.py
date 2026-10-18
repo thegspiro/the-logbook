@@ -426,6 +426,12 @@ class InventoryCategory(Base):
 
     __tablename__ = "inventory_categories"
 
+    if TYPE_CHECKING:
+        # Not a column. The medical category list stamps it on loaded rows for
+        # InventoryCategoryResponse (category_item_counts); declared only for
+        # the type checker, as on InventoryItem.
+        item_count: Optional[int]
+
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     organization_id: Mapped[str] = mapped_column(
         String(36),
@@ -664,6 +670,12 @@ class InventoryItem(Base):
     reorder_point: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
     )  # Alert when quantity <= this value
+    # Carried on the apparatus only, with no stock-room supply behind it (a
+    # LUCAS device, a cardiac monitor). The Medical Supplies page then counts
+    # it by where it is carried rather than by a shelf it never sits on.
+    apparatus_only: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Maintenance
     last_inspection_date: Mapped[Optional[date]] = mapped_column(Date)
@@ -766,6 +778,18 @@ class InventoryItem(Base):
         lot_stock: Optional[int]
         pin_position: Optional[int]
         group_key: Optional[str]
+        # Stamped by the medical supply list (next_lot_expirations,
+        # storage_path, apparatus_places_for_items).
+        next_expiration_date: Optional[date]
+        days_until_next_expiration: Optional[int]
+        next_expiration_location: Optional[str]
+        next_expiration_where: Optional[str]
+        storage_path: Optional[str]
+        apparatus_count: Optional[int]
+        apparatus_places: Optional[List[str]]
+        apparatus_stock: Optional[int]
+        apparatus_uncounted: Optional[int]
+        is_low_stock: Optional[bool]
 
     __table_args__ = (
         Index("idx_inventory_items_org_category", "organization_id", "category_id"),

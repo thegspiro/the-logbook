@@ -1,13 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
 const mockGetSummary = vi.fn();
 const mockGetItems = vi.fn();
 const mockGetCategories = vi.fn();
-const mockGetExpiringLots = vi.fn();
+const mockGetExpiringStock = vi.fn();
 const mockRetireItem = vi.fn();
+const mockBulkRetireItems = vi.fn();
+const mockGetItemLots = vi.fn();
+const mockGetStorageOptions = vi.fn();
+const mockGetItemPlacements = vi.fn();
 const mockCheckPermission = vi.fn();
 
 vi.mock('../../../services/medicalSuppliesService', () => ({
@@ -15,8 +19,12 @@ vi.mock('../../../services/medicalSuppliesService', () => ({
     getSummary: (...args: unknown[]) => mockGetSummary(...args) as unknown,
     getItems: (...args: unknown[]) => mockGetItems(...args) as unknown,
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
-    getExpiringLots: (...args: unknown[]) => mockGetExpiringLots(...args) as unknown,
+    getExpiringStock: (...args: unknown[]) => mockGetExpiringStock(...args) as unknown,
     retireItem: (...args: unknown[]) => mockRetireItem(...args) as unknown,
+    bulkRetireItems: (...args: unknown[]) => mockBulkRetireItems(...args) as unknown,
+    getItemLots: (...args: unknown[]) => mockGetItemLots(...args) as unknown,
+    getStorageOptions: (...args: unknown[]) => mockGetStorageOptions(...args) as unknown,
+    getItemPlacements: (...args: unknown[]) => mockGetItemPlacements(...args) as unknown,
   },
 }));
 
@@ -49,8 +57,12 @@ const summary = {
   expiring_within_days: 30,
 };
 
+/** One row of the Expiring tab: a shelf lot unless told otherwise. */
 const expiringLot = (overrides: Record<string, unknown> = {}) => ({
-  id: 'lot-1',
+  key: 'lot:lot-1',
+  location: 'shelf',
+  lot_id: 'lot-1',
+  where: 'Supply Room › Cabinet B',
   organization_id: 'org-1',
   inventory_item_id: 'item-1',
   item_name: '4x4 Gauze',
@@ -106,15 +118,389 @@ describe('MedicalSuppliesPage', () => {
     // but leaves implementations and queued *Once values in place, so an
     // unconsumed rejection from a failure-path test would be handed to
     // whichever test called the mock next (CLAUDE.md pitfall #28).
-    [mockCheckPermission, mockGetSummary, mockGetItems, mockGetCategories, mockGetExpiringLots, mockRetireItem].forEach(
-      (mock) => mock.mockReset()
-    );
+    [
+      mockCheckPermission,
+      mockGetSummary,
+      mockGetItems,
+      mockGetCategories,
+      mockGetExpiringStock,
+      mockRetireItem,
+      mockBulkRetireItems,
+      mockGetItemLots,
+      mockGetStorageOptions,
+      mockGetItemPlacements,
+    ].forEach((mock) => mock.mockReset());
     mockCheckPermission.mockReturnValue(false);
     mockGetSummary.mockResolvedValue(summary);
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
     mockGetCategories.mockResolvedValue([]);
-    mockGetExpiringLots.mockResolvedValue([expiringLot()]);
+    mockGetExpiringStock.mockResolvedValue([expiringLot()]);
     mockRetireItem.mockResolvedValue(undefined);
+    mockBulkRetireItems.mockResolvedValue({ retired: [], failed: [] });
+    mockGetItemLots.mockResolvedValue([]);
+    mockGetStorageOptions.mockResolvedValue({ rooms: [], areas: [] });
+    mockGetItemPlacements.mockResolvedValue([]);
+  });
+
+  describe('usability fixes', () => {
+    const lastItemsQuery = (): Record<string, unknown> => {
+      const calls = mockGetItems.mock.calls as unknown[][];
+      return (calls[calls.length - 1]?.[0] ?? {}) as Record<string, unknown>;
+    };
+
+    it('shows a dash, not 0, and no Low flag when a supply has no reorder point', async () => {
+      // The API sends an unset reorder point as null, not as a missing key.
+      mockGetItems.mockResolvedValue({
+        items: [{ id: 'item-1', name: 'Trauma Shears', quantity: 0, reorder_point: null }],
+        total: 1,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      const row = await screen.findByRole('row', { name: /Trauma Shears/ });
+      expect(row).toHaveTextContent('—');
+      expect(row).not.toHaveTextContent('Low');
+    });
+
+    it('names the size on an expiring lot', async () => {
+      mockGetExpiringStock.mockResolvedValue([
+        expiringLot({ item_name: 'Oxygen Mask, Non-Rebreather', item_size: 'Pediatric' }),
+      ]);
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      expect(await screen.findByText('Oxygen Mask, Non-Rebreather — Pediatric')).toBeInTheDocument();
+    });
+
+    it('opens the low-stock list from its tile, and Show all clears it', async () => {
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: 'Show 2 supplies at or below their reorder point' })
+      );
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ low_stock: true, skip: 0 }));
+      expect(screen.getByText(/Showing only supplies at or below their reorder point/)).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Show all supplies' }));
+      await waitFor(() => expect(lastItemsQuery()['low_stock']).toBeUndefined());
+      expect(screen.queryByText(/Showing only supplies at or below/)).not.toBeInTheDocument();
+    });
+
+    it('says nothing is low rather than that the catalog is empty', async () => {
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: 'Show 2 supplies at or below their reorder point' })
+      );
+
+      expect(await screen.findByText('Nothing is low')).toBeInTheDocument();
+    });
+
+    it('opens the expiring list from the expired tile', async () => {
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      await userEvent.click(screen.getByRole('button', { name: 'Show 1 expired lots' }));
+
+      expect(await screen.findByText('LOT-77')).toBeInTheDocument();
+    });
+
+    it("shows each supply's next expiry, coloured only when it needs action", async () => {
+      mockGetItems.mockResolvedValue({
+        items: [
+          {
+            id: 'item-1',
+            name: 'Gauze Pads',
+            quantity: 0,
+            next_expiration_date: '2026-10-06',
+            days_until_next_expiration: -10,
+          },
+          {
+            id: 'item-2',
+            name: 'Cannula',
+            quantity: 3,
+            next_expiration_date: '2027-12-01',
+            days_until_next_expiration: 411,
+          },
+          { id: 'item-3', name: 'Shears', quantity: 2, next_expiration_date: null },
+        ],
+        total: 3,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      expect(await screen.findByRole('columnheader', { name: 'Next expiry' })).toBeInTheDocument();
+      expect(screen.getByRole('cell', { name: /Expired 10d ago/ })).toHaveClass('text-red-700');
+      expect(screen.getByRole('cell', { name: /411d left/ })).toHaveClass('text-theme-text-secondary');
+      expect(screen.getByRole('row', { name: /Shears/ })).toHaveTextContent('—');
+    });
+
+    it('says where the soonest-expiring units are, on a truck or on the shelf', async () => {
+      mockGetItems.mockResolvedValue({
+        items: [
+          {
+            id: 'item-1',
+            name: 'Gauze Pads',
+            quantity: 4,
+            next_expiration_date: '2026-11-02',
+            days_until_next_expiration: 16,
+            next_expiration_location: 'apparatus',
+            next_expiration_where: 'Medic 1 › Main Compartment › Jump Bag',
+          },
+          {
+            id: 'item-2',
+            name: 'Cannula',
+            quantity: 3,
+            next_expiration_date: '2027-01-15',
+            days_until_next_expiration: 90,
+            next_expiration_location: 'shelf',
+            next_expiration_where: null,
+          },
+        ],
+        total: 2,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      const gauze = await screen.findByRole('cell', { name: /16d left/ });
+      expect(gauze).toHaveTextContent('Medic 1 › Main Compartment › Jump Bag');
+      expect(within(gauze).getByLabelText('On an apparatus')).toBeInTheDocument();
+      const cannula = screen.getByRole('cell', { name: /90d left/ });
+      expect(cannula).toHaveTextContent('In storage');
+      expect(within(cannula).getByLabelText('In storage')).toBeInTheDocument();
+    });
+
+    it('marks the views up as tabs and moves between them with the arrow keys', async () => {
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      const expiringTab = await screen.findByRole('tab', { name: 'Expiring stock' });
+      const stockTab = screen.getByRole('tab', { name: 'All supplies' });
+      expect(screen.getByRole('tablist', { name: 'Medical supply views' })).toBeInTheDocument();
+      expect(expiringTab).toHaveAttribute('aria-selected', 'true');
+      expect(stockTab).toHaveAttribute('tabindex', '-1');
+      expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', expiringTab.id);
+
+      expiringTab.focus();
+      await userEvent.keyboard('{ArrowRight}');
+
+      expect(stockTab).toHaveAttribute('aria-selected', 'true');
+      expect(stockTab).toHaveFocus();
+      expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', stockTab.id);
+
+      await userEvent.keyboard('{Home}');
+      expect(expiringTab).toHaveAttribute('aria-selected', 'true');
+      expect(expiringTab).toHaveFocus();
+    });
+
+    it('shows where each supply is kept and the apparatus places the checklist names', async () => {
+      mockGetItems.mockResolvedValue({
+        items: [
+          {
+            id: 'item-1',
+            name: 'Gauze Pads',
+            quantity: 3,
+            storage_path: 'Supply Room › Medical Cabinet',
+            // Filed automatically from this same text: not repeated as a note.
+            storage_location: 'medical  cabinet',
+            apparatus_count: 2,
+            apparatus_places: ['Medic 1 › Main Compartment › Jump Bag', 'Medic 1 › Rear Cabinet', 'Medic 2 › Jump Bag'],
+          },
+          {
+            id: 'item-2',
+            name: 'Shears',
+            quantity: 1,
+            storage_path: null,
+            storage_location: 'Top drawer',
+            apparatus_count: 0,
+            apparatus_places: [],
+          },
+        ],
+        total: 2,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      const gauze = await screen.findByRole('row', { name: /Gauze Pads/ });
+      expect(gauze).toHaveTextContent('Supply Room › Medical Cabinet');
+      expect(gauze).not.toHaveTextContent(/medical {2}cabinet/i);
+      const shears = screen.getByRole('row', { name: /Shears/ });
+      expect(shears).toHaveTextContent('Top drawer');
+      expect(within(shears).queryByRole('list', { name: /Apparatus carrying/ })).not.toBeInTheDocument();
+
+      // The first two places read as the checklist names them; the rest open the dialog.
+      const places = within(gauze).getByRole('list', { name: 'Apparatus carrying Gauze Pads' });
+      expect(within(places).getByText('Medic 1 › Main Compartment › Jump Bag')).toBeInTheDocument();
+      expect(within(places).getByText('Medic 1 › Rear Cabinet')).toBeInTheDocument();
+      expect(within(places).queryByText('Medic 2 › Jump Bag')).not.toBeInTheDocument();
+      await userEvent.click(within(places).getByRole('button', { name: '1 more apparatus places for Gauze Pads' }));
+      expect(await screen.findByRole('dialog', { name: 'Lots — Gauze Pads' })).toBeInTheDocument();
+      expect(mockGetItemPlacements).toHaveBeenCalledWith('item-1');
+    });
+
+    it('filters by a room or a storage area', async () => {
+      mockGetStorageOptions.mockResolvedValue({
+        rooms: [{ id: 'room-1', name: 'Supply Room' }],
+        areas: [
+          { id: 'area-1', name: 'Cabinet B', location_id: 'room-1', location_name: 'Supply Room', path: 'Cabinet B' },
+        ],
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      const filter = await screen.findByRole('combobox', { name: 'Filter by storage location' });
+      await userEvent.selectOptions(filter, 'area:area-1');
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ storage_area_id: 'area-1', skip: 0 }));
+      expect(lastItemsQuery()['location_id']).toBeUndefined();
+
+      await userEvent.selectOptions(filter, 'room:room-1');
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ location_id: 'room-1' }));
+      expect(lastItemsQuery()['storage_area_id']).toBeUndefined();
+    });
+
+    it('hides the location filter when no storage is set up', async () => {
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+      await screen.findByRole('combobox', { name: 'Filter by category' });
+
+      expect(screen.queryByRole('combobox', { name: 'Filter by storage location' })).not.toBeInTheDocument();
+    });
+
+    it('lists truck stock in the expiring list, named as the checklist names it', async () => {
+      mockGetExpiringStock.mockResolvedValue([
+        expiringLot(),
+        expiringLot({
+          key: 'deployed:d-1',
+          location: 'apparatus',
+          lot_id: null,
+          template_item_id: 'ti-1',
+          where: 'Medic 1 › Main Compartment › Jump Bag',
+          lot_number: 'TRK-9',
+          quantity: 3,
+          days_until_expiration: -2,
+        }),
+      ]);
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      const truckRow = await screen.findByRole('row', { name: /TRK-9/ });
+      expect(truckRow).toHaveTextContent('Medic 1 › Main Compartment › Jump Bag');
+      expect(within(truckRow).getByLabelText('On an apparatus')).toBeInTheDocument();
+      expect(truckRow).toHaveTextContent('Expired 2d ago');
+      const shelfRow = screen.getByRole('row', { name: /LOT-77/ });
+      expect(shelfRow).toHaveTextContent('Supply Room › Cabinet B');
+      expect(within(shelfRow).getByLabelText('In storage')).toBeInTheDocument();
+    });
+
+    it('counts truck stock in the expiry tiles and says how they split', async () => {
+      mockGetSummary.mockResolvedValue({
+        ...summary,
+        expiring_soon: 1,
+        expired: 0,
+        expiring_soon_on_apparatus: 2,
+        expired_on_apparatus: 1,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      const expiring = await screen.findByRole('button', { name: 'Show 3 lots expiring within 30 days' });
+      expect(expiring).toHaveTextContent('1 shelf · 2 on trucks');
+      const expired = screen.getByRole('button', { name: 'Show 1 expired lots' });
+      expect(expired).toHaveTextContent('0 shelf · 1 on trucks');
+    });
+
+    it('shows truck stock under the shelf count and takes Low from the server', async () => {
+      mockGetItems.mockResolvedValue({
+        items: [
+          {
+            id: 'item-1',
+            name: 'Gauze Pads',
+            quantity: 2,
+            reorder_point: 15,
+            apparatus_stock: 12,
+            apparatus_uncounted: 1,
+            is_low_stock: true,
+          },
+          {
+            // 1 on the shelf against a floor of 5, but the trucks carry 8:
+            // on the department-wide total it is not low.
+            id: 'item-2',
+            name: 'Cannula',
+            quantity: 1,
+            reorder_point: 5,
+            apparatus_stock: 8,
+            apparatus_uncounted: 0,
+            is_low_stock: false,
+          },
+        ],
+        total: 2,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      const gauze = await screen.findByRole('row', { name: /Gauze Pads/ });
+      expect(gauze).toHaveTextContent('+12 on trucks (1 uncounted position)');
+      expect(gauze).toHaveTextContent('Low');
+      const cannula = screen.getByRole('row', { name: /Cannula/ });
+      expect(cannula).toHaveTextContent('+8 on trucks');
+      expect(cannula).not.toHaveTextContent('Low');
+    });
+
+    it('counts a supply kept on apparatus only by what the trucks carry, with no shelf place', async () => {
+      mockGetItems.mockResolvedValue({
+        items: [
+          {
+            id: 'item-lucas',
+            name: 'LUCAS device',
+            // A stale shelf count from before it was marked: never shown.
+            quantity: 5,
+            reorder_point: 2,
+            apparatus_only: true,
+            apparatus_stock: 2,
+            apparatus_uncounted: 0,
+            apparatus_count: 2,
+            apparatus_places: ['Medic 1 › Rear Cabinet', 'Medic 2 › Rear Cabinet'],
+            storage_path: 'Supply Room › Cabinet B',
+            is_low_stock: true,
+          },
+        ],
+        total: 1,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      const row = await screen.findByRole('row', { name: /LUCAS device/ });
+      expect(within(row).getByRole('cell', { name: /on 2 apparatus/ })).toHaveTextContent(/^2\s*Low/);
+      expect(row).not.toHaveTextContent('on trucks');
+      expect(row).not.toHaveTextContent('Supply Room › Cabinet B');
+      expect(row).toHaveTextContent('Medic 1 › Rear Cabinet');
+      expect(within(row).getByRole('button', { name: 'Where LUCAS device is carried' })).toBeInTheDocument();
+    });
+
+    it("offers a supply's lots to a member who can only view", async () => {
+      mockGetItems.mockResolvedValue({
+        items: [{ id: 'item-1', name: 'Oxygen Mask', size: 'Adult', quantity: 4 }],
+        total: 1,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Lots for Oxygen Mask — Adult' }));
+
+      expect(await screen.findByRole('dialog', { name: 'Lots — Oxygen Mask — Adult' })).toBeInTheDocument();
+      expect(mockGetItemLots).toHaveBeenCalledWith('item-1');
+      expect(screen.queryByRole('button', { name: 'Edit Oxygen Mask' })).not.toBeInTheDocument();
+    });
   });
 
   /**
@@ -172,8 +558,10 @@ describe('MedicalSuppliesPage', () => {
 
     renderWithRouter(<MedicalSuppliesPage />);
 
-    const gearLink = await screen.findByRole('link', { name: /Inventory/i });
-    expect(gearLink).toHaveAttribute('href', '/inventory');
+    // Within the sentence: the Operations section strip carries an Inventory
+    // link of its own for the same viewer.
+    const aside = await screen.findByText(/It shares one catalog with gear and uniforms/i);
+    expect(within(aside).getByRole('link', { name: /Inventory/i })).toHaveAttribute('href', '/inventory');
   });
 
   it('states the separation without linking it for someone who cannot open the catalogue', async () => {
@@ -186,8 +574,8 @@ describe('MedicalSuppliesPage', () => {
     renderWithRouter(<MedicalSuppliesPage />);
     await screen.findByRole('heading', { name: /Medical Supplies/i });
 
-    expect(screen.getByText(/It shares one catalog with gear and uniforms/i)).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Inventory/i })).not.toBeInTheDocument();
+    const aside = screen.getByText(/It shares one catalog with gear and uniforms/i);
+    expect(within(aside).queryByRole('link', { name: /Inventory/i })).not.toBeInTheDocument();
   });
 
   it('opens on expiring stock, which is what goes wrong quietly', async () => {
@@ -198,7 +586,7 @@ describe('MedicalSuppliesPage', () => {
   });
 
   it('calls out an already-expired lot rather than showing a negative countdown', async () => {
-    mockGetExpiringLots.mockResolvedValue([expiringLot({ days_until_expiration: -4 })]);
+    mockGetExpiringStock.mockResolvedValue([expiringLot({ days_until_expiration: -4 })]);
 
     renderWithRouter(<MedicalSuppliesPage />);
 
@@ -211,6 +599,7 @@ describe('MedicalSuppliesPage', () => {
 
     expect(screen.queryByRole('button', { name: /Add supply/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Receive delivery/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Import / export' })).not.toBeInTheDocument();
   });
 
   it('shows the management actions to a medical-only supply officer', async () => {
@@ -221,6 +610,16 @@ describe('MedicalSuppliesPage', () => {
 
     expect(await screen.findByRole('button', { name: /Add supply/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Receive delivery/i })).toBeInTheDocument();
+  });
+
+  it('opens import and export from the actions row', async () => {
+    mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.manage_medical');
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Import / export' }));
+
+    expect(screen.getByRole('dialog', { name: /Import \/ export supplies/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Export lot list/i })).toBeInTheDocument();
   });
 
   it('shows the management actions to a quartermaster holding only the broad grant', async () => {
@@ -257,9 +656,9 @@ describe('MedicalSuppliesPage', () => {
       mockGetItems.mockClear();
       mockGetSummary.mockClear();
       mockGetCategories.mockClear();
-      mockGetExpiringLots.mockClear();
+      mockGetExpiringStock.mockClear();
 
-      fireEvent.click(screen.getByRole('button', { name: /All supplies/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /All supplies/i }));
       const input = screen.getByRole('searchbox', { name: /Search medical supplies/i });
       fireEvent.change(input, { target: { value: 'g' } });
       fireEvent.change(input, { target: { value: 'ga' } });
@@ -276,7 +675,7 @@ describe('MedicalSuppliesPage', () => {
       );
       expect(mockGetSummary).not.toHaveBeenCalled();
       expect(mockGetCategories).not.toHaveBeenCalled();
-      expect(mockGetExpiringLots).not.toHaveBeenCalled();
+      expect(mockGetExpiringStock).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
@@ -290,7 +689,7 @@ describe('MedicalSuppliesPage', () => {
 
     try {
       renderWithRouter(<MedicalSuppliesPage />);
-      fireEvent.click(screen.getByRole('button', { name: /All supplies/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /All supplies/i }));
       fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
         target: { value: 'new' },
       });
@@ -319,7 +718,7 @@ describe('MedicalSuppliesPage', () => {
     });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
 
     // The cell specifically — the category filter's <option> carries the same
     // text, and matching either one would pass without the table being right.
@@ -336,7 +735,7 @@ describe('MedicalSuppliesPage', () => {
     });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
 
     expect(await screen.findByRole('button', { name: 'Edit 4x4 Gauze' })).toBeInTheDocument();
   });
@@ -350,7 +749,7 @@ describe('MedicalSuppliesPage', () => {
     });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
 
     await screen.findByText('4x4 Gauze');
     expect(screen.queryByRole('button', { name: 'Edit 4x4 Gauze' })).not.toBeInTheDocument();
@@ -366,9 +765,136 @@ describe('MedicalSuppliesPage', () => {
     });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
 
     expect(await screen.findByRole('button', { name: 'Retire 4x4 Gauze' })).toBeInTheDocument();
+  });
+
+  describe('sorting and bulk retire', () => {
+    const twoItems = {
+      items: [
+        { id: 'item-1', name: '4x4 Gauze', quantity: 5 },
+        { id: 'item-2', name: 'Tourniquet', quantity: 3 },
+      ],
+      total: 2,
+      skip: 0,
+      limit: 200,
+    };
+
+    beforeEach(() => {
+      mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.manage_medical');
+      mockGetItems.mockResolvedValue(twoItems);
+    });
+
+    const openStock = async () => {
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+      await screen.findByText('Tourniquet');
+    };
+
+    const lastItemsQuery = (): Record<string, unknown> => {
+      const calls = mockGetItems.mock.calls as unknown[][];
+      return (calls[calls.length - 1]?.[0] ?? {}) as Record<string, unknown>;
+    };
+
+    it('sorts on the server by the clicked column, ascending then descending', async () => {
+      await openStock();
+
+      await userEvent.click(screen.getByRole('button', { name: /Category/ }));
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ sort_by: 'category', sort_order: 'asc', skip: 0 }));
+
+      await userEvent.click(screen.getByRole('button', { name: /Category/ }));
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ sort_by: 'category', sort_order: 'desc' }));
+    });
+
+    it('sorts by on-hand stock and by name', async () => {
+      await openStock();
+
+      await userEvent.click(screen.getByRole('button', { name: /On hand/ }));
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ sort_by: 'on_hand', sort_order: 'asc' }));
+
+      await userEvent.click(screen.getByRole('button', { name: /^Item/ }));
+      await waitFor(() => expect(lastItemsQuery()).toMatchObject({ sort_by: 'name', sort_order: 'asc' }));
+    });
+
+    it('retires the ticked supplies in one request after confirmation', async () => {
+      mockBulkRetireItems.mockResolvedValue({ retired: ['item-1', 'item-2'], failed: [] });
+      await openStock();
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Select 4x4 Gauze' }));
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Select Tourniquet' }));
+      expect(screen.getByText('2 selected')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Retire selected' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Retire 2' }));
+
+      await waitFor(() => expect(mockBulkRetireItems).toHaveBeenCalledWith(['item-1', 'item-2']));
+    });
+
+    it('offers phones their own select-all, since the card layout hides the header', async () => {
+      await openStock();
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Select all on this page' }));
+
+      expect(screen.getByRole('checkbox', { name: 'Select 4x4 Gauze' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Select Tourniquet' })).toBeChecked();
+      // The row cell carries no "Select" caption for the phone card to repeat.
+      const [selectCell] = within(screen.getByRole('row', { name: /Tourniquet/ })).getAllByRole('cell');
+      expect(selectCell).toHaveAttribute('data-label', '');
+    });
+
+    it('selects every supply on the page from the header checkbox', async () => {
+      await openStock();
+
+      await userEvent.click(screen.getByRole('checkbox', { name: /Select every supply on this page/i }));
+
+      expect(screen.getByRole('checkbox', { name: 'Select 4x4 Gauze' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Select Tourniquet' })).toBeChecked();
+    });
+
+    it('does nothing when the confirmation is declined', async () => {
+      await openStock();
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Select Tourniquet' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Retire selected' }));
+      await userEvent.click(await screen.findByRole('button', { name: /cancel|keep/i }));
+
+      expect(mockBulkRetireItems).not.toHaveBeenCalled();
+    });
+
+    it('keeps the ones that could not be retired ticked', async () => {
+      mockBulkRetireItems.mockResolvedValue({
+        retired: ['item-1'],
+        failed: [{ item_id: 'item-2', error: 'Cannot retire: item is currently assigned. Unassign it first.' }],
+      });
+      await openStock();
+
+      await userEvent.click(screen.getByRole('checkbox', { name: /Select every supply on this page/i }));
+      await userEvent.click(screen.getByRole('button', { name: 'Retire selected' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Retire 2' }));
+
+      expect(await screen.findByText('1 selected')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'Select Tourniquet' })).toBeChecked();
+    });
+
+    it("shows each supply's size beside its name", async () => {
+      mockGetItems.mockResolvedValue({
+        items: [{ id: 'item-1', name: 'Oxygen Mask', size: 'Pediatric', quantity: 4 }],
+        total: 1,
+        skip: 0,
+        limit: 200,
+      });
+      renderWithRouter(<MedicalSuppliesPage />);
+      await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+      expect(await screen.findByText('· Pediatric')).toBeInTheDocument();
+    });
+
+    it('offers no selection to a member who can only view', async () => {
+      mockCheckPermission.mockReturnValue(false);
+      await openStock();
+
+      expect(screen.queryByRole('checkbox', { name: 'Select Tourniquet' })).not.toBeInTheDocument();
+    });
   });
 
   it('retires a supply through the medical-domain route after confirmation', async () => {
@@ -384,7 +910,7 @@ describe('MedicalSuppliesPage', () => {
     });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
     await userEvent.click(await screen.findByRole('button', { name: 'Retire 4x4 Gauze' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Retire' }));
 
@@ -413,7 +939,7 @@ describe('MedicalSuppliesPage', () => {
     });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
     await userEvent.click(await screen.findByRole('button', { name: 'Edit 4x4 Gauze' }));
 
     await screen.findByRole('heading', { name: /Edit medical supply/i });
@@ -432,7 +958,7 @@ describe('MedicalSuppliesPage', () => {
     });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
     await userEvent.click(await screen.findByRole('button', { name: 'Edit Trauma Shears' }));
 
     await screen.findByRole('heading', { name: /Edit medical supply/i });
@@ -441,7 +967,7 @@ describe('MedicalSuppliesPage', () => {
 
   it('reports the expiry window it actually queried', async () => {
     renderWithRouter(<MedicalSuppliesPage />);
-    await waitFor(() => expect(mockGetExpiringLots).toHaveBeenCalledWith(30, undefined));
+    await waitFor(() => expect(mockGetExpiringStock).toHaveBeenCalledWith(30, undefined));
 
     expect(await screen.findByText(/Expiring within 30 days/i)).toBeInTheDocument();
   });
@@ -451,7 +977,7 @@ describe('MedicalSuppliesPage', () => {
     mockGetItems.mockResolvedValue({ items: [item()], total: 1, skip: 0, limit: 200 });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
 
     await screen.findByText('4x4 Gauze');
     assertOrganizationLowStockCount(7);
@@ -465,7 +991,7 @@ describe('MedicalSuppliesPage', () => {
     );
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
     fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
       target: { value: 'gauze' },
     });
@@ -484,7 +1010,7 @@ describe('MedicalSuppliesPage', () => {
     mockGetItems.mockResolvedValue({ items: [item({ category_id: 'cat-1' })], total: 1, skip: 0, limit: 200 });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
     await userEvent.selectOptions(screen.getByRole('combobox', { name: /Filter by category/i }), 'cat-1');
 
     await waitFor(() =>
@@ -508,7 +1034,7 @@ describe('MedicalSuppliesPage', () => {
     });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
     expect(await screen.findByRole('button', { name: 'Next' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
@@ -532,7 +1058,7 @@ describe('MedicalSuppliesPage', () => {
     });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
     expect(await screen.findByText(/Showing 1–1 of 201/)).toBeInTheDocument();
 
     mockGetItems.mockRejectedValue(new Error('Supplies unavailable'));
@@ -559,7 +1085,7 @@ describe('MedicalSuppliesPage', () => {
     });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
     expect(await screen.findByText(/Showing 1–1 of 201/)).toBeInTheDocument();
 
     mockGetItems.mockRejectedValueOnce(new Error('Supplies unavailable'));
@@ -583,7 +1109,7 @@ describe('MedicalSuppliesPage', () => {
 
     renderWithRouter(<MedicalSuppliesPage />);
     await screen.findByRole('heading', { name: /Medical Supplies/i });
-    await userEvent.click(screen.getByRole('button', { name: 'All supplies' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'All supplies' }));
 
     expect(screen.queryByText('No medical supplies yet')).not.toBeInTheDocument();
 
@@ -599,7 +1125,7 @@ describe('MedicalSuppliesPage', () => {
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: 'All supplies' }));
+    await userEvent.click(await screen.findByRole('tab', { name: 'All supplies' }));
     fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
       target: { value: 'tourniquet' },
     });
@@ -619,11 +1145,52 @@ describe('MedicalSuppliesPage', () => {
 
     renderWithRouter(<MedicalSuppliesPage />);
     await screen.findByRole('heading', { name: /Medical Supplies/i });
-    await userEvent.click(screen.getByRole('button', { name: 'All supplies' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'All supplies' }));
 
     expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
     expect(screen.getByText('Could not load the category list.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry category list' })).toBeInTheDocument();
+  });
+
+  // The word, not only the orange tint: the overview counts low items, and the
+  // list was the only place to find which, by colour alone.
+  it('says "Low" beside an item at or below its reorder point, and only there', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [
+        item({ id: 'low', name: 'Oral airway kit', quantity: 2, reorder_point: 5 }),
+        item({ id: 'ok', name: 'Bag-valve mask', quantity: 9, reorder_point: 5 }),
+      ],
+      total: 2,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
+
+    expect(await screen.findByRole('cell', { name: /^2\s*Low$/ })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '9' })).toBeInTheDocument();
+  });
+
+  it('does not call an empty catalog "Nothing expiring"', async () => {
+    mockGetSummary.mockResolvedValue({ ...summary, total_items: 0, expiring_soon: 0, expired: 0, low_stock: 0 });
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
+    mockGetExpiringStock.mockResolvedValue([]);
+
+    renderWithRouter(<MedicalSuppliesPage />);
+
+    expect(await screen.findByRole('heading', { name: 'No medical supplies yet' })).toBeInTheDocument();
+    expect(screen.queryByText('Nothing expiring')).not.toBeInTheDocument();
+  });
+
+  it('names the way to the categories page', async () => {
+    mockCheckPermission.mockReturnValue(true);
+    renderWithRouter(<MedicalSuppliesPage />);
+
+    expect(await screen.findByRole('link', { name: 'Categories' })).toHaveAttribute(
+      'href',
+      '/medical-supplies/categories'
+    );
   });
 
   it('does not derive the organization-wide count from one page of a multi-page catalog', async () => {
@@ -636,9 +1203,10 @@ describe('MedicalSuppliesPage', () => {
     });
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
 
-    expect(await screen.findByRole('cell', { name: '3' })).toBeInTheDocument();
+    // 3 in-date units against a reorder point of 5: low, and the cell says so.
+    expect(await screen.findByRole('cell', { name: /^3\s*Low$/ })).toBeInTheDocument();
     assertOrganizationLowStockCount(23);
   });
 
@@ -653,7 +1221,7 @@ describe('MedicalSuppliesPage', () => {
     );
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
     expect(await screen.findByText('Showing 1–1 of 201')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Next' }));
@@ -671,7 +1239,7 @@ describe('MedicalSuppliesPage', () => {
     );
 
     renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('tab', { name: /All supplies/i }));
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }));
     await waitFor(() =>
       expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 200 }), { signal: anyAbortSignal })
@@ -706,7 +1274,7 @@ describe('MedicalSuppliesPage', () => {
 
       const user = userEvent.setup();
       renderWithRouter(<MedicalSuppliesPage />);
-      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await user.click(await screen.findByRole('tab', { name: /All supplies/i }));
       await screen.findByText('Showing 1–1 of 201');
 
       await user.click(screen.getByRole('button', { name: 'Next' }));
@@ -745,7 +1313,7 @@ describe('MedicalSuppliesPage', () => {
 
       const user = userEvent.setup();
       renderWithRouter(<MedicalSuppliesPage />);
-      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await user.click(await screen.findByRole('tab', { name: /All supplies/i }));
       await screen.findByText('Supply 1');
 
       // Page 2 is requested and hangs; the filter then changes and settles.
@@ -803,7 +1371,7 @@ describe('MedicalSuppliesPage', () => {
       // otherwise both commit, and whichever lands last wins regardless of
       // which was asked for last.
       let failOlder: ((reason: Error) => void) | undefined;
-      mockGetExpiringLots
+      mockGetExpiringStock
         .mockRejectedValueOnce(new Error('Lots unavailable'))
         .mockImplementationOnce(() => new Promise((_resolve, reject) => (failOlder = reject)))
         .mockResolvedValue([expiringLot({ id: 'lot-2', item_name: 'Trauma Shears' })]);
@@ -844,7 +1412,7 @@ describe('MedicalSuppliesPage', () => {
 
       const user = userEvent.setup();
       renderWithRouter(<MedicalSuppliesPage />);
-      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await user.click(await screen.findByRole('tab', { name: /All supplies/i }));
       expect(await screen.findByText('Trauma Shears')).toBeInTheDocument();
 
       fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
@@ -857,7 +1425,7 @@ describe('MedicalSuppliesPage', () => {
     it('marks a section that loaded empty as stale when a later load fails', async () => {
       // A row count cannot tell "loaded, and there is nothing" from "never
       // loaded", so an empty-but-loaded section lost its stale marker.
-      mockGetExpiringLots.mockResolvedValueOnce([]).mockRejectedValue(new Error('Lots unavailable'));
+      mockGetExpiringStock.mockResolvedValueOnce([]).mockRejectedValue(new Error('Lots unavailable'));
 
       const user = userEvent.setup();
       renderWithRouter(<MedicalSuppliesPage />);
@@ -871,7 +1439,7 @@ describe('MedicalSuppliesPage', () => {
     it('does not claim a section is empty before it has ever loaded', async () => {
       // "Nothing expiring" is an assertion about the department's stock. A
       // section whose only request failed knows nothing and must not make it.
-      mockGetExpiringLots.mockRejectedValue(new Error('Lots unavailable'));
+      mockGetExpiringStock.mockRejectedValue(new Error('Lots unavailable'));
 
       renderWithRouter(<MedicalSuppliesPage />);
       await screen.findByRole('alert');
@@ -884,7 +1452,7 @@ describe('MedicalSuppliesPage', () => {
       // those rows while a slow retry runs breaks that promise at exactly the
       // moment the data is being relied on. A retry asks the same question the
       // rows already answer, unlike a filter change, which does not.
-      mockGetExpiringLots
+      mockGetExpiringStock
         .mockResolvedValueOnce([expiringLot()])
         .mockRejectedValueOnce(new Error('Lots unavailable'))
         .mockImplementation(() => new Promise(() => {}));
@@ -898,7 +1466,7 @@ describe('MedicalSuppliesPage', () => {
 
       // The retry hangs. The rows it is retrying stay put.
       await user.click(screen.getByRole('button', { name: 'Retry expiring stock' }));
-      await waitFor(() => expect(mockGetExpiringLots).toHaveBeenCalledTimes(3));
+      await waitFor(() => expect(mockGetExpiringStock).toHaveBeenCalledTimes(3));
       expect(screen.getByText('4x4 Gauze')).toBeInTheDocument();
     });
 
@@ -918,7 +1486,7 @@ describe('MedicalSuppliesPage', () => {
 
       const user = userEvent.setup();
       renderWithRouter(<MedicalSuppliesPage />);
-      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await user.click(await screen.findByRole('tab', { name: /All supplies/i }));
       expect(await screen.findByText('Trauma Shears')).toBeInTheDocument();
 
       fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
@@ -941,7 +1509,7 @@ describe('MedicalSuppliesPage', () => {
 
       const user = userEvent.setup();
       renderWithRouter(<MedicalSuppliesPage />);
-      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await user.click(await screen.findByRole('tab', { name: /All supplies/i }));
 
       const box = screen.getByRole('searchbox', { name: /Search medical supplies/i });
       fireEvent.change(box, { target: { value: 'g' } });
@@ -958,11 +1526,11 @@ describe('MedicalSuppliesPage', () => {
       // requests, letting cached data land while the refresh was discarded.
       const user = userEvent.setup();
       renderWithRouter(<MedicalSuppliesPage />);
-      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await user.click(await screen.findByRole('tab', { name: /All supplies/i }));
       await waitFor(() => expect(mockGetSummary).toHaveBeenCalledTimes(1));
       const summaryCalls = mockGetSummary.mock.calls.length;
       const categoryCalls = mockGetCategories.mock.calls.length;
-      const expiringCalls = mockGetExpiringLots.mock.calls.length;
+      const expiringCalls = mockGetExpiringStock.mock.calls.length;
       const itemCalls = mockGetItems.mock.calls.length;
 
       fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
@@ -972,7 +1540,7 @@ describe('MedicalSuppliesPage', () => {
       await waitFor(() => expect(mockGetItems.mock.calls.length).toBeGreaterThan(itemCalls));
       expect(mockGetSummary.mock.calls.length).toBe(summaryCalls);
       expect(mockGetCategories.mock.calls.length).toBe(categoryCalls);
-      expect(mockGetExpiringLots.mock.calls.length).toBe(expiringCalls);
+      expect(mockGetExpiringStock.mock.calls.length).toBe(expiringCalls);
     });
 
     it('does not call a supply uncategorized while the category list is loading', async () => {
@@ -988,7 +1556,7 @@ describe('MedicalSuppliesPage', () => {
 
       const user = userEvent.setup();
       renderWithRouter(<MedicalSuppliesPage />);
-      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await user.click(await screen.findByRole('tab', { name: /All supplies/i }));
       await screen.findByText('Trauma Shears');
 
       // The category reads as pending rather than as "no category", and the
@@ -1013,7 +1581,7 @@ describe('MedicalSuppliesPage', () => {
 
       const user = userEvent.setup();
       renderWithRouter(<MedicalSuppliesPage />);
-      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await user.click(await screen.findByRole('tab', { name: /All supplies/i }));
       await screen.findByText('Trauma Shears');
       // Named, not pending: the category list is in hand for this one.
       expect(screen.queryByText('…')).not.toBeInTheDocument();
@@ -1059,7 +1627,7 @@ describe('MedicalSuppliesPage', () => {
 
       const user = userEvent.setup();
       renderWithRouter(<MedicalSuppliesPage />);
-      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await user.click(await screen.findByRole('tab', { name: /All supplies/i }));
       await screen.findByRole('option', { name: 'Airway' });
 
       mockGetCategories.mockRejectedValue(new Error('Categories unavailable'));
@@ -1096,7 +1664,7 @@ describe('MedicalSuppliesPage', () => {
 
       const user = userEvent.setup();
       renderWithRouter(<MedicalSuppliesPage />);
-      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await user.click(await screen.findByRole('tab', { name: /All supplies/i }));
       expect(await screen.findByText('Could not load the supply table.')).toBeInTheDocument();
 
       // The new query is left hanging on purpose. If it were allowed to

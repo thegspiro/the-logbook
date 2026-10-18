@@ -61,6 +61,7 @@ from app.services.email_policy import (
     recipients_for,
 )
 from app.services.file_storage_service import StorageArea
+from app.services.integration_services.directory_common import DirectoryProviderInfo
 from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
     DEACTIVATED_EMAIL_MESSAGE,
@@ -3022,6 +3023,12 @@ class MembershipPipelineService:
         approval they follow is already durable.
         """
         try:
+            # No welcome email to carry the Google password: the account is
+            # still created, and its password goes out on its own.
+            provision_account = transfer.get("_provision_directory_account")
+            if provision_account is not None:
+                await provision_account()
+
             send = transfer.get("_send_welcome_email")
             if send is not None and await send():
                 return
@@ -4519,17 +4526,92 @@ class MembershipPipelineService:
             prog = enrollment_result["program_name"]
             result_msg += f". Auto-enrolled in training program: {prog}"
 
+        # Staged in this transaction so the record outlives a crash between
+        # the commit and the directory's API call; the call itself runs only
+        # after the caller commits (see DirectoryAccountService).
+        from app.models.directory_account import DirectoryAccountStatus
+        from app.services.directory_account_service import (
+            DirectoryAccountService,
+            provider_info,
+        )
+
+        directory_service = DirectoryAccountService(self.db)
+        directory_row = await directory_service.stage_for_transfer(
+            organization_id=prospect.organization_id,
+            user_id=user_id,
+            department_email=department_email,
+            created_by=transferred_by,
+        )
+        directory_provision_id: Optional[str] = None
+        if directory_row is not None:
+            await self.db.flush()
+            # A row staged as already failed (an address off the Workspace
+            # domain) creates no mailbox, so nothing below changes for it: the
+            # welcome email still goes to the department address, immediately.
+            if directory_row.status == DirectoryAccountStatus.PENDING.value:
+                directory_provision_id = directory_row.id
+        directory_info = (
+            provider_info(directory_row.provider) if directory_row is not None else None
+        )
+
+        async def provision_directory_account() -> Optional[str]:
+            if directory_provision_id is None:
+                return None
+            try:
+                return await directory_service.provision(
+                    directory_provision_id, prospect.organization_id
+                )
+            except Exception:
+                logger.exception(
+                    f"Directory account provisioning crashed for user {user_id}"
+                )
+                # A rollback expires every loaded instance, and the welcome
+                # email that follows still reads the prospect.
+                await self.db.rollback()
+                await self.db.refresh(prospect)
+                return None
+
         # Send welcome email with temporary credentials if requested.
         # Use the primary (department) email so the new member receives
-        # credentials at the address they'll actually log in with.
+        # credentials at the address they'll actually log in with -- unless
+        # The Logbook is creating that mailbox now, in which case it cannot
+        # receive the password that opens it, and the personal address does.
+        welcome_recipient = primary_email
+        if directory_provision_id is not None and personal_email:
+            welcome_recipient = personal_email
+
         async def send_welcome() -> bool:
-            return await self._send_transfer_welcome_email(
+            password = await provision_directory_account()
+            sent = await self._send_transfer_welcome_email(
                 prospect=prospect,
                 username=username,
                 temp_password=temp_password,
                 organization_id=prospect.organization_id,
-                recipient_email=primary_email,
+                recipient_email=welcome_recipient,
+                directory_account=(
+                    (directory_info, primary_email, password)
+                    if password and directory_info is not None
+                    else None
+                ),
             )
+            if sent and password and directory_provision_id is not None:
+                await directory_service.mark_credentials_sent(
+                    directory_provision_id, prospect.organization_id
+                )
+            return sent
+
+        async def provision_directory_account_without_welcome() -> None:
+            password = await provision_directory_account()
+            if password and directory_provision_id is not None:
+                await directory_service.send_credentials_email(
+                    directory_provision_id, prospect.organization_id, password
+                )
+
+        # A directory account cannot be created before this transaction
+        # commits, so its credentials -- and a welcome email carrying them --
+        # wait for the caller's commit too.
+        if directory_provision_id is not None:
+            defer_welcome_email = True
 
         welcome_email_sent = False
         if send_welcome_email and not defer_welcome_email:
@@ -4546,9 +4628,26 @@ class MembershipPipelineService:
             "message": result_msg,
             "auto_enrollment": enrollment_result,
             "welcome_email_sent": welcome_email_sent,
+            # The response key predates other directories; the screen reads it.
+            "google_account": (
+                {
+                    "provider": directory_row.provider,
+                    "provider_name": (
+                        directory_info.product if directory_info else None
+                    ),
+                    "status": directory_row.status,
+                    "email": directory_row.primary_email,
+                }
+                if directory_row is not None
+                else None
+            ),
         }
         if send_welcome_email and defer_welcome_email:
             result["_send_welcome_email"] = send_welcome
+        elif directory_provision_id is not None:
+            result["_provision_directory_account"] = (
+                provision_directory_account_without_welcome
+            )
         return result
 
     async def _auto_enroll_probationary(
@@ -5102,8 +5201,13 @@ class MembershipPipelineService:
         temp_password: str,
         organization_id: str,
         recipient_email: Optional[str] = None,
+        directory_account: Optional[Tuple[DirectoryProviderInfo, str, str]] = None,
     ) -> bool:
-        """Send welcome email with credentials to a transferred member."""
+        """Send welcome email with credentials to a transferred member.
+
+        ``directory_account`` is ``(provider, address, temporary password)``
+        for a directory account created for the member, added as its own card.
+        """
         try:
             from app.core.config import settings
             from app.services.email_service import EmailService
@@ -5123,6 +5227,15 @@ class MembershipPipelineService:
             )
 
             to_email = recipient_email or prospect.email
+            appended_html = appended_text = ""
+            if directory_account is not None:
+                from app.services.directory_account_service import (
+                    credentials_html,
+                    credentials_text,
+                )
+
+                appended_html = credentials_html(*directory_account)
+                appended_text = credentials_text(*directory_account)
             email_svc = EmailService(org)
             sent = await email_svc.send_welcome_email(
                 to_email=to_email,
@@ -5133,6 +5246,8 @@ class MembershipPipelineService:
                 organization_name=org_name,
                 login_url=login_url,
                 organization_id=organization_id,
+                appended_html=appended_html,
+                appended_text=appended_text,
             )
             return bool(sent)
         except Exception as e:

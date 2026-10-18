@@ -31,6 +31,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { facilitiesService } from '../../../services/api';
 import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 const PREVIEW_ITEM_COUNT = 5;
 const FACILITIES_PAGE_SIZE = 24;
@@ -116,42 +117,40 @@ export default function FacilitiesDashboard() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Facilities</h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">
-            Manage stations, buildings, maintenance, and inspections
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {canManage && (
-            <button
-              onClick={() => void navigate('/facilities/settings')}
-              className="btn-secondary flex items-center gap-2 text-sm"
-            >
-              <Settings className="h-4 w-4" /> Facility Settings
-            </button>
-          )}
-          {displayedFacilities.length > 0 && (
-            <button
-              onClick={() =>
-                void navigate(`/facilities/print-labels?ids=${displayedFacilities.map((f) => f.id).join(',')}`)
-              }
-              className="btn-secondary flex items-center gap-2 text-sm"
-            >
-              <Printer className="h-4 w-4" />
-              Print Labels
-            </button>
-          )}
-          {canCreate && (
-            <button onClick={() => setShowCreateModal(true)} className="btn-primary flex items-center gap-2 text-sm">
-              <Plus className="h-4 w-4" />
-              Add Facility
-            </button>
-          )}
-        </div>
-      </div>
+      <OperationsPageHeader
+        icon={Building2}
+        title="Facilities"
+        subtitle="Manage stations, buildings, maintenance, and inspections"
+        actions={
+          <>
+            {canManage && (
+              <button
+                onClick={() => void navigate('/facilities/settings')}
+                className="btn-secondary flex items-center gap-2 text-sm"
+              >
+                <Settings className="h-4 w-4" /> Facility Settings
+              </button>
+            )}
+            {displayedFacilities.length > 0 && (
+              <button
+                onClick={() =>
+                  void navigate(`/facilities/print-labels?ids=${displayedFacilities.map((f) => f.id).join(',')}`)
+                }
+                className="btn-secondary flex items-center gap-2 text-sm"
+              >
+                <Printer className="h-4 w-4" />
+                Print Labels
+              </button>
+            )}
+            {canCreate && (
+              <button onClick={() => setShowCreateModal(true)} className="btn-primary flex items-center gap-2 text-sm">
+                <Plus className="h-4 w-4" />
+                Add Facility
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* Loading */}
       {isLoadingDashboard && !stats ? (

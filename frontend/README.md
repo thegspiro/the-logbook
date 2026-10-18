@@ -17,8 +17,8 @@ React + TypeScript + Vite frontend application for The Logbook fire department i
 
 ### Prerequisites
 
-- Node.js 22.x or higher (enforced via `engines` in `package.json`)
-- npm 11 or higher (the `engines` floor in `package.json`) — this repo uses npm workspaces with a single root lockfile, so run `npm install` from the repo root, not from `frontend/`
+- Node.js 22.22.1 or higher
+- npm 10 or higher (both are the `engines` floor in `package.json`; there is no `engine-strict`, so npm warns on an older version rather than refusing) — this repo uses npm workspaces with a single root lockfile, so run `npm install` from the repo root, not from `frontend/`
 
 ### Installation
 

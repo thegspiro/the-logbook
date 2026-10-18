@@ -57,6 +57,12 @@ from app.models.compliance_config import (
     ReportStatus,
 )
 from app.models.consent import ConsentType, UserConsent
+from app.models.directory_account import (
+    DirectoryAccountProvision,
+    DirectoryAccountStatus,
+    DirectoryProvider,
+)
+from app.models.directory_account_departure import DEPARTED_STATUSES
 from app.models.document import (
     SYSTEM_FOLDERS,
     Document,
@@ -65,6 +71,9 @@ from app.models.document import (
     DocumentType,
 )
 from app.models.election import (
+    BallotSendJob,
+    BallotSendJobKind,
+    BallotSendJobStatus,
     Candidate,
     Election,
     ElectionStatus,
@@ -203,7 +212,11 @@ from app.models.grant import (
     RecurringFrequency,
     ReportingFrequency,
 )
-from app.models.integration import Integration, IntegrationSyncLog
+from app.models.integration import (
+    CalendarSyncMapping,
+    Integration,
+    IntegrationSyncLog,
+)
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
@@ -522,8 +535,13 @@ __all__ = [
     "MessagePriority",
     "MessageTargetType",
     # Integration models
+    "DEPARTED_STATUSES",
+    "DirectoryAccountProvision",
+    "DirectoryAccountStatus",
+    "DirectoryProvider",
     "Integration",
     "IntegrationSyncLog",
+    "CalendarSyncMapping",
     "McpServiceKey",
     "McpOAuthClient",
     "McpOAuthGrant",
@@ -579,6 +597,9 @@ __all__ = [
     "ActionItemPriority",
     # Election models
     "Election",
+    "BallotSendJob",
+    "BallotSendJobKind",
+    "BallotSendJobStatus",
     "Candidate",
     "VotingToken",
     "Vote",

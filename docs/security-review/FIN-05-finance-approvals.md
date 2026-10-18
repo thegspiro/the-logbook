@@ -1,8 +1,97 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9, [#3225](https://github.com/thegspiro/the-logbook/pull/3225)), 2026-10-18 (pass 10) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
 
 ---
+
+## Pass 10 (2026-10-18) — watchdog pickup: real delta (approval-chain/step delete restriction + audit logging), 0 fixed, 0 new findings; FIN8-05-1 and FIN-30 re-confirmed open
+
+**Scope.** Pass 9 merged as `74a57caba` (PR #3225). `git log --no-merges
+74a57caba..HEAD` over this feature's files (`finance.py`,
+`finance_service.py`, `finance_budget_request_service.py`,
+`finance_settings.py`, `schemas/finance.py`, `models/finance.py`,
+`public/finance_approvals.py`, `frontend/src/modules/finance/`): 2
+non-merge commits. No finance/approval-chain/restricted-fund/budget
+migration landed in this window (checked by scanning every new/changed
+migration file's content for those keywords, not just by pathspec).
+
+**Commit 1 of 2 — `48136548e` (dark-mode CSS only).** One line of
+`FiscalYearSettingsPage.tsx` swaps a translucent `card` class for
+`surface-opaque`, part of a repo-wide opaque-surface sweep. No logic
+touched.
+
+**Commit 2 of 2 — `d8c76347f` — a real, substantive change, read in full.**
+`delete_approval_chain` and `delete_chain_step` used to cascade-delete
+every request's `ApprovalStepRecord` (who approved/denied each step, and
+their notes) while the UI's own confirmation dialog claimed that history
+was kept. Both now count the requests routed through the chain/step via a
+new `_requests_routed_through()` helper and refuse the delete with a 400
+if any exist, telling the admin to deactivate the chain instead. Verified
+against all seven checklist dimensions:
+
+- **Tenancy (parent-resolution shape, Pitfall #14b):** both callers resolve
+  the chain through the existing org-scoped `get_approval_chain(chain_id,
+org_id)` _before_ calling `_requests_routed_through`, exactly as the new
+  helper's own docstring states the invariant it depends on
+  (`ApprovalStepRecord` carries no `organization_id` column — ancestor
+  resolution is the only correct shape for it, per repo-tenancy rules).
+  `_requests_routed_through` itself filters `ApprovalStepRecord.chain_id ==
+chain_id` (and `.step_id ==` when given), which is safe only because the
+  caller already proved that `chain_id` belongs to the caller's org — read
+  and confirmed true at both call sites.
+- **Auth:** all five endpoints (`update_approval_chain`,
+  `delete_approval_chain`, `add_chain_step`, `update_chain_step`,
+  `delete_chain_step`) remain gated by
+  `require_permission("finance.configure_approvals")`, unchanged by this
+  commit — confirmed by direct read of each `Depends(...)`.
+  `delete_approval_chain`/`delete_chain_step` now return the deleted
+  row's `name` (previously `None`) purely so the new audit-log call has it;
+  no new data is exposed to the caller — the response model for both
+  routes is still the bare success the delete endpoints always returned.
+- **Audit:** chain update/delete and step add/update/delete are now logged
+  (`finance.approval_chain_updated` / `_deleted` /
+  `_step_added`/`_step_updated`/`_step_deleted`), matching the
+  pre-existing `finance.approval_chain_created` event — a net improvement
+  to the HIPAA/audit posture, not a regression.
+- **Data exposure / injection / abuse resistance:** N/A — admin-only
+  settings page, no new unauthenticated or client-controlled input beyond
+  what the existing update/delete payloads already carried.
+- **Schema:** no migration; uses the existing `ApprovalStepRecord` model
+  and its existing `ON DELETE CASCADE` FK, unchanged.
+
+Ships with its own 296-line test file
+(`test_finance_approval_chain_delete.py`), confirmed to assert the refusal
+message, the audit events, and that an unused chain/step still deletes.
+The frontend half (`ApprovalChainsSettingsPage.tsx`, `financeStore.ts`) is
+copy and error-propagation changes matching the new backend behavior and
+the store's existing error-handling pattern for sibling chain mutations —
+no logic affecting auth or tenancy.
+
+**Standing items re-verified, both unchanged (neither file touched by this
+window's delta):**
+
+- **FIN8-05-1 (MED) — still OPEN (flagged).**
+  `finance_budget_request_service.py`'s `decide_request` (still line 653 —
+  the file carries zero diff this window) has no `assert_different_person`
+  check, unlike `review_request`.
+- **FIN-30 (LOW) — still FLAGGED.** `list_dues_payments`
+  (`finance_service.py:5760`, shifted from `:5714` by this window's earlier
+  insertions, confirmed same body by direct read) still takes no
+  limit/offset.
+
+**0 fixed, 0 new findings.**
+
+### Completion gate (pass 10)
+
+| Check                                                                                        | Result                                                  |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                | clean                                                   |
+| `black --check app/ tests/ alembic/`                                                         | clean                                                   |
+| `isort --check-only app/ tests/ alembic/`                                                    | clean                                                   |
+| `scripts/validate_migrations.py --strict`                                                    | passed, single head (`1117b642643b`, 618 revisions)     |
+| `pytest -k "finance or cash_advance or restricted_fund or budget or dues or approval_chain"` | 1,129 passed, 1 skipped (environment-only, `pywebpush`) |
+| `frontend: npm run typecheck`                                                                | clean                                                   |
+| `frontend: npm run lint`                                                                     | clean                                                   |
 
 ## Pass 9 (2026-10-14) — real delta (cash advances, restricted funds, budget charge restrictions, functional expense classes, QuickBooks dues export), 0 fixed, 0 new findings; FIN8-05-1 and FIN-30 re-confirmed open
 

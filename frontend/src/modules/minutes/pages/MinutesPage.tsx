@@ -21,14 +21,21 @@ import {
   ChevronUp,
   Users,
   ListOrdered,
+  Bell,
+  PenLine,
+  Globe,
 } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { Link, useNavigate } from 'react-router';
 import { meetingsService } from '../../../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../../../services/api';
 import { minutesService } from '../services/api';
+import { AgendaEditorDialog } from '../components/AgendaEditorDialog';
 import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
+import { PublishingSettingsDialog } from '../components/PublishingSettingsDialog';
+import { ReminderSettingsDialog } from '../components/ReminderSettingsDialog';
+import { SignerSettingsDialog } from '../components/SignerSettingsDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { toDisplayString } from '../../../utils/displayValue';
 import type { MeetingType, MinutesListItem, MinutesStats } from '../types/minutes';
@@ -90,6 +97,9 @@ const MinutesPage: React.FC = () => {
   // MM-3: minutes writes and restricted reads are gated on minutes.manage on
   // the backend, not meetings.manage — check the same permission the API does.
   const canManage = checkPermission('minutes.manage');
+  const [showReminderSettings, setShowReminderSettings] = useState(false);
+  const [showPublishingSettings, setShowPublishingSettings] = useState(false);
+  const [showSignerSettings, setShowSignerSettings] = useState(false);
   // The attendance dashboard's endpoint is gated on meetings.manage.
   const canViewAttendance = checkPermission('meetings.manage');
 
@@ -102,6 +112,7 @@ const MinutesPage: React.FC = () => {
   const [minutesStats, setMinutesStats] = useState<MinutesStats | null>(null);
   const [openingMeetingId, setOpeningMeetingId] = useState<string | null>(null);
   const [pickingFor, setPickingFor] = useState<{ id: string; type: string } | null>(null);
+  const [agendaFor, setAgendaFor] = useState<MeetingRecord | null>(null);
 
   // Loading / error state
   const [loading, setLoading] = useState(true);
@@ -237,6 +248,13 @@ const MinutesPage: React.FC = () => {
       return;
     }
     if (openingMeetingId) return;
+    // A meeting with agenda items is minuted against them, so there is no
+    // outline to choose between.
+    const hasAgenda = (meetings.find((m) => m.id === meetingId)?.agenda_items ?? []).length > 0;
+    if (hasAgenda) {
+      await createMinutesFor(meetingId);
+      return;
+    }
     // A department with one outline for this kind of meeting has nothing to
     // choose; the server starts from its default. With several, ask.
     let choices: number;
@@ -332,6 +350,36 @@ const MinutesPage: React.FC = () => {
                 <ListOrdered className="h-4 w-4" aria-hidden="true" />
                 <span>Outlines</span>
               </Link>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setShowReminderSettings(true)}
+                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
+              >
+                <Bell className="h-4 w-4" aria-hidden="true" />
+                <span>Reminders</span>
+              </button>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setShowPublishingSettings(true)}
+                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
+              >
+                <Globe className="h-4 w-4" aria-hidden="true" />
+                <span>Publishing</span>
+              </button>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setShowSignerSettings(true)}
+                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
+              >
+                <PenLine className="h-4 w-4" aria-hidden="true" />
+                <span>Signers</span>
+              </button>
             )}
             {canViewAttendance && (
               <Link to="/minutes/attendance" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
@@ -551,6 +599,14 @@ const MinutesPage: React.FC = () => {
                     {canManage && (
                       <div className="ml-4 flex items-center gap-1">
                         <button
+                          onClick={() => setAgendaFor(meeting)}
+                          className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-cyan-500/10 hover:text-cyan-800 dark:hover:text-cyan-400"
+                          title="Edit the agenda"
+                          aria-label={`Edit the agenda of ${meeting.title}`}
+                        >
+                          <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
                           onClick={() => {
                             void handleOpenMinutes(meeting.id, String(meeting.meeting_type));
                           }}
@@ -718,7 +774,26 @@ const MinutesPage: React.FC = () => {
           }}
         />
 
+        <AgendaEditorDialog
+          meeting={agendaFor}
+          hasMinutes={agendaFor !== null && minutesByMeeting.has(agendaFor.id)}
+          onClose={() => setAgendaFor(null)}
+          onSaved={fetchData}
+        />
+
         {/* Create Minutes Modal */}
+        {canManage && (
+          <>
+            <ReminderSettingsDialog isOpen={showReminderSettings} onClose={() => setShowReminderSettings(false)} />
+            <PublishingSettingsDialog
+              isOpen={showPublishingSettings}
+              onClose={() => setShowPublishingSettings(false)}
+            />
+          </>
+        )}
+
+        {canManage && <SignerSettingsDialog isOpen={showSignerSettings} onClose={() => setShowSignerSettings(false)} />}
+
         {canManage && showCreateModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">

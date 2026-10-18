@@ -27,7 +27,7 @@ import type {
   EquipmentCheckTemplate,
   CheckTemplateItem,
 } from '../../../modules/inventory/types/equipmentCheck';
-import { CHECK_ITEM_STATUS_LABELS } from '../../../modules/inventory/types/equipmentCheck';
+import { CHECK_ITEM_STATUS_LABELS, describeCount } from '../../../modules/inventory/types/equipmentCheck';
 import { DateRangePicker } from '../../../components/ux/DateRangePicker';
 import { Pagination } from '../../../components/ux/Pagination';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -484,7 +484,14 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
                     </td>
                     <td className="text-theme-text-primary px-4 py-2">{f.apparatusName ?? '-'}</td>
                     <td className="text-theme-text-secondary px-4 py-2">{f.compartmentName}</td>
-                    <td className="text-theme-text-primary px-4 py-2 font-medium">{f.itemName}</td>
+                    <td className="text-theme-text-primary px-4 py-2 font-medium">
+                      {f.itemName}
+                      {f.quantityFound != null && (
+                        <span className="text-theme-text-secondary block text-xs font-normal">
+                          {describeCount(f.quantityFound, f.targetQuantity, f.countUnit)}
+                        </span>
+                      )}
+                    </td>
                     <td className="text-theme-text-secondary px-4 py-2">{f.checkedByName ?? '-'}</td>
                     <td className="text-theme-text-muted max-w-[200px] truncate px-4 py-2 text-xs">{f.notes ?? '-'}</td>
                   </tr>

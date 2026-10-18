@@ -32,6 +32,12 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Select
 
 from app.core.audit import log_audit_event
+from app.models.apparatus import (
+    CheckItemDeployedLot,
+    CheckTemplateCompartment,
+    CheckTemplateItem,
+    EquipmentCheckTemplate,
+)
 from app.models.inventory import (
     MEDICAL_ITEM_TYPES,
     AssignmentType,
@@ -565,8 +571,15 @@ def is_pool_without_stock(item_data: Dict[str, Any]) -> bool:
     One definition, because ``create_items_bulk`` and the CSV import are two
     callers of the same rule and drifting them apart is how the CSV path
     silently lost it once already.
+
+    A supply kept on the apparatus only has no shelf to count, so a zero is
+    what its row should say, not a mis-parse.
     """
-    return item_data.get("tracking_type") == "pool" and item_data.get("quantity", 1) < 1
+    return (
+        item_data.get("tracking_type") == "pool"
+        and item_data.get("quantity", 1) < 1
+        and not item_data.get("apparatus_only")
+    )
 
 
 class InventoryService:
@@ -2059,7 +2072,71 @@ class InventoryService:
         "purchase_price": InventoryItem.purchase_price,
         "created_at": InventoryItem.created_at,
         "updated_at": InventoryItem.updated_at,
+        "reorder_point": InventoryItem.reorder_point,
     }
+    # "category" and "on_hand" are computed per query; see _sort_expression.
+    _NULLS_LAST_SORTS = {"category", "reorder_point"}
+    _NAME_TIEBREAK_SORTS = {"category", "on_hand", "reorder_point"}
+
+    async def _sort_expression(
+        self, sort_by: Optional[str], organization_id: UUID | str
+    ) -> Any:
+        """The ORDER BY expression for ``sort_by``; unknown keys sort by name.
+
+        ``category`` orders by the category's *name*, not its id, through a
+        correlated subquery rather than a join, so it cannot collide with the
+        category join a ``group_by`` adds.
+
+        ``on_hand`` orders by the number every list displays, which is not
+        ``quantity`` for a lot-stocked item: once an item has any lot, its
+        stock is the sum of its in-date lots and the column is no longer
+        maintained (see ``_in_date_lot_totals``, whose rule this mirrors).
+        Sorting by the raw column put a supply showing 40 on hand among the
+        empty ones.
+        """
+        org = str(organization_id)
+        if sort_by == "category":
+            return (
+                select(InventoryCategory.name)
+                .where(
+                    InventoryCategory.id == InventoryItem.category_id,
+                    InventoryCategory.organization_id == org,
+                )
+                .scalar_subquery()
+            )
+        if sort_by == "on_hand":
+            today = await resolve_org_today(self.db, org)
+            lot_scope = (
+                InventoryLot.inventory_item_id == InventoryItem.id,
+                InventoryLot.organization_id == org,
+            )
+            in_date_total = (
+                select(
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    or_(
+                                        InventoryLot.expiration_date.is_(None),
+                                        InventoryLot.expiration_date >= today,
+                                    ),
+                                    InventoryLot.quantity,
+                                ),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    )
+                )
+                .where(*lot_scope)
+                .scalar_subquery()
+            )
+            has_lots = select(InventoryLot.id).where(*lot_scope).exists()
+            return case(
+                (has_lots, in_date_total),
+                else_=func.coalesce(InventoryItem.quantity, 0),
+            )
+        return self._SORTABLE_COLUMNS.get(sort_by or "name", InventoryItem.name)
 
     @staticmethod
     def _category_ids_of_type(
@@ -2074,6 +2151,25 @@ class InventoryService:
         return select(InventoryCategory.id).where(
             InventoryCategory.organization_id == str(organization_id),
             InventoryCategory.item_type.in_(list(item_types)),
+        )
+
+    @classmethod
+    def _shelf_lots_count(cls, organization_id: UUID | str):
+        """Filter keeping the items whose stock-room lots count.
+
+        Everything except a medical supply kept on the apparatus only: its
+        shelf is 0 in ``stock_breakdown``, so lots left over from before it was
+        marked are not listed as expiring, counted in the tiles or shown as
+        its next expiry either. The rows are untouched, so unmarking the
+        supply brings them back. Gear ignores the flag, as it does there.
+        Needs ``InventoryItem`` in the query.
+        """
+        return or_(
+            InventoryItem.apparatus_only.is_(False),
+            InventoryItem.category_id.is_(None),
+            InventoryItem.category_id.not_in(
+                cls._category_ids_of_type(organization_id, set(MEDICAL_ITEM_TYPES))
+            ),
         )
 
     @classmethod
@@ -2124,6 +2220,7 @@ class InventoryService:
         style: Optional[str] = None,
         active_only: bool = True,
         label_printed: Optional[bool] = None,
+        item_ids: Optional[Iterable[str]] = None,
     ) -> "Select":
         """The filtered item select, with no ordering, joins or pagination.
 
@@ -2143,6 +2240,11 @@ class InventoryService:
 
         if category_id:
             query = query.where(InventoryItem.category_id == str(category_id))
+
+        # An explicit set from a caller that has already decided which rows it
+        # wants (the medical page's low-stock view). Empty means none, not all.
+        if item_ids is not None:
+            query = query.where(InventoryItem.id.in_([str(i) for i in item_ids]))
 
         if status:
             query = query.where(InventoryItem.status == status)
@@ -2294,6 +2396,7 @@ class InventoryService:
         skip: int = 0,
         limit: int = 100,
         fuzzy: bool = False,
+        item_ids: Optional[Iterable[str]] = None,
     ) -> Tuple[List[InventoryItem], int]:
         """Get items with filtering, sorting, and pagination.
 
@@ -2351,6 +2454,7 @@ class InventoryService:
                 style=style,
                 active_only=active_only,
                 label_printed=label_printed,
+                item_ids=item_ids,
             )
 
         query = self._joined_items_query(
@@ -2374,6 +2478,7 @@ class InventoryService:
             style=style,
             active_only=active_only,
             label_printed=label_printed,
+            item_ids=item_ids,
         )
 
         # Get total count
@@ -2579,7 +2684,7 @@ class InventoryService:
         # Apply sorting
         # The id breaks ties (repeated uniforms share a name), so an offset
         # page never repeats or skips a row between calls.
-        col = self._SORTABLE_COLUMNS.get(sort_by or "name", InventoryItem.name)
+        col = await self._sort_expression(sort_by, organization_id)
         order: List[Any] = []
         if pinned_for_user_id is not None:
             # Pinned rows first, in the member's own order, ahead of whatever
@@ -2600,10 +2705,22 @@ class InventoryService:
                 group[0].is_(None),
                 group[0].asc(),
             ]
+        if sort_by in self._NULLS_LAST_SORTS:
+            # Blanks last in both directions. MySQL puts NULL first ascending,
+            # so uncategorized rows and items with no reorder point would
+            # otherwise head the list ahead of every real value.
+            order.append(col.is_(None))
         if sort_order == "desc":
-            order += [col.desc(), InventoryItem.id.desc()]
+            order.append(col.desc())
         else:
-            order += [col.asc(), InventoryItem.id.asc()]
+            order.append(col.asc())
+        if sort_by in self._NAME_TIEBREAK_SORTS:
+            # Many rows share a category or a count; alphabetical within each
+            # reads as a list, where the id order alone reads as random.
+            order.append(InventoryItem.name.asc())
+        order.append(
+            InventoryItem.id.desc() if sort_order == "desc" else InventoryItem.id.asc()
+        )
         query = query.order_by(*order)
 
         query = query.offset(skip).limit(limit)
@@ -3093,6 +3210,11 @@ class InventoryService:
             # Validate pool quantity constraints
             if item.tracking_type == TrackingType.POOL and "quantity" in update_data:
                 new_qty = update_data["quantity"]
+                # A pool item's quantity is its whole stock record, so an
+                # explicit null cannot mean "clear" here; refuse it by name
+                # rather than letting the comparison below raise a TypeError.
+                if new_qty is None:
+                    return None, "Pool item quantity is required"
                 if new_qty < 0:
                     return None, "Pool item quantity cannot be negative"
 
@@ -8456,15 +8578,171 @@ class InventoryService:
         ``get_low_stock_items_for_alerts`` for why lot-stocked items are
         counted from in-date lots and never from ``quantity``.
         """
+        breakdown = await self.stock_breakdown(organization_id, items)
+        return {
+            item_id: (parts["shelf"] + parts["apparatus"], parts["from_lots"])
+            for item_id, parts in breakdown.items()
+        }
+
+    async def stock_breakdown(
+        self, organization_id: str, items: List[InventoryItem]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Where each item's ready stock is: ``{item_id: {shelf, apparatus,
+        uncounted, from_lots}}``.
+
+        ``shelf`` is the stock-room figure (in-date lots, or ``quantity`` for
+        an item stocked without lots). ``apparatus`` is the in-date stock on
+        the trucks, and is counted for **medical supplies only**: the
+        department decided (2026-10-16) that a medical supply is low when the
+        department as a whole is short, not when one shelf is, because units
+        on a truck are as usable as units in the cabinet. Gear keeps judging
+        the shelf, so its alerts and reorders are unchanged. ``uncounted`` is
+        how many truck positions entered the figure at their target because
+        no crew has counted them yet.
+
+        ``ready_on_hand`` sums shelf and apparatus from here, so the low-stock
+        list, its alert email and the automatic reorder all read one number.
+
+        A medical supply marked ``apparatus_only`` has no stock room, so its
+        shelf is 0 whatever ``quantity`` holds and it is judged on the trucks
+        alone. ``quantity`` is ignored rather than trusted because a supply
+        switched to apparatus-only keeps the count it had before, and that
+        stale shelf figure would otherwise hold it above its reorder point.
+        """
         lot_totals = await self._in_date_lot_totals(
             organization_id, [i.id for i in items]
         )
-        ready: Dict[str, Tuple[int, bool]] = {}
+        medical = await self._medical_item_ids(organization_id, [i.id for i in items])
+        aboard = await self.apparatus_ready_stock(organization_id, sorted(medical))
+        result: Dict[str, Dict[str, Any]] = {}
         for item in items:
             from_lots = item.id in lot_totals
-            on_hand = lot_totals[item.id] if from_lots else (item.quantity or 0)
-            ready[item.id] = (on_hand, from_lots)
-        return ready
+            shelf = lot_totals[item.id] if from_lots else (item.quantity or 0)
+            if item.apparatus_only and str(item.id) in medical:
+                shelf = 0
+            truck = aboard.get(str(item.id), {"quantity": 0, "uncounted": 0})
+            result[item.id] = {
+                "shelf": shelf,
+                "apparatus": truck["quantity"],
+                "uncounted": truck["uncounted"],
+                "from_lots": from_lots,
+            }
+        return result
+
+    async def _medical_item_ids(
+        self, organization_id: str, item_ids: List[str]
+    ) -> Set[str]:
+        """The ids among these that are medical supplies, org-scoped."""
+        if not item_ids:
+            return set()
+        rows = await self.db.execute(
+            select(InventoryItem.id)
+            .join(InventoryCategory, InventoryCategory.id == InventoryItem.category_id)
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.id.in_([str(i) for i in item_ids]),
+                InventoryCategory.item_type.in_(list(MEDICAL_ITEM_TYPES)),
+            )
+        )
+        return {str(i) for i in rows.scalars().all()}
+
+    async def apparatus_ready_stock(
+        self, organization_id: str, item_ids: List[str]
+    ) -> Dict[str, Dict[str, int]]:
+        """In-date units of each item aboard the apparatus.
+
+        ``{item_id: {"quantity": units, "uncounted": positions}}``, summed over
+        every position on an active checklist template linked to the item.
+
+        A position counts the way ``EquipmentCheckService._on_truck`` does —
+        its in-stock deployed lots where it has any, else the last count, else
+        the position's target, since an uncounted position is assumed full
+        until a crew says otherwise (those are tallied in ``uncounted`` so a
+        screen can say the figure includes them). Expired units are left out,
+        exactly as expired shelf lots are: a crew cannot use them either.
+        """
+        ids = [str(i) for i in item_ids]
+        if not ids:
+            return {}
+        org = str(organization_id)
+        positions = (
+            await self.db.execute(
+                select(
+                    CheckTemplateItem.id,
+                    CheckTemplateItem.inventory_item_id,
+                    CheckTemplateItem.quantity_on_truck,
+                    CheckTemplateItem.required_quantity,
+                    CheckTemplateItem.expected_quantity,
+                    CheckTemplateItem.has_expiration,
+                    CheckTemplateItem.expiration_date,
+                )
+                .join(
+                    CheckTemplateCompartment,
+                    CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+                )
+                .join(
+                    EquipmentCheckTemplate,
+                    EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+                )
+                .where(
+                    CheckTemplateItem.inventory_item_id.in_(ids),
+                    EquipmentCheckTemplate.organization_id == org,
+                    EquipmentCheckTemplate.is_active.is_(True),
+                )
+            )
+        ).all()
+        if not positions:
+            return {}
+        today = await resolve_org_today(self.db, org)
+        lot_rows = (
+            await self.db.execute(
+                select(
+                    CheckItemDeployedLot.template_item_id,
+                    CheckItemDeployedLot.quantity,
+                    CheckItemDeployedLot.expiration_date,
+                ).where(
+                    CheckItemDeployedLot.organization_id == org,
+                    CheckItemDeployedLot.template_item_id.in_(
+                        [p[0] for p in positions]
+                    ),
+                    CheckItemDeployedLot.quantity > 0,
+                )
+            )
+        ).all()
+        lots: Dict[str, List[Tuple[int, Optional[date]]]] = {}
+        for position_id, quantity, expires in lot_rows:
+            lots.setdefault(str(position_id), []).append((int(quantity), expires))
+
+        totals: Dict[str, Dict[str, int]] = {}
+        for (
+            position_id,
+            item_id,
+            on_truck,
+            required,
+            expected,
+            has_expiration,
+            expires,
+        ) in positions:
+            entry = totals.setdefault(str(item_id), {"quantity": 0, "uncounted": 0})
+            aboard = lots.get(str(position_id))
+            if aboard:
+                entry["quantity"] += sum(
+                    qty for qty, when in aboard if when is None or when >= today
+                )
+                continue
+            # The position's own date covers every unit when no lot is
+            # recorded; past it, nothing aboard is usable.
+            if has_expiration and expires is not None and expires < today:
+                continue
+            if on_truck is not None:
+                entry["quantity"] += int(on_truck)
+                continue
+            # Par, as _target_quantity resolves it: the larger of the two.
+            target = max(required or 0, expected or 0)
+            if target:
+                entry["quantity"] += int(target)
+                entry["uncounted"] += 1
+        return totals
 
     @staticmethod
     def is_at_or_below_reorder_point(
@@ -9173,7 +9451,9 @@ class InventoryService:
 
         A retired item's lots are left out, as the dashboard's expiring count
         already leaves them: the item is off every list, so the lots could
-        be neither acted on from here nor told apart from live stock.
+        be neither acted on from here nor told apart from live stock. So are
+        the lots of a medical supply kept on the apparatus only
+        (``_shelf_lots_count``).
         """
         if today is None:
             today = await resolve_org_today(self.db, organization_id)
@@ -9187,6 +9467,7 @@ class InventoryService:
                 InventoryLot.quantity > 0,
                 InventoryLot.expiration_date.isnot(None),
                 InventoryLot.expiration_date <= cutoff,
+                self._shelf_lots_count(organization_id),
             )
         )
         if item_types:
@@ -9199,6 +9480,362 @@ class InventoryService:
             query.order_by(InventoryLot.expiration_date.asc())
         )
         return [(row[0], row[1]) for row in result.all()]
+
+    async def item_sizes(
+        self, organization_id: str, item_ids: Iterable[str]
+    ) -> Dict[str, Optional[str]]:
+        """``{item_id: size}`` for these items, org-scoped, in one query."""
+        ids = {str(i) for i in item_ids}
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.size).where(
+                InventoryItem.id.in_(ids),
+                InventoryItem.organization_id == str(organization_id),
+            )
+        )
+        return {str(item_id): size for item_id, size in result.all()}
+
+    async def storage_area_index(
+        self, organization_id: str
+    ) -> Dict[str, Dict[str, Any]]:
+        """Every storage area in the organization, with its room and path.
+
+        A storage area names its room only at the top of its tree — a shelf
+        inherits the room of the rack it sits in (see ``StorageArea``) — so
+        both the room and the readable path ("Cabinet B › Shelf 2") are
+        resolved here by walking parents, once, rather than per row. Inactive
+        areas are included so an item still filed in one keeps its label; the
+        caller decides whether to offer them.
+        """
+        org = str(organization_id)
+        rows = (
+            await self.db.execute(
+                select(
+                    StorageArea.id,
+                    StorageArea.name,
+                    StorageArea.label,
+                    StorageArea.storage_type,
+                    StorageArea.parent_id,
+                    StorageArea.location_id,
+                    StorageArea.is_active,
+                    StorageArea.sort_order,
+                ).where(StorageArea.organization_id == org)
+            )
+        ).all()
+        rooms = await self.location_names(org)
+        raw = {str(r.id): r for r in rows}
+
+        index: Dict[str, Dict[str, Any]] = {}
+
+        def resolve(area_id: str) -> Dict[str, Any]:
+            if area_id in index:
+                return index[area_id]
+            # Walk to the top, guarding against a parent cycle a bad edit
+            # could leave behind: a repeated id ends the walk.
+            chain: List[Any] = []
+            seen: set = set()
+            current: Optional[str] = area_id
+            while current and current in raw and current not in seen:
+                seen.add(current)
+                chain.append(raw[current])
+                current = (
+                    str(raw[current].parent_id) if raw[current].parent_id else None
+                )
+            chain.reverse()
+            location_id = next(
+                (str(a.location_id) for a in chain if a.location_id), None
+            )
+            row = raw[area_id]
+            entry = {
+                "id": area_id,
+                "name": row.name,
+                "label": row.label,
+                "storage_type": getattr(row.storage_type, "value", row.storage_type),
+                "parent_id": str(row.parent_id) if row.parent_id else None,
+                "location_id": location_id,
+                "location_name": rooms.get(location_id) if location_id else None,
+                "is_active": bool(row.is_active),
+                "sort_order": row.sort_order or 0,
+                "path": [a.name for a in chain],
+            }
+            index[area_id] = entry
+            return entry
+
+        for area_id in raw:
+            resolve(area_id)
+        return index
+
+    async def location_names(self, organization_id: str) -> Dict[str, str]:
+        """``{location_id: name}`` for the organization's rooms and places."""
+        rows = await self.db.execute(
+            select(Location.id, Location.name).where(
+                Location.organization_id == str(organization_id)
+            )
+        )
+        return {str(loc_id): name for loc_id, name in rows.all()}
+
+    @staticmethod
+    def storage_path(
+        item: Any,
+        areas: Dict[str, Dict[str, Any]],
+        rooms: Dict[str, str],
+    ) -> Optional[str]:
+        """ "Station 1 › Supply Room › Shelf 2" for an item, or None.
+
+        The room comes from the item, falling back to its area's room, so an
+        item filed on a shelf by a form that did not also set the room still
+        says which building it is in.
+        """
+        area = areas.get(str(item.storage_area_id)) if item.storage_area_id else None
+        room_id = str(item.location_id) if item.location_id else None
+        if room_id is None and area is not None:
+            room_id = area["location_id"]
+        parts: List[str] = []
+        if room_id and rooms.get(room_id):
+            parts.append(rooms[room_id])
+        if area is not None:
+            parts.extend(area["path"])
+        return " › ".join(parts) or None
+
+    async def storage_paths_for(
+        self, organization_id: str, item_ids: Iterable[str]
+    ) -> Dict[str, Optional[str]]:
+        """``{item_id: "Room › Cabinet › Shelf"}`` for these items, org-scoped."""
+        ids = [str(i) for i in item_ids]
+        if not ids:
+            return {}
+        items = (
+            (
+                await self.db.execute(
+                    select(InventoryItem).where(
+                        InventoryItem.id.in_(ids),
+                        InventoryItem.organization_id == str(organization_id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        areas = await self.storage_area_index(str(organization_id))
+        rooms = await self.location_names(str(organization_id))
+        return {str(i.id): self.storage_path(i, areas, rooms) for i in items}
+
+    @staticmethod
+    def area_and_descendants(
+        areas: Dict[str, Dict[str, Any]], area_id: str
+    ) -> List[str]:
+        """This area and every area nested under it, at any depth."""
+        children: Dict[str, List[str]] = {}
+        for a in areas.values():
+            if a["parent_id"]:
+                children.setdefault(a["parent_id"], []).append(a["id"])
+        found: List[str] = []
+        stack = [str(area_id)]
+        while stack:
+            current = stack.pop()
+            if current in found:
+                continue
+            found.append(current)
+            stack.extend(children.get(current, []))
+        return found
+
+    async def item_ids_stored_in(
+        self,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+        *,
+        location_id: Optional[str] = None,
+        storage_area_id: Optional[str] = None,
+    ) -> List[str]:
+        """Items filed in a room or a storage area, nested areas included.
+
+        A room matches an item filed under it directly, or on any area inside
+        it — the area forms do not always set the room as well. An area
+        matches itself and everything nested beneath it, so asking for
+        "Cabinet B" finds the gauze on Shelf 2 of it.
+        """
+        org = str(organization_id)
+        areas = await self.storage_area_index(org)
+        area_ids: List[str] = []
+        if storage_area_id:
+            if str(storage_area_id) not in areas:
+                return []
+            area_ids = self.area_and_descendants(areas, str(storage_area_id))
+        elif location_id:
+            area_ids = [
+                a["id"] for a in areas.values() if a["location_id"] == str(location_id)
+            ]
+        conditions: List[Any] = []
+        if area_ids:
+            conditions.append(InventoryItem.storage_area_id.in_(area_ids))
+        if location_id and not storage_area_id:
+            conditions.append(InventoryItem.location_id == str(location_id))
+        if not conditions:
+            return []
+        rows = await self.db.execute(
+            select(InventoryItem.id)
+            .join(InventoryCategory, InventoryCategory.id == InventoryItem.category_id)
+            .where(
+                InventoryItem.organization_id == org,
+                InventoryCategory.item_type.in_(list(item_types)),
+                or_(*conditions),
+            )
+        )
+        return [str(i) for i in rows.scalars().all()]
+
+    async def item_ids_kept_in_stock(
+        self, organization_id: str, item_types: Iterable[ItemType]
+    ) -> List[str]:
+        """Items that have a stock room behind them (not ``apparatus_only``).
+
+        The population a delivery can be received into: a supply kept on the
+        apparatus only has no shelf for a delivery to land on.
+        """
+        rows = await self.db.execute(
+            select(InventoryItem.id)
+            .join(InventoryCategory, InventoryCategory.id == InventoryItem.category_id)
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryCategory.item_type.in_(list(item_types)),
+                InventoryItem.apparatus_only.is_(False),
+            )
+        )
+        return [str(i) for i in rows.scalars().all()]
+
+    async def next_lot_expirations(
+        self, organization_id: str, item_ids: Iterable[str]
+    ) -> Dict[str, date]:
+        """``{item_id: soonest expiry}`` across lots that still hold stock.
+
+        Expired lots count: a lot past its date with units left in it is the
+        most urgent thing on the shelf, and leaving it out would show the next
+        good date over stock that has to be pulled. Empty lots and lots with
+        no date have nothing to report, and nor do the lots of a medical
+        supply kept on the apparatus only (``_shelf_lots_count``).
+        """
+        ids = {str(i) for i in item_ids}
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                InventoryLot.inventory_item_id, func.min(InventoryLot.expiration_date)
+            )
+            .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
+            .where(
+                InventoryLot.organization_id == str(organization_id),
+                InventoryLot.inventory_item_id.in_(ids),
+                InventoryLot.quantity > 0,
+                InventoryLot.expiration_date.is_not(None),
+                self._shelf_lots_count(organization_id),
+            )
+            .group_by(InventoryLot.inventory_item_id)
+        )
+        # The WHERE excludes undated lots, so MIN is never NULL for a row
+        # returned; the guard is for the type checker's benefit only.
+        return {
+            str(item_id): soonest
+            for item_id, soonest in result.all()
+            if soonest is not None
+        }
+
+    async def category_item_counts(
+        self, organization_id: str, category_ids: Iterable[str]
+    ) -> Dict[str, int]:
+        """Active items filed under each category, org-scoped, in one query.
+
+        Active only, matching the supply list a category card opens, so the
+        count on the card and the rows under it agree.
+        """
+        ids = {str(i) for i in category_ids}
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(InventoryItem.category_id, func.count(InventoryItem.id))
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.category_id.in_(ids),
+                InventoryItem.active.is_(True),
+            )
+            .group_by(InventoryItem.category_id)
+        )
+        return {str(cat_id): int(n) for cat_id, n in result.all()}
+
+    async def pool_item_ids_by_name(
+        self,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> Dict[str, str]:
+        """Active pool items in a domain, keyed by ``normalize_name``.
+
+        One query for a whole import, rather than ``_item_id_by_name`` per row
+        — that scans the org's entire catalog each call, and an import naming
+        two hundred lots would scan it two hundred times.
+
+        Pool rows only, for the reason ``create_item_if_absent`` gives: a pool
+        row is the definition of a supply and owns its lots, while two
+        individual rows sharing a name are two physical devices. Oldest first
+        wins a name collision, so an older record's lots are not split onto a
+        later duplicate.
+        """
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.name)
+            .where(
+                InventoryItem.organization_id == organization_id,
+                InventoryItem.active.is_(True),
+                InventoryItem.tracking_type == TrackingType.POOL,
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                ),
+            )
+            .order_by(InventoryItem.created_at.asc(), InventoryItem.id.asc())
+        )
+        by_name: Dict[str, str] = {}
+        for item_id, name in result.all():
+            key = normalize_name(name or "")
+            if key:
+                by_name.setdefault(key, str(item_id))
+        return by_name
+
+    async def get_lots_for_export(
+        self,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> List[Tuple[InventoryLot, str, Optional[str]]]:
+        """Every stocked lot in a domain, as ``(lot, item_name, category_name)``.
+
+        The lot-level counterpart to the items export: one row per lot still
+        holding stock, soonest expiry first, so an expiry audit reads top-down.
+        Undated lots sort last rather than first — MySQL orders NULL ahead of
+        any date ascending, which would bury the lots that actually expire.
+
+        Retired items and emptied lots are left out for the reason
+        ``get_expiring_lots`` gives: neither is stock anyone can act on.
+        """
+        query = (
+            select(InventoryLot, InventoryItem.name, InventoryCategory.name)
+            .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
+            .outerjoin(
+                InventoryCategory, InventoryCategory.id == InventoryItem.category_id
+            )
+            .where(
+                InventoryLot.organization_id == organization_id,
+                InventoryItem.organization_id == organization_id,
+                InventoryItem.active.is_(True),
+                InventoryLot.quantity > 0,
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                ),
+            )
+            .order_by(
+                InventoryLot.expiration_date.is_(None),
+                InventoryLot.expiration_date.asc(),
+                InventoryItem.name.asc(),
+                InventoryLot.id.asc(),
+            )
+        )
+        result = await self.db.execute(query)
+        return [(row[0], row[1], row[2]) for row in result.all()]
 
     async def get_overdue_checkouts_for_alerts(
         self,

@@ -753,6 +753,16 @@ describe('apiCache', () => {
       expect(isCacheable('/mcp-oauth/connections')).toBe(false);
       expect(isCacheable('/mcp-oauth/requests/req1')).toBe(false);
     });
+
+    it('returns false for member-attributed maintenance records (FE9-34)', () => {
+      // Inventory: performed_by is a member id; facilities: performed_by is a
+      // typed-in name. Both also carry free-text description/notes/findings.
+      expect(isCacheable('/inventory/items/item1/maintenance')).toBe(false);
+      expect(isCacheable('/facilities/maintenance')).toBe(false);
+      // Item list/detail themselves stay cacheable — only the sub-resource is excluded.
+      expect(isCacheable('/inventory/items')).toBe(true);
+      expect(isCacheable('/inventory/items/item1')).toBe(true);
+    });
   });
 
   // ---- clearCache ----

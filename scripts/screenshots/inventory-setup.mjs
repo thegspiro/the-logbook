@@ -6,10 +6,11 @@
  *
  *   05-72-setup-prompt   the admin hub's "Finish inventory setup" banner
  *   05-73-setup-rooms    step 1 with no rooms declared yet
+ *   05-93-empty-items    the items list of a department with no items
  *
- * Both picture a department that has *not* finished setting up, and seeding is
+ * All three picture a department that has *not* finished setting up, and seeding is
  * precisely what ends that state — verified: run against the seeded demo
- * department, 05-72 captures a hub with no banner on it at all. Those two ids
+ * department, 05-72 captures a hub with no banner on it at all. Those ids
  * carry `capturedElsewhere` in the manifest so capture.mjs skips rather than
  * overwrites them; nothing else here writes a file, so the two sources never
  * race for the same name.
@@ -346,6 +347,10 @@ const scenarios = {
     "/locations": [],
     "/inventory/storage-areas": [],
     "/inventory/categories": [],
+    // An object, not the bare [] unfixtured paths get: the items list reads
+    // `items` and `total` off it, and a bare array renders "The items did not
+    // load" instead of the empty catalog.
+    "/inventory/items": { items: [], total: 0, skip: 0, limit: 50 },
   },
   /** Rooms declared; the rest still to do. */
   rooms: {
@@ -544,6 +549,13 @@ async function main() {
   await page.getByRole("heading", { name: "Rooms" }).waitFor();
   await settle(page);
   await shoot(page, "05-73-setup-rooms");
+
+  // 3 — the items list with nothing in the catalog, which says so and offers
+  // the Setup Guide rather than reading as a failed load
+  await page.goto(`${BASE}/inventory/admin/items`);
+  await page.getByText("Your department has no inventory items yet").waitFor();
+  await settle(page);
+  await shoot(page, "05-93-empty-items", { fullPage: false });
 
   // Everything past step 1 is a populated screen that the seeded department
   // renders truthfully, so `capture.mjs` owns those ids (05-74 through 05-78,

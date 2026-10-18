@@ -1,7 +1,115 @@
 # Application Review — Membership Pipeline (Tier B)
 
 **Prefix:** `MP2` · **Iteration:** B9 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-06 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-15 (pass 5)
+
+---
+
+## Pass 5 (2026-10-15) — `PUT /pipelines/{id}` answered a null NOT NULL column with a 500 (1 fixed, 1 dead schema removed, 1 contract note)
+
+Lens for this pass: the update-payload discipline the B4–B8 passes applied
+(`exclude_unset`, `apply_updates`, an explicit `null` on a NOT NULL column), driven
+through the **real handlers**, plus an AST dead-code scan that counts `tests/` as a
+reference source. The module is large — **53 routes, an 8,848-line service, 1,076
+lines of schemas** — and this pass reads its update paths, not its pipeline logic;
+see "Not read" below.
+
+### MP2-6 — LOW — `PUT /pipelines/{id}` returned 500 for `{"name": null}` — ✅ FIXED
+
+`PipelineUpdate` types every field `Optional`; `name` and `public_show_future_stages`
+are NOT NULL. `MembershipPipelineService.update_pipeline` applies the payload with
+`apply_updates`, which refuses the null by raising `ValueError`, and the other four
+update handlers in the file (`update_step`, `update_prospect`,
+`update_election_package`, `update_interview`) turn that into a 400. `update_pipeline`
+was the one handler with no `try/except ValueError`, so the error escaped as an
+unhandled 500.
+
+**Reproduced before fixing:** a new integration test drives the five update
+endpoints over HTTP against the real schema and sends `null` for every NOT NULL
+field the schemas can name (derived from schema and model: 9 fields — pipeline 2,
+step 2, prospect 4, election package 1; the interview schema has none). On the
+unmodified handler **2 of 15 failed — `pipeline-name` and
+`pipeline-public_show_future_stages`, both 500**; the other 13 passed. The handler
+now catches `ValueError` and answers 400 through `safe_error_detail`, like its
+siblings. The nullable half is paired with it (`description` on a pipeline and a
+step, `notes` on a prospect, `coordinator_notes` on a package still clear), so a
+guard that rejected every null would fail the file too.
+
+Reachability: low. The pipeline builder always sends a name, so this needs a direct
+API client; the cost was a bare 500 instead of a message naming the field.
+
+### MP2-7 — INFO — `PipelineKanbanColumn` (backend schema) had no reference anywhere — ✅ REMOVED
+
+The AST scan of 246 definitions across the service, endpoints, schemas, models and
+`prospect_privacy` flagged five names. **Four were false positives** — a
+`@field_validator`, a `@model_validator` and a `@validates` listener, each
+registered by its decorator and so never named elsewhere (`_defaults_when_unset`,
+`_bound_items`, `_class_and_status_together`, `_sync_status_token_hash`); they were
+read before being kept. The fifth, `schemas/membership_pipeline.py::
+PipelineKanbanColumn`, appears in no `.py`, `.ts`, `.tsx` or `.md` file in the
+repository besides its own definition (the board is built from `ProspectListResponse`
+rows grouped on the client). Removed.
+
+### MP2-8 — INFO — `sort_order` is accepted on a step update and silently ignored — 🚩 NOTED, contract only
+
+`PipelineStepUpdate` declares `sort_order`, but `update_step` strips it
+(`_STEP_PROTECTED_FIELDS`: a stage moves through `reorder_steps`, because a generic
+update could write a value another stage already held). The stage-edit modal still
+re-sends the stage's current `sort_order` on every edit, which is harmless, and a
+`null` is ignored the same way instead of refused. So the field is accepted and does
+nothing — the shape CLAUDE.md #19 warns about, in a mild form (no UI offers it as a
+setting). The behaviour is pinned by a test so it cannot drift; removing the field
+from the schema and from `mapStageUpdateToBackend` would make the contract honest
+and is a small follow-up, deliberately not bundled into this fix.
+
+### Verified good ✅ (this pass)
+
+- **Update handlers.** All five dump with `exclude_unset`; no `exclude_none` anywhere
+  in the endpoint file. Every service update goes through `apply_updates` with a
+  protected-field set; none uses a `setattr` loop.
+- **Routes without `require_permission`.** Two of 53, both deliberate and
+  documented in their docstrings: `GET /my-sign-offs` and `POST
+/prospects/{id}/approve-step` authorize by the approval role the caller holds, the
+  second returns a minimal result rather than the PII-bearing record, and the first
+  filters out the caller's own application (the router-level self-access guard cannot
+  run on a route without a `prospect_id` path parameter).
+- **Frontend update payloads.** `updateApplicant` / `updateStage` / `updatePipeline`
+  send a key only when a value is present, with explicit `null` as the clear for the
+  nullable fields (`target_role_id`, `inactivity_timeout_days`, the contact fields);
+  the types say so. `/prospective-members/` is in `UNCACHEABLE_PREFIXES`, and the
+  module's own `createApiClient` instance does not use the response cache at all.
+- Related suites: 1,256 backend tests (prospect, pipeline, membership, org-scoping
+  ratchet, CSV, LIKE, capacity) pass.
+
+### Not read (scope, stated plainly)
+
+The 8,848-line service was read at its update methods and the lines around them, not
+as a whole. Stage advance / regress, auto-advance, the form-integration and email
+side effects, conversion to a member, the public status page, the activity log and
+the interview / election-package business rules were **not** re-read — earlier passes
+and the existing tests cover the FK and PII findings recorded below; a clean result
+here says nothing new about them. The prospective-members frontend (16,798 lines) was read only at
+its three update payload builders and its cache classification.
+
+### Completion gate (pass 5)
+
+| Check                                                                                    | Result                                                                                                                      |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/`                                                                     | ✅ exit 0, no output                                                                                                        |
+| `black --check app/ tests/`                                                              | ✅ 1718 files unchanged                                                                                                     |
+| `isort --check-only` (changed files)                                                     | ✅ clean                                                                                                                    |
+| new backend file, mutation-checked                                                       | ✅ 15 pass with the fix; **2 fail with the handler change stashed** (`pipeline-name`, `pipeline-public_show_future_stages`) |
+| marker routing                                                                           | ✅ `-m "not integration and not slow and not docker"` selects 0 of 15; `-m integration` selects 15                          |
+| backend tests (prospect, pipeline, membership, org-scoping ratchet, CSV, LIKE, capacity) | ✅ **1256 passed, 1 skipped** (optional `pywebpush`)                                                                        |
+| `check_route_permissions.py --strict`                                                    | ✅ 0 errors, 0 warnings (no route added or removed)                                                                         |
+| frontend                                                                                 | n/a — no frontend file changed, so `tsc` / `eslint` / `vitest` were not re-run                                              |
+
+Two sandbox faults surfaced while gating, neither in the code: the Python used here
+lacked `nh3` (a pinned dependency in `requirements.txt` that `main` had added), which
+made 16 test files fail to collect, and the local database predated `main`'s newest
+migration (`Unknown column 'inventory_items.also_called'`). I installed `nh3==0.3.7`
+and ran `alembic upgrade head` + `repair_schema.py`; the re-run is the 1256 above.
 
 ---
 

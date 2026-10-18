@@ -67,6 +67,47 @@ class TestForEachOrgAfterARollback:
         assert out["errors"] == [{"org_id": "A", "error": "boom on A"}]
         assert [c.args[0] for c in db.refresh.await_args_list] == orgs[1:]
 
+    async def test_a_failed_refresh_is_reported_against_that_org_only(self):
+        # If the reload after a rollback fails too, the row is still expired:
+        # the loop must report the org by the id it captured up front rather
+        # than read the row, or the read escapes and ends the whole task.
+        class _Expiring:
+            def __init__(self, org_id):
+                self._id = org_id
+                self.expired = False
+
+            @property
+            def id(self):
+                if self.expired:
+                    raise RuntimeError("expired row read")
+                return self._id
+
+        orgs = [_Expiring(org_id) for org_id in ("A", "B", "C")]
+        db = _db_with_orgs(orgs)
+
+        async def _rollback():
+            for org in orgs:
+                org.expired = True
+
+        async def _refresh(org):
+            if org is orgs[1]:
+                raise RuntimeError("refresh failed")
+            org.expired = False
+
+        db.rollback = AsyncMock(side_effect=_rollback)
+        db.refresh = AsyncMock(side_effect=_refresh)
+
+        async def _callback(_db, org):
+            if org.id == "A":
+                raise RuntimeError("boom on A")
+            return 1
+
+        with patch.object(scheduled_tasks, "persist_task_error_log", AsyncMock()):
+            out = await scheduled_tasks._for_each_org(db, "t", _callback)
+
+        assert out["total"] == 1
+        assert [e["org_id"] for e in out["errors"]] == ["A", "B"]
+
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

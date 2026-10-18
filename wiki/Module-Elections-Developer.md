@@ -120,10 +120,13 @@ GET    /elections/{id}/forensics                    # Forensic report (manage)
 DELETE /elections/{id}/votes/{vote_id}              # Void a vote; ?reason= 3-500 chars (manage)
 
 # Ballot email and communication
-POST   /elections/{id}/send-ballot                  # Email ballots with unique tokens; open elections only (manage)
+POST   /elections/{id}/send-ballot                  # Email ballots with unique tokens; open elections only synchronous, kept for API callers (manage)
+POST   /elections/{id}/ballot-send-jobs             # Queue the same send in the background; 202, 409 while any send runs (manage)
+GET    /elections/{id}/ballot-send-jobs/{job_id}    # Status of a queued ballot send or reminder and its outcome (manage)
 POST   /elections/{id}/send-test-ballot             # Test ballot to yourself; excluded from results (manage)
 GET    /elections/{id}/non-voters                   # Eligible voters who haven't voted (manage)
-POST   /elections/{id}/remind-non-voters            # Reminder with fresh link to non-voters only (manage)
+POST   /elections/{id}/remind-non-voters            # Reminder with fresh link to non-voters only; synchronous, kept for API callers (manage)
+POST   /elections/{id}/reminder-send-jobs           # Queue the same reminder in the background; 202, 409 while any send runs (manage)
 GET    /elections/{id}/package-recipients           # Prefill list for the pre-meeting package (manage)
 GET    /elections/{id}/package-pdf                  # Pre-meeting package PDF; variant=member|full (manage)
 POST   /elections/{id}/send-package                 # Email pre-meeting package to an edited address list (manage)
@@ -170,6 +173,9 @@ batch requires a reason.
 **Reminders.** `remind-non-voters` sends a fresh ballot link to eligible
 members who have not voted, with a one-hour cooldown that starts only when
 a reminder is delivered.
+The page queues it through `reminder-send-jobs` and polls the job, as it
+does for ballot sends; the two kinds share the `ballot_send_jobs` table and
+the one-send-at-a-time guard.
 
 **Saved ballot templates** store reusable ballot configuration only —
 `name` (1–200), `description`, `ballot_items` (1–250), `voting_method` and

@@ -81,11 +81,13 @@ async def test_dues_summary_totals_use_decimal() -> None:
             amount_due=Decimal("0.10"),
             amount_paid=Decimal("0.10"),
             status=DuesStatus.PAID,
+            due_date=None,
         ),
         SimpleNamespace(
             amount_due=Decimal("0.20"),
             amount_paid=Decimal("0.20"),
             status=DuesStatus.PAID,
+            due_date=None,
         ),
     ]
     result = MagicMock()

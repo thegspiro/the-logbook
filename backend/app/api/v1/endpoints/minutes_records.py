@@ -19,12 +19,12 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
 from fastapi.responses import StreamingResponse
 from loguru import logger
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -34,17 +34,18 @@ from app.api.dependencies import (
     require_permission,
 )
 from app.api.v1.endpoints.minutes import (
-    _adopting_title,
     _build_action_item_response,
-    _build_response,
+    _respond,
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.security_middleware import check_rate_limit
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
-from app.models.minute import MinutesStatus
-from app.models.user import Organization, User
+from app.models.user import User
 from app.schemas.minute import (
     ActionItemResponse,
+    AgendaSyncApply,
+    AgendaSyncPreview,
     ApplyOutline,
     AttendanceSuggestions,
     CarryForwardRequest,
@@ -61,6 +62,9 @@ from app.schemas.minute import (
     MinutesVerification,
     MyActionItem,
     OpenActionItem,
+    SignatureResponse,
+    SignatureStatusResponse,
+    SignRequest,
     SuggestionApply,
     SuggestionCreate,
     SuggestionResolve,
@@ -68,13 +72,15 @@ from app.schemas.minute import (
     validate_attachment_category,
 )
 from app.services.minute_service import MinuteService
+from app.services.minutes_print_data import build_print_data
 from app.services.minutes_record_service import (
     MinutesRecordService,
     SuggestionApplyConflict,
 )
+from app.services.minutes_signature_service import MinutesSignatureService
 from app.utils import download_names
 from app.utils.minutes_pdf import render_minutes_pdf
-from app.utils.org_timezone import resolve_scheduling_timezone, scheduling_timezone
+from app.utils.org_timezone import resolve_scheduling_timezone
 
 router = APIRouter()
 
@@ -515,6 +521,101 @@ async def list_revisions(
         current_user.organization_id,
     )
     return [_revision_response(r, names) for r in rows]
+
+
+# ============================================
+# Signatures
+# ============================================
+
+
+async def _rate_limit_signing(request: Request) -> None:
+    # Signing re-asks for a password, so it is a place a password can be
+    # guessed from an already signed-in session. Its own scope keeps it from
+    # sharing a budget with login.
+    await check_rate_limit(
+        request,
+        max_requests=10,
+        window_seconds=60,
+        lockout_seconds=300,
+        scope="minutes_signing",
+    )
+
+
+@router.get("/{minutes_id}/signatures", response_model=SignatureStatusResponse)
+async def get_signature_status(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.view")),
+):
+    """
+    Each signature slot for the current adopted version, who has signed it, and
+    which the caller may sign
+
+    **Authentication required**
+    **Requires permission: minutes.view**
+    """
+    result = await MinutesSignatureService(db).status(
+        minutes_id,
+        current_user.organization_id,
+        current_user,
+        restricted=_restricted(current_user),
+    )
+    return ensure_found(result, "Meeting minutes")
+
+
+@router.post(
+    "/{minutes_id}/signatures",
+    response_model=SignatureResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(_rate_limit_signing)],
+)
+async def sign_minutes(
+    minutes_id: str,
+    data: SignRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.view")),
+):
+    """
+    Sign the adopted minutes in one of the department's signature slots
+
+    The signer types their name as it stands on their account and confirms
+    their password. Which slots a member may sign is the department's rule.
+
+    **Authentication required**
+    **Requires permission: minutes.view** (the slot's own rule is checked too)
+    """
+    async with handle_service_errors("Failed to sign the minutes"):
+        signature = await MinutesSignatureService(db).sign(
+            minutes_id,
+            current_user.organization_id,
+            current_user,
+            data.slot_key,
+            data.signed_name,
+            data.password,
+            restricted=_restricted(current_user),
+        )
+    signature = ensure_found(signature, "Meeting minutes")
+
+    await log_audit_event(
+        db=db,
+        event_type="minutes_signed",
+        event_category="meetings",
+        severity="info",
+        event_data={
+            "minutes_id": minutes_id,
+            "slot": signature.slot_key,
+            "content_hash": signature.content_hash,
+        },
+        user_id=str(current_user.id),
+    )
+    return SignatureResponse(
+        id=signature.id,
+        slot_key=signature.slot_key,
+        slot_title=signature.slot_title,
+        signed_name=signature.signed_name,
+        signed_at=signature.signed_at,
+        intact=True,
+    )
 
 
 @router.get("/{minutes_id}/verify", response_model=MinutesVerification)
@@ -986,7 +1087,7 @@ async def recall_minutes(
         event_data={"minutes_id": minutes_id, "title": minutes.title},
         user_id=str(current_user.id),
     )
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("/{minutes_id}/apply-outline", response_model=MinutesResponse)
@@ -1015,7 +1116,55 @@ async def apply_outline(
         event_data={"minutes_id": minutes_id, "template_id": data.template_id},
         user_id=str(current_user.id),
     )
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
+
+
+@router.get("/{minutes_id}/agenda-sync", response_model=AgendaSyncPreview)
+async def preview_agenda_sync(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    What the meeting's agenda now asks of these minutes' sections
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    async with handle_service_errors("Failed to compare the agenda"):
+        preview = await MinuteService(db).agenda_sync_preview(
+            minutes_id, current_user.organization_id
+        )
+    return ensure_found(preview, "Meeting minutes")
+
+
+@router.post("/{minutes_id}/agenda-sync", response_model=MinutesResponse)
+async def apply_agenda_sync(
+    minutes_id: str,
+    data: AgendaSyncApply,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Apply the chosen agenda changes to draft minutes
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    async with handle_service_errors("Failed to sync the agenda"):
+        minutes = await MinuteService(db).apply_agenda_sync(
+            minutes_id, current_user.organization_id, data.accept
+        )
+    minutes = ensure_found(minutes, "Meeting minutes")
+    await log_audit_event(
+        db=db,
+        event_type="minutes_agenda_synced",
+        event_category="meetings",
+        severity="info",
+        event_data={"minutes_id": minutes_id, "accepted": len(data.accept)},
+        user_id=str(current_user.id),
+    )
+    return await _respond(db, current_user, minutes)
 
 
 # ============================================
@@ -1056,167 +1205,11 @@ async def download_minutes_pdf(
         ),
         "Meeting minutes",
     )
-    records = MinutesRecordService(db)
-    elections = await records.list_election_results(
-        minutes.id, organization_id, restricted=_restricted(current_user)
+    printed = await build_print_data(
+        db, minutes, organization_id, restricted=_restricted(current_user)
     )
-    closed_sessions = await records.list_closed_sessions(
-        minutes.id, organization_id, restricted=_restricted(current_user)
-    )
-    attachments = await records.list_attachments(
-        minutes.id, organization_id, restricted=_restricted(current_user)
-    )
-    revisions = await records.list_revisions(
-        minutes.id, organization_id, restricted=_restricted(current_user)
-    )
-    org = (
-        await db.execute(select(Organization).where(Organization.id == organization_id))
-    ).scalar_one_or_none()
-    tz = scheduling_timezone(org)
-
-    def local(value: Optional[datetime], fmt: str) -> Optional[str]:
-        stamp = _aware(value)
-        return stamp.astimezone(tz).strftime(fmt) if stamp else None
-
-    person_ids = {i for i in (minutes.submitted_by, minutes.approved_by) if i}
-    names = {}
-    if person_ids:
-        found = await db.execute(
-            select(User).where(
-                User.id.in_(person_ids), User.organization_id == str(organization_id)
-            )
-        )
-        names = {u.id: (u.display_name or u.username) for u in found.scalars().all()}
-
-    status_value = (
-        minutes.status if isinstance(minutes.status, str) else minutes.status.value
-    )
-    current_revision = next(
-        (r for r in (revisions or []) if r.superseded_at is None), None
-    )
-    approval = None
-    if status_value == MinutesStatus.APPROVED.value:
-        approval = {
-            "submitted_by": names.get(minutes.submitted_by or ""),
-            "approved_by": names.get(minutes.approved_by or ""),
-            "approved_at_display": local(
-                minutes.approved_at, "%B %d, %Y at %I:%M %p %Z"
-            ),
-            "adopted_on_display": local(minutes.adopted_on, "%B %d, %Y"),
-            "as_amended": minutes.adopted_as_amended,
-            "moved_by": minutes.adoption_moved_by,
-            "seconded_by": minutes.adoption_seconded_by,
-            "adopting_title": _adopting_title(minutes),
-            "version": current_revision.version if current_revision else None,
-            "content_hash": current_revision.content_hash if current_revision else None,
-        }
-
-    meeting_type = (
-        minutes.meeting_type
-        if isinstance(minutes.meeting_type, str)
-        else minutes.meeting_type.value
-    )
-    data = {
-        "title": minutes.title,
-        "meeting_type_display": meeting_type.replace("_", " ").title(),
-        "meeting_date_display": local(minutes.meeting_date, "%B %d, %Y at %I:%M %p"),
-        "location": minutes.location,
-        "called_by": minutes.called_by,
-        "called_to_order": local(minutes.called_to_order_at, "%I:%M %p"),
-        "adjourned": local(minutes.adjourned_at, "%I:%M %p"),
-        "status_display": status_value.title(),
-        "attendees": [
-            {
-                "name": a.get("name"),
-                "role": a.get("role"),
-                "status": a.get("status")
-                or ("present" if a.get("present", True) else "absent"),
-                "note": a.get("note"),
-            }
-            for a in (minutes.attendees or [])
-        ],
-        "quorum_display": (
-            ("Quorum met" if minutes.quorum_met else "Quorum NOT met")
-            + (f" ({minutes.quorum_count} present)" if minutes.quorum_count else "")
-            if minutes.quorum_met is not None
-            else None
-        ),
-        "sections": sorted(minutes.get_sections(), key=lambda s: s.get("order", 0)),
-        "motions": [
-            {
-                "number": index,
-                "text": m.motion_text,
-                "status": m.status if isinstance(m.status, str) else m.status.value,
-                "moved_by": m.moved_by,
-                "seconded_by": m.seconded_by,
-                "notes": m.discussion_notes,
-                "ballot": (
-                    getattr(getattr(m, "election", None), "title", None)
-                    if m.election_id
-                    else None
-                ),
-                "vote_display": (
-                    f"Vote {m.votes_for}-{m.votes_against or 0}"
-                    + (f" ({m.votes_abstain} abstain)" if m.votes_abstain else "")
-                    if m.votes_for is not None
-                    else ""
-                ),
-            }
-            for index, m in enumerate(minutes.motions or [], 1)
-        ],
-        "action_items": [
-            {
-                "description": a.description,
-                "assignee": a.assignee_name,
-                "due": local(a.due_date, "%Y-%m-%d"),
-                "priority": (
-                    a.priority if isinstance(a.priority, str) else a.priority.value
-                ),
-                "status": a.status if isinstance(a.status, str) else a.status.value,
-            }
-            for a in (minutes.action_items or [])
-        ],
-        "closed_sessions": [
-            {
-                "reason": c.reason,
-                "legal_basis": c.legal_basis,
-                "started": local(c.started_at, "%I:%M %p"),
-                "ended": local(c.ended_at, "%I:%M %p"),
-                "participants": [
-                    {
-                        "name": p.get("name"),
-                        "joined": local(_parse(p.get("joined_at")), "%I:%M %p"),
-                        "left": local(_parse(p.get("left_at")), "%I:%M %p"),
-                    }
-                    for p in (c.participants or [])
-                ],
-                "summary": c.summary,
-            }
-            for c in (closed_sessions or [])
-        ],
-        "election_results": [
-            {
-                "title": r.election_title,
-                "closed_display": local(r.election_closed_at, "%B %d, %Y %I:%M %p %Z"),
-                "snapshot": r.snapshot,
-                "addendum": r.is_addendum,
-                "filed_display": local(r.created_at, "%B %d, %Y"),
-            }
-            for r in (elections or [])
-        ],
-        "attachments": [
-            {
-                "title": a.title,
-                "category": a.category,
-                "name": a.original_name,
-                "sha256": a.sha256,
-            }
-            for a in (attachments or [])
-        ],
-        "approval": approval,
-        "header": minutes.get_effective_header(),
-        "footer": minutes.get_effective_footer(),
-    }
+    data, org, tz, local = printed.data, printed.org, printed.tz, printed.local
+    status_value = printed.status_value
     pdf = render_minutes_pdf(
         data,
         {

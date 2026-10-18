@@ -3,9 +3,16 @@ import { useDialog } from '../../../hooks/useDialog';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatTimeOfDay } from '../../../utils/dateFormatting';
+import { formCoercions } from '../../../utils/formValues';
 import { X } from 'lucide-react';
+import { Link } from 'react-router';
 import type { PatternFormData, ShiftTemplate } from './shiftTemplateTypes';
 import { PATTERN_TYPES, emptyPatternForm } from './shiftTemplateTypes';
+
+// Weekly and custom patterns are generated from schedule_config (weekdays, or
+// a list of dates), which this form has no fields for: saved from here they
+// generate no shifts at all. The Patterns tab builds that config.
+const CONFIG_DRIVEN_TYPES = new Set(['weekly', 'custom']);
 
 interface PatternFormModalProps {
   isOpen: boolean;
@@ -33,21 +40,34 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
     setFormData(initialData || emptyPatternForm);
   }, [initialData, isOpen]);
 
+  // A stored weekly/custom pattern keeps its own type on screen, so an edit
+  // here cannot silently change it; it still cannot be switched to one.
+  const patternTypeChoices = PATTERN_TYPES.filter(
+    (pt) => !CONFIG_DRIVEN_TYPES.has(pt.value) || pt.value === initialData?.pattern_type
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      // The edit modal is the one handed a pattern to start from. On edit a
+      // blank field is sent as null, because the update endpoint reads the
+      // payload with exclude_unset and an omitted key keeps the stored value —
+      // "No template" or an emptied end date would otherwise snap back
+      // (CLAUDE.md pitfall #1). Generation falls back to 1 for a null
+      // days_on / days_off, so clearing them is safe.
+      const { text, pick, num } = formCoercions(initialData !== undefined);
       const payload: Record<string, unknown> = {
         name: formData.name,
         pattern_type: formData.pattern_type,
         start_date: formData.start_date,
+        description: text(formData.description),
+        template_id: pick(formData.template_id),
+        rotation_days: num(formData.rotation_days),
+        days_on: num(formData.days_on),
+        days_off: num(formData.days_off),
+        end_date: pick(formData.end_date),
       };
-      if (formData.description) payload.description = formData.description;
-      if (formData.template_id) payload.template_id = formData.template_id;
-      if (formData.rotation_days) payload.rotation_days = parseInt(formData.rotation_days, 10);
-      if (formData.days_on) payload.days_on = parseInt(formData.days_on, 10);
-      if (formData.days_off) payload.days_off = parseInt(formData.days_off, 10);
-      if (formData.end_date) payload.end_date = formData.end_date;
       await onSubmit(payload);
       onClose();
     } catch (err) {
@@ -126,14 +146,22 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
                 setFormData((prev) => ({ ...prev, pattern_type: e.target.value as PatternFormData['pattern_type'] }))
               }
               className="form-input"
+              aria-describedby="pattern-type-hint"
               required
             >
-              {PATTERN_TYPES.map((pt) => (
+              {patternTypeChoices.map((pt) => (
                 <option key={pt.value} value={pt.value}>
                   {pt.label} - {pt.description}
                 </option>
               ))}
             </select>
+            <p id="pattern-type-hint" className="text-theme-text-muted mt-1 text-xs">
+              Weekly and custom patterns pick their days or dates, so create them from the{' '}
+              <Link to="/scheduling/admin/planning/patterns" className="underline">
+                Patterns tab
+              </Link>
+              .
+            </p>
           </div>
 
           <div>

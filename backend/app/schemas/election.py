@@ -1291,6 +1291,26 @@ class EmailBallotResponse(BaseModel):
     message: str
 
 
+class BallotSendJobResponse(UTCResponseBase):
+    """A background ballot send and, once it has finished, its outcome.
+
+    ``kind`` is ballots or reminder. ``status`` is queued, running, completed
+    or failed. ``result`` is set on completed and carries what the synchronous
+    send-ballot / remind-non-voters endpoint returns; ``error`` is set on
+    failed.
+    """
+
+    id: str
+    election_id: str
+    kind: str
+    status: str
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    result: Optional[EmailBallotResponse] = None
+    error: Optional[str] = None
+
+
 class ElectionRollback(BaseModel):
     """Schema for rolling back an election"""
 

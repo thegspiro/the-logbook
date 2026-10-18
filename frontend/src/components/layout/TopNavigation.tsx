@@ -23,14 +23,13 @@ import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idC
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
-import { APPARATUS_ENTRY_PERMISSIONS } from '../../modules/apparatus/routes';
-import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { fitNavItems } from './topNavigationOverflow';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
+import { operationsNavItems } from './operationsNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 
@@ -154,7 +153,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
   const ThemeIcon = themeIcon;
 
-  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission);
+  const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission, { checkInStationOn: isNfcCardsOn });
   const canReviewLegalDocuments = LEGAL_DOCUMENTS_PERMISSIONS.some((p) => checkPermission(p));
 
   // Build the divider sentinel used between Admin sub-groups
@@ -200,56 +199,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     {
       label: 'Operations',
       path: '/inventory',
-      subItems: [
-        // Gates mirror SideNavigation's Operations group — see there.
-        ...(isModuleOn('inventory')
-          ? [
-              { label: 'My Issued Gear', path: '/inventory/my-equipment' },
-              { label: 'Inventory', path: '/inventory', permission: 'inventory.manage' },
-            ]
-          : []),
-        // Gates mirror SideNavigation's Operations group — see the reasoning
-        // there. The stock room is for whoever keeps it stocked; the crew's
-        // "we just used two of these" lives in Apparatus Inventory.
-        ...(isModuleOn('medical_supplies')
-          ? [
-              {
-                label: 'Medical Supplies',
-                path: '/medical-supplies',
-                permission: 'inventory.view_medical',
-              },
-            ]
-          : []),
-        // See SideNavigation for why "My Checklists" carries no permission
-        // gate: it is every member's only route to the checks they owe.
-        ...(isModuleOn('inventory')
-          ? [
-              { label: 'My Checklists', path: '/inventory/checklists/my' },
-              {
-                label: 'Fleet Readiness',
-                path: '/inventory/checklists',
-                anyPermission: ['inventory.check_view', 'scheduling.manage'],
-              },
-            ]
-          : []),
-        ...(isModuleOn('inventory')
-          ? [
-              {
-                label: 'Apparatus Inventory',
-                path: '/inventory/checklists/apparatus-inventory',
-                anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
-              },
-            ]
-          : []),
-        // See SideNavigation for why the module-on row is gated and the
-        // module-off `/apparatus-basic` row is not.
-        ...(isModuleOn('apparatus')
-          ? [{ label: 'Apparatus', path: '/apparatus', anyPermission: [...APPARATUS_ENTRY_PERMISSIONS] }]
-          : [{ label: 'Apparatus', path: '/apparatus-basic' }]),
-        ...(isModuleOn('facilities')
-          ? [{ label: 'Facilities', path: '/facilities', anyPermission: [...FACILITY_ENTRY_PERMISSIONS] }]
-          : []),
-      ],
+      // One list with SideNavigation and the section strip on every
+      // Operations page; the reasoning behind each row's gate lives there.
+      subItems: operationsNavItems(isModuleOn).map(({ label, path, permission, anyPermission }) => ({
+        label,
+        path,
+        ...(permission ? { permission } : {}),
+        ...(anyPermission ? { anyPermission } : {}),
+      })),
     },
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),
     // Neither the org chart nor Legal Documents is behind a module flag: every

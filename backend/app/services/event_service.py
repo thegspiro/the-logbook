@@ -7,6 +7,7 @@ Business logic for event management.
 import calendar
 import copy
 import csv
+import html as _html
 import io
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
@@ -50,10 +51,17 @@ from app.schemas.event import (
 )
 from app.schemas.training_session import TrainingSessionAttach
 from app.services.admin_hours_service import AdminHoursService
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+    recipients_for,
+)
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
 from app.utils.event_attachments import validate_attachments_for_org
 from app.utils.org_timezone import (
+    format_in_org_timezone,
     local_and_utc_dates,
     local_date,
     resolve_scheduling_timezone,
@@ -61,6 +69,21 @@ from app.utils.org_timezone import (
 )
 
 DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
+
+# Which member email switch governs each kind of notice an organizer sends
+# from an event's Notify action. An announcement is a department message, so
+# it is always sent. Reminders, check-in confirmations and missed-event
+# notices go under Event reminders, which already covers the answer to an
+# attendance request: all three are about the member's own attendance, not
+# news about the event. A follow-up is the organizer telling attendees
+# something new about the event, the same kind of news as a change to it.
+NOTIFICATION_EMAIL_KINDS: Dict[str, EmailKind] = {
+    "announcement": EmailKind.DEPARTMENT_MESSAGES,
+    "reminder": EmailKind.EVENT_REMINDERS,
+    "check_in_confirmation": EmailKind.EVENT_REMINDERS,
+    "missed_event": EmailKind.EVENT_REMINDERS,
+    "follow_up": EmailKind.EVENT_CHANGES,
+}
 
 
 def _wall_time(value: datetime, tz: ZoneInfo) -> datetime:
@@ -1338,20 +1361,206 @@ class EventService:
 
         # Send cancellation notifications if requested
         if send_notifications and rsvps_to_notify:
-            notifications_service = NotificationsService(self.db)
-            for rsvp in rsvps_to_notify:
-                if rsvp.status == RSVPStatus.GOING or rsvp.status == RSVPStatus.MAYBE:
+            notify_ids = [
+                str(rsvp.user_id)
+                for rsvp in rsvps_to_notify
+                if rsvp.status in (RSVPStatus.GOING, RSVPStatus.MAYBE)
+            ]
+            # Bell first, then email, each non-fatal: the event is already
+            # cancelled and committed, and a failed notice must not turn that
+            # into an error response.
+            try:
+                notifications_service = NotificationsService(self.db)
+                for uid in notify_ids:
                     await notifications_service.log_notification(
                         organization_id=organization_id,
                         log_data={
                             "channel": NotificationChannel.IN_APP,
-                            "recipient_id": str(rsvp.user_id),
+                            "category": "event_cancellation",
+                            "recipient_id": uid,
                             "subject": f"Event Cancelled: {event.title}",
                             "message": f'The event "{event.title}" has been cancelled. Reason: {reason}',
+                            "action_url": f"/events/{event.id}",
                         },
                     )
+            except Exception as e:
+                logger.error(
+                    "Failed to notify cancellation of event {}: {}", event.id, e
+                )
+            # Email is the channel of record (CLAUDE.md pitfall 18); the
+            # member's "Event changes and cancellations" switch is its reader.
+            try:
+                await self._email_event_cancellation(
+                    event, notify_ids, organization_id, reason
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to email cancellation of event {}: {}", event.id, e
+                )
 
         return event
+
+    async def _event_email_recipients(
+        self,
+        user_ids: List[str],
+        organization_id: UUID | str,
+        kind: EmailKind,
+    ) -> Tuple[Optional[Organization], List[User]]:
+        """The members among *user_ids* who are emailed a notice of *kind*.
+
+        One query for the organization and one for the users however many
+        ids there are, so a notice to every member costs the same two round
+        trips as a notice to one. Users are loaded inside *organization_id*
+        only; a member without an address is dropped.
+        """
+        ids = {str(uid) for uid in user_ids}
+        if not ids:
+            return None, []
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        users = (
+            (
+                await self.db.execute(
+                    select(User)
+                    .where(User.organization_id == str(organization_id))
+                    .where(User.id.in_(ids))
+                    .where(User.deleted_at.is_(None))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        with_address = [user for user in users if user.email]
+        return org, recipients_for(with_address, kind, department_required_kinds(org))
+
+    async def _event_location_name(
+        self, event: Event, organization_id: UUID | str
+    ) -> Optional[str]:
+        """The named room when the event has one, else its free-text location."""
+        from app.models.location import Location
+
+        location_name = event.location
+        if event.location_id:
+            location_name = (
+                await self.db.execute(
+                    select(Location.name)
+                    .where(Location.id == str(event.location_id))
+                    .where(Location.organization_id == str(organization_id))
+                )
+            ).scalar_one_or_none() or location_name
+        return location_name
+
+    async def _email_event_cancellation(
+        self,
+        event: Event,
+        user_ids: List[str],
+        organization_id: UUID | str,
+        reason: str,
+    ) -> int:
+        """Email the members in *user_ids* that *event* is cancelled, through
+        the Event Cancelled template. Returns how many emails were handed to
+        the mailer. One member's failed send does not stop the rest."""
+        from app.services.email_service import EmailService
+
+        org, recipients = await self._event_email_recipients(
+            user_ids, organization_id, EmailKind.EVENT_CHANGES
+        )
+        if not recipients:
+            return 0
+        mailer = EmailService(organization=org)
+        sent = 0
+        for user in recipients:
+            try:
+                if await mailer.send_event_cancellation_email(
+                    to_email=user.email,
+                    recipient_name=user.display_name or user.email,
+                    event_title=event.title,
+                    event_start=event.start_datetime,
+                    reason=reason,
+                    db=self.db,
+                    organization_id=str(organization_id),
+                ):
+                    sent += 1
+            except Exception as e:
+                logger.error(
+                    "Failed to email cancellation of event {} to user {}: {}",
+                    event.id,
+                    user.id,
+                    e,
+                )
+        return sent
+
+    async def email_event_change(
+        self,
+        event: Event,
+        user_ids: List[str],
+        organization_id: UUID | str,
+        changes_desc: str,
+    ) -> int:
+        """Email the members in *user_ids* that *event*'s title, time or
+        location changed, showing the details as they now stand.
+
+        There is no template for this notice: it is built inline through
+        ``wrap_email_body``. Gated by the member's "Event changes and
+        cancellations" email switch. Returns how many emails were accepted.
+        """
+        from app.services.email_service import EmailService, wrap_email_body
+
+        org, recipients = await self._event_email_recipients(
+            user_ids, organization_id, EmailKind.EVENT_CHANGES
+        )
+        if not recipients:
+            return 0
+
+        location_name = await self._event_location_name(event, organization_id)
+        when = format_in_org_timezone(event.start_datetime, org)
+        if event.end_datetime:
+            day = "%Y-%m-%d"
+            same_day = format_in_org_timezone(
+                event.start_datetime, org, day
+            ) == format_in_org_timezone(event.end_datetime, org, day)
+            if same_day:
+                when += " to " + format_in_org_timezone(
+                    event.end_datetime, org, "%I:%M %p"
+                )
+            else:
+                when += " to " + format_in_org_timezone(event.end_datetime, org)
+        url = f"{settings.FRONTEND_URL}/events/{event.id}"
+        intro = (
+            f'The event "{event.title}" has been updated ({changes_desc}). '
+            f"Please review the latest details."
+        )
+        facts = [("When", when)]
+        if location_name:
+            facts.append(("Where", location_name))
+
+        body_html = (
+            f"<p>{_html.escape(intro)}</p>"
+            + "".join(
+                f"<p><strong>{label}:</strong> {_html.escape(value)}</p>"
+                for label, value in facts
+            )
+            + '<p style="text-align: center;">'
+            f'<a href="{_html.escape(url)}" class="button" role="link">'
+            "View Event</a></p>"
+        )
+        text_body = "\n".join(
+            [intro, ""]
+            + [f"{label}: {value}" for label, value in facts]
+            + ["", f"View Event: {url}"]
+        )
+        success, _ = await EmailService(organization=org).send_email(
+            to_emails=[user.email for user in recipients],
+            subject=f"Event Updated: {event.title}",
+            html_body=wrap_email_body(org, "Event Updated", body_html, chip="Updated"),
+            text_body=text_body,
+            db=self.db,
+            template_type="event_update",
+        )
+        return success
 
     async def cancel_series(
         self,
@@ -2236,12 +2445,6 @@ class EventService:
         """Email a member promoted off *event*'s waitlist, unless they have
         turned that email off. Returns whether an email was handed to the
         mailer."""
-        from app.models.location import Location
-        from app.services.email_policy import (
-            EmailKind,
-            department_required_kinds,
-            member_receives_email,
-        )
         from app.services.email_service import EmailService
 
         user = (
@@ -2266,15 +2469,7 @@ class EventService:
         ):
             return False
 
-        location_name = event.location
-        if event.location_id:
-            location_name = (
-                await self.db.execute(
-                    select(Location.name)
-                    .where(Location.id == str(event.location_id))
-                    .where(Location.organization_id == str(organization_id))
-                )
-            ).scalar_one_or_none() or location_name
+        location_name = await self._event_location_name(event, organization_id)
 
         return await EmailService(organization=org).send_waitlist_promotion_email(
             to_email=user.email,
@@ -2636,6 +2831,29 @@ class EventService:
         if check_in and check_out and check_out <= check_in:
             return None, "Override check-out time must be after check-in time"
 
+        # A duration auto-derived from the previous pair of override times
+        # stops describing anything once either time is cleared, yet it would
+        # still outrank the remaining clock when finalize credits training and
+        # admin hours. Only a derived value is dropped: one that differs from
+        # the old span was entered on purpose (here or by a training session's
+        # correction), stands independently of the times, and a request that
+        # names the duration itself always wins.
+        previous_in = rsvp.override_check_in_at
+        previous_out = rsvp.override_check_out_at
+        clears_derived_duration = False
+        if (
+            previous_in
+            and previous_out
+            and not (check_in and check_out)
+            and "override_duration_minutes" not in override_fields
+            and rsvp.override_duration_minutes is not None
+        ):
+            previous_span = int((previous_out - previous_in).total_seconds() / 60)
+            clears_derived_duration = rsvp.override_duration_minutes in {
+                previous_span,
+                max(0, previous_span),
+            }
+
         for field, value in override_fields.items():
             setattr(rsvp, field, value)
 
@@ -2655,6 +2873,8 @@ class EventService:
                 rsvp.override_check_out_at - rsvp.override_check_in_at
             ).total_seconds() / 60
             rsvp.override_duration_minutes = int(duration)
+        elif clears_derived_duration:
+            rsvp.override_duration_minutes = None
 
         rsvp.overridden_by = str(manager_id)
         rsvp.overridden_at = now
@@ -5665,6 +5885,65 @@ class EventService:
                     error,
                 )
 
+        # And by email, the channel of record (CLAUDE.md pitfall 18).
+        # Non-fatal: the bell entries are already written, and a mail outage
+        # must not turn a delivered notice into an error for the organizer.
+        try:
+            await self._email_event_notification(
+                event,
+                recipient_ids,
+                organization_id,
+                notification_type,
+                subject,
+                body,
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to email {} notification for event {}: {}",
+                notification_type,
+                event_id,
+                e,
+            )
+
         summary = f"{label} notification sent to " f"{delivered_count} recipient(s)"
 
         return delivered_count, summary
+
+    async def _email_event_notification(
+        self,
+        event: Event,
+        user_ids: List[str],
+        organization_id: UUID | str,
+        notification_type: str,
+        subject: str,
+        body: str,
+    ) -> int:
+        """Email an organizer's notice to the members in *user_ids* who
+        receive its kind, in one send however many members it reaches.
+        Returns how many emails were accepted."""
+        from app.services.email_service import EmailService, wrap_email_body
+
+        kind = NOTIFICATION_EMAIL_KINDS.get(notification_type)
+        if kind is None:
+            return 0
+        org, recipients = await self._event_email_recipients(
+            user_ids, organization_id, kind
+        )
+        if not recipients:
+            return 0
+        url = f"{settings.FRONTEND_URL}/events/{event.id}"
+        body_html = (
+            f"<p>{_html.escape(body)}</p>"
+            '<p style="text-align: center;">'
+            f'<a href="{_html.escape(url)}" class="button" role="link">'
+            "View Event</a></p>"
+        )
+        success, _ = await EmailService(organization=org).send_email(
+            to_emails=[user.email for user in recipients],
+            subject=subject,
+            html_body=wrap_email_body(org, event.title, body_html),
+            text_body=f"{body}\n\nView Event: {url}",
+            db=self.db,
+            template_type="event_notification",
+        )
+        return success

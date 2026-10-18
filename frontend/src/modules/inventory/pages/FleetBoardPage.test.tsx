@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import { FleetBoardPage } from './FleetBoardPage';
 import type { FleetApparatusReadiness, FleetReadinessResponse } from '../../../modules/inventory/types/equipmentCheck';
@@ -246,5 +247,48 @@ describe('FleetBoardPage', () => {
     renderWithRouter(<FleetBoardPage />);
     await screen.findByText('E-1');
     expect(screen.queryByRole('link', { name: /Templates/ })).not.toBeInTheDocument();
+  });
+
+  it('filters the board to the rigs a summary chip counts, and back', async () => {
+    const user = userEvent.setup();
+    mockGetFleetReadiness.mockResolvedValue(
+      makeResponse([
+        makeUnit(),
+        makeUnit({ apparatusId: 'a-2', unitLabel: 'T-1', readiness: 'attention', failedItemCount: 2 }),
+      ])
+    );
+    renderWithRouter(<FleetBoardPage />);
+
+    const chip = await screen.findByRole('button', { name: '1 need attention' });
+    await user.click(chip);
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('link', { name: /T-1/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /E-1/ })).not.toBeInTheDocument();
+
+    await user.click(chip);
+    expect(screen.getByRole('link', { name: /E-1/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2 apparatus' })).toHaveAttribute('aria-pressed', 'true');
+    // A readiness with nobody in it offers no chip to tap.
+    expect(screen.queryByRole('button', { name: /out of service/ })).not.toBeInTheDocument();
+  });
+
+  it('shows only the counts that are not zero, and keeps the legend one tap away', async () => {
+    const user = userEvent.setup();
+    mockGetFleetReadiness.mockResolvedValue(
+      makeResponse([makeUnit({ failedItemCount: 1, outOfServiceItemCount: 1, completionRate: 85.7 })])
+    );
+    renderWithRouter(<FleetBoardPage />);
+
+    const card = await screen.findByRole('link', { name: /E-1/ });
+    expect(within(card).getByText('2 findings')).toBeInTheDocument();
+    expect(within(card).getByText('86%')).toBeInTheDocument();
+    expect(within(card).queryByText(/expiring/)).not.toBeInTheDocument();
+    expect(within(card).queryByText(/missed/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Passed')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'What the coloured squares mean' }));
+    const legend = screen.getByRole('dialog', { name: 'Reading the check strip' });
+    expect(within(legend).getByText('Passed')).toBeInTheDocument();
+    expect(within(legend).getByText('Missed')).toBeInTheDocument();
   });
 });

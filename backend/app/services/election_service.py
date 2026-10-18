@@ -50,6 +50,7 @@ from app.models.election import (
 )
 from app.models.email_template import EmailTemplateType
 from app.models.membership_pipeline import ProspectElectionPackage
+from app.models.notification import NotificationChannel, NotificationLog
 from app.models.user import Organization, User
 from app.schemas.election import (
     CandidateResult,
@@ -268,6 +269,25 @@ def position_ballot_items(election: Any) -> List[Dict]:
             }
         )
     return synthesized
+
+
+NOMINATION_NOTICE_CATEGORY = "election_nomination"
+
+
+def nominations_tab_path(election_id: Any) -> str:
+    """The in-app path where a nominee accepts or declines."""
+    return f"/elections/{election_id}?tab=nominations"
+
+
+def _is_approval_item(item: Dict, is_position_item: bool) -> bool:
+    """An Approve/Deny item decides a question rather than filling a seat.
+
+    ``allow_write_ins`` is an election-wide switch, but a write-in names a
+    person for a seat, so it never applies to one of these: the printed
+    ballot gives them only Approve and Deny, and both electronic ballots
+    must agree with it. A plain position is always a candidate race.
+    """
+    return not is_position_item and item.get("vote_type") == "approval"
 
 
 def effective_ballot_items(election: Any) -> Tuple[List[Dict], Set[str]]:
@@ -3894,6 +3914,39 @@ class ElectionService:
 
         return non_voters
 
+    async def ensure_reminder_allowed(
+        self, election: Election, organization_id: UUID | str
+    ) -> None:
+        """Raise ValueError when a non-voter reminder may not go out now.
+
+        Called by ``remind_non_voters`` and, before queueing, by the
+        background reminder endpoint, so the secretary is refused at once
+        rather than after the job starts.
+        """
+        if election.status != ElectionStatus.OPEN:
+            raise ValueError("Reminders can only be sent for open elections")
+        flags = await self.get_feature_flags(organization_id)
+        if not flags["reminders_enabled"]:
+            raise ValueError(
+                "Non-voter reminders are disabled for this organization — "
+                "enable them in Election Settings"
+            )
+
+        # Cooldown: a manager double-clicking (or automation racing a manual
+        # send) must not spam members — each send mints fresh tokens.
+        now = datetime.now(timezone.utc)
+        last_sent = self._ensure_utc(election.reminder_sent_at)
+        if last_sent and now - last_sent < timedelta(
+            minutes=self.REMINDER_COOLDOWN_MINUTES
+        ):
+            wait_min = self.REMINDER_COOLDOWN_MINUTES - int(
+                (now - last_sent).total_seconds() // 60
+            )
+            raise ValueError(
+                f"A reminder was already sent recently — try again in about "
+                f"{max(wait_min, 1)} minute(s)"
+            )
+
     async def remind_non_voters(
         self,
         election_id: UUID,
@@ -3932,29 +3985,8 @@ class ElectionService:
         election = result.scalar_one_or_none()
         if not election:
             raise ValueError("Election not found")
-        if election.status != ElectionStatus.OPEN:
-            raise ValueError("Reminders can only be sent for open elections")
-        flags = await self.get_feature_flags(organization_id)
-        if not flags["reminders_enabled"]:
-            raise ValueError(
-                "Non-voter reminders are disabled for this organization — "
-                "enable them in Election Settings"
-            )
-
-        # Cooldown: a manager double-clicking (or automation racing a manual
-        # send) must not spam members — each send mints fresh tokens.
+        await self.ensure_reminder_allowed(election, organization_id)
         now = datetime.now(timezone.utc)
-        last_sent = self._ensure_utc(election.reminder_sent_at)
-        if last_sent and now - last_sent < timedelta(
-            minutes=self.REMINDER_COOLDOWN_MINUTES
-        ):
-            wait_min = self.REMINDER_COOLDOWN_MINUTES - int(
-                (now - last_sent).total_seconds() // 60
-            )
-            raise ValueError(
-                f"A reminder was already sent recently — try again in about "
-                f"{max(wait_min, 1)} minute(s)"
-            )
 
         non_voters = await self.get_non_voters(election_id, organization_id)
         if not non_voters:
@@ -4284,11 +4316,19 @@ class ElectionService:
     async def _notify_nominee(
         self, election, candidate, organization_id: UUID | str
     ) -> None:
-        """Email a third-party nominee that they must accept or decline.
+        """Tell a third-party nominee that they must accept or decline.
 
-        Best-effort: a mail failure must never fail the nomination itself —
-        the pending nomination is still visible on the election page.
+        Email is the channel of record; the bell notice is added beside it
+        (not instead of it) so a member who is signed in sees the request
+        and can open the Nominations tab in one tap. Both carry the link.
+        Best-effort: a delivery failure must never fail the nomination
+        itself — the pending nomination is still visible on the election
+        page.
         """
+        nominations_path = nominations_tab_path(election.id)
+        await self._record_nominee_bell_notice(
+            election, candidate, organization_id, nominations_path
+        )
         try:
             import html as html_mod
 
@@ -4321,6 +4361,7 @@ class ElectionService:
                     f"<strong>{deadline_local}</strong>.</p>"
                 )
 
+            nominations_url = f"{settings.FRONTEND_URL.rstrip('/')}{nominations_path}"
             title = html_mod.escape(election.title)
             position = html_mod.escape(candidate.position or "")
             body_html = (
@@ -4329,6 +4370,8 @@ class ElectionService:
                 "<p>Your name will only appear on the ballot if you accept. "
                 "Sign in to the intranet and open the election's Nominations "
                 "tab to accept or decline.</p>"
+                f'<p><a href="{html_mod.escape(nominations_url)}">'
+                "Review your nomination</a></p>"
                 f"{deadline_line}"
             )
             html_body = wrap_email_body(
@@ -4348,6 +4391,49 @@ class ElectionService:
         except Exception as e:
             logger.warning(
                 f"Nominee notification failed | election={election.id} "
+                f"candidate={candidate.id} error={e}"
+            )
+
+    async def _record_nominee_bell_notice(
+        self,
+        election,
+        candidate,
+        organization_id: UUID | str,
+        nominations_path: str,
+    ) -> None:
+        """Put the nomination in the nominee's notification bell.
+
+        Not gated on the member's email preferences: muting election email
+        must not also hide a request only the nominee can answer. Committed
+        on its own so a failed insert rolls back nothing but itself.
+        """
+        try:
+            self.db.add(
+                NotificationLog(
+                    organization_id=str(organization_id),
+                    recipient_id=str(candidate.user_id),
+                    channel=NotificationChannel.IN_APP,
+                    category=NOMINATION_NOTICE_CATEGORY,
+                    subject=f"You've been nominated for {candidate.position}",
+                    message=(
+                        f"You have been nominated for {candidate.position} in "
+                        f"{election.title}. Accept or decline from the "
+                        "election's Nominations tab — your name appears on "
+                        "the ballot only if you accept."
+                    ),
+                    action_url=nominations_path,
+                    notification_metadata={
+                        "election_id": str(election.id),
+                        "candidate_id": str(candidate.id),
+                    },
+                    delivered=True,
+                )
+            )
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            logger.warning(
+                f"Nominee bell notice failed | election={election.id} "
                 f"candidate={candidate.id} error={e}"
             )
 
@@ -5659,14 +5745,31 @@ class ElectionService:
         if not candidates and not approval_items:
             return None, "The election has no accepted candidates yet", ""
 
+        # Each contest prints the method its votes are accepted under: a
+        # Ballot Builder item may override the election's, and the paper
+        # instruction has to match what the electronic ballot enforces.
+        race_items = [
+            item
+            for item in election.ballot_items or []
+            if isinstance(item, dict) and item.get("vote_type") != "approval"
+        ]
         positions = []
         for position in election.positions or []:
+            matching_item = next(
+                (
+                    item
+                    for item in race_items
+                    if position in ballot_item_candidate_positions(item)
+                ),
+                None,
+            )
             positions.append(
                 {
                     "name": position,
                     "candidates": [
                         c.name for c in candidates if c.position == position
                     ],
+                    "voting_method": _effective_voting_method(election, matching_item),
                 }
             )
         # A candidate-selection item whose race is not a plain position (a
@@ -5674,9 +5777,7 @@ class ElectionService:
         # left off the printout (W50-8). An item colliding with a plain
         # position is already printed above.
         plain = set(election.positions or [])
-        for item in election.ballot_items or []:
-            if not isinstance(item, dict) or item.get("vote_type") == "approval":
-                continue
+        for item in race_items:
             aliases = ballot_item_candidate_positions(item)
             if not aliases or aliases & plain:
                 continue
@@ -5684,6 +5785,7 @@ class ElectionService:
                 {
                     "name": item.get("title") or item.get("position") or "",
                     "candidates": [c.name for c in candidates if c.position in aliases],
+                    "voting_method": _effective_voting_method(election, item),
                 }
             )
 
@@ -5702,6 +5804,7 @@ class ElectionService:
         }
         meta = {
             "org_name": organization.name if organization else "",
+            "logo": organization.logo if organization else None,
             "generated_at": await self._org_local_time(
                 organization, datetime.now(timezone.utc)
             ),
@@ -5806,6 +5909,7 @@ class ElectionService:
         }
         meta = {
             "org_name": organization.name if organization else "",
+            "logo": organization.logo if organization else None,
             "generated_at": await self._org_local_time(
                 organization, datetime.now(timezone.utc)
             ),
@@ -7993,6 +8097,16 @@ class ElectionService:
             )
             return 0, 0, 0, [], []
 
+        # A link to a ballot with nothing on it is a dead end: the page has
+        # no race to show and the submit endpoint answers "no ballot items
+        # configured" (W50-91). Stored items and plain positions both count.
+        if not effective_ballot_items(election)[0]:
+            raise ValueError(
+                "This election has no ballot items or positions, so there is "
+                "nothing to vote on. Add the races in the Ballot Builder "
+                "before sending ballot emails."
+            )
+
         # Load organization separately to avoid INNER JOIN masking the election
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
@@ -8376,6 +8490,15 @@ class ElectionService:
                     "admin_contact_email": admin_contact_email,
                 }
             )
+
+        # Save the tokens before any mail leaves. While they were committed
+        # only after the batch, a restart mid-send or a failed final commit
+        # left members holding emailed links whose tokens were never stored,
+        # and the link answered "Invalid voting token". A token saved for a
+        # message that then fails was never delivered, so storing it is
+        # harmless.
+        if pending_emails:
+            await self.db.commit()
 
         # ---- Phase 2: Render, then send the whole batch at once ----
         # Render each email using the pre-loaded template (or default), then
@@ -8936,6 +9059,7 @@ class ElectionService:
         }
         meta = {
             "org_name": organization.name,
+            "logo": organization.logo,
             "generated_at": datetime.now(timezone.utc).astimezone(tz),
         }
 
@@ -10374,7 +10498,9 @@ class ElectionService:
             candidate_id = None
 
             if choice == "write_in":
-                if not election.allow_write_ins:
+                if not election.allow_write_ins or _is_approval_item(
+                    ballot_item, ballot_item_id in position_item_ids
+                ):
                     return (
                         None,
                         f"Write-in votes are not allowed for: {item_title}",
@@ -10887,7 +11013,9 @@ class ElectionService:
                 selections.append((title, str(option.id), None))
             elif choice == "write_in":
                 name = (vote_data.get("write_in_name") or "").strip()
-                if not election.allow_write_ins:
+                if not election.allow_write_ins or _is_approval_item(
+                    item, is_position_item
+                ):
                     return None, f"Write-in votes are not allowed for: {title}"
                 if not name:
                     return None, f"Write-in name is required for: {title}"

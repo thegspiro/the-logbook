@@ -27,6 +27,38 @@ Bring up a backend on `:3001` and the frontend dev server on `:3000` (see
 `uvicorn main:app --port 3001` and `npm run dev`). The backend creates its own
 schema on first start, so an empty database is the expected starting point.
 
+`scripts/screenshots/dev_env.sh` does all of that in one command and waits
+until the stack answers. Two things it supplies when nothing else does:
+
+- **Encryption keys.** Onboarding refuses to finish without `ENCRYPTION_KEY`
+  and `ENCRYPTION_SALT`, and it fails _after_ creating the organization and
+  administrator, which leaves a database that cannot be onboarded again. When
+  neither the environment nor `.env` sets them, the script generates a pair
+  once into `${XDG_STATE_HOME:-~/.local/state}/logbook-screenshots/demo-keys.env`
+  (mode 600, outside the repository) and reuses it on every run, because data
+  written under one key is unreadable under another. Delete that file only
+  together with the database it seeded.
+- **Malware scanning.** Uploads fail closed when no ClamAV daemon answers, so
+  every seeded document and attachment would be refused with a 503. If
+  `clamd` and its signatures are installed, the script starts it on
+  `127.0.0.1:3310` and points the backend at it. Otherwise, when
+  `CLAMAV_ENABLED` is not set, the demo backend runs with scanning off and a
+  warning is printed.
+
+  **Do not commit admin screenshots captured with scanning off.** The backend
+  then shows administrators a non-dismissible "Uploaded files are not being
+  scanned for malware" banner on every page, and it appears in every shot. To
+  get scanning on, install ClamAV and fetch its signatures once:
+
+  ```bash
+  sudo apt-get install clamav-daemon   # or your platform's package
+  sudo freshclam                       # downloads ~110 MB of signatures
+  ```
+
+  Behind an HTTPS proxy, `freshclam` needs `HTTPProxyServer` / `HTTPProxyPort`
+  in its config, and a CA bundle readable by the `clamav` user, which it drops
+  to before downloading.
+
 ```bash
 # Use a unique password for this disposable environment. It is consumed by all
 # three commands and is never stored in the repository.
@@ -84,7 +116,8 @@ picture — the state it describes is the absence of seed data.
 
 `inventory-setup.mjs` covers those by running the built frontend under
 `vite preview` and answering every `/api/v1` request from fixtures. It writes
-the same `05-7x-setup-*` ids at the same framing capture.mjs uses (1440x900
+`05-72-setup-prompt`, `05-73-setup-rooms` and `05-93-empty-items` (the
+items list of a department with no items) at the same framing capture.mjs uses (1440x900
 desktop, 414x896 phone, 1x, pngquant), so the outputs are interchangeable and
 `capture.mjs` remains the pipeline of record for everything it _can_ reach.
 
@@ -121,10 +154,10 @@ library, a member gets Available Tests and My Results. A placeholder describing
 what a member sees therefore cannot be filled from the administrator's session,
 and a shot that looks fine can quietly picture the wrong screen.
 
-| Field   | Values                                                             | Notes                                                                                                                                                                                  |
-| ------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth`  | `admin` (default), `member`, `secretary`, `forwardee`, `anonymous` | `member` signs in as `DEMO_MEMBER_CREDENTIALS` — no officer rights. `secretary` reviews every seeded suggestion box. `forwardee` reviews none and has one suggestion forwarded to them |
-| `theme` | light (default), `dark`                                            | Drives the context's `colorScheme`; the app's theme follows system                                                                                                                     |
+| Field   | Values                                                                                                                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`  | `admin` (default), `member`, `secretary`, `forwardee`, `treasurer`, `compliance`, `gearless`, `trainingofficer`, `second-member`, `anonymous` | `member` signs in as `DEMO_MEMBER_CREDENTIALS` — no officer rights. `secretary` reviews every seeded suggestion box. `forwardee` reviews none and has one suggestion forwarded to them. `treasurer` runs the approval chains and raised none of the seeded requests. `compliance` is the Compliance Officer, the only reviewer of the default Compliance box. `gearless` holds, borrows and has requested nothing. `trainingofficer` holds the Training Officer position, which new training submissions prompt. `second-member` is another ordinary member with no shift reports and nothing pending in Requests |
+| `theme` | light (default), `dark`                                                                                                                       | Drives the context's `colorScheme`; the app's theme follows system                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 Each `auth` + `theme` combination gets its own browser context, built on first
 use — cookies are per-context, so swapping users by clearing them mid-run would

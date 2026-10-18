@@ -36,6 +36,7 @@ from app.schemas.minute import (
     MinutesCreate,
     MinutesListItem,
     MinutesReject,
+    MinutesReminderSettingsResponse,
     MinutesReopen,
     MinutesResponse,
     MinutesSearchResult,
@@ -43,16 +44,26 @@ from app.schemas.minute import (
     MotionCreate,
     MotionResponse,
     MotionUpdate,
+    PublishingStatusResponse,
     SectionEntry,
+    SignatureSlotResponse,
     TemplateCreate,
     TemplateListItem,
     TemplateResponse,
     TemplateSectionEntry,
     TemplateUpdate,
 )
-from app.services.document_service import DocumentService
+from app.services.agenda_document_access import narrow_documents
 from app.services.minute_service import MinuteService
+from app.services.minutes_print_data import adopting_title
+from app.services.minutes_publishing_service import MinutesPublishingService
 from app.services.template_service import TemplateService
+from app.utils.minutes_settings import (
+    load_minutes_publishing_settings,
+    load_minutes_reminder_settings,
+    load_signature_slots,
+)
+from app.utils.motion_votes import members_present, suggested_status
 from app.utils.rich_text import normalize_format
 
 router = APIRouter()
@@ -141,6 +152,47 @@ async def get_minutes_stats(
     service = MinuteService(db)
     return await service.get_stats(
         current_user.organization_id, restricted=not can_manage
+    )
+
+
+@router.get("/settings", response_model=MinutesReminderSettingsResponse)
+async def get_minutes_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    The department's action item reminder settings, as the server applies them.
+
+    Written through `PATCH /organization/settings` (`minutes` section), which
+    needs `settings.manage`.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    resolved = await load_minutes_reminder_settings(
+        db, str(current_user.organization_id)
+    )
+    publishing = await load_minutes_publishing_settings(
+        db, str(current_user.organization_id)
+    )
+    return MinutesReminderSettingsResponse(
+        public_posting=publishing.public_posting,
+        executive_library_publishing=publishing.executive_library,
+        executive_public_posting=publishing.executive_public,
+        executive_effective_library=publishing.library_allowed(True),
+        executive_effective_public=publishing.public_allowed(True),
+        action_item_reminders=resolved.reminders_enabled,
+        reminder_days_before_due=resolved.days_before_due,
+        overdue_repeat_days=resolved.overdue_repeat_days,
+        open_items_digest=resolved.digest_enabled,
+        signature_slots=[
+            SignatureSlotResponse(
+                key=slot.key, title=slot.title, position_slug=slot.position_slug
+            )
+            for slot in await load_signature_slots(
+                db, str(current_user.organization_id)
+            )
+        ],
     )
 
 
@@ -250,7 +302,7 @@ async def get_minutes(
         "Meeting minutes",
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("", response_model=MinutesResponse, status_code=status.HTTP_201_CREATED)
@@ -288,7 +340,7 @@ async def create_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.put("/{minutes_id}", response_model=MinutesResponse)
@@ -323,7 +375,7 @@ async def update_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.delete("/{minutes_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -397,7 +449,7 @@ async def submit_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("/{minutes_id}/approve", response_model=MinutesResponse)
@@ -441,7 +493,7 @@ async def approve_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("/{minutes_id}/reject", response_model=MinutesResponse)
@@ -482,7 +534,7 @@ async def reject_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 @router.post("/{minutes_id}/reopen", response_model=MinutesResponse)
@@ -533,7 +585,7 @@ async def reopen_minutes(
         user_id=str(current_user.id),
     )
 
-    return _build_response(minutes)
+    return await _respond(db, current_user, minutes)
 
 
 # ============================================
@@ -571,7 +623,9 @@ async def add_motion(
         user_id=str(current_user.id),
     )
 
-    return _build_motion_response(motion)
+    return _build_motion_response(
+        motion, await _present_count(service, minutes_id, current_user)
+    )
 
 
 @router.put("/{minutes_id}/motions/{motion_id}", response_model=MotionResponse)
@@ -609,7 +663,9 @@ async def update_motion(
         user_id=str(current_user.id),
     )
 
-    return _build_motion_response(motion)
+    return _build_motion_response(
+        motion, await _present_count(service, minutes_id, current_user)
+    )
 
 
 @router.delete(
@@ -786,11 +842,11 @@ async def publish_minutes(
         "Minutes",
     )
 
-    doc_service = DocumentService(db)
     async with handle_service_errors("Failed to publish minutes"):
-        doc = await doc_service.publish_minutes(
-            minutes, current_user.organization_id, current_user.id
+        outcome = await MinutesPublishingService(db).publish(
+            minutes, current_user.organization_id, current_user
         )
+    doc = outcome.document
 
     await log_audit_event(
         db=db,
@@ -801,6 +857,7 @@ async def publish_minutes(
             "minutes_id": minutes_id,
             "document_id": doc.id,
             "title": minutes.title,
+            "public_posted": outcome.public_copy is not None,
         },
         user_id=str(current_user.id),
     )
@@ -824,6 +881,66 @@ async def publish_minutes(
         created_by=doc.uploaded_by,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
+        public_allowed=outcome.public_allowed,
+        public_posted=outcome.public_copy is not None,
+    )
+
+
+@router.get("/{minutes_id}/publishing", response_model=PublishingStatusResponse)
+async def get_publishing_status(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Where these minutes stand: the library copy, the public copy, and whether the
+    department's settings allow each
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    minutes = ensure_found(
+        await MinuteService(db).get_minutes(
+            minutes_id, current_user.organization_id, load_children=False
+        ),
+        "Minutes",
+    )
+    return await MinutesPublishingService(db).status(
+        minutes, current_user.organization_id
+    )
+
+
+@router.delete("/{minutes_id}/public-posting", status_code=204)
+async def withdraw_public_posting(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    Take the public copy of these minutes down. The library copy is untouched,
+    and publishing again posts a fresh public copy.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    ensure_found(
+        await MinuteService(db).get_minutes(
+            minutes_id, current_user.organization_id, load_children=False
+        ),
+        "Minutes",
+    )
+    async with handle_service_errors("Failed to withdraw the public copy"):
+        copy = await MinutesPublishingService(db).withdraw(
+            minutes_id, current_user.organization_id, current_user
+        )
+    ensure_found(copy, "Public copy")
+    await log_audit_event(
+        db=db,
+        event_type="minutes_public_withdrawn",
+        event_category="meetings",
+        severity="warning",
+        event_data={"minutes_id": minutes_id},
+        user_id=str(current_user.id),
     )
 
 
@@ -980,6 +1097,10 @@ def _build_response(minutes) -> MinutesResponse:
             required=bool(s.get("required", False)),
             needs_motion=bool(s.get("needs_motion", False)),
             motion_text=s.get("motion_text") or "",
+            presenter=s.get("presenter") or "",
+            not_taken_up=bool(s.get("not_taken_up", False)),
+            agenda_key=s.get("agenda_key"),
+            documents=s.get("documents") or [],
         )
         for s in raw_sections
     ]
@@ -1002,6 +1123,7 @@ def _build_response(minutes) -> MinutesResponse:
         quorum_met=minutes.quorum_met,
         quorum_count=minutes.quorum_count,
         event_id=minutes.event_id,
+        meeting_id=minutes.meeting_id,
         template_id=minutes.template_id,
         sections=sections,
         header_config=(
@@ -1034,11 +1156,25 @@ def _build_response(minutes) -> MinutesResponse:
         created_by=minutes.created_by,
         created_at=minutes.created_at,
         updated_at=minutes.updated_at,
-        motions=[_build_motion_response(m) for m in (minutes.motions or [])],
+        motions=[
+            _build_motion_response(m, members_present(minutes.attendees))
+            for m in (minutes.motions or [])
+        ],
         action_items=[
             _build_action_item_response(a) for a in (minutes.action_items or [])
         ],
     )
+
+
+async def _respond(db: AsyncSession, user: User, minutes) -> MinutesResponse:
+    """The response, with linked documents narrowed to what *user* could open.
+
+    A section's linked-document names were copied from the library by someone
+    who could open them; this viewer may not be able to.
+    """
+    response = _build_response(minutes)
+    await narrow_documents(db, user.organization_id, user, response.sections)
+    return response
 
 
 def _loaded(obj, relationship: str, attribute: str):
@@ -1054,24 +1190,21 @@ def _loaded(obj, relationship: str, attribute: str):
     return getattr(related, attribute) if related is not None else None
 
 
-def _adopting_title(minutes) -> Optional[str]:
-    """The adopting meeting's title, unless it was a closed session: its title
-    can name the matter, and these minutes may be read by every member."""
-    if "adopting_minutes" in sa_inspect(minutes).unloaded:
-        return None
-    adopting = minutes.adopting_minutes
-    if adopting is None:
-        return None
-    kind = (
-        adopting.meeting_type
-        if isinstance(adopting.meeting_type, str)
-        else adopting.meeting_type.value
-    )
-    return None if kind == "executive" else adopting.title
+_adopting_title = adopting_title
 
 
-def _build_motion_response(motion) -> MotionResponse:
-    """Build a MotionResponse from a Motion model"""
+async def _present_count(service, minutes_id: str, user) -> int:
+    """Members the minutes record as in the room, for a motion's suggested result."""
+    minutes = await service.get_minutes(minutes_id, user.organization_id)
+    return members_present(minutes.attendees) if minutes else 0
+
+
+def _build_motion_response(motion, present: int = 0) -> MotionResponse:
+    """Build a MotionResponse from a Motion model
+
+    ``present`` is how many members the minutes record as in the room, which
+    the majority-of-those-present threshold counts against.
+    """
     return MotionResponse(
         id=motion.id,
         minutes_id=motion.minutes_id,
@@ -1085,6 +1218,12 @@ def _build_motion_response(motion) -> MotionResponse:
         votes_for=motion.votes_for,
         votes_against=motion.votes_against,
         votes_abstain=motion.votes_abstain,
+        votes_recused=motion.votes_recused,
+        threshold=motion.threshold,
+        roll_call=motion.roll_call,
+        suggested_status=suggested_status(
+            motion.threshold, motion.votes_for, motion.votes_against, present
+        ),
         election_id=motion.election_id,
         ballot_item_id=motion.ballot_item_id,
         election_title=_loaded(motion, "election", "title"),

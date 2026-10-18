@@ -62,7 +62,24 @@ def _section_snapshot(section: dict) -> dict:
     }
     if normalize_format(section.get("format")) == FORMAT_HTML:
         entry["format"] = FORMAT_HTML
+    # Like ``format``, written only when set, so a version sealed before
+    # agendas existed verifies byte for byte.
+    if section.get("presenter"):
+        entry["presenter"] = section["presenter"]
+    if section.get("not_taken_up"):
+        entry["not_taken_up"] = True
     return entry
+
+
+def _vote_detail(motion: Any) -> dict[str, Any]:
+    """How a motion's vote was taken, only for the parts that were recorded, so
+    a snapshot sealed before they existed keeps the hash it was sealed with."""
+    detail: dict[str, Any] = {}
+    for key in ("threshold", "votes_recused", "roll_call"):
+        value = getattr(motion, key, None)
+        if value is not None:
+            detail[key] = value
+    return detail
 
 
 def build_snapshot(
@@ -134,6 +151,7 @@ def build_snapshot(
                     if getattr(m, "section_key", None)
                     else {}
                 ),
+                **_vote_detail(m),
             }
             for m in sorted(minutes.motions or [], key=lambda m: (m.order, m.id))
         ],

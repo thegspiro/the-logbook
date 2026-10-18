@@ -32,6 +32,7 @@ from app.api.public.forms import router as public_forms_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
 from app.api.public.legal import router as public_legal_router
 from app.api.public.mcp_oauth import router as mcp_oauth_router
+from app.api.public.minutes import router as public_minutes_router
 from app.api.public.paypal_webhook import router as paypal_webhook_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
@@ -2417,8 +2418,9 @@ app.include_router(
     responses={**public_responses.TOKEN_ADDRESSED, **public_responses.BAD_REQUEST},
 )
 
-# Include public calendar ICS feed (no auth — token-protected per-user feed at
-# /api/public/v1/calendar/{token}.ics)
+# Include public calendar ICS feeds (no auth — token-protected: the per-member
+# shifts feed at /api/public/v1/calendar/{token}.ics and the department events
+# feed at /api/public/v1/calendar/org/{token}.ics)
 app.include_router(
     public_calendar_router, prefix="/api", responses=public_responses.TOKEN_ADDRESSED
 )
@@ -2458,6 +2460,14 @@ app.include_router(
 # /terms pages — /api/public/v1/legal
 app.include_router(
     public_legal_router, prefix="/api", responses=public_responses.RATE_LIMITED
+)
+
+# Minutes the department chose to post publicly, behind the /public/minutes
+# page — /api/public/v1/minutes
+app.include_router(
+    public_minutes_router,
+    prefix="/api",
+    responses={**public_responses.RATE_LIMITED, **public_responses.NOT_FOUND},
 )
 
 # RFC 9116 vulnerability-disclosure pointer. Mounted at the root (no /api

@@ -1381,15 +1381,23 @@ class TestItemDeployments:
 
         rows = MagicMock()
         rows.all.return_value = [(item, compartment_name, template)]
+        # The checklist nests Compartment 1 inside the Driver Side.
+        item.compartment_id = "comp-1"
+        compartments = MagicMock()
+        compartments.all.return_value = [
+            ("comp-1", "Compartment 1", "comp-0"),
+            ("comp-0", "Driver Side", None),
+        ]
         names = MagicMock()
         names.all.return_value = [("app-1", "Engine 1")]
-        mock_db.execute = AsyncMock(side_effect=[rows, names])
+        mock_db.execute = AsyncMock(side_effect=[rows, compartments, names])
 
         result = await service.get_item_deployments("inv-1", "org-1")
 
         assert len(result) == 1
         assert result[0]["apparatus_name"] == "Engine 1"
         assert result[0]["compartment_name"] == "Compartment 1"
+        assert result[0]["compartment_path"] == ["Driver Side", "Compartment 1"]
         assert result[0]["lot_number"] == "LOT-2"
         assert result[0]["is_expired"] is True
 
@@ -1402,7 +1410,9 @@ class TestItemDeployments:
 
         rows = MagicMock()
         rows.all.return_value = [(item, "Compartment 1", template)]
-        mock_db.execute = AsyncMock(side_effect=[rows])
+        compartments = MagicMock()
+        compartments.all.return_value = []
+        mock_db.execute = AsyncMock(side_effect=[rows, compartments])
 
         result = await service.get_item_deployments("inv-1", "org-1")
 

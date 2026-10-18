@@ -70,6 +70,19 @@ def _validate_check_type(value: Optional[str]) -> Optional[str]:
     return normalize_check_type(value)
 
 
+def _normalize_count_unit(value: Optional[str]) -> Optional[str]:
+    """Trim a count unit, and read a blank one as "no unit".
+
+    Free text rather than a fixed list: the builder offers presets (each,
+    rolls, boxes, ...) but a department counts in its own terms. A blank is
+    an admin clearing the field, which must store NULL rather than "".
+    """
+    if value is None:
+        return None
+    trimmed = value.strip()
+    return trimmed or None
+
+
 class CheckTemplateItemCreate(BaseModel):
     """Schema for creating a check template item."""
 
@@ -81,6 +94,7 @@ class CheckTemplateItemCreate(BaseModel):
     required_quantity: Optional[int] = None
     expected_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
+    count_unit: Optional[str] = Field(None, max_length=50)
     min_level: Optional[float] = None
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
@@ -96,6 +110,11 @@ class CheckTemplateItemCreate(BaseModel):
     @classmethod
     def check_type_is_supported(cls, value: str) -> str:
         return _validate_check_type(value) or value
+
+    @field_validator("count_unit")
+    @classmethod
+    def count_unit_is_label(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_count_unit(value)
 
 
 class CheckTemplateItemBulkCreate(BaseModel):
@@ -143,6 +162,7 @@ class CheckTemplateItemUpdate(BaseModel):
     required_quantity: Optional[int] = None
     expected_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
+    count_unit: Optional[str] = Field(None, max_length=50)
     min_level: Optional[float] = None
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
@@ -158,6 +178,11 @@ class CheckTemplateItemUpdate(BaseModel):
     @classmethod
     def check_type_is_supported(cls, value: Optional[str]) -> Optional[str]:
         return _validate_check_type(value)
+
+    @field_validator("count_unit")
+    @classmethod
+    def count_unit_is_label(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_count_unit(value)
 
 
 class CheckTemplateItemResponse(UTCResponseBase):
@@ -179,6 +204,9 @@ class CheckTemplateItemResponse(UTCResponseBase):
     required_quantity: Optional[int] = None
     expected_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
+    # The position's own unit, as typed in the builder. What a crew sees is
+    # unit_of_measure below, which prefers the linked catalog's unit.
+    count_unit: Optional[str] = None
     min_level: Optional[float] = None
     level_unit: Optional[str] = None
     serial_number: Optional[str] = None
@@ -187,8 +215,8 @@ class CheckTemplateItemResponse(UTCResponseBase):
     equipment_id: Optional[str] = None
     inventory_item_id: Optional[str] = None
     quantity_on_truck: Optional[int] = None
-    # Projected from the linked catalog item: "2/4" alone does not say whether
-    # a crew is looking for two boxes or two gloves.
+    # Projected from the linked catalog item, else count_unit: "2/4" alone
+    # does not say whether a crew is looking for two boxes or two gloves.
     unit_of_measure: Optional[str] = None
     # The lots physically aboard, soonest first. A crew checking a drug bag is
     # reading dates off boxes; without these the form can only show one date
@@ -477,6 +505,9 @@ class ShiftEquipmentCheckItemResponse(UTCResponseBase):
     status: str
     quantity_found: Optional[int] = None
     required_quantity: Optional[int] = None
+    # Par at check time; NULL on results filed before it was recorded.
+    expected_quantity: Optional[int] = None
+    count_unit: Optional[str] = None
     critical_minimum_quantity: Optional[int] = None
     level_reading: Optional[float] = None
     level_unit: Optional[str] = None
@@ -664,6 +695,9 @@ class FailureLogRecord(BaseModel):
     check_type: Optional[str] = None
     status: str
     notes: Optional[str] = None
+    quantity_found: Optional[int] = None
+    target_quantity: Optional[int] = None
+    count_unit: Optional[str] = None
     checked_by_name: Optional[str] = None
 
 
@@ -957,6 +991,8 @@ class ItemDeployment(BaseModel):
     template_item_id: str
     item_name: str
     compartment_name: Optional[str] = None
+    # The checklist's nesting, outermost first and ending in compartment_name.
+    compartment_path: List[str] = Field(default_factory=list)
     template_id: Optional[str] = None
     template_name: Optional[str] = None
     apparatus_id: Optional[str] = None
@@ -967,6 +1003,10 @@ class ItemDeployment(BaseModel):
     expiration_date: Optional[date] = None
     days_until_expiration: Optional[int] = None
     is_expired: bool = False
+    # What the position should hold, and the running count aboard (null when
+    # nobody has counted since the position was defined).
+    target_quantity: Optional[int] = None
+    quantity_on_truck: Optional[int] = None
 
 
 class ExpiredStockDisposition(str, Enum):
@@ -1183,6 +1223,51 @@ class CrossTemplateLinkResponse(BaseModel):
     linked: int = 0
     skipped: int = 0
     skipped_positions: List[SkippedLinkPosition] = Field(default_factory=list)
+
+
+class AutoLinkedGroup(BaseModel):
+    """One checklist name that was linked automatically, and what to."""
+
+    model_config = _camel_config
+
+    name: str
+    inventory_item_id: str
+    inventory_item_name: str
+    confidence: str
+    # Set when an "also called" name produced the match, so the screen can say
+    # why "BVM" was linked to "Bag Valve Mask".
+    matched_alias: Optional[str] = None
+    position_count: int
+    # The positions this pass actually wrote — positions linked by hand in
+    # the meantime are left out — so the screen can link to each template and
+    # undo exactly these.
+    positions: List[LinkReportPosition] = Field(default_factory=list)
+
+
+class AutoLinkResponse(CrossTemplateLinkResponse):
+    """What the automatic pass linked, and how much it left for a person."""
+
+    left_for_review: int = 0
+    groups: List[AutoLinkedGroup] = Field(default_factory=list)
+
+
+class CrossTemplateUnlinkRequest(BaseModel):
+    """Links to undo: template item id -> the inventory item it was linked to.
+
+    The expected item is part of the request so a position re-linked by hand
+    since is recognised and left alone. Capped like the link request.
+    """
+
+    links: Dict[str, str] = Field(..., min_length=1, max_length=2000)
+
+
+class CrossTemplateUnlinkResponse(BaseModel):
+    """How many positions were unlinked, and how many had changed meanwhile."""
+
+    model_config = _camel_config
+
+    unlinked: int = 0
+    skipped: int = 0
 
 
 # CheckTemplateItemResponse references DeployedLot, which is declared with the

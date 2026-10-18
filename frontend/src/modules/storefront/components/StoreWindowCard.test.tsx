@@ -1,49 +1,44 @@
 /**
- * Workflow review W67: with 16 days and some hours left, the card showed
- * "16 days" while its screen-reader announcement said "Ordering closes in 17
- * days" — the announcement rounded up, the countdown down.
+ * The card shows a short countdown pill and announces the same deadline in
+ * words. They rounded in opposite directions, so 14½ days read "14d left" and
+ * "Ordering closes in 15 days" on one card.
  */
-
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { StoreWindowCard } from './StoreWindowCard';
-import { StorePaymentPolicy } from '../types';
 import type { Storefront } from '../types';
 
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 
-const NOW = new Date('2026-10-15T13:00:00Z');
+import { StoreWindowCard } from './StoreWindowCard';
 
-const storefront = (closesAt: string): Storefront => ({
-  isEnabled: true,
-  storeName: 'Valley Fire Gear Shop',
-  currency: 'USD',
-  showOpenOrderBanner: true,
-  allowPickup: true,
-  allowShipping: false,
-  pickupLocation: 'Station 1',
-  taxRate: '0',
-  acceptedPaymentMethods: ['cash'],
-  paymentMethods: [],
-  paymentPolicy: StorePaymentPolicy.BEFORE_PICKUP,
-  sendsOrderConfirmation: true,
-  window: { id: 'w1', name: 'Fall 2026 order', opensAt: '2026-10-15T08:00:00Z', closesAt },
+const NOW = new Date('2026-10-16T08:00:00Z');
+
+const storefront = {
+  window: {
+    id: 'window-1',
+    name: 'Fall shirt order',
+    opensAt: '2026-10-16T07:00:00Z',
+    // 14 days 12 hours from NOW.
+    closesAt: '2026-10-30T20:00:00Z',
+  },
   otherOpenWindows: [],
-  products: [],
-});
+  showOpenOrderBanner: true,
+} as unknown as Storefront;
 
-describe('StoreWindowCard countdown (W67)', () => {
+describe('StoreWindowCard countdown', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+  });
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('announces the same number of days the countdown shows', () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(NOW);
-    // 16 days and 9 hours away.
-    render(<StoreWindowCard storefront={storefront('2026-10-31T22:00:00Z')} onSelectWindow={vi.fn()} />);
+  it('says the same number of days in the pill and in words', () => {
+    render(<StoreWindowCard storefront={storefront} onSelectWindow={vi.fn()} />);
 
-    expect(screen.getByText('16 days')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Ordering closes in 16 days');
+    expect(screen.getByText('14d left')).toBeInTheDocument();
+    expect(screen.getByText('Ordering closes in 14 days')).toBeInTheDocument();
+    expect(screen.queryByText('Ordering closes in 15 days')).not.toBeInTheDocument();
   });
 });

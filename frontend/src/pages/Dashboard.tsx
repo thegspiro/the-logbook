@@ -344,6 +344,11 @@ const Dashboard: React.FC = () => {
   // completed training and membership type. Distinct from the per-shift
   // eligibility fetched when a signup row is expanded.
   const [mySeats, setMySeats] = useState<string[]>([]);
+  // The scheduling service's verdict that this member can hold no shift seat at
+  // all (an administrative member whose positions do not allow it, say). False
+  // until the answer lands or when it fails: hiding "Take a Shift" from a
+  // member who can ride is worse than showing it to one who cannot.
+  const [shiftsExcluded, setShiftsExcluded] = useState(false);
 
   // The member's own screening compliance, as counts. Left null when the read
   // fails so the verdict states a narrower scope rather than implying
@@ -922,12 +927,14 @@ const Dashboard: React.FC = () => {
     if (!isRetry) setSeatsError(false);
     if (!isModuleOn('scheduling')) {
       setMySeats([]);
+      setShiftsExcluded(false);
       return;
     }
     try {
       // No shift id: the positions the member may hold in general, not the
       // ones open on a particular shift.
       const data = await schedulingService.getEligiblePositions();
+      setShiftsExcluded(data.is_excluded === true);
       // A member the department excludes from shift signup has no seats to
       // report, and "no seats" is not a readiness finding about them — the
       // verdict simply says nothing on the subject.
@@ -1013,10 +1020,14 @@ const Dashboard: React.FC = () => {
       let schedulingFailed = false;
       let trainingFailed = false;
       let adminHoursFailed = false;
-      const [schedulingSummary, trainingSummary, adminHoursSummary] = await Promise.all([
+      const [shiftHours, trainingSummary, adminHoursSummary] = await Promise.all([
         canLoadScheduling
-          ? schedulingService.getSummary().catch((err) => {
-              console.error('Failed to load scheduling summary:', err);
+          ? // The member's own credited hours, the same source as Shift
+            // Scheduling > My Hours. getSummary() is the department-wide total
+            // of every member's attendance, which headed "My Hours" showed one
+            // member the whole roster's shift time.
+            schedulingService.getMyHoursHistory().catch((err) => {
+              console.error('Failed to load shift hours:', err);
               schedulingFailed = true;
               return null;
             })
@@ -1071,10 +1082,7 @@ const Dashboard: React.FC = () => {
           trainingFailed || !canLoadTraining
             ? previous.training
             : (trainingSummary?.hours_summary?.hours_this_month ?? null),
-        standby:
-          schedulingFailed || !canLoadScheduling
-            ? previous.standby
-            : (schedulingSummary?.hours_worked_this_month ?? null),
+        standby: schedulingFailed || !canLoadScheduling ? previous.standby : (shiftHours?.current_month.hours ?? null),
         administrative:
           adminHoursFailed || !canLoadAdminHours ? previous.administrative : (adminHoursSummary?.totalHours ?? null),
       }));
@@ -1440,14 +1448,33 @@ const Dashboard: React.FC = () => {
 
   const feedUnread = unreadCount + deptMsgUnread;
 
+  // A member who cannot hold a seat has no standby time to account for, so the
+  // row is dropped -- unless hours were credited to them anyway (a position
+  // changed since), in which case hiding it would understate the total.
+  const showStandbyHours = !shiftsExcluded || loadingHours || (hours.standby ?? 0) > 0;
+  // "Excluded" is the general answer, with no shift in question. A seat opened
+  // to this member on one particular shift (an administrative member on a
+  // parade) is only visible per shift, so the tile goes only when the open
+  // list is empty too. For a member without scheduling.manage that list is
+  // already seat-level (GET /shifts/open lists only shifts with an unclaimed
+  // seat they can take). A manager's is the department-wide gap view, which
+  // says nothing about what they can claim, so the tile is simply kept for
+  // them: the scheduling screen is where they work anyway, and re-deriving
+  // claimability here would second-guess the backend's own capacity check.
+  const showTakeShift =
+    !shiftsExcluded || loadingOpenShifts || openShiftsError || canViewScheduling || openShiftsInWindow.length > 0;
   const hoursSegments: HoursSegment[] = [
     { label: 'Training', value: hours.training, colorClass: 'bg-theme-accent-green' },
-    {
-      label: 'Standby',
-      value: hours.standby,
-      colorClass: 'bg-theme-accent-yellow',
-      onClick: () => void navigate('/scheduling?tab=my-shifts&view=past'),
-    },
+    ...(showStandbyHours
+      ? [
+          {
+            label: 'Standby',
+            value: hours.standby,
+            colorClass: 'bg-theme-accent-yellow',
+            onClick: () => void navigate('/scheduling?tab=my-shifts&view=past'),
+          },
+        ]
+      : []),
     {
       label: 'Administrative',
       value: hours.administrative,
@@ -1898,10 +1925,12 @@ const Dashboard: React.FC = () => {
                   shift and clocking in are as common as logging training.
                   On a phone they sit *below* the week: at 2am the thumb
                   reaches the bottom third, and the week is what you read. */}
-              <div className="order-3 grid grid-cols-2 gap-3 sm:order-1 sm:grid-cols-3">
+              <div
+                className={`order-3 grid grid-cols-2 gap-3 sm:order-1 ${showTakeShift ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}
+              >
                 <button
                   onClick={() => void navigate('/training/submit')}
-                  className="focus:ring-theme-focus-ring col-span-2 flex min-h-[72px] items-center gap-3.5 rounded-lg bg-red-800 px-4 py-4 text-left text-white shadow-sm transition-colors hover:bg-red-900 focus:ring-2 focus:ring-offset-2 focus:outline-hidden active:bg-red-900 sm:col-span-1 sm:min-h-[88px]"
+                  className={`focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-3.5 rounded-lg bg-red-800 px-4 py-4 text-left text-white shadow-sm transition-colors hover:bg-red-900 focus:ring-2 focus:ring-offset-2 focus:outline-hidden active:bg-red-900 sm:col-span-1 sm:min-h-[88px] ${showTakeShift ? 'col-span-2' : 'col-span-1'}`}
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/20">
                     <Plus className="h-6 w-6" strokeWidth={2.5} aria-hidden="true" />
@@ -1912,29 +1941,31 @@ const Dashboard: React.FC = () => {
                   </span>
                 </button>
 
-                <button
-                  onClick={() => void navigate('/scheduling')}
-                  className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
-                >
-                  <span className="bg-theme-accent-green-muted text-theme-accent-green flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
-                    <CalendarPlus className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="text-theme-text-primary block text-[15px] font-bold sm:text-base">
-                      Take a Shift
+                {showTakeShift && (
+                  <button
+                    onClick={() => void navigate('/scheduling')}
+                    className="card focus:ring-theme-focus-ring flex min-h-[72px] items-center gap-2.5 px-3.5 py-4 text-left hover:shadow-md focus:ring-2 focus:outline-hidden sm:min-h-[88px] sm:gap-3.5 sm:px-4"
+                  >
+                    <span className="bg-theme-accent-green-muted text-theme-accent-green flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11">
+                      <CalendarPlus className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
                     </span>
-                    <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
-                      {openShiftsError ? (
-                        'Open shifts unavailable'
-                      ) : (
-                        <>
-                          <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
-                          {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
-                        </>
-                      )}
+                    <span className="min-w-0">
+                      <span className="text-theme-text-primary block text-[15px] font-bold sm:text-base">
+                        Take a Shift
+                      </span>
+                      <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
+                        {openShiftsError ? (
+                          'Open shifts unavailable'
+                        ) : (
+                          <>
+                            <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
+                            {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
+                          </>
+                        )}
+                      </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                )}
 
                 <button
                   onClick={() => void navigate('/admin-hours')}

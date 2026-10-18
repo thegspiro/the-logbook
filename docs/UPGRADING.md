@@ -134,6 +134,29 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### The Unraid compose files no longer ship placeholder secrets (2026-10-16)
+
+`unraid/docker-compose-unraid.yml` and `unraid/docker-compose-build-from-source.yml`
+used to fall back to `change_me_strong_password` for `MYSQL_ROOT_PASSWORD`,
+`DB_PASSWORD` and `REDIS_PASSWORD`, and (Unraid file only) to
+`GENERATE_WITH_openssl_rand_hex_32` for `SECRET_KEY`, `ENCRYPTION_KEY` and
+`ENCRYPTION_SALT`. A missing `.env` value therefore started a database
+protected by a password printed in the repository. `docker-compose.minimal.yml`
+had the same fallback for `REDIS_PASSWORD`. Each is now a required variable,
+and `docker compose up` stops with `<NAME> must be set in .env`.
+
+- **Installs made with `unraid-setup.sh`:** nothing to do. It writes all six
+  values to `.env`.
+- **Compose Manager or hand-written `.env` that relied on the placeholder:**
+  the database was initialised with that password, so do not just set a new
+  `DB_PASSWORD` — the stored one will no longer match. Either put the password
+  you are actually running with into `.env`, or change it inside MySQL/Redis
+  first (`ALTER USER`, `CONFIG SET requirepass`) and then update `.env`.
+- Elasticsearch and MinIO keep an empty default: both refuse to start without
+  a password, and the variables only matter when their profile is enabled.
+
+No migration and no data change.
+
 ### The backend needs the `nh3` package for rich-text minutes (2026-10-14)
 
 Meeting-minutes sections can now be written with a rich-text editor. The
@@ -481,6 +504,65 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A weekly security report is emailed to the IT Manager (2026-10-16)
+
+Every department now receives a weekly email of **counts** — security alerts by
+severity and type, application errors by type, and whether the audit log's hash
+chain verified — with links to the Security Alerts and Audit Log pages. It
+carries no member names, usernames or event descriptions. A quiet week sends a
+short all-clear, so a missing email means the scheduler or mail is broken.
+
+- **On by default, Monday 07:00 on the department's clock.** Change the day and
+  hour, or turn it off, under **Organization Settings > Authentication >
+  Security Report**. Nothing is stored until someone saves, so an installation
+  upgrading today starts receiving it without any action.
+- **Recipients:** active members who hold the **IT Manager** position; if no
+  one does, active full administrators. The settings page says which. It is a
+  required email, so a recipient cannot switch it off in their own preferences.
+- **Needs the scheduler.** The `weekly_security_report` task is checked hourly
+  (`0 * * * *` on a host cron setup, listed with the other tasks in
+  `scheduled_tasks.py`). A deployment that does not run scheduled tasks sends
+  nothing.
+- **First send:** a department is not sent last week's slot at upgrade time; it
+  waits for its next scheduled day and hour.
+- **Single-department installs** also count alerts raised before sign-in (for
+  example repeated failed logins), which have no organization and appear in no
+  department's alert list on a shared install.
+
+No migration; the setting lives in the organization's existing settings JSON.
+
+### Equipment-check counts: short of par is a restock, not a failure (2026-10-16)
+
+A count line on an equipment checklist now answers two questions with two
+numbers. **Min to Pass** fails the line when the count is below it, and so
+does **Critical Min** even when Min to Pass is blank. **Par** no longer fails
+anything: a count below par but at or above the minimum **passes** and puts the
+shortfall on the restock list.
+
+What changes from the upgrade onward:
+
+- **Checklists with only Par set stop failing for being short.** Under the old
+  rule a count below par failed the line, the check, and the apparatus's
+  readiness. Those lines now pass with a restock line instead, so compliance
+  and failure reports show fewer failures from the upgrade date. Checks filed
+  before the upgrade keep their original verdict. If a line should still fail
+  below a number, set **Min to Pass** on it in the checklist builder.
+- **Par and Min to Pass both set now raise a restock between them.** Before,
+  Min to Pass was used as the only target, so a count of 8 against par 10 /
+  min 6 passed and nothing was restocked. It now passes and asks for 2.
+- **The CSV checklist import stops copying the par column into Min to Pass.**
+  Add a `Min to Pass` column to the file to set a pass floor.
+- **Count lines can name a unit** ("each", "rolls", "boxes", …). Count a
+  partial pack in the smaller unit; every quantity stays a whole number. A line
+  linked to an inventory item always counts in that item's unit of measure.
+
+The migration (`12e20092c1a8`) only adds three nullable columns and rewrites
+no rows, so it is safe on a running database.
+
+A check saved for offline sending on a device still running the previous app
+is accepted: that app reports short-of-par lines as **Fail**, and the server
+files the crew's answer as sent.
+
 ### Installer and backup settings (2026-10-13)
 
 - **`BACKUP_ENABLED` and `BACKUP_SCHEDULE` did nothing** and are gone from the
@@ -792,6 +874,70 @@ folder unless somebody has filed it elsewhere since.
   columns (no backfill). `4b7e1f0c9a2d` then gives each Compliance box that is
   still an unedited seed a required "What kind of concern is this?" question; an
   edited box is left alone, and its downgrade removes only an untouched copy.
+
+### Facility files upload in one step (2026-10-16)
+
+Nothing here stops the stack from starting, and there is no migration. The
+facility Files section now uploads through two new endpoints:
+
+- `POST /facilities/{facility_id}/photos/upload`: an image, with an optional
+  `caption`.
+- `POST /facilities/{facility_id}/documents/upload`: any document type the
+  Documents library accepts, with an optional `document_type` (default
+  `facility_record`) and `description`.
+
+Both take `facilities.create`, `facilities.edit` or `facilities.manage`, and
+no Documents permission. Before this, a facilities manager without
+`documents.manage` was refused. The file is stored straight into the
+facility's Photos or Facility Documents folder.
+
+The old two-step path still works: `POST /documents/upload`, then
+`POST /facilities/photos` or `POST /facilities/documents`.
+
+### Full administrators get a weekly email of admin-only folders (2026-10-16)
+
+Nothing here stops the stack from starting, and there is no migration. A new
+scheduled task, `admin_only_folder_digest`, checks daily and emails each
+department's active full administrators at most once a week, while any folder
+is on the Documents page's list of folders only they can open. Each email
+lists every such folder.
+
+- **External cron:** if you run scheduled tasks from cron rather than the
+  backend's own loop, add
+  `25 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=admin_only_folder_digest`.
+- **Opting out:** it is the optional "Document folder access" email. A full
+  administrator can turn it off under their email settings, and a department
+  can make it required on the Member Emails & Texts page.
+- When it was last sent is stored in the organization's settings, under
+  `documents.admin_only_digest_last_sent`.
+
+### Folders that lose everyone but administrators are listed (2026-10-15)
+
+Nothing here stops the stack from starting. Migration `c903fc771081` adds two
+nullable columns to `document_folders`, `admin_only_confirmed_at` and
+`admin_only_confirmed_by`, with no backfill. A folder can come to open to full
+administrators alone without being saved, for example when the last member
+holding its position leaves it. Full administrators now see those folders
+listed on the Documents page, each with **Change access** and **Keep for
+administrators only**.
+
+- **Folders confirmed before this upgrade are listed once.** The save-time
+  question from 2026-10-14 recorded nothing, so a folder confirmed then
+  appears on the list and needs **Keep for administrators only** a second
+  time.
+- **Probationary members now count** as members who open a folder, for this
+  list and for the save-time question. Sign-in already treats them as active,
+  and before this change a folder only probationary members could open was
+  reported as administrators-only.
+- **API:** `GET /documents/folders/admin-only` returns the list, and is empty
+  for anyone but a full administrator.
+  `POST /documents/folders/{id}/confirm-admin-only` records the confirmation.
+- **A confirmation lapses when the folder regains an audience.** Reading the
+  list clears it, so `GET /documents/folders/admin-only` can write: it clears
+  the confirmation on any folder someone besides administrators can open
+  again.
+- **Downgrade** drops both columns, so the list shows every confirmed folder
+  again after the next upgrade.
 
 ### A folder only administrators could open is confirmed first (2026-10-14)
 
@@ -2345,7 +2491,7 @@ the gear — that answer is the whole record.
 After that, a mark clears itself whenever the value the label encodes changes
 (barcode, else asset tag, else serial number), so an item whose barcode is
 edited goes back to needing a label. Details in
-[`training/05-inventory.md`](./training/05-inventory.md#knowing-which-items-still-need-a-label-2026-09-23).
+[`training/05-inventory.md`](./training/05-inventory.md#knowing-which-items-still-need-a-label).
 
 ### Suggestion boxes, and a new permission on five seeded positions (2026-09-23)
 

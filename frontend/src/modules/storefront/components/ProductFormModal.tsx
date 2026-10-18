@@ -184,6 +184,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
       toast.error('Give the item a name');
       return;
     }
+    // A blank price used to be saved as $0.00, putting a free item on sale
+    // nobody meant to give away. Zero stays allowed, but only when typed.
+    const price = form.price.trim() === '' ? Number.NaN : Number(form.price);
+    if (!Number.isFinite(price) || price < 0) {
+      toast.error('Enter a price (type 0 for a free item)');
+      return;
+    }
     if (form.requiresVariant && variants.length === 0) {
       toast.error('Add at least one option, or turn off "requires an option"');
       return;
@@ -210,7 +217,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
       description: blankToNull(form.description),
       imageUrl: blankToNull(form.imageUrl),
       category: blankToNull(form.category),
-      price: Number(form.price || 0),
+      price,
       cost: numberOrNull(form.cost),
       isTaxable: form.isTaxable,
       status: form.status,
@@ -303,10 +310,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
           </div>
           <div>
             <label htmlFor="product-price" className="form-label">
-              Price
+              Price <span aria-hidden="true">*</span>
             </label>
             <input
               id="product-price"
+              required
+              aria-required="true"
               type="number"
               min="0"
               step="0.01"
@@ -351,11 +360,18 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
               value={form.status}
               onChange={(e) => update('status', e.target.value as StoreProductStatus)}
               className="form-input"
+              aria-describedby="product-status-help"
             >
               <option value={StoreProductStatus.DRAFT}>Draft</option>
               <option value={StoreProductStatus.ACTIVE}>Active (for sale)</option>
               <option value={StoreProductStatus.ARCHIVED}>Archived</option>
             </select>
+            {/* A new item starts as a draft, and a draft is offered in no order
+                window — so an item saved with the defaults never reached the
+                store, and members saw "Nothing listed yet". */}
+            <p id="product-status-help" className="text-theme-text-muted mt-1 text-xs">
+              Draft items aren&apos;t shown to members. Choose Active to sell it.
+            </p>
           </div>
         </div>
 

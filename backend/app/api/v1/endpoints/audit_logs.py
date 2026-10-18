@@ -12,12 +12,14 @@ are excluded from the org-scoped view to prevent cross-org leakage.
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.core.utils import utc_isoformat
 from app.models.audit import AuditLog
 from app.models.user import User
@@ -54,8 +56,33 @@ def _serialize(entry: AuditLog, actor_username: str | None = None) -> dict[str, 
     }
 
 
+async def _audit_trail_read(
+    db: AsyncSession,
+    current_user: User,
+    request: Request,
+    event_type: str,
+    event_data: dict[str, Any],
+) -> None:
+    """Record that someone read the audit trail itself (HIPAA §164.312(b)).
+
+    The trail names members and what was done to their records, so who
+    browsed it has to be answerable too. Same event name as the
+    /security/audit-logs reader so one search finds both.
+    """
+    await log_audit_event(
+        db=db,
+        event_type=event_type,
+        event_category="audit",
+        severity="info",
+        event_data={"queried_by": current_user.username, **event_data},
+        user_id=str(current_user.id),
+        ip_address=get_client_ip(request),
+    )
+
+
 @router.get("")
 async def list_audit_logs(
+    request: Request,
     event_type: str | None = Query(None, max_length=100),
     event_category: str | None = Query(None, max_length=50),
     severity: str | None = Query(None, pattern="^(info|warning|critical)$"),
@@ -118,6 +145,23 @@ async def list_audit_logs(
     )
     entries = result.all()
 
+    await _audit_trail_read(
+        db,
+        current_user,
+        request,
+        "audit_log_queried",
+        {
+            "filters": {
+                "event_type": event_type,
+                "event_category": event_category,
+                "severity": severity,
+                "user_id": user_id,
+                "search": search,
+            },
+            "results_count": len(entries),
+        },
+    )
+
     return {
         "logs": [_serialize(e, actor) for e, actor in entries],
         "total": total,
@@ -168,6 +212,7 @@ async def audit_log_stats(
 @router.get("/{log_id}")
 async def get_audit_log_entry(
     log_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("audit.view")),
 ) -> dict[str, Any]:
@@ -182,4 +227,11 @@ async def get_audit_log_entry(
     if not row:
         raise HTTPException(status_code=404, detail="Audit log entry not found")
     entry, actor = row
+    await _audit_trail_read(
+        db,
+        current_user,
+        request,
+        "audit_log_entry_viewed",
+        {"log_id": log_id},
+    )
     return _serialize(entry, actor)

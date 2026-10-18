@@ -26,6 +26,11 @@ built-in integrity API.
 - Failed logins, lockouts, geo-blocks, and anomaly detections raise
   security events; error monitoring via Sentry
   [DEPARTMENT: enabled? alert recipients?].
+- The platform emails the IT Manager a weekly report of alert, error and
+  audit-log-health counts (**Organization Settings > Authentication >
+  Security Report**). It is the prompt for the review below, not a
+  substitute for it: it carries counts only, so the detail is read in the
+  application. A week with no email is itself a finding.
 - [DEPARTMENT: who] reviews the audit dashboard / integrity status
   [DEPARTMENT: cadence], and verifies chain integrity
   (`GET /security/audit-log/integrity`) after any suspected incident and

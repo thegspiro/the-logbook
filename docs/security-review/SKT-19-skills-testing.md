@@ -2071,3 +2071,203 @@ feature, 1 cross-feature scope gap flagged for the rotation
 (`knowledge_tests.py`, unowned and unreviewed). Every standing flag this
 feature carried into pass 7 is now closed; no open findings remain in
 `SKT-19-skills-testing.md`.**
+
+---
+
+## Pass 8 (2026-10-16)
+
+**Prefix:** `SKT8` · **PR:** recorded in `PROGRESS.md`'s Open PR row.
+Watchdog pickup — the dedicated `/loop 30m /security-review` session had no
+open PR or branch for this feature at pickup time (confirmed via
+`gh api repos/.../pulls?state=open`, not the tracker); PR #3302 (Feature 18,
+Training extended, pass 8) had already merged with nothing started since.
+
+**Scope check.** Diffed the current tree against `0066c60c9` (the pass-7
+merge commit for PR #2976), fetched directly by SHA since this checkout's
+default shallow clone does not reach it:
+
+```
+backend/app/api/v1/endpoints/skills_testing.py  | 30 +++++++++++---------------  (13+/17-)
+backend/app/services/skills_testing_service.py  | 161 +++++++++++++++++++++++--  (151+/10-)
+backend/app/schemas/skills_testing.py           | 10 ++++++++++
+backend/app/models/skills_testing.py            | 182 ++++++++++++++++++++++-------------  (116+/66-)
+```
+
+Read every diff directly, not summarized from a commit message.
+
+- **Endpoint file:** cosmetic mypy-narrowing (an `if`-assigned local given an
+  explicit type instead of returning the expression directly; a `bool(...)`
+  cast on `test.is_practice`) plus a real DRY fix — `_apply_test_filters`'s
+  review-queue predicate and `get_testing_summary`'s pending-validation count
+  now both call one new `pending_validation_criteria(organization_id)`
+  helper instead of each hand-writing the same four-clause filter, closing
+  the exact "two places compute the same rule and can drift" shape Pitfall
+  #29 warns about (there was no drift today — the two clause lists were
+  identical before this change — but the extraction means a future edit to
+  one can no longer silently miss the other). `create_template`/
+  `duplicate_template` gained `valid_for_months=...` passthroughs for the
+  schema field below.
+- **Service/schema/model files:** a genuine new feature, **skill expiration
+  tracking**. `SkillTemplate.valid_for_months` (nullable `Integer`, migration
+  `a17a47c5a871` — table-existence-guarded, confirmed by reading it directly)
+  is how long a passing official test stays valid; `skill_test_expiration()`
+  computes the lapse date with `dateutil.relativedelta` (clamped to a
+  shorter month correctly: Jan 31 + 1 month = Feb 28, not an invalid date);
+  `member_skill_expirations()` lists a member's own upcoming lapses. The rest
+  of the models diff is mechanical `Column` → `Mapped`/`mapped_column`
+  typing (part of the repo-wide mypy remediation effort), read in full and
+  confirmed behavior-neutral — every `nullable`/`ondelete`/`server_default`
+  is unchanged, so Pitfall #2 is not newly at risk.
+
+**New surface reviewed against the checklist, not accepted from its own
+test file's coverage:**
+
+- **Tenant isolation.** `member_skill_expirations(db, organization_id,
+user_id, ...)` takes both ids as plain parameters (never a client-supplied
+  id from the route it is reached through — see below) and filters
+  `SkillTest.organization_id == organization_id` **and**
+  `SkillTemplate.organization_id == organization_id` on the join, not just
+  one side. Confirmed by reading the query directly.
+- **Self-scoping, at the one caller.** The only call site
+  (`app/api/v1/endpoints/training_module_config.py:503`, `GET
+/training/my-training` — outside this feature's declared scope, read anyway
+  since it is this function's only consumer) passes
+  `org_id = str(current_user.organization_id)` and `user_id =
+str(current_user.id)` — the caller's own identity, not a path/query
+  parameter. There is no route anywhere that lets one member request another
+  member's expirations through this function.
+- **Disclosure gating, not merely a cosmetic filter.** Before an entry is
+  built, `resolve_result_view(...)` is called with the member's own id and
+  the entry is skipped unless the result is `view in (SCORES, FULL)` —
+  reusing the same disclosure machinery `list_tests`/`get_test` depend on,
+  not a parallel reimplementation (Pitfall #29's "do not re-derive" rule).
+  Confirmed this actually withholds data, not just computes it and discards
+  it: `test_a_withheld_result_is_not_announced_by_its_expiry` and
+  `test_a_result_awaiting_release_is_not_listed` in
+  `tests/test_skill_test_expirations.py` both construct a test whose
+  disclosure/release policy would hide it and assert the expirations list
+  comes back empty, i.e. the query that would reveal the pass date is never
+  exposed, not redacted after the fact.
+- **`is_officer` is the one existing short-circuit, applied consistently.**
+  `resolve_result_view` returns `FULL` unconditionally when `is_officer` is
+  true, same as every other caller in this file — an officer viewing their
+  own "My Training" page sees their own result in full regardless of the
+  org's disclosure policy, which is the documented, pre-existing behavior
+  ("the policy exists to govern what the person _being evaluated_ sees, not
+  to hide an officer's own record-keeping from them"), not a new gap this
+  feature introduces.
+- **Bounded, not a scan.** The query is `WHERE organization_id = ... AND
+candidate_id = ...` — one member's rows, not an org-wide table — so dimension
+  6 (abuse resistance) does not apply the way it did to the pre-paging
+  `list_tests`/`export_tests_csv`/`list_templates` (SKT3-2).
+- **`today` is server-resolved, not client-supplied** — `resolve_org_today`
+  at the one caller, confirmed by reading its assignment; a caller cannot
+  skew "days until expiry" by sending an arbitrary date.
+
+**No finding.** The new surface was built against this feature's own
+established disclosure and org-scoping machinery rather than beside it, and
+the one DRY fix in the endpoint file closes a latent two-copies-of-one-rule
+risk before it had the chance to drift, rather than after.
+
+### Re-verification of pass 1–7 fixes
+
+Read the current code directly for each, not re-cited from any prior
+write-up:
+
+- **SKT-1** — `update_template` still routes through `apply_updates` inside a
+  `try/except ValueError`.
+- **SKT-2 / SKT-3 / create_test's SoD / validate_test's SoD** — all four
+  `assert_different_person(...)` call sites still present
+  (`skills_testing.py:1574` `create_test`, `:2402` `validate_test`, `:3049`
+  `void_test`, `:3219` `return_test_for_correction` — line numbers shifted by
+  this pass's own typing/helper diff, same four functions as every prior
+  pass).
+- **SKT-4** — `lock_attempt_capacity` (`skills_testing_service.py:752`) still
+  locks `TrainingRequirement` with `.with_for_update()`; the `spent` count in
+  `assert_attempts_remaining` still carries `.with_for_update(of=SkillTest)`
+  (`:891`); `validate_test` still calls `lock_attempt_capacity` (confirmed at
+  `skills_testing.py:2350`) ahead of `_lock_test_for_transition`'s per-test
+  lock.
+- **SKT2-1** — zero `is_practice ==` comparisons (`grep -c` returns 0); still
+  `.is_(...)` throughout both files.
+- **SKT3-1** — `add_test_viewer` still rejects naming both the candidate and
+  the examiner before the existing-grant lookup.
+- **SKT3-2 / SKT4-1 / SKT4-2 / SKT4-3 / SKT4-7** — all five re-confirmed
+  fixed and unchanged since pass 7 (paging/export bounds, item caps on
+  sheets and results, summary figures gated to officers, `update_test`
+  refusing to set an outcome directly) — no commit in this pass's diff
+  touches any of their call sites.
+- **SKT4-4 / SKT4-5 / SKT4-6 / SKT5-1** — the email disclosure guard, the
+  enum `field_validator`s + `max_length` caps + fail-closed resolution, the
+  voided-before-validation redaction (status, the four void fields, and
+  `pending_validation` all flipped together), and the `waive_reason` scrub
+  in the `scores` view are all still present, re-grepped directly.
+
+All twelve standing guard-test files from passes 1–7 re-run clean (see
+completion gate). **Route surface re-enumerated with a fresh AST walk**
+(script written this pass, not a re-read of any prior table — every
+`@router.<verb>` decorator plus every `Depends(...)` default among its
+function's arguments): **29/29 routes**, identical paths, methods and gates
+to every prior pass's table — no new route, no new permission string.
+**Org-scoping re-swept**: 87 `select(` call sites (unchanged count from pass
+7 — this pass's diff adds no new query), every one either carries an
+`organization_id` filter or resolves through an already-org-scoped parent
+row, matching pass 7's sweep exactly (including the one deliberate
+exception, the client-minted-id lookup, re-confirmed unchanged).
+
+### Cross-feature scope note (not reviewed this pass — tracked for the rotation)
+
+`docs/KNOWN_LIMITATIONS.md`'s "Training — Online Knowledge Tests Have No
+Owning Feature In The Security Rotation" entry (filed by this feature's pass 7) is still accurate as of TR-17 pass 8 (2026-10-16): that pass's own
+declared nine-file scope list still does not name
+`knowledge_tests.py`/`knowledge_test.py`. No action taken here — this
+remains a rotation-process gap for Feature 17 or 18's next pass to pick up,
+not a defect in this feature's own files.
+
+### Corrections to prior write-ups
+
+None. Passes 1–7's findings, fixes, and flagged items are all re-verified
+intact above; nothing in this pass contradicts anything a prior pass
+recorded.
+
+## Guard tests added
+
+None by this pass — the one real feature in scope (`valid_for_months`/skill
+expirations) landed already guard-tested
+(`tests/test_skill_test_expirations.py`, 20 tests covering the expiry
+arithmetic, the schema bounds, and — read in full above —
+`TestMemberSkillExpirations`'s org-scoping, disclosure-gating, and
+newest-pass-wins coverage). This pass found a stale local database (the
+session's MariaDB had been built against an older migration head, before
+`a17a47c5a871` added `valid_for_months`) rather than a code defect; running
+`alembic upgrade head` + `scripts/repair_schema.py` resolved it, and every
+test that had errored on the missing column passed afterward with no code
+change. Not a finding, since nothing in the application or its migrations
+was wrong — the review environment's database was simply behind.
+
+## Completion gate (pass 8)
+
+| Check                                                 | Result                                                                                 |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations (`flake8==7.3.0`, CI's pin, reinstalled to match)                      |
+| `black --check app/ tests/ alembic/`                  | ✅ 2356 files unchanged (`black==26.5.1`, CI's pin, reinstalled to match)              |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean (`isort==9.0.1`, CI's pin, reinstalled to match)                              |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ 606 revisions, single head `361a40316340`                                           |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 270 routes, 0 errors/warnings                                                       |
+| `pytest tests/ -q -k "skill or skt"`                  | ✅ 565 passed, 1 skipped (pre-existing optional-dependency skip), up from pass 7's 512 |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors (`npm ci` run first — this worktree had no `node_modules` at all)          |
+| `cd frontend && npm run lint`                         | ✅ 0 errors, 0 warnings (`--max-warnings 10`)                                          |
+
+No source file is modified by this pass — the one feature commit in scope
+(skill expiration tracking) was already on `main`, already guard-tested, and
+reviewed clean against all seven checklist dimensions above. This pass's own
+diff is documentation only (this findings file, `PROGRESS.md`).
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** One real
+feature landed in this feature's files since pass 7 (`valid_for_months`/skill
+expirations) and was read in full rather than assumed safe from its own test
+coverage; it is correctly org-scoped, self-scoped at its one caller, gated by
+the existing disclosure machinery, and bounded to one member's rows. The
+route surface (29/29), the org-scoping sweep (87/87), and all standing
+fixes from passes 1–7 were re-verified directly against current code. No
+open findings remain in this feature.

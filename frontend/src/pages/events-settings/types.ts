@@ -59,6 +59,10 @@ export interface PipelineSectionProps extends SettingsSectionProps {
   onNewTaskDescChange: (value: string) => void;
 }
 
+/** Bounds of `EmailTemplateCreate.trigger_days_before` in the backend schema. */
+export const MIN_TEMPLATE_DAYS_BEFORE = 1;
+export const MAX_TEMPLATE_DAYS_BEFORE = 90;
+
 /** Props for the Email section. */
 export interface EmailSectionProps extends SettingsSectionProps {
   emailTemplates: EmailTemplate[];
@@ -75,6 +79,9 @@ export interface EmailSectionProps extends SettingsSectionProps {
   onNewTemplateBodyChange: (value: string) => void;
   newTemplateTrigger: string;
   onNewTemplateTriggerChange: (value: string) => void;
+  /** Raw text of the "days before" field; read only while the trigger is days_before_event. */
+  newTemplateDaysBefore: string;
+  onNewTemplateDaysBeforeChange: (value: string) => void;
 }
 
 /** Minimal form info shown in the events settings panel. */

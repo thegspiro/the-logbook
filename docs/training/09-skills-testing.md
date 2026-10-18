@@ -1247,6 +1247,13 @@ keep the last value in place.
 
 ![Per-template Result Disclosure controls showing the inherited default](./images/09-08-template-result-disclosure.png)
 
+Here is the same group with both dropdowns set on the sheet: **Scores only** and
+**Only after an officer releases the result**. A member who takes a test from
+this sheet sees nothing of it until an officer releases it. After the release
+they see pass or fail and the points, but none of the examiner's written notes.
+
+![The Result Disclosure group with Scores only and Only after an officer releases the result chosen](./images/09-25-template-scores-on-release.png)
+
 ### Releasing a withheld result
 
 In **Skills Test Records**, a completed official result that has not been
@@ -1259,6 +1266,8 @@ On the result itself, **Release to candidate** appears under **Officer
 actions** only where it is a real step: the result is held for release, and the
 member is allowed to see it. Until the result is accepted, the button is
 greyed out — there is no decided outcome to release yet.
+
+![The Officer actions card on an accepted result held for release, with the green Release to candidate button and the line saying what the candidate will see once it is released](./images/09-26-release-to-candidate.png)
 
 ### The member is told when a result becomes theirs to read
 

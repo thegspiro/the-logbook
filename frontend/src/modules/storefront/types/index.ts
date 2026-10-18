@@ -414,18 +414,23 @@ export interface StoreOrderWindow {
   updatedAt?: string | null;
 }
 
+/**
+ * Optional fields accept `null` because the update endpoint dumps with
+ * `exclude_unset`: an omitted key keeps the stored value, so an edit that
+ * clears a field has to send an explicit `null`.
+ */
 export interface StoreOrderWindowInput {
   name: string;
-  description?: string | undefined;
-  opensAt?: string | undefined;
-  closesAt?: string | undefined;
+  description?: string | null | undefined;
+  opensAt?: string | null | undefined;
+  closesAt?: string | null | undefined;
   autoOpen: boolean;
   autoClose: boolean;
-  expectedDeliveryDate?: string | undefined;
-  pickupInstructions?: string | undefined;
+  expectedDeliveryDate?: string | null | undefined;
+  pickupInstructions?: string | null | undefined;
   includeAllProducts: boolean;
   notifyOnOpen: boolean;
-  notes?: string | undefined;
+  notes?: string | null | undefined;
 }
 
 export interface StorefrontVariantOption {

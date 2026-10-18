@@ -97,7 +97,7 @@ dropped/archived status). Deactivate or archive first.
 
 ## Consent
 
-**Settings → Security → Privacy Choices** (`GET /api/v1/users/me/consents`;
+**My Account → Privacy → Privacy Choices** (`GET /api/v1/users/me/consents`;
 one choice at a time with `PUT /api/v1/users/me/consents/{consent_type}`)
 
 Consent gates _optional_ processing only — the things a department may do with

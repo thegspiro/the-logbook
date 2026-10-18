@@ -101,10 +101,10 @@ drivers and expiration dates in one place, and that its crew seats fill in on
 new shifts. A search or filter that matches nothing reads **No Apparatus
 Found** instead.
 
-<!-- Screenshot needed: the empty fleet list (**No apparatus yet**) and the Add
-Apparatus form with the intro line, the NFPA help text and the **CNG** fuel
-option. See `SCREENSHOT_CURRENCY.md`, _Queued by the October 7 – 8
-documentation pass_.
+![The Add Apparatus form: the intro line, the identification and status fields, CNG chosen as the fuel type, and the NFPA compliance tracking help text](./images/06-29-add-apparatus-form.png)
+
+<!-- Screenshot needed: the empty fleet list (**No apparatus yet**). See
+`SCREENSHOT_CURRENCY.md`, _Queued by the October 7 – 8 documentation pass_.
 -->
 
 > **Hint:** If your department does not use the full Apparatus module, you
@@ -215,9 +215,13 @@ page.
 picker list every vehicle in the Apparatus module. A shift template that names
 a rig keeps it. A shift with no rig gets no equipment checklist.
 
-> **Screenshot needed:** a vehicle page showing the Deficiency explanation and
-> the Failures link; the edit form with the **Reason** field; Create Shift with
-> the apparatus picker.
+![Editing a vehicle's status: Out of Service chosen, and the Reason field below it, required for that status, with "Shown next to the status on the apparatus page."](./images/06-30-apparatus-status-reason.png)
+
+![The Create Shift dialog with its Apparatus picker set to an Apparatus-module vehicle](./images/06-31-create-shift-apparatus.png)
+
+<!-- Screenshot needed:
+_[A vehicle page showing the Deficiency explanation and the **See what was found →** link to the failures in Check Reports.]_
+-->
 
 ---
 
@@ -420,7 +424,7 @@ For the full workflow, including how to request and approve an exception, see
 Equipment checks are structured checklists that crews run on a vehicle, often
 at the start of a shift. They are part of Inventory. For building checklists,
 running checks and the reports, see
-[Inventory → Equipment Checklists](./05-inventory.md#equipment-checklists-moved-here-2026-08-31).
+[Inventory → Equipment Checklists](./05-inventory.md#equipment-checklists).
 
 What matters on the Apparatus side:
 
@@ -447,7 +451,7 @@ view of its tracked supplies, the lots and expiry dates aboard, and the stock
 on the shelf behind it. A crew can record what they used as they use it. See
 [Shifts & Scheduling → Supply Tracking](./03-scheduling.md#supply-tracking-keeping-the-truck-and-the-shelf-in-step)
 and, for the shelf side,
-[Inventory → Dated Stock Lots and Receiving](./05-inventory.md#dated-stock-lots-and-receiving-2026-08-10).
+[Inventory → Dated Stock Lots and Receiving](./05-inventory.md#dated-stock-lots-and-receiving).
 
 | What if …?                                             | What happens                                                                                                                                    |
 | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -642,9 +646,7 @@ at what is open for check-in in that room right now:
   guessing.
 - **None:** "Nothing to check in to", with **Check again**.
 
-<!-- Screenshot needed:
-_[Signed in as a member, open `/locations/<room id>/check-in` for a room with two events in their check-in window → the "Which event are you here for?" page listing both events.]_
--->
+![A member who tapped the Volunteer Office's room tag: "Which event are you here for?" listing the two events open for check-in in that room](./images/06-32-room-checkin-chooser.png)
 
 Someone who can write room tags but is not shown kiosk codes (the Vice
 President, by default) sees a **Room NFC Tags** list instead of the room

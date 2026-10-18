@@ -225,6 +225,7 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose,
                 {status.expose_finance ? ' · finance totals shared' : ''}
                 {status.expose_medical_screening ? ' · medical screening status shared' : ''}
                 {status.expose_full_schedule ? ' · full duty schedule shared' : ''}
+                {status.expose_medical_supplies ? ' · medical supply inventory shared' : ''}
               </p>
             )}
           </div>

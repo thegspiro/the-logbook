@@ -3,10 +3,11 @@ Event organizers: who runs an event, who hears about it, and handing it over.
 
 An event names an organizer and an optional alternate. They — not every holder
 of ``events.manage`` — are asked to vouch for a member who missed check-in, and
-they receive the series-end reminder for a recurring event. Either of them, or
-any events manager, can hand the event to somebody else; on a recurring event
-the handover can carry to every upcoming occurrence, which is how a new officer
-takes over a standing drill night without anybody re-creating it.
+they receive the series-end reminder for a recurring event and the prompt to
+validate attendance once an event ends. Either of them, or any events manager,
+can hand the event to somebody else; on a recurring event the handover can
+carry to every upcoming occurrence, which is how a new officer takes over a
+standing drill night without anybody re-creating it.
 
 When neither can be reached — both have left, or the only one set is the member
 asking — attendance requests go to a position the department picks per event
@@ -275,9 +276,15 @@ class EventOrganizerService:
             if user_has_permission(user, EVENT_MANAGER_PERMISSION)
         ]
 
-    async def series_reminder_recipients(self, event: Event) -> List[User]:
-        """The organizer and alternate of a series; its creator if neither is
-        reachable, which is who the reminder went to before organizers."""
+    async def organizer_duty_recipients(self, event: Event) -> List[User]:
+        """Who is told about a duty that belongs to whoever runs *event*: the
+        series-end reminder and the post-event "validate attendance" prompt.
+
+        The organizer and alternate; the creator only if neither is an
+        eligible member, since an event with no reachable organizer still
+        needs somebody to close it out. Unlike attendance requests there is
+        no wider fallback — these are reminders, not decisions waiting on an
+        answer."""
         organization_id = str(event.organization_id)
         recipients = await self._active_users(organizer_ids(event), organization_id)
         if recipients or not event.created_by:

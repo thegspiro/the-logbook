@@ -25,6 +25,7 @@ from app.services.integration_services.base import (
     MAX_RESPONSE_SIZE,
     ResponseTooLargeError,
 )
+from app.services.integration_services.calendar_common import CalendarTransient
 from app.services.integration_services.google_calendar_service import (
     GoogleCalendarService,
     _BoundedHttp,
@@ -231,12 +232,22 @@ class TestThroughTheGoogleClient:
         time.sleep(0.2)
         assert local_google.sent < _STREAM_TOTAL
 
-    async def test_a_push_against_a_stalled_api_returns_none(
+    async def test_a_push_against_a_stalled_api_raises_transient(
         self, local_google, monkeypatch
     ):
         monkeypatch.setattr(gcal, "_READ_TIMEOUT", 0.5)
         local_google.mode = "stall_before_headers"
-        result = await GoogleCalendarService({"token": "t"}).push_event(
-            {"title": "Drill"}
-        )
-        assert result is None
+        payload = {
+            "event_id": "00000000-0000-0000-0000-000000000001",
+            "title": "Drill",
+            "start": "2026-10-16T09:00:00-04:00",
+            "end": "2026-10-16T10:00:00-04:00",
+            "time_zone": "America/New_York",
+            "url": "https://logbook.example/events/1",
+        }
+        started = time.monotonic()
+        with pytest.raises(CalendarTransient):
+            await GoogleCalendarService({"token": "t"}).upsert_event(
+                "cal", None, payload
+            )
+        assert time.monotonic() - started < 5

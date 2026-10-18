@@ -344,8 +344,11 @@ const PhotoUseConsentPage: React.FC = () => {
             </h1>
             <p className="text-theme-text-secondary mt-1 max-w-3xl text-sm">
               Who has agreed to their image being used in publications, social media, and other public material. Members
-              set this themselves under My Account &rarr; Privacy &rarr; Privacy Choices; it cannot be changed on their
-              behalf from here.
+              set this themselves under{' '}
+              <Link to="/account?tab=privacy" className="text-theme-text-primary underline hover:no-underline">
+                My Account &rarr; Privacy &rarr; Privacy Choices
+              </Link>
+              ; it cannot be changed on their behalf from here.
             </p>
           </div>
           <div className="hscroll flex items-center gap-2">

@@ -136,6 +136,7 @@ async def get_mcp_status(
         "expose_finance": config.expose_finance,
         "expose_medical_screening": config.expose_medical_screening,
         "expose_full_schedule": config.expose_full_schedule,
+        "expose_medical_supplies": config.expose_medical_supplies,
         "active_key": _key_to_dict(active[0]) if active else None,
     }
 

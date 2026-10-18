@@ -307,7 +307,7 @@ export const SuggestionsPanel: React.FC<SuggestionsPanelProps> = ({
         }}
         title="Decline this suggestion"
         message="The member sees your reason next to their suggestion."
-        label="Reason (optional)"
+        label="Reason"
         required={false}
         multiline
         confirmLabel="Decline"

@@ -296,13 +296,9 @@ right up against this one. The least busy members are listed first.
   is noted on the request and in the audit log. Exchange cards name the other
   member.
 
-<!-- Screenshot needed:
-_[Member at /scheduling?tab=my-shifts, Request swap dialog with Exchange With a Member chosen and the Exchange With dropdown listing two seats. Demo members only.]_
--->
+![The Request Shift Swap dialog as a member, with Exchange With a Member chosen and the Exchange With list naming the member and seat to trade with](./images/03-106-exchange-swap-dialog.png)
 
-<!-- Screenshot needed:
-_[Scheduling officer at /scheduling?tab=requests: the "Approve without qualification?" confirmation over a pending exchange, with Approve anyway and Keep it pending. Needs a seeded exchange whose member lost a qualification after submission. Do not confirm.]_
--->
+![The Approve without qualification? confirmation over the Requests tab, naming the seat the member is not cleared for, with Keep it pending and Approve anyway](./images/03-107-approve-without-qualification.png)
 
 - **A request ends when its seat does.** If you leave a shift for any reason
   (you withdraw or decline, take approved time off, go on leave, or an officer
@@ -519,13 +515,9 @@ figures, not inside them:
 The Shift Compliance report **does** add them into each member's shift and
 hour totals.
 
-<!-- Screenshot needed:
-_[My Shifts → Hours as a member → the "Shifts with other departments" card with two entries (one showing a start–end time range, one reading **Not counted** with its reason) and the **Log outside shift** button.]_
--->
+![The Shifts with other departments card on a member's Hours view: two counted shifts with their times, hours and unit, one Not counted entry with the officer's reason, and the Log outside shift button](./images/03-108-member-outside-shifts.png)
 
-<!-- Screenshot needed:
-_[My Shifts → Hours → Log outside shift → the "Log a shift with another department" dialog with Start and End filled, the **+12 hours** / **+24 hours** buttons, "Counts as 12 hours", and Department and Apparatus chosen.]_
--->
+![The Log a shift with another department dialog: Start filled in, End set by the +12 hours button, Counts as 12 hours, and Township Fire Company and Engine 21 chosen](./images/03-109-log-outside-shift-dialog.png)
 
 ### For scheduling officers: the list and the review
 
@@ -545,21 +537,13 @@ You need to be able to manage schedules for both of these.
   reason) or **Restore**. Officers who can only view reports see the list but
   can't reject or restore.
 
-<!-- Screenshot needed:
-_[Scheduling Admin → Settings → Outside Apparatus → one department with two units, one turned off, and the "Add a department" field.]_
--->
+![Scheduling Settings on Outside Apparatus: Township Fire Company with Engine 21 on and Tanker 23 switched off, a second department below, and the Add a department field](./images/03-110-outside-apparatus-settings.png)
 
-<!-- Screenshot needed:
-_[Scheduling Reports → Member Hours → scrolled to the "Outside apparatus staffed" table and the "Shifts with other departments" list with a Reject button on a row.]_
--->
+![Member Hours scrolled to Outside apparatus staffed, one row per outside unit with its shifts, hours and members, and below it Shifts with other departments with a Reject button on each counted row](./images/03-111-member-hours-outside-tables.png)
 
-<!-- Screenshot needed:
-_[Member at /scheduling?tab=my-shifts&view=hours, with at least one outside department and unit seeded. The 'Log a shift with another department' dialog opened from 'Log outside shift' and filled in: a Start, an End set with '+12 hours', the 'Counts as 12 hours' line, a Department and Apparatus chosen, and Position 'Driver'. Use placeholder department names, never a real neighbouring department.]_
--->
+![The Log a shift with another department dialog at phone width, filled in: Start, an End set with +12 hours, Counts as 12 hours, Township Fire Company, Engine 21 and Position Driver](./images/03-112-member-outside-dialog-driver.png)
 
-<!-- Screenshot needed:
-_[Member at /scheduling?tab=my-shifts&view=hours. The 'Shifts with other departments' section under the Hours table, with two counted entries showing date, time range, hours and apparatus, and one 'Not counted' entry with its Reason line; a card above should read '+N hrs with other departments'.]_
--->
+![A member's Hours view: the This month card reading +24 hrs with other departments above the monthly table, and the Shifts with other departments section beneath with two counted entries and one Not counted with its reason](./images/03-113-member-hours-with-outside.png)
 
 ---
 
@@ -775,9 +759,7 @@ At or after the scheduled end, it checks you out without asking.
 > **not** ask first. One tap there ends your shift for good. If you check out
 > by mistake, ask an officer to fix your hours.
 
-<!-- Screenshot needed:
-_[Shift Check-In at phone width, one hour into a shift → tap Check Out → the "Check out early?" dialog with **Stay checked in** and **Check out now**.]_
--->
+![Shift Check-In on a phone during a shift: the Check out early? dialog saying when the shift runs until, with Stay checked in and Check out now](./images/03-114-check-out-early.png)
 
 > **What if I forget to check out?** Anyone still checked in is checked out
 > automatically at the shift's end time. The close-out checklist warns the
@@ -948,7 +930,7 @@ car crash. It was one call for the department and one run for each unit.
 Member credit is different again. A member who came on at 0300 was not on the
 2200 call.
 
-![Call Volume for a count-only department: Unit Responses, Avg Responses/Day and Peak Responses, over the footnote saying an incident two units attended is counted once for each](./images/03-82-call-volume-count-only.png)
+![Call Volume for a count-only department: Total Calls, Avg Calls/Day and Peak Calls, with no per-unit footnote](./images/03-82-call-volume-count-only.png)
 
 ![The same department and period in detailed mode: the identical cards read Total Calls, Avg Calls/Day and Peak Calls, and the per-unit footnote is gone](./images/03-83-call-volume-detailed.png)
 
@@ -1091,7 +1073,7 @@ A swap starts from the shift you are giving up.
 | **Specific Shift**         | "Choose which shift you want". Pick a shift under **Select Shift**. If an officer approves, you move to that shift in the same seat, and your original seat becomes open |
 | **Exchange With a Member** | "Trade seats: you take theirs, they take yours". Pick a member's seat under **Exchange With**. Only seats you are both qualified for, in the next 90 days, are listed |
 
-![The Request Shift Swap dialog — the two swap-type cards, the shift picker and the reason field](./images/03-67-swap-request-dialog.png)
+![The Request Shift Swap dialog — the three swap-type cards (Open Swap, Specific Shift, Exchange With a Member) with Specific Shift chosen, the shift picker and the reason field](./images/03-67-swap-request-dialog.png)
 
 The request then appears under **Requests → Swap Requests**, where you can
 follow it or cancel it.
@@ -1202,9 +1184,7 @@ that ✕ marks your own request, which you cannot review._
 
 ![The bottom of the Requests tab's first page of time-off requests, with the Load more time-off requests control beneath the twentieth row](./images/03-79-requests-load-more.png)
 
-<!-- Screenshot needed:
-_[Member at /scheduling?tab=requests on the default Pending filter, after their only swap request was approved. It shows 'No swap requests', 'Your swap requests will appear here…' and the line 'Showing pending requests only. Choose All Statuses to see the rest.']_
--->
+![The Requests tab for a member whose only swap request was approved: No swap requests on the default Pending filter, with the line Showing pending requests only. Choose All Statuses to see the rest.](./images/03-115-requests-nothing-pending.png)
 
 > **For administrators: which permissions does this need?** On the Role
 > Management screen:
@@ -1643,9 +1623,7 @@ apparatus. Below the table are **Outside apparatus staffed** and **Shifts with
 other departments**. See
 [Shifts with other departments](#shifts-with-other-departments).
 
-<!-- Screenshot needed:
-_[Scheduling administrator (scheduling.manage) at /scheduling/admin/reports, Member Hours generated for a range containing outside shifts. Show the Outside Hours column, the 'Outside apparatus staffed' table with its Total row, and the 'Shifts with other departments' list with a Reject button and one 'Not counted' row. Use placeholder department names such as 'Township Fire Company', never a real neighbouring department.]_
--->
+![Member Hours for a range containing outside shifts: the Outside Hours column in the member table, the Outside apparatus staffed table with its Total row, and Shifts with other departments with Reject buttons and one Not counted row](./images/03-122-member-hours-report-outside.png)
 
 ### Compliance Report
 
@@ -1693,7 +1671,7 @@ requirement exempts, because they joined before it, are left out. See
 > - An **hours** requirement is graded here from shift attendance only when it
 >   is ticked. The Training screens still grade it from training records.
 
-![Scheduling compliance report with per-member shift totals](./images/03-14-scheduling-reports.png)
+![Shift Compliance: the Requirements, Requirement Checks, Checks Met and Checks Not Met cards above each requirement, a requirement nobody is held to reading Not applicable](./images/03-14-scheduling-reports.png)
 
 > **Tip:** Members on an active leave of absence have their requirements
 > reduced. The report shows the adjusted target and the number of leave months.
@@ -1721,9 +1699,7 @@ read it and acknowledge it."
   first, it adds: "A training officer reviews each report before it is shared
   with you." It also lists what a report holds.
 
-<!-- Screenshot needed:
-_[Scheduling → Shift Reports as a member with no reports → the "Shift reports about you" heading and the "No shift reports yet" empty state with its three cards.]_
--->
+![Shift Reports for a member with no reports: the Shift reports about you heading and the No shift reports yet explanation with its three cards](./images/03-116-shift-reports-none-yet.png)
 
 **If you were the Shift Officer** on a shift but cannot manage training
 records, you can still file that shift's reports. Follow the link from your
@@ -1761,9 +1737,7 @@ The **New report** button sits beside the strip.
 The **Department** view shows the same tiles under **Department reporting
 summary**, for every officer. It shows totals only, not a list.
 
-<!-- Screenshot needed:
-_[Scheduling → Shift Reports as a training officer → Written by me → "Your reporting summary" with its tiles (including a Drafts to finish → button), the "Reports written per month" chart, and the "Reports you've written (N)" list beginning below.]_
--->
+![Shift Reports on Written by me: Your reporting summary tiles including Drafts to finish, the Reports written per month chart, and the start of the Reports you've written list](./images/03-117-reporting-summary.png)
 
 **What a report card shows.** Each card shows, without opening it:
 
@@ -1779,11 +1753,9 @@ turns amber at 3 days and red at 7.
 
 On a phone, the status badges sit on their own row under the name.
 
-![A shift report card naming the trainee in its header, with the filing officer in the metadata row beneath it](./images/03-49-report-card-names.png)
+![A shift report card on Written by me naming the member in its header, expanded to its rating, call types, narrative, skills and tasks](./images/03-49-report-card-names.png)
 
-<!-- Screenshot needed:
-_[Scheduling → Shift Reports at 390 px width as an officer → a report card with its status badges on their own row beneath the member's full name.]_
--->
+![A shift report card at 390px phone width: the member's full name on its own line and the status badges on a row beneath it](./images/03-118-report-card-phone.png)
 
 The view you pick is kept in the page address. Refreshing, sharing the link or
 using the back button returns you to the same view.
@@ -1926,7 +1898,7 @@ reports are held on the device:
 
 **Save as Draft** needs a connection. Only submitting can be held offline.
 
-![The Shift Reports tab offline banner — reports will be saved locally and submitted when connectivity returns](./images/03-63-offline-banner.png)
+![The Shift Reports tab offline banner — reports are saved on this device and sent automatically when you're back online](./images/03-63-offline-banner.png)
 
 Held reports are not listed one by one. The banner count is how you know they
 are waiting.
@@ -2345,10 +2317,10 @@ This section is in three parts:
 
 The full list of checklist screens and who can open each one is in the
 Inventory guide, under
-[Equipment Checklists](./05-inventory.md#equipment-checklists-moved-here-2026-08-31).
+[Equipment Checklists](./05-inventory.md#equipment-checklists).
 The settings that decide when crews are prompted, and how early or late a
 member may check in, are under
-[Checklist Settings](./05-inventory.md#checklist-settings-moved-here-2026-08-31).
+[Checklist Settings](./05-inventory.md#checklist-settings).
 
 ---
 
@@ -2369,6 +2341,16 @@ You can also get there from your shift:
 
 Both take you to My Checklists with that shift's checks at the top.
 
+On a phone the list is compact: one row per checklist under a heading for each
+day (**Today**, **Tomorrow**, then the date). A day that has passed and still
+holds an unfiled check is marked overdue. **Unscheduled checklist** sits beside
+the title (shortened to **Unscheduled**), and **Apparatus Inventory** and
+**Manage Templates** fold into a **⋯** menu. Completed checklists are grouped
+by the day checked. The **All / Start / End** filter is gone; every row carries
+its own **Start** or **End** badge. On a laptop the cards below are unchanged.
+
+<!-- Screenshot needed: My Checklists on a phone, showing day headings, the overdue marker and the ⋯ menu. -->
+
 Each card shows:
 
 - the truck, and whether it is a **Start of shift** or **End of shift** check;
@@ -2385,9 +2367,7 @@ The button follows the status:
 | Part answered                | **Continue checklist**            |
 | Already filed for this shift | **Submitted for this shift** (no button) |
 
-If more than one check is listed, use **All**, **Start of shift** or **End of
-shift** to filter them. Your finished checks are under **Completed
-checklists** at the bottom.
+Your finished checks are under **Completed checklists** at the bottom.
 
 If nothing is due, the page says: _"Nothing to check right now. When one of
 your shifts has an equipment checklist, it will show up here. If you expected
@@ -2423,7 +2403,7 @@ Every item asks for one of four kinds of answer:
 | Type         | What you do                                                    | What passing means                                                                                                  |
 | ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **Function** | Select **Pass** or **Fail**                                    | It works. Selecting an answer moves you straight on to the next item                                                |
-| **Count**    | Set the count with the stepper                                 | The count is at or above its target (its _par_). Short of par is filed as a failure                                 |
+| **Count**    | Set the count with the stepper                                 | The count is at or above its **Min to Pass**. Short of _par_ but at the minimum passes and becomes a restock line   |
 | **Level**    | Enter the reading, then pass or fail                           | The reading meets its minimum. An empty box means "not read yet", not zero. The reading is kept, so trends show     |
 | **Expiry**   | Check the serial number, lot number and expiry date on record, then pass or fail | The date on record has not passed. Items close to their date show amber on every shift until they are replaced |
 
@@ -2452,9 +2432,25 @@ check, or an officer who can edit checklists, can add photos to it.
 
 ![Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below](./images/03-72-check-item-controls.png)
 
-**Critical minimum.** A count item can have a critical minimum below its par.
-If your count is at or below it, the item shows a red **CRITICAL — below
-minimum** warning.
+**Par, Min to Pass and Critical Min.** A count item can carry three numbers,
+and they answer two different questions:
+
+| Number           | What it does                                                                                 |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| **Par**          | What the truck should carry. A count below par shows **Restock _N_** and goes on the restock list. It does **not** fail the item |
+| **Min to Pass**  | A count below it fails the item, shown as **Below minimum (_N_) — fails**                    |
+| **Critical Min** | A count below it fails the item even when Min to Pass is blank, shows a red **CRITICAL — below minimum** warning, and alerts leadership in the failure email |
+
+For example, with par 10 and Min to Pass 6, a count of 8 passes and asks for 2
+more; a count of 5 fails. With only a par of 10 set, a count of 3 still passes
+and asks for 7. A count exactly at a minimum is not below it, and a count that
+meets par is never critical.
+
+**Count units.** A count item can say what is counted — each, rolls, boxes,
+pairs, packs, bottles, or the department's own word — and the count reads with
+it, for example "8/10 each". Count a partly used pack in the smaller unit (12
+each rather than half a box). An item linked to an inventory item always counts
+in that item's unit.
 
 #### Counts carried over from last time
 
@@ -2600,7 +2596,8 @@ the flag as it was. Logging a repair does not clear it.
 | No checklist covers the truck on your shift    | No checklist appears for that shift                                                                              |
 | The checklist names seats you don't hold       | You don't see it. Members in those seats do                                                                      |
 | You marked an expired item **Pass**            | It is filed as failed, with "expired" as the reason                                                              |
-| You entered a count below par                  | It is filed as failed, with "under required quantity" as the reason                                              |
+| You entered a count below par, at or above its minimum | It passes, and the shortfall goes on the restock list                                                    |
+| You entered a count below Min to Pass or Critical Min  | It is filed as failed. You cannot mark it **Pass**                                                       |
 | Every item passes                              | The truck's deficiency flag clears, if it was set                                                                |
 | You try to open a check someone already filed  | My Checklists shows **Submitted for this shift**. Only one check per checklist per shift is kept                 |
 | A checklist has only optional items, and you answered none | You can still submit, after confirming the warning                                                   |
@@ -2838,7 +2835,7 @@ officers who can open them.
 
 > **Important.** Editing a published checklist takes it **off every shift**
 > until you publish it again. A banner says so, with **Publish now**. See
-> [Inventory → What changed in the builder](./05-inventory.md#what-changed-in-the-builder-2026-09-30--2026-10-04)
+> [Inventory → Building a checklist](./05-inventory.md#building-a-checklist)
 > for the full behaviour.
 
 #### Which checklists a shift gets
@@ -2912,9 +2909,10 @@ and lot numbers, image, critical minimum and the inventory link. You never need
 to open it to finish an item. You can fill a whole truck's names and answer
 types without opening anything.
 
-> **What if the critical minimum is at or above par?** When you publish, The
-> Logbook lists it in a **Save with warnings?** box. You can go back and fix it,
-> or save anyway.
+> **What if the numbers are out of order?** They should run Critical Min ≤
+> Min to Pass ≤ Par. The item editor says so as soon as they do not, and when
+> you publish, The Logbook lists the item in a **Save with warnings?** box. You
+> can go back and fix it, or save anyway. Equal numbers are allowed.
 
 ![Equipment check template builder with the template header and sections](./images/03-22-equipment-check-builder.png)
 
@@ -3193,9 +3191,7 @@ dates before you select **Generate**. Afterwards, The Logbook tells you:
 
 ![The shift patterns page — each pattern with its type badge, rotation settings and Generate Shifts action](./images/03-13-shift-patterns.png)
 
-<!-- Screenshot needed:
-_[Scheduling administrator at /scheduling/admin/planning/patterns. A pattern's Generate panel after generating a date range that is already fully on the schedule, with the 'No new shifts. Dates already on the schedule are skipped…' toast visible. Generate the same range once first so the second run creates nothing.]_
--->
+![Shift Patterns after generating a range already on the schedule: the No new shifts. Dates already on the schedule are skipped… message over the pattern list](./images/03-119-pattern-generate-nothing-new.png)
 
 **To extend a schedule,** generate the same pattern again for the next range.
 Dates already on the schedule are skipped, so overlapping ranges are safe.
@@ -3362,10 +3358,6 @@ computer never sees your values.
 - **Notifications has no on/off switches for single scheduling notices** such
   as "Time-Off Approved" or "Swap Request". Those notices are always sent. The
   section only controls the alerts described below.
-
-<!-- Screenshot needed:
-_[Scheduling Admin → Settings → Notifications → the "Not in effect yet" notice above the six switches.]_
--->
 
 ### Notifications
 
@@ -3789,7 +3781,7 @@ When a member declines or is removed:
 
 - **My Upcoming Shifts** on the dashboard hides shifts you declined and
   shifts that were cancelled. **Open Shifts** hides shifts you already signed
-  up for.
+  up for, and shifts that have already ended, even one dated today.
 - If you cancelled a sign-up, you can sign up for the same shift again.
 - A shift's head count leaves out cancelled and no-show members.
 
@@ -4385,5 +4377,6 @@ dates its end in the card heading, so a 25.5-hour attendance no longer reads as
 "6:00 AM - 7:30 AM". Counts read "1 shift", "1 entry" and "1 archived
 former-member record".
 
-> **Screenshot needed:** the Shift History Import list (upload form with the time
-> zone picker, drafts and committed imports) and a draft's **Members** tab.
+![Shift History Import: the upload form with its time zone picker above the list of imports, one draft waiting for review](./images/03-120-history-import-list.png)
+
+![A draft import's Members tab with Show settled ticked: three names from the file marked No match, each with a Choose… picker, above the names matched automatically to members on file](./images/03-121-history-import-members.png)

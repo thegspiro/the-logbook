@@ -956,6 +956,8 @@ export interface InventoryCategory {
   active: boolean;
   created_at: string;
   updated_at: string;
+  /** Active items filed here. Sent by the medical category list only. */
+  item_count?: number | null;
 }
 
 export interface InventoryItem {
@@ -1001,6 +1003,12 @@ export interface InventoryItem {
   unit_of_measure?: string;
   reorder_point?: number;
   /**
+   * Carried on the apparatus only, with no stock-room supply behind it (a
+   * LUCAS device, a cardiac monitor). Its shelf counts as 0 and it is judged
+   * on the trucks alone.
+   */
+  apparatus_only?: boolean;
+  /**
    * Ready units across the item's in-date stock lots.
    *
    * Lots and `quantity` are separate ledgers — receiving a lot does not touch
@@ -1011,6 +1019,28 @@ export interface InventoryItem {
   lot_stock?: number | null;
   /** True when the item is stocked as lots, so `lot_stock` is the count to show. */
   is_lot_stocked?: boolean;
+  /**
+   * Soonest expiry among lots still holding stock, expired ones included, and
+   * its distance in days from the department's today. Sent by the medical
+   * supply list only.
+   */
+  next_expiration_date?: string | null;
+  days_until_next_expiration?: number | null;
+  /** Whether the soonest-expiring units are on the shelf or aboard an apparatus. */
+  next_expiration_location?: 'shelf' | 'apparatus' | null;
+  /** Where those units are: the storage path, or "Medic 1 › Jump Bag". */
+  next_expiration_where?: string | null;
+  /** "Station 1 › Supply Room › Shelf 2". Sent by the medical supply list only. */
+  storage_path?: string | null;
+  /** How many apparatus checklists carry it. Sent by the medical supply list only. */
+  apparatus_count?: number | null;
+  /** Each position carrying it, as the checklist names it: "Medic 1 › Main Compartment › Jump Bag". Medical list only. */
+  apparatus_places?: string[] | null;
+  /** In-date units on the trucks, and how many positions entered it uncounted (at their target). Medical list only. */
+  apparatus_stock?: number | null;
+  apparatus_uncounted?: number | null;
+  /** At or below the reorder point on shelf plus trucks — the server's call. Medical list only. */
+  is_low_stock?: boolean | null;
   last_inspection_date?: string;
   next_inspection_due?: string;
   inspection_interval_days?: number;
@@ -1365,6 +1395,7 @@ export interface InventoryItemCreate {
   quantity?: number | undefined;
   unit_of_measure?: string | null | undefined;
   reorder_point?: number | null | undefined;
+  apparatus_only?: boolean | undefined;
   inspection_interval_days?: number | null | undefined;
   min_rank_order?: number | null | undefined;
   restricted_to_positions?: string[] | null | undefined;
@@ -1886,6 +1917,8 @@ export interface ReorderRequestCreate {
 export interface ReorderRequestUpdate {
   /** Refused by the server once stock has been received against the link. */
   item_id?: string | null | undefined;
+  /** Null clears the category; the server refuses one from another org. */
+  category_id?: string | null | undefined;
   item_name?: string | undefined;
   quantity_requested?: number | undefined;
   quantity_received?: number | undefined;
@@ -2340,8 +2373,9 @@ export interface InventoryLotBulkEntry extends InventoryLotCreate {
 }
 
 export interface InventoryLotUpdate {
-  lot_number?: string | undefined;
-  expiration_date?: string | undefined;
+  /** null clears it; the backend dumps updates with exclude_unset, so omitting keeps the old value. */
+  lot_number?: string | null | undefined;
+  expiration_date?: string | null | undefined;
   quantity?: number | undefined;
   received_date?: string | undefined;
   notes?: string | undefined;
@@ -2349,6 +2383,8 @@ export interface InventoryLotUpdate {
 
 export interface ExpiringLot extends InventoryLot {
   item_name?: string;
+  /** Set on medical lots only, so the adult and pediatric versions of a supply can be told apart. */
+  item_size?: string | null;
   days_until_expiration?: number;
 }
 

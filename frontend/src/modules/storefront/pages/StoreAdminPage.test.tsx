@@ -371,3 +371,70 @@ describe('StoreAdminPage — tabs in the URL', () => {
     );
   });
 });
+
+// Ordering needs both an open window and the store switched on. With only the
+// window, the overview said "Open for orders" while members were told the
+// store was closed, and "Store is offline" named the state without the way out.
+describe('StoreAdminPage — a store that is switched off', () => {
+  const offline = {
+    ...dashboard,
+    isEnabled: false,
+    activeWindow: {
+      id: 'window-1',
+      name: 'Fall shirt order',
+      description: null,
+      orderCount: 0,
+      totalSales: '0',
+      closesAt: '2026-10-30T20:00:00Z',
+    },
+  };
+
+  beforeEach(() => {
+    mockIsModuleOn.mockReset();
+    mockIsModuleOn.mockReturnValue(true);
+    mockModulesLoading.mockReset();
+    mockModulesLoading.mockReturnValue(false);
+    mockGetDashboard.mockReset();
+    mockGetDashboard.mockResolvedValue(offline);
+    mockGetAdminHubSummary.mockReset();
+    mockGetAdminHubSummary.mockResolvedValue({
+      moduleKey: 'storefront',
+      generatedAt: '2026-09-01T12:00:00Z',
+      timezone: 'UTC',
+      metrics: [],
+      attention: [],
+    });
+  });
+
+  const renderOverview = () =>
+    render(
+      <MemoryRouter initialEntries={['/inventory/admin/store']}>
+        <StoreAdminPage />
+      </MemoryRouter>
+    );
+
+  it('says on the open window that members cannot order yet', async () => {
+    renderOverview();
+
+    expect(await screen.findByText('Fall shirt order')).toBeInTheDocument();
+    expect(screen.getByText(/Members can.t order yet/)).toBeInTheDocument();
+  });
+
+  it('takes the offline badge to the setting that changes it', async () => {
+    const user = userEvent.setup();
+    renderOverview();
+
+    await user.click(await screen.findByRole('button', { name: /Store is offline/ }));
+
+    expect(screen.getByRole('tab', { name: 'Settings' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('says nothing of the kind once the store is on', async () => {
+    mockGetDashboard.mockResolvedValue({ ...offline, isEnabled: true });
+    renderOverview();
+
+    expect(await screen.findByText('Fall shirt order')).toBeInTheDocument();
+    expect(screen.queryByText(/Members can.t order yet/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Store is offline/ })).not.toBeInTheDocument();
+  });
+});

@@ -295,6 +295,20 @@ def build_email_logo_block(organization: Optional[Organization]) -> str:
     )
 
 
+def append_to_email_html(html_body: str, block: str) -> str:
+    """Stack *block* as a card above the footer, wherever the body allows.
+
+    Departments may have customized the welcome template, so the block cannot
+    rely on a template variable: it goes before the rendered footer when there
+    is one, else before ``</body>``, else at the end.
+    """
+    for marker in ('<div class="footer"', "</body>"):
+        index = html_body.rfind(marker)
+        if index != -1:
+            return f"{html_body[:index]}{block}\n    {html_body[index:]}"
+    return f"{html_body}\n{block}"
+
+
 def wrap_email_body(
     organization: Optional[Organization],
     title: str,
@@ -1969,9 +1983,15 @@ class EmailService:
         db: Any = None,
         organization_id: Optional[str] = None,
         attachment_paths: Optional[Sequence[AttachmentSpec]] = None,
+        appended_html: str = "",
+        appended_text: str = "",
     ) -> bool:
         """
         Send a welcome email to a newly created user.
+
+        ``appended_html``/``appended_text`` are system-rendered blocks (already
+        escaped) added after the department's template, so a customized
+        template carries them without being edited.
 
         Returns:
             True if sent successfully
@@ -2029,6 +2049,10 @@ class EmailService:
             default_html=DEFAULT_WELCOME_HTML,
             default_text=DEFAULT_WELCOME_TEXT,
         )
+        if appended_html:
+            html_body = append_to_email_html(html_body, appended_html)
+        if appended_text:
+            text_body = (text_body or "") + appended_text
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -2256,6 +2280,54 @@ class EmailService:
             text_body=text_body,
             db=db,
             template_type=EmailTemplateType.EVENT_WAITLIST_PROMOTION.value,
+        )
+
+        return success_count > 0
+
+    async def send_event_cancellation_email(
+        self,
+        to_email: str,
+        recipient_name: str,
+        event_title: str,
+        event_start: datetime,
+        reason: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Tell a member who was going, or might have gone, that an event is
+        cancelled."""
+        from app.services.email_template_service import (
+            DEFAULT_EVENT_CANCELLATION_HTML,
+            DEFAULT_EVENT_CANCELLATION_SUBJECT,
+            DEFAULT_EVENT_CANCELLATION_TEXT,
+        )
+
+        context = {
+            "recipient_name": recipient_name,
+            "event_title": event_title,
+            # Date only, matching the template's "Original date" and the
+            # sample a test email shows.
+            "event_date": self._format_local_dt(event_start, "%B %d, %Y"),
+            "reason": reason,
+        }
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.EVENT_CANCELLATION,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_EVENT_CANCELLATION_SUBJECT,
+            default_html=DEFAULT_EVENT_CANCELLATION_HTML,
+            default_text=DEFAULT_EVENT_CANCELLATION_TEXT,
+        )
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.EVENT_CANCELLATION.value,
         )
 
         return success_count > 0

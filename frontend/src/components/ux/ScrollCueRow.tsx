@@ -20,6 +20,11 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
  * The selected item (`[aria-selected="true"]` or `[aria-current]`) is scrolled
  * into view when `revealKey` changes, so a deep link to the last tab does not
  * open with that tab off screen and nothing saying which one is open.
+ *
+ * A table whose first column is `position: sticky` marks that column's cell
+ * with `data-scroll-pin`. The left fade and chevron then start where the
+ * pinned column ends: faded from the row's own edge, they would wash out the
+ * very labels that were pinned so they could always be read.
  */
 
 interface ScrollCueRowProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -27,6 +32,8 @@ interface ScrollCueRowProps extends React.HTMLAttributes<HTMLDivElement> {
   className?: string;
   /** Change it to re-reveal the selected item, e.g. the active tab's id. */
   revealKey?: string | undefined;
+  /** Open scrolled to the far end — for a timeline whose newest entry is last. */
+  startAtEnd?: boolean;
   children: React.ReactNode;
 }
 
@@ -35,17 +42,46 @@ const EDGE_TOLERANCE = 2;
 /** The chevron's width plus a little air: an item under it is not visible. */
 const CHEVRON_INSET = 48;
 
-export const ScrollCueRow: React.FC<ScrollCueRowProps> = ({ className = '', revealKey, children, ...rest }) => {
+export const ScrollCueRow: React.FC<ScrollCueRowProps> = ({
+  className = '',
+  revealKey,
+  startAtEnd = false,
+  children,
+  ...rest
+}) => {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [pinInset, setPinInset] = useState(0);
 
   const measure = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
     setCanScrollLeft(el.scrollLeft > EDGE_TOLERANCE);
     setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - EDGE_TOLERANCE);
+    const pin = el.querySelector<HTMLElement>('[data-scroll-pin]');
+    setPinInset(pin ? Math.max(0, Math.round(pin.getBoundingClientRect().right - el.getBoundingClientRect().left)) : 0);
   }, []);
+
+  useEffect(() => {
+    if (!startAtEnd) return undefined;
+    const toEnd = () => {
+      const el = scrollerRef.current;
+      if (!el) return;
+      el.scrollLeft = el.scrollWidth;
+      measure();
+    };
+    toEnd();
+    // Same reason as `reveal` below: the web font widens the content after
+    // the first scroll, which would leave the newest column under the chevron.
+    let cancelled = false;
+    void document.fonts?.ready.then(() => {
+      if (!cancelled) toEnd();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [startAtEnd, measure]);
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -106,9 +142,13 @@ export const ScrollCueRow: React.FC<ScrollCueRowProps> = ({ className = '', reve
   // page here is a gradient, and an overlay painted in one colour would show
   // as a stripe over it.
   const fade = (left: boolean, right: boolean) =>
-    `linear-gradient(to right, ${left ? 'transparent 0, black 3rem' : 'black 0'}, ${
-      right ? 'black calc(100% - 3rem), transparent 100%' : 'black 100%'
-    })`;
+    `linear-gradient(to right, ${
+      left
+        ? pinInset > 0
+          ? `black ${pinInset}px, transparent ${pinInset}px, black calc(${pinInset}px + 3rem)`
+          : 'transparent 0, black 3rem'
+        : 'black 0'
+    }, ${right ? 'black calc(100% - 3rem), transparent 100%' : 'black 100%'})`;
   const maskImage = canScrollLeft || canScrollRight ? fade(canScrollLeft, canScrollRight) : undefined;
 
   const chevronClass =
@@ -134,6 +174,7 @@ export const ScrollCueRow: React.FC<ScrollCueRowProps> = ({ className = '', reve
           aria-hidden="true"
           onClick={() => page(-1)}
           className={`${chevronClass} left-0`}
+          style={pinInset > 0 ? { left: pinInset } : undefined}
           data-testid="scroll-cue-left"
         >
           <ChevronLeft className="h-5 w-5" />

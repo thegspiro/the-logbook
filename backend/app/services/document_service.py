@@ -19,6 +19,7 @@ from app.models.document import (
     Document,
     DocumentFolder,
     DocumentType,
+    FolderVisibility,
     system_folder_fields,
 )
 from app.models.minute import (
@@ -26,15 +27,17 @@ from app.models.minute import (
     MinutesClosedSession,
     MinutesElectionResult,
     MinutesMeetingType,
+    MinutesRevision,
     MinutesStatus,
 )
 from app.models.user import Organization
 from app.utils.minutes_attendance import derive_status
+from app.utils.motion_votes import vote_summary
 from app.utils.rich_text import (
     FORMAT_HTML,
     normalize_format,
     sanitize_html,
-    section_is_blank,
+    section_is_printed,
 )
 
 
@@ -166,10 +169,16 @@ class DocumentService:
         minutes: MeetingMinutes,
         organization_id: UUID | str,
         published_by: UUID | str,
+        *,
+        allow_executive: bool = False,
     ) -> Document:
         """
         Publish approved meeting minutes as a formatted HTML document
         in the 'Meeting Minutes' system folder.
+
+        Executive-session minutes are filed only when the department allows it
+        (``allow_executive``, from its publishing settings), and then into a
+        leadership-only folder, never the one every member can read.
         """
         if minutes.status != MinutesStatus.APPROVED.value:
             raise ValueError("Only approved minutes can be published")
@@ -188,7 +197,8 @@ class DocumentService:
             if isinstance(minutes.meeting_type, str)
             else minutes.meeting_type.value
         )
-        if meeting_type_value == MinutesMeetingType.EXECUTIVE.value:
+        is_executive = meeting_type_value == MinutesMeetingType.EXECUTIVE.value
+        if is_executive and not allow_executive:
             raise ValueError(
                 "Executive-session minutes cannot be published as a shared "
                 "document — they are restricted to minutes managers"
@@ -203,6 +213,10 @@ class DocumentService:
             folder = next((f for f in folders if f.slug == "meeting-minutes"), None)
             if not folder:
                 raise RuntimeError("Failed to create meeting-minutes folder")
+        if is_executive:
+            folder = await self._executive_minutes_folder(
+                folder, organization_id, published_by
+            )
 
         # Look up organization timezone for local date formatting
         org_result = await self.db.execute(
@@ -243,6 +257,10 @@ class DocumentService:
             .all()
         )
         html = self._generate_minutes_html(minutes, tz_name, filed_results, sessions)
+        version = await self._current_revision_version(minutes.id, organization_id)
+        note = self._replacement_note(minutes, tz_name)
+        if note:
+            html = note + html
 
         # Check if already published (update instead of creating duplicate)
         if minutes.published_document_id:
@@ -256,6 +274,12 @@ class DocumentService:
                 existing.name = minutes.title
                 existing.under_correction_since = None
                 existing.updated_at = datetime.now(timezone.utc)
+                if is_executive:
+                    # Closed-session copies stay in the restricted folder even if
+                    # someone moved the document out of it.
+                    existing.folder_id = folder.id
+                minutes.published_revision_version = version
+                minutes.published_at = datetime.now(timezone.utc)
                 await self.db.commit()
                 await self.db.refresh(existing)
                 return existing
@@ -289,9 +313,108 @@ class DocumentService:
 
         # Update the minutes record with the published document reference
         minutes.published_document_id = doc.id
+        minutes.published_revision_version = version
+        minutes.published_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(doc)
         return doc
+
+    async def _current_revision_version(
+        self, minutes_id: str, organization_id: UUID | str
+    ) -> Optional[int]:
+        """The adopted version these minutes are on, or None if never adopted."""
+        revision = (
+            await self.db.execute(
+                select(MinutesRevision.version)
+                .where(
+                    MinutesRevision.minutes_id == str(minutes_id),
+                    MinutesRevision.organization_id == str(organization_id),
+                    MinutesRevision.superseded_at.is_(None),
+                )
+                .order_by(MinutesRevision.version.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        return revision
+
+    @staticmethod
+    def _replacement_note(
+        minutes: MeetingMinutes, tz_name: Optional[str]
+    ) -> Optional[str]:
+        """The line at the top of a republished copy naming what it replaced.
+
+        Only when a version was recorded at the earlier publish: minutes filed
+        before versions were tracked get no note rather than a wrong one.
+        """
+        previous = minutes.published_revision_version
+        filed = minutes.published_at
+        if previous is None or not minutes.published_document_id:
+            return None
+        when = ""
+        if filed is not None:
+            stamp = filed if filed.tzinfo else filed.replace(tzinfo=timezone.utc)
+            try:
+                stamp = stamp.astimezone(ZoneInfo(tz_name)) if tz_name else stamp
+            except Exception:  # an unknown zone name falls back to UTC
+                pass
+            when = f", published {stamp.strftime('%B %d, %Y')}"
+        return (
+            '<div class="minutes-replacement-note" style="margin-bottom:16px; '
+            "padding:8px 12px; border-left:4px solid #1e3a5f; background:#f3f6fa; "
+            'font-size:13px; color:#333;">'
+            f"This version replaces version {int(previous)}{escape(when)}."
+            "</div>"
+        )
+
+    async def _executive_minutes_folder(
+        self,
+        parent: DocumentFolder,
+        organization_id: UUID | str,
+        created_by: UUID | str,
+    ) -> DocumentFolder:
+        """The leadership-only folder executive-session copies are filed in.
+
+        Created on first use under Meeting Minutes. If a library manager has
+        since opened it up, this refuses rather than file closed-session
+        content where every member can read it.
+        """
+        # Locked before the existence check, as in initialize_system_folders,
+        # so two first publishes cannot each create one.
+        await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        slug = "meeting-minutes-executive"
+        folder = await self.db.scalar(
+            select(DocumentFolder)
+            .where(
+                DocumentFolder.organization_id == str(organization_id),
+                DocumentFolder.slug == slug,
+            )
+            .with_for_update()
+        )
+        if folder is None:
+            folder = DocumentFolder(
+                organization_id=str(organization_id),
+                created_by=str(created_by),
+                parent_id=parent.id,
+                slug=slug,
+                name="Executive Session Minutes",
+                description="Executive-session minutes; library managers only",
+                visibility=FolderVisibility.LEADERSHIP,
+                is_system=False,
+                sort_order=1,
+                icon="shield",
+            )
+            self.db.add(folder)
+            await self.db.flush()
+        elif folder.visibility != FolderVisibility.LEADERSHIP:
+            raise ValueError(
+                "The Executive Session Minutes folder is no longer restricted to "
+                "library managers; restore that before publishing executive minutes"
+            )
+        return folder
 
     @staticmethod
     def _attendee_label(entry: dict, status: str) -> str:
@@ -578,7 +701,7 @@ class DocumentService:
         sections = minutes.get_sections()
         if sections:
             for section in sorted(sections, key=lambda s: s.get("order", 0)):
-                if not section_is_blank(section):
+                if section_is_printed(section):
                     content = section.get("content", "")
                     title = escape(section.get("title", section.get("key", "Section")))
                     parts.append(
@@ -587,6 +710,16 @@ class DocumentService:
                     parts.append(
                         f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">{title}</h4>'
                     )
+                    if section.get("presenter"):
+                        parts.append(
+                            '<div style="font-size:13px; color:#555;">'
+                            f"Presented by {escape(section['presenter'])}</div>"
+                        )
+                    if section.get("not_taken_up"):
+                        parts.append(
+                            '<div style="font-size:14px; color:#555; '
+                            'font-style:italic;">Not taken up.</div>'
+                        )
                     if normalize_format(section.get("format")) == FORMAT_HTML:
                         # Cleaned again on the way out: the stored value was
                         # cleaned on write, and a published page is the last
@@ -632,15 +765,8 @@ class DocumentService:
                     detail_parts.append(f"Moved by: {escape(motion.moved_by)}")
                 if motion.seconded_by:
                     detail_parts.append(f"Seconded by: {escape(motion.seconded_by)}")
-                if motion.votes_for is not None:
-                    detail_parts.append(
-                        f"Vote: {motion.votes_for}-{motion.votes_against or 0}"
-                        + (
-                            f" ({motion.votes_abstain} abstain)"
-                            if motion.votes_abstain
-                            else ""
-                        )
-                    )
+                if vote_summary(motion):
+                    detail_parts.append(escape(vote_summary(motion)))
                 ballot = getattr(getattr(motion, "election", None), "title", None)
                 if ballot:
                     detail_parts.append(f"Decided by ballot: {escape(ballot)}")

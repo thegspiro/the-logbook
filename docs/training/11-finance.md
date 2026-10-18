@@ -200,7 +200,7 @@ Next year's budget is built in a **Draft** fiscal year. As a finance manager, op
 2. Select **Copy lines**, then **Copy lines** again in the confirmation.
 3. The message tells you how many lines were copied and how many the draft already had (for example _"12 lines copied, 2 already there"_).
 
-Each copy keeps the line's category, station, notes and its own owner position, and starts at the line's **current** budget (amendments included), with nothing spent. Treat that amount as a starting point and edit it. A category and station the draft already has is left alone, so running it again copies nothing new. Lines whose owner comes from their category keep getting it from the category.
+Each copy keeps the line's category, station, notes and its own owner position, and starts at the line's **current** budget (amendments included), with nothing spent. Treat that amount as a starting point and edit it. A category and station the draft already has is left alone, so running it again copies nothing new. **Lines on a category you have retired are not copied** _(2026-10-14)_; the confirmation message counts them as "retired". A sub-line still in use under a retired parent is copied, because only the line's own category is checked. Lines whose owner comes from their category keep getting it from the category.
 
 **2. Set the request deadline.** Budget-line owners propose next year's amounts for their lines until this date:
 
@@ -290,7 +290,7 @@ Budget categories organize your department's spending into logical groups. Categ
 
 To change a category later, select the pencil beside it.
 
-![Budget categories list with QuickBooks account mapping](./images/11-03-budget-categories.png)
+![Budget categories as a tree: Officer brass and Station boots nested under Personal Protective Equipment, each line with its owner and who can charge it](./images/11-03-budget-categories.png)
 
 ### Category Hierarchy
 
@@ -747,31 +747,25 @@ What the dialog says about approvers is the rule The Logbook applies:
 The dialog has no notification-email, email-template or required settings.
 Nothing would act on them, so they are not offered.
 
-**Deleting a step is not a tidy-up.** The confirmation says what it does: the
-step is removed from every request routed through the chain, including the
-record of who approved or denied it and their notes. A request waiting on that
-step moves to the next one — and an Email approver on that next step is **not**
-sent a link — and a request with no later step is left waiting with nothing to
-approve. It cannot be undone. When requests are in flight, turn the chain off
-(**Edit chain**, untick **Active**) and build a new one instead.
+**Only a step or chain no request has used can be deleted.** Every request
+routed through a chain carries a record of each of its steps — who approved or
+denied it, and their notes — and deleting the step or chain would erase those
+records. So The Logbook refuses: _"This approval chain can't be deleted: 2
+requests have been routed through it, and deleting it would erase their approval
+history. Turn the chain off instead (edit it and clear Active) so nothing new is
+routed through it."_ A step gets the same answer. A chain nobody has used yet,
+or a step added since the chain was last used, deletes as normal.
 
-**Deleting a whole chain goes further.** Its confirmation says requests that
-went through the chain keep their approval history. They do not: deleting the
-chain removes its steps, and with them every request's approval records for
-those steps, exactly as deleting each step would. Turn the chain off instead of
-deleting it.
+To retire a chain, turn it off (**Edit chain**, untick **Active**); to change
+who approves future requests, edit the step, or build a new chain and turn the
+old one off. Every chain and step change — create, edit, delete — is recorded in
+the audit log.
 
-<!-- Screenshot needed:
-_[Finance → Settings → Approval Chains → expand a chain → **Add step**, with Step type **Approval**, Approver type **Email**, an approver email filled in, the **Allow self-approval by email** box and the **Auto-approve under ($)** field visible, and the help text under Approver type readable.]_
--->
+![The Add step dialog with Step type Approval and Approver type Email: the help text under Approver type, an approver email filled in, the Allow self-approval by email box and the Auto-approve under ($) field](./images/11-18-approval-step-email.png)
 
-<!-- Screenshot needed:
-_[Treasurer or admin holding finance.configure_approvals and positions.view, /finance/settings/approval-chains. The Add step dialog over an expanded purchase-request chain: Step type Approval, Approver type Position, the position picker set to Treasurer, Auto-approve under ($) = 250. The finance.approve help text under Approver type must be visible.]_
--->
+![The Add step dialog as the Treasurer, over the Purchase Request Approval chain: Step type Approval, Approver type Position with Treasurer chosen, Auto-approve under ($) set to 250, and the help text naming the finance.approve permission](./images/11-19-approval-step-position.png)
 
-<!-- Screenshot needed:
-_[Treasurer or admin holding finance.configure_approvals, /finance/settings/approval-chains. The Delete step confirmation over a chain with three steps, showing the history-removal and waiting-request warnings and the Delete step / Keep it buttons. Never confirm.]_
--->
+![The Delete step confirmation for a step in an approval chain: it can be deleted only if no request has been routed through it yet, otherwise deleting is refused so the record of who approved or denied it is kept, with Delete step and Keep it buttons](./images/11-17-approval-step-delete.png)
 
 ### Steps nobody can act on
 
@@ -789,9 +783,7 @@ the meantime. Saving a step also checks its approver: a position must exist, a
 member must be active, a permission must be a real permission name, and an Email
 step takes exactly one address.
 
-<!-- Screenshot needed:
-_[Treasurer at /finance/settings/approval-chains with a demo chain whose step names a position nobody holds: the page banner and the amber "No active member can act on this step" chip with "N requests waiting" under that step.]_
--->
+![Approval Chains as the Treasurer: the amber banner counting approval steps no one can act on, and the Purchase Request Approval chain expanded with its Company officer review step warning that no active member can act on it and how many requests are waiting](./images/11-20-approval-step-unreachable.png)
 
 ### Previewing Chain Resolution
 
@@ -879,13 +871,9 @@ waiting on you the page says _"Nothing is waiting on you."_ The dashboard's
 If you raised the request yourself, the approval is refused with the
 separation-of-duties message (see [Separation of Duties](#separation-of-duties)).
 
-<!-- Screenshot needed:
-_[Finance → Approvals as an approvals administrator (finance.configure_approvals), with one request assigned to them and one assigned to someone else: the "Requests waiting on you." heading, the admin explanation line, the Waiting on column, the "Not assigned to you" badge and the "Approve as approvals admin" / "Deny as approvals admin" buttons on the second row. Demo data only.]_
--->
+![Approvals as the Treasurer, an approvals administrator: "Requests waiting on you." and the administrator line above a table whose first rows wait on the Treasurer with Approve and Deny, and whose later rows wait on the Captain position, marked Not assigned to you with Approve as admin and Deny as admin](./images/11-21-approvals-admin-view.png)
 
-<!-- Screenshot needed:
-_[Finance → Approvals, a "Approve as approvals admin" dialog open on a step assigned to another member: the "This step is assigned to <name>…" text, Notes, and the Override reason box with its help text "Why you are acting on a step assigned to someone else. Recorded in the audit log." Do not submit.]_
--->
+![The Approve as approvals admin dialog on a step assigned to the Captain position: the text naming who the step is assigned to, Notes, and the required Override reason box with its help text](./images/11-22-approvals-admin-override.png)
 
 <!-- Screenshot needed (replace):
 _[Finance → Approvals as the Treasurer, with three or four waiting requests of mixed types (purchase request, expense report, check request) showing the Request, Type, Requested by, Amount, Step and Submitted columns and the Approve / Deny buttons on each row.]_
@@ -950,9 +938,7 @@ approved only once two different people have approved it.
 - The budget is committed (encumbered) once, when the request is fully
   approved.
 
-<!-- Screenshot needed:
-_[A purchase request detail page in Pending Approval with no approval chain configured, viewed by the Treasurer: the "No approval chain applies to this request. Approve or deny it here." panel with its Approve and Deny buttons, and the approval timeline reading "This request has no approval steps."]_
--->
+![A purchase request pending approval with no approval chain, viewed by the Treasurer: the panel reading "No approval chain applies to this request. Approve or deny it here." with Approve and Deny, above a timeline with no approval steps](./images/11-23-unrouted-request.png)
 
 ---
 
@@ -1378,9 +1364,9 @@ A dues schedule defines the terms of a recurring fee:
 | **Notes**     | Optional notes about the schedule                                                              |
 
 > **No grace period, late fee or membership-type filter.** None of these can be
-> set. No late fee is ever charged. A daily check marks unpaid dues Overdue the
-> day after the due date. **Generate dues** bills every active member,
-> whatever their membership type.
+> set. No late fee is ever charged. Dues with nothing paid show as Overdue the
+> day after the due date; part-paid dues stay Partial. **Generate dues** bills
+> every active member, whatever their membership type.
 
 ### Frequencies
 
@@ -1960,7 +1946,7 @@ The Treasurer regularly:
 | "Cannot void an issued check"                                         | Voiding is only permitted for checks with **Issued** status. If the check has already been voided, it cannot be voided again.                                                                                                                                                                                                                                   |
 | "Member dues not generated for a new member"                          | The **Generate Dues** action only creates records for members who do not already have a record for that schedule. If a member joined after the initial generation, run Generate Dues again -- it will create a record only for that member.                                                                                                                     |
 | "Deleting a category removed its budgets"                             | That is what deleting does: a category's budgets in every fiscal year are deleted with it, and requests charged to them lose their budget. It cannot be undone. To retire a category and keep its history, leave it in place and stop adding lines to it.                                                                                                       |
-| "Should I delete an old approval chain?"                              | No. Deleting a chain also deletes the approval records of every request that went through it. Turn it off instead: **Edit chain**, untick **Active**.                                                                                                                                                                                                           |
+| "Should I delete an old approval chain?"                              | Turn it off instead: **Edit chain**, untick **Active**. A chain any request has been routed through cannot be deleted, because that would erase those requests' approval history.                                                                                                                                                                               |
 | "Encumbered amount not released after denial"                         | This is expected behavior. Denial happens during the approval flow, before the request reaches Approved status, so no encumbrance was ever created. The budget was never affected.                                                                                                                                                                              |
 | "Late fee not applied"                                                | The Logbook does not charge late fees. If your department charges one, record it outside The Logbook.                                                                                                                                                                                                                                                           |
 | "I need to change the amount on an approved purchase request"         | The estimated amount cannot be changed after the request leaves Draft/Submitted status. However, when marking the request as **Paid**, you can enter the **actual amount**, which is what gets recorded against the budget. The difference between estimated (encumbered) and actual (spent) is reconciled automatically.                                       |

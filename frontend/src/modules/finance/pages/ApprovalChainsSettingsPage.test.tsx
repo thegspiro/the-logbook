@@ -268,7 +268,9 @@ describe('ApprovalChainsSettingsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Delete Treasurer review' }));
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText(/including the record of who approved or denied it/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/can be deleted only if no request has been routed through it yet/)
+    ).toBeInTheDocument();
     expect(mockDeleteStep).not.toHaveBeenCalled();
 
     await user.click(within(dialog).getByRole('button', { name: 'Delete step' }));
@@ -287,6 +289,56 @@ describe('ApprovalChainsSettingsPage', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(mockDeleteStep).not.toHaveBeenCalled();
+  });
+
+  it('shows the refusal when a step requests have used cannot be deleted', async () => {
+    mockDeleteStep.mockRejectedValue(new Error("This step can't be deleted: 1 request has been routed through it"));
+    const user = await openChainSteps();
+    await user.click(screen.getByRole('button', { name: 'Delete Treasurer review' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete step' }));
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith("This step can't be deleted: 1 request has been routed through it")
+    );
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  describe('deleting a chain', () => {
+    beforeEach(() => {
+      mockDelete.mockReset();
+      mockDelete.mockResolvedValue(undefined);
+    });
+
+    it('says only an unused chain can be deleted and offers turning it off instead', async () => {
+      const user = await openChainSteps();
+      await user.click(screen.getByRole('button', { name: 'Delete chain Large purchases' }));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(
+        within(dialog).getByText('Only a chain that no request has been routed through yet can be deleted.')
+      ).toBeInTheDocument();
+      expect(within(dialog).getByText(/Turn the chain off instead: edit it and clear Active/)).toBeInTheDocument();
+      expect(within(dialog).queryByText(/keep their approval history/)).not.toBeInTheDocument();
+
+      await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+      await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('c1'));
+      expect(mockToastSuccess).toHaveBeenCalledWith('Approval chain deleted');
+    });
+
+    it('shows the API’s refusal and keeps the chain listed', async () => {
+      const refusal =
+        "This approval chain can't be deleted: 2 requests have been routed through it, and deleting it would erase their approval history.";
+      mockDelete.mockRejectedValue(new Error(refusal));
+      const user = await openChainSteps();
+      await user.click(screen.getByRole('button', { name: 'Delete chain Large purchases' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+      await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(refusal));
+      expect(mockToastSuccess).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Delete chain Large purchases' })).toBeInTheDocument();
+    });
   });
 
   it('moves a step up by swapping the two step_order values', async () => {

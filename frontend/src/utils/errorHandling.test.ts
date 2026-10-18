@@ -4,6 +4,7 @@ import {
   toAppError,
   getErrorDetail,
   getErrorMessage,
+  getSaveFailureMessage,
   isNetworkError,
   isNonRetryableHttpError,
 } from './errorHandling';
@@ -552,6 +553,41 @@ describe('errorHandling', () => {
       expect(isNonRetryableHttpError({ response: { status: 408 } })).toBe(false);
       expect(isNonRetryableHttpError({ response: { status: 425 } })).toBe(false);
       expect(isNonRetryableHttpError({ response: { status: 429 } })).toBe(false);
+    });
+  });
+  describe('getSaveFailureMessage', () => {
+    it('names the action, reassures, and keeps the support code on a server fault', () => {
+      const message = getSaveFailureMessage(
+        { message: 'An unexpected error occurred', status: 500, code: 'LB-API-500' },
+        'save the purchase request'
+      );
+
+      expect(message).toContain('Could not save the purchase request');
+      expect(message).toContain('try again');
+      expect(message).toContain('LB-API-500');
+      expect(message).not.toContain('An unexpected error occurred');
+    });
+
+    it('omits the code clause when the server sent none', () => {
+      const message = getSaveFailureMessage({ message: 'boom', status: 502 }, 'save the purchase request');
+
+      expect(message).toContain('tell IT.');
+      expect(message).not.toContain('Error code');
+    });
+
+    it('passes a specific client error through untouched', () => {
+      expect(
+        getSaveFailureMessage(
+          { message: 'Title is required', status: 422, code: 'LB-API-422' },
+          'save the purchase request'
+        )
+      ).toBe('Title is required (Error code: LB-API-422)');
+    });
+
+    it('falls back to the action when the error has no status or message', () => {
+      expect(getSaveFailureMessage({ message: '' }, 'save the purchase request')).toBe(
+        'Could not save the purchase request'
+      );
     });
   });
 });

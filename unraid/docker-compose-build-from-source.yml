@@ -310,6 +310,12 @@ services:
       AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_CLIENT_SECRET:-}
       AUTHENTIK_REDIRECT_URI: ${AUTHENTIK_REDIRECT_URI:-}
       AUTHENTIK_ALLOWED_DOMAINS: ${AUTHENTIK_ALLOWED_DOMAINS:-}
+      # Google Calendar / Outlook publishing. Each redirect URI must match its
+      # OAuth client (Google, or the Azure AD app); blank derives it from the
+      # request.
+      CALENDAR_SYNC_ENABLED: ${CALENDAR_SYNC_ENABLED:-false}
+      GOOGLE_CALENDAR_REDIRECT_URI: ${GOOGLE_CALENDAR_REDIRECT_URI:-}
+      MICROSOFT_CALENDAR_REDIRECT_URI: ${MICROSOFT_CALENDAR_REDIRECT_URI:-}
       # Claude (MCP) member sign-in: the OAuth 2.1 authorization server. Off
       # unless enabled AND the issuer is an https:// origin.
       MCP_OAUTH_ENABLED: ${MCP_OAUTH_ENABLED:-false}
@@ -439,10 +445,10 @@ services:
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-the_logbook}
       DB_USER: ${DB_USER:-logbook_user}
-      DB_PASSWORD: ${DB_PASSWORD:-change_me_strong_password}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
       # Restore drills load the dump into a throwaway schema, which needs
       # CREATE/DROP DATABASE — hence root, scoped to this internal network.
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_strong_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set in .env}
       BACKUP_TIME: ${BACKUP_TIME:-02:00}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
       VERIFY_EVERY_N_BACKUPS: ${VERIFY_EVERY_N_BACKUPS:-7}

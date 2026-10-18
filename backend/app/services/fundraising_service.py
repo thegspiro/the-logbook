@@ -25,7 +25,7 @@ from app.models.grant import (
     PledgeStatus,
 )
 from app.services.restricted_funds import is_charged
-from app.utils.model_updates import apply_updates
+from app.utils.model_updates import apply_updates, reload_updated_at
 from app.utils.org_timezone import (
     local_date,
     resolve_local_range_utc,
@@ -164,10 +164,7 @@ class FundraisingService:
         if campaign.is_restricted and not (campaign.restriction_purpose or "").strip():
             raise ValueError("A restricted fund needs the purpose it is for.")
         await self.db.flush()
-        # W69: onupdate expires updated_at at the flush; without the reload the
-        # response model's lazy read raised MissingGreenlet — a 500 that rolled
-        # the edit back. The same holds for every update below.
-        await self.db.refresh(campaign)
+        await reload_updated_at(self.db, campaign)
         return campaign
 
     async def delete_campaign(self, campaign_id: str, organization_id: str) -> bool:
@@ -249,7 +246,7 @@ class FundraisingService:
             return None
         apply_updates(donor, data, skip={"organization_id", "id"})
         await self.db.flush()
-        await self.db.refresh(donor)
+        await reload_updated_at(self.db, donor)
         return donor
 
     # ------------------------------------------------------------------
@@ -421,7 +418,7 @@ class FundraisingService:
         for did in {d for d in (old_donor_id, donation.donor_id) if d is not None}:
             await self._update_donor_stats(did, organization_id)
 
-        await self.db.refresh(donation)
+        await reload_updated_at(self.db, donation)
         return donation
 
     async def _lock_campaign(self, campaign_id: str, organization_id: str) -> None:
@@ -602,7 +599,7 @@ class FundraisingService:
         await self._validate_pledge_fks(data, organization_id)
         apply_updates(pledge, data, skip={"organization_id", "id"})
         await self.db.flush()
-        await self.db.refresh(pledge)
+        await reload_updated_at(self.db, pledge)
         return pledge
 
     # ------------------------------------------------------------------
@@ -688,7 +685,7 @@ class FundraisingService:
         await self._validate_fundraising_event_fks(data, organization_id)
         apply_updates(event, data, skip={"organization_id", "id"})
         await self.db.flush()
-        await self.db.refresh(event)
+        await reload_updated_at(self.db, event)
         return event
 
     # ------------------------------------------------------------------

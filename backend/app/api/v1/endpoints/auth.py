@@ -40,6 +40,8 @@ from app.core.constants import (
     AUDIT_EVENT_LOGIN,
     AUDIT_EVENT_LOGIN_FAILED,
     AUDIT_EVENT_LOGOUT,
+    AUDIT_EVENT_PASSWORD_CHANGE_FAILED,
+    AUDIT_EVENT_PASSWORD_CHANGED,
 )
 from app.core.database import database_manager, get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
@@ -1763,13 +1765,17 @@ async def get_session_settings(
 @router.post("/change-password", dependencies=[rate_limit_password_change()])
 async def change_password(
     password_data: PasswordChange,
+    request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Change the current user's password
 
-    Requires the current password for verification.
+    Requires the current password for verification. Both outcomes are
+    audited (HIPAA §164.312(b)); a refusal records which control refused
+    it, never either password.
     """
     auth_service = AuthService(db)
 
@@ -1779,12 +1785,50 @@ async def change_password(
         new_password=password_data.new_password,
     )
 
+    member = {
+        "user_id": str(current_user.id),
+        "username": current_user.username,
+        "organization_id": (
+            str(current_user.organization_id) if current_user.organization_id else None
+        ),
+    }
+
     if not success:
+        await _audit_sign_in(
+            db,
+            request,
+            AUDIT_EVENT_PASSWORD_CHANGE_FAILED,
+            "warning",
+            {"reason": auth_service.last_password_change_failure or "unknown"},
+            **member,
+        )
+        # get_db rolls back when the HTTPException below propagates, so the
+        # refusal is committed here or it is lost.
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error or "Password change failed",
         )
 
+    await _audit_sign_in(
+        db,
+        request,
+        AUDIT_EVENT_PASSWORD_CHANGED,
+        "info",
+        {"sessions_revoked": True},
+        **member,
+    )
+    await notify_security_event(
+        db,
+        current_user,
+        subject="Your password was changed",
+        message=(
+            "The password on your account was just changed, and every device "
+            "signed in to it has been signed out. If this wasn't you, contact "
+            "an administrator immediately."
+        ),
+        background_tasks=background_tasks,
+    )
     return {"message": "Password changed successfully"}
 
 
@@ -2009,7 +2053,10 @@ async def reset_password(
         new_password=reset_data.new_password,
     )
 
-    # Audit log the outcome
+    # Only a completed reset names the member. A refusal is written
+    # platform-level: the token may never have resolved to anyone, and a
+    # guessed token must not be able to write rows against an account.
+    reset_user = auth_service.last_reset_user if success else None
     await log_audit_event(
         db=db,
         event_type=(
@@ -2021,11 +2068,21 @@ async def reset_password(
             "success": success,
             "error": error,
         },
+        user_id=str(reset_user.id) if reset_user else None,
+        username=reset_user.username if reset_user else None,
+        organization_id=(
+            str(reset_user.organization_id)
+            if reset_user and reset_user.organization_id
+            else None
+        ),
         ip_address=ip_address,
         user_agent=request.headers.get("user-agent"),
     )
 
     if not success:
+        # get_db rolls back when the HTTPException below propagates, so the
+        # failure row is committed here or it is lost.
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error or "Password reset failed",

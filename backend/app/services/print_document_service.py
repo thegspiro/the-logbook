@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.utils.check_types import COUNT, normalize_check_type
 from app.utils.member_names import format_display_name
 from app.utils.positions import position_label
 from app.utils.print_document import DocumentRow, DocumentSection, PrintDocument
@@ -283,9 +284,18 @@ async def build_shift_roster(
 def _item_expectation(item) -> Optional[str]:
     """The short right-hand note that says what "correct" looks like."""
     check_type = str(item.check_type or "")
-    if check_type == "quantity":
-        expected = item.required_quantity or item.expected_quantity
-        return f"qty {expected}" if expected else "qty"
+    # Normalized: stored rows say "count", so matching the legacy "quantity"
+    # alone printed nothing for every count position.
+    if normalize_check_type(check_type) == COUNT:
+        par = max(item.required_quantity or 0, item.expected_quantity or 0)
+        if not par:
+            return "qty"
+        note = f"par {par}"
+        if item.count_unit:
+            note += f" {item.count_unit}"
+        if item.required_quantity:
+            note += f", min {item.required_quantity}"
+        return note
     if check_type == "level":
         if item.min_level is not None:
             unit = item.level_unit or ""

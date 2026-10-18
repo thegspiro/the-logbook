@@ -471,8 +471,62 @@ class InventoryCategoryResponse(InventoryCategoryBase):
     created_by: Optional[UUID] = None
     # Override: DB column is "extra_data"; SQLAlchemy reserves "metadata" as a class attr
     metadata: Optional[Dict[str, Any]] = Field(None, validation_alias="extra_data")
+    # Active items filed here. Set by the medical category list only; other
+    # lists leave it empty rather than report a count they did not take.
+    item_count: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class MedicalExpiringStockRow(BaseModel):
+    """A medical supply expiring soon, on a shelf or aboard an apparatus.
+
+    ``where`` is the storage path for a shelf lot and the checklist's own
+    naming ("Medic 1 › Main Compartment › Jump Bag") for truck stock, so the
+    one list says where to go to pull it.
+    """
+
+    key: str
+    location: Literal["shelf", "apparatus"]
+    inventory_item_id: str
+    item_name: Optional[str] = None
+    item_size: Optional[str] = None
+    # The shelf lot, or the checklist position the units sit in.
+    lot_id: Optional[str] = None
+    template_item_id: Optional[str] = None
+    lot_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    days_until_expiration: Optional[int] = None
+    quantity: int = 0
+    where: Optional[str] = None
+
+
+class MedicalStorageRoom(BaseModel):
+    """A room or place a supply can be filed under."""
+
+    id: str
+    name: str
+
+
+class MedicalStorageAreaOption(BaseModel):
+    """An active storage area, with its room and readable path resolved."""
+
+    id: str
+    name: str
+    label: Optional[str] = None
+    storage_type: Optional[str] = None
+    parent_id: Optional[str] = None
+    location_id: Optional[str] = None
+    location_name: Optional[str] = None
+    # "Cabinet B › Shelf 2": the area's own name last.
+    path: str
+
+
+class MedicalStorageOptionsResponse(BaseModel):
+    """What the medical supply form can file a supply under."""
+
+    rooms: List[MedicalStorageRoom] = Field(default_factory=list)
+    areas: List[MedicalStorageAreaOption] = Field(default_factory=list)
 
 
 class InventoryCategoryDeleteResult(BaseModel):
@@ -573,6 +627,8 @@ class InventoryItemBase(BaseModel):
     quantity: int = Field(default=1, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     reorder_point: Optional[int] = Field(None, ge=0)
+    # Kept on the apparatus only; see InventoryItem.apparatus_only.
+    apparatus_only: bool = False
     inspection_interval_days: Optional[int] = Field(None, ge=0)
     min_rank_order: Optional[int] = None
     restricted_to_positions: Optional[List[str]] = None
@@ -682,6 +738,7 @@ class InventoryItemUpdate(BaseModel):
     quantity: Optional[int] = Field(None, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     reorder_point: Optional[int] = Field(None, ge=0)
+    apparatus_only: Optional[bool] = None
     last_inspection_date: Optional[date] = None
     next_inspection_due: Optional[date] = None
     inspection_interval_days: Optional[int] = Field(None, ge=0)
@@ -749,6 +806,31 @@ class InventoryItemResponse(InventoryItemBase):
     # the item has no lots — there is nothing to prefer over `quantity`.
     lot_stock: Optional[int] = None
     is_lot_stocked: bool = False
+    # The soonest expiry among units still in stock (expired ones included),
+    # on the shelf or aboard an apparatus, and its distance from the
+    # department's today; then which of the two it is and where ("Medic 1 ›
+    # Jump Bag", or the storage path). Set by the medical supply list only;
+    # other lists leave all four empty.
+    next_expiration_date: Optional[date] = None
+    days_until_next_expiration: Optional[int] = None
+    next_expiration_location: Optional[Literal["shelf", "apparatus"]] = None
+    next_expiration_where: Optional[str] = None
+    # Where it is: "Station 1 › Supply Room › Shelf 2" from the item's room
+    # and storage area, and how many apparatus checklists carry it. Set by the
+    # medical supply list only; other lists leave both empty.
+    storage_path: Optional[str] = None
+    apparatus_count: Optional[int] = None
+    # Each apparatus position carrying it, as the checklist names it:
+    # "Medic 1 › Main Compartment › Jump Bag". Medical supply list only.
+    apparatus_places: Optional[List[str]] = None
+    # In-date units on the trucks, how many positions entered that figure at
+    # their target because nobody has counted them, and whether the supply is
+    # at or below its reorder point on shelf plus trucks — the server's call,
+    # so the list cannot disagree with the Low stock tile it opens from.
+    # Medical supply list only.
+    apparatus_stock: Optional[int] = None
+    apparatus_uncounted: Optional[int] = None
+    is_low_stock: Optional[bool] = None
 
     # The requesting member's own pin position, 0-based, or null when they
     # have not pinned this item. Personal to the caller: two members reading
@@ -865,6 +947,8 @@ class ExpiringLotResponse(InventoryLotResponse):
     """A stock lot nearing expiration, with its item name for display."""
 
     item_name: Optional[str] = None
+    # Set by the medical route only; gear lots leave it empty.
+    item_size: Optional[str] = None
     days_until_expiration: Optional[int] = None
 
 
@@ -1319,6 +1403,29 @@ class ItemRetireRequest(BaseModel):
     """Schema for retiring an item"""
 
     notes: Optional[FreeText] = None
+
+
+class ItemBulkRetireRequest(BaseModel):
+    """Retire several items at once, with one note for all of them."""
+
+    # Capped like a received delivery: a selection larger than a page of the
+    # list is not something anyone ticked by hand.
+    item_ids: List[UUID] = Field(..., min_length=1, max_length=200)
+    notes: Optional[FreeText] = None
+
+
+class ItemBulkRetireFailure(BaseModel):
+    """One item a bulk retire left in place, and why."""
+
+    item_id: str
+    error: str
+
+
+class ItemBulkRetireResult(BaseModel):
+    """What a bulk retire did, item by item."""
+
+    retired: List[str]
+    failed: List[ItemBulkRetireFailure]
 
 
 class ItemGroupCount(BaseModel):
@@ -2431,6 +2538,9 @@ class ReorderRequestUpdate(BaseModel):
     # W41-5: link (or relink) the inventory item, which receiving requires.
     # Refused once stock has been received against the current link.
     item_id: Optional[UUID] = None
+    # Null clears the category; a non-null id must belong to the caller's org
+    # (checked by the service, as on create).
+    category_id: Optional[UUID] = None
     item_name: Optional[str] = Field(None, min_length=1, max_length=255)
     quantity_requested: Optional[int] = Field(None, ge=1)
     quantity_received: Optional[int] = Field(None, ge=0)

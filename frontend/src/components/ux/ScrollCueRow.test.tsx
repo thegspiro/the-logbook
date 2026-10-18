@@ -137,6 +137,41 @@ describe('ScrollCueRow', () => {
     expect(geometry.getScrollLeft()).toBe(105);
   });
 
+  // A timeline's newest entry is its last; opening on the oldest put today
+  // off screen on a phone.
+  it('opens at the far end when asked to, with the cue on the left', () => {
+    const geometry = layOut(700);
+    render(
+      <ScrollCueRow startAtEnd data-testid="timeline">
+        <span>Days</span>
+      </ScrollCueRow>
+    );
+
+    expect(geometry.getScrollLeft()).toBe(700);
+    expect(cue('left')).not.toBeNull();
+    expect(cue('right')).toBeNull();
+  });
+
+  // A fade from the row's own edge would wash out the pinned unit labels.
+  it('starts the left cue where a pinned column ends', () => {
+    layOut(700, 400);
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const box = (left: number, width: number) => ({ left, width, right: left + width }) as DOMRect;
+      if (this.hasAttribute('data-scroll-pin')) return box(10, 80);
+      return box(10, 300);
+    });
+    render(
+      <ScrollCueRow data-testid="timeline">
+        <span data-scroll-pin>Unit</span>
+        <span>Days</span>
+      </ScrollCueRow>
+    );
+
+    // jsdom discards mask-image, so the fade itself is checked in a browser;
+    // the chevron shares the measured inset.
+    expect(cue('left')).toHaveStyle({ left: '80px' });
+  });
+
   it('passes its attributes to the scrolling element', () => {
     layOut(300);
     renderRow();

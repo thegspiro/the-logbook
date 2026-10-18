@@ -33,16 +33,42 @@ describe('countAnswer', () => {
     });
   });
 
-  it('records short of par as a failure, because that is what gets stored', () => {
-    // The server rewrites any quantity under the required one to `fail`
-    // whatever is sent, and the accordion stores `fail` too. Storing `pass`
-    // here told a crew the truck had no fault immediately before the saved
-    // report gave it one. The restock/fault distinction is kept in what the
-    // sweep reports — see stopFailures and stopRestocks.
+  // The rule table the department signed off on (2026-10-16): the pass
+  // floor decides the verdict, par decides the restock. Mirrors
+  // EquipmentCheckService._pass_floor, so the server accepts what is stored.
+  it('passes short of par alone, with a restock line', () => {
     expect(countAnswer(item({ expectedQuantity: 24 }), 23)).toEqual({
       quantityFound: 23,
+      status: 'pass',
+      restockNeeded: true,
+    });
+  });
+
+  it('passes between the minimum and par, with a restock line', () => {
+    expect(countAnswer(item({ expectedQuantity: 10, passFloor: 6 }), 8)).toEqual({
+      quantityFound: 8,
+      status: 'pass',
+      restockNeeded: true,
+    });
+  });
+
+  it('passes at the minimum exactly', () => {
+    expect(countAnswer(item({ expectedQuantity: 10, passFloor: 6 }), 6).status).toBe('pass');
+  });
+
+  it('fails below the minimum, and still raises the restock', () => {
+    expect(countAnswer(item({ expectedQuantity: 10, passFloor: 6 }), 5)).toEqual({
+      quantityFound: 5,
       status: 'fail',
       restockNeeded: true,
+    });
+  });
+
+  it('passes at par with nothing to restock', () => {
+    expect(countAnswer(item({ expectedQuantity: 10, passFloor: 6 }), 10)).toEqual({
+      quantityFound: 10,
+      status: 'pass',
+      restockNeeded: false,
     });
   });
 

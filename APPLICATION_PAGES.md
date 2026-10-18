@@ -6,19 +6,21 @@ Complete reference of all pages in the application, organized by module.
 
 ## Public Pages (No Authentication Required)
 
-| URL                                    | Page                   | Description                                                                                                                          |
-| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `/`                                    | Welcome                | Landing / onboarding entry point                                                                                                     |
-| `/login`                               | Login                  | User authentication                                                                                                                  |
-| `/forgot-password`                     | Forgot Password        | Password reset request                                                                                                               |
-| `/reset-password`                      | Reset Password         | Password reset form                                                                                                                  |
-| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                                                       |
-| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                                                 |
-| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                                                   |
-| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based); reads member ID cards where the room has badge check-in on _(2026-10-03)_ |
-| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                                                             |
-| `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text                                 |
-| `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text                                   |
+| URL                                    | Page                   | Description                                                                                                                               |
+| -------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                                    | Welcome                | Landing / onboarding entry point                                                                                                          |
+| `/login`                               | Login                  | User authentication                                                                                                                       |
+| `/forgot-password`                     | Forgot Password        | Password reset request                                                                                                                    |
+| `/reset-password`                      | Reset Password         | Password reset form                                                                                                                       |
+| `/auth/callback`                       | `OAuthCallbackPage`    | OAuth sign-in landing page (handles Google/Microsoft redirect)                                                                            |
+| `/f/:slug`                             | Public Form            | Public form submission (token-based)                                                                                                      |
+| `/ballot`                              | Ballot Voting          | Public ballot voting (token-based)                                                                                                        |
+| `/display/:code`                       | Location Kiosk Display | QR code display for tablets in rooms (display-code-based); reads member ID cards where the room has badge check-in on _(2026-10-03)_      |
+| `/display/:code/events/:eventId/guest` | `GuestCheckInPage`     | Guest (non-member) sign-in for an event held in that room _(2026-08-09)_                                                                  |
+| `/privacy`                             | Privacy Policy         | Public privacy notice; department control + status-based access, dated; department-configurable text                                      |
+| `/terms`                               | Terms of Service       | Public terms of use; department control + status-based access, dated; department-configurable text                                        |
+| `/public/minutes`                      | Public Minutes         | Minutes the department posted publicly (list); off until the department turns on public posting under Minutes → Publishing _(2026-10-17)_ |
+| `/public/minutes/:copyId`              | Public Minutes         | One posted set of minutes, in the narrower public form; shows the version it replaced and a notice while under correction _(2026-10-17)_  |
 
 > **Badge check-in at the room kiosk** _(2026-10-03)_. A room with **Badge
 > check-in** switched on (Check-In QR Codes, `locations.manage_nfc_tags`, needs
@@ -458,7 +460,7 @@ Requires `training.manage` permission. Tab-based admin interface.
 | `pipelines`         | Pipelines                     |
 | `shift-reports`     | Shift Reports                 |
 | `integrations`      | Integrations                  |
-| `import`            | Import History                |
+| `import`            | Import Past Training          |
 | `enhancements`      | Enhancements                  |
 
 > The two **Skills Testing** tabs were missing from this list. `templates` is the skill-sheet library (create, edit, publish, archive, and the per-template result-disclosure override); `tests` is the records tab, which is where an officer **validates**, **voids**, **releases** and **cancels** results, and where the "awaiting validation" filter lives. Both are officer-only, unlike `/training/skills-testing`, which is the member's entry point.

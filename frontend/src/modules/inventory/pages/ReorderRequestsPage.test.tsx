@@ -201,6 +201,33 @@ describe('ReorderRequestsPage', () => {
     expect(mockUpdateReorderRequest.mock.calls[0]?.[1]).toMatchObject({ item_id: null });
   });
 
+  it('sends a changed category on edit, and an explicit null once it is cleared', async () => {
+    mockGetCategories.mockResolvedValue([
+      { id: 'cat-1', name: 'Breathing Air' },
+      { id: 'cat-2', name: 'Hand Protection' },
+    ]);
+    mockGetReorderRequests.mockResolvedValue([makeReq({ status: 'pending', category_id: 'cat-1' })]);
+    const user = userEvent.setup();
+    renderWithRouter(<ReorderRequestsPage />);
+    await screen.findAllByText('SCBA Cylinders');
+
+    await user.click(firstButton('Edit'));
+    const category = await screen.findByLabelText('Category');
+    await screen.findByRole('option', { name: 'Hand Protection' });
+    await user.selectOptions(category, 'cat-2');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateReorderRequest).toHaveBeenCalledTimes(1));
+    expect(mockUpdateReorderRequest.mock.calls[0]?.[1]).toMatchObject({ category_id: 'cat-2' });
+
+    await user.click(firstButton('Edit'));
+    await user.selectOptions(await screen.findByLabelText('Category'), '');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateReorderRequest).toHaveBeenCalledTimes(2));
+    expect(mockUpdateReorderRequest.mock.calls[1]?.[1]).toMatchObject({ category_id: null });
+  });
+
   it('edits a pending request', async () => {
     mockGetReorderRequests.mockResolvedValue([makeReq({ status: 'pending' })]);
     const user = userEvent.setup();

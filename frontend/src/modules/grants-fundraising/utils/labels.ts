@@ -2,7 +2,13 @@
  * Display labels shared across the Grants & Fundraising pages.
  */
 
-import { FundraisingEventStatus, FundraisingEventType, GrantCategory, PledgeStatus } from '../types';
+import {
+  BUDGET_ITEM_CATEGORY_LABELS,
+  FundraisingEventStatus,
+  FundraisingEventType,
+  GrantCategory,
+  PledgeStatus,
+} from '../types';
 import type { Donor } from '../types';
 
 export const GRANT_CATEGORY_LABELS: Record<GrantCategory, string> = {
@@ -18,24 +24,11 @@ export const GRANT_CATEGORY_LABELS: Record<GrantCategory, string> = {
 };
 
 /**
- * A budget line's category, keyed by the code the API stores
- * (`BudgetItemCategoryLiteral` in `schemas/grant.py`). W68: the add dialog
- * sent these labels as the value, which the API refused.
+ * A stored budget-line category's label (W68: the reports page printed the raw
+ * code). An unknown code reads as itself.
  */
-export const BUDGET_ITEM_CATEGORY_LABELS: Record<string, string> = {
-  personnel: 'Personnel',
-  equipment: 'Equipment',
-  supplies: 'Supplies',
-  travel: 'Travel',
-  training: 'Training',
-  contractual: 'Contractual',
-  construction: 'Construction',
-  indirect: 'Indirect Costs',
-  other: 'Other',
-};
-
-/** A stored category's label; an unknown code reads as itself. */
-export const budgetItemCategoryLabel = (category: string): string => BUDGET_ITEM_CATEGORY_LABELS[category] ?? category;
+export const budgetItemCategoryLabel = (category: string): string =>
+  (BUDGET_ITEM_CATEGORY_LABELS as Record<string, string>)[category] ?? category;
 
 /** A donor as the pickers and lists name them: person, then organization. */
 export const donorDisplayName = (donor: Donor): string => {

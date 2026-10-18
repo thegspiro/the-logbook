@@ -920,9 +920,10 @@ async def list_budget_options(
 
     **Requires permission: finance.request, finance.view or finance.manage**
 
-    Each line is a label (its category, plus its station when it has one)
-    and the amount remaining. That is all a member choosing a line needs, and
-    all they see: the budget pages themselves stay behind the view grant.
+    Each line is a label (its category, plus its station when it has one).
+    The amount remaining is added only for ``finance.view`` / ``finance.manage``
+    holders and for the owner of that line; every other member gets the label
+    alone. The budget pages themselves stay behind the view grant.
     """
     # Registered before `/budgets/{budget_id}` for the reason
     # get_budget_summary gives.
@@ -931,6 +932,9 @@ async def list_budget_options(
         str(current_user.organization_id),
         fiscal_year_id,
         charger_id=_requester_scope(current_user),
+        amounts_for=str(current_user.id),
+        sees_all_amounts=user_has_permission(current_user, "finance.view")
+        or user_has_permission(current_user, "finance.manage"),
     )
 
 
@@ -1851,11 +1855,27 @@ async def update_approval_chain(
 ):
     service = FinanceService(db)
     try:
-        return await service.update_approval_chain(
+        updates = data.model_dump(exclude_unset=True)
+        chain = await service.update_approval_chain(
             chain_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_unset=True),
+            **updates,
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_updated",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "chain_id": chain_id,
+                "name": chain.name,
+                "fields": sorted(updates),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
+        return chain
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1872,7 +1892,19 @@ async def delete_approval_chain(
 ):
     service = FinanceService(db)
     try:
-        await service.delete_approval_chain(chain_id, str(current_user.organization_id))
+        name = await service.delete_approval_chain(
+            chain_id, str(current_user.organization_id)
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_deleted",
+            event_category="finance",
+            severity="info",
+            event_data={"chain_id": chain_id, "name": name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1894,11 +1926,26 @@ async def add_chain_step(
 ):
     service = FinanceService(db)
     try:
-        return await service.add_chain_step(
+        step = await service.add_chain_step(
             chain_id,
             str(current_user.organization_id),
             **data.model_dump(),
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_step_added",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "chain_id": chain_id,
+                "step_id": str(step.id),
+                "name": step.name,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
+        return step
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1920,12 +1967,29 @@ async def update_chain_step(
 ):
     service = FinanceService(db)
     try:
-        return await service.update_chain_step(
+        updates = data.model_dump(exclude_unset=True)
+        step = await service.update_chain_step(
             step_id,
             chain_id,
             str(current_user.organization_id),
-            **data.model_dump(exclude_unset=True),
+            **updates,
         )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_step_updated",
+            event_category="finance",
+            severity="info",
+            event_data={
+                "chain_id": chain_id,
+                "step_id": step_id,
+                "name": step.name,
+                "fields": sorted(updates),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
+        )
+        return step
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
@@ -1943,8 +2007,18 @@ async def delete_chain_step(
 ):
     service = FinanceService(db)
     try:
-        await service.delete_chain_step(
+        name = await service.delete_chain_step(
             step_id, chain_id, str(current_user.organization_id)
+        )
+        await log_audit_event(
+            db=db,
+            event_type="finance.approval_chain_step_deleted",
+            event_category="finance",
+            severity="info",
+            event_data={"chain_id": chain_id, "step_id": step_id, "name": name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+            organization_id=str(current_user.organization_id),
         )
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))

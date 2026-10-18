@@ -36,6 +36,11 @@ from loguru import logger
 # client credentials flow there is no user to consent to anything narrower.
 MICROSOFT_OAUTH_SCOPE = "https://outlook.office365.com/.default"
 
+# Microsoft Graph, for the Microsoft 365 account-provisioning integration.
+# The same app-only flow: ``.default`` is whatever application permissions
+# the department consented to on its registration.
+MICROSOFT_GRAPH_SCOPE = "https://graph.microsoft.com/.default"
+
 _AUTHORITY_TEMPLATE = "https://login.microsoftonline.com/{tenant}"
 
 # Passed to msal as the underlying requests timeout, which msal's own
@@ -309,8 +314,17 @@ def _describe_failure(result: Optional[dict]) -> str:
     return "Microsoft rejected the token request for the Microsoft 365 application."
 
 
-def acquire_access_token(tenant_id: Any, client_id: Any, client_secret: Any) -> str:
-    """Return an Exchange Online access token for the app registration.
+def acquire_access_token(
+    tenant_id: Any,
+    client_id: Any,
+    client_secret: Any,
+    scope: str = MICROSOFT_OAUTH_SCOPE,
+) -> str:
+    """Return an access token for the app registration, for *scope*
+    (Exchange Online unless told otherwise).
+
+    One msal application serves every scope for a registration; its token
+    cache keys tokens by scope, so an Exchange and a Graph token coexist.
 
     Raises ``MicrosoftOAuthError`` with an administrator-facing message when
     the credentials are malformed, Microsoft declines the request, or the
@@ -351,7 +365,7 @@ def acquire_access_token(tenant_id: Any, client_id: Any, client_secret: Any) -> 
                 raise MicrosoftOAuthError(recent)
 
             app = _client_app(tenant, client, client_secret)
-            result = app.acquire_token_for_client(scopes=[MICROSOFT_OAUTH_SCOPE])
+            result = app.acquire_token_for_client(scopes=[scope])
     except requests.exceptions.RequestException as e:
         # msal lets transport failures through untouched, and the timeout
         # above makes one an expected outcome rather than a surprise. Left

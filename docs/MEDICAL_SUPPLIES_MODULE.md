@@ -110,6 +110,28 @@ whose name or alternate names merely resemble the search; the checklist builder
 uses it so a rig's wording finds the catalog row instead of prompting a
 duplicate. It stays inside the medical domain like every other route here.
 
+**List, sort and bulk actions** _(2026-10-16)_. `GET /items` sorts server-side
+(`sort_by` accepts `name`, `category`, `on_hand`, `reorder_point`; blanks last,
+ties by name; `on_hand` orders by the number the list shows, the in-date lot
+total for a lot-stocked supply). A `low_stock` flag filters to what the Low
+stock tile counts; an unset (null) reorder point is never low.
+`POST /items/bulk-retire` retires each item through `retire_item` with the
+medical domain re-checked under its lock; failures are reported and the rest go
+through (audit `medical_items_bulk_retired`). The list route adds `size`,
+`next_expiry`, `storage_path`, `apparatus_count` and `apparatus_places`.
+The two export routes are in `SecurityMonitoringMiddleware.EXPORT_ENDPOINTS`.
+
+**Where a supply is kept** _(2026-10-16)_. Items carry a storage area
+(`storage_area_id`, which settles the room) beside the free-text
+`storage_location` note. New
+medical-scoped reads, so a medical-only officer needs no general inventory
+access: `GET /storage-options` and `GET /items/{id}/placements`
+(`ItemDeployment` adds `target_quantity`, `quantity_on_truck`,
+`compartment_path`). Paths come from one query per request over the templates
+involved, walking `parent_compartment_id` with a cycle guard. Migration
+`58522b08f6a7` files existing supplies under the one active area whose name
+matches their text; the downgrade unlinks rows still matching that rule.
+
 **Deleting a category moves its supplies first.** A category can be deleted
 permanently (`DELETE /categories/{id}`), and the page asks where its supplies
 should go. This is not left to the database: an item's foreign key to its
@@ -327,6 +349,31 @@ paths (retirement goes through `retire_item`, with its lock, blockers and audit
 event), and the maintenance form no longer offers it.
 
 ---
+
+## Stock on the apparatus _(2026-10-16)_
+
+A medical supply's ready stock is **shelf plus trucks**
+(`InventoryService.stock_breakdown`): in-date deployed lots, else the last count,
+else the position's target (tallied as uncounted). The low-stock list, the Low
+stock tile, the daily alert email and automatic reorder read that one figure;
+gear keeps judging the shelf alone. Auto-reorder is also checked after a daily
+check, a "report used" and a recount. The list's On hand shows "+N on trucks" and
+takes Low from the server (`is_low_stock`).
+
+- **Expiring**: `GET /medical-supplies/expiring-stock` lists truck stock beside
+  shelf lots; `/lots/expiring` is unchanged. The summary adds
+  `expiring_soon_on_apparatus` and `expired_on_apparatus` and keeps its existing
+  fields. Next expiry takes the soonest of the shelf and the trucks and reports
+  `next_expiration_location` and `next_expiration_where`; a tie goes to the shelf.
+- **Apparatus only** (`inventory_items.apparatus_only`, default false; migration
+  `0bbf263a5ff0`, guarded, downgrade drops the column): the shelf counts as 0,
+  the list shows "N on M apparatus", the lots dialog has no stock-lot controls,
+  and Receive delivery leaves it out (`exclude_apparatus_only`). Shelf lots left
+  from before are excluded from Expiring, the tiles and Next expiry by one
+  filter, `InventoryService._shelf_lots_count`; rows are untouched, so unmarking
+  restores them. CSV carries "Kept on Apparatus Only" (Yes/No); an unreadable
+  value is refused, an apparatus-only row may carry Quantity 0, and lot columns
+  on such a row are refused.
 
 ## Alerts
 
