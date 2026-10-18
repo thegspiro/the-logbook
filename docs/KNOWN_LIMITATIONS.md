@@ -5911,6 +5911,24 @@ connected — or accept that catalog changes reach new organizations only.
 
 See `docs/app-review/integrations.md` → Pass 5.
 
+## GF2-2 — Seven More Services Flush And Return An Updated Row Without Reloading `updated_at` (2026-10-16)
+
+The grants / fundraising update endpoints answered 500 and discarded the change because a
+server-side `onupdate=func.now()` column expires after the flush and the response model
+cannot lazy-load it in an async session (fixed in that module with
+`reload_updated_at`; see `docs/app-review/grants-fundraising.md` → Pass 5, GF2-1). A
+static scan found seven more `update_*` service methods with the same shape that were not
+driven: `finance_service.update_chain_step`, `inventory_service.update_reorder_request`,
+`label_printer_service.update_printer`, `legal_service.update_draft`,
+`medical_screening_service.update_requirement` and `update_record`,
+`org_chart_service.update_node`.
+
+**Candidates, not confirmed failures.** Each depends on the model carrying `onupdate` and
+on the endpoint not re-fetching before it responds. **Owner decision:** let each
+module's rotation pass drive its own update with a real change (the test pattern is in
+`backend/tests/test_grants_update_endpoints_integration.py`) and apply
+`reload_updated_at` where it fails — or ask for one sweep that drives all seven now.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

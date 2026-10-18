@@ -27,8 +27,9 @@ from typing import Any, Iterable, Mapping
 
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import NoInspectionAvailable
+from sqlalchemy.ext.asyncio import AsyncSession
 
-__all__ = ["apply_updates"]
+__all__ = ["apply_updates", "reload_updated_at"]
 
 
 def _nullable_columns(instance: Any) -> dict[str, bool]:
@@ -94,3 +95,17 @@ def apply_updates(
         written.add(key)
 
     return written
+
+
+async def reload_updated_at(db: AsyncSession, instance: Any) -> None:
+    """Load ``updated_at`` after a flush so the response can read it.
+
+    ``updated_at`` is ``onupdate=func.now()``, a server-side expression. MySQL
+    and MariaDB cannot return it from an UPDATE, so SQLAlchemy expires the
+    attribute instead, and the first read of it lazy-loads, which an async
+    session cannot do outside a greenlet. A handler that returns the instance
+    straight after ``flush()`` therefore fails while the response model reads
+    the timestamp, and the request's session rolls back with it: the update is
+    answered 500 and not saved. Costs one primary-key SELECT.
+    """
+    await db.refresh(instance, ["updated_at"])
