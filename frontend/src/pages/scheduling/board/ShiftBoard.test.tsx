@@ -5,6 +5,7 @@ const mockEligible = vi.fn();
 const mockMyOffers = vi.fn();
 const mockRespond = vi.fn();
 const mockCancelSwap = vi.fn();
+const mockGetShifts = vi.fn();
 
 vi.mock('../../../modules/scheduling', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('../../../modules/scheduling');
@@ -18,6 +19,7 @@ vi.mock('../../../modules/scheduling', async () => {
       getMySwapRequests: (...args: unknown[]) => mockMyOffers(...args) as unknown,
       respondToSwapOffer: (...args: unknown[]) => mockRespond(...args) as unknown,
       cancelSwapRequest: (...args: unknown[]) => mockCancelSwap(...args) as unknown,
+      getShifts: (...args: unknown[]) => mockGetShifts(...args) as unknown,
       getCalendarFeed: () => Promise.resolve({ token: 't', feed_path: '/feed' }),
     },
   };
@@ -114,6 +116,10 @@ beforeEach(() => {
   mockMyOffers.mockResolvedValue([]);
   mockRespond.mockResolvedValue({ id: 'sw1' });
   mockCancelSwap.mockResolvedValue(undefined);
+  // Reset, not just cleared: a later-shift hint queued by one test must not
+  // reach the empty month of the next.
+  mockGetShifts.mockReset();
+  mockGetShifts.mockResolvedValue({ shifts: [], total: 0, skip: 0, limit: 1 });
 });
 
 afterEach(() => {
@@ -219,6 +225,56 @@ describe('ShiftBoard', () => {
     renderBoard();
     expect(await screen.findByText('Nothing is scheduled for this month yet.')).toBeInTheDocument();
     expect(screen.getByText(/Your scheduling officer has not published shifts for these dates/)).toBeInTheDocument();
+  });
+
+  it('points an empty range at the next shift on the schedule', async () => {
+    mockGetMonth.mockResolvedValue([]);
+    mockGetShifts.mockResolvedValue({
+      shifts: [shift({ id: 'next', shift_date: '2026-09-07' })],
+      total: 1,
+      skip: 0,
+      limit: 1,
+    });
+    const onVisibleDateChange = vi.fn();
+    renderBoard({ onVisibleDateChange });
+
+    expect(await screen.findByText(/The next shift on the schedule is on Mon, Sep 7/)).toBeInTheDocument();
+    // Asked from the day after the month the board fetched, not from today.
+    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: '2026-09-01', limit: 1 });
+    expect(screen.queryByText(/Your scheduling officer has not published/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Go to the next shift' }));
+    const moved = onVisibleDateChange.mock.calls[0]?.[0] as Date | undefined;
+    expect(moved?.getFullYear()).toBe(2026);
+    expect(moved?.getMonth()).toBe(8);
+    expect(moved?.getDate()).toBe(7);
+  });
+
+  it("keeps the officer's create action beside the next-shift link", async () => {
+    mockGetMonth.mockResolvedValue([]);
+    mockGetShifts.mockResolvedValue({
+      shifts: [shift({ id: 'next', shift_date: '2026-09-07' })],
+      total: 1,
+      skip: 0,
+      limit: 1,
+    });
+    renderBoard({ emptyAction: <button type="button">Create a shift</button> });
+
+    expect(await screen.findByRole('button', { name: 'Go to the next shift' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create a shift' })).toBeInTheDocument();
+  });
+
+  it('asks a week view from the day after its Saturday', async () => {
+    mockGetWeek.mockResolvedValue([]);
+    renderBoard({ view: 'week', visibleDate: new Date(2026, 7, 20) });
+
+    await waitFor(() => expect(mockGetShifts).toHaveBeenCalledWith({ start_date: '2026-08-23', limit: 1 }));
+  });
+
+  it('does not look for a later shift when the range has some', async () => {
+    renderBoard();
+    expect(await screen.findByTestId('month-open-seats')).toHaveTextContent('2 open seats this month');
+    expect(mockGetShifts).not.toHaveBeenCalled();
   });
 
   it('surfaces a failed load instead of showing an empty month', async () => {

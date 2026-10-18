@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SchedulingPage from './SchedulingPage';
@@ -25,6 +25,8 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getMyShifts: vi.fn().mockResolvedValue([]),
     getOpenShifts: vi.fn().mockResolvedValue([]),
     getShift: vi.fn(),
+    createShift: vi.fn().mockResolvedValue({ id: 'new' }),
+    getMySwapRequests: vi.fn().mockResolvedValue([]),
   },
   // A pure helper the create form calls on the template list; the real one just
   // flattens seats, so an empty list is a faithful stand-in for no template.
@@ -488,6 +490,40 @@ describe('SchedulingPage', () => {
           membersLoaded: false,
         });
       });
+    });
+
+    it('moves the board to the date of the shift just created', async () => {
+      const user = userEvent.setup();
+      // Without apparatus the form asks for none, so a date and a template
+      // are all it needs to submit.
+      useSchedulingStore.setState({ shiftApparatus: [] });
+      renderWithRouter(<SchedulingPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+      await user.selectOptions(within(dialog).getByLabelText('Shift Template'), 't0');
+      fireEvent.change(within(dialog).getByLabelText(/Start Date/), { target: { value: '2031-03-04' } });
+      await user.click(within(dialog).getByRole('button', { name: 'Create Shift' }));
+
+      await waitFor(() => expect(schedulingService.createShift).toHaveBeenCalled());
+      await waitFor(() => expect(window.location.search).toContain('date=2031-03-04'));
+    });
+
+    it('offers "Create a shift" rather than "the first" once the department has shifts', async () => {
+      renderWithRouter(<SchedulingPage />);
+      expect(await screen.findByRole('button', { name: 'Create a shift' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Create the first shift' })).not.toBeInTheDocument();
+    });
+
+    it('still says "the first" to a department with none on record', async () => {
+      vi.mocked(schedulingService.getSummary).mockResolvedValueOnce({
+        shifts_scheduled: 0,
+        shifts_scheduled_this_week: 0,
+        shifts_scheduled_this_month: 0,
+        hours_worked_this_month: 0,
+      } as never);
+      renderWithRouter(<SchedulingPage />);
+      expect(await screen.findByRole('button', { name: 'Create the first shift' })).toBeInTheDocument();
     });
 
     it('names every field in the Create Shift dialog', async () => {
