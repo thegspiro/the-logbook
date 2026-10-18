@@ -16,6 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3394](https://github.com/thegspiro/the-logbook/pull/3394)** (branch
+`claude/security-review-frontend-shared`). PR #3393 (Feature 33, Core
+infrastructure, pass 7) merged 2026-10-18 ~02:30 UTC clean; already
+recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 34 (Frontend shared), pass 9. **1 fix, 0 new
+OPEN/FLAGGED findings.** Six feature-owned files had changed since pass 8's
+baseline (`3f429ede`, PR #3093) plus one new global store
+(`stores/practicalSkillsStore.ts`); everything else named in that pass's
+scope — `ProtectedRoute.tsx`, `authStore.ts`, all four offline queues and
+their ownership/quarantine utilities, `createApiClient.ts`, all 13 module
+`services/api.ts` files plus the four second-client files — is
+byte-identical. **FE9-34-1** (LOW, fixed): `GET /inventory/items/{id}/
+maintenance` and `GET /facilities/maintenance` were cacheable despite
+carrying a member-attributed `performed_by` (an id on the inventory side, a
+typed-in name on the facilities side) plus free-text notes/findings — the
+same shape `/issuances`/`/history`/`/exposures` are already excluded for.
+Added `/maintenance` to `UNCACHEABLE_SUBSTRINGS`; a sibling method
+(`getOpenMaintenanceRecords`) added to the same already-reviewed endpoint is
+what prompted re-reading its response schema. Also audited a genuinely new
+shared XSS surface in full: the Minutes rich-text editor
+(`components/ux/RichText.tsx`/`RichTextEditor.tsx`,
+`utils/richText.ts`, 694 new lines across 7 files) — DOMPurify on the
+frontend and `nh3` on the backend share one allowlist (`app/utils/
+rich_text.py`'s own docstring explains the choice), the backend sanitizes on
+every write via a Pydantic `model_validator`, links are scheme-restricted
+and `rel="noopener noreferrer"`-forced on both sides, and existing adversarial
+tests (not added by this pass) already assert `<script>`/`onerror=`/
+`javascript:` are stripped at the util, component, and page level. Verified
+good, no finding. See `FE9-34-frontend-shared.md`. Row 34 → ✅ (pending this
+PR's merge); next is Feature 00 (Cross-cutting baseline) — the rotation wraps
+after 34, per the table's own "35 iterations per full pass" note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 7, PR #3393, merged), preserved for history</summary>
+
 **PR [#3393](https://github.com/thegspiro/the-logbook/pull/3393)** (branch
 `claude/security-review-core-infrastructure`). PR #3391 (Feature 32,
 Locations & kiosk, pass 7) merged 2026-10-18 ~01:48 UTC clean; already
@@ -41,6 +80,8 @@ fields, and the retiring commit actually predates CI6's own merge — CI6's
 "still open" note for it was stale the moment it was written. See
 `CI7-33-core-infra.md`. Row 33 → ✅ (pending this PR's merge); next is
 Feature 34 (Frontend shared).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 7, PR #3391, merged), preserved for history</summary>
@@ -19857,7 +19898,7 @@ here.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
