@@ -162,10 +162,11 @@ const UNCACHEABLE_SUBSTRINGS = [
   '/eligible-members', // returns member first/last name + email (PII)
   '/external-attendees', // external attendee PII
   '/check-in-monitoring', // live attendee/location check-in data (PII)
-  // The three PII sub-resources of an inventory item. Substrings rather than a
-  // '/inventory/items/' prefix on purpose: the item list and item detail carry
-  // no member data and are the module's hottest reads, so excluding the whole
-  // subtree would cost every screen in Inventory to protect three routes.
+  // The PII sub-resources of an inventory item (five below). Substrings rather
+  // than an '/inventory/items/' prefix on purpose: the item list and item
+  // detail carry no member data and are the module's hottest reads, so
+  // excluding the whole subtree would cost every screen in Inventory to
+  // protect a handful of routes.
   '/issuances', // who currently holds a pool item (member names) — the same
   // disclosure '/inventory/checkout/' and '/inventory/users/' are already
   // excluded for, reached through the item instead of through the member.
@@ -175,6 +176,11 @@ const UNCACHEABLE_SUBSTRINGS = [
   '/exposures', // NFPA exposure records: user_id, exposure type, incident
   // number, decon status and free-text description — a member's contamination
   // history, which is health data however it is filed.
+  '/maintenance', // GET /inventory/items/{id}/maintenance: performed_by (a member
+  // id) plus free-text description/notes/issues_found — the same
+  // member-attributed-record shape as '/history' below. Also covers
+  // GET /facilities/maintenance, whose own performed_by is a typed-in name
+  // (FacilityMaintenanceBase.performed_by: str), not an id.
   '/users', // any sub-resource that enumerates members — GET /roles/{id}/users
   // returns each holder's first/last name and email. The '/users' *prefix*
   // above only covers the top-level roster; a nested one is a different URL
