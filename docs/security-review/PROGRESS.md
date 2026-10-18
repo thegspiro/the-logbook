@@ -16,24 +16,69 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3404 (Feature 06, Elections & ballots, pass 10) merged
-clean 2026-10-18 — not docs-only (fixed ELEC-47, a real locking-read bug
-in the new ballot-send-jobs guard, plus its guard test), but already
-fully recorded in that PR's own history below (its own commits updated
-this file and the findings file), so there is nothing further to add
-here. Rotation row 06 stays ✅. Confirmed via `search_pull_requests`
-(`is:open head:claude/security-review-`, 0 results) that no
-`claude/security-review-*` PR is open. The dedicated `/loop 30m
-/security-review` session was still not reachable via `ListAgents`, so
-this is another watchdog pickup. Proceeding to Feature 07 (Users &
-organizations), pass 10.
+**PR [#3410](https://github.com/thegspiro/the-logbook/pull/3410)** (branch
+`claude/security-review-users-organizations-p10`). PR #3404
+(Feature 06, Elections & ballots, pass 10) merged 2026-10-18 clean — not
+docs-only (fixed ELEC-47, a real locking-read bug in the new
+ballot-send-jobs guard, plus its guard test), but already fully recorded
+in that PR's own history below.
 
-**Note on PR #3403:** an earlier watchdog pickup of this same rotation
-row raced #3404 within minutes and was closed by the owner as a
-duplicate — its own review had missed ELEC-47 (asserted the overlap
-guard was "correctly applied" without reading `find_active_job` closely
-enough to see it was a non-locking read). No further action needed; the
-rotation state above reflects #3404, the kept PR.
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 07 (Users & organizations), pass 10. **0
+fixes, 0 new findings.** Baseline `7add73bc4` (PR #3250's merge, pass 9);
+7 non-merge commits touch this feature's scope, 3 of them Minutes-module
+settings fields riding on the shared `OrganizationSettingsUpdate` schema
+aggregator (additive, no logic). The 4 real changes — PHI read auditing
+on `member_leaves.py`, two new `members.manage`-gated status-change-reason
+endpoints (org-scoped via the existing `_load_member` helper), the
+undo-drop window now anchored to a drop's effective date (tightens, not
+weakens, an existing week-long window), and a server-validated
+`separation_date` on the existing status-change endpoint — all verified
+sound. USR-5 and USR-8 re-confirmed **OPEN**, unchanged. See
+`USR-07-users-organizations.md`'s **Pass 10** section for the full
+writeup. Row 07 → ✅ (pending this PR's merge); next is Feature 08
+(Membership pipeline).
+
+**Note on PR #3403:** an earlier watchdog pickup of rotation row 06
+raced #3404 within minutes and was closed by the owner as a duplicate —
+its own review had missed ELEC-47 (asserted the overlap guard was
+"correctly applied" without reading `find_active_job` closely enough to
+see it was a non-locking read). No further action needed; #3404 is the
+PR that was kept and merged.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 10, PR #3404, merged), preserved for history</summary>
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 06 (Elections & ballots), pass 10. **1
+fix applied, 1 new finding flagged.** Baseline `80d92def` (PR #3248's
+merge, pass 9). This window's delta was substantive (unlike the last
+several passes' 0/0): a new background-job system for ballot/reminder
+sends (`app/services/ballot_send_jobs.py`, new), replacing the
+synchronous sends that outlasted the browser/nginx timeout at department
+scale. **ELEC-47 (MEDIUM, FIXED):** the new one-send-per-election guard
+(`find_active_job`) was a plain, non-locking read — CLAUDE.md pitfall
+#27's exact shape, since the auth dependency's own user lookup on the
+same session already fixed this transaction's REPEATABLE READ snapshot
+before the endpoint's own election-row lock. Two requests queuing a send
+for the same election could both see no active job and both queue one,
+double-mailing the department. Fixed: the check is now itself a locking
+read (`.with_for_update()`). **ELEC-48 (LOW, FLAGGED):** the two
+synchronous send endpoints (kept for API callers) still take no lock of
+their own, so two concurrent calls to the _same_ synchronous endpoint
+can still race each other directly; not a regression (no guard existed
+there before this feature), but an owner decision on whether to lock
+them too or retire them. Mirrored in `KNOWN_LIMITATIONS.md`'s "Elections
+— Background Ballot Sends Live in the Web Process" entry. See
+`ELEC-06-elections-ballots.md`'s **Pass 10** section for the full
+writeup. Row 06 → ✅ (pending this PR's merge); next is Feature 07
+(Users & organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 10, PR #3401, merged), preserved for history</summary>
