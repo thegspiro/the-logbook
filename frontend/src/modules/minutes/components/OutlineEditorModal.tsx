@@ -344,7 +344,8 @@ export const OutlineEditorModal: React.FC<OutlineEditorModalProps> = ({
                       onChange={(e) => setRow(row.rowId, { needs_motion: e.target.checked })}
                     />
                     <span className="text-theme-text-secondary">
-                      Needs a motion and a second, such as adopting the minutes or adjourning
+                      Needs a motion and a second. The motion is prepared with the minutes, as for adopting the previous
+                      minutes or adjourning
                     </span>
                   </label>
                   {row.needs_motion && (

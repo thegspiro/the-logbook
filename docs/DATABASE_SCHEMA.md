@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**316 tables · 5229 columns · 1066 foreign keys**
+**316 tables · 5231 columns · 1067 foreign keys**
 
 ---
 
@@ -440,7 +440,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 48 | Meeting Minutes model |
-| [`meeting_motions`](#meeting_motions) | `Motion` | 19 | Motion model |
+| [`meeting_motions`](#meeting_motions) | `Motion` | 21 | Motion model |
 | [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 15 | Action Item model |
 | [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 13 | A file kept with a set of minutes: reports, handouts, the signed copy. |
 | [`minutes_closed_sessions`](#minutes_closed_sessions) | `MinutesClosedSession` | 13 | A closed (executive) session held during a meeting. |
@@ -6691,9 +6691,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `seconded_by` | VARCHAR(200) | yes |  |  |  |
 | `discussion_notes` | TEXT | yes |  |  |  |
 | `section_key` | VARCHAR(100) | yes |  |  |  |
+| `previous_minutes_id` | VARCHAR(36) | yes | FK |  | → `meeting_minutes.id` ON DELETE SET NULL |
+| `acceptance` | VARCHAR(20) | yes |  |  |  |
 | `election_id` | VARCHAR(36) | yes | FK |  | → `elections.id` ON DELETE SET NULL |
 | `ballot_item_id` | VARCHAR(100) | yes |  |  |  |
-| `status` | ENUM(`passed`, `failed`, `tabled`, `withdrawn`) | no |  | `passed` |  |
+| `status` | ENUM(`pending`, `passed`, `failed`, `tabled`, `withdrawn`) | no |  | `passed` |  |
 | `votes_for` | INTEGER | yes |  |  |  |
 | `votes_against` | INTEGER | yes |  |  |  |
 | `votes_abstain` | INTEGER | yes |  |  |  |
@@ -11787,6 +11789,22 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
 
+### → `meeting_minutes` (11 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `meeting_minutes` | `adopting_minutes_id` | SET NULL | yes |
+| `meeting_motions` | `minutes_id` | CASCADE | no |
+| `meeting_motions` | `previous_minutes_id` | SET NULL | yes |
+| `minutes_action_items` | `minutes_id` | CASCADE | no |
+| `minutes_attachments` | `minutes_id` | CASCADE | no |
+| `minutes_closed_sessions` | `minutes_id` | CASCADE | no |
+| `minutes_election_results` | `minutes_id` | CASCADE | no |
+| `minutes_public_copies` | `minutes_id` | CASCADE | no |
+| `minutes_revisions` | `minutes_id` | CASCADE | no |
+| `minutes_signatures` | `minutes_id` | CASCADE | no |
+| `minutes_suggestions` | `minutes_id` | CASCADE | no |
+
 ### → `positions` (11 references)
 
 | From table | Column | On delete | Nullable |
@@ -11818,21 +11836,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
 | `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
 | `training_submissions` | `shift_id` | SET NULL | yes |
-
-### → `meeting_minutes` (10 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `meeting_minutes` | `adopting_minutes_id` | SET NULL | yes |
-| `meeting_motions` | `minutes_id` | CASCADE | no |
-| `minutes_action_items` | `minutes_id` | CASCADE | no |
-| `minutes_attachments` | `minutes_id` | CASCADE | no |
-| `minutes_closed_sessions` | `minutes_id` | CASCADE | no |
-| `minutes_election_results` | `minutes_id` | CASCADE | no |
-| `minutes_public_copies` | `minutes_id` | CASCADE | no |
-| `minutes_revisions` | `minutes_id` | CASCADE | no |
-| `minutes_signatures` | `minutes_id` | CASCADE | no |
-| `minutes_suggestions` | `minutes_id` | CASCADE | no |
 
 ### → `training_courses` (10 references)
 

@@ -69,8 +69,14 @@ def mock_db():
 
 @pytest.fixture
 def service(mock_db):
-    """Create a MinuteService with a mocked db."""
-    return MinuteService(mock_db)
+    """Create a MinuteService with a mocked db.
+
+    Preparing a section's motion queries the database; it has its own tests
+    against a real one, so here it is a double.
+    """
+    svc = MinuteService(mock_db)
+    svc.ensure_section_motions = AsyncMock()  # type: ignore[method-assign]
+    return svc
 
 
 @pytest.fixture(autouse=True)

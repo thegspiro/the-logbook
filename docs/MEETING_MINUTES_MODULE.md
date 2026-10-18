@@ -753,6 +753,45 @@ is not changed, and the flag is set on the Outlines screen.
   PDF's approval block and included in the sealed snapshot **only when
   recorded**, so a snapshot sealed earlier verifies exactly as it did.
 
+#### Prepared motions, and accepting the previous minutes _(2026-10-18)_
+
+A section marked **Needs a motion and a second** now has its motion from the day
+the minutes are made, so the secretary records who moved and the vote instead of
+building the motion. By default that is the built-in **Approval of Previous
+Minutes** and **Adjournment**; a department marks others in its outlines. An
+outline a department already saved is not changed — tick the box on the Outlines
+screen.
+
+- **Pending.** A prepared motion has the result `pending` (`meeting_motions.status`
+  gains the value): wording only, no mover, no vote. It is created with the
+  minutes (new, from a meeting, an outline applied, an agenda synced, or sections
+  saved), never twice for one section, and removed again if its section stops
+  needing a motion **and the meeting has not acted on it**. Recording it — from
+  the section's Motion card, `PUT …/motions/{id}`, or `POST …/motions` naming the
+  section, which fills the prepared one in rather than adding a second — gives it
+  a real result. A client cannot set `pending`.
+- **Not part of the record.** A pending motion is not printed, published, posted
+  on the public page, counted in `motions_count`, or sealed into an adopted
+  version (`recorded_motions()` in `app/utils/motion_votes.py` is the one filter),
+  so a sealed hash is unchanged by motions nobody moved.
+- **Accepting the previous minutes.** The `approval_of_previous` motion is worded
+  with, and linked to (`previous_minutes_id`, set by the server and never by a
+  client), the latest earlier minutes of the **same kind of meeting** in this
+  department that have been circulated or adopted: "Motion to accept the minutes
+  of the September 3, 2026 business meeting." A department's own wording in the
+  outline is kept; with no earlier minutes it reads as the generic wording.
+- **As submitted or as revised.** The motion carries `acceptance`
+  (`as_submitted` | `as_revised`), asked for when the motion passes, printed and
+  published ("Accepted as revised") and sealed only when recorded. Only that
+  motion may carry one.
+- **Adoption is pre-filled, not automatic.** `GET /{id}/adoption-proposal`
+  (`minutes.manage`) returns, for circulated minutes a later meeting accepted, the
+  adoption that motion implies: the meeting, its date, as presented or as
+  amended, and the mover and seconder. **Adopt Minutes** opens already filled in
+  from it. The separation-of-duties rule is unchanged: the officer who circulated
+  the minutes still cannot adopt them, and passing the motion does not adopt
+  anything by itself.
+
 ### Votes on motions _(2026-10-15)_
 
 A motion's vote is recorded as **totals** or as a **roll call**, and carries the
@@ -998,6 +1037,7 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 | `POST`   | `/{id}/approve`                           | `minutes.manage` | Adopt; optional `{adopted_on, adopting_minutes_id, as_amended, moved_by, seconded_by}` |
 | `POST`   | `/{id}/suggestions/{suggestion_id}/apply` | `minutes.manage` | Apply the accepted tracked changes `{accepted: [...], note}`                           |
 | `POST`   | `/{id}/recall`                            | `minutes.manage` | Circulated → draft                                                                     |
+| `GET`    | `/{id}/adoption-proposal`                 | `minutes.manage` | The adoption a later meeting's passed acceptance motion implies, or null               |
 | `POST`   | `/{id}/publish`                           | `minutes.manage` | File the library copy and, where allowed, the public copy; returns `public_posted`     |
 | `GET`    | `/{id}/publishing`                        | `minutes.manage` | Where these minutes stand: library, public, and what the settings allow                |
 | `DELETE` | `/{id}/public-posting`                    | `minutes.manage` | Take the public copy down (library copy untouched)                                     |
@@ -1021,21 +1061,22 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 
 ## Database Migrations
 
-| Migration                                                           | Revision              | Description                                                                                                                           |
-| ------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `20260212_1200_add_meeting_minutes_tables.py`                       | `add_meeting_minutes` | Creates `meeting_minutes` table                                                                                                       |
-| `20260213_0800_add_templates_documents_dynamic_sections.py`         | `20260213_0800`       | Creates `minutes_templates`, `document_folders`, `documents` tables                                                                   |
-| `20260213_1400_add_trustee_executive_annual_meeting_types.py`       | `a7f3e2d91b04`        | Extends MeetingType ENUM with `trustee`, `executive`, `annual`                                                                        |
-| `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`            | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them) |
-| `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py`      | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)      |
-| `20261015_0910_48f403b2631f_minutes_suggestions_tracked_changes.py` | `48f403b2631f`        | Tracked-change columns on `minutes_suggestions` (idempotent; the downgrade drops them)                                                |
-| `20261016_2141_38a57d984653_meeting_agenda_items.py`                | `38a57d984653`        | `meetings.agenda_items` JSON column (idempotent; the downgrade drops it and the items with it)                                        |
-| `20261016_1101_f236c56b1b49_minutes_signatures.py`                  | `f236c56b1b49`        | `minutes_signatures` table (idempotent; the downgrade drops it)                                                                       |
-| `20261015_1652_9ce470b513ae_minutes_motions_vote_detail.py`         | `9ce470b513ae`        | `meeting_motions.votes_recused` / `threshold` / `roll_call` (idempotent; the downgrade drops them)                                    |
-| `20261015_1441_b90813f63e25_minutes_action_items_last_reminded.py`  | `b90813f63e25`        | `minutes_action_items.last_reminded_at` (idempotent; the downgrade drops it)                                                          |
-| `20261017_2305_89723c04ae94_minutes_public_copies.py`               | `89723c04ae94`        | `minutes_public_copies` table; `meeting_minutes.published_revision_version` / `published_at` (idempotent; the downgrade drops them)   |
-| `20261018_1723_6dc58d6997df_minutes_attendance_listing.py`          | `6dc58d6997df`        | `meeting_minutes.attendance_listing` (idempotent; the downgrade drops it)                                                             |
-| `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`    | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)    |
+| Migration                                                           | Revision              | Description                                                                                                                                       |
+| ------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `20260212_1200_add_meeting_minutes_tables.py`                       | `add_meeting_minutes` | Creates `meeting_minutes` table                                                                                                                   |
+| `20260213_0800_add_templates_documents_dynamic_sections.py`         | `20260213_0800`       | Creates `minutes_templates`, `document_folders`, `documents` tables                                                                               |
+| `20260213_1400_add_trustee_executive_annual_meeting_types.py`       | `a7f3e2d91b04`        | Extends MeetingType ENUM with `trustee`, `executive`, `annual`                                                                                    |
+| `20261014_1719_8efc77d4c0c3_minutes_record_keeping_*.py`            | `8efc77d4c0c3`        | Attendance backfill; carry-forward columns; election results, attachments and revisions tables (idempotent; the downgrade drops them)             |
+| `20261014_1830_f2c5e55e7dda_minutes_adoption_suggestions_*.py`      | `f2c5e55e7dda`        | Adoption columns; motion ballot link; `is_addendum`; closed-session and suggestion tables (idempotent; the downgrade drops them)                  |
+| `20261015_0910_48f403b2631f_minutes_suggestions_tracked_changes.py` | `48f403b2631f`        | Tracked-change columns on `minutes_suggestions` (idempotent; the downgrade drops them)                                                            |
+| `20261016_2141_38a57d984653_meeting_agenda_items.py`                | `38a57d984653`        | `meetings.agenda_items` JSON column (idempotent; the downgrade drops it and the items with it)                                                    |
+| `20261016_1101_f236c56b1b49_minutes_signatures.py`                  | `f236c56b1b49`        | `minutes_signatures` table (idempotent; the downgrade drops it)                                                                                   |
+| `20261015_1652_9ce470b513ae_minutes_motions_vote_detail.py`         | `9ce470b513ae`        | `meeting_motions.votes_recused` / `threshold` / `roll_call` (idempotent; the downgrade drops them)                                                |
+| `20261015_1441_b90813f63e25_minutes_action_items_last_reminded.py`  | `b90813f63e25`        | `minutes_action_items.last_reminded_at` (idempotent; the downgrade drops it)                                                                      |
+| `20261017_2305_89723c04ae94_minutes_public_copies.py`               | `89723c04ae94`        | `minutes_public_copies` table; `meeting_minutes.published_revision_version` / `published_at` (idempotent; the downgrade drops them)               |
+| `20261018_2152_751a14709cc4_minutes_section_motions.py`             | `751a14709cc4`        | `meeting_motions` status `pending`, `previous_minutes_id`, `acceptance`; merges the two heads (idempotent; the downgrade deletes pending motions) |
+| `20261018_1723_6dc58d6997df_minutes_attendance_listing.py`          | `6dc58d6997df`        | `meeting_minutes.attendance_listing` (idempotent; the downgrade drops it)                                                                         |
+| `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`    | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)                |
 
 ### Migration Chain
 

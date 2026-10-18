@@ -33,7 +33,7 @@ from app.models.minute import (
 from app.models.user import Organization
 from app.utils.minutes_attendance import derive_status, effective_listing, is_listed
 from app.utils.minutes_settings import attendance_listing_in
-from app.utils.motion_votes import vote_summary
+from app.utils.motion_votes import acceptance_label, recorded_motions, vote_summary
 from app.utils.rich_text import (
     FORMAT_HTML,
     normalize_format,
@@ -748,12 +748,13 @@ class DocumentService:
                     parts.append("</div>")
 
         # Motions
-        if minutes.motions:
+        recorded = recorded_motions(minutes.motions)
+        if recorded:
             parts.append('<div class="minutes-motions" style="margin-bottom:24px;">')
             parts.append(
-                f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">Motions ({len(minutes.motions)})</h4>'
+                f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">Motions ({len(recorded)})</h4>'
             )
-            for i, motion in enumerate(minutes.motions, 1):
+            for i, motion in enumerate(recorded, 1):
                 status = (
                     motion.status
                     if isinstance(motion.status, str)
@@ -780,6 +781,8 @@ class DocumentService:
                     detail_parts.append(f"Seconded by: {escape(motion.seconded_by)}")
                 if vote_summary(motion):
                     detail_parts.append(escape(vote_summary(motion)))
+                if acceptance_label(motion):
+                    detail_parts.append(escape(acceptance_label(motion) or ""))
                 ballot = getattr(getattr(motion, "election", None), "title", None)
                 if ballot:
                     detail_parts.append(f"Decided by ballot: {escape(ballot)}")

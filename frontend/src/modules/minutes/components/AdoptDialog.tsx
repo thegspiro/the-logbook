@@ -15,13 +15,15 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatForDateTimeInput, formatDate, localToUTC } from '../../../utils/dateFormatting';
 import { minutesService } from '../services/api';
 import { PersonPicker } from './PersonPicker';
-import type { AdoptionDetails, AttendeeEntry, MinutesListItem } from '../types/minutes';
+import type { AdoptionDetails, AdoptionProposal, AttendeeEntry, MinutesListItem } from '../types/minutes';
 
 interface AdoptDialogProps {
   isOpen: boolean;
   minutesId: string;
   /** Whether a suggestion was accepted, which sets the default for "as amended". */
   hasAcceptedSuggestions: boolean;
+  /** What a later meeting's passed acceptance motion implies; fills the form in. */
+  proposal?: AdoptionProposal | null;
   /** The roll of these minutes, which the mover and seconder are chosen from. */
   attendees: AttendeeEntry[];
   busy: boolean;
@@ -33,6 +35,7 @@ export const AdoptDialog: React.FC<AdoptDialogProps> = ({
   isOpen,
   minutesId,
   hasAcceptedSuggestions,
+  proposal = null,
   attendees,
   busy,
   onClose,
@@ -49,17 +52,19 @@ export const AdoptDialog: React.FC<AdoptDialogProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-    setVotedAt(formatForDateTimeInput(new Date().toISOString(), tz));
-    setMeetingId('');
-    setAsAmended(hasAcceptedSuggestions);
-    setMovedBy('');
-    setSecondedBy('');
+    // Filled in from the meeting that accepted these minutes, when there was one;
+    // otherwise the vote defaults to now and the rest starts blank.
+    setVotedAt(formatForDateTimeInput(proposal?.adopted_on ?? new Date().toISOString(), tz));
+    setMeetingId(proposal?.adopting_minutes_id ?? '');
+    setAsAmended(proposal ? proposal.as_amended : hasAcceptedSuggestions);
+    setMovedBy(proposal?.moved_by ?? '');
+    setSecondedBy(proposal?.seconded_by ?? '');
     setError(null);
     minutesService
       .listAllMinutes()
       .then((all) => setMeetings(all.filter((m) => m.id !== minutesId)))
       .catch(() => setMeetings([]));
-  }, [isOpen, minutesId, hasAcceptedSuggestions, tz]);
+  }, [isOpen, minutesId, hasAcceptedSuggestions, proposal, tz]);
 
   return (
     <Modal
@@ -99,6 +104,11 @@ export const AdoptDialog: React.FC<AdoptDialogProps> = ({
         Once adopted, these minutes are locked. A correction after that means reopening them, and they must be
         circulated and adopted again.
       </p>
+      {proposal && (
+        <p className="alert-info mb-3 text-sm" role="status">
+          Filled in from the motion recorded at {proposal.adopting_minutes_title}. Check it, then adopt.
+        </p>
+      )}
       {error && (
         <p className="alert-danger mb-3 text-sm" role="alert">
           {error}

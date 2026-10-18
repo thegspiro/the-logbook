@@ -36,6 +36,7 @@ import type {
   AdoptionDetails,
   ImportableElection,
   MinutesPublishingStatus,
+  AdoptionProposal,
 } from '../types/minutes';
 import type { Event as EventDetail, EventListItem } from '../../../types/event';
 import { useConfirm } from '../../../contexts/ConfirmContext';
@@ -139,6 +140,7 @@ export const MinutesDetailPage: React.FC = () => {
   const [showAdopt, setShowAdopt] = useState(false);
   const [adopting, setAdopting] = useState(false);
   const [hasAcceptedSuggestions, setHasAcceptedSuggestions] = useState(false);
+  const [proposal, setProposal] = useState<AdoptionProposal | null>(null);
   const [showApplyOutline, setShowApplyOutline] = useState(false);
   const [showAgendaSync, setShowAgendaSync] = useState(false);
   const [applyingOutline, setApplyingOutline] = useState(false);
@@ -419,6 +421,24 @@ export const MinutesDetailPage: React.FC = () => {
   useEffect(() => {
     void loadPublishingStatus();
   }, [loadPublishingStatus]);
+
+  // A later meeting may already have accepted these minutes; its motion fills in
+  // the adoption form. Only circulated minutes can be adopted.
+  useEffect(() => {
+    if (!minutesId || !canManage || minutesStatus !== 'submitted') {
+      setProposal(null);
+      return;
+    }
+    const load = async () => {
+      try {
+        setProposal(await minutesService.getAdoptionProposal(minutesId));
+      } catch {
+        // A hint only: adopting works without it.
+        setProposal(null);
+      }
+    };
+    void load();
+  }, [minutesId, canManage, minutesStatus]);
 
   const handlePublish = async () => {
     if (!minutesId) return;
@@ -758,6 +778,8 @@ export const MinutesDetailPage: React.FC = () => {
     );
   }
 
+  const recordedMotions = minutes.motions.filter((m) => m.status !== 'pending');
+
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -911,6 +933,17 @@ export const MinutesDetailPage: React.FC = () => {
               <p className="alert-warning text-theme-text-primary mb-3 text-sm" role="status">
                 The copy published to Documents is marked as being corrected. Once these minutes are approved again,
                 re-publish them to replace it.
+              </p>
+            )}
+            {minutes.status === 'submitted' && proposal && (
+              <p className="alert-info text-theme-text-primary mb-3 text-sm" role="status">
+                <Link to={`/minutes/${proposal.adopting_minutes_id}`} className="underline">
+                  {proposal.adopting_minutes_title}
+                </Link>{' '}
+                accepted these minutes {proposal.as_amended ? 'as revised' : 'as submitted'}
+                {proposal.moved_by ? `, moved by ${proposal.moved_by}` : ''}
+                {proposal.seconded_by ? `, seconded by ${proposal.seconded_by}` : ''}. Adopt Minutes opens already
+                filled in from that motion; an officer other than the one who circulated them confirms it.
               </p>
             )}
             <PublishingStatusNote
@@ -1371,7 +1404,7 @@ export const MinutesDetailPage: React.FC = () => {
           id="motions-heading"
           icon={<Gavel className="h-5 w-5" aria-hidden="true" />}
           title="Motions"
-          count={minutes.motions.length}
+          count={recordedMotions.length}
           defaultOpen={false}
           actions={
             canManage &&
@@ -1502,11 +1535,11 @@ export const MinutesDetailPage: React.FC = () => {
             </div>
           )}
 
-          {minutes.motions.length === 0 ? (
+          {recordedMotions.length === 0 ? (
             <p className="text-theme-text-muted text-sm">No motions recorded.</p>
           ) : (
             <div className="space-y-3">
-              {minutes.motions.map((motion, i) => (
+              {recordedMotions.map((motion, i) => (
                 <div key={motion.id} className="border-theme-surface-border rounded-lg border p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -1772,6 +1805,7 @@ export const MinutesDetailPage: React.FC = () => {
           isOpen={showAdopt}
           minutesId={minutes.id}
           hasAcceptedSuggestions={hasAcceptedSuggestions}
+          proposal={proposal}
           attendees={minutes.attendees ?? []}
           busy={adopting}
           onClose={() => setShowAdopt(false)}

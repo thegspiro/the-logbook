@@ -48,6 +48,10 @@ class MinutesStatus(str, Enum):
 class MotionStatus(str, Enum):
     """Motion vote result"""
 
+    # A motion the outline prepared that the meeting has not acted on yet:
+    # wording only, no mover, no vote. Never printed, published, posted or
+    # sealed into an adopted record, because nothing happened.
+    PENDING = "pending"
     PASSED = "passed"
     FAILED = "failed"
     TABLED = "tabled"
@@ -499,8 +503,11 @@ DEFAULT_ANNUAL_SECTIONS = [
 # Parliamentary procedure puts these two behind a motion and a second, so the
 # built-in outlines mark them and carry the usual wording. The wording is a
 # starting point the secretary edits on the section, not a fixed script.
+# The section whose motion accepts the previous meeting's minutes.
+PREVIOUS_MINUTES_SECTION = "approval_of_previous"
+
 DEFAULT_MOTION_SECTIONS = {
-    "approval_of_previous": "Motion to approve the minutes of the previous meeting.",
+    PREVIOUS_MINUTES_SECTION: "Motion to approve the minutes of the previous meeting.",
     "adjournment": "Motion to adjourn the meeting.",
 }
 
@@ -759,6 +766,7 @@ class MeetingMinutes(Base):
     motions: Mapped[list["Motion"]] = relationship(
         "Motion",
         back_populates="minutes",
+        foreign_keys="Motion.minutes_id",
         cascade="all, delete-orphan",
         order_by="Motion.order",
     )
@@ -847,6 +855,15 @@ class Motion(Base):
     # section is an entry inside the minutes' JSON, not a row.
     section_key: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
+    # For the motion that accepts the previous meeting's minutes: those
+    # minutes, found by the server (never taken from a client), and whether
+    # they were accepted as submitted or as revised. Passing the motion
+    # prefills the adoption of the previous minutes from it.
+    previous_minutes_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("meeting_minutes.id", ondelete="SET NULL"), nullable=True
+    )
+    acceptance: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
     # The ballot that decided this motion, when it went to a ballot rather
     # than a voice or hand vote. ``ballot_item_id`` is the item's id inside
     # that election's ``ballot_items``.
@@ -889,7 +906,7 @@ class Motion(Base):
 
     # Relationships
     minutes: Mapped["MeetingMinutes"] = relationship(
-        "MeetingMinutes", back_populates="motions"
+        "MeetingMinutes", back_populates="motions", foreign_keys=[minutes_id]
     )
     # Loaded with the motion so a response can name the ballot. The id is
     # checked against the caller's organization when it is written, so this
