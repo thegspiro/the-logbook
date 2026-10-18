@@ -46,6 +46,7 @@ import {
   getStatusBadgeClass,
   getVictoryDescription,
   describePackageSendError,
+  describeUnreachedPackageRecipients,
   electionCanEmailBallots,
 } from '../utils/electionHelpers';
 import SendBallotEmailsModal from '../components/election-detail/SendBallotEmailsModal';
@@ -752,8 +753,13 @@ export const ElectionDetailPage: React.FC = () => {
         message: message.trim() || undefined,
         include_full_roster: includeFullRoster,
       });
-      setShowPackageModal(false);
       toast.success(result.message);
+      const unreached = result.unreached ?? [];
+      if (unreached.length > 0) {
+        setPackageError(describeUnreachedPackageRecipients(unreached));
+        return;
+      }
+      setShowPackageModal(false);
     } catch (err: unknown) {
       setPackageError(describePackageSendError(err, recipientEmails, 'Failed to send pre-meeting package'));
     } finally {

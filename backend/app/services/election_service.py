@@ -92,6 +92,12 @@ from app.utils.sql_results import rows_affected
 
 # What a member sees when they open the link a reminder replaced. Not
 # "expired": the election is still open and their newer email works.
+# Most providers cap recipients per message and count To with BCC: Amazon
+# SES refuses more than 50, and Gmail / Workspace sit above that. An
+# all-member email sent as one message with everyone on BCC is refused
+# whole once the roster outgrows the cap, so nobody receives it. One slot
+# goes to the visible To address, the rest to BCC.
+BULK_EMAIL_MAX_RECIPIENTS = 50
 SUPERSEDED_TOKEN_MESSAGE = "This link was replaced by a newer ballot email"
 REOPENED_TOKEN_MESSAGE = (
     "This election was closed and reopened, so this ballot link is no longer "
@@ -4169,13 +4175,54 @@ class ElectionService:
         local = self._ensure_utc(dt).astimezone(tz)
         return f"{local:%Y-%m-%d %H:%M %Z}"
 
+    @staticmethod
+    async def _send_in_bcc_batches(
+        email_service,
+        to_email: str,
+        bcc_emails: List[str],
+        **send_kwargs: Any,
+    ) -> Tuple[bool, List[str]]:
+        """Send one message per batch of BCC recipients, ``to_email`` on each.
+
+        A batch that fails does not stop the ones after it. Returns whether
+        any batch was accepted (so ``to_email`` got at least one copy) and
+        the BCC addresses of every batch that was not. A provider that
+        accepts a message while refusing some of its addresses reports that
+        nowhere ``send_email`` surfaces, so those count as sent.
+        """
+        size = BULK_EMAIL_MAX_RECIPIENTS - 1
+        batches = [bcc_emails[i : i + size] for i in range(0, len(bcc_emails), size)]
+        any_sent = False
+        unreached: List[str] = []
+        for index, batch in enumerate(batches or [[]]):
+            try:
+                sent, _ = await email_service.send_email(
+                    to_emails=[to_email], bcc_emails=batch, **send_kwargs
+                )
+            except Exception as e:
+                logger.error(
+                    f"BCC batch send raised | batch={index + 1}/{len(batches)} "
+                    f"error={e}"
+                )
+                sent = 0
+            if sent > 0:
+                any_sent = True
+            else:
+                logger.warning(
+                    f"BCC batch not sent | batch={index + 1}/{len(batches)} "
+                    f"recipients={len(batch)}"
+                )
+                unreached.extend(batch)
+        return any_sent, unreached
+
     async def _announce_nominations_open(
         self, election, organization_id: UUID | str, acting_user_id: Optional[str]
-    ) -> None:
+    ) -> Optional[Dict[str, int]]:
         """Email active members that the nomination phase is open.
 
-        Best-effort: any failure is logged, never raised — an email outage
-        must not block the phase transition.
+        Returns the recipient and unreached counts for the audit record, or
+        None when nothing was sent. Best-effort: any failure is logged, never
+        raised — an email outage must not block the phase transition.
         """
         try:
             import html as html_mod
@@ -4187,7 +4234,7 @@ class ElectionService:
             )
             organization = org_result.scalar_one_or_none()
             if not organization:
-                return
+                return None
 
             members_result = await self.db.execute(
                 select(User)
@@ -4205,7 +4252,7 @@ class ElectionService:
                 if m.email
             ]
             if not member_emails:
-                return
+                return None
 
             # To: the acting officer (or org contact / creator) so member
             # addresses stay in BCC and are never exposed to each other.
@@ -4245,20 +4292,34 @@ class ElectionService:
                 body_html=body_html,
             )
             email_service = EmailService(organization)
-            await email_service.send_email(
-                to_emails=[to_email],
+            any_sent, unreached = await self._send_in_bcc_batches(
+                email_service,
+                to_email,
+                bcc,
                 subject=f"Nominations Open: {election.title}",
                 html_body=html_body,
-                bcc_emails=bcc,
                 db=self.db,
                 template_type="custom",
                 sent_by=acting_user_id,
             )
+            recipient_count = len(bcc) + 1
+            unreached_count = len(unreached) + (0 if any_sent else 1)
+            if unreached_count:
+                logger.warning(
+                    f"Nominations-open announcement not delivered to all "
+                    f"members | election={election.id} "
+                    f"unreached={unreached_count}/{recipient_count}"
+                )
+            return {
+                "recipient_count": recipient_count,
+                "unreached_count": unreached_count,
+            }
         except Exception as e:
             logger.warning(
                 f"Nominations-open announcement failed | "
                 f"election={election.id} error={e}"
             )
+            return None
 
     async def _notify_proxy_delegator(
         self, election, organization_id: UUID | str, delegating_user, proxy_user
@@ -4484,7 +4545,9 @@ class ElectionService:
         await self.db.refresh(election)
 
         logger.info(f"Nominations opened | election={election_id}")
-        await self._announce_nominations_open(election, organization_id, acting_user_id)
+        announcement = await self._announce_nominations_open(
+            election, organization_id, acting_user_id
+        )
         await self._audit(
             "nominations_opened",
             {
@@ -4495,6 +4558,7 @@ class ElectionService:
                     if election.nomination_deadline
                     else None
                 ),
+                "announcement": announcement,
             },
         )
         return election, None
@@ -9079,15 +9143,17 @@ class ElectionService:
         recipient_emails: List[str],
         message: Optional[str] = None,
         include_full_roster: bool = False,
-    ) -> Tuple[bool, str, int]:
+    ) -> Tuple[bool, str, int, List[str]]:
         """Email the pre-meeting package PDF to a secretary-edited list.
 
         ``recipient_emails`` is the FINAL list — prefills (leadership /
         eligible voters) are resolved in the modal and freely edited there,
         including outside addresses. Recipients go on BCC so addresses are
-        not exposed to each other.
+        not exposed to each other, in batches the provider will accept.
 
-        Returns: (success, message, sent_count)
+        Returns: (success, message, sent_count, unreached) — ``unreached``
+        lists the addresses whose batch the provider refused, so the
+        secretary can resend to just those.
         """
         # Deduplicate case-insensitively, preserving order
         seen: set = set()
@@ -9098,19 +9164,19 @@ class ElectionService:
                 seen.add(addr.lower())
                 cleaned_emails.append(addr)
         if not cleaned_emails:
-            return False, "No recipient email addresses provided", 0
+            return False, "No recipient email addresses provided", 0, []
 
         buf, error, filename = await self.build_pre_meeting_package_pdf(
             election_id, organization_id, include_full_roster
         )
         if error or buf is None:
-            return False, error or "Failed to generate package PDF", 0
+            return False, error or "Failed to generate package PDF", 0, []
 
         election = await self.get_election(election_id, organization_id)
         if election is None:
             # The PDF build above already found it; only a concurrent delete
             # lands here, and it is reported the way that build reports it.
-            return False, "Election not found", 0
+            return False, "Election not found", 0, []
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
         )
@@ -9125,10 +9191,10 @@ class ElectionService:
         )
         sender = sender_result.scalar_one_or_none()
         if sender and sender.email:
-            to_emails = [sender.email]
+            to_email = sender.email
             bcc_emails = [e for e in cleaned_emails if e != sender.email]
         else:
-            to_emails = [cleaned_emails[0]]
+            to_email = cleaned_emails[0]
             bcc_emails = cleaned_emails[1:]
 
         tz = ZoneInfo(
@@ -9186,13 +9252,14 @@ class ElectionService:
             with open(tmp_path, "wb") as tmp:
                 tmp.write(buf.getvalue())
 
-            success_count, failure_count = await email_service.send_email(
-                to_emails=to_emails,
+            any_sent, unreached = await self._send_in_bcc_batches(
+                email_service,
+                to_email,
+                bcc_emails,
                 subject=f"Pre-Meeting Package: {election.title}",
                 html_body=html_body,
                 text_body=body_text,
                 attachment_paths=[tmp_path],
-                bcc_emails=bcc_emails,
                 db=self.db,
                 template_type="pre_meeting_package",
                 sent_by=str(sent_by),
@@ -9207,34 +9274,50 @@ class ElectionService:
             except OSError:
                 pass
 
-        sent_count = len(cleaned_emails) if success_count > 0 else 0
+        # The To address rides on every batch, so it is unreached only
+        # when none was accepted; it counts only if the secretary listed it.
+        if not any_sent and to_email in cleaned_emails:
+            unreached = [to_email] + unreached
+        sent_count = len(cleaned_emails) - len(unreached)
         await self._audit(
             "pre_meeting_package_sent",
             {
                 "election_id": str(election_id),
                 "title": election.title,
                 "recipient_count": len(cleaned_emails),
+                "unreached_count": len(unreached),
                 "full_roster_variant": include_full_roster,
-                "success": success_count > 0,
+                "success": sent_count > 0,
             },
             user_id=str(sent_by),
         )
 
-        if success_count > 0:
+        if sent_count > 0:
             logger.info(
                 f"Pre-meeting package sent | election={election_id} "
-                f"recipients={len(cleaned_emails)} full={include_full_roster}"
+                f"recipients={len(cleaned_emails)} unreached={len(unreached)} "
+                f"full={include_full_roster}"
             )
+            if unreached:
+                return (
+                    True,
+                    f"Pre-meeting package sent to {sent_count} of "
+                    f"{len(cleaned_emails)} recipient(s); {len(unreached)} "
+                    f"could not be reached",
+                    sent_count,
+                    unreached,
+                )
             return (
                 True,
-                f"Pre-meeting package sent to {len(cleaned_emails)} " f"recipient(s)",
+                f"Pre-meeting package sent to {sent_count} recipient(s)",
                 sent_count,
+                [],
             )
         logger.error(
             f"Failed to send pre-meeting package | election={election_id} "
-            f"failures={failure_count}"
+            f"recipients={len(cleaned_emails)}"
         )
-        return False, "Failed to send pre-meeting package email", 0
+        return False, "Failed to send pre-meeting package email", 0, unreached
 
     async def send_eligibility_summary_email(
         self,
