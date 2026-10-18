@@ -20,7 +20,7 @@ import { FundSelect } from '../components/FundSelect';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { PurchaseRequestPriority, PurchaseRequestStatus } from '../types';
-import { getErrorMessage } from '@/utils/errorHandling';
+import { getSaveFailureMessage } from '@/utils/errorHandling';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
@@ -199,7 +199,9 @@ const PurchaseRequestFormPage: React.FC = () => {
       toast.success(isEdit ? 'Purchase request updated' : 'Purchase request saved as a draft');
       void navigate(`/finance/purchase-requests/${savedId}`);
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not save the purchase request'));
+      // A fixed id so repeated taps replace the toast instead of stacking one
+      // per attempt.
+      toast.error(getSaveFailureMessage(err, 'save the purchase request'), { id: 'purchase-request-save-error' });
     }
   };
 
@@ -222,7 +224,7 @@ const PurchaseRequestFormPage: React.FC = () => {
           await autosave.flush();
           toast.success('Draft saved');
         } catch (err: unknown) {
-          toast.error(getErrorMessage(err, 'Could not save the draft'));
+          toast.error(getSaveFailureMessage(err, 'save the draft'));
           return;
         }
       }
@@ -244,7 +246,7 @@ const PurchaseRequestFormPage: React.FC = () => {
     try {
       await purchaseRequestService.cancel(draftId);
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not discard the draft'));
+      toast.error(getSaveFailureMessage(err, 'discard the draft'));
       return;
     }
     autosave.stop();
