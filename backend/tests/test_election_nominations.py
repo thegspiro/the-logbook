@@ -1591,3 +1591,83 @@ class TestAttestations(TestNominationSetup):
         if voided_at.tzinfo is None:
             voided_at = voided_at.replace(tzinfo=timezone.utc)
         assert voided_at >= before
+
+
+class TestNominationsOpenAnnouncement(TestNominationSetup):
+    """The all-member announcement goes out in provider-sized batches."""
+
+    async def _add_members(self, db_session: AsyncSession, org_id: str, count: int):
+        for _ in range(count):
+            uid = _uid()
+            uname = f"bulk-{uid[:8]}"
+            await db_session.execute(
+                text(
+                    "INSERT INTO users "
+                    "(id, organization_id, username, first_name, last_name, "
+                    "email, password_hash, status) "
+                    "VALUES (:id, :org, :un, 'Bulk', 'Member', :em, 'hashed', "
+                    "'active')"
+                ),
+                {"id": uid, "org": org_id, "un": uname, "em": f"{uname}@test.com"},
+            )
+        await db_session.flush()
+
+    async def _member_emails(self, db_session: AsyncSession, org_id: str):
+        result = await db_session.execute(
+            text("SELECT email FROM users WHERE organization_id = :org"),
+            {"org": org_id},
+        )
+        return {row[0] for row in result.all()}
+
+    async def test_announcement_batches_bcc_under_provider_cap(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        from unittest.mock import AsyncMock, patch
+
+        from app.services.election_service import BULK_EMAIL_MAX_RECIPIENTS
+
+        org_id, user1_id, _ = setup_org_and_users
+        await self._add_members(db_session, org_id, 58)
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+
+        send_email = AsyncMock(return_value=(1, 0))
+        with patch(
+            "app.services.email_service.EmailService.send_email", new=send_email
+        ):
+            election, err = await svc.open_nominations(
+                uuid.UUID(election_id), uuid.UUID(org_id), acting_user_id=user1_id
+            )
+        assert err is None, err
+
+        everyone = await self._member_emails(db_session, org_id)
+        officer = f"nom1-{user1_id[:8]}@test.com"
+        calls = [c.kwargs for c in send_email.await_args_list]
+        assert len(calls) == 2, "60 members must split into two messages"
+        bcc_seen: list[str] = []
+        for kwargs in calls:
+            assert kwargs["to_emails"] == [officer]
+            assert len(kwargs["bcc_emails"]) + 1 <= BULK_EMAIL_MAX_RECIPIENTS
+            bcc_seen.extend(kwargs["bcc_emails"])
+        assert len(bcc_seen) == len(set(bcc_seen)), "No member is mailed twice"
+        assert set(bcc_seen) == everyone - {officer}
+
+    async def test_failed_batch_does_not_stop_the_rest(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        from unittest.mock import AsyncMock, patch
+
+        org_id, user1_id, _ = setup_org_and_users
+        await self._add_members(db_session, org_id, 108)
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        election = await self._get_election(db_session, election_id)
+        svc = ElectionService(db_session)
+
+        send_email = AsyncMock(side_effect=[(1, 0), (0, 1), (1, 0)])
+        with patch(
+            "app.services.email_service.EmailService.send_email", new=send_email
+        ):
+            outcome = await svc._announce_nominations_open(election, org_id, user1_id)
+
+        assert send_email.await_count == 3
+        assert outcome == {"recipient_count": 110, "unreached_count": 49}

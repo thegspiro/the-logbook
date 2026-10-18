@@ -169,6 +169,16 @@ export function describePackageSendError(err: unknown, recipientEmails: string[]
 }
 
 /**
+ * The package goes out in batches, and a batch the provider refuses leaves
+ * its addresses unreached while the rest are delivered. Naming them lets the
+ * secretary resend to just those instead of to everyone again.
+ */
+export function describeUnreachedPackageRecipients(unreached: string[]): string {
+  const one = unreached.length === 1;
+  return `${one ? 'This address was' : 'These addresses were'} not reached: ${unreached.join(', ')}. Everyone else was sent the package — send again to just ${one ? 'this address' : 'these addresses'}.`;
+}
+
+/**
  * Whether ballot emails can be sent: the emailed ballot carries ballot items
  * and plain positions (each position served as an item since the 2026-10-05
  * ballot convergence). Candidates with no race at all have nothing to mail.
