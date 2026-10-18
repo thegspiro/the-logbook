@@ -16,10 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3420](https://github.com/thegspiro/the-logbook/pull/3420)** (branch
-`claude/security-review-membership-pipeline-p11`). PR #3410
-(Feature 07, Users & organizations, pass 10) merged 2026-10-18 clean,
+**PR [#3427](https://github.com/thegspiro/the-logbook/pull/3427)** (branch
+`claude/security-review-medical-screening-p10`). PR #3420
+(Feature 08, Membership pipeline, pass 11) merged 2026-10-18 clean,
 docs-only; already recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 09 (Medical screening, PHI), pass 10. **0
+fixes, 0 new findings.** Baseline `7a16ea19c` (PR #3256's merge, pass 9);
+exactly 1 non-merge commit touches this feature's scope, frontend-only
+(a falsy-coercion bug where an entered `0` grace-period saved as `30`;
+no PHI, auth, or tenancy touched). MS-14 and MS-15 re-confirmed **OPEN**,
+unchanged. **Separately** (unrelated to this feature): this pass's
+completion gate surfaced a 3-way forked Alembic chain blocking
+`alembic upgrade head` repo-wide, fixed in its own standalone PR
+(**#3426**, now open) rather than folded in here. See
+`MS-09-medical-screening.md`'s **Pass 10** section for the full writeup.
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 11, PR #3420, merged), preserved for history</summary>
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
 `claude/security-review-`, confirmed via `search_pull_requests`, and the
@@ -38,6 +57,8 @@ existing permission gate (53 routes, unchanged). MP-22 re-confirmed
 **OPEN**, unchanged. See `MP-08-membership-pipeline.md`'s **Pass 11**
 section for the full writeup. Row 08 → ✅ (pending this PR's merge); next
 is Feature 09 (Medical screening, PHI).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 10, PR #3410, merged), preserved for history</summary>
@@ -20129,7 +20150,7 @@ iteration's commit" rule.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -20162,6 +20183,57 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-18 — Feature 09 (Medical screening PHI, pass 10) — watchdog pickup, near-zero delta, 0 fixed, 0 new findings; MS-14/MS-15 still open; separately fixed an unrelated 3-way Alembic fork (PR #3426)
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3420 (Feature 08, Membership pipeline, pass 11) had
+already merged clean, docs-only, closing row 08; rotation row 09 was the
+next `⬜`.
+
+**Baseline:** `7a16ea19c` (PR #3256's merge, pass 9). **Head:** current
+`main`. Exactly 1 non-merge commit touches this feature's scope
+(`endpoints/medical_screening.py`, `services/medical_screening_service.py`,
+`models/medical_screening.py`, `schemas/medical_screening.py`,
+`mcp/tools/medical.py`, and the full `frontend/src/modules/
+medical-screening/` directory) — and it's frontend-only, no backend file,
+no migration. `ScreeningRequirementForm.tsx`'s save payload built
+`grace_period_days` as `Number(gracePeriodDays) || 30`, silently turning
+an intentionally-entered `0` into `30` (a falsy-coercion bug in the same
+family as Pitfall #1); fixed to drop the `|| 30` fallback and require the
+field client-side. No PHI handling, auth, or tenancy touched. All 16
+routes re-enumerated, unchanged. **MS-14** (no finer-grained PHI read
+tier) and **MS-15** (unbounded compliance roster), both standing flagged
+items, re-confirmed unchanged by direct read — neither file in scope.
+Tenant isolation (every by-id getter org-scoped; `assert_in_org` on all
+three client-supplied FKs) and PHI-at-rest encryption
+(`EncryptedText`/`EncryptedJSON`) both re-confirmed present. See
+`MS-09-medical-screening.md`'s **Pass 10** section for the full writeup.
+
+**Separately, while running this pass's completion gate:**
+`validate_migrations.py --strict` surfaced a 3-way forked Alembic chain
+(`6dc58d6997df`/`7e5d6cf3292c`/`e99f068be43e` — three independently-merged
+PRs that each revised the same parent, `89723c04ae94`), blocking
+`alembic upgrade head` for every PR in the repo, not just this one.
+Unrelated to medical screening, so fixed and pushed as its own standalone
+PR (#3426 — a no-op merge revision, matching the repo's own precedent for
+this exact situation) rather than folded into this docs-only
+security-review PR. Verified against the real database
+(`alembic upgrade head`) and the migration guard tests (80 passed)
+before pushing.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` clean; `validate_migrations.py --strict` passed (single
+head, after applying the separate fork fix locally);
+`check_route_permissions.py --strict` 272 routes, 0 errors/warnings;
+scoped backend tests (`-k "medical_screening or screening"`) 122 passed,
+1 skipped (environment-only, `pywebpush`); frontend `npm run typecheck`
+and `npm run lint` both clean; scoped frontend suite
+(`medical-screening`) 54 passed across 9 files.
+
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal).
 
 ### 2026-10-18 — Feature 08 (Membership pipeline, pass 11) — watchdog pickup, real delta (directory-account provisioning hooked into conversion), 0 fixed, 0 new findings; MP-22 still open
 
