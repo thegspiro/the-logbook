@@ -1948,7 +1948,8 @@ class ExportReadinessCategoryResponse(UTCResponseBase):
     category_id: str
     category_name: str
     is_active: bool
-    # ready, no_account, no_offset, duplicate_mappings or payable_receivable
+    # ready, no_account, no_offset, duplicate_mappings, payable_receivable,
+    # unsafe_account_name (starts with =, +, - or @) or not_in_chart
     status: str
     account_name: Optional[str] = None
     # category (its own qb_account_name), mapping, or parent (inherited)
@@ -1958,6 +1959,8 @@ class ExportReadinessCategoryResponse(UTCResponseBase):
     # its own.
     account_inherited_from: Optional[str] = None
     offset_inherited_from: Optional[str] = None
+    # With not_in_chart: which of the two the uploaded chart lacks.
+    accounts_not_in_chart: list[str] = []
     mapping_ids: list[str]
 
 
@@ -1969,13 +1972,15 @@ class DuesScheduleExportResponse(UTCResponseBase):
     schedule_id: str
     name: str
     is_active: bool
-    # ready, no_income, no_deposit or payable_receivable
+    # ready, no_income, no_deposit, payable_receivable, unsafe_account_name
+    # or not_in_chart
     status: str
     income_account: Optional[str] = None
     # schedule (its own) or default (the department's)
     income_source: Optional[str] = None
     deposit_account: Optional[str] = None
     deposit_source: Optional[str] = None
+    accounts_not_in_chart: list[str] = []
 
 
 class DuesExportReadinessResponse(UTCResponseBase):
@@ -1994,12 +1999,14 @@ class AdvanceExportReadinessResponse(UTCResponseBase):
 
     model_config = _RESPONSE_CONFIG
 
-    # ready, no_advances_account, no_cash_account or payable_receivable
+    # ready, no_advances_account, no_cash_account, payable_receivable,
+    # unsafe_account_name or not_in_chart
     status: str = "no_advances_account"
     # The asset account an advance is owed on, and the bank account it is
     # paid from and returned to.
     advances_account: Optional[str] = None
     cash_account: Optional[str] = None
+    accounts_not_in_chart: list[str] = []
 
 
 class ExportReadinessResponse(UTCResponseBase):
@@ -2011,6 +2018,26 @@ class ExportReadinessResponse(UTCResponseBase):
     unmatched_mapping_ids: list[str]
     dues: DuesExportReadinessResponse = DuesExportReadinessResponse()
     advances: AdvanceExportReadinessResponse = AdvanceExportReadinessResponse()
+    # Whether account names are being checked against an uploaded chart.
+    chart_uploaded: bool = False
+
+
+class QuickBooksChartAccountResponse(UTCResponseBase):
+    model_config = _RESPONSE_CONFIG
+
+    name: str
+    account_type: Optional[str] = None
+
+
+class QuickBooksChartResponse(UTCResponseBase):
+    """The QuickBooks chart of accounts the export checks names against."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # None while no chart is on file, when names are not checked.
+    uploaded_at: Optional[datetime] = None
+    uploaded_by_name: Optional[str] = None
+    accounts: list[QuickBooksChartAccountResponse] = []
 
 
 class DuesDefaultAccountsUpdate(BaseModel):
@@ -2136,6 +2163,9 @@ class ExportRequest(BaseModel):
     # Send again payments an earlier export already carried. Off, the export
     # leaves them out so overlapping periods do not import twice.
     include_exported: bool = False
+    # Send them even where their file was confirmed as imported into
+    # QuickBooks; without it such a resend is refused (409).
+    confirm_reimport: bool = False
 
     @field_validator("date_range_start", "date_range_end")
     @classmethod
@@ -2184,6 +2214,10 @@ class ExportLogResponse(UTCResponseBase):
     status: str
     error_message: Optional[str] = None
     completed_at: Optional[datetime] = None
+    # When the Treasurer confirmed the file was imported into QuickBooks.
+    imported_at: Optional[datetime] = None
+    imported_by: Optional[str] = None
+    imported_by_name: Optional[str] = None
 
 
 # ============================================

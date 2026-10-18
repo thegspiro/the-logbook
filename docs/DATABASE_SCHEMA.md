@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**316 tables · 5228 columns · 1066 foreign keys**
+**317 tables · 5236 columns · 1069 foreign keys**
 
 ---
 
@@ -274,8 +274,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 17 | Schedule for dues collection |
 | [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 14 | Individual line item within an expense report |
 | [`expense_reports`](#expense_reports) | `ExpenseReport` | 26 | Expense report submitted by a member for reimbursement |
-| [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
+| [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 14 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
+| [`finance_qb_chart_accounts`](#finance_qb_chart_accounts) | `QuickBooksChartAccount` | 6 | One account of the department's QuickBooks chart of accounts, as the |
 | [`fiscal_years`](#fiscal_years) | `FiscalYear` | 21 | Fiscal year definition for the organization |
 | [`member_dues`](#member_dues) | `MemberDues` | 18 | Individual member dues payment record |
 | [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 32 | Purchase request submitted by a member |
@@ -4222,6 +4223,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | VARCHAR(20) | no |  | `'pending'` |  |
 | `error_message` | VARCHAR(500) | yes |  |  |  |
 | `completed_at` | DATETIME | yes |  |  |  |
+| `imported_at` | DATETIME | yes |  |  |  |
+| `imported_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 
 **Indexes**
 
@@ -4248,6 +4251,25 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_export_mappings_org_id` (`organization_id`)
+
+### `finance_qb_chart_accounts`
+
+**QuickBooksChartAccount** · `app/models/finance.py`
+
+> One account of the department's QuickBooks chart of accounts, as the Treasurer last uploaded it. The journal-entry import matches accounts by name, so a name the chart does not hold fails at import, after the file has left. With a chart on file the export refuses such a name first. Each upload replaces the whole set; none on file turns the check off.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(255) | no |  |  |  |
+| `account_type` | VARCHAR(100) | yes |  |  |  |
+| `uploaded_at` | DATETIME | no |  |  |  |
+| `uploaded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- `ix_finance_qb_chart_accounts_org_id` (`organization_id`)
 
 ### `fiscal_years`
 
@@ -11017,7 +11039,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (391 references)
+### → `users` (393 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11171,6 +11193,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `facility_utility_accounts` | `created_by` | SET NULL | yes |
 | `facility_utility_readings` | `created_by` | SET NULL | yes |
 | `finance_export_logs` | `exported_by` | RESTRICT | no |
+| `finance_export_logs` | `imported_by` | SET NULL | yes |
+| `finance_qb_chart_accounts` | `uploaded_by` | SET NULL | yes |
 | `fiscal_years` | `adoption_recorded_by` | SET NULL | yes |
 | `fiscal_years` | `created_by` | RESTRICT | no |
 | `fiscal_years` | `locked_by` | SET NULL | yes |
@@ -11413,7 +11437,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (259 references)
+### → `organizations` (260 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11520,6 +11544,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `facility_utility_readings` | `organization_id` | CASCADE | no |
 | `finance_export_logs` | `organization_id` | CASCADE | no |
 | `finance_export_mappings` | `organization_id` | CASCADE | no |
+| `finance_qb_chart_accounts` | `organization_id` | CASCADE | no |
 | `fiscal_years` | `organization_id` | CASCADE | no |
 | `form_integrations` | `organization_id` | CASCADE | no |
 | `form_submissions` | `organization_id` | CASCADE | no |

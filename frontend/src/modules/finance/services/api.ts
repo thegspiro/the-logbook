@@ -90,6 +90,7 @@ import type {
   ExportRunPayload,
   DuesDefaultAccountsPayload,
   DuesExportReadiness,
+  QuickBooksChart,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 
@@ -1006,6 +1007,36 @@ export const exportMappingService = {
   async setAdvanceAccounts(data: AdvanceAccountsPayload): Promise<AdvanceExportReadiness> {
     const response = await api.put<AdvanceExportReadiness>('/finance/export/advance-accounts', data);
     return response.data;
+  },
+
+  /** Record that an export's file was imported into QuickBooks. */
+  async confirmImported(logId: string): Promise<ExportLog> {
+    const response = await api.post<ExportLog>(`/finance/export/logs/${encodeURIComponent(logId)}/imported`);
+    return response.data;
+  },
+
+  /** Undo a confirmation made by mistake. */
+  async withdrawImported(logId: string): Promise<ExportLog> {
+    const response = await api.delete<ExportLog>(`/finance/export/logs/${encodeURIComponent(logId)}/imported`);
+    return response.data;
+  },
+
+  async chart(): Promise<QuickBooksChart> {
+    const response = await api.get<QuickBooksChart>('/finance/export/chart-of-accounts');
+    return response.data;
+  },
+
+  /** Replace the chart of accounts with QuickBooks' exported Account List report. */
+  async uploadChart(file: File): Promise<QuickBooksChart> {
+    const response = await api.post<QuickBooksChart>('/finance/export/chart-of-accounts', receiptForm(file), {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  /** Remove the uploaded chart, which stops the account name check. */
+  async clearChart(): Promise<void> {
+    await api.delete('/finance/export/chart-of-accounts');
   },
 
   /** Run the QuickBooks export for a period, as the file the server names. */

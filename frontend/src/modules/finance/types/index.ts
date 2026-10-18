@@ -1218,6 +1218,10 @@ export const ExportReadinessStatus = {
   DUPLICATE_MAPPINGS: 'duplicate_mappings',
   /** Posts to Accounts Payable or Receivable, which QuickBooks' import needs a Name for. */
   PAYABLE_RECEIVABLE: 'payable_receivable',
+  /** An account name starts with =, +, - or @, which the export's formula escaping would alter. */
+  UNSAFE_ACCOUNT_NAME: 'unsafe_account_name',
+  /** An account the uploaded chart of accounts does not list (see `accountsNotInChart`). */
+  NOT_IN_CHART: 'not_in_chart',
 } as const;
 export type ExportReadinessStatus = (typeof ExportReadinessStatus)[keyof typeof ExportReadinessStatus];
 
@@ -1233,6 +1237,8 @@ export interface ExportReadinessCategory {
   /** The ancestor category each account came from, when this one has none of its own. */
   accountInheritedFrom?: string | null;
   offsetInheritedFrom?: string | null;
+  /** With `not_in_chart`: the accounts the uploaded chart of accounts lacks. */
+  accountsNotInChart?: string[];
   mappingIds: string[];
 }
 
@@ -1242,6 +1248,8 @@ export interface ExportRunPayload {
   dateRangeEnd: string;
   /** Send again payments an earlier export already carried. */
   includeExported: boolean;
+  /** Send them even where their file was confirmed as imported (otherwise a 409, `LB-FIN-001`). */
+  confirmReimport?: boolean;
 }
 
 export interface ExportReadiness {
@@ -1250,6 +1258,21 @@ export interface ExportReadiness {
   unmatchedMappingIds: string[];
   dues?: DuesExportReadiness;
   advances?: AdvanceExportReadiness;
+  /** Whether account names are checked against an uploaded chart of accounts. */
+  chartUploaded?: boolean;
+}
+
+/** One account of the uploaded QuickBooks chart of accounts. */
+export interface QuickBooksChartAccount {
+  name: string;
+  accountType?: string | null;
+}
+
+/** `GET /finance/export/chart-of-accounts`; `uploadedAt` is null while none is on file. */
+export interface QuickBooksChart {
+  uploadedAt?: string | null;
+  uploadedByName?: string | null;
+  accounts: QuickBooksChartAccount[];
 }
 
 export const AdvanceExportStatus = {
@@ -1257,6 +1280,8 @@ export const AdvanceExportStatus = {
   NO_ADVANCES_ACCOUNT: 'no_advances_account',
   NO_CASH_ACCOUNT: 'no_cash_account',
   PAYABLE_RECEIVABLE: 'payable_receivable',
+  UNSAFE_ACCOUNT_NAME: 'unsafe_account_name',
+  NOT_IN_CHART: 'not_in_chart',
 } as const;
 export type AdvanceExportStatus = (typeof AdvanceExportStatus)[keyof typeof AdvanceExportStatus];
 
@@ -1267,6 +1292,7 @@ export interface AdvanceExportReadiness {
   advancesAccount?: string | null;
   /** The bank account advances are paid from and returned to. */
   cashAccount?: string | null;
+  accountsNotInChart?: string[];
 }
 
 /** `PUT /finance/export/advance-accounts`; null clears one. */
@@ -1280,6 +1306,8 @@ export const DuesExportStatus = {
   NO_INCOME: 'no_income',
   NO_DEPOSIT: 'no_deposit',
   PAYABLE_RECEIVABLE: 'payable_receivable',
+  UNSAFE_ACCOUNT_NAME: 'unsafe_account_name',
+  NOT_IN_CHART: 'not_in_chart',
 } as const;
 export type DuesExportStatus = (typeof DuesExportStatus)[keyof typeof DuesExportStatus];
 
@@ -1294,6 +1322,7 @@ export interface DuesScheduleExport {
   incomeSource?: 'schedule' | 'default' | null;
   depositAccount?: string | null;
   depositSource?: 'schedule' | 'default' | null;
+  accountsNotInChart?: string[];
 }
 
 export interface DuesExportReadiness {
@@ -1395,6 +1424,10 @@ export interface ExportLog {
   status: string;
   errorMessage?: string | null;
   completedAt?: string | null;
+  /** When the Treasurer confirmed the file was imported into QuickBooks. */
+  importedAt?: string | null;
+  importedBy?: string | null;
+  importedByName?: string | null;
 }
 
 export interface FinanceDashboard {
