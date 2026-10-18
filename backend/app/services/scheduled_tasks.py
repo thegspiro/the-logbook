@@ -40,6 +40,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:35 AM — Google Workspace accounts waiting over a day for an administrator
 35 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=google_workspace_attention_digest
 
+# Hourly — the weekly security and audit report to the IT Manager (each department sets its own day and hour; this only checks whether one is due)
+0 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=weekly_security_report
+
 # Every 15 minutes — process delayed inventory change notifications
 */15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=inventory_notifications
 
@@ -294,6 +297,16 @@ SCHEDULE = {
         "frequency": "daily check, weekly send",
         "recommended_time": "07:25",
         "cron": "25 7 * * *",
+    },
+    "weekly_security_report": {
+        "description": (
+            "Email the IT Manager a weekly count of security alerts, "
+            "application errors and audit log health, on each department's "
+            "chosen day and hour"
+        ),
+        "frequency": "hourly check, weekly send",
+        "recommended_time": "every hour",
+        "cron": "0 * * * *",
     },
     "inventory_notifications": {
         "description": "Process delayed inventory change notifications — consolidate and send one email per member for changes older than 1 hour",
@@ -1100,6 +1113,16 @@ async def run_minutes_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
         return reminders + digests
 
     return await _for_each_org(db, "minutes_action_item_reminders", _process)
+
+
+async def run_weekly_security_report(db: AsyncSession) -> Dict[str, Any]:
+    """Email the IT Manager the weekly security and audit report when it is due."""
+    from app.services.security_weekly_report import send_weekly_security_report
+
+    async def _process(db_session, org):
+        return await send_weekly_security_report(db_session, org)
+
+    return await _for_each_org(db, "weekly_security_report", _process)
 
 
 async def run_admin_only_folder_digest(db: AsyncSession) -> Dict[str, Any]:
@@ -7517,6 +7540,7 @@ TASK_RUNNERS = {
     "action_item_reminders": run_action_item_reminders,
     "minutes_action_item_reminders": run_minutes_action_item_reminders,
     "admin_only_folder_digest": run_admin_only_folder_digest,
+    "weekly_security_report": run_weekly_security_report,
     "inventory_notifications": run_inventory_notifications,
     "event_reminders": run_event_reminders,
     "post_event_validation": run_post_event_validation,
@@ -7615,6 +7639,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "minutes_action_item_reminders": 86400,
     # Checked daily; sends at most weekly per org (see admin_only_folder_digest).
     "admin_only_folder_digest": 86400,
+    # Checked hourly because each department picks its own hour; it sends at
+    # most once a week (see security_weekly_report.is_due).
+    "weekly_security_report": 3600,
     "inventory_low_stock_alerts": 86400,
     "inventory_overdue_alerts": 86400,
     # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).

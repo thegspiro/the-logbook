@@ -2844,9 +2844,16 @@ Sending ballots to a 42-member department failed in the browser with "timeout
 of 30000ms exceeded". The send ran inside the HTTP request: an eligibility check
 and a new voting token per member, then one SMTP connection with a 0.25 s pause
 between messages. The server kept going after the browser gave up, so the
-ballots most likely went out, but the secretary was shown an error. Sending
-again would have minted new tokens and broken the links already in members'
-inboxes.
+ballots most likely went out, but the secretary was shown an error, which
+invited a second send that would have mailed every member again.
+
+**Correction (2026-10-17):** an earlier version of this entry, and the
+pull requests that added the jobs, said a resend breaks the links already in
+members' inboxes. It does not. A plain resend mints a new token per member and
+leaves earlier ones valid; the vote is deduplicated on the voter hash, so a
+member votes once whichever link they use. Earlier links are retired only by a
+reminder (for the members it reached), by a rollback that regenerates the
+anonymity salt, and by a change to the ballot.
 
 **Fixed for the Send Ballots dialog.** `POST /elections/{id}/ballot-send-jobs`
 records a `ballot_send_jobs` row and returns `202`. The send runs after the
@@ -2862,9 +2869,12 @@ Two limitations remain:
 - **The send runs in the web process, not in a worker.** No Celery worker is
   deployed (Celery is in `requirements.txt`, but no compose file runs one), so
   the job is an asyncio task like the scheduled-email loop in `main.py`. A
-  restart while it runs stops it partway. Some members will have been mailed,
-  but their tokens are committed only at the end, so those links will not work.
-  The row stays `running` until `STALE_JOB_AFTER` (30 minutes) passes. After
+  restart while it runs stops it partway, and some members will have been
+  mailed. Their links work: the tokens are committed before the batch starts
+  (`send_ballot_emails`, 2026-10-17; they used to be committed only after it,
+  which left those links answering "Invalid voting token"). What is lost is the
+  election's record of who was sent a ballot, which is written at the end. The
+  row stays `running` until `STALE_JOB_AFTER` (30 minutes) passes. After
   that it reads as failed with a message to check who received a ballot, and it
   stops blocking a new send. Moving sends to a real worker would remove this,
   at the cost of a new service in every deployment (Docker, Unraid, AWS).
