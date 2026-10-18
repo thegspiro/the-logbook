@@ -2597,17 +2597,22 @@ class FinanceService:
         amount: Decimal,
         budget_category_id: Optional[str] = None,
     ) -> Optional[ApprovalChain]:
-        """Find the most specific matching approval chain"""
+        """Find the most specific matching approval chain.
+
+        Only chains configured for ``entity_type`` are candidates. A purchase
+        request chain names the approvers for buying something; it is not a
+        fallback for an expense report or a check request, and borrowing it
+        sent reimbursements and payouts to approvers nobody had assigned to
+        them. With no chain for the type, this returns None and the caller
+        leaves the request to be decided by hand.
+        """
         query = (
             select(ApprovalChain)
             .options(selectinload(ApprovalChain.steps))
             .where(
                 ApprovalChain.organization_id == org_id,
                 ApprovalChain.is_active.is_(True),
-                or_(
-                    ApprovalChain.applies_to == entity_type,
-                    ApprovalChain.applies_to == ApprovalEntityType.PURCHASE_REQUEST,
-                ),
+                ApprovalChain.applies_to == entity_type,
             )
         )
         result = await self.db.execute(query)
@@ -2622,12 +2627,6 @@ class FinanceService:
 
         for chain in chains:
             score = 0
-            # Must match entity type
-            if (
-                chain.applies_to != entity_type
-                and chain.applies_to != ApprovalEntityType.PURCHASE_REQUEST
-            ):
-                continue
 
             # Check amount range
             if chain.min_amount is not None and amount < chain.min_amount:
