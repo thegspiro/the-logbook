@@ -320,7 +320,7 @@ class BudgetCreate(BaseModel):
 
     fiscal_year_id: str
     category_id: str
-    amount_budgeted: Decimal = Field(..., ge=0, decimal_places=2)
+    amount_budgeted: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
     notes: Optional[str] = None
     station_id: Optional[str] = None
     # None: the line inherits its category's owner.
@@ -336,7 +336,9 @@ class BudgetUpdate(BaseModel):
 
     model_config = _REQUEST_CONFIG
 
-    amount_budgeted: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
+    amount_budgeted: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
     notes: Optional[str] = None
     station_id: Optional[str] = None
     owner_position_id: Optional[str] = None
@@ -852,7 +854,7 @@ class ApprovalChainStepCreate(BaseModel):
     notification_emails: Optional[list[str]] = None
     email_template_id: Optional[str] = None
     allow_self_approval: bool = False
-    auto_approve_under: Optional[Decimal] = Field(None, decimal_places=2)
+    auto_approve_under: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     required: bool = True
 
 
@@ -876,7 +878,7 @@ class ApprovalChainStepUpdate(BaseModel):
     notification_emails: Optional[list[str]] = None
     email_template_id: Optional[str] = None
     allow_self_approval: Optional[bool] = None
-    auto_approve_under: Optional[Decimal] = Field(None, decimal_places=2)
+    auto_approve_under: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     required: Optional[bool] = None
 
 
@@ -912,8 +914,8 @@ class ApprovalChainCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     applies_to: str
-    min_amount: Optional[Decimal] = Field(None, decimal_places=2)
-    max_amount: Optional[Decimal] = Field(None, decimal_places=2)
+    min_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
+    max_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     budget_category_id: Optional[str] = None
     is_default: bool = False
     steps: Optional[list[ApprovalChainStepCreate]] = None
@@ -931,8 +933,8 @@ class ApprovalChainUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     applies_to: Optional[str] = None
-    min_amount: Optional[Decimal] = Field(None, decimal_places=2)
-    max_amount: Optional[Decimal] = Field(None, decimal_places=2)
+    min_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
+    max_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     budget_category_id: Optional[str] = None
     is_default: Optional[bool] = None
     is_active: Optional[bool] = None
@@ -1348,7 +1350,7 @@ class PurchaseRequestCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
     vendor: Optional[str] = None
-    estimated_amount: Decimal = Field(..., gt=0, decimal_places=2)
+    estimated_amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     priority: str = "medium"
     notes: Optional[str] = None
     apparatus_id: Optional[str] = None
@@ -1369,8 +1371,12 @@ class PurchaseRequestUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
     vendor: Optional[str] = None
-    estimated_amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
-    actual_amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
+    estimated_amount: Optional[Decimal] = Field(
+        None, gt=0, max_digits=12, decimal_places=2
+    )
+    actual_amount: Optional[Decimal] = Field(
+        None, gt=0, max_digits=12, decimal_places=2
+    )
     priority: Optional[str] = None
     notes: Optional[str] = None
     receipt_url: Optional[str] = None
@@ -1472,7 +1478,7 @@ class ExpenseLineItemCreate(BaseModel):
     # payment spends; app/services/restricted_funds.py.
     fund_campaign_id: Optional[str] = None
     description: str = Field(..., min_length=1, max_length=500)
-    amount: Decimal = Field(..., gt=0, decimal_places=2)
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     date_incurred: datetime
     # Typed as the enum so an unknown value is rejected with a 422 here rather
     # than reaching MySQL, where the column is an ENUM and the insert fails with
@@ -1633,7 +1639,7 @@ class CheckRequestCreate(BaseModel):
     is_advance: bool = False
     payee_name: str = Field(..., min_length=1, max_length=300)
     payee_address: Optional[str] = None
-    amount: Decimal = Field(..., gt=0, decimal_places=2)
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     memo: Optional[str] = None
     purpose: Optional[str] = None
     notes: Optional[str] = None
@@ -1650,7 +1656,7 @@ class CheckRequestUpdate(BaseModel):
     fund_campaign_id: Optional[str] = None
     payee_name: Optional[str] = Field(None, min_length=1, max_length=300)
     payee_address: Optional[str] = None
-    amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
     memo: Optional[str] = None
     purpose: Optional[str] = None
     notes: Optional[str] = None
@@ -1724,11 +1730,11 @@ class DuesScheduleCreate(BaseModel):
     )
 
     name: str = Field(..., min_length=1, max_length=200)
-    amount: Decimal = Field(..., gt=0, decimal_places=2)
+    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     frequency: str
     due_date: datetime
     grace_period_days: int = Field(30, ge=0)
-    late_fee_amount: Optional[Decimal] = Field(None, decimal_places=2)
+    late_fee_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
     notes: Optional[str] = None
@@ -1752,11 +1758,11 @@ class DuesScheduleUpdate(BaseModel):
     )
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
-    amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
     frequency: Optional[str] = None
     due_date: Optional[datetime] = None
     grace_period_days: Optional[int] = Field(None, ge=0)
-    late_fee_amount: Optional[Decimal] = Field(None, decimal_places=2)
+    late_fee_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
     is_active: Optional[bool] = None
@@ -1847,7 +1853,7 @@ class MemberDuesPayment(BaseModel):
 
     model_config = _REQUEST_CONFIG
 
-    amount_paid: Decimal = Field(..., gt=0, decimal_places=2)
+    amount_paid: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     payment_method: Optional[str] = None
     transaction_reference: Optional[str] = None
     notes: Optional[str] = None
