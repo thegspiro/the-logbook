@@ -16,10 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3399](https://github.com/thegspiro/the-logbook/pull/3399)** (branch
-`claude/security-review-public-webhooks`). PR #3398
-(Feature 02, Permissions & roles, pass 10) merged 2026-10-18 clean; already
-recorded in that PR's own history below.
+**PR [#3400](https://github.com/thegspiro/the-logbook/pull/3400)** (branch
+`claude/security-review-storefront-payments`). PR #3399
+(Feature 03, Public surface & webhooks, pass 10) merged 2026-10-18 clean,
+docs-only; already recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 04 (Storefront & payments), pass 10. **0
+fixes, 0 new findings.** Baseline `a137bedf` (PR #3223's merge, pass 9); 4
+non-merge commits touch this feature's scope, all frontend-only (a
+required-price form guard, store-window/draft messaging copy, a dark-mode
+CSS fix, and `WindowFormModal` adopting the shared `blankToNull`-style
+helpers so a cleared field reaches the already-correct
+`exclude_unset=True` update contract as an explicit `null`). No backend
+file in scope changed; no storefront migration landed. SF8-04-2 and
+SF8-04-3 re-confirmed **OPEN**, unchanged, still an owner decision. See
+`SF-04-storefront-payments.md`'s **Pass 10** section for the full writeup.
+Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
+approvals).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03, Public surface & webhooks, pass 10, PR #3399, merged), preserved for history</summary>
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
 `claude/security-review-`, confirmed via `search_pull_requests`, and the
@@ -43,6 +62,8 @@ pass) directly asserting the allowlist, org-isolation, bad-token 404s, and
 audited token rotation. See `PUB-03-public-surface-webhooks.md`'s **Pass
 10** section for the full writeup. Row 03 → ✅ (pending this PR's merge);
 next is Feature 04 (Storefront & payments).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 02, Permissions & roles, pass 10, PR #3398, merged), preserved for history</summary>
@@ -19995,7 +20016,7 @@ iteration's commit" rule.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
@@ -20033,6 +20054,45 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-18 — Feature 04 (Storefront & payments, pass 10) — watchdog pickup, 0 fixed, 0 new findings; SF8-04-2/SF8-04-3 still open
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3399 (Feature 03, Public surface & webhooks, pass 10)
+had already merged clean, docs-only, closing row 03; rotation row 04 was
+the next `⬜`.
+
+**Baseline:** `a137bedf` (PR #3223's merge, pass 9). **Head:** current
+`main`. Unshallowed the clone first (it was shallow, the same hazard pass
+9 flagged) before trusting the range. 4 non-merge commits touch this
+feature's scope, all frontend-only: a required-price guard on the product
+form (backend already enforces `price >= 0` independently), store-window
+and draft-product messaging copy, a dark-mode CSS fix, and
+`WindowFormModal` adopting the shared `blankToNull`-style helpers so a
+cleared field reaches the (already-correct) `exclude_unset=True` /
+`Optional[...] = None` update contract as an explicit `null` instead of
+being dropped. No backend file in scope changed; no storefront migration
+landed. The two standing flagged findings — **SF8-04-2** (`update_order_
+status`'s settlement branch reads the order unlocked) and **SF8-04-3**
+(`waive_order_payment` has no settled-order guard) — remain OPEN, untouched
+by this window's delta; both still need an owner decision per pass 8's
+original rationale. All five self-settlement separation-of-duties guards
+and the PayPal webhook verification/replay guard re-confirmed unchanged by
+direct read. See `SF-04-storefront-payments.md`'s **Pass 10** section for
+the full writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` clean; `validate_migrations.py --strict` passed (618
+revisions, single head); scoped backend tests (`-k "storefront or
+paypal"`) 811 passed, 1 skipped (environment-only, `pywebpush`); frontend
+`npm run typecheck` and `npm run lint` both clean (after `npm ci` from the
+repo root resolved a stale sandbox `node_modules` missing the `@tiptap/*`
+packages the Minutes rich-text editor already depends on — unrelated to
+this feature, not a code defect).
+
+Row 04 → ✅ (pending this PR's merge); next is Feature 05 (Finance &
+approvals).
 
 ### 2026-10-18 — Feature 03 (Public surface & webhooks, pass 10) — watchdog pickup, a new unauth route reviewed fresh, 0 fixed, 0 new findings
 
