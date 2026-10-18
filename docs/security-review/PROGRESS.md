@@ -16,12 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3410](https://github.com/thegspiro/the-logbook/pull/3410)** (branch
-`claude/security-review-users-organizations-p10`). PR #3404
-(Feature 06, Elections & ballots, pass 10) merged 2026-10-18 clean — not
-docs-only (fixed ELEC-47, a real locking-read bug in the new
-ballot-send-jobs guard, plus its guard test), but already fully recorded
-in that PR's own history below.
+**None.** PR #3410 (Feature 07, Users & organizations, pass 10) merged
+clean 2026-10-18, docs-only (`PROGRESS.md` +
+`USR-07-users-organizations.md` only). Already fully recorded in that
+PR's own history below, so there is nothing further to add here.
+Rotation row 07 stays ✅. Confirmed via `search_pull_requests`
+(`is:open head:claude/security-review-`, 0 results) that no
+`claude/security-review-*` PR is open. The dedicated `/loop 30m
+/security-review` session was still not reachable via `ListAgents`, so
+this is another watchdog pickup. Proceeding to Feature 08 (Membership
+pipeline), pass 10.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 10, PR #3410, merged), preserved for history</summary>
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
 `claude/security-review-`, confirmed via `search_pull_requests`, and the
@@ -47,6 +54,8 @@ its own review had missed ELEC-47 (asserted the overlap guard was
 "correctly applied" without reading `find_active_job` closely enough to
 see it was a non-locking read). No further action needed; #3404 is the
 PR that was kept and merged.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 10, PR #3404, merged), preserved for history</summary>
@@ -20107,7 +20116,7 @@ iteration's commit" rule.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
@@ -20141,6 +20150,61 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-18 — Feature 08 (Membership pipeline, pass 11) — watchdog pickup, real delta (directory-account provisioning hooked into conversion), 0 fixed, 0 new findings; MP-22 still open
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3410 (Feature 07, Users & organizations, pass 10) had
+already merged clean, docs-only, closing row 07; rotation row 08 was the
+next `⬜`. (Note: this file's own pass count runs one ahead of its
+lap-mates — last recorded pass was 10, PR #3255, merged 2026-10-15 — so
+this iteration is that file's pass 11, not pass 10; each findings file's
+pass number is local to itself.)
+
+**Baseline:** `b260c519e` (PR #3255's merge, pass 10). **Head:** current
+`main`. 5 non-merge commits touch this feature's scope, all read in
+full — a new directory-account provisioning engine (Google Workspace,
+later generalized to also support Microsoft 365) hooked into
+`transfer_prospect`, the endpoint that converts an applicant to a
+member. Verified sound across all seven checklist dimensions: every
+`DirectoryAccountService` call passes `prospect.organization_id`
+explicitly, and the service's own `provision()` org-scopes and
+row-locks before mutating; the temporary directory-account password has
+no storage column at all (confirmed by reading the model, not its
+docstring) and is only ever a transient return value used to build the
+delivery email; it is never conflated with the member's own Logbook
+login password (which is separately generated and hashed before
+storage); the directory-account row is staged inside the conversion's
+own transaction but the actual provider API call runs only after that
+transaction commits, so a directory failure can never roll back the
+member conversion; no response ever carries the password; and
+`transfer_prospect` keeps its existing `members.manage`/
+`prospective_members.manage` gate with no new route added (53 routes,
+unchanged). A one-line fix within this window (`2008edbec`) correctly
+restricts provisioning to rows still `PENDING`, not already-failed ones
+— verified present in current code. Other hardening in that same commit
+(alias/group-linking rejection, suspend-by-immutable-id, etc.) lives in
+`directory_account_service.py`, outside this feature's declared scope —
+noted so a future MP-08 pass doesn't re-derive it. A separate,
+unrelated fix (`3284dc052`) closes a 500→400 gap on `PUT /pipelines/{id}`
+for a null aimed at a `NOT NULL` column — pure correctness, no
+auth/tenancy change. **MP-22**, the one standing flagged item, remains
+**OPEN**, unchanged — neither of its two sites touched by this window's
+delta. See `MP-08-membership-pipeline.md`'s **Pass 11** section for the
+full writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` clean; `validate_migrations.py --strict` passed (619
+revisions, single head); `check_route_permissions.py --strict` 272
+routes, 0 errors/warnings; scoped backend tests (`-k "membership or
+prospect or pipeline or election"`) 1,734 passed, 1 skipped
+(environment-only, `pywebpush`); frontend `npm run typecheck` and `npm
+run lint` both clean; scoped frontend suite
+(`prospective-members`) 287 passed across 34 files.
+
+Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
+screening, PHI).
 
 ### 2026-10-18 — Feature 07 (Users & organizations, pass 10) — watchdog pickup, real delta (PHI read auditing, new status-change-reason endpoints, undo-drop window hardening), 0 fixed, 0 new findings
 
