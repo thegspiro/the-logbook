@@ -13,6 +13,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE, MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE } from '../utils/moneyLimits';
 import { purchaseRequestService } from '../services/api';
 import { budgetOptionLabel, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { useFundOptions } from '../hooks/useFundOptions';
@@ -40,7 +41,11 @@ const purchaseRequestSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   description: z.string().max(2000).optional(),
   vendor: z.string().max(200).optional(),
-  estimatedAmount: z.number({ message: 'Amount is required' }).positive('Amount must be greater than zero'),
+  estimatedAmount: z
+    .number({ message: 'Amount is required' })
+    .positive('Amount must be greater than zero')
+    .min(MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE)
+    .max(MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE),
   priority: z.string().min(1, 'Priority is required'),
   budgetId: z.string().optional(),
   fundCampaignId: z.string().optional(),
@@ -347,7 +352,8 @@ const PurchaseRequestFormPage: React.FC = () => {
             <input
               type="number"
               step="0.01"
-              min="0"
+              min={MIN_MONEY_AMOUNT}
+              max={MAX_MONEY_AMOUNT}
               className={inputClass}
               placeholder="0.00"
               {...register('estimatedAmount', { valueAsNumber: true })}

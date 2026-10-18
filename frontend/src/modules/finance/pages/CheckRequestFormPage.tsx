@@ -15,6 +15,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
+import { MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE, MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE } from '../utils/moneyLimits';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { budgetOptionLabel, useRequestFormOptions } from '../hooks/useRequestFormOptions';
@@ -28,7 +29,11 @@ import { formatCurrency } from '@/utils/currencyFormatting';
 const checkRequestSchema = z.object({
   payeeName: z.string().min(1, 'Payee name is required').max(200),
   payeeAddress: z.string().max(500).optional(),
-  amount: z.number({ message: 'Amount is required' }).positive('Amount must be greater than zero'),
+  amount: z
+    .number({ message: 'Amount is required' })
+    .positive('Amount must be greater than zero')
+    .min(MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE)
+    .max(MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE),
   memo: z.string().max(500).optional(),
   purpose: z.string().max(2000).optional(),
   fiscalYearId: z.string().min(1, 'Fiscal year is required'),
@@ -184,6 +189,8 @@ const CheckRequestFormPage: React.FC = () => {
               id="amount"
               type="number"
               step="0.01"
+              min={MIN_MONEY_AMOUNT}
+              max={MAX_MONEY_AMOUNT}
               {...register('amount', { valueAsNumber: true })}
               className={inputClass}
             />

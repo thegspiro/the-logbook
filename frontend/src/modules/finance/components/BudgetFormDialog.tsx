@@ -19,6 +19,7 @@ import { budgetService } from '../services/api';
 import { useBudgetFormOptions, withCurrent } from '../hooks/useBudgetFormOptions';
 import { inheritedOwnerHint } from '../utils/budgetOwnership';
 import { categoryPathLabel, orderCategoryTree } from '../utils/budgetCategoryTree';
+import { MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE } from '../utils/moneyLimits';
 import type { Budget, BudgetCategory, BudgetCreatePayload, BudgetUpdatePayload, FiscalYear } from '../types';
 
 interface BudgetFormDialogProps {
@@ -90,6 +91,8 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
     const parsed = Number(amount);
     if (amount.trim() === '' || !Number.isFinite(parsed) || parsed < 0) {
       next.amount = 'Enter an amount of zero or more.';
+    } else if (parsed > MAX_MONEY_AMOUNT) {
+      next.amount = MAX_MONEY_MESSAGE;
     }
     setErrors(next);
     return Object.keys(next).length === 0 ? parsed.toFixed(2) : null;
@@ -246,6 +249,7 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
             type="number"
             inputMode="decimal"
             min="0"
+            max={MAX_MONEY_AMOUNT}
             step="0.01"
             className="form-input"
             value={amount}
