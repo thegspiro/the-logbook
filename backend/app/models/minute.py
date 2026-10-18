@@ -707,6 +707,9 @@ class MeetingMinutes(Base):
     adoption_seconded_by: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True
     )
+    # This set of minutes' own choice of which attendance statuses to name
+    # (all / present_excused / present); NULL follows the department default.
+    attendance_listing: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     adopting_minutes_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("meeting_minutes.id", ondelete="SET NULL"),

@@ -445,6 +445,31 @@ status, so existing callers keep working. A member can be listed once. A
 migration rewrote every stored entry; a legacy entry that was present stays
 `present`, so a quorum already recorded does not change.
 
+#### Who the minutes name _(2026-10-18)_
+
+The roll is always recorded in full: quorum, the attendance dashboard and the
+carry-forward read it. What a **reader** is shown is a separate, display-only
+choice, because some departments denote only who was present.
+
+| Listing           | Names                                                            |
+| ----------------- | ---------------------------------------------------------------- |
+| `all`             | Every status (what minutes have always shown)                    |
+| `present_excused` | Present, late, left early, guests, and excused members           |
+| `present`         | Present, late, left early and guests; excused and absent are not |
+
+A guest was in the room, so every listing names guests. The department sets the
+default under **Minutes → Roll listing** (`settings.minutes.attendance_listing`,
+`settings.manage`); unset, or any unrecognised value, reads as `all`, so an
+upgrade changes no printed or published copy. One set of minutes can choose for
+itself (`meeting_minutes.attendance_listing`, draft or rejected minutes only;
+`null` follows the department). The choice applies at display time to the
+minutes page, the PDF, the library copy and the public copy; the public copy
+leaves out the excused/absent **counts** too when they are not listed, rather
+than reporting a misleading zero. Editing the roll still shows everyone.
+`GET /{id}` returns `attendance_listing` (the override) and
+`attendance_listing_effective` (what is in force); `GET /settings` returns the
+department's value.
+
 `GET /{id}/attendance-suggestions` builds a starting roll without saving it:
 the active members, with those who checked in to the linked event marked
 present and checked-in outside guests added as guests; with no event, everyone
@@ -1009,6 +1034,7 @@ lists, block quotes and links — the set the server stores and the PDF can prin
 | `20261015_1652_9ce470b513ae_minutes_motions_vote_detail.py`         | `9ce470b513ae`        | `meeting_motions.votes_recused` / `threshold` / `roll_call` (idempotent; the downgrade drops them)                                    |
 | `20261015_1441_b90813f63e25_minutes_action_items_last_reminded.py`  | `b90813f63e25`        | `minutes_action_items.last_reminded_at` (idempotent; the downgrade drops it)                                                          |
 | `20261017_2305_89723c04ae94_minutes_public_copies.py`               | `89723c04ae94`        | `minutes_public_copies` table; `meeting_minutes.published_revision_version` / `published_at` (idempotent; the downgrade drops them)   |
+| `20261018_1723_6dc58d6997df_minutes_attendance_listing.py`          | `6dc58d6997df`        | `meeting_minutes.attendance_listing` (idempotent; the downgrade drops it)                                                             |
 | `20261015_1126_bb60bd43bede_minutes_motions_on_sections_and_.py`    | `bb60bd43bede`        | `meeting_motions.section_key`; `meeting_minutes.adoption_moved_by` / `adoption_seconded_by` (idempotent; the downgrade drops them)    |
 
 ### Migration Chain

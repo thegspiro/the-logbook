@@ -26,6 +26,7 @@ edited or reopened.
 
 from typing import Any, Dict, List, Optional
 
+from app.utils.minutes_attendance import is_listed, normalize_listing
 from app.utils.rich_text import (
     FORMAT_HTML,
     normalize_format,
@@ -59,7 +60,13 @@ def _number(value: Any) -> Optional[float]:
     return value
 
 
-def _attendance(attendees: List[Any]) -> Dict[str, Any]:
+def _attendance(attendees: List[Any], listing: str) -> Dict[str, Any]:
+    """Counts the department chose to show, plus the officers present.
+
+    ``attendees`` is already narrowed to the listing, so a status it does not
+    name would count as zero: that would read as "nobody was absent" rather
+    than "absences are not reported". Those keys are left out instead.
+    """
     counts = {"present": 0, "excused": 0, "absent": 0, "guests": 0}
     officers: List[Dict[str, str]] = []
     for entry in attendees:
@@ -78,7 +85,13 @@ def _attendance(attendees: List[Any]) -> Dict[str, Any]:
             # An officer is a member with a title who was in the room.
             if name and role:
                 officers.append({"name": name, "role": role})
-    return {**counts, "officers_present": officers}
+    shown = {
+        key: n
+        for key, n in counts.items()
+        if key in ("present", "guests")
+        or is_listed("excused" if key == "excused" else "absent", listing)
+    }
+    return {**shown, "officers_present": officers}
 
 
 def _section(entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -221,7 +234,10 @@ def narrow_for_public(data: Dict[str, Any]) -> Dict[str, Any]:
         "called_to_order": _text(data.get("called_to_order"), 50),
         "adjourned": _text(data.get("adjourned"), 50),
         "quorum_display": _text(data.get("quorum_display"), 200),
-        "attendance": _attendance(_list(data.get("attendees"))),
+        "attendance": _attendance(
+            _list(data.get("attendees")),
+            normalize_listing(data.get("attendance_listing")),
+        ),
         "sections": sections,
         "motions": [_motion(_dict(m)) for m in _list(data.get("motions"))],
         "action_items": [
