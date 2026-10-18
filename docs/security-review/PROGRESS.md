@@ -16,6 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this PR)** (branch `claude/friendly-babbage-jru09t`). PR #3384
+(Feature 31, Scheduled tasks, pass 7) merged 2026-10-17 ~22:26 UTC clean;
+already recorded in that PR's own history below.
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 32 (Locations & kiosk), pass 7. 0 fixes
+needed, 0 new findings: the real delta since pass 6 (`a4fb4b36`, PR #3077)
+is confined to five files — `admin_hub_service.py` gates the skills-testing
+attention item and metric behind the department's configured
+practical-skills method (`get_practical_skills_method`, org-scoped,
+Pitfall #19-shaped default) and fixes the "issued to members" metric to sum
+`InventoryService.get_members_inventory_summary` instead of an undercounting
+open-issuance-only query (read in full: every subquery and the base query
+filter their own `organization_id`); `location_service.py` only widens three
+parameter type signatures (`UUID` → `UUID | str`); `org_locks.py` adds one
+unrelated lock constant (`QUICKBOOKS_EXPORT`, Feature 05's); and
+`LocationsPage.tsx`/`RoomQRCodesPage.tsx` get accessibility fixes
+(`aria-expanded`/`aria-controls`, wired `<label htmlFor>`, `aria-disabled` in
+place of `disabled` so a confirmation dialog can return focus) plus a
+retry-safe station/room wizard save loop, a required-station-address client
+guard matching the page's own station/room grouping heuristic, and a switch
+to the shared `formCoercions` helper so an edit's cleared field sends an
+explicit `null` rather than being omitted (Pitfall #1's create-vs-update
+distinction). `locations.py`, `display.py`, `admin_hub.py`, both schema
+files, both model files, `nfc_tag_service.py`, `guest_check_in_service.py`,
+`LocationKioskPage.tsx`, and `AdminHubFrame.tsx` are all byte-identical to
+pass 6. Route surface re-enumerated: 15/15 unchanged. See
+`LOC7-32-locations-kiosk.md`. Row 32 → ✅ (pending this PR's merge); next is
+Feature 33 (Core infrastructure).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 7, PR #3384, merged), preserved for history</summary>
+
 **PR [#3384](https://github.com/thegspiro/the-logbook/pull/3384)** (branch
 `claude/friendly-babbage-isuxx8`). PR #3381 (Feature 30, Onboarding, pass 7)
 merged 2026-10-17 ~20:45 UTC clean; already recorded in that PR's own
@@ -44,6 +79,8 @@ re-confirmed unchanged. Two of the new runners' service modules
 already reviewed in INT-27 (Integrations) pass 7, which merged after both
 files' last edit — not re-read. See `CRON7-31-scheduled-tasks.md`. Row 31 → ✅
 (pending this PR's merge); next is Feature 32 (Locations & kiosk).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security audit & IP, pass 7, PR #3376, merged), preserved for history</summary>
@@ -19786,7 +19823,7 @@ here.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
