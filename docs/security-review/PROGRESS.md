@@ -16,9 +16,12 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3432 (Feature 11, Inventory, pass 10) merged 2026-10-19,
-docs-only — not independently recordable here beyond what follows. Rotation
-row 11 is already ✅; next is Feature 12 (Facilities).
+**PR [#3433](https://github.com/thegspiro/the-logbook/pull/3433)** (branch
+`claude/security-review-facilities`). PR #3432 (Feature 11, Inventory, pass 10) merged 2026-10-19, docs-only — not independently recordable here beyond
+what follows. This iteration (watchdog pickup, same conditions as above)
+reviewed Feature 12 (Facilities), pass 10 — 0 fixes, 0 new findings; FAC-30
+re-confirmed the only standing item. Rotation row 12 → ✅ (pending this PR's
+merge); next is Feature 13 (Apparatus & NFC).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 10, PR #3431, merged), preserved for history</summary>
