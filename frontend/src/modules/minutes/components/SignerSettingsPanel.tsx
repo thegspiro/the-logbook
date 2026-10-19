@@ -8,7 +8,7 @@
  * it and only a settings administrator changes it.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { organizationService, roleService } from '../../../services/api';
@@ -50,7 +50,13 @@ export const SignerSettingsPanel: React.FC<MinutesSettingsPanelProps> = ({ setti
   const [positions, setPositions] = useState<PositionOption[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // Rows are keyed by rowId, so re-seeding on mount would replace every input
+  // the first render just painted; only a later change from the server (after a
+  // save) re-seeds.
+  const seeded = useRef(settings.signature_slots);
   useEffect(() => {
+    if (seeded.current === settings.signature_slots) return;
+    seeded.current = settings.signature_slots;
     setRows(toRows(settings.signature_slots));
   }, [settings.signature_slots]);
 

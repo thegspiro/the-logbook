@@ -56,6 +56,21 @@ describe('SignerSettingsPanel', () => {
     expect(screen.getByDisplayValue('Presiding Officer')).toBeInTheDocument();
   });
 
+  it('never replaces an input it has painted just because it mounted', () => {
+    const removed: Node[] = [];
+    const watcher = new MutationObserver((records) => {
+      records.forEach((r) => removed.push(...Array.from(r.removedNodes)));
+    });
+    const host = document.body;
+    watcher.observe(host, { childList: true, subtree: true });
+
+    open();
+    watcher.takeRecords().forEach((r) => removed.push(...Array.from(r.removedNodes)));
+    watcher.disconnect();
+
+    expect(removed.filter((n) => n.nodeName === 'LI')).toEqual([]);
+  });
+
   it('lets a slot name a position, offering the department’s positions', async () => {
     const user = userEvent.setup();
     open();
