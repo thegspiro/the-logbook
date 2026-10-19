@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (recorded below once opened)** (branch
+**PR [#3444](https://github.com/thegspiro/the-logbook/pull/3444)** (branch
 `claude/security-review-training-extended`). PR #3440 (Feature 17, Training
 core, pass 9) merged 2026-10-19 — not independently recordable here beyond
 what follows. This iteration (watchdog pickup — no open PR's head branch
