@@ -288,7 +288,7 @@ const ExpenseReportFormPage: React.FC = () => {
         <button
           type="button"
           onClick={() => void navigate('/finance/expenses')}
-          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+          className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Expense Reports
@@ -305,7 +305,7 @@ const ExpenseReportFormPage: React.FC = () => {
       <button
         type="button"
         onClick={() => void navigate('/finance/expenses')}
-        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+        className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Expense Reports
@@ -326,30 +326,38 @@ const ExpenseReportFormPage: React.FC = () => {
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Report Details</h2>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className={labelClass}>Title *</label>
+              <label htmlFor="er-title" className={labelClass}>
+                Title *
+              </label>
               <input
                 type="text"
                 className={inputClass}
                 placeholder="Brief title for this expense report"
+                id="er-title"
                 {...register('title')}
               />
               {errors.title && <p className={errorClass}>{errors.title.message}</p>}
             </div>
 
             <div className="sm:col-span-2">
-              <label className={labelClass}>Description</label>
+              <label htmlFor="er-description" className={labelClass}>
+                Description
+              </label>
               <textarea
                 className={inputClass}
                 rows={3}
                 placeholder="Additional context for this expense report"
+                id="er-description"
                 {...register('description')}
               />
               {errors.description && <p className={errorClass}>{errors.description.message}</p>}
             </div>
 
             <div>
-              <label className={labelClass}>Fiscal Year *</label>
-              <select className={selectClass} {...register('fiscalYearId')}>
+              <label htmlFor="er-fiscalYearId" className={labelClass}>
+                Fiscal Year *
+              </label>
+              <select className={selectClass} id="er-fiscalYearId" {...register('fiscalYearId')}>
                 <option value="">Select fiscal year</option>
                 {fiscalYears.map((fy) => (
                   <option key={fy.id} value={fy.id}>
@@ -402,7 +410,7 @@ const ExpenseReportFormPage: React.FC = () => {
             <button
               type="button"
               onClick={addLineItem}
-              className="inline-flex items-center gap-1 rounded-md bg-red-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-900"
+              className="touch:min-h-11 inline-flex items-center gap-1 rounded-md bg-red-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-900"
             >
               <Plus className="h-3 w-3" />
               Add Item
@@ -424,30 +432,36 @@ const ExpenseReportFormPage: React.FC = () => {
                       type="button"
                       onClick={() => removeLineItem(index)}
                       aria-label={`Remove item ${String(index + 1)}`}
-                      className="text-red-500 hover:text-red-700"
+                      className="touch-target-phone text-red-500 hover:text-red-700"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div className="sm:col-span-2">
-                      <label className={labelClass}>Description *</label>
+                      <label htmlFor={`line-${String(index)}-description`} className={labelClass}>
+                        Description *
+                      </label>
                       <input
                         type="text"
                         className={inputClass}
+                        id={`line-${String(index)}-description`}
                         placeholder="What was purchased"
                         value={item.description}
                         onChange={(e) => updateLineItem(index, 'description', e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Amount *</label>
+                      <label htmlFor={`line-${String(index)}-amount`} className={labelClass}>
+                        Amount *
+                      </label>
                       <input
                         type="number"
                         step="0.01"
                         min={MIN_MONEY_AMOUNT}
                         max={MAX_MONEY_AMOUNT}
                         className={inputClass}
+                        id={`line-${String(index)}-amount`}
                         placeholder="0.00"
                         value={item.amount || ''}
                         onChange={(e) => updateLineItem(index, 'amount', parseFloat(e.target.value) || 0)}
@@ -476,9 +490,12 @@ const ExpenseReportFormPage: React.FC = () => {
                       )}
                     </div>
                     <div>
-                      <label className={labelClass}>Type *</label>
+                      <label htmlFor={`line-${String(index)}-type`} className={labelClass}>
+                        Type *
+                      </label>
                       <select
                         className={selectClass}
+                        id={`line-${String(index)}-type`}
                         value={item.expenseType}
                         onChange={(e) => updateLineItem(index, 'expenseType', e.target.value)}
                       >
@@ -490,10 +507,13 @@ const ExpenseReportFormPage: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className={labelClass}>Merchant</label>
+                      <label htmlFor={`line-${String(index)}-merchant`} className={labelClass}>
+                        Merchant
+                      </label>
                       <input
                         type="text"
                         className={inputClass}
+                        id={`line-${String(index)}-merchant`}
                         placeholder="Store or vendor"
                         value={item.merchant}
                         onChange={(e) => updateLineItem(index, 'merchant', e.target.value)}
@@ -522,14 +542,14 @@ const ExpenseReportFormPage: React.FC = () => {
           <button
             type="button"
             onClick={() => void navigate('/finance/expenses')}
-            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
+            className="touch:min-h-11 border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
+            className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
             {isSubmitting ? 'Saving...' : 'Create Report'}

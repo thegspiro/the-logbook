@@ -249,6 +249,11 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onMar
         ref={contentRef}
         id={contentId}
         role="region"
+        // A collapsed body is only squeezed to 0px, not removed, so its
+        // buttons stayed in the tab order: Tab landed on an invisible
+        // "Read Message" and "Pin". inert takes it out of focus and the
+        // accessibility tree until it is opened.
+        inert={!isExpanded}
         style={{ height: height !== undefined ? `${height}px` : 'auto' }}
         className="overflow-hidden transition-[height] duration-200 ease-in-out"
       >

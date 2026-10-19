@@ -225,3 +225,19 @@ describe('NotificationCard', () => {
     });
   });
 });
+
+// Workflow review W56: a collapsed card is squeezed to 0px, not removed, so
+// Tab used to land on its invisible "Read Message" and "Pin" buttons.
+describe('NotificationCard collapsed body', () => {
+  it("keeps a closed card's actions out of reach until it is opened", async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<NotificationCard notification={makeNotification()} onMarkRead={vi.fn()} onTogglePin={vi.fn()} />);
+
+    const body = screen.getByRole('region', { hidden: true });
+    expect(body).toHaveAttribute('inert');
+
+    await expand(user);
+
+    expect(body).not.toHaveAttribute('inert');
+  });
+});

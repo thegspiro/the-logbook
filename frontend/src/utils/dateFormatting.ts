@@ -514,6 +514,36 @@ export const addCalendarDays = (dateOnly: string | null | undefined, days: numbe
 };
 
 /**
+ * Shift a calendar date by whole months, staying in calendar space.
+ *
+ * A day past the end of the target month clamps to its last day, as a
+ * recurrence does: 31 January plus one month is 28 (or 29) February, not
+ * 3 March, which is what `setUTCMonth` alone gives.
+ *
+ * @param dateOnly - Calendar date "YYYY-MM-DD" (anything else is returned unchanged)
+ * @param months - Whole months to add; negative moves back
+ * @returns Calendar date "YYYY-MM-DD"
+ */
+export const addCalendarMonths = (dateOnly: string | null | undefined, months: number): string => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateOnly ?? '');
+  if (!match) return dateOnly ?? '';
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1 + months;
+  const day = Number(match[3]);
+  const targetYear = year + Math.floor(monthIndex / 12);
+  const targetMonth = ((monthIndex % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  const date = new Date(Date.UTC(targetYear, targetMonth, Math.min(day, lastDay)));
+  if (isNaN(date.getTime())) return dateOnly ?? '';
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'UTC',
+  }).format(date);
+};
+
+/**
  * Format a number for display (currency, counts, measurements).
  * Use this instead of `value.toLocaleString()` to avoid ESLint
  * conflicts with the date-method restrictions.

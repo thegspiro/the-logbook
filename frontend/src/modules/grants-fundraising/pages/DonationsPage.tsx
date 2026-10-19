@@ -1,13 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { DollarSign, Search, Filter, Receipt, Heart, Plus } from 'lucide-react';
 import { fundraisingService } from '../services/api';
-import type { Donation } from '../types';
+import type { Donation, Donor } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
-import { PAYMENT_METHOD_LABELS } from '../utils/labels';
+import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, donorDisplayName } from '../utils/labels';
+import { getErrorMessage } from '@/utils/errorHandling';
+
+// The API's own ceiling; the page totals what it loaded, so it loads as much as
+// it may (the same bound the pledges page uses).
+const LIST_LIMIT = 1000;
 
 const PAYMENT_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -21,17 +26,20 @@ const DonationsPage: React.FC = () => {
   const tz = useTimezone();
   const canManage = useAuthStore((st) => st.checkPermission('fundraising.manage'));
   const [donations, setDonations] = useState<Donation[]>([]);
+  const [donors, setDonors] = useState<Donor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
 
   useEffect(() => {
     const loadDonations = async () => {
       try {
-        const data = await fundraisingService.listDonations({});
+        const data = await fundraisingService.listDonations({ limit: LIST_LIMIT });
         setDonations(data);
-      } catch {
-        // Error handled silently
+      } catch (err: unknown) {
+        // W69: a failed load used to read "No donations recorded yet."
+        setLoadError(getErrorMessage(err, 'Could not load donations. Refresh the page to try again.'));
       } finally {
         setIsLoading(false);
       }
@@ -39,10 +47,30 @@ const DonationsPage: React.FC = () => {
     void loadDonations();
   }, []);
 
+  // A gift from a directory donor stores only donor_id; donor_name is for a
+  // walk-in. The donor list is already masked for a view-only caller (GF-8),
+  // so naming from it cannot reveal an anonymous donor (W69).
+  useEffect(() => {
+    let cancelled = false;
+    fundraisingService
+      .listDonors({ limit: LIST_LIMIT })
+      .then((list) => {
+        if (!cancelled) setDonors(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const donorNames = useMemo(() => new Map(donors.map((d) => [d.id, donorDisplayName(d)])), [donors]);
+  const nameOf = (d: Donation): string =>
+    d.isAnonymous ? 'Anonymous' : (d.donorName ?? (d.donorId ? donorNames.get(d.donorId) : undefined) ?? 'Unknown');
+
   const filtered = donations.filter((d: Donation) => {
     const matchesSearch =
       !search ||
-      (d.donorName ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      nameOf(d).toLowerCase().includes(search.toLowerCase()) ||
       (d.donorEmail ?? '').toLowerCase().includes(search.toLowerCase());
     const matchesMethod = !methodFilter || d.paymentMethod === methodFilter;
     return matchesSearch && matchesMethod;
@@ -100,7 +128,12 @@ const DonationsPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <Filter className="text-theme-text-secondary h-4 w-4" />
-          <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className="form-input">
+          <select
+            aria-label="Filter by payment method"
+            value={methodFilter}
+            onChange={(e) => setMethodFilter(e.target.value)}
+            className="form-input"
+          >
             <option value="">All Methods</option>
             {Object.entries(PAYMENT_METHOD_LABELS).map(([key, label]) => (
               <option key={key} value={key}>
@@ -111,13 +144,19 @@ const DonationsPage: React.FC = () => {
         </div>
       </div>
 
+      {loadError && (
+        <div role="alert" className="alert-danger text-sm">
+          {loadError}
+        </div>
+      )}
+
       {/* Donations Table */}
       <div className="card overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-red-500 border-t-transparent" />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : loadError ? null : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
             <Heart className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
             <p className="text-theme-text-secondary">
@@ -181,9 +220,7 @@ const DonationsPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <div>
-                        <span className="text-theme-text-primary font-medium">
-                          {donation.isAnonymous ? 'Anonymous' : (donation.donorName ?? 'Unknown')}
-                        </span>
+                        <span className="text-theme-text-primary font-medium">{nameOf(donation)}</span>
                         {donation.donorEmail && (
                           <p className="text-theme-text-secondary text-xs">{donation.donorEmail}</p>
                         )}
@@ -200,7 +237,7 @@ const DonationsPage: React.FC = () => {
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_STATUS_COLORS[donation.paymentStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                       >
-                        {donation.paymentStatus}
+                        {PAYMENT_STATUS_LABELS[donation.paymentStatus] ?? donation.paymentStatus}
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
