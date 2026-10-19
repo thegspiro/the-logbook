@@ -54,6 +54,7 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useScrollOverflow } from '../../hooks/useScrollOverflow';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
+import { isAdministrativeMember } from '../../utils/membership';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { offersSkillsTesting, usePracticalSkillsMethod } from '../../stores/practicalSkillsStore';
 import { useConnectedIntegrations } from '../../hooks/useConnectedIntegrations';
@@ -277,7 +278,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
       icon: Package,
       // One list with TopNavigation and the section strip on every Operations
       // page; the reasoning behind each row's gate lives there.
-      subItems: operationsNavItems(isModuleOn),
+      subItems: operationsNavItems(isModuleOn, isAdministrativeMember(undefined, currentUser?.membership_type)),
     },
     // When Facilities module is off, show a lightweight Locations page
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations', icon: MapPin } as NavItem]),
