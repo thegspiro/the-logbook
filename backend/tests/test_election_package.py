@@ -246,7 +246,7 @@ class TestPackageSend(TestPackageSetup):
             new_callable=AsyncMock,
             return_value=(1, 0),
         ) as mock_send:
-            success, message, sent_count = (
+            success, message, sent_count, unreached = (
                 await svc.generate_and_send_pre_meeting_package(
                     election_id=uuid.UUID(data["election_id"]),
                     organization_id=uuid.UUID(data["org_id"]),
@@ -263,6 +263,7 @@ class TestPackageSend(TestPackageSetup):
 
         assert success is True, message
         assert sent_count == 2, "Case-insensitive duplicates must collapse"
+        assert unreached == []
         kwargs = mock_send.call_args.kwargs
         # Sender on To, edited list on BCC
         assert kwargs["to_emails"] == ["pkgsec@test.com"]
@@ -273,17 +274,54 @@ class TestPackageSend(TestPackageSetup):
         assert kwargs["attachment_paths"], "Package PDF must be attached"
         assert "Annual Officer Election 2027" in kwargs["subject"]
 
+    async def test_large_list_sent_in_batches_with_unreached_reported(
+        self, db_session: AsyncSession, setup_package_election
+    ):
+        from app.services.election_service import BULK_EMAIL_MAX_RECIPIENTS
+
+        data = setup_package_election
+        svc = ElectionService(db_session)
+        recipients = [f"member{i}@dept.example" for i in range(120)]
+
+        # Three batches of at most 49 BCC; the provider refuses the second.
+        with patch(
+            "app.services.email_service.EmailService.send_email",
+            new_callable=AsyncMock,
+            side_effect=[(1, 0), (0, 1), (1, 0)],
+        ) as mock_send:
+            success, message, sent_count, unreached = (
+                await svc.generate_and_send_pre_meeting_package(
+                    election_id=uuid.UUID(data["election_id"]),
+                    organization_id=uuid.UUID(data["org_id"]),
+                    sent_by=uuid.UUID(data["secretary_id"]),
+                    recipient_emails=recipients,
+                )
+            )
+
+        calls = [c.kwargs for c in mock_send.await_args_list]
+        assert len(calls) == 3
+        for kwargs in calls:
+            assert kwargs["to_emails"] == ["pkgsec@test.com"]
+            assert len(kwargs["bcc_emails"]) + 1 <= BULK_EMAIL_MAX_RECIPIENTS
+            assert kwargs["attachment_paths"], "Every batch carries the PDF"
+        assert success is True
+        assert unreached == calls[1]["bcc_emails"]
+        assert sent_count == 120 - len(unreached)
+        assert f"{sent_count} of 120" in message
+
     async def test_empty_recipient_list_rejected(
         self, db_session: AsyncSession, setup_package_election
     ):
         data = setup_package_election
         svc = ElectionService(db_session)
 
-        success, message, sent_count = await svc.generate_and_send_pre_meeting_package(
-            election_id=uuid.UUID(data["election_id"]),
-            organization_id=uuid.UUID(data["org_id"]),
-            sent_by=uuid.UUID(data["secretary_id"]),
-            recipient_emails=["", "   "],
+        success, message, sent_count, _ = (
+            await svc.generate_and_send_pre_meeting_package(
+                election_id=uuid.UUID(data["election_id"]),
+                organization_id=uuid.UUID(data["org_id"]),
+                sent_by=uuid.UUID(data["secretary_id"]),
+                recipient_emails=["", "   "],
+            )
         )
         assert success is False
         assert sent_count == 0
@@ -299,7 +337,7 @@ class TestPackageSend(TestPackageSetup):
             new_callable=AsyncMock,
             return_value=(0, 1),
         ):
-            success, message, sent_count = (
+            success, message, sent_count, unreached = (
                 await svc.generate_and_send_pre_meeting_package(
                     election_id=uuid.UUID(data["election_id"]),
                     organization_id=uuid.UUID(data["org_id"]),
@@ -309,3 +347,4 @@ class TestPackageSend(TestPackageSetup):
             )
         assert success is False
         assert sent_count == 0
+        assert unreached == ["pkgvoter@test.com"]

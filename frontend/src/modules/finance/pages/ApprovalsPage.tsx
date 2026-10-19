@@ -178,7 +178,7 @@ const ManualDecisions: React.FC = () => {
                 <td data-label="Request" className="rwd-table-lead px-4 py-3 text-sm font-medium">
                   <Link
                     to={approvalEntityPath(row.entityType, row.entityId)}
-                    className="text-red-700 hover:underline dark:text-red-400"
+                    className="touch:inline-flex touch:min-h-11 touch:items-center text-red-700 hover:underline dark:text-red-400"
                   >
                     {row.entityTitle}
                   </Link>
@@ -317,7 +317,7 @@ const ApprovalsPage: React.FC = () => {
                     <td data-label="Request" className="rwd-table-lead px-4 py-3 text-sm font-medium">
                       <Link
                         to={approvalEntityPath(row.entityType, row.entityId)}
-                        className="text-red-700 hover:underline dark:text-red-400"
+                        className="touch:inline-flex touch:min-h-11 touch:items-center text-red-700 hover:underline dark:text-red-400"
                       >
                         {row.entityTitle}
                       </Link>

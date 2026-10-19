@@ -16,6 +16,7 @@ import { ComplianceDashboard } from '../components/ComplianceDashboard';
 import { SelfRecordedBadge } from '../components/SelfRecordedBadge';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { SCREENING_TYPE_LABELS, SCREENING_STATUS_LABELS, SCREENING_STATUS_COLORS } from '../types';
 import type {
   ScreeningRequirement,
@@ -283,14 +284,14 @@ export const MedicalScreeningPage: React.FC = () => {
                       setEditingRequirement(req);
                       setShowRequirementForm(true);
                     }}
-                    className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone transition-colors"
                     aria-label={`Edit ${req.name}`}
                   >
                     <Edit2 className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => setDeleteTarget({ type: 'requirement', id: req.id, name: req.name })}
-                    className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
+                    className="text-theme-text-muted touch-target-phone transition-colors hover:text-red-700 dark:hover:text-red-400"
                     aria-label={`Delete ${req.name}`}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -331,8 +332,10 @@ export const MedicalScreeningPage: React.FC = () => {
                       record.prospect_name ??
                       (record.user_id || record.prospect_id ? 'Unknown' : 'Not linked to a member or prospect')}
                     {record.provider_name ? ` — ${record.provider_name}` : ''}
-                    {record.scheduled_date ? ` — Scheduled: ${record.scheduled_date}` : ''}
-                    {record.expiration_date ? ` — Expires: ${record.expiration_date}` : ''}
+                    {/* Calendar dates, spelled out (W71: these printed as "2026-11-01"). */}
+                    {record.scheduled_date ? ` — Scheduled: ${formatCalendarDate(record.scheduled_date)}` : ''}
+                    {record.completed_date ? ` — Completed: ${formatCalendarDate(record.completed_date)}` : ''}
+                    {record.expiration_date ? ` — Expires: ${formatCalendarDate(record.expiration_date)}` : ''}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -341,8 +344,8 @@ export const MedicalScreeningPage: React.FC = () => {
                       setEditingRecord(record);
                       setShowRecordForm(true);
                     }}
-                    className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                    aria-label={`Edit ${SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type} record`}
+                    className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone transition-colors"
+                    aria-label={`Edit ${record.user_name ?? record.prospect_name ?? 'unlinked'} ${SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type} record`}
                   >
                     <Edit2 className="h-4 w-4" />
                   </button>
@@ -354,8 +357,8 @@ export const MedicalScreeningPage: React.FC = () => {
                         name: SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type,
                       })
                     }
-                    className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
-                    aria-label={`Delete ${SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type} record`}
+                    className="text-theme-text-muted touch-target-phone transition-colors hover:text-red-700 dark:hover:text-red-400"
+                    aria-label={`Delete ${record.user_name ?? record.prospect_name ?? 'unlinked'} ${SCREENING_TYPE_LABELS[record.screening_type] ?? record.screening_type} record`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

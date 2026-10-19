@@ -68,8 +68,9 @@ interface PublicContent {
   quorum_display: string | null;
   attendance: {
     present: number;
-    excused: number;
-    absent: number;
+    // Left out by the server when the department does not report them.
+    excused?: number;
+    absent?: number;
     guests: number;
     officers_present: { name: string; role: string }[];
   };
@@ -286,8 +287,8 @@ const MinutesDocument: React.FC<{ id: string }> = ({ id }) => {
         <h2 className={heading}>Attendance</h2>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat label="Present" value={a.present} />
-          <Stat label="Excused" value={a.excused} />
-          <Stat label="Absent" value={a.absent} />
+          {a.excused !== undefined && <Stat label="Excused" value={a.excused} />}
+          {a.absent !== undefined && <Stat label="Absent" value={a.absent} />}
           <Stat label="Guests" value={a.guests} />
         </div>
         {a.officers_present.length > 0 && (

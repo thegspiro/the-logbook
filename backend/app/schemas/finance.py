@@ -593,18 +593,20 @@ class BudgetRequestProposalOptionsResponse(BaseModel):
 
 
 class BudgetOptionResponse(BaseModel):
-    """A budget line as a request form offers it: a name and what is left.
+    """A budget line as a request form offers it: a name, and what is left
+    only for a caller allowed to see it.
 
     Deliberately not ``BudgetResponse``. ``finance.request`` holders see this
     and nothing more of the budget — the budgeted, spent and encumbered
-    figures stay behind ``finance.view``.
+    figures stay behind ``finance.view``, and so does ``amount_remaining``
+    unless the caller owns the line (it is None otherwise).
     """
 
     model_config = _RESPONSE_CONFIG
 
     id: str
     label: str
-    amount_remaining: Decimal
+    amount_remaining: Optional[Decimal] = None
 
 
 class FiscalYearOptionResponse(BaseModel):

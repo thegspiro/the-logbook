@@ -1,6 +1,127 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), pass 10 (PR pending)
+**Prefix:** `MP` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5), 2026-09-14 (pass 6), 2026-09-16 (pass 7), 2026-10-05 (pass 8), 2026-10-13 (pass 9), 2026-10-15 (pass 10, PR [#3255](https://github.com/thegspiro/the-logbook/pull/3255) — corrected here from the "PR pending" placeholder pass 10's own write-up left unresolved after merge), 2026-10-18 (pass 11) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5, plus #2406/#2408/#2413 follow-ups), [#2555](https://github.com/thegspiro/the-logbook/pull/2555) (pass 6), [#2605](https://github.com/thegspiro/the-logbook/pull/2605) (pass 7), [#2955](https://github.com/thegspiro/the-logbook/pull/2955) (pass 8), [#3149](https://github.com/thegspiro/the-logbook/pull/3149) (pass 9), [#3255](https://github.com/thegspiro/the-logbook/pull/3255) (pass 10)
+
+---
+
+## Pass 11 (2026-10-18) — watchdog pickup: real delta (directory-account provisioning hooked into conversion), 0 fixed, 0 new findings; MP-22 re-confirmed unchanged
+
+**Note on this file's pass numbering running one ahead of its lap-mates:**
+pass 10 (above) landed one day after features 00–07's own pass 9, so this
+file is a pass ahead of the sibling findings files reviewed in the same
+watchdog run (PUB-03/SF-04/FIN-05/ELEC-06/USR-07 are all on their own
+pass 10 as of this run). Each findings file's pass count is local to
+itself; nothing in the rotation mechanism requires them to stay numerically
+aligned across features, and Step 0 reads the truth from GitHub, not from
+matching numbers across files.
+
+**Scope.** Pass 10 merged as `b260c519e` (PR #3255). `git log --no-merges
+b260c519e..HEAD` over the declared scope (`membership_pipeline.py`,
+`membership_pipeline_service.py`, `models/membership_pipeline.py`,
+`schemas/membership_pipeline.py`, `api/prospect_privacy.py`, `utils/
+prospect_fields.py`, `frontend/src/modules/prospective-members/`): 5
+non-merge commits, all read in full. No prospect/pipeline-table migration
+landed this window (the one migration-touching commit in this range,
+`90b69e626`, only adds a new, unrelated `google_account_provisions` table
+— confirmed by reading the migration file, not just the commit message's
+mention of "prospective-members pipeline").
+
+**The real delta is a new directory-account provisioning engine
+(Google Workspace, later generalized to also support Microsoft 365)
+hooked into `transfer_prospect` — the endpoint that converts an applicant
+to a member — read in full across all five commits, not diffed
+piecemeal:**
+
+- **Org-scoping, throughout.** Every `DirectoryAccountService` call from
+  `membership_pipeline_service.py` passes `prospect.organization_id`
+  explicitly (`stage_for_transfer`, `provision`, `mark_credentials_sent`,
+  `send_credentials_email`); `DirectoryAccountService.provision()` itself
+  loads its row with `_load(organization_id, provision_id=..., lock=True)`
+  — org-scoped and row-locked (Pitfall #27's shape) before any mutation.
+- **The temporary directory-account password is never stored, confirmed
+  by reading the model, not just its docstring's claim.**
+  `models/directory_account.py` has no password column at all (its own
+  docstring says so: "The temporary password is never stored here: it
+  lives only in memory for the [delivery email]"). In the service,
+  `provision()` returns the plaintext password as a local return value
+  used only to build the welcome/credentials email, then discarded — it
+  is never assigned to any ORM attribute. This is a distinct credential
+  from the member's own Logbook login password (`temp_password`,
+  generated by `generate_temporary_password()` and immediately
+  `hash_password()`-ed before storage at `:4305-4310`) — the two are not
+  conflated anywhere in the flow.
+- **Commit-ordering and failure isolation, traced end to end.** The
+  directory-account row is staged _inside_ the same transaction as the
+  member conversion (so a crash between commit and the directory API
+  call leaves a resumable row, not data loss), but the actual
+  provider API call (`provision_directory_account()`) runs only _after_
+  that transaction commits — a directory failure can never roll back or
+  fail the member conversion itself. A caught exception during
+  provisioning explicitly rolls back and refreshes the `prospect` ORM
+  object so the welcome email that follows still has a valid, attached
+  instance to read.
+- **No response ever carries the password.** `result["google_account"]`
+  (the pipeline API response) and the retry/status field it mirrors on
+  the member's profile both expose only `provider`, `provider_name`,
+  `status`, and `email` — confirmed by reading the dict literal directly,
+  not inferred from the commit message.
+- **Permission gate unchanged.** `transfer_prospect` is still gated by
+  `require_permission("members.manage", "prospective_members.manage")` —
+  the provisioning hook rides on this already-gated endpoint; no new
+  route was added to `membership_pipeline.py` for it (confirmed: still
+  53 routes, unchanged from pass 10).
+- **A real, narrow fix landed within this window and is correctly in
+  place (`2008edbec`):** an earlier commit in this same window
+  (`90b69e626`) had provisioned even for a row staged as already-failed
+  (an address off the Workspace domain); `2008edbec` restricts
+  provisioning to `status == PENDING` rows only. Verified present in the
+  current code, not merely claimed by the commit.
+- **Other hardening in this same commit** (alias/group-linking rejection,
+  suspending by Google's immutable user id rather than a possibly-aliased
+  address, 409-recovery, restricting retries once a member has departed,
+  redacted error logging) **lives in `directory_account_service.py`**,
+  which is outside this feature's declared scope — that file belongs to
+  the Integrations rotation entry and will get its own dedicated pass
+  there. Noted here only so a future MP-08 pass does not re-derive it as
+  this feature's own finding.
+- **`3284dc052` — pure correctness fix, no security implication.**
+  `PUT /pipelines/{id}` was the one update handler with no
+  `except ValueError`, so `apply_updates` raising on a null aimed at a
+  `NOT NULL` column (`name`, `public_show_future_stages`) escaped as a
+  500; now caught and returned as 400 via `safe_error_detail`. No
+  auth/tenancy change.
+
+**All 53 routes re-enumerated** (unchanged from pass 10); no new
+`.ilike()`/`.like()` without `escape=`, no raw `csv.writer`, no
+`window.confirm`/`alert`/`prompt` introduced this window (grepped the
+five commits directly). The router-wide `block_self_prospect_access`
+dependency is unchanged.
+
+**Standing item re-verified, unchanged (neither site touched by this
+window's delta):**
+
+- **MP-22** (a document delete, or the purge rewrite sharing the same
+  helper, can lose a file on disk if the commit fails after a successful
+  `os.remove`) — `delete_prospect_document`
+  (`membership_pipeline_service.py:6916`) and `_delete_inactive_prospects`
+  (`:6444`) are both outside every hunk this window's five commits touch.
+  Owner-accepted tradeoff, unchanged.
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.**
+
+### Completion gate (pass 11)
+
+| Check                                                                  | Result                                                     |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                          | ✅ 0 violations                                            |
+| `black --check app/ tests/ alembic/`                                   | ✅ 2438 files unchanged                                    |
+| `isort --check-only app/ tests/ alembic/`                              | ✅ clean                                                   |
+| `python3 scripts/validate_migrations.py --strict`                      | ✅ 619 revisions, single head `89723c04ae94`               |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)      | ✅ 272 routes, 0 errors, 0 warnings                        |
+| `pytest tests/ -q -k "membership or prospect or pipeline or election"` | ✅ 1,734 passed, 1 skipped (environment-only, `pywebpush`) |
+| `frontend: npm run typecheck`                                          | ✅ clean                                                   |
+| `frontend: npm run lint`                                               | ✅ clean                                                   |
+| `npx vitest run src/modules/prospective-members`                       | ✅ 287 passed (34 files)                                   |
 
 ---
 

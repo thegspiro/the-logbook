@@ -241,6 +241,10 @@ class MedicalScreeningService:
         # IntegrityError instead of the clean 400 apply_updates raises.
         apply_updates(requirement, data.model_dump(exclude_unset=True))
         await self.db.flush()
+        # W71: as on create — `onupdate` expires updated_at at the flush, and the
+        # response model's lazy read raised MissingGreenlet. The endpoint has
+        # already committed, so the officer was told a saved edit had failed.
+        await self.db.refresh(requirement)
         return requirement
 
     async def delete_requirement(
@@ -445,6 +449,7 @@ class MedicalScreeningService:
         if reviewed_by and "status" in changes:
             record.self_recorded = _is_self(reviewed_by, record.user_id)
         await self.db.flush()
+        await self.db.refresh(record)  # see update_requirement (W71)
         return record
 
     async def try_advance_pipeline_stage(

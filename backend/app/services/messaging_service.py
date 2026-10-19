@@ -25,8 +25,20 @@ from app.models.notification import (
 from app.models.user import Role, User, UserStatus
 from app.services.message_delivery_service import THROTTLED_REASON
 from app.utils.member_names import format_display_name
+from app.utils.membership import MemberStatus
 from app.utils.sql_results import rows_affected
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+# Statuses spelled the same on the account and on the membership ladder (see
+# the module docstring of app/models/user.py). A department means the ladder
+# when it targets "probationary members" or "retired members": a new member is
+# added at ladder status probationary with an active account, so matching the
+# account status alone missed every probie added the usual way. The account
+# status still counts, so a member an admin set to probationary through
+# "Change status" keeps receiving these messages.
+LADDER_TARGETABLE_STATUSES = frozenset(
+    {MemberStatus.PROBATIONARY, MemberStatus.RETIRED}
+)
 
 
 def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
@@ -46,9 +58,9 @@ def _validate_expiry(
         return
     if scheduled_at is not None:
         if expires_at <= scheduled_at:
-            raise ValueError("expires_at must be later than scheduled_at")
+            raise ValueError("The expiry time must be later than the scheduled time")
     elif expires_at <= now:
-        raise ValueError("expires_at must be in the future for a published message")
+        raise ValueError("The expiry time must be in the future")
 
 
 # Reasons the delivery code itself writes, shown as they are. Anything else
@@ -693,14 +705,17 @@ class MessagingService:
         return added
 
     @staticmethod
-    def _user_targeting_context(user) -> Tuple[List[str], List[str], str]:
-        """Extract the (role_ids, role_names, status) a user is matched on."""
+    def _user_targeting_context(
+        user,
+    ) -> Tuple[List[str], List[str], str, Optional[str]]:
+        """Extract the (role_ids, role_names, status, member_status) a user is
+        matched on."""
         role_ids = [str(r.id) for r in user.roles]
         role_names = [r.name for r in user.roles]
         status = (
             user.status.value if hasattr(user.status, "value") else str(user.status)
         )
-        return role_ids, role_names, status
+        return role_ids, role_names, status, user.member_status
 
     async def _get_targeting_user(
         self, organization_id: str, user_id: str
@@ -724,8 +739,12 @@ class MessagingService:
         user_role_ids: List[str],
         user_role_names: List[str],
         user_status: str,
+        member_status: Optional[str] = None,
     ) -> bool:
         """Check if a message targets the given user.
+
+        Status targeting matches the account status, and for the statuses in
+        ``LADDER_TARGETABLE_STATUSES`` the membership-ladder status as well.
 
         Role targeting matches on role *id* (rename-safe). A role-name fallback
         is retained so messages authored before role-id targeting — or entries
@@ -747,7 +766,12 @@ class MessagingService:
             )
         elif tt == "statuses":
             target_statuses = message.target_statuses or []
-            return user_status in target_statuses
+            if user_status in target_statuses:
+                return True
+            return (
+                member_status in LADDER_TARGETABLE_STATUSES
+                and member_status in target_statuses
+            )
         elif tt == "members":
             target_ids = message.target_member_ids or []
             return user_id in target_ids
@@ -999,8 +1023,12 @@ class MessagingService:
         users = users_result.scalars().all()
         targeted = []
         for u in users:
-            role_ids, role_names, status = self._user_targeting_context(u)
-            if self._is_targeted(message, str(u.id), role_ids, role_names, status):
+            role_ids, role_names, status, member_status = self._user_targeting_context(
+                u
+            )
+            if self._is_targeted(
+                message, str(u.id), role_ids, role_names, status, member_status
+            ):
                 targeted.append(u)
         return targeted
 

@@ -22,7 +22,7 @@ export const buildSchedulingSetupSteps = (summary: SchedulingSummary): Schedulin
     id: 'template',
     title: 'Create a shift template',
     description:
-      'A template is a reusable shift: its hours, the seats it needs filled (officer, driver, firefighter) and the vehicle it staffs. Every shift you schedule starts from one.',
+      'A template is a reusable shift: its hours, the seats it needs filled (officer, driver, firefighter) and the type of vehicle it staffs (you pick the actual vehicle on each shift). Every shift you schedule starts from one.',
     href: '/scheduling/admin/planning/templates',
     action: 'Open Shift Templates',
     done: summary.active_templates > 0,

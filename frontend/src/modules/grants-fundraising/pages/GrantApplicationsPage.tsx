@@ -40,6 +40,8 @@ import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { Pagination } from '@/components/ux/Pagination';
 import { DEFAULT_PAGE_SIZE } from '@/constants/config';
+import { useMemberNames } from '../hooks/useMemberNames';
+import type { MemberNames } from '../hooks/useMemberNames';
 
 // =============================================================================
 // Constants
@@ -135,9 +137,10 @@ function initialStatusFilter(params: URLSearchParams): string {
 interface PipelineCardProps {
   application: GrantApplication;
   timezone: string;
+  nameOf: MemberNames['nameOf'];
 }
 
-const PipelineCard: React.FC<PipelineCardProps> = ({ application, timezone }) => {
+const PipelineCard: React.FC<PipelineCardProps> = ({ application, timezone, nameOf }) => {
   const navigate = useNavigate();
 
   const deadlineDate = application.applicationDeadline ? new Date(application.applicationDeadline) : null;
@@ -172,7 +175,7 @@ const PipelineCard: React.FC<PipelineCardProps> = ({ application, timezone }) =>
       </div>
 
       {application.assignedTo && (
-        <p className="text-theme-text-secondary mt-2 truncate text-xs">{application.assignedTo}</p>
+        <p className="text-theme-text-secondary mt-2 truncate text-xs">{nameOf(application.assignedTo)}</p>
       )}
     </button>
   );
@@ -186,6 +189,7 @@ interface PipelineColumnProps {
   status: ApplicationStatus;
   filters: ListFilters;
   timezone: string;
+  nameOf: MemberNames['nameOf'];
   onTotal: (status: ApplicationStatus, total: number) => void;
 }
 
@@ -199,7 +203,7 @@ interface PipelineColumnProps {
  * comes back empty rather than this page re-deriving which statuses a group
  * holds.
  */
-const PipelineColumn: React.FC<PipelineColumnProps> = ({ status, filters, timezone, onTotal }) => {
+const PipelineColumn: React.FC<PipelineColumnProps> = ({ status, filters, timezone, nameOf, onTotal }) => {
   const colorClasses = APPLICATION_STATUS_COLORS[status] ?? 'bg-theme-surface-secondary text-theme-text-secondary';
   const [items, setItems] = useState<GrantApplication[]>([]);
   const [total, setTotal] = useState(0);
@@ -269,7 +273,7 @@ const PipelineColumn: React.FC<PipelineColumnProps> = ({ status, filters, timezo
         ) : items.length === 0 && !isLoading ? (
           <p className="text-theme-text-secondary py-4 text-center text-xs">No applications</p>
         ) : (
-          items.map((app) => <PipelineCard key={app.id} application={app} timezone={timezone} />)
+          items.map((app) => <PipelineCard key={app.id} application={app} timezone={timezone} nameOf={nameOf} />)
         )}
         {isLoading && (
           <div className="flex justify-center py-2">
@@ -336,10 +340,11 @@ const SortableHeader: React.FC<SortableHeaderProps> = ({ label, field, currentSo
 interface ApplicationsTableProps {
   filters: ListFilters;
   timezone: string;
+  nameOf: MemberNames['nameOf'];
   emptyState: React.ReactNode;
 }
 
-const ApplicationsTable: React.FC<ApplicationsTableProps> = ({ filters, timezone, emptyState }) => {
+const ApplicationsTable: React.FC<ApplicationsTableProps> = ({ filters, timezone, nameOf, emptyState }) => {
   const navigate = useNavigate();
   const [sortField, setSortField] = useState<SortField>('applicationDeadline');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -513,7 +518,7 @@ const ApplicationsTable: React.FC<ApplicationsTableProps> = ({ filters, timezone
                   </span>
                 </td>
                 <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                  {app.assignedTo ?? '--'}
+                  {nameOf(app.assignedTo)}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <ExternalLink className="text-theme-text-secondary h-4 w-4" />
@@ -540,6 +545,7 @@ const ApplicationsTable: React.FC<ApplicationsTableProps> = ({ filters, timezone
 
 export const GrantApplicationsPage: React.FC = () => {
   const tz = useTimezone();
+  const { nameOf } = useMemberNames();
   const [searchParams] = useSearchParams();
 
   const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
@@ -614,7 +620,7 @@ export const GrantApplicationsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setViewMode('pipeline')}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`touch:min-h-11 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   viewMode === 'pipeline'
                     ? 'bg-red-800 text-white'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -626,7 +632,7 @@ export const GrantApplicationsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setViewMode('table')}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`touch:min-h-11 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   viewMode === 'table'
                     ? 'bg-red-800 text-white'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -640,7 +646,7 @@ export const GrantApplicationsPage: React.FC = () => {
             {/* New Application */}
             <Link
               to="/grants/applications/new"
-              className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+              className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
             >
               <Plus className="h-4 w-4" />
               New Application
@@ -728,6 +734,7 @@ export const GrantApplicationsPage: React.FC = () => {
                     status={status}
                     filters={filters}
                     timezone={tz}
+                    nameOf={nameOf}
                     onTotal={handleColumnTotal}
                   />
                 ))}
@@ -738,7 +745,7 @@ export const GrantApplicationsPage: React.FC = () => {
           /* ================================================================ */
           /* Table View                                                       */
           /* ================================================================ */
-          <ApplicationsTable filters={filters} timezone={tz} emptyState={emptyState} />
+          <ApplicationsTable filters={filters} timezone={tz} nameOf={nameOf} emptyState={emptyState} />
         )}
       </div>
     </div>

@@ -31,7 +31,8 @@ from app.models.minute import (
     MinutesStatus,
 )
 from app.models.user import Organization
-from app.utils.minutes_attendance import derive_status
+from app.utils.minutes_attendance import derive_status, effective_listing, is_listed
+from app.utils.minutes_settings import attendance_listing_in
 from app.utils.motion_votes import vote_summary
 from app.utils.rich_text import (
     FORMAT_HTML,
@@ -256,7 +257,13 @@ class DocumentService:
             .scalars()
             .all()
         )
-        html = self._generate_minutes_html(minutes, tz_name, filed_results, sessions)
+        listing = effective_listing(
+            minutes.attendance_listing,
+            attendance_listing_in(org.settings if org else None),
+        )
+        html = self._generate_minutes_html(
+            minutes, tz_name, filed_results, sessions, listing
+        )
         version = await self._current_revision_version(minutes.id, organization_id)
         note = self._replacement_note(minutes, tz_name)
         if note:
@@ -571,8 +578,13 @@ class DocumentService:
         tz_name: Optional[str] = None,
         election_results: Sequence[MinutesElectionResult] = (),
         closed_sessions: Sequence[MinutesClosedSession] = (),
+        attendance_listing: str = "all",
     ) -> str:
-        """Generate formatted HTML for published meeting minutes"""
+        """Generate formatted HTML for published meeting minutes.
+
+        ``attendance_listing`` is the listing already in force for these
+        minutes; the roll is recorded in full and only what it names is shown.
+        """
         header = minutes.get_effective_header() or {}
         footer = minutes.get_effective_footer() or {}
 
@@ -663,7 +675,8 @@ class DocumentService:
             # an excused member and a guest under Absent.
             by_status: dict = {}
             for entry in minutes.attendees:
-                by_status.setdefault(derive_status(entry), []).append(entry)
+                if is_listed(derive_status(entry), attendance_listing):
+                    by_status.setdefault(derive_status(entry), []).append(entry)
             in_room = [
                 (e, status)
                 for status in ("present", "late", "left_early")

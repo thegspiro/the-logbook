@@ -125,6 +125,11 @@ export REDIS_DB="$WR_REDIS_DB"
 export ENVIRONMENT=development
 export DEBUG=false
 export ALLOWED_ORIGINS="http://localhost:$WR_FRONTEND_PORT,http://127.0.0.1:$WR_FRONTEND_PORT"
+# The review install has no ClamAV, and uploads fail closed without one (503
+# "Files cannot be checked for malware right now", seen in W64), so no
+# receipt, photo or document could be attached. Run a scanner and set
+# WR_CLAMAV_ENABLED=true (with CLAMAV_HOST) to review with scanning on.
+export CLAMAV_ENABLED="${WR_CLAMAV_ENABLED:-false}"
 
 # Both steps, in this order, as the session-start hook and production do:
 # some tables are only ever built by create_all, which repair_schema performs.

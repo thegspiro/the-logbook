@@ -80,7 +80,7 @@ describe('the purchase request form', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('This is $20.00 more than the fund has left.');
 
-    await user.click(screen.getByRole('button', { name: /Create Request/ }));
+    await user.click(screen.getByRole('button', { name: /Save Draft/ }));
 
     await waitFor(() =>
       expect(createPurchaseRequest).toHaveBeenCalledWith(
@@ -100,7 +100,7 @@ describe('the purchase request form', () => {
     await user.clear(amount);
     await user.type(amount, '40');
     await screen.findByLabelText('Restricted fund');
-    await user.click(screen.getByRole('button', { name: /Create Request/ }));
+    await user.click(screen.getByRole('button', { name: /Save Draft/ }));
 
     await waitFor(() => expect(createPurchaseRequest).toHaveBeenCalled());
     expect(createPurchaseRequest.mock.calls[0]?.[0]).not.toHaveProperty('fundCampaignId');

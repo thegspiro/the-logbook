@@ -566,13 +566,15 @@ export interface FinanceNamedOption {
 
 /**
  * A budget line as the request forms offer it — `GET /finance/budgets/options`.
- * All a member holding only `finance.request` sees of a budget.
+ * All a member holding only `finance.request` sees of a budget: the name, and
+ * no amount. `amountRemaining` is null unless the server allows the caller to
+ * see it (`finance.view` / `finance.manage`, or the line's owner).
  */
 export interface BudgetOption {
   id: string;
   /** Category name, plus the station when the line has one. */
   label: string;
-  amountRemaining: MonetaryAmount;
+  amountRemaining: MonetaryAmount | null;
 }
 
 /** An active or draft fiscal year — `GET /finance/fiscal-years/options`. */
@@ -858,6 +860,8 @@ export const ApproverCoverageProblem = {
   NOT_FOUND: 'not_found',
   NO_ACTIVE_MEMBERS: 'no_active_members',
   INVALID_EMAIL: 'invalid_email',
+  /** Someone fills the step, but none of them holds finance.approve. */
+  NO_APPROVE_PERMISSION: 'no_approve_permission',
 } as const;
 export type ApproverCoverageProblem = (typeof ApproverCoverageProblem)[keyof typeof ApproverCoverageProblem];
 

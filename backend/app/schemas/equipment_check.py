@@ -15,6 +15,7 @@ from pydantic.alias_generators import to_camel
 from app.schemas.base import UTCResponseBase
 from app.utils.check_types import (
     CANONICAL_CHECK_TYPES,
+    EXPIRY,
     LEGACY_CHECK_TYPES,
     STRUCTURAL_TYPES,
     normalize_check_type,
@@ -30,8 +31,9 @@ from app.utils.check_types import (
 # unrecognised one reached the crew as a raw token ("presence" under every item,
 # because that is what the value said). Validated on the way in instead.
 #
-# Since 2026-08-23 the stored form is one of the four canonical answer shapes
-# (level / function / count / expiry) plus the two structural rows. The legacy
+# Since 2026-08-23 the stored form is one of the canonical answer shapes
+# (level / function / count / expiry, and since 2026-10-18 presence) plus the
+# two structural rows. The legacy
 # names are still *accepted* — an integration or an older client may send one,
 # and rejecting it would break a caller over a rename it never asked for — but
 # they are normalized before they are stored, so nothing new lands in the old
@@ -116,6 +118,15 @@ class CheckTemplateItemCreate(BaseModel):
     def count_unit_is_label(cls, value: Optional[str]) -> Optional[str]:
         return _normalize_count_unit(value)
 
+    @model_validator(mode="after")
+    def date_lines_carry_a_date(self) -> "CheckTemplateItemCreate":
+        # A Date line is a date on record; with expiration off it has nothing
+        # to confirm, and the check form drew Pass/Fail beside an empty date.
+        # Other types keep the checkbox, so a count of IV bags can carry one.
+        if self.check_type == EXPIRY:
+            self.has_expiration = True
+        return self
+
 
 class CheckTemplateItemBulkCreate(BaseModel):
     """Create several items atomically, with retry protection."""
@@ -184,6 +195,16 @@ class CheckTemplateItemUpdate(BaseModel):
     def count_unit_is_label(cls, value: Optional[str]) -> Optional[str]:
         return _normalize_count_unit(value)
 
+    @model_validator(mode="after")
+    def date_lines_carry_a_date(self) -> "CheckTemplateItemUpdate":
+        # Assigned rather than left to the service so the field counts as set
+        # and survives the endpoint's exclude_unset dump. An update that only
+        # turns expiration off on an existing Date line is settled by
+        # EquipmentCheckService.update_item, which can see the stored type.
+        if self.check_type == EXPIRY:
+            self.has_expiration = True
+        return self
+
 
 class CheckTemplateItemResponse(UTCResponseBase):
     """Response schema for a check template item."""
@@ -235,6 +256,32 @@ class CheckTemplateItemResponse(UTCResponseBase):
 # ============================================
 
 
+def _check_inline_shape(
+    is_inline: Optional[bool],
+    *,
+    is_header: Optional[bool],
+    is_sealed: Optional[bool],
+    parent_compartment_id: Optional[str],
+) -> None:
+    """Refuse an inline group that is also a heading, a seal, or nested.
+
+    An inline group is items placed directly on the checklist. A seal is a
+    claim about one closed bag, a section header carries no items, and nesting
+    would put the "loose" items inside a location after all — each combination
+    describes something other than what the flag means.
+    """
+    if not is_inline:
+        return
+    if is_header:
+        raise ValueError("Items placed directly on a checklist cannot be a section")
+    if is_sealed:
+        raise ValueError("Items placed directly on a checklist cannot be sealed")
+    if parent_compartment_id:
+        raise ValueError(
+            "Items placed directly on a checklist cannot sit inside a location"
+        )
+
+
 class CheckTemplateCompartmentCreate(BaseModel):
     """Schema for creating a compartment."""
 
@@ -245,8 +292,23 @@ class CheckTemplateCompartmentCreate(BaseModel):
     is_header: bool = False
     container_type: str = Field("compartment", max_length=50)
     is_sealed: bool = False
+    is_inline: bool = False
     parent_compartment_id: Optional[str] = None
     items: Optional[List[CheckTemplateItemCreate]] = None
+
+    @model_validator(mode="after")
+    def inline_group_shape(self) -> "CheckTemplateCompartmentCreate":
+        _check_inline_shape(
+            self.is_inline,
+            is_header=self.is_header,
+            is_sealed=self.is_sealed,
+            parent_compartment_id=self.parent_compartment_id,
+        )
+        if self.is_inline:
+            # Headingless by definition. A name sent anyway would surface in
+            # result snapshots and reports as a location nobody can see.
+            self.name = ""
+        return self
 
 
 class CompartmentReplaceRequest(BaseModel):
@@ -275,6 +337,7 @@ class CheckTemplateCompartmentUpdate(BaseModel):
     is_header: Optional[bool] = None
     container_type: Optional[str] = Field(None, max_length=50)
     is_sealed: Optional[bool] = None
+    is_inline: Optional[bool] = None
     parent_compartment_id: Optional[str] = None
 
 
@@ -302,6 +365,7 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
     is_header: bool = False
     container_type: str = "compartment"
     is_sealed: bool = False
+    is_inline: bool = False
     parent_compartment_id: Optional[str] = None
     items: List[CheckTemplateItemResponse] = []
     created_at: Optional[datetime] = None
@@ -327,6 +391,14 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
     @classmethod
     def coerce_is_sealed(cls, v: object) -> bool:
         """Rows created before the is_sealed column was added store NULL."""
+        if v is None:
+            return False
+        return bool(v)
+
+    @field_validator("is_inline", mode="before")
+    @classmethod
+    def coerce_is_inline(cls, v: object) -> bool:
+        """A row read before repair_schema adds the column has no value."""
         if v is None:
             return False
         return bool(v)
@@ -426,9 +498,11 @@ class CheckItemResultSubmit(BaseModel):
     lot_number: Optional[str] = Field(None, max_length=100)
     serial_found: Optional[str] = Field(None, max_length=100)
     lot_found: Optional[str] = Field(None, max_length=100)
-    # Expiration read off a unit replaced during this check. This is retained
-    # as check evidence; authoritative template dates change through inventory
-    # lot swaps rather than ordinary check submissions.
+    # Expiration read off a unit replaced during this check, with its lot.
+    # Kept as evidence on the result. On a Date line that is not linked to
+    # inventory it also becomes the line's date (change-logged), so the line
+    # stops failing; a linked line's date changes only through a lot swap, so
+    # there it is dropped. A date already past is refused.
     expiration_found: Optional[date] = None
     photo_urls: Optional[List[str]] = None
     # Advisory only: the server recomputes expiry from the template item so a
@@ -586,6 +660,9 @@ class CheckItemHistory(UTCResponseBase):
     shift_id: str
     shift_date: Optional[date] = None
     status: str
+    # The type the line had when it was answered, so a Present line's
+    # pass / fail can read as present / absent.
+    check_type: Optional[str] = None
     quantity_found: Optional[int] = None
     level_reading: Optional[float] = None
     serial_number: Optional[str] = None

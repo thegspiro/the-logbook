@@ -446,7 +446,10 @@ const DuesManagementPage: React.FC = () => {
                       >
                         {md.paidDate ? formatDate(md.paidDate, tz) : '--'}
                       </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {/* data-label="" keeps the actions on a phone: the reflowed
+                          table hides a cell with no data-label, which left a
+                          treasurer no way to record a payment from one. */}
+                      <td data-label="" className="px-4 py-3 text-right whitespace-nowrap">
                         <div className="flex flex-wrap justify-end gap-2">
                           {canManage && OWING.has(md.status) && (
                             <button

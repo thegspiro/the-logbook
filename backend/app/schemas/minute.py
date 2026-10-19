@@ -623,6 +623,13 @@ class MinutesUpdate(BaseModel):
     quorum_met: Optional[bool] = None
     quorum_count: Optional[int] = Field(None, ge=0)
     event_id: Optional[str] = None
+    attendance_listing: Optional[Literal["all", "present_excused", "present"]] = Field(
+        None,
+        description=(
+            "Which attendance statuses these minutes name; null follows "
+            "the department default"
+        ),
+    )
     sections: Optional[List[SectionEntry]] = Field(
         None, description="Full sections replacement"
     )
@@ -657,6 +664,9 @@ class MinutesResponse(UTCResponseBase):
     called_to_order_at: Optional[datetime] = None
     adjourned_at: Optional[datetime] = None
     attendees: Optional[List[AttendeeEntry]] = None
+    # This set's own choice (null = department default) and what is in force.
+    attendance_listing: Optional[str] = None
+    attendance_listing_effective: str = "all"
     quorum_met: Optional[bool] = None
     quorum_count: Optional[int] = None
     meeting_id: Optional[str] = None
@@ -806,6 +816,7 @@ class MinutesReminderSettingsResponse(BaseModel):
     # work out the three-switch rule itself.
     executive_effective_library: bool = False
     executive_effective_public: bool = False
+    attendance_listing: Literal["all", "present_excused", "present"] = "all"
 
 
 class PublishingStatusResponse(BaseModel):
