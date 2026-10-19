@@ -7,6 +7,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import type { OperationsNavItem } from '../layout/operationsNavigation';
 import { activeOperationsSection, operationsNavItems, visibleOperationsNavItems } from '../layout/operationsNavigation';
+import { isAdministrativeMember } from '../../utils/membership';
 
 const DENY_ALL = (): boolean => false;
 
@@ -26,8 +27,12 @@ function useOperationsSections() {
   const storePredicate: unknown = useAuthStore((state) => state.checkPermission);
   const checkPermission =
     typeof storePredicate === 'function' ? (storePredicate as (permission: string) => boolean) : DENY_ALL;
+  // Read as unknown for the same reason: a suite that stubs the store without
+  // honouring the selector hands back its whole stub, which is not a string.
+  const membershipType: unknown = useAuthStore((state) => state.user?.membership_type);
+  const isAdministrative = typeof membershipType === 'string' && isAdministrativeMember(undefined, membershipType);
   const { isModuleOn } = useEnabledModules();
-  const items = visibleOperationsNavItems(operationsNavItems(isModuleOn), checkPermission);
+  const items = visibleOperationsNavItems(operationsNavItems(isModuleOn, isAdministrative), checkPermission);
   return { pathname, items, active: activeOperationsSection(items, pathname) };
 }
 

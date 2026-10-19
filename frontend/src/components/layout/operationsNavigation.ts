@@ -21,7 +21,23 @@ export interface OperationsNavItem {
   anyPermission?: string[];
 }
 
-export function operationsNavItems(isModuleOn: (module: string) => boolean): OperationsNavItem[] {
+/**
+ * What opens the crew rows below to an administrative member.
+ *
+ * `inventory.check_submit` and `inventory.view` are on the default member
+ * position, so no permission separates an administrative member from a rider
+ * for these rows; a gate on them is a gate on nobody. An administrative member
+ * therefore needs a grant a position has to be given on purpose, which is also
+ * what an Apparatus Manager carries. Apparatus Inventory takes only the one
+ * its route accepts: a row must never lead to the route's Access Denied.
+ */
+const MY_CHECKLISTS_ADMINISTRATIVE_GRANTS = ['inventory.check_view', 'inventory.check_manage', 'inventory.manage'];
+const APPARATUS_INVENTORY_ADMINISTRATIVE_GRANTS = ['inventory.check_view'];
+
+export function operationsNavItems(
+  isModuleOn: (module: string) => boolean,
+  isAdministrative = false
+): OperationsNavItem[] {
   const inventory = isModuleOn('inventory');
   return [
     // My Issued Gear carries no gate: it is a member's own kit, plus the
@@ -60,7 +76,15 @@ export function operationsNavItems(isModuleOn: (module: string) => boolean): Ope
           // No gate on purpose. Walking a truck is the one thing every member
           // does, the API narrows /my-checklists to the caller, and this row is
           // their only route to it.
-          { label: 'My Checklists', path: '/inventory/checklists/my', icon: ClipboardCheck },
+          // For an administrative member the row is held back unless a grant
+          // names them as someone who checks or manages the fleet; they do
+          // not walk a truck, and the page would be empty for them.
+          {
+            label: 'My Checklists',
+            path: '/inventory/checklists/my',
+            icon: ClipboardCheck,
+            ...(isAdministrative ? { anyPermission: MY_CHECKLISTS_ADMINISTRATIVE_GRANTS } : {}),
+          },
           {
             label: 'Fleet Readiness',
             path: '/inventory/checklists',
@@ -77,7 +101,9 @@ export function operationsNavItems(isModuleOn: (module: string) => boolean): Ope
             label: 'Apparatus Inventory',
             path: '/inventory/checklists/apparatus-inventory',
             icon: Truck,
-            anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
+            anyPermission: isAdministrative
+              ? APPARATUS_INVENTORY_ADMINISTRATIVE_GRANTS
+              : ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
           },
         ]
       : []),

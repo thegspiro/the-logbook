@@ -16,6 +16,7 @@ import {
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
+import { isAdministrativeMember } from '../../utils/membership';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { offersSkillsTesting, usePracticalSkillsMethod } from '../../stores/practicalSkillsStore';
 import { useConnectedIntegrations } from '../../hooks/useConnectedIntegrations';
@@ -201,12 +202,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       path: '/inventory',
       // One list with SideNavigation and the section strip on every
       // Operations page; the reasoning behind each row's gate lives there.
-      subItems: operationsNavItems(isModuleOn).map(({ label, path, permission, anyPermission }) => ({
-        label,
-        path,
-        ...(permission ? { permission } : {}),
-        ...(anyPermission ? { anyPermission } : {}),
-      })),
+      subItems: operationsNavItems(isModuleOn, isAdministrativeMember(undefined, currentUser?.membership_type)).map(
+        ({ label, path, permission, anyPermission }) => ({
+          label,
+          path,
+          ...(permission ? { permission } : {}),
+          ...(anyPermission ? { anyPermission } : {}),
+        })
+      ),
     },
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),
     // Neither the org chart nor Legal Documents is behind a module flag: every
