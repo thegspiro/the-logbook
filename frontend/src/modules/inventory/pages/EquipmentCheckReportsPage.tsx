@@ -27,7 +27,7 @@ import type {
   EquipmentCheckTemplate,
   CheckTemplateItem,
 } from '../../../modules/inventory/types/equipmentCheck';
-import { CHECK_ITEM_STATUS_LABELS, describeCount } from '../../../modules/inventory/types/equipmentCheck';
+import { checkItemStatusLabel, describeCount } from '../../../modules/inventory/types/equipmentCheck';
 import { DateRangePicker } from '../../../components/ux/DateRangePicker';
 import { Pagination } from '../../../components/ux/Pagination';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -782,7 +782,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                             ) : null}
                             {/* Never the raw token: an item answered
                                 "not_applicable" printed as itself here. */}
-                            {CHECK_ITEM_STATUS_LABELS[h.status] ?? h.status}
+                            {checkItemStatusLabel(h.checkType, h.status)}
                           </span>
                         </td>
                         <td className="text-theme-text-secondary px-4 py-2">{h.checkedByName ?? '-'}</td>

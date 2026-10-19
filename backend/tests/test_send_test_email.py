@@ -34,7 +34,7 @@ def _template(allow_attachments, attachments, template_type=EmailTemplateType.WE
     )
 
 
-async def _send(template):
+async def _send(template, can_send=True):
     org = SimpleNamespace(id="org-1", name="Station 12")
     history = SimpleNamespace(id="hist-1")
     db = MagicMock()
@@ -46,6 +46,7 @@ async def _send(template):
     email_service = MagicMock()
     email_service.send_email = AsyncMock(return_value=(1, 0))
     email_service.last_message_history_id = "hist-1"
+    email_service.can_send = can_send
 
     user = SimpleNamespace(
         organization_id="org-1",
@@ -167,3 +168,15 @@ async def test_an_event_reminder_test_uses_the_departments_next_event():
     assert context["event_title"] == "Pump Ops Drill"
     # Still addressed to the admin; the record fills only the event.
     assert context["recipient_name"] == "Jordan Reyes"
+
+
+async def test_a_test_send_with_email_switched_off_says_so():
+    """W57: with email off the send is skipped and writes no history, which
+    used to come back as a 500 saying "Email sent but failed to log history"."""
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as refused:
+        await _send(_template(False, []), can_send=False)
+
+    assert refused.value.status_code == 400
+    assert "Email is not set up on this server" in refused.value.detail

@@ -17,6 +17,7 @@ import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
 import { CampaignRestrictionControl } from '../components/CampaignRestrictionControl';
+import { getErrorMessage } from '@/utils/errorHandling';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -63,6 +64,7 @@ interface CreateFormData {
   campaign_type: string;
   goal_amount: string;
   start_date: string;
+  end_date: string;
   status: string;
   is_restricted: boolean;
   restriction_purpose: string;
@@ -74,6 +76,7 @@ const INITIAL_FORM: CreateFormData = {
   campaign_type: 'general',
   goal_amount: '',
   start_date: '',
+  end_date: '',
   status: 'draft',
   is_restricted: false,
   restriction_purpose: '',
@@ -136,6 +139,21 @@ const CampaignsPage: React.FC = () => {
     void loadCampaigns();
   }, [loadCampaigns]);
 
+  const [statusSaving, setStatusSaving] = useState<string | null>(null);
+
+  const changeStatus = async (campaign: FundraisingCampaign, status: string) => {
+    setStatusSaving(campaign.id);
+    try {
+      await fundraisingService.updateCampaign(campaign.id, { status: status as FundraisingCampaign['status'] });
+      toast.success(`${campaign.name} is now ${STATUS_LABELS[status] ?? status}`);
+      void loadCampaigns();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not change the campaign status'));
+    } finally {
+      setStatusSaving(null);
+    }
+  };
+
   // ---- Client-side search ----
 
   const filteredCampaigns = useMemo(() => {
@@ -169,6 +187,11 @@ const CampaignsPage: React.FC = () => {
       return;
     }
 
+    if (formData.end_date && formData.end_date < formData.start_date) {
+      toast.error('The end date cannot be before the start date');
+      return;
+    }
+
     if (formData.is_restricted && !formData.restriction_purpose.trim()) {
       toast.error('Say what the donors to a restricted fund are giving for');
       return;
@@ -182,6 +205,7 @@ const CampaignsPage: React.FC = () => {
         campaignType: formData.campaign_type as FundraisingCampaign['campaignType'],
         goalAmount: Number(formData.goal_amount),
         startDate: formData.start_date,
+        endDate: formData.end_date || null,
         status: formData.status as FundraisingCampaign['status'],
         ...(formData.is_restricted
           ? { isRestricted: true, restrictionPurpose: formData.restriction_purpose.trim() }
@@ -191,8 +215,8 @@ const CampaignsPage: React.FC = () => {
       setFormData(INITIAL_FORM);
       setShowCreateForm(false);
       void loadCampaigns();
-    } catch {
-      toast.error('Failed to create campaign');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to create campaign'));
     } finally {
       setIsSubmitting(false);
     }
@@ -211,7 +235,7 @@ const CampaignsPage: React.FC = () => {
         {canManage && (
           <button
             onClick={() => setShowCreateForm((prev) => !prev)}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+            className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
           >
             {showCreateForm ? (
               <>
@@ -306,6 +330,22 @@ const CampaignsPage: React.FC = () => {
               />
             </div>
 
+            {/* End Date — optional; a campaign without one reads "Ongoing" */}
+            <div>
+              <label htmlFor="create-end-date" className={labelClass}>
+                End Date
+              </label>
+              <input
+                id="create-end-date"
+                name="end_date"
+                type="date"
+                value={formData.end_date}
+                min={formData.start_date || undefined}
+                onChange={handleFormChange}
+                className={inputClass}
+              />
+            </div>
+
             {/* Status */}
             <div>
               <label htmlFor="create-status" className={labelClass}>
@@ -344,7 +384,7 @@ const CampaignsPage: React.FC = () => {
 
             {/* Restricted fund (full width) */}
             <div className="md:col-span-2">
-              <label className="text-theme-text-primary flex items-center gap-2 text-sm">
+              <label className="text-theme-text-primary touch:min-h-11 flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   className="form-checkbox"
@@ -520,6 +560,29 @@ const CampaignsPage: React.FC = () => {
                     />
                   </div>
                 </div>
+
+                {canManage && (
+                  // W69: a campaign's status could be set only at creation (and
+                  // was dropped even then), so none could be ended or paused.
+                  <div className="flex items-center gap-2 text-sm">
+                    <label htmlFor={`campaign-status-${campaign.id}`} className="text-theme-text-secondary">
+                      Status
+                    </label>
+                    <select
+                      id={`campaign-status-${campaign.id}`}
+                      value={campaign.status}
+                      disabled={statusSaving === campaign.id}
+                      onChange={(e) => void changeStatus(campaign, e.target.value)}
+                      className="form-input w-auto py-1 text-sm"
+                    >
+                      {STATUS_OPTIONS.map((value) => (
+                        <option key={value} value={value}>
+                          {STATUS_LABELS[value] ?? value}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <CampaignRestrictionControl
                   campaign={campaign}

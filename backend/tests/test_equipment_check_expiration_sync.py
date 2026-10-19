@@ -22,7 +22,10 @@ from app.models.apparatus import (
     TemplateChangeLog,
 )
 from app.schemas.equipment_check import DeployedLotUpdateRequest
-from app.services.equipment_check_service import EquipmentCheckService
+from app.services.equipment_check_service import (
+    _REPLACEMENT_DATE,
+    EquipmentCheckService,
+)
 from app.services.inventory_service import InventoryService
 
 
@@ -81,11 +84,20 @@ class TestResolveExpiration:
         assert resolved == YESTERDAY
 
     def test_found_date_supersedes_an_unlinked_date_line(self, service):
+        # Read from the key only validation writes, once it has accepted the
+        # date for a line that takes one and checked it is not past.
+        item = _template_item()
+        resolved = service._resolve_expiration(
+            {"template_item_id": "ti-1", _REPLACEMENT_DATE: NEXT_YEAR}, item
+        )
+        assert resolved == NEXT_YEAR
+
+    def test_an_unvalidated_found_date_does_not_supersede(self, service):
         item = _template_item()
         resolved = service._resolve_expiration(
             {"template_item_id": "ti-1", "expiration_found": NEXT_YEAR}, item
         )
-        assert resolved == NEXT_YEAR
+        assert resolved == YESTERDAY
 
     def test_found_date_is_ignored_on_a_line_that_is_not_a_date_line(self, service):
         item = _template_item(check_type="function")
@@ -176,12 +188,14 @@ class TestComputeCheckStatus:
 
     def test_a_replacement_clears_an_unlinked_date_lines_auto_fail(self, service):
         # The crew swapped the expired unit for one off the shelf and read its
-        # date; that is the unit aboard now, so the line passes.
+        # date; that is the unit aboard now, so the line passes. Validation
+        # has already accepted it, which is what writes the key.
         items = [
             {
                 "template_item_id": "ti-1",
                 "status": "pass",
                 "expiration_found": NEXT_YEAR,
+                _REPLACEMENT_DATE: NEXT_YEAR,
             }
         ]
         _, _, failed, overall = service._compute_check_status(

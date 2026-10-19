@@ -2591,11 +2591,12 @@ class CheckTemplateCompartment(Base):
     is_sealed: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
-    # A headingless group: its items sit directly on the checklist, wherever
-    # the group is placed among the locations. It is still a row here, rather
-    # than items pointing at the template, because every department-isolation
-    # query reaches an item's organization through its compartment. Never
-    # sealed, nested or named — EquipmentCheckService keeps it that way.
+    # A headingless group: items placed directly on the checklist rather than
+    # in a named place on the truck. It is still a row here, rather than items
+    # carrying the template id themselves, because every department-isolation
+    # query reaches an item through its compartment; a second path to the
+    # template would have to be scoped separately everywhere. It has no name,
+    # cannot be sealed, and is never nested or a parent.
     is_inline: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
@@ -2783,7 +2784,6 @@ class CheckTemplateItem(Base):
         lots_aboard: Any
         unit_of_measure: Optional[str]
         _check_compartment_name: Optional[str]
-        _check_template_id: Optional[str]
 
     __table_args__ = (
         Index("idx_check_item_compartment", "compartment_id"),

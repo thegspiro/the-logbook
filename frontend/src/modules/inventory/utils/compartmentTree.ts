@@ -276,3 +276,19 @@ export function reparentCompartment<T extends CompartmentNode>(nodes: readonly T
 export function orderedCompartmentIds(nodes: readonly CompartmentNode[]): string[] {
   return canonicalCompartmentOrder(nodes).flatMap((node) => (node.id ? [node.id] : []));
 }
+
+/**
+ * Insert a top-level node so it shows at `rootIndex` among the top-level rows.
+ *
+ * Inserted directly before that root's own position in canonical order, never
+ * between a root and its descendants, so a location keeps its nested contents
+ * whatever lands beside it. An index past the last root appends.
+ */
+export function insertRootAt<T extends CompartmentNode>(nodes: readonly T[], node: T, rootIndex: number): T[] {
+  const ordered = canonicalCompartmentOrder(nodes);
+  const roots = ordered.filter((candidate) => visibleParentId(nodes, candidate) === '');
+  const before = roots[rootIndex];
+  if (!before) return [...ordered, node];
+  const at = ordered.indexOf(before);
+  return [...ordered.slice(0, at), node, ...ordered.slice(at)];
+}

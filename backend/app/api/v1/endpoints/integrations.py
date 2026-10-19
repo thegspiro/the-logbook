@@ -635,6 +635,30 @@ def _validate_config(integration_type: str, config: dict[str, Any]) -> dict[str,
     return config
 
 
+def _missing_required_fields(
+    integration: Integration, config: dict[str, Any]
+) -> list[str]:
+    """Required settings neither this request nor the stored integration holds.
+
+    W73: ``_validate_config`` checks only a non-empty body, so connecting with
+    ``{}`` left Slack "connected" with no webhook. An empty body is still
+    right for a reconnect, whose settings were kept on disconnect, so a field
+    counts as present if it is stored — in the public config or as a secret.
+    """
+    schema_cls = INTEGRATION_CONFIG_SCHEMAS.get(integration.integration_type)
+    if schema_cls is None:
+        return []
+    stored = integration.config or {}
+    return [
+        name
+        for name, field in schema_cls.model_fields.items()
+        if field.is_required()
+        and name not in config
+        and name not in stored
+        and not integration.get_secret(name)
+    ]
+
+
 def _extract_secrets(
     config: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, str]]:
@@ -983,6 +1007,12 @@ async def connect_integration(
     was_connected = integration.status == "connected" and bool(integration.enabled)
 
     config = body.config
+    missing = _missing_required_fields(integration, config)
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{integration.name} needs: {', '.join(missing)}",
+        )
     clear_salesforce_refresh_token = (
         integration.integration_type == "salesforce"
         and "refresh_token" in config

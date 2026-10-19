@@ -2413,10 +2413,10 @@ number come from the stock records and you cannot change them on the check
 form. To record a replacement, use **Swap** (below) or
 [Apparatus Inventory](#apparatus-inventory--what-the-truck-is-carrying-right-now).
 
-**Replaced an expiring item that is not linked to stock?** Select **Replaced
-it? Enter the new date** and enter the date printed on the unit you put aboard,
-and its lot number if you read one. The item then reads as in date and you can
-pass it. When you submit, the new date replaces the old one on the checklist,
+**Replaced an expiring item that is not linked to stock?** Select **Put in a
+replacement? Record its date** and enter the date printed on the unit you put
+aboard, and its lot number if you read one. The item then reads as in date and
+passes. When you submit, the new date replaces the old one on the checklist,
 and the checklist's change log records that you made the change. A date that
 has already passed is refused.
 

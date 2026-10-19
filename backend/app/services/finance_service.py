@@ -2226,14 +2226,25 @@ class FinanceService:
         }
 
     async def list_budget_options(
-        self, org_id: str, fiscal_year_id: str, charger_id: Optional[str] = None
+        self,
+        org_id: str,
+        fiscal_year_id: str,
+        charger_id: Optional[str] = None,
+        amounts_for: Optional[str] = None,
+        sees_all_amounts: bool = True,
     ) -> list[dict]:
         """The budget lines a requester may charge, as a label and what is left.
 
         The narrow read behind the request forms' budget picker. A member who
-        holds only ``finance.request`` chooses a line by name and sees the
-        remaining amount, nothing else: the budgeted, spent and encumbered
-        figures, notes and the summary stay behind ``finance.view``.
+        holds only ``finance.request`` chooses a line by name and nothing
+        else: the budgeted, spent and encumbered figures, notes and the
+        summary stay behind ``finance.view``, and so does the amount left.
+
+        ``amount_remaining`` is filled only for a caller who ``sees_all_amounts``
+        (``finance.view`` / ``finance.manage``) or who owns that line
+        (``amounts_for`` is the caller's id; ownership is
+        ``owned_budgets_query``, the one definition of the rule). For anyone
+        else it is None, so the figure never leaves the server.
 
         ``charger_id`` leaves out the restricted lines that member may not
         charge (app/services/finance_budget_access.py); None, for
@@ -2251,6 +2262,12 @@ class FinanceService:
             if charger_id
             else set()
         )
+        owned_ids: set[str] = set()
+        if not sees_all_amounts and amounts_for:
+            owned_result = await self.db.execute(
+                owned_budgets_query(org_id, amounts_for).with_only_columns(Budget.id)
+            )
+            owned_ids = {str(budget_id) for budget_id in owned_result.scalars()}
         result = await self.db.execute(
             select(
                 Budget.id,
@@ -2308,9 +2325,11 @@ class FinanceService:
                 {
                     "id": row.id,
                     "label": label,
-                    "amount_remaining": row.amount_budgeted
-                    - row.amount_spent
-                    - row.amount_encumbered,
+                    "amount_remaining": (
+                        row.amount_budgeted - row.amount_spent - row.amount_encumbered
+                        if sees_all_amounts or str(row.id) in owned_ids
+                        else None
+                    ),
                 }
             )
         return options
@@ -3515,10 +3534,22 @@ class FinanceService:
                     continue
                 approver_type = normalize_approver_type(step.approver_type)
                 value = (step.approver_value or "").strip()
+                # Approve and deny need finance.approve as well as a match
+                # (step_actor_flags, and the endpoints' gate). Counting the
+                # match alone reported a Chief step as covered while the Chief,
+                # holding no finance.approve, got 403 on the queue and 404 on
+                # the request. An email approver acts from the emailed link, so
+                # the grant does not apply to them.
+                needs_grant = approver_type != ApproverType.EMAIL
+                matched = 0
                 eligible = 0
                 for member in members:
                     if await user_matches_step(self.db, member, step, org_id):
-                        eligible += 1
+                        matched += 1
+                        if not needs_grant or user_has_permission(
+                            member, FINANCE_APPROVE
+                        ):
+                            eligible += 1
                 rows.append(
                     {
                         "chain_id": chain.id,
@@ -3534,7 +3565,7 @@ class FinanceService:
                         "assignee_label": await describe_assignee(step, directory),
                         "eligible_active_count": eligible,
                         "problem": await self._coverage_problem(
-                            approver_type, value, eligible, directory
+                            approver_type, value, eligible, directory, matched
                         ),
                         "pending_request_count": pending_by_step.get(step.id, 0),
                     }
@@ -3547,6 +3578,7 @@ class FinanceService:
         value: str,
         eligible: int,
         directory: ApproverDirectory,
+        matched: int = 0,
     ) -> Optional[str]:
         if approver_type is None:
             return None if eligible else "no_active_members"
@@ -3565,7 +3597,11 @@ class FinanceService:
         elif approver_type == ApproverType.PERMISSION:
             if not is_known_permission(value):
                 return "not_found"
-        return None if eligible else "no_active_members"
+        if eligible:
+            return None
+        # Somebody fills the step, but none of them may approve: distinct from
+        # an empty position, because the fix is a grant, not a person.
+        return "no_approve_permission" if matched else "no_active_members"
 
     # ========================================
     # Manual approval (no approval chain applies)
@@ -5308,7 +5344,7 @@ class FinanceService:
             raise ValueError("Check request not found")
         # SoD (FIN-4): the person who issues the check must not be the requester.
         assert_different_person(
-            acted_by, cr.requested_by, action="issue check", record="check request"
+            acted_by, cr.requested_by, action="issue", record="check request"
         )
         if cr.status != CheckRequestStatus.APPROVED:
             raise ValueError("Only approved requests can have checks issued")
@@ -5644,6 +5680,19 @@ class FinanceService:
         result = await self.db.execute(query)
         users = list(result.scalars().all())
 
+        # A schedule entered with a due date already past bills its members as
+        # overdue straight away. Left PENDING, they read "Pending" until the
+        # daily run_mark_overdue_dues, so a treasurer generating last spring's
+        # dues saw nobody behind and the Overdue filter came back empty (W66).
+        due = schedule.due_date
+        if due is not None and due.tzinfo is None:
+            due = due.replace(tzinfo=timezone.utc)
+        initial_status = (
+            DuesStatus.OVERDUE
+            if due is not None and due < datetime.now(timezone.utc)
+            else DuesStatus.PENDING
+        )
+
         count = 0
         for user in users:
             # Check if dues already exist for this user + schedule
@@ -5662,6 +5711,7 @@ class FinanceService:
                 user_id=user.id,
                 amount_due=schedule.amount,
                 due_date=schedule.due_date,
+                status=initial_status,
             )
             self.db.add(dues)
             count += 1

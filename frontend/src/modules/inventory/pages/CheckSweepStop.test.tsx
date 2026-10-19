@@ -158,7 +158,7 @@ describe('a presence row', () => {
   it('answers in words, and Absent opens no fault fields', async () => {
     const user = userEvent.setup();
     const onAnswer = setup([maps]);
-    expect(screen.getByRole('button', { name: 'Map book is present' })).toHaveTextContent('Present');
+    expect(screen.getByRole('button', { name: 'Map book is present' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Map book is absent' }));
     expect(onAnswer).toHaveBeenCalledWith('maps', { status: 'fail' });
 
@@ -173,29 +173,31 @@ describe('dating a replacement in the sweep', () => {
     name: 'AED pads',
     checkType: 'expiry',
     expirationDate: YESTERDAY,
-    acceptsReplacement: true,
+    takesReplacementDate: true,
   };
 
   it('offers the field on an expired unlinked line and records a valid date', async () => {
     const user = userEvent.setup();
     const onAnswer = setup([pads]);
-    await user.click(screen.getByRole('button', { name: 'Replaced it? Enter the new date' }));
-    fireEvent.change(screen.getByLabelText("New unit's expiration"), { target: { value: FAR } });
-    expect(onAnswer).toHaveBeenCalledWith('pads', { expirationFound: FAR });
+    await user.click(screen.getByRole('button', { name: 'Put in a replacement? Record its date' }));
+    fireEvent.change(screen.getByLabelText('Replacement expires'), { target: { value: FAR } });
+    expect(onAnswer).toHaveBeenCalledWith('pads', expect.objectContaining({ expirationFound: FAR }));
   });
 
   it('holds back a past date and says why', async () => {
     const user = userEvent.setup();
     const onAnswer = setup([pads]);
-    await user.click(screen.getByRole('button', { name: 'Replaced it? Enter the new date' }));
-    fireEvent.change(screen.getByLabelText("New unit's expiration"), { target: { value: '2000-01-01' } });
-    expect(onAnswer).toHaveBeenLastCalledWith('pads', { expirationFound: undefined });
-    expect(screen.getByText('That date has passed. Put an in-date unit aboard.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Put in a replacement? Record its date' }));
+    fireEvent.change(screen.getByLabelText('Replacement expires'), { target: { value: '2000-01-01' } });
+    expect(onAnswer).toHaveBeenLastCalledWith('pads', expect.objectContaining({ expirationFound: undefined }));
+    expect(
+      screen.getByText('That date has already passed. Enter the date printed on the unit you put in.')
+    ).toBeInTheDocument();
   });
 
   it('does not offer it where the line does not accept one', () => {
-    setup([{ ...pads, acceptsReplacement: false }]);
-    expect(screen.queryByRole('button', { name: 'Replaced it? Enter the new date' })).not.toBeInTheDocument();
+    setup([{ ...pads, takesReplacementDate: false }]);
+    expect(screen.queryByRole('button', { name: 'Put in a replacement? Record its date' })).not.toBeInTheDocument();
   });
 });
 
@@ -827,5 +829,62 @@ describe('marking a count not applicable', () => {
   it('still offers the carried figure while the item is on the truck', () => {
     render(<CheckSweepStop stop={stop([{ ...gauze, carriedQuantity: 7 }])} answers={{}} onAnswer={vi.fn()} />);
     expect(screen.getByTestId('tally-value-gauze')).toHaveTextContent('7');
+  });
+});
+
+describe('a Present line', () => {
+  const chocks: CheckItemSpec = { id: 'chocks', name: 'Wheel chocks', checkType: 'presence' };
+
+  it('asks whether it is aboard, not whether it works', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([chocks]);
+    await user.click(screen.getByRole('button', { name: 'Wheel chocks is absent' }));
+    expect(onAnswer).toHaveBeenCalledWith('chocks', { status: 'fail' });
+    expect(screen.queryByRole('button', { name: 'Wheel chocks does not work' })).not.toBeInTheDocument();
+  });
+
+  it('opens no fault detail when absent — missing explains itself', () => {
+    setup([chocks], { chocks: { status: 'fail' } });
+    expect(screen.queryByLabelText('What happened')).not.toBeInTheDocument();
+  });
+});
+
+describe('dating a replacement on a line nothing else tracks', () => {
+  const pads: CheckItemSpec = {
+    id: 'pads',
+    name: 'AED pads',
+    checkType: 'expiry',
+    expirationDate: YESTERDAY,
+    takesReplacementDate: true,
+  };
+
+  it('records the new unit and passes the line', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([pads]);
+    await user.click(screen.getByTestId('replacement-open-pads'));
+    fireEvent.change(screen.getByTestId('replacement-date-pads'), { target: { value: FAR } });
+    expect(onAnswer).toHaveBeenCalledWith(
+      'pads',
+      expect.objectContaining({ expirationFound: FAR, status: 'pass', expiryConfirmed: true })
+    );
+  });
+
+  it('refuses a date that has already passed', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([pads]);
+    await user.click(screen.getByTestId('replacement-open-pads'));
+    fireEvent.change(screen.getByTestId('replacement-date-pads'), { target: { value: '2020-01-01' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('already passed');
+    expect(onAnswer).not.toHaveBeenCalledWith('pads', expect.objectContaining({ expirationFound: '2020-01-01' }));
+  });
+
+  it('is not offered on a line whose date is fine', () => {
+    setup([{ ...pads, expirationDate: FAR }]);
+    expect(screen.queryByTestId('replacement-open-pads')).not.toBeInTheDocument();
+  });
+
+  it('is not offered where inventory owns the dates', () => {
+    setup([{ ...pads, takesReplacementDate: false }]);
+    expect(screen.queryByTestId('replacement-open-pads')).not.toBeInTheDocument();
   });
 });

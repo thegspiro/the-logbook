@@ -150,10 +150,10 @@ describe('EquipmentCheckForm — dating a replacement', () => {
     renderWithRouter(<EquipmentCheckForm shiftId="shift-1" template={template([expiredPads()]) as never} />);
 
     expect(await screen.findByRole('button', { name: 'Pass' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: 'Replaced it? Enter the new date' }));
-    await user.type(screen.getByLabelText("New unit's expiration"), isoFromToday(200));
-    await user.type(screen.getByLabelText('Lot number (optional)'), 'NEW-7');
-    await user.click(screen.getByRole('button', { name: 'Pass' }));
+    await user.click(screen.getByRole('button', { name: 'Put in a replacement? Record its date' }));
+    await user.type(screen.getByLabelText('Replacement expires'), isoFromToday(200));
+    await user.type(screen.getByLabelText('Lot (optional)'), 'NEW-7');
+    // An in-date replacement passes the line on its own.
     await user.click(submitButton());
 
     await waitFor(() => expect(mockSubmitCheck).toHaveBeenCalled());
@@ -171,10 +171,12 @@ describe('EquipmentCheckForm — dating a replacement', () => {
     const user = userEvent.setup();
     renderWithRouter(<EquipmentCheckForm shiftId="shift-1" template={template([expiredPads()]) as never} />);
 
-    await user.click(await screen.findByRole('button', { name: 'Replaced it? Enter the new date' }));
-    await user.type(screen.getByLabelText("New unit's expiration"), isoFromToday(-1));
+    await user.click(await screen.findByRole('button', { name: 'Put in a replacement? Record its date' }));
+    await user.type(screen.getByLabelText('Replacement expires'), isoFromToday(-1));
 
-    expect(screen.getByText('That date has passed. Put an in-date unit aboard.')).toBeInTheDocument();
+    expect(
+      screen.getByText('That date has already passed. Enter the date printed on the unit you put in.')
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pass' })).toBeDisabled();
   });
 
@@ -184,7 +186,7 @@ describe('EquipmentCheckForm — dating a replacement', () => {
     );
 
     await screen.findByRole('button', { name: 'Pass' });
-    expect(screen.queryByRole('button', { name: 'Replaced it? Enter the new date' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Put in a replacement? Record its date' })).not.toBeInTheDocument();
   });
 });
 

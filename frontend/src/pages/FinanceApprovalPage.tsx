@@ -41,6 +41,16 @@ const CLOSED_STEP_LABELS: Record<string, string> = {
   sent: 'closed',
 };
 
+// The token is cleared once it is used, so the approver's own second visit, and
+// a link a mail program cut short, both reach the API as "not found" or "too
+// short". The server's wording for those ("Approval not found", "path.token:
+// Value is too short") means nothing to someone outside the department.
+const UNUSABLE_LINK =
+  'This approval link can no longer be used. If you already responded, your response was recorded and there is nothing more to do. If you have not, open the link from the email again in case it was copied incompletely, or ask the department to send a new one.';
+
+const isUnusableLink = (err: unknown): boolean =>
+  axios.isAxiosError(err) && (err.response?.status === 404 || err.response?.status === 422);
+
 const prettyEntity = (raw: string): string =>
   raw
     .split('_')
@@ -82,7 +92,9 @@ export const FinanceApprovalPage: React.FC = () => {
         if (active) setDetail(res.data);
       } catch (err: unknown) {
         if (active) {
-          setError(getErrorMessage(err, 'This approval link is invalid or has expired.'));
+          setError(
+            isUnusableLink(err) ? UNUSABLE_LINK : getErrorMessage(err, 'This approval link is invalid or has expired.')
+          );
         }
       } finally {
         if (active) setLoading(false);

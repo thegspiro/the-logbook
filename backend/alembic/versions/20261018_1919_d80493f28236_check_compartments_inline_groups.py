@@ -1,7 +1,7 @@
 """Let checklist items sit directly on the checklist, between locations.
 
 Revision ID: d80493f28236
-Revises: 89723c04ae94
+Revises: 2315d544d60a
 Create Date: 2026-10-18 19:19:00.000000
 
 Every checklist item had to live inside a named location ("Officer Door
@@ -19,12 +19,22 @@ keeps the chain intact, so no isolation query changes.
 Every existing row gets ``0`` (an ordinary location), which is today's
 behaviour, so nothing changes until someone places an item on the checklist.
 
+**Re-pointed, and now a no-op in practice.** This revision was written in
+parallel with ``e99f068be43e``, which adds the identical column and reached
+main first. Both originally revised ``89723c04ae94``; this one was moved to
+revise the merge head ``2315d544d60a`` so the history keeps a single head. By
+the time it runs ``e99f068be43e`` has already added the column, so the guard
+below makes it change nothing. It is kept rather than deleted only so a
+development database already stamped at this revision still resolves.
+
 **Why the step is guarded.** The column is added only when the table exists
 and the column does not, so a database built by ``create_all`` (which already
 declares it) or a re-run changes nothing.
 
-**Downgrade** drops the column. Inline groups survive as unnamed locations,
-which the builder then asks to be named before publishing.
+**Downgrade** does nothing. The column belongs to ``e99f068be43e``, which
+sits below this revision; dropping it here would leave ``2315d544d60a``
+without a column its models declare. Downgrading past ``e99f068be43e`` drops
+it.
 """
 
 from typing import Sequence, Union
@@ -34,7 +44,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d80493f28236"
-down_revision: Union[str, None] = "89723c04ae94"
+down_revision: Union[str, None] = "2315d544d60a"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -62,5 +72,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    if _has_column():
-        op.drop_column(_TABLE, _COLUMN)
+    # e99f068be43e owns the column; see the module docstring.
+    pass

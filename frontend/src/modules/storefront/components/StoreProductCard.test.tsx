@@ -86,6 +86,40 @@ describe('StoreProductCard', () => {
     expect(screen.getByText('Only 4 left in L')).toBeInTheDocument();
   });
 
+  // W67: availableQuantity folds in the member's own allowance, so it is not
+  // stock. stockAvailable carries stock alone.
+  const limited = (ordered: number) =>
+    offer({
+      requiresVariant: false,
+      maxPerMember: 2,
+      availableQuantity: 2 - ordered,
+      stockAvailable: null,
+      isAvailable: ordered < 2,
+      variants: [],
+    });
+
+  it('does not call a per-member limit low stock', () => {
+    render(<StoreProductCard offer={limited(0)} onAdd={onAdd} />);
+    expect(screen.queryByText(/Only \d+ left/)).not.toBeInTheDocument();
+  });
+
+  it('stops the quantity at what the member may still order', async () => {
+    const user = userEvent.setup();
+    render(<StoreProductCard offer={limited(0)} onAdd={onAdd} />);
+
+    const increase = screen.getByRole('button', { name: /Increase quantity/ });
+    await user.click(increase);
+    expect(increase).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Add to cart · \$130\.00/ })).toBeInTheDocument();
+  });
+
+  it('tells a member at their limit so, rather than that it sold out', () => {
+    render(<StoreProductCard offer={limited(2)} onAdd={onAdd} />);
+    expect(screen.getByText('Limit reached')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'You have ordered your limit of 2' })).toBeDisabled();
+    expect(screen.queryByText(/Sold out/)).not.toBeInTheDocument();
+  });
+
   it('adds the personalization upcharge only once text is entered', async () => {
     const user = userEvent.setup();
     render(<StoreProductCard offer={offer({ personalizationEnabled: true })} onAdd={onAdd} />);

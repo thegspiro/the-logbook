@@ -11,8 +11,8 @@ import type { CheckType } from '@/modules/inventory/types/equipmentCheck';
 // Check-type metadata
 // ============================================================================
 
-// What the admin picks from. Four answer shapes, then the two structural rows.
-// The order is the design's: level, function, count, expiry.
+// What the admin picks from. Five answer shapes, then the two structural rows.
+// The order is the design's: level, function, count, expiry, presence.
 export const CHECK_TYPES = [
   { value: 'level', label: 'Level' },
   { value: 'function', label: 'Function' },
@@ -31,9 +31,9 @@ export const CHECK_TYPE_HELP: Record<string, string> = {
   count:
     'A par level to match. One tap confirms par; the stepper is for when it does not. Short of par becomes a restock line, not a failure.',
   expiry:
-    'A date already on record, shown and confirmed rather than retyped, so the check is a glance at the vial. Inside the pull window the line stays amber on every shift until it is replaced.',
+    'A date already on record, shown and confirmed rather than retyped, so the check is a glance at the vial. Inside the pull window the line stays amber on every shift until it is replaced. A line not linked to inventory needs its date before the checklist can be published, and the crew records the new date when they put in a replacement.',
   presence:
-    'Is it on the truck — gloves, a map book, a spare wrench. The crew answers Present or Absent; Absent fails the item without needing a note, because it already says what is wrong.',
+    'Whether the thing is aboard at all — a spare bottle, wheel chocks, the map book. The crew answers Present or Absent. Absent fails the line and needs no note: missing explains itself.',
   text: 'Read-only statement or instruction. Displayed as informational text — no action required from the member.',
   header: 'Visual section divider to group items. Not a checkable item — just a label to help members navigate.',
 };
@@ -47,7 +47,7 @@ export const CHECK_TYPE_SUMMARY: Record<string, string> = {
   function: 'Switched on and watched; a fail takes a note and a photo.',
   count: 'A par level to match; short of par is a restock, below Min to Pass fails.',
   expiry: 'A date on record, confirmed at a glance.',
-  presence: 'On the truck or not; Absent fails with no note needed.',
+  presence: 'Present or absent; absent fails without a note.',
   text: 'A read-only statement; nothing to answer.',
   header: 'A section divider; not a checkable item.',
 };

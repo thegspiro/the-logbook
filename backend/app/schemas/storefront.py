@@ -394,6 +394,10 @@ class StorefrontVariantOption(UTCResponseBase):
     label: str
     price: Decimal
     available_quantity: Optional[int] = None
+    # Units left in stock or under the window's cap, ignoring the member's own
+    # per-member allowance; None means unlimited. ``available_quantity`` is the
+    # tighter of the two.
+    stock_available: Optional[int] = None
     is_available: bool
 
 
@@ -420,6 +424,8 @@ class StorefrontProductOffer(UTCResponseBase):
     personalization_thread_color_hex: str = DEFAULT_THREAD_COLOR_HEX
     personalization_method: PersonalizationMethod = PersonalizationMethod.EMBROIDERY
     available_quantity: Optional[int] = None
+    # As on StorefrontVariantOption: stock and window cap only.
+    stock_available: Optional[int] = None
     is_available: bool
     variants: List[StorefrontVariantOption] = Field(default_factory=list)
 

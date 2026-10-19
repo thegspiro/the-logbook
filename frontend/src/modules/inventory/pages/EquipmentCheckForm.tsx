@@ -36,6 +36,7 @@ import {
   Repeat,
   X,
   PackageCheck,
+  PackageSearch,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
@@ -76,9 +77,9 @@ import {
   countedOnTruck,
   ExpiredStockDisposition,
   normalizeCheckType,
+  canRecordReplacementDate,
   soonestExpiration,
   submitterMaySwap,
-  acceptsReplacementDate,
   passFloor,
   targetQuantity,
   isBelowCriticalMinimum,
@@ -113,7 +114,7 @@ import {
   type LapStop,
   type SealState as SweepSealState,
 } from './checkLapModel';
-import type { CheckItemAnswer } from './CheckItemControls';
+import { ReplacementDateFields, type CheckItemAnswer } from './CheckItemControls';
 import {
   deleteEquipmentCheckDraft,
   loadEquipmentCheckDraft,
@@ -170,9 +171,12 @@ export interface ItemResult {
    * stop offering "Confirm" on a date that has already been confirmed.
    */
   expiryConfirmed?: boolean | undefined;
-  /** A replacement's printed date (`YYYY-MM-DD`) on an unlinked Date line. */
+  /**
+   * The date printed on a replacement unit the crew put in, on a Date line
+   * nothing else tracks (`canRecordReplacementDate`). It is what the line
+   * reads from then on, here and on the record.
+   */
   expirationFound?: string | undefined;
-  /** The replacement's lot number, when the crew read one. */
   lotFound?: string | undefined;
   photoUrls?: string[] | undefined;
   photoFiles?: File[] | undefined;
@@ -300,88 +304,11 @@ function failureNeedsNote(item: CheckTemplateItem, result: ItemResult | undefine
   const status = getEffectiveStatus(item, result, today);
   if (status !== 'fail' && status !== 'out_of_service') return false;
   if (getExpirationStatus(item, today) === 'expired') return false;
-  // Absent is the whole finding on a presence line. Mirrors the server's
-  // `_failure_needs_note`, so the form never sends what it refuses.
+  // "Absent" is the explanation, the way a short count's number is. Out of
+  // service on the same line still says nothing about what is wrong.
   if (status === 'fail' && item.checkType === 'presence') return false;
   return result?.quantityFound == null && result?.levelReading == null;
 }
-
-/**
- * Where a crew records the date on a replacement it put aboard.
- *
- * Only on a Date line with no inventory link (`acceptsReplacementDate`): before
- * this, an expired unit swapped from an untracked shelf kept failing every
- * check until an admin edited the checklist. A date already past is refused
- * here and again by the server — putting an expired unit aboard is not a fix.
- */
-const ReplacementDateFields: React.FC<{
-  itemId: string;
-  today: string;
-  expirationFound: string | undefined;
-  lotFound: string | undefined;
-  onChange: (patch: Partial<ItemResult>) => void;
-}> = ({ itemId, today, expirationFound, lotFound, onChange }) => {
-  const [open, setOpen] = useState(Boolean(expirationFound));
-  const [draft, setDraft] = useState(expirationFound ?? '');
-  const past = draft !== '' && draft < today;
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-theme-accent-blue min-h-11 text-sm font-medium underline-offset-2 hover:underline"
-      >
-        Replaced it? Enter the new date
-      </button>
-    );
-  }
-  return (
-    <div className="border-theme-surface-border grid grid-cols-1 gap-2 rounded-lg border p-3 sm:grid-cols-2">
-      <div>
-        <label className="form-label" htmlFor={`replacement-date-${itemId}`}>
-          New unit&apos;s expiration
-        </label>
-        <input
-          id={`replacement-date-${itemId}`}
-          type="date"
-          min={today}
-          className={`form-input ${past ? 'border-theme-alert-danger-icon' : ''}`}
-          value={draft}
-          aria-invalid={past}
-          aria-describedby={past ? `replacement-date-error-${itemId}` : undefined}
-          onChange={(e) => {
-            const next = e.target.value;
-            setDraft(next);
-            // Held back until valid, so a half-typed or past date never
-            // reaches the verdict or the payload.
-            onChange({ expirationFound: next !== '' && next >= today ? next : undefined });
-          }}
-        />
-        {past && (
-          <p id={`replacement-date-error-${itemId}`} className="text-theme-alert-danger-title mt-1 text-xs font-medium">
-            That date has passed. Put an in-date unit aboard.
-          </p>
-        )}
-      </div>
-      <div>
-        <label className="form-label" htmlFor={`replacement-lot-${itemId}`}>
-          Lot number (optional)
-        </label>
-        <input
-          id={`replacement-lot-${itemId}`}
-          type="text"
-          maxLength={100}
-          className="form-input"
-          value={lotFound ?? ''}
-          onChange={(e) => onChange({ lotFound: e.target.value || undefined })}
-        />
-      </div>
-      <p className="text-theme-text-muted text-xs sm:col-span-2">
-        Saving the check puts this date on the checklist, under your name.
-      </p>
-    </div>
-  );
-};
 
 /** DOM id of an item's note field, so a Fail answer can move focus into it. */
 const itemNotesFieldId = (itemId: string) => `item-notes-${itemId}`;
@@ -439,9 +366,9 @@ const STATUS_LABELS: Record<string, string> = {
 const CHECK_TYPE_ICONS: Partial<Record<CheckType, React.ElementType>> = {
   level: Gauge,
   function: Wrench,
-  presence: PackageCheck,
   count: Hash,
   expiry: Calendar,
+  presence: PackageSearch,
   text: MessageSquare,
   header: Type,
 };
@@ -744,13 +671,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Apply an inventory swap response immediately so the badge, auto-fail, and
   // submitted snapshot reflect the authoritative lot now on the truck without
   // waiting for a template re-fetch.
+  //
+  // A replacement date the crew entered is the same kind of fact on a line
+  // nothing else tracks: the box aboard now carries that date, so the line
+  // stops reading expired the moment it is entered rather than at the next
+  // template fetch.
   const applyOverride = useCallback(
     (item: CheckTemplateItem): CheckTemplateItem => {
-      // A replacement the crew dated on an unlinked Date line is the unit now
-      // aboard, so every expiry reading — the badge, the auto-fail, the
-      // snapshot — reads its date. The server resolves it the same way.
       const replaced = results[item.id]?.expirationFound;
-      if (replaced && acceptsReplacementDate(item)) {
+      if (replaced && canRecordReplacementDate(item)) {
         const lot = results[item.id]?.lotFound;
         return { ...item, hasExpiration: true, expirationDate: replaced, ...(lot ? { lotNumber: lot } : {}) };
       }
@@ -1002,11 +931,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             name: compartment.name,
             isSealed: Boolean(compartment.isSealed),
             clearableItemIds: compartment.items
-              .filter(
-                (item) =>
-                  !item.hasExpiration &&
-                  (item.checkType === 'function' || item.checkType === 'presence' || item.checkType === 'count')
-              )
+              .filter((item) => !item.hasExpiration && (item.checkType === 'function' || item.checkType === 'count'))
               .map((item) => item.id)
               .sort(),
           },
@@ -1521,7 +1446,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           // count": `level` is excluded because a pressure reading moves while
           // the bag sits shut, and an expiring item is excluded whatever its
           // type, because a seal proves unchanged, not full.
-          (item.checkType === 'function' || item.checkType === 'presence' || item.checkType === 'count')
+          (item.checkType === 'function' || item.checkType === 'count')
       ),
     [checkableIn]
   );
@@ -1847,10 +1772,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       let marked = 0;
       for (const id of onList) {
         const item = byId.get(id);
-        // A tag tapped on the shelf proves the item is there, which answers a
-        // pass/fail or a presence line; a count or a gauge still needs reading.
-        const type = item ? normalizeCheckType(item.checkType) : null;
-        if (!item || (type !== 'function' && type !== 'presence')) continue;
+        if (!item || normalizeCheckType(item.checkType) !== 'function') continue;
         if ((results[id]?.status ?? 'not_checked') !== 'not_checked') continue;
         updateResult(id, { status: 'pass' });
         marked += 1;
@@ -1925,8 +1847,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           lot_number: item.lotNumber || undefined,
           is_expired: getExpirationStatus(item, today) === 'expired',
           expiration_date: item.expirationDate || undefined,
-          // Sent only where the server accepts one; it re-checks both rules.
-          ...(result?.expirationFound && acceptsReplacementDate(rawItem)
+          // The server re-checks the line is untracked and the date not past,
+          // refusing a past one. A draft resumed the day after its date can
+          // hold one, and then the line already reads expired here, so it is
+          // left off rather than refusing the whole check.
+          ...(result?.expirationFound && result.expirationFound >= today && canRecordReplacementDate(rawItem)
             ? { expiration_found: result.expirationFound, lot_found: result.lotFound || undefined }
             : {}),
           notes: result?.notes || undefined,
@@ -2224,10 +2149,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
     // Every item carries the same four labels, so the group names the item and
     // aria-pressed says which answer is held — the colour alone did both.
-    // Present / Absent is the same stored verdict in the crew's words. It drops
-    // Not on truck and Out of service: beside Absent they read as the same
-    // answer, and the one that does not fail is the one a crew would pick.
-    const isPresence = item.checkType === 'presence';
     const passFailButtons = (
       <div className="flex items-stretch gap-2">
         <div className="grid flex-1 grid-cols-2 gap-2" role="group" aria-label={item.name}>
@@ -2244,7 +2165,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             } ${isExpired ? 'cursor-not-allowed opacity-50' : ''}`}
           >
             <CheckCircle className="h-4 w-4" />
-            {isPresence ? 'Present' : 'Pass'}
+            Pass
           </button>
           <button
             type="button"
@@ -2258,10 +2179,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             }`}
           >
             <XCircle className="h-4 w-4" />
-            {isPresence ? 'Absent' : 'Fail'}
+            Fail
           </button>
-          {!isPresence && notApplicableButton}
-          {!isPresence && outOfServiceButton}
+          {notApplicableButton}
+          {outOfServiceButton}
         </div>
         {trailing}
       </div>
@@ -2269,8 +2190,47 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
     switch (item.checkType) {
       case 'function':
-      case 'presence':
         return passFailButtons;
+
+      case 'presence':
+        // Two answers and no third: "Not on truck" is what Absent already
+        // says, and "Out of service" asks whether a thing works, which is a
+        // Works line's question.
+        return (
+          <div className="flex items-stretch gap-2">
+            <div className="grid flex-1 grid-cols-2 gap-2" role="group" aria-label={item.name}>
+              <button
+                type="button"
+                data-action="pass"
+                aria-pressed={effectiveStatus === 'pass'}
+                onClick={() => updateResultAndAdvance(item.id, { status: 'pass' })}
+                className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
+                  effectiveStatus === 'pass'
+                    ? 'bg-green-800 text-white'
+                    : 'border-theme-surface-border text-theme-text-muted border hover:border-green-800 hover:text-green-800'
+                }`}
+              >
+                <CheckCircle className="h-4 w-4" />
+                Present
+              </button>
+              <button
+                type="button"
+                data-action="fail"
+                aria-pressed={effectiveStatus === 'fail'}
+                onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
+                className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
+                  effectiveStatus === 'fail'
+                    ? 'bg-red-800 text-white'
+                    : 'border-theme-surface-border text-theme-text-muted border hover:border-red-800 hover:text-red-800'
+                }`}
+              >
+                <XCircle className="h-4 w-4" />
+                Absent
+              </button>
+            </div>
+            {trailing}
+          </div>
+        );
 
       case 'count': {
         // Par sets the restock; Min to Pass (or Critical Min) sets the verdict.
@@ -2491,15 +2451,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 )}
               </div>
             )}
-            {acceptsReplacementDate(item) && (
-              <ReplacementDateFields
-                itemId={item.id}
-                today={today}
-                expirationFound={result?.expirationFound}
-                lotFound={result?.lotFound}
-                onChange={(patch) => updateResult(item.id, patch)}
-              />
-            )}
+            {/* A line nothing else tracks has no swap, so the crew dates the
+                unit they put in instead. Offered once the date matters, and
+                kept open after, when the line already reads the new date. */}
+            {canRecordReplacementDate(item) &&
+              (expirationStatus === 'expired' || expirationStatus === 'expiring_soon' || result?.expirationFound) && (
+                <ReplacementDateFields
+                  item={item}
+                  answer={result}
+                  onChange={(patch) => updateResult(item.id, toItemResult(patch))}
+                  disabled={submitting || previewMode}
+                  today={new Date(`${today}T00:00:00`)}
+                />
+              )}
             {passFailButtons}
           </div>
         );
@@ -2592,11 +2556,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               {renderExpirationBadge(item)}
               {/* Show the caption only for a type we have words for. Falling
                   back to the raw value printed an internal token under the
-                  item name — a template stored with check_type "presence"
-                  captioned every item "presence", which reads as a typo to the
-                  crew. An unrecognised type is now silent rather than
-                  confusing; the backend rejects new ones, so this is for
-                  templates stored before it did. On the name's line rather
+                  item name, which reads as a typo to the crew. An
+                  unrecognised type is now silent rather than confusing; the
+                  backend rejects new ones, so this is for templates stored
+                  before it did. On the name's line rather
                   than its own, which cost every row a line of height. */}
               {!isQuantity && CHECK_TYPE_LABELS[item.checkType] && (
                 <span className="text-theme-text-muted ml-auto text-[10px]">{CHECK_TYPE_LABELS[item.checkType]}</span>
@@ -2829,26 +2792,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             )}
 
             {section.comps.map(({ comp }) => {
-              const isCollapsed = collapsedCompartments.has(comp.id);
-              const effectiveComp = { ...comp, items: comp.items.map(applyOverride) };
-              const status = getCompartmentStatus(effectiveComp, results, today);
-              const checkable = comp.items.filter((i) => i.checkType !== 'header' && i.checkType !== 'text');
-              const checked = checkable.filter(
-                (item) => getEffectiveStatus(applyOverride(item), results[item.id], today) !== 'not_checked'
-              ).length;
-              // A cleared seal answers the contents count, so those rows come
-              // off the screen: what is left is the short list the design calls
-              // "still needs eyes on" — dates and readings.
-              const sealCleared = sealIsClearing(comp);
-              const sealClearable = comp.isSealed ? sealClearableIn(comp) : [];
-              const clearedIds = sealCleared ? new Set(sealClearable.map((item) => item.id)) : new Set<string>();
-              const visibleItems = sealCleared ? comp.items.filter((item) => !clearedIds.has(item.id)) : comp.items;
-
-              // Items placed directly on the checklist: no heading, no bulk
-              // actions, nothing to collapse — they read as part of the list
-              // wherever the builder placed them. An emptied group renders
-              // nothing rather than an empty card.
+              // Items placed directly on the checklist: no heading, nothing to
+              // collapse, no bulk actions. They read as rows in the list.
               if (comp.isInline) {
+                // An emptied group is builder debris, not something to show a
+                // crew; rendering it would only leave a stray gap in the list.
                 if (comp.items.length === 0) return null;
                 return (
                   <div
@@ -2863,6 +2811,20 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   </div>
                 );
               }
+              const isCollapsed = collapsedCompartments.has(comp.id);
+              const effectiveComp = { ...comp, items: comp.items.map(applyOverride) };
+              const status = getCompartmentStatus(effectiveComp, results, today);
+              const checkable = comp.items.filter((i) => i.checkType !== 'header' && i.checkType !== 'text');
+              const checked = checkable.filter(
+                (item) => getEffectiveStatus(applyOverride(item), results[item.id], today) !== 'not_checked'
+              ).length;
+              // A cleared seal answers the contents count, so those rows come
+              // off the screen: what is left is the short list the design calls
+              // "still needs eyes on" — dates and readings.
+              const sealCleared = sealIsClearing(comp);
+              const sealClearable = comp.isSealed ? sealClearableIn(comp) : [];
+              const clearedIds = sealCleared ? new Set(sealClearable.map((item) => item.id)) : new Set<string>();
+              const visibleItems = sealCleared ? comp.items.filter((item) => !clearedIds.has(item.id)) : comp.items;
 
               return (
                 <div

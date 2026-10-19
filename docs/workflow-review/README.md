@@ -70,6 +70,12 @@ key, salt and secret key are generated on first run and kept in
 `.workflow-review/keys.env`: data encrypted under one key cannot be read under
 the next, so they must survive a restart. `--reset` keeps them.
 
+**Uploads are not scanned.** The review install has no ClamAV, and with
+scanning on, every upload is refused (503, "Files cannot be checked for
+malware right now"). So `start.sh` runs the backend with `CLAMAV_ENABLED=false`.
+Set `WR_CLAMAV_ENABLED=true`, and `CLAMAV_HOST` / `CLAMAV_PORT`, to review
+against a running scanner.
+
 `start.sh` without `--reset` keeps the data: activities build on each other (the
 members added in W08 are the members scheduled in W32), so a run resets only
 when the database is in a state no later run can use.

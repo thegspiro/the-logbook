@@ -5640,11 +5640,6 @@ class ShiftEquipmentCheck(Base):
             "checked_at",
         ),
         Index(
-            "idx_shift_equip_check_shift_tmpl",
-            "shift_id",
-            "template_id",
-        ),
-        Index(
             "idx_shift_equip_check_shift_timing",
             "shift_id",
             "check_timing",

@@ -52,6 +52,14 @@ these defaults.
     ``MinutesPublishingSettings.public_allowed``), so one stray switch cannot
     open it.
 
+``attendance_listing``
+    Which attendance statuses the minutes name: ``all``, ``present_excused`` or
+    ``present``. Absent or unrecognised reads as ``all``, the behaviour every
+    department had before this existed, so an upgrade changes nothing on a
+    printed or published copy. Display only: the roll is always recorded in
+    full, because quorum and the attendance reports read it. A set of minutes
+    can carry its own choice (``meeting_minutes.attendance_listing``).
+
 Every value is read defensively. The JSON is unvalidated and an exception here
 would take out the daily task for the whole organization over one mistyped
 setting, so anything malformed reads as its default.
@@ -65,6 +73,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import Organization
+from app.utils.minutes_attendance import DEFAULT_ATTENDANCE_LISTING, normalize_listing
 
 MINUTES_SETTINGS_KEY = "minutes"
 
@@ -235,3 +244,21 @@ async def load_minutes_publishing_settings(
         select(Organization.settings).where(Organization.id == str(organization_id))
     )
     return minutes_publishing_settings_in(result.scalar_one_or_none())
+
+
+ATTENDANCE_LISTING_FLAG = "attendance_listing"
+
+
+def attendance_listing_in(settings: Any) -> str:
+    """The department's attendance listing; ``all`` unless set to a known value."""
+    section = settings.get(MINUTES_SETTINGS_KEY) if isinstance(settings, dict) else None
+    if not isinstance(section, dict):
+        return DEFAULT_ATTENDANCE_LISTING
+    return normalize_listing(section.get(ATTENDANCE_LISTING_FLAG))
+
+
+async def load_attendance_listing(db: AsyncSession, organization_id: str) -> str:
+    result = await db.execute(
+        select(Organization.settings).where(Organization.id == str(organization_id))
+    )
+    return attendance_listing_in(result.scalar_one_or_none())

@@ -19,6 +19,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from pydantic import ValidationError
 from sqlalchemy import select
 
 from app.api.dependencies import get_current_user
@@ -35,8 +36,8 @@ from app.schemas.equipment_check import (
     CheckTemplateCompartmentCreate,
     CheckTemplateItemCreate,
 )
-from app.services.equipment_check_pdf import _status_label
 from app.services.equipment_check_service import EquipmentCheckService
+from app.utils.check_types import describe_status
 
 TODAY = date.today()
 YESTERDAY = TODAY - timedelta(days=1)
@@ -80,9 +81,10 @@ class TestPresenceType:
         assert _needs_note("fail", "function") is True
 
     def test_the_pdf_says_present_and_absent(self):
-        assert _status_label("presence", "pass") == "PRESENT"
-        assert _status_label("presence", "fail") == "ABSENT"
-        assert _status_label("function", "fail") == "FAIL"
+        # The detail PDF prints describe_status upper-cased.
+        assert describe_status("presence", "pass") == "present"
+        assert describe_status("presence", "fail") == "absent"
+        assert describe_status("function", "fail") == "fail"
 
 
 @pytest.mark.unit
@@ -193,20 +195,17 @@ class TestReplacementDateValidation:
 
 @pytest.mark.unit
 class TestInlineGroupSchema:
-    def test_an_inline_group_is_kept_plain(self):
-        group = CheckTemplateCompartmentCreate(
-            name="Stray",
-            is_inline=True,
-            is_sealed=True,
-            is_header=True,
-            parent_compartment_id="p-1",
-            container_type="bag",
-        )
+    def test_an_inline_group_has_no_name(self):
+        group = CheckTemplateCompartmentCreate(name="Stray", is_inline=True)
         assert group.name == ""
-        assert group.is_sealed is False
-        assert group.is_header is False
-        assert group.parent_compartment_id is None
-        assert group.container_type == "compartment"
+
+    @pytest.mark.parametrize(
+        "extra",
+        [{"is_sealed": True}, {"is_header": True}, {"parent_compartment_id": "p-1"}],
+    )
+    def test_an_inline_group_cannot_be_sealed_a_section_or_nested(self, extra):
+        with pytest.raises(ValidationError, match="placed directly on a checklist"):
+            CheckTemplateCompartmentCreate(name="", is_inline=True, **extra)
 
     def test_an_inline_group_needs_no_name_and_may_be_empty(self):
         errors = EquipmentCheckService._publication_errors(
@@ -389,10 +388,13 @@ class TestReplacementDateSubmission:
             .scalars()
             .all()
         )
-        assert [log.action for log in logs] == ["dated"]
+        assert [log.action for log in logs] == ["replacement_dated"]
         assert logs[0].user_id == user_id
-        assert logs[0].changes["from"]["expiration_date"] == YESTERDAY.isoformat()
-        assert logs[0].changes["to"]["expiration_date"] == NEXT_YEAR.isoformat()
+        assert logs[0].changes["expiration_date"] == {
+            "old": YESTERDAY.isoformat(),
+            "new": NEXT_YEAR.isoformat(),
+        }
+        assert logs[0].changes["lot_number"] == {"old": "OLD-1", "new": "NEW-7"}
 
     async def test_a_past_date_is_refused_and_nothing_changes(
         self, db_session, setup_org_and_admin
@@ -490,14 +492,14 @@ class TestInlineGroups:
         template = await _template(db_session, org_id, active=False)
         loose = await _compartment(db_session, template, is_inline=True)
 
-        with pytest.raises(ValueError, match="Nothing can be stored inside"):
+        with pytest.raises(ValueError, match="cannot be stored inside items"):
             await EquipmentCheckService(db_session).add_compartment(
                 template.id,
                 org_id,
                 {"name": "Bag", "parent_compartment_id": loose.id},
             )
 
-    async def test_an_update_cannot_seal_or_name_an_inline_group(
+    async def test_an_update_cannot_name_an_inline_group(
         self, db_session, setup_org_and_admin
     ):
         org_id, _ = setup_org_and_admin
@@ -505,12 +507,23 @@ class TestInlineGroups:
         loose = await _compartment(db_session, template, is_inline=True)
 
         updated = await EquipmentCheckService(db_session).update_compartment(
-            loose.id, org_id, {"name": "Renamed", "is_sealed": True}
+            loose.id, org_id, {"name": "Renamed"}
         )
 
         assert updated is not None
         assert updated.name == ""
-        assert updated.is_sealed is False
+
+    async def test_an_update_cannot_seal_an_inline_group(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        template = await _template(db_session, org_id, active=False)
+        loose = await _compartment(db_session, template, is_inline=True)
+
+        with pytest.raises(ValueError, match="cannot be sealed"):
+            await EquipmentCheckService(db_session).update_compartment(
+                loose.id, org_id, {"is_sealed": True}
+            )
 
     async def test_another_department_cannot_reach_an_inline_group(
         self, db_session, setup_org_and_admin

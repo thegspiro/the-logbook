@@ -10,14 +10,14 @@
 // ============================================================================
 
 /**
- * The four answer shapes a check item can have, plus the two structural rows.
+ * The answer shapes a check item can have, plus the two structural rows.
  *
- * A check stores exactly one of four things: a number, a pass/fail, a
- * quantity, or a date. The type decides the control, the pass rule, and what
- * the record keeps — so an admin building a checklist picks a type, not a
- * layout.
+ * A check stores one of five things: a number, a pass/fail, a quantity, a
+ * date, or present/absent. The type decides the control, the pass rule, and
+ * what the record keeps — so an admin building a checklist picks a type, not
+ * a layout.
  *
- * `HEADER` and `TEXT` are deliberately outside the four. They are not checks;
+ * `HEADER` and `TEXT` are deliberately outside the five. They are not checks;
  * they *are* the layout, which is the thing a type is no longer allowed to be.
  *
  * Mirrors `backend/app/utils/check_types.py`, which is the write-side
@@ -39,8 +39,10 @@ export const CheckType = {
   /** A date on record, confirmed rather than retyped. Medications, IV fluids,
    *  AED pads, extinguisher inspection. */
   EXPIRY: 'expiry',
-  /** Is it on the truck. Stores pass/fail, answered Present or Absent, and
-   *  Absent explains itself the way a short count does. Gloves, a map book. */
+  /** Whether the thing is aboard at all. Stores present / absent, as pass /
+   *  fail. Spare SCBA bottle, wheel chocks, map book. Absent fails the line
+   *  without a note, the way a short count does. Not the legacy `present`,
+   *  which has always meant pass/fail and still normalizes to `function`. */
   PRESENCE: 'presence',
   /** Structural: a section heading. Not a check. */
   HEADER: 'header',
@@ -127,6 +129,27 @@ export function soonestExpiration(item: CheckTemplateItem): string | undefined {
 }
 
 /**
+ * Whether a crew may date the replacement unit they put in on this line.
+ *
+ * Only a Date line the inventory does not track. A linked line, or one with
+ * lots recorded aboard, has its dates owned by the lot swap, which also moves
+ * stock; a date typed on a check would bypass that and leave the record of
+ * what is aboard disagreeing with the line.
+ *
+ * Mirrors `EquipmentCheckService._takes_crew_replacement_date`, which drops
+ * the date on any other line, so offering it here would only lose the entry.
+ */
+export function canRecordReplacementDate(
+  item: Pick<CheckTemplateItem, 'checkType' | 'inventoryItemId' | 'lotsAboard'>
+): boolean {
+  return (
+    normalizeCheckType(item.checkType) === CheckType.EXPIRY &&
+    !item.inventoryItemId &&
+    (item.lotsAboard ?? []).length === 0
+  );
+}
+
+/**
  * Par: what this position should hold, as `_target_quantity` resolves it.
  *
  * Par is what a shortfall, a restock and a swap are measured against. It does
@@ -165,23 +188,6 @@ export function passFloor(
 ): number | null {
   const floors = [requiredQuantity, criticalMinimumQuantity].filter((v): v is number => v != null);
   return floors.length > 0 ? Math.max(...floors) : null;
-}
-
-/**
- * Whether the crew may record a replacement's date on this line.
- *
- * Mirrors `EquipmentCheckService._accepts_replacement_date`: a Date line with
- * no inventory link and no lots aboard, whose date nothing else owns. A
- * linked line records its new date through the stock swap instead.
- */
-export function acceptsReplacementDate(
-  item: Pick<CheckTemplateItem, 'checkType' | 'inventoryItemId' | 'lotsAboard'>
-): boolean {
-  return (
-    normalizeCheckType(item.checkType) === CheckType.EXPIRY &&
-    !item.inventoryItemId &&
-    !(item.lotsAboard ?? []).some((lot) => lot.quantity > 0)
-  );
 }
 
 /**
@@ -588,8 +594,9 @@ export interface CheckTemplateCompartment {
    */
   isSealed?: boolean;
   /**
-   * A headingless group: its items sit directly on the checklist, wherever the
-   * group is placed among the locations. Never sealed, nested or named.
+   * A headingless group: its items sit directly on the checklist, in place
+   * among the locations. It has no name, cannot be sealed, and holds no
+   * locations of its own.
    */
   isInline?: boolean;
   parentCompartmentId?: string;
@@ -606,9 +613,8 @@ export interface CheckTemplateCompartmentCreate {
   is_header?: boolean | undefined;
   container_type?: string | undefined;
   is_sealed?: boolean | undefined;
-  parent_compartment_id?: string | undefined;
-  /** Fixed at creation; the server coerces an inline group to stay plain. */
   is_inline?: boolean | undefined;
+  parent_compartment_id?: string | undefined;
   items?: CheckTemplateItemCreate[] | undefined;
 }
 
@@ -621,6 +627,7 @@ export interface CheckTemplateCompartmentUpdate {
   // NOT NULL: no cleared state, so null is not offered.
   container_type?: string | undefined;
   is_sealed?: boolean | undefined;
+  is_inline?: boolean | undefined;
   parent_compartment_id?: string | null | undefined;
 }
 
@@ -698,6 +705,20 @@ export const CHECK_ITEM_STATUS_LABELS: Record<string, string> = {
   out_of_service: 'Out of service',
 };
 
+/**
+ * A filed status in the words the crew answered with. Pass and fail are what
+ * is stored, so every total keeps working off them, but a Present line was
+ * answered Present or Absent. Mirrors `describe_status` in
+ * `backend/app/utils/check_types.py`.
+ */
+export function checkItemStatusLabel(checkType: string | null | undefined, status: string): string {
+  if (normalizeCheckType(checkType) === CheckType.PRESENCE) {
+    if (status === 'pass') return 'Present';
+    if (status === 'fail') return 'Absent';
+  }
+  return CHECK_ITEM_STATUS_LABELS[status] ?? status;
+}
+
 export interface CheckItemResultSubmit {
   template_item_id: string;
   compartment_name: string;
@@ -713,7 +734,11 @@ export interface CheckItemResultSubmit {
   lot_number?: string | undefined;
   serial_found?: string | undefined;
   lot_found?: string | undefined;
-  /** Expiration read off a replacement unit; written back onto the template. */
+  /**
+   * Expiration read off a replacement unit the crew put in, on a Date line not
+   * linked to inventory. Written back onto the template line; a past date is
+   * refused. Ignored on a linked line, whose dates move only with a lot swap.
+   */
   expiration_found?: string | undefined;
   photo_urls?: string[] | undefined;
   is_expired?: boolean | undefined;
@@ -856,6 +881,8 @@ export interface CheckItemHistory {
   shiftId: string;
   shiftDate?: string;
   status: string;
+  /** The line's type when it was answered. Absent on a server before 2026-10-18. */
+  checkType?: string;
   quantityFound?: number;
   levelReading?: number;
   serialNumber?: string;

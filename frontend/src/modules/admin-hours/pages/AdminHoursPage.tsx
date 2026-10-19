@@ -39,6 +39,7 @@ import { addHoursExact, syncEndToStartExact, resolveEndUtc, type DerivedEndTime 
 import QuickDurationButtons from '../components/QuickDurationButtons';
 import MyEntryEditForm from '../components/MyEntryEditForm';
 import { entryMethodLabel } from '../utils/entryMethod';
+import { entryStatusLabel } from '../utils/entryStatus';
 
 const PAGE_SIZE = 20;
 
@@ -690,7 +691,7 @@ const AdminHoursPage: React.FC = () => {
                     <span className="text-theme-text-primary text-sm font-semibold">
                       {formatHours(category.totalHours)} hrs{' '}
                       <span className="text-theme-text-muted font-normal">
-                        · {category.entryCount} entries · {share}%
+                        · {category.entryCount} {category.entryCount === 1 ? 'entry' : 'entries'} · {share}%
                       </span>
                     </span>
                   </div>
@@ -756,8 +757,11 @@ const AdminHoursPage: React.FC = () => {
           >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
-                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Category *</label>
+                <label htmlFor="manual-category" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                  Category *
+                </label>
                 <select
+                  id="manual-category"
                   value={manualData.category_id}
                   onChange={(e) => setManualData({ ...manualData, category_id: e.target.value })}
                   required
@@ -778,6 +782,7 @@ const AdminHoursPage: React.FC = () => {
                 </label>
                 <DateTimeQuarterHour
                   id="manual-clock-in"
+                  timeLabel="Start time"
                   value={manualData.clock_in_at}
                   onChange={handleManualStartChange}
                   required
@@ -791,6 +796,7 @@ const AdminHoursPage: React.FC = () => {
                 </label>
                 <DateTimeQuarterHour
                   id="manual-clock-out"
+                  timeLabel="End time"
                   value={manualData.clock_out_at}
                   onChange={(val) => {
                     setManualData({ ...manualData, clock_out_at: val });
@@ -819,8 +825,11 @@ const AdminHoursPage: React.FC = () => {
             )}
 
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Description</label>
+              <label htmlFor="manual-description" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                Description
+              </label>
               <input
+                id="manual-description"
                 type="text"
                 value={manualData.description ?? ''}
                 onChange={(e) => setManualData({ ...manualData, description: e.target.value })}
@@ -934,7 +943,7 @@ const AdminHoursPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <span className="text-theme-text-primary font-medium">{entry.categoryName}</span>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColor(entry.status)}`}>
-                        {entry.status}
+                        {entryStatusLabel(entry.status)}
                       </span>
                     </div>
                     <div className="text-theme-text-muted text-sm">

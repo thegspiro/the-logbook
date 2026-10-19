@@ -4,7 +4,7 @@
  * The template is stored the way an admin builds it: a flat list of
  * compartments carrying `parentCompartmentId`, section dividers mixed in among
  * them, and per-item columns that mean different things depending on which of
- * four types the item is. The sweep wants a walk — an ordered list of places,
+ * the types the item is. The sweep wants a walk — an ordered list of places,
  * each holding what to ask there. This is the only place that translation
  * happens, so a rule about it has one home rather than one per screen.
  *
@@ -31,7 +31,7 @@
  */
 
 import {
-  acceptsReplacementDate,
+  canRecordReplacementDate,
   CheckType,
   normalizeCheckType,
   passFloor,
@@ -106,9 +106,17 @@ function toItemSpec(item: CheckTemplateItem, source: SweepSource): CheckItemSpec
     ...(expiry !== undefined ? { expirationDate: expiry } : {}),
     ...(item.inventoryItemId !== undefined ? { inventoryItemId: item.inventoryItemId } : {}),
     ...(item.expirationWarningDays !== undefined ? { expirationWarningDays: item.expirationWarningDays } : {}),
-    ...(acceptsReplacementDate(item) ? { acceptsReplacement: true } : {}),
+    ...(canRecordReplacementDate(item) ? { takesReplacementDate: true } : {}),
   };
 }
+
+/**
+ * What the strip and the Next button call a group of items placed directly on
+ * the checklist. It has no name of its own — that is the point of it — but the
+ * map still needs words for "you are here", and the stop screen shows no
+ * heading for it.
+ */
+export const INLINE_STOP_NAME = 'On the checklist';
 
 /**
  * The seal as the crew meets it: the number off the record, the answer so far.
@@ -171,6 +179,9 @@ export function toLapStops(source: SweepSource): LapStop[] {
     // stop. One that somehow carries items is kept anyway, because dropping
     // a crew's items to honour a layout flag is the wrong trade.
     if (compartment.isHeader && compartment.items.length === 0) continue;
+    // An emptied group of items placed directly on the checklist is not a
+    // place to stand; publishing ignores it the same way.
+    if (compartment.isInline && compartment.items.length === 0) continue;
     const parentId = parentOf(compartment);
     if (parentId === undefined) {
       roots.push(compartment);
@@ -188,9 +199,8 @@ export function toLapStops(source: SweepSource): LapStop[] {
     const seal = toSeal(compartment, source);
     return {
       id: compartment.id,
-      // Items placed directly on the checklist have no heading of their own;
-      // the walk still needs a name for the stop and the jump list.
-      name: compartment.isInline ? 'On the checklist' : compartment.name,
+      name: compartment.isInline ? INLINE_STOP_NAME : compartment.name,
+      ...(compartment.isInline ? { isInline: true } : {}),
       ...(compartment.containerType !== undefined ? { containerType: compartment.containerType } : {}),
       ...(compartment.isSealed ? { isSealed: true } : {}),
       ...(seal !== undefined ? { seal } : {}),
@@ -202,9 +212,5 @@ export function toLapStops(source: SweepSource): LapStop[] {
     };
   };
 
-  return roots
-    .filter((compartment) => !(compartment.isInline && compartment.items.length === 0))
-    .slice()
-    .sort(bySortOrder)
-    .map(build);
+  return roots.slice().sort(bySortOrder).map(build);
 }

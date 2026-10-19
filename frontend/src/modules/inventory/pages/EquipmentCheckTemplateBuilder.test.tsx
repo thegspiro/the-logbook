@@ -2993,7 +2993,7 @@ describe('EquipmentCheckTemplateBuilder date lines and checklist items', () => {
     getTemplate.mockResolvedValue(withRadioAs({ checkType: 'expiry', hasExpiration: true }));
     renderBuilder();
 
-    expect(await screen.findByRole('button', { name: /Radio needs a date/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Radio needs an expiration date/ })).toBeInTheDocument();
   });
 
   it('does not list one that has its date', async () => {
@@ -3004,7 +3004,7 @@ describe('EquipmentCheckTemplateBuilder date lines and checklist items', () => {
     renderBuilder();
 
     await screen.findByRole('button', { name: /Collapse Cab|Expand Cab/ });
-    expect(screen.queryByRole('button', { name: /Radio needs a date/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Radio needs an expiration date/ })).not.toBeInTheDocument();
   });
 
   it('locks Has Expiration on for a Date line', async () => {
@@ -3034,12 +3034,12 @@ describe('EquipmentCheckTemplateBuilder date lines and checklist items', () => {
     renderBuilder();
     await screen.findByRole('button', { name: /Collapse Cab|Expand Cab/ });
 
-    await user.click(screen.getByRole('button', { name: 'Add items to the checklist' }));
+    // Spot 0 is the place above the first location.
+    await user.click(screen.getByTestId('add-item-here-0'));
 
     await waitFor(() =>
       expect(addCompartment).toHaveBeenCalledWith('template-1', expect.objectContaining({ is_inline: true, name: '' }))
     );
-    expect(await screen.findByText('On the checklist · no location')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Remove these checklist items' })).toBeInTheDocument();
+    expect(await screen.findByTestId('inline-group-loose')).toBeInTheDocument();
   });
 });

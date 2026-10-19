@@ -1633,6 +1633,18 @@ class ReportsService:
                     "category": "training",
                     "available": True,
                 },
+                # W72: generate_report has run this since it was added, but the
+                # catalog never listed it — so /available could not hide it from
+                # a caller without admin_hours.manage (RPT-3), and Saved Reports,
+                # which builds its picker from this list, could not offer it.
+                {
+                    "id": "admin_hours",
+                    "title": "Admin Hours Report",
+                    "description": "Administrative hours logged by members, broken down by category.",
+                    "category": "admin",
+                    "available": True,
+                    "usesDateRange": True,
+                },
                 {
                     "id": "department_overview",
                     "title": "Department Overview",
@@ -1878,6 +1890,8 @@ class ReportsService:
         range_start, range_end = await resolve_local_range_utc(
             self.db, organization_id, start_date, end_date
         )
+        # The period is chosen in department days; each row's date must be too.
+        tz = await resolve_reporting_timezone(self.db, organization_id)
         if range_start:
             base_conditions.append(AdminHoursEntry.clock_in_at >= range_start)
         if range_end:
@@ -1910,8 +1924,10 @@ class ReportsService:
                 {
                     "member_name": f"{first_name} {last_name}",
                     "category_name": category_name,
+                    # W72: the UTC day, which is already tomorrow for an evening
+                    # session, dated a 7 PM Chicago clock-in a day late.
                     "date": (
-                        entry.clock_in_at.strftime("%Y-%m-%d")
+                        local_date(entry.clock_in_at, tz).isoformat()
                         if entry.clock_in_at
                         else None
                     ),

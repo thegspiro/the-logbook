@@ -504,28 +504,44 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
-### Equipment checks: Present / Absent, crew-dated replacements, items with no location (2026-10-18)
+### Equipment checklists: a Date line needs its date to publish (2026-10-18)
 
-- **A Date line must have a date to publish.** Choosing the Date type now
-  always turns expiration on, and a Date line with no expiration date (and no
-  dated lot aboard) blocks publishing. This is checked when a checklist is
-  published, or saved while it is active. A checklist that is already live
-  keeps working for crews, but the next time an admin saves it they must give
-  each dateless Date line a date or change its type.
+A **Date** line (stored as `expiry`) checks the expiration date on record, so a
+checklist can no longer be **published** while one of its Date lines has no
+date. The builder lists each one under "Before publishing" and the server
+refuses the publish with `date item "<name>" needs an expiration date`. Drafts
+still save. A Date line linked to an inventory item is exempt, because its
+dates come from the lots aboard, and so is a line with a dated lot aboard.
+
+- **A checklist that is already published keeps running.** Nothing is
+  unpublished at upgrade. The rule applies the next time someone publishes it,
+  which also happens after any structural edit, since those return a checklist
+  to draft. Add the missing dates, or switch those lines to another type,
+  before then.
+- **Choosing Date turns Has Expiration on**, and it cannot be turned off on a
+  Date line. Other types can still tick it.
 - **Crews can record a replacement's date.** On a Date line not linked to
-  inventory, the member doing the check can enter the date printed on a
-  replacement they put aboard. The line takes that date when the check is
-  submitted, and the checklist's change log records who changed it ("dated").
-  Lines linked to inventory still change only through the stock swap.
-- **New Present answer type.** Crews answer Present or Absent. Absent fails the
-  item with no note required. Existing checklists are not converted; an admin
-  switches a line to Present in the builder. An app that has not been reloaded
-  since the upgrade shows a Present line with Pass / Fail buttons and still
-  files the answer correctly.
+  inventory, the crew can enter the date (and optionally the lot) printed on a
+  replacement unit they put in. The line's date on the checklist is updated to
+  it, the change log names the member and the check, and the checklist stays
+  published. A date in the past is refused. Inventory-linked lines keep using
+  Swap.
+
+The same release adds two things that need no action:
+
 - **Items can sit directly on a checklist**, between locations, with no
-  heading (the builder's **Items** button). Migration `d80493f28236` adds one
-  column, `check_template_compartments.is_inline`, defaulting to false. It
-  rewrites no rows and is safe on a running database.
+  heading. They are stored as a headingless group, using the new
+  `check_template_compartments.is_inline` column. Migration `e99f068be43e` only
+  adds that column (default false) and rewrites no rows, so it is safe on a
+  running database. An emptied group is removed when the checklist is saved.
+  A second revision, `d80493f28236`, adds the same column under the same
+  existence guard; it was written in parallel and finds the column already
+  there, so on every database it changes nothing. Both are expected in
+  `alembic history`.
+- **A Present answer type** (Present / Absent). Absent fails the line and needs
+  no note. No existing line is converted. A device still running the previous
+  app shows a Present line as a Works line and files its Pass / Fail, which the
+  server stores the same way.
 
 ### A weekly security report is emailed to the IT Manager (2026-10-16)
 

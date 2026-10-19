@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**316 tables · 5229 columns · 1066 foreign keys**
+**316 tables · 5230 columns · 1066 foreign keys**
 
 ---
 
@@ -439,7 +439,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 47 | Meeting Minutes model |
+| [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 48 | Meeting Minutes model |
 | [`meeting_motions`](#meeting_motions) | `Motion` | 19 | Motion model |
 | [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 15 | Action Item model |
 | [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 13 | A file kept with a set of minutes: reports, handouts, the signed copy. |
@@ -6661,6 +6661,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `adopted_as_amended` | BOOL | yes |  |  |  |
 | `adoption_moved_by` | VARCHAR(200) | yes |  |  |  |
 | `adoption_seconded_by` | VARCHAR(200) | yes |  |  |  |
+| `attendance_listing` | VARCHAR(20) | yes |  |  |  |
 | `adopting_minutes_id` | VARCHAR(36) | yes | FK |  | → `meeting_minutes.id` ON DELETE SET NULL |
 | `event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `meeting_id` | VARCHAR(36) | yes | FK |  | → `meetings.id` ON DELETE SET NULL |
@@ -9859,7 +9860,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_shift_equip_check_org_date` (`organization_id`, `checked_at`)
 - `idx_shift_equip_check_shift_timing` (`shift_id`, `check_timing`)
-- `idx_shift_equip_check_shift_tmpl` (`shift_id`, `template_id`)
 - `idx_shift_equip_check_template` (`template_id`)
 - `idx_shift_equip_check_user` (`checked_by`)
 

@@ -15,14 +15,12 @@
  */
 
 import { AlertTriangle, Check, ShieldAlert, ShieldCheck, X } from 'lucide-react';
-import React, { useState } from 'react';
+import React from 'react';
 
 import { CheckType, daysUntil, normalizeCheckType, submitterMaySwap } from '@/modules/inventory/types/equipmentCheck';
 
-import { toLocalISODate } from '@/utils/dateFormatting';
-
 import { countAnswer, expiryAnswer, levelAnswer } from './checkAnswers';
-import { FaultDetail, type CheckItemAnswer, type CheckItemSpec } from './CheckItemControls';
+import { FaultDetail, ReplacementDateFields, type CheckItemAnswer, type CheckItemSpec } from './CheckItemControls';
 import {
   contentsAreSealed,
   expiryUrgency,
@@ -342,6 +340,16 @@ const GaugeCard: React.FC<{
 // Function — one line, the test beside it
 // ============================================================================
 
+/**
+ * A Present line asks a different question with the same two buttons: whether
+ * the thing is aboard, not whether it works. Absent explains itself, so it
+ * opens no fault detail.
+ */
+const VERDICT_WORDS = {
+  function: { yes: 'works', no: 'does not work' },
+  presence: { yes: 'is present', no: 'is absent' },
+} as const;
+
 const FunctionRow: React.FC<{
   item: CheckItemSpec;
   answer: CheckItemAnswer | undefined;
@@ -349,9 +357,8 @@ const FunctionRow: React.FC<{
   disabled?: boolean | undefined;
 }> = ({ item, answer, onAnswer, disabled }) => {
   const status = answer?.status;
-  // A presence line is the same stored verdict, answered in words rather than
-  // icons — "is it there" is not "does it work", and a tick reads as the latter.
-  const presence = normalizeCheckType(item.checkType) === CheckType.PRESENCE;
+  const isPresence = normalizeCheckType(item.checkType) === CheckType.PRESENCE;
+  const words = isPresence ? VERDICT_WORDS.presence : VERDICT_WORDS.function;
   return (
     <div data-testid={`switch-${item.id}`} className="border-theme-surface-border border-b last:border-b-0">
       <div className="flex items-center gap-3 px-3 py-2">
@@ -365,29 +372,29 @@ const FunctionRow: React.FC<{
             type="button"
             disabled={disabled}
             onClick={() => onAnswer({ status: 'pass' })}
-            aria-label={presence ? `${item.name} is present` : `${item.name} works`}
+            aria-label={`${item.name} ${words.yes}`}
             aria-pressed={status === 'pass'}
-            className={`flex h-11 ${presence ? 'px-3 text-[14px] font-bold' : 'w-12'} items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
+            className={`flex h-11 w-12 items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
               status === 'pass'
                 ? 'border-green-800 bg-green-800 text-white'
                 : 'border-theme-input-border text-theme-text-secondary hover:border-green-800'
             }`}
           >
-            {presence ? 'Present' : <Check className="h-5 w-5" aria-hidden="true" />}
+            <Check className="h-5 w-5" aria-hidden="true" />
           </button>
           <button
             type="button"
             disabled={disabled}
             onClick={() => onAnswer({ status: 'fail' })}
-            aria-label={presence ? `${item.name} is absent` : `${item.name} does not work`}
+            aria-label={`${item.name} ${words.no}`}
             aria-pressed={status === 'fail'}
-            className={`flex h-11 ${presence ? 'px-3 text-[14px] font-bold' : 'w-12'} items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
+            className={`flex h-11 w-12 items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
               status === 'fail'
                 ? 'border-red-800 bg-red-800 text-white'
                 : 'border-theme-input-border text-theme-text-secondary hover:border-red-800'
             }`}
           >
-            {presence ? 'Absent' : <X className="h-5 w-5" aria-hidden="true" />}
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -395,8 +402,7 @@ const FunctionRow: React.FC<{
       {/* A fault opens the same two fields here as in the accordion, from the
           same component — a note written on one screen and a note written on
           the other are the same field on the same record. */}
-      {/* Absent needs no explanation, so it opens no fault fields. */}
-      {status === 'fail' && !presence && (
+      {status === 'fail' && !isPresence && (
         <div className="px-3 pb-3">
           <FaultDetail item={item} answer={answer} onChange={onAnswer} disabled={disabled} />
         </div>
@@ -424,11 +430,6 @@ const ExpiryRow: React.FC<{
   const expired = days !== null && days < 0;
   const inWindow = days !== null && days >= 0 && days <= pullAt;
   const confirmed = answer?.expiryConfirmed === true;
-  // A replacement already dated moves this row's date to the new unit's (the
-  // form resolves it through applyOverride), so the field stays open on the
-  // answer rather than on the expiry it has just cleared.
-  const [replacing, setReplacing] = useState(Boolean(answer?.expirationFound));
-  const offerReplacement = item.acceptsReplacement === true && (expired || inWindow || replacing);
   // The adapter has already resolved par and the carried count, so those are
   // this screen's answers to the pair `_target_quantity` and `_on_truck`
   // compare. The rule itself lives in one place.
@@ -437,18 +438,23 @@ const ExpiryRow: React.FC<{
     (canManageSwap === false &&
       !submitterMaySwap(expired, item.expectedQuantity ?? null, item.carriedQuantity ?? null));
 
+  // A line nothing else tracks has no swap, so the crew dates the unit they
+  // put in instead. Offered once the date matters, and kept open after, when
+  // the line already reads the new unit's date.
+  const offerReplacement = item.takesReplacementDate === true && (expired || inWindow || !!answer?.expirationFound);
+
   return (
-    <div data-testid={`expiry-row-${item.id}`} className="border-theme-surface-border border-b last:border-b-0">
-      <div
-        data-testid={`expiry-${item.id}`}
-        className={`flex items-center gap-3 px-3 py-2 ${offerReplacement ? 'border-b' : ''} ${
-          expired
-            ? 'bg-theme-alert-danger-bg border-theme-alert-danger-border'
-            : inWindow
-              ? 'bg-theme-alert-warning-bg border-theme-alert-warning-border'
-              : 'border-theme-surface-border'
-        }`}
-      >
+    <div
+      data-testid={`expiry-${item.id}`}
+      className={`border-b px-3 py-2 last:border-b-0 ${
+        expired
+          ? 'bg-theme-alert-danger-bg border-theme-alert-danger-border'
+          : inWindow
+            ? 'bg-theme-alert-warning-bg border-theme-alert-warning-border'
+            : 'border-theme-surface-border'
+      }`}
+    >
+      <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-theme-text-primary text-[16px] font-semibold">{item.name}</p>
           <p
@@ -509,90 +515,9 @@ const ExpiryRow: React.FC<{
         </div>
       </div>
       {offerReplacement && (
-        <SweepReplacementDate
-          item={item}
-          answer={answer}
-          today={today}
-          open={replacing}
-          onOpen={() => setReplacing(true)}
-          onAnswer={onAnswer}
-          disabled={disabled}
-        />
-      )}
-    </div>
-  );
-};
-
-/**
- * The sweep's way in to recording a replacement's date on an unlinked Date
- * line — the same field the accordion offers, held to the same rule: a date
- * already past is refused here and again by the server.
- */
-const SweepReplacementDate: React.FC<{
-  item: CheckItemSpec;
-  answer: CheckItemAnswer | undefined;
-  today: Date;
-  open: boolean;
-  onOpen: () => void;
-  onAnswer: (patch: Partial<CheckItemAnswer>) => void;
-  disabled?: boolean | undefined;
-}> = ({ item, answer, today, open, onOpen, onAnswer, disabled }) => {
-  const todayIso = toLocalISODate(today);
-  const [draft, setDraft] = useState(answer?.expirationFound ?? '');
-  const past = draft !== '' && draft < todayIso;
-  if (!open) {
-    return (
-      <div className="px-3 pb-2">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={onOpen}
-          className="text-theme-accent-blue min-h-11 text-[14px] font-semibold disabled:opacity-50"
-        >
-          Replaced it? Enter the new date
-        </button>
-      </div>
-    );
-  }
-  return (
-    <div className="grid grid-cols-2 gap-2 px-3 pb-3">
-      <div>
-        <label className="form-label" htmlFor={`sweep-replacement-date-${item.id}`}>
-          New unit&apos;s expiration
-        </label>
-        <input
-          id={`sweep-replacement-date-${item.id}`}
-          type="date"
-          min={todayIso}
-          disabled={disabled}
-          className={`form-input ${past ? 'border-theme-alert-danger-icon' : ''}`}
-          value={draft}
-          aria-invalid={past}
-          onChange={(e) => {
-            const next = e.target.value;
-            setDraft(next);
-            onAnswer({ expirationFound: next !== '' && next >= todayIso ? next : undefined });
-          }}
-        />
-      </div>
-      <div>
-        <label className="form-label" htmlFor={`sweep-replacement-lot-${item.id}`}>
-          Lot (optional)
-        </label>
-        <input
-          id={`sweep-replacement-lot-${item.id}`}
-          type="text"
-          maxLength={100}
-          disabled={disabled}
-          className="form-input"
-          value={answer?.lotFound ?? ''}
-          onChange={(e) => onAnswer({ lotFound: e.target.value || undefined })}
-        />
-      </div>
-      {past && (
-        <p className="text-theme-alert-danger-title col-span-2 text-[13px] font-semibold">
-          That date has passed. Put an in-date unit aboard.
-        </p>
+        <div className="pt-2">
+          <ReplacementDateFields item={item} answer={answer} onChange={onAnswer} disabled={disabled} today={today} />
+        </div>
       )}
     </div>
   );
@@ -621,7 +546,8 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
   const of = (type: string) => items.filter((i) => normalizeCheckType(i.checkType) === type);
   const counts = of(CheckType.COUNT);
   const gauges = of(CheckType.LEVEL);
-  // Presence lines share the switch rows: one line, two answers.
+  // Present lines share the switch rows' two-button layout, in template order
+  // among them, because both are a verdict read off the cabinet.
   const switches = items.filter((i) => {
     const t = normalizeCheckType(i.checkType);
     return t === CheckType.FUNCTION || t === CheckType.PRESENCE;

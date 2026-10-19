@@ -310,6 +310,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter templates..."
+            aria-label="Filter templates"
             className="form-input py-1.5 pr-2 pl-7 text-xs"
           />
         </div>
@@ -350,7 +351,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
               type="button"
               onClick={() => setCollapsed((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
               aria-expanded={isOpen}
-              className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary flex w-full items-center gap-1.5 rounded-md px-3 py-1.5 text-left text-xs font-semibold tracking-wide uppercase transition-colors"
+              className="touch:min-h-11 text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary flex w-full items-center gap-1.5 rounded-md px-3 py-1.5 text-left text-xs font-semibold tracking-wide uppercase transition-colors"
             >
               {isOpen ? (
                 <ChevronDown className="h-3.5 w-3.5 shrink-0" />

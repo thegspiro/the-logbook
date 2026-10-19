@@ -518,7 +518,7 @@ const PhotoUseConsentPage: React.FC = () => {
             </select>
           </div>
 
-          <label className="text-theme-text-secondary flex items-center gap-2 text-sm sm:ml-auto">
+          <label className="text-theme-text-secondary touch:min-h-11 flex items-center gap-2 text-sm sm:ml-auto">
             <input
               type="checkbox"
               className="form-checkbox"
@@ -542,20 +542,25 @@ const PhotoUseConsentPage: React.FC = () => {
                 className="badge border-theme-surface-border bg-theme-surface text-theme-text-primary gap-1.5 border py-1 pr-1.5 pl-2.5"
               >
                 {chip.label}
+                {/* The circle is drawn on the inner span so the button itself can
+                    grow to a finger-sized target without the chip growing a
+                    44px grey disc; the negative margin keeps the chip's height. */}
                 <button
                   type="button"
                   onClick={chip.onClear}
                   aria-label={chip.clearLabel}
-                  className="bg-theme-surface-hover text-theme-text-secondary hover:text-theme-text-primary inline-flex h-4.5 w-4.5 items-center justify-center rounded-full"
+                  className="text-theme-text-secondary hover:text-theme-text-primary touch-target-phone touch:-my-3 touch:-mr-3 inline-flex items-center justify-center"
                 >
-                  <X className="h-2.5 w-2.5" aria-hidden="true" />
+                  <span className="bg-theme-surface-hover inline-flex h-4.5 w-4.5 items-center justify-center rounded-full">
+                    <X className="h-2.5 w-2.5" aria-hidden="true" />
+                  </span>
                 </button>
               </span>
             ))}
             <button
               type="button"
               onClick={clearFilters}
-              className="text-theme-text-secondary hover:text-theme-text-primary text-xs font-medium underline"
+              className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 text-xs font-medium underline"
             >
               Clear all
             </button>
@@ -647,7 +652,7 @@ const PhotoUseConsentPage: React.FC = () => {
                               inline box a <Link> renders by default. */}
                           <Link
                             to={`/members/${member.user_id}`}
-                            className="text-theme-text-primary block truncate font-medium hover:underline"
+                            className="text-theme-text-primary touch:leading-11 block truncate font-medium hover:underline"
                           >
                             {memberName(member)}
                           </Link>

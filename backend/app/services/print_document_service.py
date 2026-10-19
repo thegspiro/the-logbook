@@ -296,13 +296,13 @@ def _item_expectation(item) -> Optional[str]:
         if item.required_quantity:
             note += f", min {item.required_quantity}"
         return note
-    if normalize_check_type(check_type) == PRESENCE:
-        return "present / absent"
     if check_type == "level":
         if item.min_level is not None:
             unit = item.level_unit or ""
             return f"min {item.min_level:g}{unit}".strip()
         return "level"
+    if normalize_check_type(check_type) == PRESENCE:
+        return "present / absent"
     if check_type in ("date_lot", "reading", "text", "present", "functional"):
         return check_type.replace("_", " ")
     return None
@@ -402,7 +402,7 @@ async def build_apparatus_check_sheet(
         walk(compartment, 0, rows)
         if rows:
             # Items placed directly on the checklist print without a heading,
-            # the way the crew sees them.
+            # in place among the locations, as the crew sees them.
             heading = (
                 None if getattr(compartment, "is_inline", False) else compartment.name
             )
