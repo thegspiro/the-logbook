@@ -154,7 +154,7 @@ decorator.
 | `flake8 app/ tests/ alembic/`                                                            | ✅ 0 violations                                   |
 | `black --check app/ tests/ alembic/`                                                     | ✅ clean (2460 files unchanged)                   |
 | `isort --check-only app/ tests/ alembic/`                                                | ✅ clean                                          |
-| `python3 scripts/validate_migrations.py --strict`                                        | ✅ single head `127ebe3103ff`, 627 revisions      |
+| `python3 scripts/validate_migrations.py --strict`                                        | ✅ single head `7ce50d36b948`, 627 revisions      |
 | `test_alembic_migrations.py`/`test_migration_create_all_tables.py`                       | ✅ 80 passed                                      |
 | `python3 scripts/check_route_permissions.py --strict`                                    | ✅ 272 routes, 0 errors, 0 warnings               |
 | `pytest tests/ -k "event"` (python3.13)                                                  | ✅ 1434 passed, 1 pre-existing skip (`pywebpush`) |
@@ -163,8 +163,9 @@ decorator.
 | `npx vitest run` (events module + `EventForm`/`EventTemplateForm`/`EventEditPage` tests) | ✅ 125 passed (4 files)                           |
 
 Alembic was forked into two heads (`4e18470473d6`/`d80493f28236`) at the
-start of this pass — unrelated to this feature, fixed with merge revision
-`127ebe3103ff`; see the Log entry in `PROGRESS.md` for detail.
+start of this pass — unrelated to this feature. Rather than add a second,
+competing merge revision, this PR adopted PR #3437's `7ce50d36b948`
+unchanged; see the Log entry in `PROGRESS.md` for detail.
 
 Rotation row 16 → ✅ (pending PR merge). Next: Feature 17 (Training core).
 

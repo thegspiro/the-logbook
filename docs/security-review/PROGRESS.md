@@ -21,9 +21,13 @@ feature. The rotation cannot outrun its own review queue.
 pass 9) merged 2026-10-19 — not independently recordable here beyond what
 follows. This iteration (watchdog pickup, same conditions as above)
 reviewed Feature 16 (Events & requests), pass 9 — 0 fixes, 0 new findings;
-near-zero delta of 3 commits in scope, all verified clean. Also fixed a
-repo-wide Alembic fork found while running the completion gate, unrelated
-to this feature, with merge revision `127ebe3103ff`. Rotation row 16 → ✅
+near-zero delta of 3 commits in scope, all verified clean. Also hit a
+repo-wide Alembic fork while running the completion gate, unrelated to
+this feature — already being fixed by open PR
+[#3437](https://github.com/thegspiro/the-logbook/pull/3437) with merge
+revision `7ce50d36b948`; this PR was rebased onto that same revision
+(dropping an initial, independently-written duplicate merge revision)
+rather than opening a second, competing fix. Rotation row 16 → ✅
 (pending this PR's merge); next is Feature 17 (Training core).
 
 <details>
@@ -20276,18 +20280,21 @@ helper). All three reviewed clean — no tenancy, auth, or escaping gap.
 EV-23 and EV-26 re-confirmed unchanged; the request-status token and
 `SET NULL` nullability re-checks both zero-diff this window.
 
-**Also discovered and fixed, unrelated to this feature's own code but
-blocking the completion gate:** the Alembic chain had forked into two heads
+**Also discovered, unrelated to this feature's own code but blocking the
+completion gate:** the Alembic chain had forked into two heads
 (`4e18470473d6`, a finance-timestamp-backfill/main merge; `d80493f28236`,
 a checklist-items migration) — two different pull requests that each
 merged without seeing the other's branch, the same shape this tracker's
-migration-fork precedents describe. Resolved with a merge revision
-(`127ebe3103ff`). `alembic upgrade head` plus `scripts/repair_schema.py`
-brought the sandbox database current.
+migration-fork precedents describe. Rather than write a second merge
+revision here (which would have left two competing merges of the same
+pair of heads once both PRs landed), this PR adopted the merge revision
+already opened in PR #3437 (`7ce50d36b948`) unchanged. `alembic upgrade
+head` plus `scripts/repair_schema.py` brought the sandbox database
+current.
 
 Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
 alembic/`; `validate_migrations.py --strict` — 627 revisions, single head
-`127ebe3103ff` (post-fix); `test_alembic_migrations.py`/
+`7ce50d36b948` (post-fix); `test_alembic_migrations.py`/
 `test_migration_create_all_tables.py` — 80 passed; `check_route_permissions.py
 --strict` — 272 routes, 0 errors, 0 warnings; `pytest tests/ -k "event"` —
 1434 passed, 1 pre-existing skip (`pywebpush`); frontend `npm run
