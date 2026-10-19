@@ -953,6 +953,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'minutes.manage',
         module: 'minutes',
       },
+      {
+        path: '/minutes/settings',
+        label: 'Minutes settings',
+        permission: 'minutes.manage',
+        module: 'minutes',
+      },
       { path: '/minutes/:minutesId', label: 'Minutes detail', module: 'minutes' },
     ],
   },

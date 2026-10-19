@@ -5,6 +5,7 @@
  *   /minutes              — Minutes list
  *   /minutes/attendance   — Meeting attendance dashboard (meetings.manage)
  *   /minutes/outlines     — Standard outlines (minutes.manage)
+ *   /minutes/settings     — Department-wide minutes settings (minutes.manage)
  *   /minutes/:minutesId   — Minutes detail
  */
 
@@ -17,6 +18,7 @@ const MinutesPage = lazyWithRetry(() => import('./pages/MinutesPage'));
 const MinutesDetailPage = lazyWithRetry(() => import('./pages/MinutesDetailPage'));
 const AttendanceDashboardPage = lazyWithRetry(() => import('./pages/AttendanceDashboardPage'));
 const OutlinesPage = lazyWithRetry(() => import('./pages/OutlinesPage'));
+const MinutesSettingsPage = lazyWithRetry(() => import('./pages/MinutesSettingsPage'));
 
 /** Protected minutes routes (rendered inside AppLayout). */
 export const getMinutesRoutes = () => (
@@ -47,6 +49,16 @@ export const getMinutesRoutes = () => (
         <ProtectedRoute requiredModule="minutes" moduleLabel="Meeting Minutes" requiredPermission="minutes.manage">
           <Suspense fallback={null}>
             <OutlinesPage />
+          </Suspense>
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/minutes/settings"
+      element={
+        <ProtectedRoute requiredModule="minutes" moduleLabel="Meeting Minutes" requiredPermission="minutes.manage">
+          <Suspense fallback={null}>
+            <MinutesSettingsPage />
           </Suspense>
         </ProtectedRoute>
       }

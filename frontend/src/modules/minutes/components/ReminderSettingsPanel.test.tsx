@@ -2,61 +2,59 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const mockGet = vi.fn();
 const mockUpdate = vi.fn();
-const authState = { checkPermission: (_p: string) => true };
 
-vi.mock('../services/api', () => ({
-  minutesService: { getReminderSettings: (...a: unknown[]) => mockGet(...a) as unknown },
-}));
 vi.mock('../../../services/api', () => ({
   organizationService: { updateSettings: (...a: unknown[]) => mockUpdate(...a) as unknown },
 }));
-vi.mock('../../../stores/authStore', () => ({
-  useAuthStore: (selector?: (s: typeof authState) => unknown) => (selector ? selector(authState) : authState),
-}));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
-import { ReminderSettingsDialog } from './ReminderSettingsDialog';
+import { ReminderSettingsPanel } from './ReminderSettingsPanel';
+import type { MinutesReminderSettings } from '../types/minutes';
 
-const defaults = {
+const defaults: MinutesReminderSettings = {
   action_item_reminders: true,
   reminder_days_before_due: 3,
   overdue_repeat_days: 7,
   open_items_digest: true,
+  signature_slots: [],
+  public_posting: false,
+  executive_library_publishing: false,
+  executive_public_posting: false,
+  executive_effective_library: false,
+  executive_effective_public: false,
+  attendance_listing: 'all',
 };
 
-describe('ReminderSettingsDialog', () => {
-  const onClose = vi.fn();
+describe('ReminderSettingsPanel', () => {
+  const onSaved = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGet.mockReset();
-    mockGet.mockResolvedValue(defaults);
     mockUpdate.mockReset();
     mockUpdate.mockResolvedValue({});
-    authState.checkPermission = () => true;
+    onSaved.mockReset();
+    onSaved.mockResolvedValue(undefined);
   });
 
-  const open = () => render(<ReminderSettingsDialog isOpen onClose={onClose} />);
+  const open = (settings: MinutesReminderSettings = defaults, canEdit = true) =>
+    render(<ReminderSettingsPanel settings={settings} canEdit={canEdit} onSaved={onSaved} />);
 
-  it('shows what the server will apply, not a local default', async () => {
-    mockGet.mockResolvedValue({ ...defaults, reminder_days_before_due: 5, overdue_repeat_days: 14 });
-    open();
+  it('shows what the server will apply, not a local default', () => {
+    open({ ...defaults, reminder_days_before_due: 5, overdue_repeat_days: 14 });
 
-    expect(await screen.findByLabelText('First reminder, days before the due date')).toHaveValue(5);
+    expect(screen.getByLabelText('First reminder, days before the due date')).toHaveValue(5);
     expect(screen.getByLabelText('Repeat while overdue, every this many days')).toHaveValue(14);
   });
 
-  it('saves every field and then re-reads what the server holds', async () => {
+  it('saves every field and then asks the page to re-read what the server holds', async () => {
     const user = userEvent.setup();
     open();
 
-    const days = await screen.findByLabelText('First reminder, days before the due date');
+    const days = screen.getByLabelText('First reminder, days before the due date');
     await user.clear(days);
     await user.type(days, '0');
     await user.click(screen.getByRole('checkbox', { name: /Weekly list of open items/ }));
-    mockGet.mockResolvedValue({ ...defaults, reminder_days_before_due: 0, open_items_digest: false });
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(mockUpdate).toHaveBeenCalledWith({
@@ -67,15 +65,30 @@ describe('ReminderSettingsDialog', () => {
         open_items_digest: false,
       },
     });
-    expect(mockGet).toHaveBeenCalledTimes(2);
-    expect(onClose).toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  it('has nothing to save until something changes', () => {
+    open();
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('follows the settings when the page reloads them', () => {
+    const { rerender } = open();
+
+    rerender(
+      <ReminderSettingsPanel settings={{ ...defaults, reminder_days_before_due: 9 }} canEdit onSaved={onSaved} />
+    );
+
+    expect(screen.getByLabelText('First reminder, days before the due date')).toHaveValue(9);
   });
 
   it('explains what each number means as it is typed', async () => {
     const user = userEvent.setup();
     open();
 
-    const days = await screen.findByLabelText('First reminder, days before the due date');
+    const days = screen.getByLabelText('First reminder, days before the due date');
     expect(screen.getByText('3 days ahead.')).toBeInTheDocument();
     await user.clear(days);
     await user.type(days, '0');
@@ -91,7 +104,7 @@ describe('ReminderSettingsDialog', () => {
     const user = userEvent.setup();
     open();
 
-    const days = await screen.findByLabelText('First reminder, days before the due date');
+    const days = screen.getByLabelText('First reminder, days before the due date');
     await user.clear(days);
     await user.type(days, '31');
 
@@ -103,16 +116,15 @@ describe('ReminderSettingsDialog', () => {
     const user = userEvent.setup();
     open();
 
-    await user.clear(await screen.findByLabelText('Repeat while overdue, every this many days'));
+    await user.clear(screen.getByLabelText('Repeat while overdue, every this many days'));
 
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
-  it('is read-only for someone who cannot change organization settings', async () => {
-    authState.checkPermission = (p: string) => p === 'minutes.manage';
-    open();
+  it('is read-only for someone who cannot change organization settings', () => {
+    open(defaults, false);
 
-    expect(await screen.findByLabelText('First reminder, days before the due date')).toBeDisabled();
+    expect(screen.getByLabelText('First reminder, days before the due date')).toBeDisabled();
     expect(screen.getByRole('checkbox', { name: /Email reminders to assignees/ })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
     expect(screen.getByText(/changed by a settings administrator/)).toBeInTheDocument();
@@ -122,29 +134,22 @@ describe('ReminderSettingsDialog', () => {
     const user = userEvent.setup();
     open();
 
-    await user.click(await screen.findByRole('checkbox', { name: /Email reminders to assignees/ }));
+    await user.click(screen.getByRole('checkbox', { name: /Email reminders to assignees/ }));
 
     expect(screen.getByLabelText('First reminder, days before the due date')).toBeDisabled();
     expect(screen.getByLabelText('Repeat while overdue, every this many days')).toBeDisabled();
     expect(screen.getByRole('checkbox', { name: /Weekly list of open items/ })).toBeEnabled();
   });
 
-  it('shows the reason when the settings cannot be loaded', async () => {
-    mockGet.mockRejectedValue(new Error('Forbidden'));
-    open();
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Forbidden');
-    expect(screen.queryByRole('button', { name: 'Save' })).toBeDisabled();
-  });
-
-  it('keeps the dialog open when saving fails', async () => {
+  it('does not report a save that failed', async () => {
     mockUpdate.mockRejectedValue(new Error('Nope'));
     const user = userEvent.setup();
     open();
 
-    await user.click(await screen.findByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('checkbox', { name: /Weekly list of open items/ }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(onClose).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 });

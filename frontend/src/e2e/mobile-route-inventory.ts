@@ -1008,6 +1008,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
       'outline list built from the shared card, btn-secondary and Modal utilities; /minutes is the representative module route',
   },
   {
+    path: '/minutes/settings',
+    source: 'src/modules/minutes/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'settings screen built on the shared SettingsLayout, form-input and btn-primary utilities; /minutes is the representative module route',
+  },
+  {
     path: '/minutes/:minutesId',
     source: 'src/modules/minutes/routes.tsx',
     coverage: 'exempt',
