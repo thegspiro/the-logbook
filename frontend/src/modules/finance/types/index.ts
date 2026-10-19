@@ -860,6 +860,8 @@ export const ApproverCoverageProblem = {
   NOT_FOUND: 'not_found',
   NO_ACTIVE_MEMBERS: 'no_active_members',
   INVALID_EMAIL: 'invalid_email',
+  /** Someone fills the step, but none of them holds finance.approve. */
+  NO_APPROVE_PERMISSION: 'no_approve_permission',
 } as const;
 export type ApproverCoverageProblem = (typeof ApproverCoverageProblem)[keyof typeof ApproverCoverageProblem];
 

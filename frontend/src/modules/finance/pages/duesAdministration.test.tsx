@@ -151,6 +151,16 @@ describe('reading', () => {
     // The ledger is still theirs to read.
     expect(screen.getByRole('button', { name: 'Payment history for Terry Heather' })).toBeInTheDocument();
   });
+
+  // W66: the reflowed table hides a cell without data-label under 768px, so
+  // on a phone the row's actions — Record payment included — were not there.
+  it('keeps the row actions in the stacked phone layout', () => {
+    renderPage();
+    const actions = screen
+      .getAllByRole('cell')
+      .find((cell) => within(cell).queryByRole('button', { name: 'Payment history for Terry Heather' }));
+    expect(actions).toHaveAttribute('data-label');
+  });
 });
 
 describe('schedules', () => {

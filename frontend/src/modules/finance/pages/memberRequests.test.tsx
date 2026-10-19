@@ -13,6 +13,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { ConfirmProvider } from '@/contexts/ConfirmContext';
 
@@ -38,6 +39,7 @@ vi.mock('../services/api', () => ({
   fiscalYearService: { options: () => fiscalYearOptions() as unknown },
   budgetService: { options: (fy: string) => budgetOptions(fy) as unknown },
   purchaseRequestService: {},
+  advanceService: { list: () => Promise.resolve([]) },
   fundService: { list: () => Promise.resolve([]) },
   financeSettingsService: {
     get: () =>
@@ -55,6 +57,7 @@ import ExpenseReportsPage from './ExpenseReportsPage';
 import CheckRequestsPage from './CheckRequestsPage';
 import PurchaseRequestFormPage from './PurchaseRequestFormPage';
 import CheckRequestFormPage from './CheckRequestFormPage';
+import ExpenseReportFormPage from './ExpenseReportFormPage';
 import PurchaseRequestDetailPage from './PurchaseRequestDetailPage';
 import CheckRequestDetailPage from './CheckRequestDetailPage';
 
@@ -152,6 +155,35 @@ describe.each(listCases)('$name list', (c) => {
   });
 });
 
+// W63: the status filters were 32px and New was 36px at 390px wide.
+describe('purchase request list on a phone', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    granted = new Set(['finance.request']);
+    storeState = { ...emptyLists };
+  });
+
+  it('gives the status filters and New a touch-sized target', () => {
+    renderAt('/finance/purchase-requests', '/finance/purchase-requests', PurchaseRequestsPage);
+
+    expect(screen.getByRole('button', { name: 'Draft' })).toHaveClass('touch:min-h-11');
+    expect(screen.getByRole('link', { name: 'New Purchase Request' })).toHaveClass('touch:min-h-11');
+  });
+
+  // W64 / W65: the same 32px filters and 36px New on the other two lists.
+  // New is a link on one and a button on the other; the header's comes first.
+  it.each([
+    ['/finance/expenses', ExpenseReportsPage, 'link', 'New Expense Report'],
+    ['/finance/check-requests', CheckRequestsPage, 'button', 'New Check Request'],
+  ] as const)('sizes %s for touch too', (path, Page, role, newLabel) => {
+    renderAt(path, path, Page);
+
+    expect(screen.getByRole('button', { name: 'Draft' })).toHaveClass('touch:min-h-11');
+    const [headerNew] = screen.getAllByRole(role, { name: newLabel });
+    expect(headerNew).toHaveClass('touch:min-h-11');
+  });
+});
+
 describe('request forms pick a budget line by name and amount left', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -179,6 +211,45 @@ describe('request forms pick a budget line by name and amount left', () => {
     expect(screen.getByRole('option', { name: 'Apparatus (Station 2) — $80.50 remaining' })).toBeInTheDocument();
     // The active year is chosen for them, and its lines are what was asked for.
     expect(budgetOptions).toHaveBeenCalledWith('fy-1');
+  });
+
+  // W63: none of the seven fields was tied to its label.
+  it('names every purchase request field by its label', async () => {
+    renderAt('/finance/purchase-requests/new', '/finance/purchase-requests/new', PurchaseRequestFormPage);
+
+    await screen.findByRole('option', { name: 'Training — $1,250.00 remaining' });
+    for (const label of [
+      'Title *',
+      'Description',
+      'Vendor',
+      'Estimated Amount *',
+      'Priority *',
+      'Fiscal Year *',
+      'Budget',
+    ]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
+  });
+
+  // W64: only a line's Date was tied to its label.
+  it('names every expense report field by its label, line items included', async () => {
+    const user = userEvent.setup();
+    renderAt('/finance/expenses/new', '/finance/expenses/new', ExpenseReportFormPage);
+
+    await screen.findByRole('option', { name: /FY2026/ });
+    await user.click(screen.getByRole('button', { name: 'Add Item' }));
+    for (const label of [
+      'Title *',
+      'Description',
+      'Fiscal Year *',
+      'Description *',
+      'Amount *',
+      'Date *',
+      'Type *',
+      'Merchant',
+    ]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
   });
 
   it('shows the name alone when the server sends no amount', async () => {

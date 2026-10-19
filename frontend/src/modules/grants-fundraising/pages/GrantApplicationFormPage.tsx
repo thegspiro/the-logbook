@@ -24,7 +24,7 @@ import {
   readKeyContacts,
 } from '../utils/applicationStructuredFields';
 import type { BudgetAmounts, ContactRow } from '../utils/applicationStructuredFields';
-import { toAppError } from '@/utils/errorHandling';
+import { getErrorMessage, toAppError } from '@/utils/errorHandling';
 import { formCoercions } from '@/utils/formValues';
 import { displayNameOf } from '@/utils/memberName';
 import { userService } from '@/services/api';
@@ -72,6 +72,8 @@ interface FormData {
   matchAmount: string;
   matchSource: string;
   applicationDeadline: string;
+  submittedDate: string;
+  awardDate: string;
   grantStartDate: string;
   grantEndDate: string;
   projectDescription: string;
@@ -79,6 +81,8 @@ interface FormData {
   federalAwardId: string;
   performancePeriodMonths: string;
   reportingFrequency: string;
+  nextReportDue: string;
+  finalReportDue: string;
   assignedTo: string;
   priority: string;
   notes: string;
@@ -94,6 +98,8 @@ const EMPTY_FORM: FormData = {
   matchAmount: '',
   matchSource: '',
   applicationDeadline: '',
+  submittedDate: '',
+  awardDate: '',
   grantStartDate: '',
   grantEndDate: '',
   projectDescription: '',
@@ -101,6 +107,8 @@ const EMPTY_FORM: FormData = {
   federalAwardId: '',
   performancePeriodMonths: '',
   reportingFrequency: '',
+  nextReportDue: '',
+  finalReportDue: '',
   assignedTo: '',
   priority: GrantPriority.MEDIUM,
   notes: '',
@@ -212,6 +220,8 @@ export const GrantApplicationFormPage: React.FC = () => {
             matchAmount: app.matchAmount != null ? String(app.matchAmount) : '',
             matchSource: app.matchSource ?? '',
             applicationDeadline: app.applicationDeadline?.split('T')[0] ?? '',
+            submittedDate: app.submittedDate?.split('T')[0] ?? '',
+            awardDate: app.awardDate?.split('T')[0] ?? '',
             grantStartDate: app.grantStartDate?.split('T')[0] ?? '',
             grantEndDate: app.grantEndDate?.split('T')[0] ?? '',
             projectDescription: app.projectDescription ?? '',
@@ -219,6 +229,8 @@ export const GrantApplicationFormPage: React.FC = () => {
             federalAwardId: app.federalAwardId ?? '',
             performancePeriodMonths: app.performancePeriodMonths != null ? String(app.performancePeriodMonths) : '',
             reportingFrequency: app.reportingFrequency ?? '',
+            nextReportDue: app.nextReportDue?.split('T')[0] ?? '',
+            finalReportDue: app.finalReportDue?.split('T')[0] ?? '',
             assignedTo: app.assignedTo ?? '',
             priority: app.priority,
             notes: app.notes ?? '',
@@ -291,6 +303,8 @@ export const GrantApplicationFormPage: React.FC = () => {
       matchAmount: formData.matchAmount ? Number(formData.matchAmount) : null,
       matchSource: formData.matchSource || null,
       applicationDeadline: formData.applicationDeadline || null,
+      submittedDate: formData.submittedDate || null,
+      awardDate: formData.awardDate || null,
       grantStartDate: formData.grantStartDate || null,
       grantEndDate: formData.grantEndDate || null,
       projectDescription: formData.projectDescription || null,
@@ -300,6 +314,8 @@ export const GrantApplicationFormPage: React.FC = () => {
       federalAwardId: formData.federalAwardId || null,
       performancePeriodMonths: formData.performancePeriodMonths ? Number(formData.performancePeriodMonths) : null,
       reportingFrequency: formData.reportingFrequency || null,
+      nextReportDue: formData.nextReportDue || null,
+      finalReportDue: formData.finalReportDue || null,
       ...(assignedTo !== undefined && { assignedTo }),
       priority: formData.priority as GrantApplication['priority'],
       notes: formData.notes || null,
@@ -315,8 +331,8 @@ export const GrantApplicationFormPage: React.FC = () => {
         toast.success('Application created.');
         void navigate(`/grants/applications/${created.id}`);
       }
-    } catch {
-      toast.error('Failed to save application. Try again.');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save application. Try again.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -338,7 +354,7 @@ export const GrantApplicationFormPage: React.FC = () => {
           type="button"
           aria-label="Back to applications"
           onClick={() => void navigate('/grants/applications')}
-          className="text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg p-2 transition-colors"
+          className="text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone rounded-lg p-2 transition-colors"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
@@ -566,7 +582,7 @@ export const GrantApplicationFormPage: React.FC = () => {
         {/* Dates */}
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Dates</h2>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label htmlFor="applicationDeadline" className={labelClass}>
                 Application Deadline
@@ -576,6 +592,32 @@ export const GrantApplicationFormPage: React.FC = () => {
                 name="applicationDeadline"
                 type="date"
                 value={formData.applicationDeadline}
+                onChange={handleChange}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="submittedDate" className={labelClass}>
+                Submitted
+              </label>
+              <input
+                id="submittedDate"
+                name="submittedDate"
+                type="date"
+                value={formData.submittedDate}
+                onChange={handleChange}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="awardDate" className={labelClass}>
+                Award Date
+              </label>
+              <input
+                id="awardDate"
+                name="awardDate"
+                type="date"
+                value={formData.awardDate}
                 onChange={handleChange}
                 className={inputClass}
               />
@@ -627,7 +669,7 @@ export const GrantApplicationFormPage: React.FC = () => {
         {/* Reporting */}
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Reporting</h2>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label htmlFor="reportingFrequency" className={labelClass}>
                 Reporting Frequency
@@ -646,6 +688,32 @@ export const GrantApplicationFormPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label htmlFor="nextReportDue" className={labelClass}>
+                Next Report Due
+              </label>
+              <input
+                id="nextReportDue"
+                name="nextReportDue"
+                type="date"
+                value={formData.nextReportDue}
+                onChange={handleChange}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="finalReportDue" className={labelClass}>
+                Final Report Due
+              </label>
+              <input
+                id="finalReportDue"
+                name="finalReportDue"
+                type="date"
+                value={formData.finalReportDue}
+                onChange={handleChange}
+                className={inputClass}
+              />
             </div>
           </div>
         </div>
@@ -807,7 +875,7 @@ export const GrantApplicationFormPage: React.FC = () => {
           <button
             type="button"
             onClick={() => void navigate('/grants/applications')}
-            className="bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium transition-colors"
+            className="bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface touch:min-h-11 inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium transition-colors"
           >
             <X className="h-4 w-4" />
             Cancel
@@ -815,7 +883,7 @@ export const GrantApplicationFormPage: React.FC = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
+            className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save className="h-4 w-4" />
             {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Application'}

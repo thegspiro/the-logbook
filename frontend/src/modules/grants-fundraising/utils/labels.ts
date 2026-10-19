@@ -2,7 +2,13 @@
  * Display labels shared across the Grants & Fundraising pages.
  */
 
-import { FundraisingEventStatus, FundraisingEventType, GrantCategory, PledgeStatus } from '../types';
+import {
+  BUDGET_ITEM_CATEGORY_LABELS,
+  FundraisingEventStatus,
+  FundraisingEventType,
+  GrantCategory,
+  PledgeStatus,
+} from '../types';
 import type { Donor } from '../types';
 
 export const GRANT_CATEGORY_LABELS: Record<GrantCategory, string> = {
@@ -16,6 +22,13 @@ export const GRANT_CATEGORY_LABELS: Record<GrantCategory, string> = {
   [GrantCategory.COMMUNITY]: 'Community',
   [GrantCategory.OTHER]: 'Other',
 };
+
+/**
+ * A stored budget-line category's label (W68: the reports page printed the raw
+ * code). An unknown code reads as itself.
+ */
+export const budgetItemCategoryLabel = (category: string): string =>
+  (BUDGET_ITEM_CATEGORY_LABELS as Record<string, string>)[category] ?? category;
 
 /** A donor as the pickers and lists name them: person, then organization. */
 export const donorDisplayName = (donor: Donor): string => {

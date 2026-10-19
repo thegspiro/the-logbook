@@ -709,7 +709,7 @@ export interface GrantsDashboard {
   pendingApplications: number;
   totalGrantFunding: number;
   totalRaisedYtd: number;
-  totalRaised12mo: number;
+  totalRaised12Mo: number;
   activeCampaignsCount: number;
   activeCampaigns: FundraisingCampaign[];
   recentDonations: Donation[];

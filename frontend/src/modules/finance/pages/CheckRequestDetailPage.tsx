@@ -23,6 +23,8 @@ import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
+import { useConfirm } from '@/contexts/ConfirmContext';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import {
   ApprovalEntityType,
@@ -81,6 +83,7 @@ const CheckRequestDetailPage: React.FC = () => {
   const { busy, run } = useSubmitGuard();
   const { selectedCheckRequest: cr, isLoading, error, fetchCheckRequest, submitCheckRequest } = useFinanceStore();
   const access = useFinanceRequestAccess();
+  const { confirm } = useConfirm();
   const [showIssueDialog, setShowIssueDialog] = useState(false);
   const [issuing, setIssuing] = useState(false);
 
@@ -115,21 +118,32 @@ const CheckRequestDetailPage: React.FC = () => {
       toast.success('Check issued');
       setShowIssueDialog(false);
       void fetchCheckRequest(id);
-    } catch {
-      toast.error('Failed to issue check');
+    } catch (err: unknown) {
+      // The server's reason, e.g. that whoever raised a check may not issue it.
+      toast.error(getErrorMessage(err, 'Failed to issue check'));
     } finally {
       setIssuing(false);
     }
   };
 
   const handleVoid = async () => {
-    if (!id) return;
+    if (!id || !cr) return;
+    // Voiding is final and takes the amount back off the budget line's
+    // spending, so it is not left to a single stray tap.
+    const ok = await confirm({
+      title: 'Void this check?',
+      message: `${cr.requestNumber}, ${formatCurrency(cr.amount)} to ${cr.payeeName}, will be marked as voided and its amount taken off the budget line's spending. This cannot be undone.`,
+      confirmLabel: 'Void check',
+      cancelLabel: 'Keep it',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await checkRequestService.void(id);
       toast.success('Check request voided');
       void fetchCheckRequest(id);
-    } catch {
-      toast.error('Failed to void check request');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to void check request'));
     }
   };
 
@@ -139,7 +153,7 @@ const CheckRequestDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/check-requests"
-          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+          className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Check Requests
@@ -155,7 +169,7 @@ const CheckRequestDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/check-requests"
-          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+          className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Check Requests
@@ -181,7 +195,7 @@ const CheckRequestDetailPage: React.FC = () => {
       <Breadcrumbs />
       <Link
         to="/finance/check-requests"
-        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+        className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Check Requests
@@ -218,7 +232,7 @@ const CheckRequestDetailPage: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={() => void handleSubmit()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="h-3.5 w-3.5" />
                 Submit for Approval
@@ -228,7 +242,7 @@ const CheckRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowIssueDialog(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800"
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800"
               >
                 <CheckCircle className="h-3.5 w-3.5" />
                 Issue Check
@@ -238,7 +252,7 @@ const CheckRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleVoid()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
               >
                 <XCircle className="h-3.5 w-3.5" />
                 Void Request
@@ -425,8 +439,9 @@ const CheckRequestDetailPage: React.FC = () => {
         message={
           <>
             Enter the number of the check paying {formatCurrency(cr.amount)} to{' '}
-            <span className="text-theme-text-primary font-medium">{cr.payeeName}</span>. {cr.requestNumber} will be
-            marked as issued.
+            <span className="text-theme-text-primary font-medium">{cr.payeeName}</span>
+            {/* A payee such as "Valley Fuel Co." already ends the sentence. */}
+            {cr.payeeName.trim().endsWith('.') ? '' : '.'} {cr.requestNumber} will be marked as issued.
           </>
         }
         label="Check number"

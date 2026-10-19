@@ -10,7 +10,7 @@ import { Check, X, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
 import { formatDuration } from '../utils/formatDuration';
 import { DEFAULT_PAGE_SIZE } from '../../../constants/config';
-import type { AdminHoursEntryEdit } from '../types';
+import type { AdminHoursEntry, AdminHoursEntryEdit } from '../types';
 import { formatDate, formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
@@ -21,6 +21,9 @@ import { entryMethodLabel } from '../utils/entryMethod';
 
 const PendingReviewTab: React.FC = () => {
   const tz = useTimezone();
+  // Every row's buttons read "Approve" / "Reject" alone; this says whose (W70).
+  const entryLabel = (entry: AdminHoursEntry): string =>
+    `${entry.userName ?? 'Unknown'}'s ${entry.categoryName ?? 'entry'} on ${formatDate(entry.clockInAt, tz)}`;
   const allEntries = useAdminHoursStore((s) => s.allEntries);
   const allEntriesTotal = useAdminHoursStore((s) => s.allEntriesTotal);
   const entriesLoading = useAdminHoursStore((s) => s.entriesLoading);
@@ -187,7 +190,7 @@ const PendingReviewTab: React.FC = () => {
         <h2 className="text-theme-text-primary text-xl font-semibold">Pending Review</h2>
         {allEntries.length > 0 && (
           <div className="flex items-center gap-2">
-            <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
+            <label className="text-theme-text-secondary touch:min-h-11 flex cursor-pointer items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={selectedEntryIds.size === allEntries.length && allEntries.length > 0}
@@ -328,12 +331,15 @@ const PendingReviewTab: React.FC = () => {
                   /* Normal Review View */
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedEntryIds.has(entry.id)}
-                        onChange={() => toggleEntrySelection(entry.id)}
-                        className="border-theme-input-border mt-1 h-4 w-4 rounded-sm"
-                      />
+                      <label className="touch-target-phone touch:-m-3 mt-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedEntryIds.has(entry.id)}
+                          onChange={() => toggleEntrySelection(entry.id)}
+                          aria-label={`Select ${entryLabel(entry)}`}
+                          className="border-theme-input-border h-4 w-4 rounded-sm"
+                        />
+                      </label>
                       <div>
                         <div className="mb-1 flex items-center gap-2">
                           <div
@@ -386,8 +392,10 @@ const PendingReviewTab: React.FC = () => {
                       ) : (
                         <>
                           <button
+                            type="button"
                             onClick={() => startEditEntry(entry)}
-                            className="card-secondary text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1 px-3 py-1.5 text-sm transition"
+                            aria-label={`Edit ${entryLabel(entry)}`}
+                            className="touch:min-h-11 card-secondary text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1 px-3 py-1.5 text-sm transition"
                           >
                             <Pencil className="h-3.5 w-3.5" /> Edit
                           </button>
@@ -395,13 +403,17 @@ const PendingReviewTab: React.FC = () => {
                             onClick={() => {
                               void handleApprove(entry.id);
                             }}
-                            className="btn-success flex items-center gap-1 px-3 py-1.5 text-sm transition"
+                            type="button"
+                            aria-label={`Approve ${entryLabel(entry)}`}
+                            className="btn-success touch:min-h-11 flex items-center gap-1 px-3 py-1.5 text-sm transition"
                           >
                             <Check className="h-4 w-4" /> Approve
                           </button>
                           <button
+                            type="button"
                             onClick={() => setRejectingEntryId(entry.id)}
-                            className="btn-primary flex items-center gap-1 px-3 py-1.5 text-sm transition"
+                            aria-label={`Reject ${entryLabel(entry)}`}
+                            className="btn-primary touch:min-h-11 flex items-center gap-1 px-3 py-1.5 text-sm transition"
                           >
                             <X className="h-4 w-4" /> Reject
                           </button>
