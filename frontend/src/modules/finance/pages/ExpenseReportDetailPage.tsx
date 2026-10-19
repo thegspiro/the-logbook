@@ -12,7 +12,7 @@
 
 import React, { useEffect } from 'react';
 import { useParams, Link } from 'react-router';
-import { ArrowLeft, AlertTriangle, Receipt, Send, CheckCircle, Clock, XCircle, Ban } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Receipt, Send, CheckCircle, Clock, XCircle, Ban, CreditCard } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { useFinanceRequestAccess } from '../hooks/useFinanceRequestAccess';
@@ -28,6 +28,8 @@ import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
+import { useConfirm } from '@/contexts/ConfirmContext';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import {
   ApprovalEntityType,
@@ -86,6 +88,7 @@ const ExpenseReportDetailPage: React.FC = () => {
   const { busy, run } = useSubmitGuard();
   const { selectedExpenseReport: er, isLoading, error, fetchExpenseReport, submitExpenseReport } = useFinanceStore();
   const access = useFinanceRequestAccess();
+  const { confirm } = useConfirm();
 
   useEffect(() => {
     if (id) {
@@ -104,13 +107,37 @@ const ExpenseReportDetailPage: React.FC = () => {
       }
     });
 
+  // POST /expense-reports/{id}/mark-paid existed with no control calling it,
+  // so an approved report could never be recorded as reimbursed (W64). The
+  // API decides who may (finance.manage, not the submitter) and posts the
+  // spending; this only asks, and shows its refusal in its own words.
+  const handleMarkPaid = () =>
+    run(async () => {
+      if (!id || !er) return;
+      const ok = await confirm({
+        title: 'Mark as paid?',
+        message: `Record ${er.reportNumber} (${formatCurrency(er.totalAmount)}) as reimbursed to the member. This cannot be undone from this screen.`,
+        confirmLabel: 'Mark as paid',
+        cancelLabel: 'Not yet',
+        variant: 'warning',
+      });
+      if (!ok) return;
+      try {
+        await expenseReportService.markPaid(id);
+        toast.success('Marked as paid');
+        void fetchExpenseReport(id);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not mark the report as paid'));
+      }
+    });
+
   if (isLoading && !er) {
     return (
       <div className="space-y-6">
         <Breadcrumbs />
         <Link
           to="/finance/expenses"
-          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+          className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Expense Reports
@@ -126,7 +153,7 @@ const ExpenseReportDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/expenses"
-          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+          className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Expense Reports
@@ -140,6 +167,7 @@ const ExpenseReportDetailPage: React.FC = () => {
     );
   }
 
+  const canMarkPaid = er.status === ExpenseReportStatus.APPROVED && access.canManage;
   // Submitting is the requester's action (or the finance office's).
   const canSubmit = er.status === ExpenseReportStatus.DRAFT && access.canActAsRequester(er.submittedBy);
   // Every line needs an uploaded receipt before the report is submitted;
@@ -162,7 +190,7 @@ const ExpenseReportDetailPage: React.FC = () => {
       <Breadcrumbs />
       <Link
         to="/finance/expenses"
-        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+        className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Expense Reports
@@ -201,10 +229,21 @@ const ExpenseReportDetailPage: React.FC = () => {
                 disabled={busy || missingReceipts > 0}
                 aria-describedby={missingReceipts > 0 ? 'expense-receipts-needed' : undefined}
                 onClick={() => void handleSubmit()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="h-3.5 w-3.5" />
                 Submit for Approval
+              </button>
+            )}
+            {canMarkPaid && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleMarkPaid()}
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
+                Mark Paid
               </button>
             )}
           </div>

@@ -90,7 +90,7 @@ describe('MessagesAdminPage — delivery state in the report (MSG-12)', () => {
     const user = userEvent.setup();
     renderWithRouter(<MessagesAdminPage />);
 
-    await user.click(await screen.findByRole('button', { name: 'View acknowledgments' }));
+    await user.click(await screen.findByRole('button', { name: 'View acknowledgments for Roof collapse drill' }));
 
     expect(
       await screen.findByText('Email failed — The provider refused the message or could not be reached')

@@ -482,7 +482,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
         />
       ) : (
         <>
-          <label className="text-theme-text-secondary mb-2 flex items-center gap-2 text-sm">
+          <label className="text-theme-text-secondary touch:min-h-11 mb-2 flex items-center gap-2 text-sm">
             <input type="checkbox" className="form-checkbox" checked={allSelected} onChange={toggleSelectAll} />
             Select all on this page ({orders.length})
           </label>
@@ -490,13 +490,20 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
           <ul className="space-y-2">
             {orders.map((order) => (
               <li key={order.id} className="card-secondary flex flex-wrap items-center gap-3 p-3">
-                <input
-                  type="checkbox"
-                  className="form-checkbox"
-                  aria-label={`Select order ${order.orderNumber}`}
-                  checked={selected.includes(order.id)}
-                  onChange={() => toggleSelect(order.id)}
-                />
+                {/* The box alone was 16px; the label gives it a finger-sized
+                    target without changing its look. */}
+                <label
+                  className="touch-target-phone touch:-m-3 cursor-pointer"
+                  data-testid={`select-order-${order.id}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    aria-label={`Select order ${order.orderNumber}`}
+                    checked={selected.includes(order.id)}
+                    onChange={() => toggleSelect(order.id)}
+                  />
+                </label>
                 <div className="min-w-0 flex-1">
                   <p className="text-theme-text-primary text-sm">
                     {order.orderNumber} — {order.customerName}
@@ -520,15 +527,21 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
                     type="button"
                     className="btn-success btn-sm"
                     disabled={busy}
+                    aria-label={`Mark ${order.orderNumber} paid`}
                     onClick={() => {
                       void markPaid(order);
                     }}
                   >
-                    <CircleDollarSign className="h-3.5 w-3.5" />
+                    <CircleDollarSign className="h-3.5 w-3.5" aria-hidden="true" />
                     Mark paid
                   </button>
                 )}
-                <button type="button" className="btn-secondary btn-sm" onClick={() => setDetailId(order.id)}>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  aria-label={`Manage ${order.orderNumber}`}
+                  onClick={() => setDetailId(order.id)}
+                >
                   Manage
                 </button>
               </li>

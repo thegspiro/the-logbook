@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createMockApiError } from '../../../test/utils';
 
 const mockCreate = vi.fn();
 const mockUpdate = vi.fn();
@@ -139,5 +140,39 @@ describe('MessageComposeForm', () => {
     // Stale role targeting is explicitly cleared, not left behind.
     expect(payload.target_roles).toBeNull();
     expect(onSaved.mock.calls.length).toBe(1);
+  });
+});
+
+// Workflow review W55.
+describe('MessageComposeForm when the server refuses', () => {
+  beforeEach(() => {
+    mockGetRoles.mockReset();
+    mockGetRoles.mockResolvedValue([]);
+    mockGetUsers.mockReset();
+    mockGetUsers.mockResolvedValue([{ id: 'u1', first_name: 'Jordan', last_name: 'Avery' }]);
+    mockCreate.mockReset();
+    mockCreate.mockRejectedValue(createMockApiError('The expiry time must be in the future'));
+  });
+
+  // "Unable to post the message. Try again." sent the officer round the same
+  // failure; the server had said exactly what to change.
+  it("shows the server's reason, not a bare retry", async () => {
+    const user = userEvent.setup();
+    render(<MessageComposeForm onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText('Title'), 'Hose test');
+    await user.type(screen.getByLabelText('Message'), 'Saturday.');
+    await user.click(screen.getByRole('button', { name: /post message/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The expiry time must be in the future');
+  });
+
+  it('labels the member search', async () => {
+    const user = userEvent.setup();
+    render(<MessageComposeForm onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.selectOptions(screen.getByLabelText('Audience'), 'members');
+
+    expect(screen.getByRole('textbox', { name: 'Search members' })).toBeInTheDocument();
   });
 });

@@ -5853,6 +5853,23 @@ server. Doing it for these two endpoints would close all three items at once.
 Until then the two screens are reliable for small organizations and quietly
 partial for large ones.
 
+## Notifications — Rules Cannot Be Renamed or Deleted From the Screen (2026-10-12)
+
+Found driving W56 (`docs/workflow-review/W56-notifications.md`, W56-4).
+
+- **What the screen offers:** the rules tab creates a rule and switches it on
+  or off, and nothing else. A rule with a typo in its name, or on the wrong
+  trigger, stays on the list for good.
+- **What the API already supports:** `PATCH /notifications/rules/{id}` and
+  `DELETE /notifications/rules/{id}`, both behind `notifications.manage`.
+- **Why it is not simply a Delete button:** with no rule for a trigger, that
+  trigger's notifications go out with their default settings (pitfall 19). So
+  deleting the one switched-off rule for, say, event reminders turns the
+  reminders back on, with nothing on the screen to say so.
+- **Decisions needed before building it:**
+  - whether to offer edit only, or delete as well;
+  - if delete, whether it warns that the trigger reverts to sending.
+
 - **MM5-4 — Two people editing one set of minutes silently overwrite each
   other's sections.** _(app-review B6, 2026-10-13)_ The minutes page saves,
   reorders, adds and deletes a section by sending the **entire** `sections` list
@@ -5971,6 +5988,212 @@ on the endpoint not re-fetching before it responds. **Owner decision:** let each
 module's rotation pass drive its own update with a real change (the test pattern is in
 `backend/tests/test_grants_update_endpoints_integration.py`) and apply
 `reload_updated_at` where it fails — or ask for one sweep that drives all seven now.
+
+## Privacy Choices — A Member Cannot Record "No" Without First Recording "Yes" (2026-10-13)
+
+Found driving W59 (`docs/workflow-review/W59-photo-use-consent.md`, W59-3).
+
+- **What the screen offers:** My Account → Privacy → Privacy Choices shows
+  photo use, public roster listing and SMS texts as one checkbox each. An
+  unanswered choice is an unticked box marked "(not answered)".
+- **What goes wrong:** leaving the box unticked records nothing. A member who
+  means "no" must tick it, which records an agreement, and then untick it.
+  - The audit ledger, which is the consent record, then shows an agreement
+    the member never gave.
+  - A member who does not find that trick stays "Not answered". The
+    photo-use roster says those members "can still be asked", so the PIO
+    keeps asking someone who has refused.
+- **Why it was not changed in the review:** an explicit Yes / No choice is
+  the obvious fix, but the same control carries the SMS consent, a TCPA
+  record whose switch also sets the SMS notification preference through a
+  shared handler.
+- **Decisions needed:**
+  - whether each choice becomes an explicit Yes / No;
+  - whether SMS changes with the other two, or keeps its switch on the
+    Notifications section.
+
+## Finance — Emailed Approvals Cannot Be Re-Sent, and Show the Approver Nothing to Decide On (2026-10-14)
+
+Found driving W62 (`docs/workflow-review/W62-approval-chains-and-finance-settings.md`,
+W62-6 and W62-7).
+
+- **A link that never arrives is invisible.** When a request reaches an
+  "Email" approver step, the link is minted once and emailed.
+  - If email is off or the send fails, `send_approval_request_email` returns
+    False and nothing records or shows it. The queue reads "waiting on
+    board-chair@example.org" either way.
+  - A link that expires after its 7 days is never replaced.
+  - The only way forward is an approvals admin's "Approve as admin", which
+    overrides the external approver rather than reaching them.
+- **The approver decides blind.** The emailed page shows the request's type
+  and the step's name, then Approve and Deny. No title, amount, vendor or
+  requester. The email itself carries only the step name. This is
+  deliberate, because the link is a bearer token, but it leaves the approver
+  nothing to judge.
+- **Decisions needed:**
+  - whether staff may re-send a link, and whether the screen should say when
+    one was not sent;
+  - whether staff may ever see or copy a link, since it is a bearer token for
+    someone else's approval;
+  - which details the emailed page and the email may show. At least the title
+    and amount are needed to make the decision; the requester's name and the
+    description are more sensitive.
+
+## Finance — Purchase Requests: Named Approvers, Notices and the Paid Amount (2026-10-14)
+
+Found driving W63 (`docs/workflow-review/W63-purchase-request-approval.md`,
+W63-5, W63-6 and W63-7).
+
+- **A chain can name an approver who cannot approve.** Approve, deny and the
+  Approvals queue require `finance.approve`. A chain step naming a position
+  (the Chief, here) whose holders lack it leaves them a 403 on the queue and
+  a 404 on the request. Only an approvals admin's override moves it on.
+  - The chain screen now says so ("Nobody on this step has the finance
+    approval permission", W63-2).
+  - Decision: either naming a position or member in a chain lets them act on
+    that step, or saving such a step is refused.
+- **Nobody is told.** No email, bell entry or text goes to:
+  - an approver whose step a request has reached;
+  - the requester when it is approved or denied.
+
+  The existing entries record this for dual approval's second approval and
+  for amendments. It holds for every ordinary step and for the decision too.
+  Decision: which events notify whom (email first, pitfall 18).
+
+- **The paid amount is always the estimate.** "Mark Paid" sends no amount,
+  though `POST /finance/purchase-requests/{id}/mark-paid` takes
+  `actual_amount` and the service records it. An invoice that differs from
+  the quote leaves the budget line's spent and committed figures wrong, with
+  no way to correct them on screen. Decision: whether "Mark Paid" asks for
+  the amount, and how a difference from the commitment is shown.
+
+## Finance — Expense Reports: Routed by Purchase Chains, and Charged to No Budget (2026-10-14)
+
+Found driving W64 (`docs/workflow-review/W64-expense-report.md`, W64-4 and
+W64-5).
+
+- **Purchase-request chains route everything.** `resolve_approval_chain`
+  matches chains whose `applies_to` is the request's type **or
+  `PURCHASE_REQUEST`**, and scores them without preferring the exact type.
+  - Every chain marked "Purchase Requests" also routes expense reports and
+    check requests.
+  - A purchase chain with an amount range or category outranks a default
+    expense or check chain.
+  - In this review an expense reimbursement went to the board chair's emailed
+    sign-off. `FINANCE_MODULE.md`'s own example ("Large Purchase" $5,000+
+    beside "General Expense") would send a $6,000 reimbursement to the Board
+    of Trustees.
+  - It has worked this way since the module was added, so changing it
+    re-routes live requests.
+  - Decision: match only the request's own type (with an `UPGRADING.md` note
+    and perhaps a migration copying purchase chains to the other types), add
+    an explicit "All requests" option, or keep it and say so on the chain
+    screen.
+- **Expense lines carry no budget.** The form offers no budget line, so
+  `budget_id` is null, and `mark_expense_paid` posts spending only to lines
+  that have one. A paid reimbursement reaches no budget line, and nothing
+  commits it on approval as a purchase request's amount is. Decision: who
+  picks the line (the member, or the Treasurer on approval), and whether
+  approval commits it.
+
+## Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14)
+
+Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
+
+- **An overpayment is accepted silently.** `record_dues_payment` has no check
+  against the balance. In the review, $75 recorded against a $70 balance left
+  "$125.00 paid of $120.00", and the extra $5 counted as collected.
+  Decision: refuse, warn and allow, or carry the excess as a credit to the
+  member's next dues.
+- **A member cannot see their own dues.**
+  - No screen shows a member what they owe; `/finance/dues` needs
+    `finance.view`.
+  - `GET /finance/dues` already confines a non-manager to their own records,
+    but its `finance.view` gate refuses a plain member first.
+  - Nothing tells a member their dues are due or overdue.
+  - Decision: whether members get a "My dues" view (and on what gate), and
+    which dues reminders go out (email first, pitfall 18).
+
+## Department Store — The Cart Does Not Survive a Reload (2026-10-15)
+
+Found driving W67 (`docs/workflow-review/W67-department-store.md`, W67-6).
+
+- **What happens:** the cart lives only in the page's memory. A reload, or a
+  phone browser discarding the tab while the member switches apps, empties
+  it.
+- **Why it is not simply fixed:** keeping it means choosing where (browser
+  storage on that device, or saved on the server so it follows the member)
+  and how long it lasts, against an order window that closes.
+- **Decision:** whether to keep the cart, and where.
+
+## Grants — Opportunities Cannot Be Edited (2026-10-15)
+
+Found driving W68 (`docs/workflow-review/W68-grants.md`, W68-10). W68-9, key
+contacts edited as free text, was closed by the structured contacts editor on
+the application form.
+
+- **What happens:** `PUT` and `DELETE /grants/{opportunity_id}` exist, but no
+  control on the opportunities page reaches either, so a mistyped deadline or
+  a program that has closed stays as entered. The four Federal Programs cards
+  are fixed text with no way to start an application from them.
+- **Decision:** whether opportunities get edit and retire controls, and whether
+  the federal programs become real, seeded opportunities.
+
+## Fundraising — A Donor Must Have a Person's Name (2026-10-15)
+
+Found driving W69 (`docs/workflow-review/W69-fundraising.md`, W69-6).
+
+- **What happens:** `first_name` and `last_name` are required on every donor
+  (`DonorBase` in `schemas/grant.py`, and the Add Donor form), whatever the
+  donor type. A business is entered under its contact ("Dale Harmon (Valley
+  Hardware)"); a foundation or business with no named contact cannot be
+  added at all.
+- **Decision:** whether business, foundation and government donors may be
+  recorded by organization name alone, which would make the name fields
+  optional for those types (a schema change, and the list and receipts would
+  need to name such a donor by `company_name`).
+
+## Medical Screening — A Screening With No Expiration Date Never Falls Due (2026-10-16)
+
+Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
+
+- **What happens:** `_grade` in `medical_screening_service.py` counts a
+  passed, completed or waived record with no `expiration_date` as compliant
+  indefinitely, and nothing reads a requirement's `frequency_months`. An
+  annual physical recorded without an expiration therefore never lapses,
+  never appears under "Expiring within 30 days", and the requirement card's
+  "Every 12 months" describes nothing.
+- **Since W71:** the record form fills in completed date + frequency, so new
+  records linked to a recurring requirement carry an expiration. Records
+  already saved without one, and records not linked to a requirement, are
+  unchanged.
+- **Also:** records are matched to a requirement by screening _type_, not by
+  `requirement_id`, so two requirements of the same type are satisfied by
+  one record.
+- **Decision:** whether grading should fall back to completed date +
+  `frequency_months` when a record has no expiration (which changes the
+  standing of existing records on upgrade), and whether a record should
+  satisfy only the requirement it is linked to.
+
+## Integrations — Connecting iCalendar (ICS) Does Nothing (2026-10-17)
+
+Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
+
+- **What happens:** the catalog offers "iCalendar (ICS) — Subscribe to
+  department events via standard iCal feed URL … Filtered feeds". Connecting
+  it shows Connected, but no feed URL appears anywhere, and nothing reads the
+  integration's status or its config (`feed_token`, `included_event_types`,
+  `include_shifts` in `ICalConfig`).
+- **What does work:** each member's personal shift feed, from
+  `GET /scheduling/calendar-feed` (`/api/public/v1/calendar/{token}.ics`),
+  whether or not this integration is connected.
+- **Decision:**
+  - build the department events feed the card describes;
+  - mark the entry unavailable; or
+  - re-describe it as the members' personal shift feeds.
+
+  The catalog row is seeded per organization, so the last two also need a
+  data change for existing installations.
 
 ## Process
 

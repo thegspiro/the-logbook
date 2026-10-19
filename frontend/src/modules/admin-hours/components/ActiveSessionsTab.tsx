@@ -146,7 +146,8 @@ const ActiveSessionsTab: React.FC = () => {
                     onClick={() => {
                       void handleForceClockOut(session.id, session.userName);
                     }}
-                    className="flex shrink-0 items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-900"
+                    aria-label={`End ${session.userName ?? 'this member'}'s ${session.categoryName} session`}
+                    className="touch:min-h-11 flex shrink-0 items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-900"
                     title="End this session on behalf of the member"
                   >
                     <StopCircle className="h-4 w-4" />

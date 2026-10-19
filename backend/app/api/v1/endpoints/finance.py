@@ -3251,7 +3251,17 @@ async def submit_purchase_request(
             user_id=str(current_user.id),
             username=current_user.username,
         )
-        return pr
+        # With its steps, as the detail endpoint returns it: the screen shows
+        # this response as the request, and without them its Approval Timeline
+        # read "This request has no approval steps" until a reload.
+        return await _with_approval_steps(
+            service,
+            PurchaseRequestResponse.model_validate(pr),
+            ApprovalEntityType.PURCHASE_REQUEST,
+            pr.id,
+            str(current_user.organization_id),
+            current_user,
+        )
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
@@ -3596,10 +3606,19 @@ async def submit_expense_report(
     """
     service = FinanceService(db)
     try:
-        return await service.submit_expense_report(
+        er = await service.submit_expense_report(
             er_id,
             str(current_user.organization_id),
             requester_id=_requester_scope(current_user),
+        )
+        # With its steps, for the reason given in submit_purchase_request.
+        return await _with_approval_steps(
+            service,
+            ExpenseReportResponse.model_validate(er),
+            ApprovalEntityType.EXPENSE_REPORT,
+            er.id,
+            str(current_user.organization_id),
+            current_user,
         )
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -3797,10 +3816,19 @@ async def submit_check_request(
     """
     service = FinanceService(db)
     try:
-        return await service.submit_check_request(
+        cr = await service.submit_check_request(
             cr_id,
             str(current_user.organization_id),
             requester_id=_requester_scope(current_user),
+        )
+        # With its steps, for the reason given in submit_purchase_request.
+        return await _with_approval_steps(
+            service,
+            CheckRequestResponse.model_validate(cr),
+            ApprovalEntityType.CHECK_REQUEST,
+            cr.id,
+            str(current_user.organization_id),
+            current_user,
         )
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

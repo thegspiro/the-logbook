@@ -725,6 +725,10 @@ class CampaignBase(BaseModel):
 class CampaignCreate(CampaignBase):
     """Schema for creating a new fundraising campaign"""
 
+    # W69: the form offers a starting status; without this field a campaign
+    # created as Active was stored as Draft, and nothing could change it after.
+    status: CampaignStatusLiteral = "draft"
+
     @model_validator(mode="after")
     def _restricted_needs_purpose(self):
         if self.is_restricted and not (self.restriction_purpose or "").strip():
