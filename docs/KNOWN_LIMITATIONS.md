@@ -4442,6 +4442,29 @@ made these choices. Everything is off until the department switches it on.
 
 ---
 
+## Minutes — Prepared Motions and Accepting the Previous Minutes (2026-10-18)
+
+**Open — owner decisions to confirm.** See
+[MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#prepared-motions-and-accepting-the-previous-minutes-2026-10-18).
+
+- **Outlines a department already saved are not changed.** Only the built-in
+  outlines mark approval of previous minutes and adjournment as needing a motion,
+  so a department with its own saved outline ticks the box on the Outlines screen
+  before its minutes get prepared motions. Setting the flag on every saved
+  outline's sections of those two keys would be a data migration; it was not done
+  because it would change what existing departments' next minutes contain.
+- **Minutes made before this change get their prepared motions when next edited**
+  (sections saved, an outline applied, an agenda synced), not at once.
+- **"Previous minutes" means the latest earlier circulated or adopted minutes of
+  the same kind of meeting.** A trustee meeting accepts the last trustee minutes,
+  not the last business ones. A draft set is skipped, and if none has been
+  circulated the motion reads generically and links nothing.
+- **Passing the acceptance motion does not adopt the previous minutes.** An
+  officer other than the one who circulated them confirms the pre-filled
+  adoption, because the separation-of-duties rule was kept.
+
+---
+
 ## MM-17 — `set_meeting_quorum_config` Has No Finalization Guard on Approved Minutes (2026-09-13)
 
 > ✅ **Resolved (2026-10-11), as the owner chose: lock on APPROVED, with a

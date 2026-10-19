@@ -321,6 +321,7 @@ def render_minutes_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
                     else ""
                 ),
                 motion.get("vote_display") or "",
+                motion.get("acceptance_display") or "",
             ]
             detail_text = " · ".join(d for d in detail if d)
             if detail_text:

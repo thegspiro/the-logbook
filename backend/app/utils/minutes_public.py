@@ -128,6 +128,7 @@ def _motion(entry: Dict[str, Any]) -> Dict[str, Any]:
         "moved_by": _text(entry.get("moved_by"), 200),
         "seconded_by": _text(entry.get("seconded_by"), 200),
         "vote_display": _text(entry.get("vote_display"), 300),
+        "acceptance": _text(entry.get("acceptance_display"), 100),
     }
 
 

@@ -51,6 +51,7 @@ interface PublicMotion {
   moved_by: string | null;
   seconded_by: string | null;
   vote_display: string | null;
+  acceptance?: string | null;
 }
 
 interface PublicCandidate {
@@ -332,7 +333,7 @@ const MinutesDocument: React.FC<{ id: string }> = ({ id }) => {
                       .join(', ')}
                   </p>
                   <p className="text-theme-text-secondary mt-1">
-                    {[motion.status, motion.vote_display].filter(Boolean).join(' · ')}
+                    {[motion.status, motion.vote_display, motion.acceptance].filter(Boolean).join(' · ')}
                   </p>
                 </li>
               ))}

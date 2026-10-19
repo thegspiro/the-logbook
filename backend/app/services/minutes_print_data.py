@@ -21,7 +21,7 @@ from app.services.minutes_record_service import MinutesRecordService
 from app.services.minutes_signature_service import MinutesSignatureService
 from app.utils.minutes_attendance import effective_listing, listed_attendees
 from app.utils.minutes_settings import attendance_listing_in
-from app.utils.motion_votes import vote_summary
+from app.utils.motion_votes import acceptance_label, recorded_motions, vote_summary
 from app.utils.org_timezone import scheduling_timezone
 
 
@@ -187,8 +187,9 @@ async def build_print_data(
                     else None
                 ),
                 "vote_display": vote_summary(m),
+                "acceptance_display": acceptance_label(m),
             }
-            for index, m in enumerate(minutes.motions or [], 1)
+            for index, m in enumerate(recorded_motions(minutes.motions), 1)
         ],
         "action_items": [
             {

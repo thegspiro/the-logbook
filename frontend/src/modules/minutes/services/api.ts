@@ -7,6 +7,7 @@
 
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
+  AdoptionProposal,
   AgendaSyncPreview,
   MeetingMinutes,
   Motion,
@@ -88,6 +89,12 @@ export const minutesService = {
   async approve(minutesId: string, adoption?: AdoptionDetails): Promise<MeetingMinutes> {
     const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/approve`, adoption ?? null);
     return response.data;
+  },
+
+  /** What a later meeting's passed acceptance motion implies for these minutes' adoption, if anything. */
+  async getAdoptionProposal(minutesId: string): Promise<AdoptionProposal | null> {
+    const response = await api.get<AdoptionProposal | null>(`/minutes-records/${minutesId}/adoption-proposal`);
+    return response.data ?? null;
   },
 
   /** Take circulated minutes back to draft so suggestions can be worked in. */

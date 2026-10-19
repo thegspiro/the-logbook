@@ -12,6 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -24,7 +25,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.document import DocumentType
-from app.models.minute import MinutesStatus
+from app.models.minute import MeetingMinutes, MinutesStatus
 from app.models.user import User
 from app.schemas.documents import PublishedDocumentResponse
 from app.schemas.minute import (
@@ -32,6 +33,7 @@ from app.schemas.minute import (
     ActionItemCreate,
     ActionItemResponse,
     ActionItemUpdate,
+    AdoptionProposal,
     MinutesAdopt,
     MinutesCreate,
     MinutesListItem,
@@ -65,7 +67,11 @@ from app.utils.minutes_settings import (
     load_minutes_reminder_settings,
     load_signature_slots,
 )
-from app.utils.motion_votes import members_present, suggested_status
+from app.utils.motion_votes import (
+    members_present,
+    recorded_motions,
+    suggested_status,
+)
 from app.utils.rich_text import normalize_format
 
 router = APIRouter()
@@ -122,7 +128,7 @@ async def list_minutes(
             location=m.location,
             called_by=m.called_by,
             meeting_id=m.meeting_id,
-            motions_count=len(m.motions) if m.motions else 0,
+            motions_count=len(recorded_motions(m.motions)),
             action_items_count=len(m.action_items) if m.action_items else 0,
             open_action_items=sum(
                 1
@@ -457,6 +463,32 @@ async def submit_minutes(
     return await _respond(db, current_user, minutes)
 
 
+@router.get(
+    "/{minutes_id}/adoption-proposal", response_model=Optional[AdoptionProposal]
+)
+async def get_adoption_proposal(
+    minutes_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.manage")),
+):
+    """
+    What a later meeting's motion decided about these minutes
+
+    When the body accepted these minutes as submitted or as revised, the
+    adoption form opens already filled in from that motion. Nothing is adopted
+    until an officer other than the one who circulated them confirms it.
+
+    **Authentication required**
+    **Requires permission: minutes.manage**
+    """
+    service = MinuteService(db)
+    minutes = await service.get_minutes(
+        minutes_id, current_user.organization_id, load_children=False
+    )
+    ensure_found(minutes, "Meeting minutes")
+    return await service.adoption_proposal(minutes_id, current_user.organization_id)
+
+
 @router.post("/{minutes_id}/approve", response_model=MinutesResponse)
 async def approve_minutes(
     minutes_id: str,
@@ -628,9 +660,7 @@ async def add_motion(
         user_id=str(current_user.id),
     )
 
-    return _build_motion_response(
-        motion, await _present_count(service, minutes_id, current_user)
-    )
+    return await _motion_response(service, db, minutes_id, motion, current_user)
 
 
 @router.put("/{minutes_id}/motions/{motion_id}", response_model=MotionResponse)
@@ -668,9 +698,7 @@ async def update_motion(
         user_id=str(current_user.id),
     )
 
-    return _build_motion_response(
-        motion, await _present_count(service, minutes_id, current_user)
-    )
+    return await _motion_response(service, db, minutes_id, motion, current_user)
 
 
 @router.delete(
@@ -1172,6 +1200,36 @@ def _build_response(minutes) -> MinutesResponse:
     )
 
 
+async def _name_previous_minutes(
+    db: AsyncSession, organization_id, motions: list[MotionResponse]
+) -> None:
+    """Say which minutes a previous-minutes motion accepts, and where they stand.
+
+    The ids were set by the server, but are still resolved inside the caller's
+    department so a stale or foreign id can never surface another department's
+    title.
+    """
+    ids = {m.previous_minutes_id for m in motions if m.previous_minutes_id}
+    if not ids:
+        return
+    found = await db.execute(
+        sa_select(MeetingMinutes.id, MeetingMinutes.title, MeetingMinutes.status).where(
+            MeetingMinutes.id.in_(ids),
+            MeetingMinutes.organization_id == str(organization_id),
+        )
+    )
+    known = {row.id: row for row in found}
+    for motion in motions:
+        row = known.get(motion.previous_minutes_id or "")
+        if row is None:
+            motion.previous_minutes_id = None
+            continue
+        motion.previous_minutes_title = row.title
+        motion.previous_minutes_status = (
+            row.status if isinstance(row.status, str) else row.status.value
+        )
+
+
 async def _respond(db: AsyncSession, user: User, minutes) -> MinutesResponse:
     """The response, with linked documents narrowed to what *user* could open.
 
@@ -1179,6 +1237,7 @@ async def _respond(db: AsyncSession, user: User, minutes) -> MinutesResponse:
     who could open them; this viewer may not be able to.
     """
     response = _build_response(minutes)
+    await _name_previous_minutes(db, user.organization_id, response.motions)
     response.attendance_listing_effective = effective_listing(
         minutes.attendance_listing,
         await load_attendance_listing(db, str(user.organization_id)),
@@ -1203,6 +1262,16 @@ def _loaded(obj, relationship: str, attribute: str):
 _adopting_title = adopting_title
 
 
+async def _motion_response(
+    service, db, minutes_id: str, motion, user
+) -> MotionResponse:
+    response = _build_motion_response(
+        motion, await _present_count(service, minutes_id, user)
+    )
+    await _name_previous_minutes(db, user.organization_id, [response])
+    return response
+
+
 async def _present_count(service, minutes_id: str, user) -> int:
     """Members the minutes record as in the room, for a motion's suggested result."""
     minutes = await service.get_minutes(minutes_id, user.organization_id)
@@ -1225,6 +1294,8 @@ def _build_motion_response(motion, present: int = 0) -> MotionResponse:
         section_key=motion.section_key,
         discussion_notes=motion.discussion_notes,
         status=motion.status if isinstance(motion.status, str) else motion.status.value,
+        acceptance=motion.acceptance,
+        previous_minutes_id=motion.previous_minutes_id,
         votes_for=motion.votes_for,
         votes_against=motion.votes_against,
         votes_abstain=motion.votes_abstain,
@@ -1311,10 +1382,6 @@ async def set_meeting_quorum_config(
 
     Requires `minutes.manage` permission.
     """
-    from sqlalchemy import select as sa_select
-
-    from app.models.minute import MeetingMinutes
-
     if quorum_type not in ("count", "percentage"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

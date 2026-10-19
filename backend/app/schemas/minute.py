@@ -338,6 +338,11 @@ class MotionBase(BaseModel):
     status: str = Field(
         default="passed", description="Motion result: passed, failed, tabled, withdrawn"
     )
+    acceptance: Optional[Literal["as_submitted", "as_revised"]] = Field(
+        None,
+        description="For the motion that accepts the previous minutes: accepted "
+        "as submitted or as revised",
+    )
     votes_for: Optional[int] = Field(None, ge=0)
     votes_against: Optional[int] = Field(None, ge=0)
     votes_abstain: Optional[int] = Field(None, ge=0)
@@ -383,6 +388,7 @@ class MotionUpdate(BaseModel):
     discussion_notes: Optional[str] = None
     section_key: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = None
+    acceptance: Optional[Literal["as_submitted", "as_revised"]] = None
     votes_for: Optional[int] = Field(None, ge=0)
     votes_against: Optional[int] = Field(None, ge=0)
     votes_abstain: Optional[int] = Field(None, ge=0)
@@ -403,6 +409,10 @@ class MotionResponse(MotionBase):
     minutes_id: str
     order: int
     election_title: Optional[str] = None
+    # The minutes this motion accepts, when it is the previous-minutes motion.
+    previous_minutes_id: Optional[str] = None
+    previous_minutes_title: Optional[str] = None
+    previous_minutes_status: Optional[str] = None
     suggested_status: Optional[str] = Field(
         None,
         description="passed or failed when the counts and threshold decide it; "
@@ -719,6 +729,23 @@ class MinutesListItem(UTCResponseBase):
     created_at: datetime
 
     model_config = _response_config
+
+
+class AdoptionProposal(BaseModel):
+    """The adoption a passed acceptance motion implies for these minutes.
+
+    Taken from the motion that accepted them at a later meeting, so the
+    adoption form opens already filled in. It is a proposal: the officer who
+    confirms it is still someone other than whoever circulated the minutes.
+    """
+
+    motion_id: str
+    adopted_on: datetime
+    adopting_minutes_id: str
+    adopting_minutes_title: str
+    as_amended: bool
+    moved_by: Optional[str] = None
+    seconded_by: Optional[str] = None
 
 
 class MinutesAdopt(BaseModel):
