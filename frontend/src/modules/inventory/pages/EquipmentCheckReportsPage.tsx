@@ -483,7 +483,7 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
                       {f.checkedAt ? formatDateTime(f.checkedAt, tz) : '-'}
                     </td>
                     <td className="text-theme-text-primary px-4 py-2">{f.apparatusName ?? '-'}</td>
-                    <td className="text-theme-text-secondary px-4 py-2">{f.compartmentName}</td>
+                    <td className="text-theme-text-secondary px-4 py-2">{f.compartmentName || 'On the checklist'}</td>
                     <td className="text-theme-text-primary px-4 py-2 font-medium">
                       {f.itemName}
                       {f.quantityFound != null && (

@@ -472,7 +472,7 @@ export const MyChecklistsPage: React.FC = () => {
                   >
                     <div className="min-w-0">
                       <span className="text-theme-text-primary font-medium">{item.itemName}</span>
-                      <span className="text-theme-text-muted ml-2">{item.compartmentName}</span>
+                      <span className="text-theme-text-muted ml-2">{item.compartmentName || 'On the checklist'}</span>
                       {item.quantityFound != null && (
                         <span className="text-theme-text-secondary block text-xs">
                           {/* Results filed before par was snapshotted carry

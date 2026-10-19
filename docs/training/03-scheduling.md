@@ -2398,7 +2398,7 @@ scored.
 
 #### Answering each item
 
-Every item asks for one of four kinds of answer:
+Every item asks for one of five kinds of answer:
 
 | Type         | What you do                                                    | What passing means                                                                                                  |
 | ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -2406,10 +2406,24 @@ Every item asks for one of four kinds of answer:
 | **Count**    | Set the count with the stepper                                 | The count is at or above its **Min to Pass**. Short of _par_ but at the minimum passes and becomes a restock line   |
 | **Level**    | Enter the reading, then pass or fail                           | The reading meets its minimum. An empty box means "not read yet", not zero. The reading is kept, so trends show     |
 | **Expiry**   | Check the serial number, lot number and expiry date on record, then pass or fail | The date on record has not passed. Items close to their date show amber on every shift until they are replaced |
+| **Present**  | Select **Present** or **Absent**                               | It is on the truck. **Absent** fails the item without a note — it already says what is wrong. **Not on truck** and **Out of service** are not offered |
 
-The expiry date, lot and serial number come from the department's stock
-records. You cannot change them on the check form. To record a replacement, use
-**Swap** (below) or [Apparatus Inventory](#apparatus-inventory--what-the-truck-is-carrying-right-now).
+For an item linked to the department's stock, the expiry date, lot and serial
+number come from the stock records and you cannot change them on the check
+form. To record a replacement, use **Swap** (below) or
+[Apparatus Inventory](#apparatus-inventory--what-the-truck-is-carrying-right-now).
+
+**Replaced an expiring item that is not linked to stock?** Select **Put in a
+replacement? Record its date** and enter the date printed on the unit you put
+aboard, and its lot number if you read one. The item then reads as in date and
+passes. When you submit, the new date replaces the old one on the checklist,
+and the checklist's change log records that you made the change. A date that
+has already passed is refused.
+
+**Items with no location.** Some items sit directly on the checklist rather
+than in a compartment or bag, such as the radios or the map book. They appear
+between the locations, wherever the checklist places them, with no heading of
+their own.
 
 **When an item fails.** After you select **Fail**, two more choices appear:
 

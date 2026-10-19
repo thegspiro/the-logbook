@@ -77,6 +77,7 @@ class TestCloneCompartment:
             is_header=False,
             container_type="compartment",
             is_sealed=False,
+            is_inline=False,
             parent_compartment_id=None,
             items=[item],
         )
@@ -642,11 +643,12 @@ class TestTemplateContentRevision:
         self, service, mock_db, method, args, getter, entity
     ):
         compartment = SimpleNamespace(
-            id="comp-1", template_id="tmpl-1", name="Old", items=[]
+            id="comp-1", template_id="tmpl-1", name="Old", items=[], is_inline=False
         )
         item = SimpleNamespace(
             id="item-1",
             name="Old",
+            check_type="function",
             compartment_id="comp-1",
             compartment=compartment,
         )
@@ -1150,6 +1152,7 @@ class TestCompartmentParentValidation:
             id=compartment_id,
             parent_compartment_id=parent_id,
             template_id=template_id,
+            is_inline=False,
         )
 
     async def test_rejects_self_parenting(self, service, mock_db):
