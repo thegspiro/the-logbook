@@ -16,10 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3448](https://github.com/thegspiro/the-logbook/pull/3448)** (branch
+`claude/security-review-skills-testing-p9`). PR #3444 (Feature 18, Training
+extended, pass 9) merged 2026-10-19, docs-only — not independently
+recordable here beyond what follows. This iteration (watchdog pickup — no
+open PR's head branch starts with `claude/security-review-`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 19 (Skills testing), pass 9 — 0 fixes, 0 new
+findings; a true zero delta (0 of 504 commits in the window touch any of
+the four declared scope files or the feature's one external caller).
+Rotation row 19 → ✅ (pending this PR's merge); next is Feature 20
+(Compliance).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3444's merge, Feature 18 Training extended pass 9), preserved for history</summary>
+
 None. PR #3444 (Feature 18, Training extended, pass 9) merged 2026-10-19 —
 docs-only (findings file + this tracker), not independently recordable here
 beyond what follows. Rotation row 18 → ✅. Next is Feature 19 (Skills
 testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18 Training extended pass 9, PR #3444, before it merged), preserved for history</summary>
