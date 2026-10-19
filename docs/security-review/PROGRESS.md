@@ -16,10 +16,12 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3431 (Feature 10, Documents & legal, pass 10) merged
-2026-10-18, docs-only — not independently recordable here beyond what
-follows. This iteration (watchdog pickup, same conditions as below) reviewed
-Feature 11 (Inventory), pass 10 — see the Log below for the full entry.
+**PR [#3432](https://github.com/thegspiro/the-logbook/pull/3432)** (branch
+`claude/security-review-inventory`). PR #3431 (Feature 10, Documents &
+legal, pass 10) merged 2026-10-18, docs-only — not independently
+recordable here beyond what follows. This iteration (watchdog pickup, same
+conditions as below) reviewed Feature 11 (Inventory), pass 10 — see the Log
+below for the full entry.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 10, PR #3431, merged), preserved for history</summary>
