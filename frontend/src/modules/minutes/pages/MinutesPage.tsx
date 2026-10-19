@@ -21,9 +21,7 @@ import {
   ChevronUp,
   Users,
   ListOrdered,
-  Bell,
-  PenLine,
-  Globe,
+  Settings,
 } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { Link, useNavigate } from 'react-router';
@@ -34,10 +32,6 @@ import { AgendaEditorDialog } from '../components/AgendaEditorDialog';
 import { ArchiveSearchResults } from '../components/ArchiveSearchResults';
 import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
-import { AttendanceListingDialog } from '../components/AttendanceListingDialog';
-import { PublishingSettingsDialog } from '../components/PublishingSettingsDialog';
-import { ReminderSettingsDialog } from '../components/ReminderSettingsDialog';
-import { SignerSettingsDialog } from '../components/SignerSettingsDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { toDisplayString } from '../../../utils/displayValue';
 import type { MeetingType, MinutesListItem, MinutesStats } from '../types/minutes';
@@ -99,10 +93,6 @@ const MinutesPage: React.FC = () => {
   // MM-3: minutes writes and restricted reads are gated on minutes.manage on
   // the backend, not meetings.manage — check the same permission the API does.
   const canManage = checkPermission('minutes.manage');
-  const [showReminderSettings, setShowReminderSettings] = useState(false);
-  const [showPublishingSettings, setShowPublishingSettings] = useState(false);
-  const [showAttendanceListing, setShowAttendanceListing] = useState(false);
-  const [showSignerSettings, setShowSignerSettings] = useState(false);
   // The attendance dashboard's endpoint is gated on meetings.manage.
   const canViewAttendance = checkPermission('meetings.manage');
 
@@ -355,44 +345,10 @@ const MinutesPage: React.FC = () => {
               </Link>
             )}
             {canManage && (
-              <button
-                type="button"
-                onClick={() => setShowReminderSettings(true)}
-                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
-              >
-                <Bell className="h-4 w-4" aria-hidden="true" />
-                <span>Reminders</span>
-              </button>
-            )}
-            {canManage && (
-              <button
-                type="button"
-                onClick={() => setShowAttendanceListing(true)}
-                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
-              >
-                <ClipboardList className="h-4 w-4" aria-hidden="true" />
-                <span>Roll listing</span>
-              </button>
-            )}
-            {canManage && (
-              <button
-                type="button"
-                onClick={() => setShowPublishingSettings(true)}
-                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
-              >
-                <Globe className="h-4 w-4" aria-hidden="true" />
-                <span>Publishing</span>
-              </button>
-            )}
-            {canManage && (
-              <button
-                type="button"
-                onClick={() => setShowSignerSettings(true)}
-                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
-              >
-                <PenLine className="h-4 w-4" aria-hidden="true" />
-                <span>Signers</span>
-              </button>
+              <Link to="/minutes/settings" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
+                <Settings className="h-4 w-4" aria-hidden="true" />
+                <span>Settings</span>
+              </Link>
             )}
             {canViewAttendance && (
               <Link to="/minutes/attendance" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
@@ -797,19 +753,6 @@ const MinutesPage: React.FC = () => {
         />
 
         {/* Create Minutes Modal */}
-        {canManage && (
-          <>
-            <ReminderSettingsDialog isOpen={showReminderSettings} onClose={() => setShowReminderSettings(false)} />
-            <AttendanceListingDialog isOpen={showAttendanceListing} onClose={() => setShowAttendanceListing(false)} />
-            <PublishingSettingsDialog
-              isOpen={showPublishingSettings}
-              onClose={() => setShowPublishingSettings(false)}
-            />
-          </>
-        )}
-
-        {canManage && <SignerSettingsDialog isOpen={showSignerSettings} onClose={() => setShowSignerSettings(false)} />}
-
         {canManage && showCreateModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">

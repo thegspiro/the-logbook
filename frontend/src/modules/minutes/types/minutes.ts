@@ -632,6 +632,16 @@ export interface MinutesReminderSettings {
   attendance_listing: AttendanceListing;
 }
 
+/** What every panel on the minutes settings page is given. */
+export interface MinutesSettingsPanelProps {
+  /** The department's settings as the server applies them. */
+  settings: MinutesReminderSettings;
+  /** Whether the viewer may change them (`settings.manage`); anyone else reads. */
+  canEdit: boolean;
+  /** Called after a save so the page re-reads what the server now holds. */
+  onSaved: () => Promise<void> | void;
+}
+
 /** Where one set of minutes stands: the library copy, the public copy, and what the settings allow. */
 export interface MinutesPublishingStatus {
   library_allowed: boolean;
