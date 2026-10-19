@@ -1109,6 +1109,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/minutes`            | Minutes List                 | Authenticated     |
 | `/minutes/attendance` | Meeting Attendance Dashboard | `meetings.manage` |
 | `/minutes/outlines`   | Meeting Outlines             | `minutes.manage`  |
+| `/minutes/settings`   | Minutes Settings             | `minutes.manage`  |
 | `/minutes/:minutesId` | Minutes Detail               | Authenticated     |
 
 ---

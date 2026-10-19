@@ -458,7 +458,7 @@ choice, because some departments denote only who was present.
 | `present`         | Present, late, left early and guests; excused and absent are not |
 
 A guest was in the room, so every listing names guests. The department sets the
-default under **Minutes → Roll listing** (`settings.minutes.attendance_listing`,
+default under **Minutes → Settings → Attendance** (`settings.minutes.attendance_listing`,
 `settings.manage`); unset, or any unrecognised value, reads as `all`, so an
 upgrade changes no printed or published copy. One set of minutes can choose for
 itself (`meeting_minutes.attendance_listing`, draft or rejected minutes only;
@@ -582,12 +582,12 @@ addition. The bell task is unchanged.
   `reminder_days_before_due` (3; 0 to 30; 0 is the due date itself),
   `overdue_repeat_days` (7; 0 to 90; 0 is one overdue reminder only) and
   `open_items_digest` (on). Anything missing or malformed reads as its default.
-  **Minutes → Reminders** shows the server's reading to anyone who manages
+  **Minutes → Settings → Reminders** shows the server's reading to anyone who manages
   minutes (`GET /minutes-records/settings`) and lets a settings administrator
   change it (`PATCH /organization/settings`).
 - **Upgrading:** the reminders are on by default, so a department that has open
   items on adopted minutes will start receiving these emails the day after the
-  upgrade. They can be switched off in **Minutes → Reminders** before or after.
+  upgrade. They can be switched off in **Minutes → Settings → Reminders** before or after.
 
 ### Printable minutes
 
@@ -626,6 +626,25 @@ Recorded in [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#meeting-minutes--what-
 automatic filing of results at certification.
 
 ---
+
+### Minutes settings page _(2026-10-19)_
+
+Every department-wide choice about minutes is on one screen, **Minutes →
+Settings** (`/minutes/settings`, `minutes.manage`), in four sections addressed by
+`?tab=`: **Attendance** (who the minutes name), **Signatures** (who signs adopted
+minutes), **Reminders** (action item follow-up) and **Publishing** (the library
+and the public page). They replace four buttons on the Minutes page that each
+opened a dialog.
+
+- One read, `GET /minutes-records/settings` (what the server applies), serves all
+  four sections; a save writes through the organization settings
+  (`settings.manage`) and the page re-reads, so a section shows what the server
+  now holds rather than what was sent.
+- Anyone who manages minutes can read every section; without `settings.manage`
+  the controls are disabled and there is no Save, and each section says a
+  settings administrator changes it. Save is disabled until something changed.
+- **Outlines stay where they are** (`/minutes/outlines`): they are a working tool
+  edited meeting by meeting, not a department setting.
 
 ## Review, adoption and outlines _(2026-10-14)_
 
@@ -835,7 +854,7 @@ Once minutes are adopted, the people the department names sign them, in the app.
   `minutes.manage`. Unset, it reads as a **Recording Secretary** and a
   **Presiding Officer**, both open to anyone who manages minutes, so an upgrade
   changes nothing. Up to six; an entry that is malformed or repeats a key is
-  dropped rather than failing the rest. **Minutes → Signers** shows the server's
+  dropped rather than failing the rest. **Minutes → Settings → Signatures** shows the server's
   reading to anyone who manages minutes and lets a settings administrator
   change it.
 - **Signing** (`POST /{id}/signatures {slot_key, signed_name, password}`): the
@@ -915,7 +934,7 @@ needs_motion, motion_text, documents[{id, name}]}`, at most 60. They are edited
 
 Publishing files the library copy and, if the department's settings allow it,
 posts a public copy beside it. Two department-wide switches under **Minutes →
-Publishing** (written through the organization settings, `settings.manage`;
+Settings → Publishing** (written through the organization settings, `settings.manage`;
 anyone who manages minutes can read them) decide what happens. Everything is
 **off by default** and every switch reads as off unless it is literally `true`.
 

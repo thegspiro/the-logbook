@@ -4430,7 +4430,7 @@ made these choices. Everything is off until the department switches it on.
 - **Unset reads as "everyone", not "present only".** The owner preferred present
   only as the default, but an installation that never chose would otherwise
   start hiding absences on printed and published copies the moment it upgraded.
-  A department switches to present only under Minutes → Roll listing. To make
+  A department switches to present only under Minutes → Settings → Attendance. To make
   present only the default for new installs, change `DEFAULT_ATTENDANCE_LISTING`
   in `app/utils/minutes_attendance.py` (existing installs that never set it
   would change too).
