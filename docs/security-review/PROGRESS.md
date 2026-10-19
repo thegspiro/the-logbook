@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3440](https://github.com/thegspiro/the-logbook/pull/3440)** (branch
+`claude/security-review-training-core`). PR #3438 (Feature 16, Events &
+requests, pass 9) and PR #3437 (the Alembic-heads fix it carried along)
+both merged 2026-10-19 — not independently recordable here beyond what
+follows. This iteration (watchdog pickup, same conditions as above)
+reviewed Feature 17 (Training core), pass 9 — 0 fixes, 0 new findings;
+near-zero delta of 1 commit in scope (wires an already-org-validated
+`instructor_id` through on a write, no new tenancy gap). TR7-1 re-verified
+still OPEN/FLAGGED at its pass-8 citation, unchanged. Rotation row 17 → ✅
+(pending this PR's merge); next is Feature 18 (Training extended).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16 Events & requests pass 9, PR #3438, before it merged), preserved for history</summary>
+
 **PR [#3438](https://github.com/thegspiro/the-logbook/pull/3438)** (branch
 `claude/security-review-events-requests`). PR #3436 (Feature 15, Scheduling,
 pass 9) merged 2026-10-19 — not independently recordable here beyond what
@@ -29,6 +43,8 @@ revision `7ce50d36b948`; this PR was rebased onto that same revision
 (dropping an initial, independently-written duplicate merge revision)
 rather than opening a second, competing fix. Rotation row 16 → ✅
 (pending this PR's merge); next is Feature 17 (Training core).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 9, PR #3436, merged), preserved for history</summary>
