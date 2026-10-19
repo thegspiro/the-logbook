@@ -6,6 +6,10 @@
  * the instants the API takes (utils/exportPeriod.ts). Whether the export can
  * run is the server's call: a payment whose category has no accounts refuses
  * the whole file, and the refusal names what to fix, which this shows as is.
+ *
+ * Resending a file the Treasurer marked as imported is refused with
+ * `LB-FIN-001` until confirmed; the server says how many payments that is,
+ * and the confirmation repeats the request with `confirmReimport`.
  */
 
 import React, { useState } from 'react';
@@ -14,10 +18,13 @@ import toast from 'react-hot-toast';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { useTimezone } from '@/hooks/useTimezone';
 import { getTodayLocalDate } from '@/utils/dateFormatting';
-import { getErrorMessage } from '@/utils/errorHandling';
+import { getErrorMessage, toAppError } from '@/utils/errorHandling';
 import { saveFile } from '@/utils/fileDownload';
 import { exportMappingService } from '../services/api';
 import { exportRange, MAX_EXPORT_DAYS, periodLength, previousMonth } from '../utils/exportPeriod';
+
+/** The server's refusal to resend payments from a file confirmed as imported. */
+const REIMPORT_CONFIRMATION_REQUIRED = 'LB-FIN-001';
 
 interface RunExportSectionProps {
   /** Called after a file is produced, so the history beside it can refresh. */
@@ -58,12 +65,23 @@ export const RunExportSection: React.FC<RunExportSectionProps> = ({ onExported }
     }
     setRunning(true);
     setError(null);
+    const payload = { ...exportRange(period.start, period.end, tz), includeExported };
     try {
-      const file = await exportMappingService.run({
-        ...exportRange(period.start, period.end, tz),
-        includeExported,
-      });
-      saveFile(file);
+      try {
+        saveFile(await exportMappingService.run(payload));
+      } catch (err: unknown) {
+        const appError = toAppError(err);
+        if (appError.code !== REIMPORT_CONFIRMATION_REQUIRED) throw err;
+        const confirmed = await confirm({
+          title: 'Already imported into QuickBooks',
+          message: `${appError.message} Have those entries been deleted in QuickBooks?`,
+          confirmLabel: 'They were deleted, include them',
+          cancelLabel: 'Leave them out',
+          variant: 'warning',
+        });
+        if (!confirmed) return;
+        saveFile(await exportMappingService.run({ ...payload, confirmReimport: true }));
+      }
       toast.success('QuickBooks file downloaded');
       onExported();
     } catch (err: unknown) {

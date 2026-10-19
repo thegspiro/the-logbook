@@ -31,6 +31,8 @@ import { ExportHistorySection } from '../components/ExportHistorySection';
 import { RunExportSection } from '../components/RunExportSection';
 import { DuesExportSection } from '../components/DuesExportSection';
 import { AdvanceExportSection } from '../components/AdvanceExportSection';
+import { ChartOfAccountsSection } from '../components/ChartOfAccountsSection';
+import { notInChartHint, UNSAFE_ACCOUNT_NAME_HINT } from '../utils/qbAccountIssues';
 import { ExportReadinessStatus } from '../types';
 import type { ExportMapping, ExportReadiness, ExportReadinessCategory } from '../types';
 
@@ -43,6 +45,8 @@ const STATUS_LABELS: Record<ExportReadinessStatus, string> = {
   [ExportReadinessStatus.NO_OFFSET]: 'No paid-from account',
   [ExportReadinessStatus.DUPLICATE_MAPPINGS]: 'More than one mapping',
   [ExportReadinessStatus.PAYABLE_RECEIVABLE]: 'Payable/receivable account',
+  [ExportReadinessStatus.UNSAFE_ACCOUNT_NAME]: 'Account name not importable',
+  [ExportReadinessStatus.NOT_IN_CHART]: 'Not in chart of accounts',
 };
 
 const STATUS_COLORS: Record<ExportReadinessStatus, string> = {
@@ -51,17 +55,23 @@ const STATUS_COLORS: Record<ExportReadinessStatus, string> = {
   [ExportReadinessStatus.NO_OFFSET]: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
   [ExportReadinessStatus.DUPLICATE_MAPPINGS]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
   [ExportReadinessStatus.PAYABLE_RECEIVABLE]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  [ExportReadinessStatus.UNSAFE_ACCOUNT_NAME]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  [ExportReadinessStatus.NOT_IN_CHART]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
 };
 
-/** What the Treasurer does about a category in each state. */
-const STATUS_HINTS: Record<ExportReadinessStatus, string> = {
+/** What the Treasurer does about a category in each state; `not_in_chart` names its accounts (statusHint). */
+const STATUS_HINTS: Record<Exclude<ExportReadinessStatus, 'not_in_chart'>, string> = {
   [ExportReadinessStatus.READY]: '',
   [ExportReadinessStatus.NO_ACCOUNT]: 'Add a mapping, or name an account on the category.',
   [ExportReadinessStatus.NO_OFFSET]: 'Add the account it is paid from to its mapping.',
   [ExportReadinessStatus.DUPLICATE_MAPPINGS]: 'Delete all but one of its mappings below.',
   [ExportReadinessStatus.PAYABLE_RECEIVABLE]:
     "QuickBooks can't import journal lines to Accounts Payable or Receivable without a vendor or customer. Use the bank or card account it is paid from, and an expense account.",
+  [ExportReadinessStatus.UNSAFE_ACCOUNT_NAME]: UNSAFE_ACCOUNT_NAME_HINT,
 };
+
+const statusHint = (row: ExportReadinessCategory): string =>
+  row.status === ExportReadinessStatus.NOT_IN_CHART ? notInChartHint(row.accountsNotInChart) : STATUS_HINTS[row.status];
 
 /** The account a category posts to, and whether it or its mapping supplies it. */
 const AccountCell: React.FC<{ row: ExportReadinessCategory }> = ({ row }) =>
@@ -266,10 +276,8 @@ const QuickBooksExportSettingsPage: React.FC = () => {
                         </td>
                         <td data-label="Status" className={CELL}>
                           <span className={`badge ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</span>
-                          {STATUS_HINTS[row.status] && (
-                            <span className="text-theme-text-secondary mt-1 block text-xs">
-                              {STATUS_HINTS[row.status]}
-                            </span>
+                          {statusHint(row) && (
+                            <span className="text-theme-text-secondary mt-1 block text-xs">{statusHint(row)}</span>
                           )}
                         </td>
                         <td className={`${CELL} text-right`}>
@@ -391,6 +399,8 @@ const QuickBooksExportSettingsPage: React.FC = () => {
         )}
       </section>
 
+      <ChartOfAccountsSection onChanged={() => void load()} />
+
       {readiness?.dues && (
         <DuesExportSection
           dues={readiness.dues}
@@ -419,7 +429,10 @@ const QuickBooksExportSettingsPage: React.FC = () => {
           entries, after setting up QuickBooks as follows:
         </p>
         <ul className="text-theme-text-primary list-disc space-y-1 pl-5 text-sm">
-          <li>Every account named here exists in your chart of accounts, spelled the same.</li>
+          <li>
+            Every account named here exists in your chart of accounts, spelled the same. Upload the chart above and this
+            page checks it for you.
+          </li>
           <li>
             Account numbers are turned off while you import (Settings › Account and settings › Advanced › Chart of
             accounts).

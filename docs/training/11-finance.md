@@ -1702,13 +1702,15 @@ The export produces a **QuickBooks Online journal-entry import file** (CSV). Eac
 
 Open **Finance › QuickBooks Export**. The **Budget categories** table shows, for every category, the account its spending posts to, the account it is paid from, and whether an export would accept it:
 
-| Status                         | What to do                                                                                     |
-| ------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **Ready**                      | Nothing — its spending exports                                                                 |
-| **No account**                 | Add a mapping, or enter a **QuickBooks account** on the category in Finance Settings           |
-| **No paid-from account**       | Add the account it is paid from to its mapping                                                 |
-| **More than one mapping**      | Delete all but one of its mappings                                                             |
-| **Payable/receivable account** | Change it: QuickBooks can't import journal lines to Accounts Payable or Receivable (see below) |
+| Status                          | What to do                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Ready**                       | Nothing — its spending exports                                                                 |
+| **No account**                  | Add a mapping, or enter a **QuickBooks account** on the category in Finance Settings           |
+| **No paid-from account**        | Add the account it is paid from to its mapping                                                 |
+| **More than one mapping**       | Delete all but one of its mappings                                                             |
+| **Payable/receivable account**  | Change it: QuickBooks can't import journal lines to Accounts Payable or Receivable (see below) |
+| **Not in chart of accounts**    | Fix the spelling to match QuickBooks, or upload the chart again if you added the account since |
+| **Account name not importable** | Rename the account so it doesn't start with `=`, `+`, `-` or `@`, in QuickBooks and here       |
 
 Select **Add mapping** (or **Edit mapping**) on a category and enter:
 
@@ -1720,6 +1722,15 @@ A category's own **QuickBooks account** (set in its dialog on Finance Settings) 
 **Subcategories use their parent's accounts.** A subcategory with no account or mapping of its own posts where its parent does — map **Operations** once and **Turnout gear** under it exports too. The table shows where each account came from (**From Operations**). A subcategory can still name its own expense account; it then keeps its parent's paid-from account unless its own mapping gives one.
 
 > **Accounts Payable and Accounts Receivable can't be used.** QuickBooks requires a vendor or customer on every journal line posting to those accounts, and the export carries none, so the import would fail. The mapping and category dialogs refuse them, and an older mapping that uses one shows **Payable/receivable account**. The check recognizes QuickBooks' standard names ("Accounts Payable (A/P)", "Accounts Receivable (A/R)"); if you renamed those accounts, the check can't tell, so don't use them.
+
+### Checking Account Names Against QuickBooks
+
+QuickBooks matches the file's accounts by name, so a misspelled or renamed account only fails once you import. Upload your chart of accounts and the export catches it first:
+
+1. In QuickBooks Online, open **Reports › Account List** and export it to Excel (or CSV).
+2. On **Finance › QuickBooks Export**, under **QuickBooks chart of accounts**, select **Upload chart of accounts** and choose that file.
+
+Every category, dues schedule and cash-advance account is then checked against it, and any account the chart doesn't list shows **Not in chart of accounts**, naming the account. An export that would post to one is refused until it is fixed. Names must match exactly, capitals included. Upload the chart again whenever you add or rename an account in QuickBooks; **Remove chart** turns the check off.
 
 ### Dues Payments
 
@@ -1796,13 +1807,14 @@ Intuit's requirements for a journal-entry import. They are also listed at the bo
 
 **Finance › QuickBooks Export** lists every export run under **Export history**, newest first, 25 at a time (**Show older exports** loads the next 25):
 
-| Column           | Contents                                                                     |
-| ---------------- | ---------------------------------------------------------------------------- |
-| **Exported**     | When the export was run                                                      |
-| **Period**       | The start and end dates of the exported period                               |
-| **Transactions** | How many transactions (an expense report counts once per line) were included |
-| **Status**       | Whether the file was delivered whole (see below)                             |
-| **By**           | The officer who ran it                                                       |
+| Column            | Contents                                                                     |
+| ----------------- | ---------------------------------------------------------------------------- |
+| **Exported**      | When the export was run                                                      |
+| **Period**        | The start and end dates of the exported period                               |
+| **Transactions**  | How many transactions (an expense report counts once per line) were included |
+| **Status**        | Whether the file was delivered whole (see below)                             |
+| **By**            | The officer who ran it                                                       |
+| **In QuickBooks** | Whether you marked the file as imported into QuickBooks, when, and by whom   |
 
 | Status           | Meaning                                                                                                   |
 | ---------------- | --------------------------------------------------------------------------------------------------------- |
@@ -1810,6 +1822,8 @@ Intuit's requirements for a journal-entry import. They are also listed at the bo
 | **Interrupted**  | Some transactions reached the browser before an error or a closed tab stopped it. Do not import that file |
 | **Failed**       | Nothing was delivered                                                                                     |
 | **Not finished** | The log was opened but the download never reported an end. Run the period again                           |
+
+**Mark each file as imported.** After importing a complete file into QuickBooks, select **Mark as imported** on its row (**Undo** reverses a mistake). If you later tick **Include payments already sent to QuickBooks** for a period that includes those payments, the export stops and tells you how many were in a file already imported. Choose **They were deleted, include them** only if you deleted those entries in QuickBooks first; otherwise choose **Leave them out**. A file you never mark is not protected this way.
 
 > **Hint:** Export frequently (monthly or quarterly) rather than waiting for year-end. This makes reconciliation with QuickBooks easier and catches mapping issues early. Each export creates a log entry so you can track what has been exported and when.
 

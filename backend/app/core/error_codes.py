@@ -96,6 +96,9 @@ class ErrorCode(str, Enum):
     # --- Documents -------------------------------------------------------
     DOC_FOLDER_ADMIN_ONLY = "LB-DOC-001"
 
+    # --- Finance ---------------------------------------------------------
+    FIN_REIMPORT_CONFIRMATION_REQUIRED = "LB-FIN-001"
+
 
 @dataclass(frozen=True)
 class ErrorCodeInfo:
@@ -580,6 +583,21 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
             "loosen a restriction on a folder above it.",
             "If the folder is meant for full administrators only, confirm "
             "when the Documents screen asks, and it is saved as it is.",
+        ),
+    ),
+    ErrorCode.FIN_REIMPORT_CONFIRMATION_REQUIRED: ErrorCodeInfo(
+        title="QuickBooks export would resend imported payments",
+        description=(
+            "A QuickBooks export asked to include payments already sent, and "
+            "some of them went out in a file the Treasurer confirmed was "
+            "imported into QuickBooks. Importing them again would post them "
+            "twice. No file was produced."
+        ),
+        resolution=(
+            "Leave out payments already sent, unless the earlier entries were "
+            "deleted in QuickBooks.",
+            "If they were, confirm when the QuickBooks Export screen asks, "
+            "and the file is produced with them.",
         ),
     ),
     ErrorCode.SCHED_UNKNOWN_SEAT: ErrorCodeInfo(

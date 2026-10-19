@@ -1696,6 +1696,7 @@ class SecurityMonitoringMiddleware:
         "/api/v1/equipment-checks/reports/export/pdf",
         "/api/v1/errors/export",
         "/api/v1/finance/export/advance-accounts",
+        "/api/v1/finance/export/chart-of-accounts",
         "/api/v1/finance/export/dues-accounts",
         "/api/v1/finance/export/logs",
         "/api/v1/finance/export/mappings",
@@ -1714,6 +1715,7 @@ class SecurityMonitoringMiddleware:
         "/api/v1/users/me/data-export",
     }
     EXPORT_ENDPOINT_TEMPLATES = (
+        "/api/v1/finance/export/logs/{log_id}/imported",
         "/api/v1/training/programs/programs/{program_id}/export",
     )
     _EXPORT_PATTERNS = tuple(

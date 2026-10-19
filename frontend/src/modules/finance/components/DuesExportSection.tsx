@@ -15,12 +15,15 @@ import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { exportMappingService } from '../services/api';
 import { DuesExportStatus, type DuesExportReadiness, type DuesScheduleExport } from '../types';
+import { notInChartHint, UNSAFE_ACCOUNT_NAME_HINT } from '../utils/qbAccountIssues';
 
 const STATUS_LABELS: Record<DuesExportStatus, string> = {
   [DuesExportStatus.READY]: 'Ready',
   [DuesExportStatus.NO_INCOME]: 'No income account',
   [DuesExportStatus.NO_DEPOSIT]: 'No deposit account',
   [DuesExportStatus.PAYABLE_RECEIVABLE]: 'Payable/receivable account',
+  [DuesExportStatus.UNSAFE_ACCOUNT_NAME]: 'Account name not importable',
+  [DuesExportStatus.NOT_IN_CHART]: 'Not in chart of accounts',
 };
 
 const STATUS_COLORS: Record<DuesExportStatus, string> = {
@@ -28,7 +31,17 @@ const STATUS_COLORS: Record<DuesExportStatus, string> = {
   [DuesExportStatus.NO_INCOME]: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
   [DuesExportStatus.NO_DEPOSIT]: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
   [DuesExportStatus.PAYABLE_RECEIVABLE]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  [DuesExportStatus.UNSAFE_ACCOUNT_NAME]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  [DuesExportStatus.NOT_IN_CHART]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
 };
+
+/** Only the two problems with an account's name need words beyond the badge. */
+const accountHint = (status: DuesExportStatus, notInChart: readonly string[] | undefined): string =>
+  status === DuesExportStatus.NOT_IN_CHART
+    ? notInChartHint(notInChart)
+    : status === DuesExportStatus.UNSAFE_ACCOUNT_NAME
+      ? UNSAFE_ACCOUNT_NAME_HINT
+      : '';
 
 const HEADER_CELL = 'text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase';
 const CELL = 'text-theme-text-primary px-4 py-3 text-sm';
@@ -91,6 +104,11 @@ export const DuesExportSection: React.FC<DuesExportSectionProps> = ({ dues, onSa
       </td>
       <td data-label="Status" className={CELL}>
         <span className={`badge ${STATUS_COLORS[schedule.status]}`}>{STATUS_LABELS[schedule.status]}</span>
+        {accountHint(schedule.status, schedule.accountsNotInChart) && (
+          <span className="text-theme-text-secondary mt-1 block text-xs">
+            {accountHint(schedule.status, schedule.accountsNotInChart)}
+          </span>
+        )}
       </td>
     </tr>
   );
