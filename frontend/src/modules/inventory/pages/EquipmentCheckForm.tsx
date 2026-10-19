@@ -2795,6 +2795,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               // Items placed directly on the checklist: no heading, nothing to
               // collapse, no bulk actions. They read as rows in the list.
               if (comp.isInline) {
+                // An emptied group is builder debris, not something to show a
+                // crew; rendering it would only leave a stray gap in the list.
+                if (comp.items.length === 0) return null;
                 return (
                   <div
                     key={comp.id}
