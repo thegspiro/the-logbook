@@ -16,9 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3433 (Feature 12, Facilities, pass 10) merged 2026-10-19,
-docs-only — not independently recordable here beyond what follows. Rotation
-row 12 is already ✅; next is Feature 13 (Apparatus & NFC).
+**PR [#3434](https://github.com/thegspiro/the-logbook/pull/3434)** (branch
+`claude/security-review-apparatus-nfc`). PR #3433 (Feature 12, Facilities,
+pass 10) merged 2026-10-19, docs-only — not independently recordable here
+beyond what follows. This iteration (watchdog pickup, same conditions as
+above) reviewed Feature 13 (Apparatus & NFC), pass 17 — 0 fixes, 0 new
+findings; zero commits touched this feature's own core files. AP2-4
+re-confirmed the only standing item. Rotation row 13 → ✅ (pending this PR's
+merge); next is Feature 14 (Equipment check & shifts).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 10, PR #3431, merged), preserved for history</summary>
