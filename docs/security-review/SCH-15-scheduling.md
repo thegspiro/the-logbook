@@ -8,8 +8,11 @@
 [#2971](https://github.com/thegspiro/the-logbook/pull/2971) (pass 7, 0
 fixed, SCH-10 confirmed fixed),
 [#3291](https://github.com/thegspiro/the-logbook/pull/3291) (pass 8, 0
-fixed, 1 new scope-boundary item), #3293 (pass 8 addendum, SCH-18 fixed,
-SCH-19 flagged), pass 9 PR recorded below once opened
+fixed, 1 new scope-boundary item),
+[#3293](https://github.com/thegspiro/the-logbook/pull/3293) (pass 8
+addendum, SCH-18 fixed, SCH-19 flagged),
+[#3436](https://github.com/thegspiro/the-logbook/pull/3436) (pass 9, 0
+fixed, 0 new findings, SCH-19 re-confirmed OPEN)
 
 **Backend:** `api/v1/endpoints/scheduling.py` (4,400 L, 107 routes, up from
 98), `api/v1/endpoints/scheduling_module_config.py` (3 routes, unchanged),

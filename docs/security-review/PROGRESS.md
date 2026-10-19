@@ -16,9 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3435 (Feature 14, Equipment check & shifts, pass 10) merged
-2026-10-19 — watchdog pickup, 0 fixes, 0 new findings. Rotation row 14 →
-✅. This iteration proceeds to Feature 15 (Scheduling).
+**PR [#3436](https://github.com/thegspiro/the-logbook/pull/3436)** (branch
+`claude/security-review-scheduling`). PR #3435 (Feature 14, Equipment check
+& shifts, pass 10) merged 2026-10-19 — not independently recordable here
+beyond what follows. This iteration (watchdog pickup, same conditions as
+above) reviewed Feature 15 (Scheduling), pass 9 — 0 fixes, 0 new findings;
+near-zero delta of 2 commits in scope, both verified clean; SCH-19
+re-confirmed OPEN. Rotation row 15 → ✅ (pending this PR's merge); next is
+Feature 16 (Events & requests).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 10, PR #3435, merged), preserved for history</summary>
