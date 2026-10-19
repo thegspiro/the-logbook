@@ -3358,6 +3358,8 @@ async def send_pre_meeting_package(
     Email the pre-meeting package PDF to the given (secretary-edited)
     email list, one message per address so no recipient sees another's.
 
+    ``unreached`` names every address the package could not be sent to.
+
     Synchronous, and about a second per address: kept for API callers. The
     election page queues the send with ``POST /{election_id}/package-send-jobs``.
 
@@ -3380,7 +3382,7 @@ async def send_pre_meeting_package(
 
     service = ElectionService(db)
     try:
-        success, message, sent_count, _unsent = (
+        success, message, sent_count, unreached = (
             await service.generate_and_send_pre_meeting_package(
                 election_id=election_id,
                 organization_id=current_user.organization_id,
@@ -3399,7 +3401,7 @@ async def send_pre_meeting_package(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     return PreMeetingPackageResponse(
-        success=True, message=message, sent_count=sent_count
+        success=True, message=message, sent_count=sent_count, unreached=unreached
     )
 
 

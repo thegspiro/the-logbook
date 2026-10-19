@@ -1377,6 +1377,8 @@ class PreMeetingPackageResponse(BaseModel):
     success: bool
     message: str
     sent_count: int
+    # Addresses the package could not be sent to; empty when all went.
+    unreached: List[str] = Field(default_factory=list)
 
 
 class ElectionDelete(BaseModel):

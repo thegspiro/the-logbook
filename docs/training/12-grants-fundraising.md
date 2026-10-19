@@ -159,7 +159,11 @@ schedule.
    - **Application Deadline** — when it must be submitted
    - **Project Description** — what the grant will pay for
    - **Priority** — Low, Medium, High or Critical
-   - **Assigned To** — the member managing the application
+   - **Assigned To** — the member managing the application, chosen from the
+     member list (the list needs permission to view members; without it the
+     field keeps whoever is already assigned)
+   - once decided, **Amount Awarded**, **Submitted** and **Award Date**, and
+     under **Reporting** the **Next Report Due** and **Final Report Due**
 3. Select **Create Application**. The application starts in **Researching**.
    When you edit it later, save with **Save Changes**.
 
@@ -451,11 +455,11 @@ did not give for a stated purpose."
 
 ### Edge Cases
 
-| Situation                                  | What happens                                                                                                                               |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| A campaign passes its goal or its end date | Nothing changes by itself. The campaign keeps its status                                                                                   |
-| A campaign's status needs to change        | You choose the status only when you create the campaign. The campaigns page has no control to change it afterwards, so choose it with care |
-| A donation is not linked to a campaign     | It does not count toward any campaign's total                                                                                              |
+| Situation                                  | What happens                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| A campaign passes its goal or its end date | Nothing changes by itself. The campaign keeps its status                                   |
+| A campaign's status needs to change        | Use the **Status** list on the campaign's card (managers only). Nothing moves it by itself |
+| A donation is not linked to a campaign     | It does not count toward any campaign's total                                              |
 
 ---
 

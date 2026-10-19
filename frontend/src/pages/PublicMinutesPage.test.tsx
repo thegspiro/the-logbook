@@ -139,4 +139,24 @@ describe('PublicMinutesPage', () => {
     expect(await screen.findByText('These minutes are not available.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /All minutes/ })).toHaveAttribute('href', '/public/minutes');
   });
+
+  it('shows only the attendance counts the server sent', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        ...item,
+        organization_name: 'FD',
+        replaces: null,
+        content: {
+          ...content,
+          attendance: { present: 9, guests: 3, officers_present: [] },
+        },
+      },
+    });
+    at('/public/minutes/c1');
+
+    expect(await screen.findByText('Present')).toBeInTheDocument();
+    expect(screen.getByText('Guests')).toBeInTheDocument();
+    expect(screen.queryByText('Absent')).not.toBeInTheDocument();
+    expect(screen.queryByText('Excused')).not.toBeInTheDocument();
+  });
 });

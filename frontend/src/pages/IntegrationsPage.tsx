@@ -821,6 +821,20 @@ const IntegrationsPage: React.FC = () => {
     const integration = integrations.find((i) => i.id === integrationId);
     if (mcpBusy && integration?.integration_type === 'claude-mcp') return;
     const activation = integration ? isActivation(integration.integration_type) : false;
+    const name = integration?.name ?? 'this integration';
+    // W73: this acted on one tap. For Claude (MCP) it revokes every service key
+    // and ends every member's connection, and reconnecting restores neither.
+    const isMcp = integration?.integration_type === 'claude-mcp';
+    const confirmed = await confirm({
+      title: `${activation ? 'Deactivate' : 'Disconnect'} ${name}?`,
+      message: isMcp
+        ? 'Every service key is revoked and every member who connected with their own account is signed out. Reconnecting does not bring them back: keys must be issued again and members must reconnect.'
+        : `${name} stops working for the department until it is ${activation ? 'activated' : 'connected'} again. Its saved settings are kept.`,
+      confirmLabel: activation ? 'Deactivate' : 'Disconnect',
+      cancelLabel: activation ? 'Keep it active' : 'Keep it connected',
+      variant: isMcp ? 'danger' : 'warning',
+    });
+    if (!confirmed) return;
     try {
       await integrationsService.disconnectIntegration(integrationId);
       setIntegrations((prev) =>
@@ -1035,8 +1049,11 @@ const IntegrationsPage: React.FC = () => {
       return (
         <div className="space-y-3">
           <div>
-            <label className={labelClass}>Webhook URL</label>
+            <label htmlFor="messaging-webhook-url" className={labelClass}>
+              Webhook URL
+            </label>
             <input
+              id="messaging-webhook-url"
               type="url"
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
@@ -2221,6 +2238,7 @@ const IntegrationsPage: React.FC = () => {
                           onClick={() => {
                             void handleTestConnection(integration.id);
                           }}
+                          aria-label={`Test ${integration.name}`}
                           disabled={testing}
                           className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
                         >
@@ -2237,6 +2255,7 @@ const IntegrationsPage: React.FC = () => {
                             // Disconnecting the Claude integration unmounts the key
                             // panel; mid-issue that would lose the one-time plaintext.
                             disabled={mcpBusy && integration.integration_type === 'claude-mcp'}
+                            aria-label={`${activation ? 'Deactivate' : 'Disconnect'} ${integration.name}`}
                             title={
                               mcpBusy && integration.integration_type === 'claude-mcp'
                                 ? 'Wait for the current key request to finish'
@@ -2259,6 +2278,7 @@ const IntegrationsPage: React.FC = () => {
                       <button
                         type="button"
                         data-integration-connect={integration.id}
+                        aria-label={`${activation ? 'Activate' : 'Connect'} ${integration.name}`}
                         onClick={() => {
                           resetFormState(integration);
                           setShowConnectModal(integration.id);

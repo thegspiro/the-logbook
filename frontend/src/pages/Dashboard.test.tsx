@@ -162,7 +162,7 @@ vi.mock('../modules/admin-hours/services/api', () => ({
 // every caller the whole state object, so a consumer selecting one primitive
 // (`state.user?.id`) gets a fresh object each render and spins any effect keyed
 // on it — which is exactly what DashboardOrientation does.
-const authUser = vi.hoisted(() => ({ preferredName: null as string | null }));
+const authUser = vi.hoisted(() => ({ preferredName: null as string | null, membershipType: null as string | null }));
 vi.mock('../stores/authStore', () => {
   const state = () => ({
     checkPermission: mockCheckPermission,
@@ -171,6 +171,7 @@ vi.mock('../stores/authStore', () => {
       first_name: 'Test',
       last_name: 'User',
       preferred_name: authUser.preferredName,
+      membership_type: authUser.membershipType,
       organization_id: 'org-1',
     },
   });
@@ -261,6 +262,7 @@ describe('Dashboard', () => {
   beforeEach(() => {
     registeredPullToRefresh = undefined;
     authUser.preferredName = null;
+    authUser.membershipType = null;
     // mockReset, not just clearAllMocks: clearAllMocks wipes recorded calls but
     // leaves implementations AND any unconsumed mockRejectedValueOnce still
     // queued, so a test that arms a one-shot rejection and then returns early
@@ -2205,6 +2207,25 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
+    });
+
+    // "Clear to respond" is a statement about riding. An administrative member
+    // holding a CPR card is not being cleared for anything, and an expired one
+    // is not "Not clear to respond"; the expiry still reaches them through the
+    // Needs you rows.
+    it('says nothing to an administrative member', async () => {
+      authUser.membershipType = 'administrative';
+      withCerts([
+        { id: 'c1', course_name: 'CPR', expiration_date: '2028-01-01', is_expired: false, days_until_expiry: 500 },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      await waitFor(() => {
+        expect(mockGetMyTraining).toHaveBeenCalled();
+      });
+      expect(screen.queryByText('Clear to respond')).not.toBeInTheDocument();
+      expect(screen.queryByText('Not clear to respond')).not.toBeInTheDocument();
     });
 
     it('names the seats the member can hold', async () => {

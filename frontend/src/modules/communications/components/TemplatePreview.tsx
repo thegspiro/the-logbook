@@ -119,8 +119,9 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
 
       {/* Member selector */}
       <div className="flex items-center gap-2">
-        <Users className="text-theme-text-muted h-4 w-4 shrink-0" />
+        <Users className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
         <select
+          aria-label="Preview as member"
           value={selectedMemberId}
           onChange={(e) => handleMemberChange(e.target.value)}
           disabled={isLoadingMembers}

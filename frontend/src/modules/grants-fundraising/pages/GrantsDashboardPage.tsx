@@ -26,7 +26,7 @@ import { useGrantsStore } from '../store/grantsStore';
 import type { GrantOpportunity, GrantComplianceTask, Donation, PipelineSummaryItem } from '../types';
 import { APPLICATION_STATUS_COLORS, COMPLIANCE_STATUS_COLORS } from '../types';
 import { Skeleton, SkeletonRow } from '../../../components/ux/Skeleton';
-import { formatDate, daysUntil } from '../../../utils/dateFormatting';
+import { formatDate, calendarDaysFromToday } from '../../../utils/dateFormatting';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
@@ -72,18 +72,26 @@ const PIPELINE_STATUS_LABELS: Record<string, string> = {
 // Deadline Urgency Helpers
 // =============================================================================
 
-const getDeadlineColor = (deadlineDate: string | null): string => {
+/**
+ * Whole calendar days from the department's today to a date-only value.
+ * W68: `daysUntil` read "2026-10-15" as UTC midnight and floored the
+ * difference from now, so a task due today read Overdue by mid-morning and a
+ * deadline 36 days out read "35d left".
+ */
+const daysUntil = (dateOnly: string, timezone: string): number => calendarDaysFromToday(dateOnly, timezone) ?? NaN;
+
+const getDeadlineColor = (deadlineDate: string | null, timezone: string): string => {
   if (!deadlineDate) return 'text-theme-text-secondary';
-  const days = daysUntil(deadlineDate);
+  const days = daysUntil(deadlineDate, timezone);
   if (isNaN(days)) return 'text-theme-text-secondary';
   if (days < 14) return 'text-red-600';
   if (days < 30) return 'text-yellow-600';
   return 'text-green-600';
 };
 
-const getDeadlineBadgeColor = (deadlineDate: string | null): string => {
+const getDeadlineBadgeColor = (deadlineDate: string | null, timezone: string): string => {
   if (!deadlineDate) return 'bg-theme-surface-secondary text-theme-text-secondary';
-  const days = daysUntil(deadlineDate);
+  const days = daysUntil(deadlineDate, timezone);
   if (isNaN(days)) return 'bg-theme-surface-secondary text-theme-text-secondary';
   if (days < 14) return 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400';
   if (days < 30) return 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
@@ -295,9 +303,9 @@ const UpcomingDeadlines: React.FC<UpcomingDeadlinesProps> = ({ deadlines, timezo
     ) : (
       <ul className="divide-theme-surface-border divide-y">
         {deadlines.map((opp) => {
-          const days = opp.deadlineDate ? daysUntil(opp.deadlineDate) : NaN;
-          const deadlineColor = getDeadlineColor(opp.deadlineDate);
-          const badgeColor = getDeadlineBadgeColor(opp.deadlineDate);
+          const days = opp.deadlineDate ? daysUntil(opp.deadlineDate, timezone) : NaN;
+          const deadlineColor = getDeadlineColor(opp.deadlineDate, timezone);
+          const badgeColor = getDeadlineBadgeColor(opp.deadlineDate, timezone);
 
           return (
             <li key={opp.id} className="hover:bg-theme-surface-hover p-4 transition-colors">
@@ -352,7 +360,7 @@ const ComplianceTasksDue: React.FC<ComplianceTasksProps> = ({ tasks, timezone })
         {tasks.map((task) => {
           const statusColor =
             COMPLIANCE_STATUS_COLORS[task.status] ?? 'bg-theme-surface-secondary text-theme-text-secondary';
-          const days = daysUntil(task.dueDate);
+          const days = daysUntil(task.dueDate, timezone);
           const urgentClass = !isNaN(days) && days < 7 ? 'text-red-600' : 'text-theme-text-secondary';
 
           return (
@@ -366,7 +374,7 @@ const ComplianceTasksDue: React.FC<ComplianceTasksProps> = ({ tasks, timezone })
                     </span>
                     <Link
                       to={`/grants/applications/${task.applicationId}`}
-                      className="text-xs text-red-600 hover:text-red-700 hover:underline"
+                      className="touch:min-h-11 touch:inline-flex touch:items-center text-xs text-red-600 hover:text-red-700 hover:underline"
                     >
                       View Grant
                     </Link>
@@ -474,7 +482,10 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({ donations, timez
                     // list) — link there rather than to a route that
                     // doesn't exist, which previously matched the app's
                     // catch-all and silently redirected to `/`.
-                    <Link to="/grants/campaigns" className="text-red-600 hover:text-red-700 hover:underline">
+                    <Link
+                      to="/grants/campaigns"
+                      className="touch:min-h-11 touch:inline-flex touch:items-center text-red-600 hover:text-red-700 hover:underline"
+                    >
                       View Campaign
                     </Link>
                   ) : (
@@ -547,7 +558,7 @@ const GrantsDashboardPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Link
               to="/grants/applications/new"
-              className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
+              className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
             >
               <FileText className="h-4 w-4" />
               New Application
@@ -621,7 +632,7 @@ const GrantsDashboardPage: React.FC = () => {
         />
         <KpiCard
           label="Total Raised (12mo)"
-          value={formatCurrencyWhole(dashboard?.totalRaised12mo ?? 0)}
+          value={formatCurrencyWhole(dashboard?.totalRaised12Mo ?? 0)}
           icon={<BarChart3 className="h-5 w-5 text-teal-600" />}
           iconBgClass="bg-teal-100 dark:bg-teal-500/20"
         />

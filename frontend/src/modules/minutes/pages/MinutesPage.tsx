@@ -33,6 +33,7 @@ import { minutesService } from '../services/api';
 import { AgendaEditorDialog } from '../components/AgendaEditorDialog';
 import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
+import { AttendanceListingDialog } from '../components/AttendanceListingDialog';
 import { PublishingSettingsDialog } from '../components/PublishingSettingsDialog';
 import { ReminderSettingsDialog } from '../components/ReminderSettingsDialog';
 import { SignerSettingsDialog } from '../components/SignerSettingsDialog';
@@ -99,6 +100,7 @@ const MinutesPage: React.FC = () => {
   const canManage = checkPermission('minutes.manage');
   const [showReminderSettings, setShowReminderSettings] = useState(false);
   const [showPublishingSettings, setShowPublishingSettings] = useState(false);
+  const [showAttendanceListing, setShowAttendanceListing] = useState(false);
   const [showSignerSettings, setShowSignerSettings] = useState(false);
   // The attendance dashboard's endpoint is gated on meetings.manage.
   const canViewAttendance = checkPermission('meetings.manage');
@@ -359,6 +361,16 @@ const MinutesPage: React.FC = () => {
               >
                 <Bell className="h-4 w-4" aria-hidden="true" />
                 <span>Reminders</span>
+              </button>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setShowAttendanceListing(true)}
+                className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
+              >
+                <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                <span>Roll listing</span>
               </button>
             )}
             {canManage && (
@@ -785,6 +797,7 @@ const MinutesPage: React.FC = () => {
         {canManage && (
           <>
             <ReminderSettingsDialog isOpen={showReminderSettings} onClose={() => setShowReminderSettings(false)} />
+            <AttendanceListingDialog isOpen={showAttendanceListing} onClose={() => setShowAttendanceListing(false)} />
             <PublishingSettingsDialog
               isOpen={showPublishingSettings}
               onClose={() => setShowPublishingSettings(false)}

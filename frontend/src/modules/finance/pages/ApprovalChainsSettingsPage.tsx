@@ -110,6 +110,8 @@ function coverageProblemText(row: ApproverCoverageRow): string {
       return (type && NOT_FOUND_TEXT[type]) || 'That position, member or permission no longer exists';
     case ApproverCoverageProblem.INVALID_EMAIL:
       return 'Not a valid email address';
+    case ApproverCoverageProblem.NO_APPROVE_PERMISSION:
+      return 'Nobody on this step has the finance approval permission, so they cannot approve or deny';
     case ApproverCoverageProblem.NO_ACTIVE_MEMBERS:
     default:
       return 'No active member can act on this step';
@@ -581,9 +583,9 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         <div className="flex items-center gap-4">
           <Link
             to="/finance/settings"
-            className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+            className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-2 text-sm"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Back to Settings
           </Link>
         </div>
@@ -604,9 +606,9 @@ const ApprovalChainsSettingsPage: React.FC = () => {
       {/* Back link */}
       <Link
         to="/finance/settings"
-        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+        className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-2 text-sm"
       >
-        <ArrowLeft className="h-4 w-4" />
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         Back to Settings
       </Link>
 
@@ -621,7 +623,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+          className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
         >
           <Plus className="h-4 w-4" />
           New Chain
@@ -665,8 +667,11 @@ const ApprovalChainsSettingsPage: React.FC = () => {
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">New Approval Chain</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className={labelClass}>Name *</label>
+              <label htmlFor="new-chain-name" className={labelClass}>
+                Name *
+              </label>
               <input
+                id="new-chain-name"
                 type="text"
                 className={inputClass}
                 placeholder="e.g., Large Purchase Approval"
@@ -675,8 +680,11 @@ const ApprovalChainsSettingsPage: React.FC = () => {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className={labelClass}>Description</label>
+              <label htmlFor="new-chain-description" className={labelClass}>
+                Description
+              </label>
               <textarea
+                id="new-chain-description"
                 className={inputClass}
                 rows={2}
                 placeholder="When this chain should be used..."
@@ -685,8 +693,11 @@ const ApprovalChainsSettingsPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className={labelClass}>Applies To *</label>
+              <label htmlFor="new-chain-applies-to" className={labelClass}>
+                Applies To *
+              </label>
               <select
+                id="new-chain-applies-to"
                 className={selectClass}
                 value={formData.appliesTo}
                 onChange={(e) => setFormData({ ...formData, appliesTo: e.target.value as ApprovalEntityType })}
@@ -697,8 +708,11 @@ const ApprovalChainsSettingsPage: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className={labelClass}>Budget Category (optional)</label>
+              <label htmlFor="new-chain-category" className={labelClass}>
+                Budget Category (optional)
+              </label>
               <select
+                id="new-chain-category"
                 className={selectClass}
                 value={formData.budgetCategoryId}
                 onChange={(e) => setFormData({ ...formData, budgetCategoryId: e.target.value })}
@@ -712,8 +726,11 @@ const ApprovalChainsSettingsPage: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className={labelClass}>Min Amount ($)</label>
+              <label htmlFor="new-chain-min" className={labelClass}>
+                Min Amount ($)
+              </label>
               <input
+                id="new-chain-min"
                 type="number"
                 step="0.01"
                 min="0"
@@ -724,8 +741,11 @@ const ApprovalChainsSettingsPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className={labelClass}>Max Amount ($)</label>
+              <label htmlFor="new-chain-max" className={labelClass}>
+                Max Amount ($)
+              </label>
               <input
+                id="new-chain-max"
                 type="number"
                 step="0.01"
                 min="0"

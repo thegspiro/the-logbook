@@ -4,6 +4,7 @@
  * All entries list with status/category filters, pagination, and CSV export.
  */
 
+import { entryStatusLabel } from '../utils/entryStatus';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -103,7 +104,8 @@ const AllEntriesTab: React.FC = () => {
           <option value="">All Categories</option>
           {categories.map((cat) => (
             <option key={cat.id} value={cat.id}>
-              {cat.name}
+              {/* Retired categories stay filterable for old entries; say which (W70). */}
+              {cat.isActive ? cat.name : `${cat.name} (inactive)`}
             </option>
           ))}
         </select>
@@ -193,7 +195,7 @@ const AllEntriesTab: React.FC = () => {
                                   : 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
                         }`}
                       >
-                        {entry.status}
+                        {entryStatusLabel(entry.status)}
                       </span>
                     </td>
                     <td className="text-theme-text-muted px-4 py-3 text-sm">{entry.approverName ?? '-'}</td>

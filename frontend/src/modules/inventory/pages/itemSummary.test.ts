@@ -25,6 +25,7 @@ describe('formatItemSummary', () => {
     ['count', 'Count'],
     ['level', 'Level'],
     ['expiry', 'Expiry'],
+    ['presence', 'Present'],
     ['text', 'Statement'],
     ['header', 'Section Header'],
   ])('labels a configured %s item', (checkType, label) => {
@@ -34,7 +35,7 @@ describe('formatItemSummary', () => {
         : checkType === 'level'
           ? { minLevel: '500' }
           : checkType === 'expiry'
-            ? { lotNumber: 'LOT-1' }
+            ? { lotNumber: 'LOT-1', expirationDate: '2027-01-01' }
             : {};
     expect(texts({ checkType, ...configuration })[0]).toBe(label);
   });
@@ -63,7 +64,10 @@ describe('formatItemSummary', () => {
   it('puts incomplete and invalid configuration ahead of ordinary metadata', () => {
     expect(texts({ checkType: 'count', isRequired: true })).toEqual(['Needs quantity']);
     expect(texts({ checkType: 'level' })).toEqual(['Needs minimum']);
-    expect(texts({ checkType: 'expiry' })).toEqual(['Needs serial or lot']);
+    expect(texts({ checkType: 'expiry' })).toEqual(['Needs serial or lot', 'Needs expiration date']);
+    expect(texts({ checkType: 'expiry', lotNumber: 'L-1' })).toEqual(['Needs expiration date']);
+    // A linked Date line reads its dates off the lots aboard.
+    expect(texts({ checkType: 'expiry', lotNumber: 'L-1', inventoryItemId: 'inv-1' })).toEqual(['Expiry']);
     expect(texts({ hasExpiration: true })).toEqual(['Needs expiration date']);
     expect(texts({ checkType: 'count', expectedQuantity: '4', criticalMinimumQuantity: '5' })).toEqual([
       'Fix critical minimum',

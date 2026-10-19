@@ -852,7 +852,12 @@ class TestApproverCoverage:
         admin = await _make_member(
             db_session, org_id, "finance.approve", "finance.configure_approvals"
         )
-        holder = await _make_member(db_session, org_id, slug="treasurer")
+        holder = await _make_member(
+            db_session, org_id, "finance.approve", slug="treasurer"
+        )
+        # Fills the captain position but may not approve: approve and deny
+        # are gated on finance.approve, so the step is not covered (W63).
+        await _make_member(db_session, org_id, slug="captain")
         await _make_member(
             db_session, org_id, slug="trustee", status=UserStatus.INACTIVE
         )
@@ -869,6 +874,7 @@ class TestApproverCoverage:
             "treasurer": (ApproverType.POSITION, "treasurer"),
             "trustee": (ApproverType.POSITION, "trustee"),
             "chief": (ApproverType.POSITION, "chief"),
+            "captain": (ApproverType.POSITION, "captain"),
             "ghost": (ApproverType.POSITION, "ghost"),
             "blank": (ApproverType.POSITION, "  "),
             "perm": (ApproverType.PERMISSION, "finance.bogus"),
@@ -906,13 +912,16 @@ class TestApproverCoverage:
 
         assert "fyi" not in rows
         assert rows["unassigned"]["problem"] is None
-        assert rows["unassigned"]["eligible_active_count"] == 1  # the admin
+        # The admin and the treasurer, the two finance.approve holders.
+        assert rows["unassigned"]["eligible_active_count"] == 2
         assert rows["unassigned"]["assignee_label"] == "any finance approver"
         assert rows["treasurer"]["problem"] is None
         assert rows["treasurer"]["eligible_active_count"] == 1
         assert rows["treasurer"]["assignee_label"] == "Treasurer position"
         assert rows["trustee"]["problem"] == "no_active_members"
         assert rows["chief"]["problem"] == "no_active_members"
+        assert rows["captain"]["problem"] == "no_approve_permission"
+        assert rows["captain"]["eligible_active_count"] == 0
         assert rows["ghost"]["problem"] == "not_found"
         assert rows["blank"]["problem"] == "no_value"
         assert rows["perm"]["problem"] == "not_found"

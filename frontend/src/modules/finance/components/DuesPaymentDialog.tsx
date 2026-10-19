@@ -18,8 +18,7 @@ import { formatCurrency } from '../../../utils/currencyFormatting';
 import { duesService } from '../services/api';
 import type { DuesPaymentPayload, MemberDues } from '../types';
 import { DUES_PAYMENT_METHODS, outstandingOf } from '../utils/dues';
-
-const MAX_AMOUNT = 9_999_999_999.99;
+import { MAX_MONEY_AMOUNT } from '../utils/moneyLimits';
 
 interface DuesPaymentDialogProps {
   dues: MemberDues;
@@ -45,7 +44,7 @@ export const DuesPaymentDialog: React.FC<DuesPaymentDialogProps> = ({ dues, memb
       setError('Enter an amount greater than zero.');
       return;
     }
-    if (parsed > MAX_AMOUNT) {
+    if (parsed > MAX_MONEY_AMOUNT) {
       setError('That amount is too large.');
       return;
     }

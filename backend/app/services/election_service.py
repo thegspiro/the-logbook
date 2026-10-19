@@ -4174,15 +4174,18 @@ class ElectionService:
         election_id: UUID | str,
         organization_id: UUID | str,
         acting_user_id: Optional[str],
-    ) -> None:
+    ) -> Optional[Dict[str, int]]:
         """Email active members that the nomination phase is open.
 
         Each member gets their own message, so no member sees another's
-        address and a refused address is logged rather than hidden inside one
-        BCC'd message the mail server partly accepted. At about a second per
-        member that outlasts a request, so the open-nominations endpoint runs
-        this after its response.
+        address, no message carries more recipients than a provider's
+        per-message cap, and a refused address is counted rather than hidden
+        inside one BCC'd message the mail server partly accepted. At about a
+        second per member that outlasts a request, so the open-nominations
+        endpoint runs this after its response.
 
+        Returns the recipient and unreached counts (also audited as
+        ``nominations_announced``), or None when nothing was sent.
         Best-effort: any failure is logged, never raised — an email outage
         must not block the phase transition.
         """
@@ -4200,14 +4203,14 @@ class ElectionService:
             # Nominations can be closed again before this runs; an
             # announcement for a phase already over would mislead.
             if not election or election.status != ElectionStatus.NOMINATIONS:
-                return
+                return None
 
             org_result = await self.db.execute(
                 select(Organization).where(Organization.id == str(organization_id))
             )
             organization = org_result.scalar_one_or_none()
             if not organization:
-                return
+                return None
 
             members_result = await self.db.execute(
                 select(User)
@@ -4225,7 +4228,7 @@ class ElectionService:
                 if m.email
             ]
             if not member_emails:
-                return
+                return None
 
             deadline_line = ""
             if election.nomination_deadline:
@@ -4270,11 +4273,26 @@ class ElectionService:
                 f"Nominations-open announcement | election={election_id} "
                 f"sent={sent} unsent={len(member_emails) - sent}"
             )
+            # This runs after nominations_opened was audited, so the delivery
+            # count is recorded as its own event rather than on that one.
+            announcement = {
+                "recipient_count": len(member_emails),
+                "unreached_count": len(member_emails) - sent,
+            }
+            await self._audit(
+                "nominations_announced",
+                {"election_id": str(election_id), **announcement},
+                user_id=acting_user_id,
+                organization_id=str(organization_id),
+            )
+            await self.db.commit()
+            return announcement
         except Exception as e:
             logger.warning(
                 f"Nominations-open announcement failed | "
                 f"election={election_id} error={e}"
             )
+            return None
 
     async def _notify_proxy_delegator(
         self, election, organization_id: UUID | str, delegating_user, proxy_user

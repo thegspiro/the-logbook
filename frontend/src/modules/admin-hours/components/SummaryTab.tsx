@@ -151,7 +151,9 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                 {formatHours(summary.totalHours)}
                 <span className="ml-1 text-base font-medium">hrs</span>
               </p>
-              <p className="text-theme-text-muted mt-1 text-xs">{summary.totalEntries} approved or pending entries</p>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                {summary.totalEntries} approved or pending {summary.totalEntries === 1 ? 'entry' : 'entries'}
+              </p>
             </article>
             <article className="card border-green-200 p-5 dark:border-green-900">
               <div className="flex items-center justify-between">
@@ -162,7 +164,9 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                 {formatHours(summary.approvedHours)}
                 <span className="ml-1 text-base font-medium">hrs</span>
               </p>
-              <p className="text-theme-text-muted mt-1 text-xs">{summary.approvedEntries} finalized entries</p>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                {summary.approvedEntries} finalized {summary.approvedEntries === 1 ? 'entry' : 'entries'}
+              </p>
             </article>
             <article className="card border-amber-200 p-5 dark:border-amber-900">
               <div className="flex items-center justify-between">
@@ -174,7 +178,9 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                 <span className="ml-1 text-base font-medium">hrs</span>
               </p>
               <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-theme-text-muted text-xs">{summary.pendingEntries} pending entries</p>
+                <p className="text-theme-text-muted text-xs">
+                  {summary.pendingEntries} pending {summary.pendingEntries === 1 ? 'entry' : 'entries'}
+                </p>
                 {summary.pendingEntries > 0 && onNavigate && (
                   <button
                     type="button"
@@ -238,7 +244,7 @@ const SummaryTab: React.FC<SummaryTabProps> = ({ onNavigate }) => {
                           <span className="text-theme-text-primary text-sm font-semibold">
                             {formatHours(category.totalHours)} hrs{' '}
                             <span className="text-theme-text-muted font-normal">
-                              · {category.entryCount} entries · {share}%
+                              · {category.entryCount} {category.entryCount === 1 ? 'entry' : 'entries'} · {share}%
                             </span>
                           </span>
                         </div>

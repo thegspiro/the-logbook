@@ -225,7 +225,12 @@ export const GrantOpportunitiesPage: React.FC = () => {
             className="form-input placeholder:text-theme-text-secondary pr-4 pl-10 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500"
           />
         </div>
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="form-input">
+        <select
+          aria-label="Filter by category"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="form-input"
+        >
           <option value="">All Categories</option>
           {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
             <option key={key} value={key}>
@@ -344,16 +349,19 @@ export const GrantOpportunitiesPage: React.FC = () => {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2">
-                    <Link
-                      to={`/grants/applications/new?opportunity_id=${opp.id}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-900"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      Start Application
-                    </Link>
+                    {/* The application route needs fundraising.manage (W68). */}
+                    {canManage && (
+                      <Link
+                        to={`/grants/applications/new?opportunity_id=${opp.id}`}
+                        className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-900"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Start Application
+                      </Link>
+                    )}
                     <button
                       onClick={() => toggleExpand(opp.id)}
-                      className="bg-theme-surface-hover text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+                      className="bg-theme-surface-hover text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
                     >
                       {isExpanded ? (
                         <>

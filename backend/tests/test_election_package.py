@@ -282,6 +282,44 @@ class TestPackageSend(TestPackageSetup):
         assert kwargs["attachment_paths"], "Package PDF must be attached"
         assert "Annual Officer Election 2027" in kwargs["subject"]
 
+    async def test_large_list_goes_one_message_per_address_with_unsent_named(
+        self, db_session: AsyncSession, setup_package_election
+    ):
+        # A department-sized list is never one message: each address is its
+        # own, so no provider recipient cap applies and a refusal costs only
+        # the addresses refused, which are named for a resend.
+        data = setup_package_election
+        svc = ElectionService(db_session)
+        recipients = [f"member{i}@dept.example" for i in range(120)]
+        refused = set(recipients[49:98])
+
+        async def refuse_some(**kwargs):
+            outcomes = [addr not in refused for addr in kwargs["to_emails"]]
+            kwargs["results_out"].extend(outcomes)
+            return sum(outcomes), len(outcomes) - sum(outcomes)
+
+        with patch(
+            "app.services.email_service.EmailService.send_email",
+            new=AsyncMock(side_effect=refuse_some),
+        ) as mock_send:
+            success, message, sent_count, unsent = (
+                await svc.generate_and_send_pre_meeting_package(
+                    election_id=uuid.UUID(data["election_id"]),
+                    organization_id=uuid.UUID(data["org_id"]),
+                    sent_by=uuid.UUID(data["secretary_id"]),
+                    recipient_emails=recipients,
+                )
+            )
+
+        kwargs = mock_send.await_args.kwargs
+        assert kwargs["to_emails"] == recipients + ["pkgsec@test.com"]
+        assert not kwargs.get("bcc_emails")
+        assert kwargs["attachment_paths"], "Every message carries the PDF"
+        assert success is True
+        assert unsent == recipients[49:98]
+        assert sent_count == 120 - len(unsent)
+        assert f"Could not be sent to {len(unsent)}:" in message
+
     async def test_empty_recipient_list_rejected(
         self, db_session: AsyncSession, setup_package_election
     ):

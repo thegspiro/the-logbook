@@ -11,7 +11,7 @@ field cannot leak across by being "optional" in a shared one:
 """
 
 from datetime import datetime
-from typing import List, Literal, Optional, get_args
+from typing import Any, List, Literal, Optional, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
@@ -308,6 +308,14 @@ class SuggestionBoxPublic(UTCResponseBase):
     # A route only appears when its destination is open; the server routes
     # the same way, so the member's preview matches where it lands.
     intake_questions: List[IntakeQuestion] = Field(default_factory=list)
+
+    @field_validator("intake_questions", mode="before")
+    @classmethod
+    def _no_questions_is_an_empty_list(cls, value: Any) -> Any:
+        # The column stores NULL for a box that asks nothing, and the review
+        # summary serialises the ORM row directly: a NULL here 500'd the
+        # summary for every reviewer of such a box, hiding their Review tab.
+        return [] if value is None else value
 
 
 PickKind = Literal["member", "apparatus"]

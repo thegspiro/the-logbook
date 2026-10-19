@@ -16,21 +16,123 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3404](https://github.com/thegspiro/the-logbook/pull/3404)** (branch
-`claude/security-review-elections-ballots`). PR #3401 (Feature 05, Finance &
-approvals, pass 10) merged 2026-10-18 clean, docs-only; already recorded in
-that PR's own history below.
+**PR [#3431](https://github.com/thegspiro/the-logbook/pull/3431)** (branch
+`claude/security-review-documents-legal-p10`). PR #3427 (Feature 09, Medical
+screening, pass 10) merged 2026-10-18; PR #3426 (the standalone Alembic-fork
+fix it needed, see below) also merged 2026-10-18 — neither independently
+recordable here beyond what follows.
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
-`claude/security-review-`, confirmed via `list_pull_requests`, and the
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
 dedicated `/loop 30m /security-review` session was not reachable via
-`ListAgents`) reviewed Feature 06 (Elections & ballots), pass 10. **1 fix
-applied, 1 new finding flagged.** Baseline `80d92def` (PR #3248's merge,
-pass 9). This window's delta was substantive (unlike the last several
-passes' 0/0): a new background-job system for ballot/reminder sends
-(`app/services/ballot_send_jobs.py`, new), replacing the synchronous
-sends that outlasted the browser/nginx timeout at department scale.
-**ELEC-47 (MEDIUM, FIXED):** the new one-send-per-election guard
+`ListAgents`) reviewed Feature 10 (Documents & legal), pass 10. **0 fixes, 0
+new findings.** Baseline `f0599488a` (PR #3262's merge, pass 9). Real delta
+since then: a new feature (decision 30 — folders that come to admit no
+active member but a full administrator, a confirmation step, and a weekly
+digest email), reviewed in full for tenant isolation, authz, migration
+correctness and test coverage; the executive-session-minutes publishing
+path reaching the documents library (Feature 24-owned, reviewed only for
+this feature's own surface); and a checklist print-formatting change
+(Equipment/Inventory-owned, no ACL surface). Routes: 24, up from 22 — both
+additions carry `documents.manage`, not a baseline grant. See
+`DOC-10-documents-legal.md`'s **Pass 10** section for the full writeup.
+
+**Separately** (unrelated to this feature, carried over from the prior
+watchdog iteration): a 3-way forked Alembic chain blocking `alembic upgrade
+head` repo-wide was found and fixed in its own standalone PR (**#3426**),
+and the same fix was ported into PR #3427 since its base did not yet carry
+it. Both merged 2026-10-18; `validate_migrations.py --strict` now reports a
+single head.
+
+Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 10, PR #3427, merged; and the standalone Alembic-fork fix, PR #3426, merged), preserved for history</summary>
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 09 (Medical screening, PHI), pass 10. **0
+fixes, 0 new findings.** Baseline `7a16ea19c` (PR #3256's merge, pass 9);
+exactly 1 non-merge commit touches this feature's scope, frontend-only
+(a falsy-coercion bug where an entered `0` grace-period saved as `30`;
+no PHI, auth, or tenancy touched). MS-14 and MS-15 re-confirmed **OPEN**,
+unchanged. **Separately** (unrelated to this feature): this pass's
+completion gate surfaced a 3-way forked Alembic chain blocking
+`alembic upgrade head` repo-wide, fixed in its own standalone PR
+(**#3426**, now open) rather than folded in here. See
+`MS-09-medical-screening.md`'s **Pass 10** section for the full writeup.
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 11, PR #3420, merged), preserved for history</summary>
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 08 (Membership pipeline), its own pass 11
+(this file runs one pass ahead of its lap-mates). **0 fixes, 0 new
+findings.** Baseline `b260c519e` (PR #3255's merge, pass 10); 5
+non-merge commits touch this feature's scope — a new directory-account
+provisioning engine (Google Workspace / Microsoft 365) hooked into
+`transfer_prospect`. Verified sound: org-scoped throughout; the
+temporary directory-account password has no storage column at all and
+is only ever a transient return value; provisioning runs only after the
+conversion's own transaction commits, so a directory failure can't roll
+it back; no response carries the password; `transfer_prospect` keeps its
+existing permission gate (53 routes, unchanged). MP-22 re-confirmed
+**OPEN**, unchanged. See `MP-08-membership-pipeline.md`'s **Pass 11**
+section for the full writeup. Row 08 → ✅ (pending this PR's merge); next
+is Feature 09 (Medical screening, PHI).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 10, PR #3410, merged), preserved for history</summary>
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 07 (Users & organizations), pass 10. **0
+fixes, 0 new findings.** Baseline `7add73bc4` (PR #3250's merge, pass 9);
+7 non-merge commits touch this feature's scope, 3 of them Minutes-module
+settings fields riding on the shared `OrganizationSettingsUpdate` schema
+aggregator (additive, no logic). The 4 real changes — PHI read auditing
+on `member_leaves.py`, two new `members.manage`-gated status-change-reason
+endpoints (org-scoped via the existing `_load_member` helper), the
+undo-drop window now anchored to a drop's effective date (tightens, not
+weakens, an existing week-long window), and a server-validated
+`separation_date` on the existing status-change endpoint — all verified
+sound. USR-5 and USR-8 re-confirmed **OPEN**, unchanged. See
+`USR-07-users-organizations.md`'s **Pass 10** section for the full
+writeup. Row 07 → ✅ (pending this PR's merge); next is Feature 08
+(Membership pipeline).
+
+**Note on PR #3403:** an earlier watchdog pickup of rotation row 06
+raced #3404 within minutes and was closed by the owner as a duplicate —
+its own review had missed ELEC-47 (asserted the overlap guard was
+"correctly applied" without reading `find_active_job` closely enough to
+see it was a non-locking read). No further action needed; #3404 is the
+PR that was kept and merged.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 10, PR #3404, merged), preserved for history</summary>
+
+This iteration (a watchdog pickup — no open PR's head branch starts with
+`claude/security-review-`, confirmed via `search_pull_requests`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 06 (Elections & ballots), pass 10. **1
+fix applied, 1 new finding flagged.** Baseline `80d92def` (PR #3248's
+merge, pass 9). This window's delta was substantive (unlike the last
+several passes' 0/0): a new background-job system for ballot/reminder
+sends (`app/services/ballot_send_jobs.py`, new), replacing the
+synchronous sends that outlasted the browser/nginx timeout at department
+scale. **ELEC-47 (MEDIUM, FIXED):** the new one-send-per-election guard
 (`find_active_job`) was a plain, non-locking read — CLAUDE.md pitfall
 #27's exact shape, since the auth dependency's own user lookup on the
 same session already fixed this transaction's REPEATABLE READ snapshot
@@ -47,6 +149,8 @@ them too or retire them. Mirrored in `KNOWN_LIMITATIONS.md`'s "Elections
 `ELEC-06-elections-ballots.md`'s **Pass 10** section for the full
 writeup. Row 06 → ✅ (pending this PR's merge); next is Feature 07
 (Users & organizations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 10, PR #3401, merged), preserved for history</summary>
@@ -20074,10 +20178,10 @@ iteration's commit" rule.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -20109,6 +20213,201 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-18 — Feature 10 (Documents & legal, pass 10) — watchdog pickup, decision 30 reviewed in full, 0 fixed, 0 new findings; ported the Alembic-fork fix into PR #3427
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3427 (Feature 09, Medical screening, pass 10) and its
+dependency PR #3426 (the standalone Alembic-fork fix) had both merged;
+rotation row 10 was the next `⬜`.
+
+**Baseline:** `f0599488a` (PR #3262's merge, pass 9). **Head:** current
+`main`. Real delta since then, confirmed by `git diff --numstat` against
+the full declared scope plus backing services: a new feature (decision
+30 — `DocumentsService.admin_only_folders`/`confirm_admin_only`, two new
+routes under `documents.manage`, a weekly digest email via
+`admin_only_folder_digest.py`, migration `c903fc771081`), reviewed in
+full — tenant isolation (org-scoped throughout), fails safe for
+non-full-administrators, the confirmation re-verifies the folder is
+actually shut before recording it, the digest reads the same function
+the page does rather than re-deriving it, and the new migration is
+table-existence-guarded and reversible. Also reviewed: the
+executive-session-minutes publishing path reaching the documents
+library (`document_service.py`, Feature 24-owned; `allow_executive` is
+server-derived from department settings, never client-supplied, and
+files into an existing restricted folder tier, failing closed if that
+folder's visibility was widened) and a checklist print-formatting change
+(`print_document_service.py`, Equipment/Inventory-owned, no ACL
+surface). Routes: 24, up from 22 (AST walk) — neither new route is a
+baseline grant. Test coverage matches the claims
+(`test_folder_access_editor.py`, `test_admin_only_folder_digest.py`,
+correctly `pytest.mark.integration`). **0 new findings, 0 fixes needed**
+— no standing OPEN finding carried from pass 9. See
+`DOC-10-documents-legal.md`'s **Pass 10** section for the full writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only`
+(`app/ tests/ alembic/`) clean; `validate_migrations.py --strict` — 1
+head; `check_route_permissions.py --strict` — 272 routes, 0 errors/0
+warnings; scoped backend tests
+(`-k "document or legal or station_document or facility_folder or folder or admin_only"`)
+— 628 passed, 1 skipped (pre-existing, `pywebpush`); frontend
+`typecheck`/`lint` clean; scoped `vitest` (`DocumentsPage.test.tsx`,
+`src/components/documents`) — 51 passed (3 files).
+
+Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory).
+
+### 2026-10-18 — Feature 09 (Medical screening PHI, pass 10) — watchdog pickup, near-zero delta, 0 fixed, 0 new findings; MS-14/MS-15 still open; separately fixed an unrelated 3-way Alembic fork (PR #3426)
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3420 (Feature 08, Membership pipeline, pass 11) had
+already merged clean, docs-only, closing row 08; rotation row 09 was the
+next `⬜`.
+
+**Baseline:** `7a16ea19c` (PR #3256's merge, pass 9). **Head:** current
+`main`. Exactly 1 non-merge commit touches this feature's scope
+(`endpoints/medical_screening.py`, `services/medical_screening_service.py`,
+`models/medical_screening.py`, `schemas/medical_screening.py`,
+`mcp/tools/medical.py`, and the full `frontend/src/modules/
+medical-screening/` directory) — and it's frontend-only, no backend file,
+no migration. `ScreeningRequirementForm.tsx`'s save payload built
+`grace_period_days` as `Number(gracePeriodDays) || 30`, silently turning
+an intentionally-entered `0` into `30` (a falsy-coercion bug in the same
+family as Pitfall #1); fixed to drop the `|| 30` fallback and require the
+field client-side. No PHI handling, auth, or tenancy touched. All 16
+routes re-enumerated, unchanged. **MS-14** (no finer-grained PHI read
+tier) and **MS-15** (unbounded compliance roster), both standing flagged
+items, re-confirmed unchanged by direct read — neither file in scope.
+Tenant isolation (every by-id getter org-scoped; `assert_in_org` on all
+three client-supplied FKs) and PHI-at-rest encryption
+(`EncryptedText`/`EncryptedJSON`) both re-confirmed present. See
+`MS-09-medical-screening.md`'s **Pass 10** section for the full writeup.
+
+**Separately, while running this pass's completion gate:**
+`validate_migrations.py --strict` surfaced a 3-way forked Alembic chain
+(`6dc58d6997df`/`7e5d6cf3292c`/`e99f068be43e` — three independently-merged
+PRs that each revised the same parent, `89723c04ae94`), blocking
+`alembic upgrade head` for every PR in the repo, not just this one.
+Unrelated to medical screening, so fixed and pushed as its own standalone
+PR (#3426 — a no-op merge revision, matching the repo's own precedent for
+this exact situation) rather than folded into this docs-only
+security-review PR. Verified against the real database
+(`alembic upgrade head`) and the migration guard tests (80 passed)
+before pushing.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` clean; `validate_migrations.py --strict` passed (single
+head, after applying the separate fork fix locally);
+`check_route_permissions.py --strict` 272 routes, 0 errors/warnings;
+scoped backend tests (`-k "medical_screening or screening"`) 122 passed,
+1 skipped (environment-only, `pywebpush`); frontend `npm run typecheck`
+and `npm run lint` both clean; scoped frontend suite
+(`medical-screening`) 54 passed across 9 files.
+
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal).
+
+### 2026-10-18 — Feature 08 (Membership pipeline, pass 11) — watchdog pickup, real delta (directory-account provisioning hooked into conversion), 0 fixed, 0 new findings; MP-22 still open
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3410 (Feature 07, Users & organizations, pass 10) had
+already merged clean, docs-only, closing row 07; rotation row 08 was the
+next `⬜`. (Note: this file's own pass count runs one ahead of its
+lap-mates — last recorded pass was 10, PR #3255, merged 2026-10-15 — so
+this iteration is that file's pass 11, not pass 10; each findings file's
+pass number is local to itself.)
+
+**Baseline:** `b260c519e` (PR #3255's merge, pass 10). **Head:** current
+`main`. 5 non-merge commits touch this feature's scope, all read in
+full — a new directory-account provisioning engine (Google Workspace,
+later generalized to also support Microsoft 365) hooked into
+`transfer_prospect`, the endpoint that converts an applicant to a
+member. Verified sound across all seven checklist dimensions: every
+`DirectoryAccountService` call passes `prospect.organization_id`
+explicitly, and the service's own `provision()` org-scopes and
+row-locks before mutating; the temporary directory-account password has
+no storage column at all (confirmed by reading the model, not its
+docstring) and is only ever a transient return value used to build the
+delivery email; it is never conflated with the member's own Logbook
+login password (which is separately generated and hashed before
+storage); the directory-account row is staged inside the conversion's
+own transaction but the actual provider API call runs only after that
+transaction commits, so a directory failure can never roll back the
+member conversion; no response ever carries the password; and
+`transfer_prospect` keeps its existing `members.manage`/
+`prospective_members.manage` gate with no new route added (53 routes,
+unchanged). A one-line fix within this window (`2008edbec`) correctly
+restricts provisioning to rows still `PENDING`, not already-failed ones
+— verified present in current code. Other hardening in that same commit
+(alias/group-linking rejection, suspend-by-immutable-id, etc.) lives in
+`directory_account_service.py`, outside this feature's declared scope —
+noted so a future MP-08 pass doesn't re-derive it. A separate,
+unrelated fix (`3284dc052`) closes a 500→400 gap on `PUT /pipelines/{id}`
+for a null aimed at a `NOT NULL` column — pure correctness, no
+auth/tenancy change. **MP-22**, the one standing flagged item, remains
+**OPEN**, unchanged — neither of its two sites touched by this window's
+delta. See `MP-08-membership-pipeline.md`'s **Pass 11** section for the
+full writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` clean; `validate_migrations.py --strict` passed (619
+revisions, single head); `check_route_permissions.py --strict` 272
+routes, 0 errors/warnings; scoped backend tests (`-k "membership or
+prospect or pipeline or election"`) 1,734 passed, 1 skipped
+(environment-only, `pywebpush`); frontend `npm run typecheck` and `npm
+run lint` both clean; scoped frontend suite
+(`prospective-members`) 287 passed across 34 files.
+
+Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical
+screening, PHI).
+
+### 2026-10-18 — Feature 07 (Users & organizations, pass 10) — watchdog pickup, real delta (PHI read auditing, new status-change-reason endpoints, undo-drop window hardening), 0 fixed, 0 new findings
+
+No `claude/security-review-*` PR was open (`search_pull_requests`); the
+dedicated `/loop 30m /security-review` session was not reachable
+(`ListAgents`). PR #3404 (Feature 06, Elections & ballots, pass 10) had
+already merged, closing row 06 (not docs-only — fixed ELEC-47, a real
+locking-read race in the new ballot-send-jobs guard; already fully
+recorded in that PR's own commits). A duplicate watchdog pickup of the
+same row (PR #3403) had raced it minutes earlier and was closed by the
+owner — its review had missed ELEC-47. Rotation row 07 was the next `⬜`.
+
+**Baseline:** `7add73bc4` (PR #3250's merge, pass 9). **Head:** current
+`main`. 7 non-merge commits touch this feature's scope; 3 are Minutes-
+module (Feature 24) settings fields riding on the shared
+`OrganizationSettingsUpdate` schema aggregator (additive `Optional[...]`
+fields only, no logic). The 4 real changes, all verified sound: PHI read
+auditing on `member_leaves.py` (HIPAA §164.312(b), ids/counts only, never
+the reason text); two new `members.manage`-gated status-change-reason
+endpoints resolving the target through the existing org-scoped
+`_load_member` helper; the undo-drop window now anchored to a drop's
+effective date rather than when it was recorded (tightens, not weakens,
+the existing week-long window, and the new anchor can only shift
+backward); and a server-validated `separation_date` on the existing
+status-change endpoint (future dates and pre-service dates refused by
+`resolve_org_today` / the service layer). All 79 routes across the four
+principal files re-enumerated (`member_status.py` 14→16 for the two new
+routes, the rest unchanged); no new unescaped LIKE, raw `csv.writer`, or
+`window.confirm`/`alert`/`prompt`. **USR-5** and **USR-8**, both standing
+flagged/accepted items, re-confirmed unchanged — neither touched by this
+window's delta. See `USR-07-users-organizations.md`'s **Pass 10** section
+for the full writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on `app/
+tests/ alembic/` clean; `validate_migrations.py --strict` passed (619
+revisions, single head); `check_route_permissions.py --strict` 272
+routes, 0 errors/warnings; scoped backend tests (pass 9's own selection
+string) 1,576 passed, 1 skipped (environment-only, `pywebpush`) — a first
+run against the pre-migration local database gave 17 unrelated Minutes-
+module failures (`meeting_minutes.published_revision_version` unknown
+column); `alembic upgrade head` resolved it, the same stale-schema
+pattern pass 9 documented; frontend `npm run typecheck` and `npm run
+lint` both clean.
+
+Row 07 → ✅ (pending this PR's merge); next is Feature 08 (Membership
+pipeline).
 
 ### 2026-10-18 — Feature 06 (Elections & ballots, pass 10) — watchdog pickup, new ballot-send-job queue; ELEC-47 locking-read race fixed, ELEC-48 flagged
 
