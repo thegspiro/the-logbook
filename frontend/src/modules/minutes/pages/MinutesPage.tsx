@@ -335,7 +335,7 @@ const MinutesPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-8 flex flex-col gap-4">
           <div className="flex items-center space-x-3">
             <div className="shrink-0 rounded-lg bg-cyan-600 p-2">
               <ClipboardList className="h-6 w-6 text-white" aria-hidden="true" />
@@ -347,7 +347,7 @@ const MinutesPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-2">
             {canManage && (
               <Link to="/minutes/outlines" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
                 <ListOrdered className="h-4 w-4" aria-hidden="true" />
