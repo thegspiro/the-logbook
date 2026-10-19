@@ -16,9 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3436 (Feature 15, Scheduling, pass 9) merged 2026-10-19 —
-watchdog pickup, 0 fixes, 0 new findings, SCH-19 re-confirmed OPEN. Rotation
-row 15 → ✅.
+**PR [#3438](https://github.com/thegspiro/the-logbook/pull/3438)** (branch
+`claude/security-review-events-requests`). PR #3436 (Feature 15, Scheduling,
+pass 9) merged 2026-10-19 — not independently recordable here beyond what
+follows. This iteration (watchdog pickup, same conditions as above)
+reviewed Feature 16 (Events & requests), pass 9 — 0 fixes, 0 new findings;
+near-zero delta of 3 commits in scope, all verified clean. Also fixed a
+repo-wide Alembic fork found while running the completion gate, unrelated
+to this feature, with merge revision `127ebe3103ff`. Rotation row 16 → ✅
+(pending this PR's merge); next is Feature 17 (Training core).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 9, PR #3436, merged), preserved for history</summary>
