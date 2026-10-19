@@ -21,7 +21,7 @@ const dashboard = {
   pendingApplications: 5,
   totalGrantFunding: 100000,
   totalRaisedYtd: 0,
-  totalRaised12mo: 0,
+  totalRaised12Mo: 0,
   activeCampaignsCount: 0,
   activeCampaigns: [],
   recentDonations: [],

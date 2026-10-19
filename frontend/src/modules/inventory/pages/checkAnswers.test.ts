@@ -12,7 +12,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { countAnswer, expiryAnswer, levelAnswer } from './checkAnswers';
+import { CLEARED_REPLACEMENT, countAnswer, expiryAnswer, levelAnswer, replacementAnswer } from './checkAnswers';
 
 import type { CheckItemSpec } from './CheckItemControls';
 
@@ -114,5 +114,31 @@ describe('expiryAnswer', () => {
 
   it('confirms an item with no date on record rather than failing it', () => {
     expect(expiryAnswer(item())).toEqual({ expiryConfirmed: true, status: 'pass' });
+  });
+});
+
+describe('replacementAnswer', () => {
+  const today = new Date(2026, 9, 18);
+
+  it('passes the line on the new unit and keeps its lot', () => {
+    expect(replacementAnswer('2027-03-01', ' L-9 ', today)).toEqual({
+      expirationFound: '2027-03-01',
+      lotFound: 'L-9',
+      expiryConfirmed: true,
+      status: 'pass',
+    });
+  });
+
+  it('takes today, which has not passed', () => {
+    expect(replacementAnswer('2026-10-18', '', today)).toMatchObject({ status: 'pass', lotFound: undefined });
+  });
+
+  it('refuses a date that has already passed, as the server does', () => {
+    expect(replacementAnswer('2026-10-17', 'L-9', today)).toBeNull();
+  });
+
+  it('withdraws the replacement when the date is cleared', () => {
+    expect(replacementAnswer('', 'L-9', today)).toBe(CLEARED_REPLACEMENT);
+    expect(CLEARED_REPLACEMENT).toMatchObject({ expirationFound: undefined, status: 'not_checked' });
   });
 });

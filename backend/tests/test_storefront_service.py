@@ -290,7 +290,9 @@ class TestLimits:
         await _make_open_window(db_session, org)
 
         await service.create_order(org.id, member_a, _cart(product.id, 1))
-        with pytest.raises(ValueError, match="remain available"):
+        with pytest.raises(
+            ValueError, match="already ordered the most allowed .*1 per member"
+        ):
             await service.create_order(org.id, member_a, _cart(product.id, 1))
 
         # The other member's allowance is untouched.
@@ -327,8 +329,46 @@ class TestLimits:
             "fulfillment_method": "pickup",
         }
         # The cap is per product, not per variant: 2 + 1 exceeds it.
-        with pytest.raises(ValueError, match="remain available"):
+        with pytest.raises(ValueError, match="You can order 2 more .*2 per member"):
             await service.create_order(org.id, member, payload)
+
+    async def test_offers_report_stock_apart_from_the_member_allowance(
+        self, db_session
+    ):
+        """W67: ``available_quantity`` folds in the member's own allowance, and
+        the storefront read it as stock — "Only 2 left" on an untracked item
+        limited to 2 per member, "Sold out" once a member had ordered theirs.
+        ``stock_available`` carries the stock and window caps alone."""
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        untracked = await _make_product(db_session, org, max_per_member=2)
+        tracked = await _make_product(
+            db_session,
+            org,
+            name="Challenge coin",
+            max_per_member=2,
+            track_stock=True,
+            stock_quantity=10,
+        )
+        await _make_open_window(db_session, org)
+
+        def offer(storefront, product):
+            (match,) = [o for o in storefront["products"] if o["id"] == product.id]
+            return match
+
+        front = await service.get_storefront(org.id, member.id)
+        assert offer(front, untracked)["available_quantity"] == 2
+        assert offer(front, untracked)["stock_available"] is None
+        assert offer(front, tracked)["stock_available"] == 10
+
+        await service.create_order(org.id, member, _cart(untracked.id, 2))
+        front = await service.get_storefront(org.id, member.id)
+        # The member is at their limit; nothing is sold out.
+        assert offer(front, untracked)["available_quantity"] == 0
+        assert offer(front, untracked)["is_available"] is False
+        assert offer(front, untracked)["stock_available"] is None
 
     async def test_variant_stock_spans_personalized_lines(self, db_session):
         org = await _make_org(db_session)

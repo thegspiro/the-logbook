@@ -6,7 +6,7 @@ attendance tracking, and calendar views.
 """
 
 import copy
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -3370,9 +3370,17 @@ async def signup_for_shift(
             ),
         )
 
+    # A member's own tap is their commitment, so it lands confirmed: the Open
+    # Shifts screen promises the shift "goes straight onto your schedule", and
+    # leaving it ASSIGNED asked them to confirm what they had just claimed and
+    # printed them as "unconfirmed" on the crew roster. Officer assignments and
+    # standing claims (seated automatically, months ahead) still wait on the
+    # member's confirmation.
     assignment_data = {
         "user_id": str(current_user.id),
         "position": position_value,
+        "assignment_status": AssignmentStatus.CONFIRMED,
+        "confirmed_at": datetime.now(timezone.utc),
     }
     if outreach_role:
         assignment_data["outreach_role"] = outreach_role

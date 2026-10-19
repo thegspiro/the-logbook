@@ -6,7 +6,7 @@
  * period comparison, and saved report functionality.
  */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Link } from 'react-router';
 import { DialogPanel } from '../../../components/ux/DialogPanel';
 import {
@@ -290,11 +290,30 @@ export const ReportsPage: React.FC = () => {
     setError,
     generateComparisonReport,
     clearComparison,
+    availableReports,
+    fetchAvailableReports,
   } = useReportsStore();
 
+  // W72: the cards are a fixed list, but /available is what drops a report the
+  // caller lacks the source permission for (RPT-3). Without it the chief was
+  // offered the Admin Hours Report and refused on Generate. Until it loads, or
+  // if it fails, every card shows and the server still refuses as before.
+  useEffect(() => {
+    void fetchAvailableReports();
+  }, [fetchAvailableReports]);
+  const offered = useMemo(
+    () => (availableReports.length > 0 ? new Set(availableReports.map((r) => r.id)) : null),
+    [availableReports]
+  );
+
   const filteredReports = useMemo(
-    () => (selectedCategory === 'all' ? REPORT_CARDS : REPORT_CARDS.filter((r) => r.category === selectedCategory)),
-    [selectedCategory]
+    () =>
+      REPORT_CARDS.filter(
+        (r) =>
+          (selectedCategory === 'all' || r.category === selectedCategory) &&
+          (!offered || offered.has(REPORT_TYPE_MAP[r.id] ?? ''))
+      ),
+    [selectedCategory, offered]
   );
 
   // Find the active card definition
@@ -677,7 +696,7 @@ export const ReportsPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={handleComparePreviousPeriod}
-                          className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
+                          className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
                         >
                           <GitCompareArrows className="h-3.5 w-3.5" aria-hidden="true" />
                           Compare
@@ -686,7 +705,7 @@ export const ReportsPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={closeModal}
-                        className="text-theme-text-muted hover:text-theme-text-primary"
+                        className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone"
                         aria-label="Close report"
                       >
                         <X className="h-5 w-5" aria-hidden="true" />
@@ -708,7 +727,7 @@ export const ReportsPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={clearComparison}
-                          className="text-theme-text-muted hover:text-theme-text-primary text-xs"
+                          className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 text-xs"
                         >
                           Remove comparison
                         </button>
@@ -722,7 +741,7 @@ export const ReportsPage: React.FC = () => {
                 <div className="border-theme-surface-border flex justify-end border-t px-6 py-4">
                   <button
                     onClick={closeModal}
-                    className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary focus:ring-theme-focus-ring rounded-lg px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
+                    className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary focus:ring-theme-focus-ring touch:min-h-11 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
                   >
                     Close
                   </button>

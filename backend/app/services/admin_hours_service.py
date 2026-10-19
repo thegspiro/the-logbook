@@ -133,6 +133,33 @@ class AdminHoursService:
         admin_hours_category: Optional[AdminHoursCategory] = result.scalar_one_or_none()
         return admin_hours_category
 
+    async def _assert_name_free(
+        self,
+        organization_id: str,
+        name: object,
+        exclude_id: Optional[str] = None,
+    ) -> None:
+        """Refuse a second active category with the same name (W70).
+
+        Two "Station Maintenance" categories leave a member choosing between
+        identical names at clock-in and split the summary's hours across two
+        rows nobody can tell apart. Compared case-insensitively and trimmed;
+        an inactive category does not count, so a retired name can be reused.
+        """
+        if not isinstance(name, str) or not name.strip():
+            return
+        query = select(AdminHoursCategory.id).where(
+            AdminHoursCategory.organization_id == organization_id,
+            AdminHoursCategory.is_active.is_(True),
+            func.lower(func.trim(AdminHoursCategory.name)) == name.strip().lower(),
+        )
+        if exclude_id is not None:
+            query = query.where(AdminHoursCategory.id != exclude_id)
+        if (await self.db.execute(query.limit(1))).scalar_one_or_none() is not None:
+            raise ValueError(
+                f'There is already an active category named "{name.strip()}".'
+            )
+
     async def create_category(
         self,
         organization_id: str,
@@ -140,6 +167,7 @@ class AdminHoursService:
         **kwargs: object,
     ) -> AdminHoursCategory:
         """Create a new admin hours category."""
+        await self._assert_name_free(organization_id, kwargs.get("name"))
         category = AdminHoursCategory(
             organization_id=organization_id,
             created_by=created_by,
@@ -170,6 +198,14 @@ class AdminHoursService:
         category = await self.get_category(category_id, organization_id)
         if not category:
             raise ValueError("Category not found")
+
+        # A rename, or reactivating a category whose name has since been taken.
+        if kwargs.get("is_active", category.is_active):
+            await self._assert_name_free(
+                organization_id,
+                kwargs.get("name", category.name),
+                exclude_id=category.id,
+            )
 
         apply_updates(category, kwargs, skip={"organization_id", "id"})
         category.updated_by = updated_by

@@ -22,9 +22,9 @@ import { duesService } from '../services/api';
 import { DuesFrequency } from '../types';
 import type { DuesSchedule, DuesScheduleCreatePayload, DuesScheduleUpdatePayload } from '../types';
 import { DUES_FREQUENCY_LABELS } from '../utils/dues';
+import { MAX_MONEY_AMOUNT } from '../utils/moneyLimits';
 
 /** The largest amount the backend's Numeric(12, 2) column holds. */
-const MAX_AMOUNT = 9_999_999_999.99;
 const MAX_NAME = 200;
 
 interface DuesScheduleDialogProps {
@@ -55,7 +55,7 @@ export const DuesScheduleDialog: React.FC<DuesScheduleDialogProps> = ({ schedule
     const parsed = Number(amount);
     if (amount.trim() === '' || !Number.isFinite(parsed) || parsed <= 0) {
       next.amount = 'Enter an amount greater than zero.';
-    } else if (parsed > MAX_AMOUNT) {
+    } else if (parsed > MAX_MONEY_AMOUNT) {
       next.amount = 'That amount is too large.';
     }
     if (!dueDate) next.dueDate = 'Enter the date dues are due.';

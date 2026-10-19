@@ -85,6 +85,7 @@ import {
   toLocalISODate,
 } from '../utils/dateFormatting';
 import { useAuthStore } from '../stores/authStore';
+import { isAdministrativeMember } from '../utils/membership';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import type { ProgramEnrollment, MemberProgramProgress } from '../types/training';
 import type { NotificationLogRecord } from '../services/api';
@@ -281,6 +282,11 @@ const Dashboard: React.FC = () => {
   const canManageMessages = canViewLegacyAdmin || checkPermission('notifications.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
   const canViewScheduling = checkPermission('scheduling.manage');
+  // Readiness is a verdict on responding, which an administrative member does
+  // not do. Class, not a permission, because nothing a position grants changes
+  // that; and not shiftsExcluded, which is also true of an operational member
+  // with no qualifying seat yet -- exactly who should still read "Not clear".
+  const isAdministrative = isAdministrativeMember(undefined, currentUser?.membership_type);
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(canViewLegacyAdmin);
   const [adminError, setAdminError] = useState(false);
@@ -1877,17 +1883,21 @@ const Dashboard: React.FC = () => {
               {/* Both carry the default flex order, so source order puts the
                   verdict above the panel it summarises — on phones too, where
                   the actions and timeline swap around them. */}
-              <DashboardReadiness
-                certs={myCerts}
-                positions={mySeats}
-                screenings={myScreenings}
-                // A verdict driven only by screenings has nothing to say on
-                // the training page. Send those members to the department feed,
-                // where a screening notice would reach them, rather than to a
-                // page that cannot explain what grounded them.
-                onOpen={() => void navigate(myCerts.length > 0 ? '/training/my-training' : '/notifications?tab=inbox')}
-              />
-              {(certificationsError || seatsError || screeningsError) && (
+              {!isAdministrative && (
+                <DashboardReadiness
+                  certs={myCerts}
+                  positions={mySeats}
+                  screenings={myScreenings}
+                  // A verdict driven only by screenings has nothing to say on
+                  // the training page. Send those members to the department feed,
+                  // where a screening notice would reach them, rather than to a
+                  // page that cannot explain what grounded them.
+                  onOpen={() =>
+                    void navigate(myCerts.length > 0 ? '/training/my-training' : '/notifications?tab=inbox')
+                  }
+                />
+              )}
+              {!isAdministrative && (certificationsError || seatsError || screeningsError) && (
                 <div className="card">
                   <SectionError
                     message="Readiness could not be fully verified."

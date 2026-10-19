@@ -298,8 +298,9 @@ describe('AdminHoursPage manual entry times', () => {
     renderWithRouter(<AdminHoursPage />);
     fireEvent.click(screen.getByRole('button', { name: /log hours manually/i }));
     return {
-      start: await screen.findByLabelText(/start time/i),
-      end: screen.getByLabelText(/end time/i),
+      // Exact: the time selects are named "Start time hour" etc. since W70.
+      start: await screen.findByLabelText('Start Time *'),
+      end: screen.getByLabelText('End Time *'),
     };
   };
 

@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  canRecordReplacementDate,
+  checkItemStatusLabel,
   containerTypeLabel,
+  normalizeCheckType,
   countedOnTruck,
   daysUntil,
   isPresetContainerType,
@@ -191,5 +194,34 @@ describe('isBelowCriticalMinimum', () => {
     expect(isBelowCriticalMinimum(0, null, 4)).toBe(false);
     expect(isBelowCriticalMinimum(0, undefined, null)).toBe(false);
     expect(isBelowCriticalMinimum(0, 1, null)).toBe(true);
+  });
+});
+
+describe('presence', () => {
+  it('is its own type, and the legacy present still means pass/fail', () => {
+    expect(normalizeCheckType('presence')).toBe('presence');
+    expect(normalizeCheckType('present')).toBe('function');
+  });
+
+  it('reads a filed answer in the words the crew used', () => {
+    expect(checkItemStatusLabel('presence', 'pass')).toBe('Present');
+    expect(checkItemStatusLabel('presence', 'fail')).toBe('Absent');
+    expect(checkItemStatusLabel('presence', 'not_checked')).toBe('Not checked');
+    expect(checkItemStatusLabel('function', 'fail')).toBe('Fail');
+    expect(checkItemStatusLabel(undefined, 'pass')).toBe('Pass');
+  });
+});
+
+describe('canRecordReplacementDate', () => {
+  it('is only a Date line that inventory does not track', () => {
+    expect(canRecordReplacementDate({ checkType: 'expiry' })).toBe(true);
+    expect(canRecordReplacementDate({ checkType: 'expiry', inventoryItemId: 'inv-1' })).toBe(false);
+    expect(
+      canRecordReplacementDate({
+        checkType: 'expiry',
+        lotsAboard: [{ id: 'l1', lotNumber: 'A', quantity: 1 } as never],
+      })
+    ).toBe(false);
+    expect(canRecordReplacementDate({ checkType: 'count' })).toBe(false);
   });
 });

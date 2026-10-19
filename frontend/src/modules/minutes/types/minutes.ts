@@ -197,6 +197,9 @@ export interface MyActionItem extends ActionItem {
   minutes_status: MinutesStatus;
 }
 
+/** Which attendance statuses minutes name; the roll is always recorded in full. */
+export type AttendanceListing = 'all' | 'present_excused' | 'present';
+
 export interface MeetingMinutes {
   id: string;
   organization_id: string;
@@ -210,6 +213,10 @@ export interface MeetingMinutes {
   called_to_order_at?: string;
   adjourned_at?: string;
   attendees?: AttendeeEntry[];
+  /** This set's own choice; null follows the department default. */
+  attendance_listing?: AttendanceListing | null;
+  /** What is in force: the choice above, else the department default. */
+  attendance_listing_effective?: AttendanceListing;
   quorum_met?: boolean;
   quorum_count?: number;
   event_id?: string;
@@ -569,6 +576,7 @@ export interface MinutesReminderSettings {
   /** What the server will actually do for executive-session minutes, whatever the switches read. */
   executive_effective_library: boolean;
   executive_effective_public: boolean;
+  attendance_listing: AttendanceListing;
 }
 
 /** Where one set of minutes stands: the library copy, the public copy, and what the settings allow. */

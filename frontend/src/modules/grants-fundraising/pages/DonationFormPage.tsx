@@ -135,7 +135,7 @@ const DonationFormPage: React.FC = () => {
     <div className="mx-auto max-w-3xl space-y-6">
       <Link
         to="/grants/donations"
-        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+        className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Donations
@@ -299,7 +299,7 @@ const DonationFormPage: React.FC = () => {
               </div>
             </div>
           )}
-          <label className="flex items-center gap-2 text-sm">
+          <label className="touch:min-h-11 flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               className="form-checkbox"
@@ -349,7 +349,7 @@ const DonationFormPage: React.FC = () => {
               </div>
             )}
           </div>
-          <label className="flex items-center gap-2 text-sm">
+          <label className="touch:min-h-11 flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               className="form-checkbox"

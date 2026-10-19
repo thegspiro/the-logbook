@@ -74,7 +74,7 @@ export const CampaignRestrictionControl: React.FC<CampaignRestrictionControlProp
       {canManage && (
         <button
           type="button"
-          className="text-sm font-medium text-red-700 hover:underline disabled:opacity-50 dark:text-red-400"
+          className="touch:min-h-11 text-sm font-medium text-red-700 hover:underline disabled:opacity-50 dark:text-red-400"
           disabled={saving}
           onClick={() => (campaign.isRestricted ? void unrestrict() : setAsking(true))}
         >

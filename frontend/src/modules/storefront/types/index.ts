@@ -438,6 +438,8 @@ export interface StorefrontVariantOption {
   label: string;
   price: string;
   availableQuantity?: number | null;
+  /** Stock or window cap left, without the member's own allowance; null = unlimited. */
+  stockAvailable?: number | null;
   isAvailable: boolean;
 }
 
@@ -461,6 +463,8 @@ export interface StorefrontProductOffer {
   personalizationThreadColorHex: string;
   personalizationMethod: PersonalizationMethod;
   availableQuantity?: number | null;
+  /** As on StorefrontVariantOption: stock and window cap only. */
+  stockAvailable?: number | null;
   isAvailable: boolean;
   variants: StorefrontVariantOption[];
 }

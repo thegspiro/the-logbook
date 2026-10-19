@@ -10,6 +10,18 @@ import type { AdminHoursCategoryCreate } from '../types';
 
 const DEFAULT_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
 
+// The swatches are buttons with no text; these name them (W70).
+const COLOR_NAMES: Record<string, string> = {
+  '#3B82F6': 'Blue',
+  '#10B981': 'Green',
+  '#F59E0B': 'Amber',
+  '#EF4444': 'Red',
+  '#8B5CF6': 'Violet',
+  '#EC4899': 'Pink',
+  '#06B6D4': 'Cyan',
+  '#84CC16': 'Lime',
+};
+
 interface CategoryFormProps {
   formData: AdminHoursCategoryCreate;
   onChange: (data: AdminHoursCategoryCreate) => void;
@@ -36,25 +48,32 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Name *</label>
+            <label htmlFor="category-name" className="form-label">
+              Name *
+            </label>
             <input
+              id="category-name"
               type="text"
               value={formData.name}
               onChange={(e) => onChange({ ...formData, name: e.target.value })}
-              className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-3 py-2 focus:border-transparent focus:ring-2"
+              className="form-input"
               required
               placeholder="e.g., Building Maintenance"
             />
           </div>
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Color</label>
-            <div className="flex items-center gap-2">
+            <span id="category-color-label" className="form-label">
+              Color
+            </span>
+            <div role="group" aria-labelledby="category-color-label" className="flex flex-wrap items-center gap-2">
               {DEFAULT_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => onChange({ ...formData, color: c })}
-                  className={`h-8 w-8 rounded-full border-2 transition ${formData.color === c ? 'border-theme-surface scale-110 ring-2 ring-blue-500' : 'border-transparent'}`}
+                  aria-label={COLOR_NAMES[c] ?? c}
+                  aria-pressed={formData.color === c}
+                  className={`touch-target-phone h-8 w-8 rounded-full border-2 transition ${formData.color === c ? 'border-theme-surface scale-110 ring-2 ring-blue-500' : 'border-transparent'}`}
                   style={{ backgroundColor: c }}
                 />
               ))}
@@ -63,33 +82,37 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
         </div>
 
         <div>
-          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Description</label>
+          <label htmlFor="category-description" className="form-label">
+            Description
+          </label>
           <textarea
+            id="category-description"
             value={formData.description ?? ''}
             onChange={(e) => onChange({ ...formData, description: e.target.value })}
             rows={2}
-            className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-3 py-2 focus:border-transparent focus:ring-2"
+            className="form-input"
             placeholder="Brief description of this type of admin work"
           />
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <label className="flex cursor-pointer items-center gap-2">
+          <label className="touch:min-h-11 flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
               checked={formData.require_approval ?? true}
               onChange={(e) => onChange({ ...formData, require_approval: e.target.checked })}
-              className="border-theme-input-border h-4 w-4 rounded-sm"
+              className="form-checkbox"
               aria-describedby="category-approval-scope"
             />
             <span className="text-theme-text-secondary text-sm">Require approval</span>
           </label>
 
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            <label htmlFor="category-auto-approve" className="form-label">
               Auto-approve under (hours)
             </label>
             <input
+              id="category-auto-approve"
               type="number"
               step="0.5"
               min="0"
@@ -97,14 +120,17 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               onChange={(e) =>
                 onChange({ ...formData, auto_approve_under_hours: e.target.value ? parseFloat(e.target.value) : null })
               }
-              className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-3 py-2 focus:border-transparent focus:ring-2"
+              className="form-input"
               placeholder="e.g., 4"
             />
           </div>
 
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Max hours per session</label>
+            <label htmlFor="category-max-hours" className="form-label">
+              Max hours per session
+            </label>
             <input
+              id="category-max-hours"
               type="number"
               step="0.5"
               min="0.5"
@@ -112,7 +138,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
               onChange={(e) =>
                 onChange({ ...formData, max_hours_per_session: e.target.value ? parseFloat(e.target.value) : null })
               }
-              className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-3 py-2 focus:border-transparent focus:ring-2"
+              className="form-input"
               placeholder="e.g., 12"
             />
           </div>

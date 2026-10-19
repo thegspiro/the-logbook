@@ -36,7 +36,10 @@ interface BudgetProgressProps {
 const BudgetProgress: React.FC<BudgetProgressProps> = ({ spent, encumbered, budgeted }) => {
   const spentPct = budgeted > 0 ? Math.min((spent / budgeted) * 100, 100) : 0;
   const encPct = budgeted > 0 ? Math.min((encumbered / budgeted) * 100, 100 - spentPct) : 0;
-  const totalPct = spentPct + encPct;
+  // Only the bar's widths are capped. The figure is not: summing the capped
+  // widths topped out at 100, so an overspent line read "Near limit" here while
+  // its own page (BudgetDetailPage's info card) said "Over budget".
+  const totalPct = budgeted > 0 ? ((spent + encumbered) / budgeted) * 100 : 0;
   const overBudget = totalPct > 90;
 
   return (
@@ -191,6 +194,7 @@ const BudgetsPage: React.FC = () => {
 
   const getRemaining = (b: Budget): number =>
     Number(b.amountBudgeted) - Number(b.amountSpent) - Number(b.amountEncumbered);
+  const totalRemaining = visibleBudgets.reduce((s, b) => s + getRemaining(b), 0);
 
   if (isLoading && budgets.length === 0) {
     return (
@@ -372,7 +376,7 @@ const BudgetsPage: React.FC = () => {
                         <td className="px-4 py-3" style={{ paddingLeft: `${1 + Math.min(depth, 4) * 1.25}rem` }}>
                           <Link
                             to={`/finance/budgets/${budget.id}`}
-                            className="text-theme-text-primary text-sm font-medium hover:text-red-600"
+                            className="text-theme-text-primary touch:inline-flex touch:min-h-11 touch:items-center text-sm font-medium hover:text-red-600"
                           >
                             {categoryMap.get(budget.categoryId) ?? 'Unknown'}
                           </Link>
@@ -410,9 +414,10 @@ const BudgetsPage: React.FC = () => {
                         <td className="px-4 py-3">
                           <Link
                             to={`/finance/budgets/${budget.id}`}
-                            className="text-theme-text-secondary hover:text-red-600"
+                            aria-label={`Open ${categoryMap.get(budget.categoryId) ?? 'this budget line'}`}
+                            className="text-theme-text-secondary touch-target-phone hover:text-red-600"
                           >
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
                           </Link>
                         </td>
                       </tr>
@@ -461,8 +466,10 @@ const BudgetsPage: React.FC = () => {
                   <td className="text-theme-text-secondary px-4 py-3 text-right text-sm font-bold whitespace-nowrap">
                     {formatCurrencyWhole(visibleBudgets.reduce((s, b) => s + Number(b.amountEncumbered), 0))}
                   </td>
-                  <td className="px-4 py-3 text-right text-sm font-bold whitespace-nowrap text-green-600">
-                    {formatCurrencyWhole(visibleBudgets.reduce((s, b) => s + getRemaining(b), 0))}
+                  <td
+                    className={`px-4 py-3 text-right text-sm font-bold whitespace-nowrap ${totalRemaining < 0 ? 'text-red-600' : 'text-green-600'}`}
+                  >
+                    {formatCurrencyWhole(totalRemaining)}
                   </td>
                   <td colSpan={2} />
                 </tr>

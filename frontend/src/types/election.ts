@@ -587,6 +587,9 @@ export interface PreMeetingPackageResponse {
   success: boolean;
   message: string;
   sent_count: number;
+  // Addresses whose batch the mail provider refused. Absent from servers
+  // older than batched sending.
+  unreached?: string[] | undefined;
 }
 
 // Vote receipt verification

@@ -2591,6 +2591,15 @@ class CheckTemplateCompartment(Base):
     is_sealed: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="0"
     )
+    # A headingless group: items placed directly on the checklist rather than
+    # in a named place on the truck. It is still a row here, rather than items
+    # carrying the template id themselves, because every department-isolation
+    # query reaches an item through its compartment; a second path to the
+    # template would have to be scoped separately everywhere. It has no name,
+    # cannot be sealed, and is never nested or a parent.
+    is_inline: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

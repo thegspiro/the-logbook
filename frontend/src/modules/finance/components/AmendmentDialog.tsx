@@ -21,9 +21,9 @@ import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { budgetService } from '../services/api';
 import type { BudgetAmendmentCreatePayload, BudgetAmendmentCreated } from '../types';
+import { MAX_MONEY_AMOUNT } from '../utils/moneyLimits';
 
 /** The largest amount the backend's Numeric(12, 2) column holds. */
-const MAX_AMOUNT = 9_999_999_999.99;
 const MAX_REASON = 2000;
 const MAX_APPROVED_BY = 200;
 
@@ -51,7 +51,7 @@ export const AmendmentDialog: React.FC<AmendmentDialogProps> = ({ budgetId, line
     const parsed = Number(amount);
     if (amount.trim() === '' || !Number.isFinite(parsed) || parsed <= 0) {
       next.amount = 'Enter an amount greater than zero.';
-    } else if (parsed > MAX_AMOUNT) {
+    } else if (parsed > MAX_MONEY_AMOUNT) {
       next.amount = 'That amount is too large.';
     }
     if (!reason.trim()) next.reason = 'Give a reason for the amendment.';

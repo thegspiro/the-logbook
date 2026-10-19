@@ -6,7 +6,11 @@ import axios from 'axios';
 import { FinanceApprovalPage } from './FinanceApprovalPage';
 
 vi.mock('axios', () => ({
-  default: { get: vi.fn(), post: vi.fn() },
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+    isAxiosError: (err: unknown) => typeof err === 'object' && err !== null && 'isAxiosError' in err,
+  },
 }));
 
 const mockGet = axios.get as unknown as Mock;
@@ -146,5 +150,17 @@ describe('FinanceApprovalPage', () => {
     await user.type(await screen.findByLabelText('Notes (optional)'), 'Matches the invoice');
 
     expect(screen.getByLabelText('Notes (optional)')).toHaveValue('Matches the invoice');
+  });
+
+  // W62: the token is cleared once used, so the approver's own second visit
+  // and a link a mail program cut short reached the screen as the API's
+  // wording — "Approval not found (Error code: LB-API-404)", "path.token: Value
+  // is too short." — which tells someone outside the department nothing.
+  it.each([404, 422])('explains a link that can no longer be used (%i)', async (status) => {
+    mockGet.mockRejectedValue({ isAxiosError: true, response: { status, data: { detail: 'Approval not found' } } });
+    renderAt('used-token');
+
+    expect(await screen.findByText(/If you already responded, your response was recorded/)).toBeInTheDocument();
+    expect(screen.queryByText(/Approval not found/)).not.toBeInTheDocument();
   });
 });

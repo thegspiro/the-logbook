@@ -56,6 +56,13 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
   const upcharge = Number(offer.personalizationPrice ?? 0);
   const remaining = selectedVariant ? selectedVariant.availableQuantity : offer.availableQuantity;
   const soldOut = selectedVariant ? !selectedVariant.isAvailable : !offer.isAvailable;
+  // `remaining` folds in this member's own allowance, so it is not stock: an
+  // untracked item limited to 2 per member read "Only 2 left" in every size,
+  // and a member who had ordered their 2 was told it was sold out (W67).
+  const stockLeft = selectedVariant ? selectedVariant.stockAvailable : offer.stockAvailable;
+  const lowStock = stockLeft === undefined ? remaining : stockLeft;
+  const atMemberLimit =
+    soldOut && offer.maxPerMember != null && stockLeft !== undefined && (stockLeft === null || stockLeft > 0);
   const trimmedText = personalizationText.trim();
   const missingRequiredText = offer.personalizationEnabled && offer.personalizationRequired && !trimmedText;
   const personalizing = offer.personalizationEnabled && personalizationOn;
@@ -90,7 +97,7 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
         )}
         {soldOut ? (
           <span className="absolute top-2.5 left-2.5 rounded-full bg-slate-900 px-2.5 py-[3px] text-[11px] font-semibold text-white">
-            Sold out
+            {atMemberLimit ? 'Limit reached' : 'Sold out'}
           </span>
         ) : (
           offer.category && (
@@ -222,9 +229,9 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
           </div>
         )}
 
-        {remaining != null && remaining > 0 && remaining <= LOW_STOCK_THRESHOLD && (
+        {lowStock != null && lowStock > 0 && lowStock <= LOW_STOCK_THRESHOLD && (
           <p className="text-xs text-amber-900 dark:text-amber-200">
-            Only {remaining} left{selectedVariant ? ` in ${selectedVariant.label}` : ''}
+            Only {lowStock} left{selectedVariant ? ` in ${selectedVariant.label}` : ''}
           </p>
         )}
 
@@ -250,8 +257,11 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
               <button
                 type="button"
                 aria-label={`Increase quantity of ${offer.name}`}
-                className="btn-icon text-theme-text-secondary"
-                onClick={() => setQuantity((q) => q + 1)}
+                className="btn-icon text-theme-text-secondary disabled:opacity-40"
+                // Up to what this member may still order (stock, the window's
+                // cap and their own allowance); the server refused anything more.
+                disabled={remaining != null && quantity >= remaining}
+                onClick={() => setQuantity((q) => (remaining != null ? Math.min(q + 1, remaining) : q + 1))}
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -264,7 +274,11 @@ export const StoreProductCard: React.FC<StoreProductCardProps> = ({ offer, onAdd
             onClick={handleAdd}
           >
             {soldOut ? (
-              'Sold out this window'
+              atMemberLimit ? (
+                `You have ordered your limit of ${String(offer.maxPerMember)}`
+              ) : (
+                'Sold out this window'
+              )
             ) : (
               <>
                 <Plus className="h-4 w-4" aria-hidden="true" />
