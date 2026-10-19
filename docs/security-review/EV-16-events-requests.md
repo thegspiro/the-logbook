@@ -1,12 +1,15 @@
 # Security Review 16 — Events & Requests
 
 **Prefix:** `EV` · **Iteration:** 16 · **Reviewed:** 2026-08-26 (pass 1),
-2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-15 (pass 8) · **PR:**
+2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-15 (pass 8), 2026-10-19
+(pass 9) · **PR:**
 [#1848](https://github.com/thegspiro/the-logbook/pull/1848) (pass 1),
 [#2630](https://github.com/thegspiro/the-logbook/pull/2630) (pass 6),
 [#2972](https://github.com/thegspiro/the-logbook/pull/2972) (pass 7, 0
 fixed, EV-26 confirmed fixed),
-pass 8 PR (0 fixes needed this pass — see below)
+[#3294](https://github.com/thegspiro/the-logbook/pull/3294) (pass 8, 0
+fixed),
+pass 9 PR (0 fixes needed this pass — see below)
 
 **Backend:** `api/v1/endpoints/events.py` (58 routes, unchanged),
 `api/v1/endpoints/event_requests.py` (23 routes — includes the
@@ -35,6 +38,135 @@ into 409 `phase_gate` with an `occurrences` list. `useRSVPForm`'s series
 branch confirms against the list and retries with `override=true`. Tests:
 `test_event_rsvp_waitlist.py::TestRsvpToSeries`,
 `test_series_rsvp_phase_gate_endpoint.py`, `hooks/useRSVPForm.test.ts`.
+
+---
+
+## Pass 9 (2026-10-19) — near-zero delta (3 of 271 commits in scope), 0 fixes needed, 0 new findings
+
+**Watchdog pickup.** No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). PR #3436 (Feature 15, Scheduling, pass 9) had
+already merged. Rotation row 16 (Events & requests) was the next pending
+feature.
+
+### Scope
+
+Baseline `28987390b` (PR #3294's merge, pass 8). **271 non-merge commits**
+landed repo-wide in the window; only **3** touch this feature's declared
+files (`events.py`, `event_service.py`, `event_organizer_service.py`) —
+confirmed via `git log 28987390b..HEAD --no-merges -- <declared files>`.
+`event_requests.py`, `event_attendance_petitions.py`,
+`event_attendance_petition_service.py`, `event_request_service.py`,
+`models/event.py`, `models/event_request.py`, and the frontend `modules/events`
+tree have zero diff since pass 8 — confirmed by the same command against
+each path.
+
+### Commits reviewed
+
+- **`37c057558`** ("Persist cleared fields on the remaining module edit
+  forms") — repo-wide Pitfall #1 sweep; this feature's slice is the Event
+  editor and Event template edit forms sending an explicit `null`/`[]` for a
+  cleared optional field instead of omitting the key, plus a backend
+  correctness fix in `override_rsvp_attendance`
+  (`event_service.py:2640`-area): a `override_duration_minutes` value that
+  was auto-derived from the previous check-in/check-out pair is now dropped
+  when either time is cleared (narrowly — only when the stored duration
+  still equals the old derived span and the request itself doesn't name a
+  duration), so a stale derived value can't keep crediting a span that no
+  longer exists. No tenancy/auth surface; verified the condition only
+  _narrows_ when the value is cleared, never widens what gets dropped.
+- **`ffbdaa09a`** ("Email event cancellations, changes and organizer
+  notices") — adds email (Pitfall #18's channel of record) for event
+  cancellation, `PATCH /events/{id}` changes, and the existing
+  `POST /{event_id}/notify` endpoint (already `events.manage`-gated,
+  unchanged by this commit). All three new send paths route through the new
+  `_event_email_recipients` helper, which loads `User` filtered on
+  `User.organization_id == organization_id` and `User.id.in_(ids)` — no
+  cross-tenant recipient is reachable regardless of which `user_ids` list a
+  caller assembles upstream. Every interpolated dynamic value
+  (`event.title`, `location_name`, the organizer's free-text `message`, the
+  change description, the view-event URL) is passed through `html.escape`
+  before landing in the HTML body (`event_service.py` new
+  `_email_event_cancellation`/`email_event_change`/
+  `_email_event_notification` methods) — confirmed by direct read, not
+  assumed from the commit message. The one un-escaped use of `event.title`
+  is in an email **subject** line (`subject = f"{label}: {event.title}"`,
+  `send_event_notification`'s existing codepath, label from a fixed
+  dict) — not a new risk: the endpoint already requires `events.manage`
+  in-org (unchanged by this commit, confirmed at `events.py:3681`), so the
+  only actor who can put arbitrary text in `event.title` is already a
+  privileged same-org member, the same trust boundary every other
+  organizer-authored field in this feature already crosses. All three new
+  email sends are wrapped in `try/except Exception: logger.error(...)`,
+  non-fatal, matching this feature's existing pattern for best-effort side
+  effects (bell already committed/sent before the email is attempted).
+- **`52ebfd66c`** ("Send the post-event validation prompt to the event's
+  organizers") — `scheduled_tasks.py::run_post_event_validation` now asks
+  the event's organizer/alternate (falling back to the creator only when
+  neither is an eligible member) instead of only the creator, via
+  `EventOrganizerService.organizer_duty_recipients` (renamed from
+  `series_reminder_recipients`, same org-scoping). That helper's only new
+  logic is `_active_users(organizer_ids(event), organization_id)` — an
+  existing, already-reviewed method that filters `User.organization_id ==
+organization_id`; no new unscoped query introduced. The task's own
+  `Event` query remains scoped to the org being iterated (unchanged by this
+  commit). Each recipient's email continues to use `_html.escape` on
+  `event.title` and the recipient's name before interpolation (unchanged
+  lines, confirmed by direct read of the surrounding context this commit
+  did not touch).
+
+### Re-verified standing items
+
+- **EV-26 — still fixed, unregressed.** `check_overlapping_events` call
+  sites unchanged this window (zero diff on `event_service.py`'s locking
+  section and `event_requests.py::schedule_request`, confirmed by the scope
+  check above). `KNOWN_LIMITATIONS.md`'s EV-26 entry re-read, still
+  accurate.
+- **EV-23 — still resolved**, zero diff on `rsvp_to_series` /
+  `_evaluate_session_phase_warning` this window.
+- **`check_request_status`'s 256-bit token** — `generate_status_token()`
+  unchanged (zero diff on `models/event_request.py` this window); same
+  conclusion as every prior pass.
+- **`ondelete="SET NULL"` nullability** — zero diff on both model files
+  this window, so no new FK to re-check beyond pass 8's line-by-line pass.
+
+### Route inventory
+
+**Unchanged: `events.py` 58, `event_requests.py` 23,
+`event_attendance_petitions.py` 7** — confirmed via `grep -c '^@router\.'`
+on each file; none of this window's 3 in-scope commits touch a route
+decorator.
+
+### Verified good ✅ (pass 9)
+
+- No new unbounded query, no new CSV export, no new `.like()`/`.ilike()`
+  usage, no new JSON-column shallow-copy mutation, no new unauthenticated
+  route, no new client-supplied FK accepted without an in-org check.
+- The three real commits in scope are each a correctness fix or an
+  additive notification channel, all org-scoped and output-escaped as
+  detailed above; none touches auth, permissions, or tenant isolation.
+
+### Completion gate
+
+| Check                                                                                    | Result                                            |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                            | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/`                                                     | ✅ clean (2460 files unchanged)                   |
+| `isort --check-only app/ tests/ alembic/`                                                | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`                                        | ✅ single head `127ebe3103ff`, 627 revisions      |
+| `test_alembic_migrations.py`/`test_migration_create_all_tables.py`                       | ✅ 80 passed                                      |
+| `python3 scripts/check_route_permissions.py --strict`                                    | ✅ 272 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -k "event"` (python3.13)                                                  | ✅ 1434 passed, 1 pre-existing skip (`pywebpush`) |
+| `npm run typecheck`                                                                      | ✅ clean                                          |
+| `npm run lint`                                                                           | ✅ clean (exit 0)                                 |
+| `npx vitest run` (events module + `EventForm`/`EventTemplateForm`/`EventEditPage` tests) | ✅ 125 passed (4 files)                           |
+
+Alembic was forked into two heads (`4e18470473d6`/`d80493f28236`) at the
+start of this pass — unrelated to this feature, fixed with merge revision
+`127ebe3103ff`; see the Log entry in `PROGRESS.md` for detail.
+
+Rotation row 16 → ✅ (pending PR merge). Next: Feature 17 (Training core).
 
 ---
 

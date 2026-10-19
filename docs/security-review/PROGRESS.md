@@ -16,6 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #3436 (Feature 15, Scheduling, pass 9) merged 2026-10-19 —
+watchdog pickup, 0 fixes, 0 new findings, SCH-19 re-confirmed OPEN. Rotation
+row 15 → ✅.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 9, PR #3436, merged), preserved for history</summary>
+
 **PR [#3436](https://github.com/thegspiro/the-logbook/pull/3436)** (branch
 `claude/security-review-scheduling`). PR #3435 (Feature 14, Equipment check
 & shifts, pass 10) merged 2026-10-19 — not independently recordable here
@@ -24,6 +31,8 @@ above) reviewed Feature 15 (Scheduling), pass 9 — 0 fixes, 0 new findings;
 near-zero delta of 2 commits in scope, both verified clean; SCH-19
 re-confirmed OPEN. Rotation row 15 → ✅ (pending this PR's merge); next is
 Feature 16 (Events & requests).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 10, PR #3435, merged), preserved for history</summary>
@@ -20210,7 +20219,7 @@ iteration's commit" rule.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
@@ -20236,6 +20245,53 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-19 — Feature 16 (Events & requests, pass 9) — watchdog pickup, near-zero delta (3 of 271 commits in-scope), 0 fixed, 0 new findings; a repo-wide Alembic fork found and fixed, unrelated to this feature
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). PR #3436 (Feature 15, Scheduling, pass 9) had
+already merged. Rotation row 16 (Events & requests) was the next pending
+feature.
+
+**0 fixes applied, 0 new findings.** Baseline `28987390b` (PR #3294's
+merge, pass 8). 271 non-merge commits landed repo-wide in the window; only
+3 touch this feature's declared files, confined to `events.py` (Pitfall #1
+cleared-field fix plus an auto-derived-duration correctness fix),
+`event_service.py`/`events.py` (new email notices for event cancellation,
+changes, and the existing `events.manage`-gated notify endpoint — every
+recipient query org-scoped via a new shared helper, every interpolated
+value `html.escape`d), and `event_organizer_service.py`/`scheduled_tasks.py`
+(the post-event validation prompt now reaches the organizer/alternate
+instead of only the event's creator, reusing an existing org-scoped
+helper). All three reviewed clean — no tenancy, auth, or escaping gap.
+EV-23 and EV-26 re-confirmed unchanged; the request-status token and
+`SET NULL` nullability re-checks both zero-diff this window.
+
+**Also discovered and fixed, unrelated to this feature's own code but
+blocking the completion gate:** the Alembic chain had forked into two heads
+(`4e18470473d6`, a finance-timestamp-backfill/main merge; `d80493f28236`,
+a checklist-items migration) — two different pull requests that each
+merged without seeing the other's branch, the same shape this tracker's
+migration-fork precedents describe. Resolved with a merge revision
+(`127ebe3103ff`). `alembic upgrade head` plus `scripts/repair_schema.py`
+brought the sandbox database current.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
+alembic/`; `validate_migrations.py --strict` — 627 revisions, single head
+`127ebe3103ff` (post-fix); `test_alembic_migrations.py`/
+`test_migration_create_all_tables.py` — 80 passed; `check_route_permissions.py
+--strict` — 272 routes, 0 errors, 0 warnings; `pytest tests/ -k "event"` —
+1434 passed, 1 pre-existing skip (`pywebpush`); frontend `npm run
+typecheck`/`npm run lint` both clean; `npx vitest run` on the events
+module's test files — 125 passed (4 files).
+
+Findings doc: [`EV-16-events-requests.md`](./EV-16-events-requests.md)'s
+**Pass 9** section. No `KNOWN_LIMITATIONS.md` change needed — EV-23 and
+EV-26 entries re-checked against current code, both still accurate.
+Rotation row 16 → ✅. Next: Feature 17 (Training core).
 
 ### 2026-10-19 — Feature 15 (Scheduling, pass 9) — watchdog pickup, near-zero delta (2 commits in-scope), 0 fixed, 0 new findings; SCH-19 re-confirmed OPEN
 
