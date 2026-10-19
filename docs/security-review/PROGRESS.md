@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3448](https://github.com/thegspiro/the-logbook/pull/3448)** (branch
+`claude/security-review-skills-testing-p9`). PR #3444 (Feature 18, Training
+extended, pass 9) merged 2026-10-19, docs-only — not independently
+recordable here beyond what follows. This iteration (watchdog pickup — no
+open PR's head branch starts with `claude/security-review-`, and the
+dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 19 (Skills testing), pass 9 — 0 fixes, 0 new
+findings; a true zero delta (0 of 504 commits in the window touch any of
+the four declared scope files or the feature's one external caller).
+Rotation row 19 → ✅ (pending this PR's merge); next is Feature 20
+(Compliance).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #3444's merge, Feature 18 Training extended pass 9), preserved for history</summary>
+
+None. PR #3444 (Feature 18, Training extended, pass 9) merged 2026-10-19 —
+docs-only (findings file + this tracker), not independently recordable here
+beyond what follows. Rotation row 18 → ✅. Next is Feature 19 (Skills
+testing).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18 Training extended pass 9, PR #3444, before it merged), preserved for history</summary>
+
 **PR [#3444](https://github.com/thegspiro/the-logbook/pull/3444)** (branch
 `claude/security-review-training-extended`). PR #3440 (Feature 17, Training
 core, pass 9) merged 2026-10-19 — not independently recordable here beyond
@@ -28,6 +53,8 @@ gains an optional `sync_log_id` filter, ANDed onto an already org- and
 provider-scoped query — cannot widen the result cross-tenant). No TRX
 finding is OPEN or FLAGGED as of pass 8; none re-opened. Rotation row 18 → ✅
 (pending this PR's merge); next is Feature 19 (Skills testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17 Training core pass 9, PR #3440, before it merged), preserved for history</summary>
@@ -20266,7 +20293,7 @@ iteration's commit" rule.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
@@ -20289,6 +20316,34 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-19 — Feature 19 (Skills testing, pass 9) — watchdog pickup, true zero delta (0 commits touch any of the four declared scope files), 0 fixed, 0 new findings
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`list_pull_requests`, 0 results among open PRs),
+and the dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). PR #3444 (Feature 18, Training extended, pass 9)
+had just merged, docs-only. Rotation row 19 (Skills testing) was the next
+pending feature.
+
+**0 fixes applied, 0 new findings.** Baseline `cef8a679` (PR #3307's base
+commit, pass 8 — that PR's own diff was documentation only, so the base
+commit is also the most recent known-reviewed-clean state of this feature's
+code). `git diff` across all four declared scope files
+(`skills_testing.py`, `skills_testing_service.py`, `schemas/skills_testing.py`,
+`models/skills_testing.py`) between that commit and current `main` is empty
+— zero commits touched any of them, out of 504 commits that landed elsewhere
+in the repo over the same window. The one external caller noted at pass 8
+(`training_module_config.py`'s `GET /training/my-training`) is also
+unchanged. Every standing fix from passes 1–8 re-confirmed present at
+identical line numbers (by construction, given the zero diff, and spot
+re-grepped directly). Route surface re-enumerated: 29/29 routes, 0 missing
+auth. Org-scoping sweep: 87 `select(` call sites in the endpoint file,
+unchanged from pass 8.
+
+Full writeup: [`SKT-19-skills-testing.md`](./SKT-19-skills-testing.md)'s
+**Pass 9** section.
 
 ### 2026-10-19 — Feature 18 (Training extended, pass 9) — watchdog pickup, near-zero delta (1 of 1 commits in-scope touches one file), 0 fixed, 0 new findings
 
