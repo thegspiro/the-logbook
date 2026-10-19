@@ -16,10 +16,11 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #3427 (Feature 09, Medical screening, pass 10) merged
-2026-10-18; PR #3426 (the standalone Alembic-fork fix it needed, see below)
-also merged 2026-10-18 — neither independently recordable here beyond what
-follows.
+**PR [#3431](https://github.com/thegspiro/the-logbook/pull/3431)** (branch
+`claude/security-review-documents-legal-p10`). PR #3427 (Feature 09, Medical
+screening, pass 10) merged 2026-10-18; PR #3426 (the standalone Alembic-fork
+fix it needed, see below) also merged 2026-10-18 — neither independently
+recordable here beyond what follows.
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
 `claude/security-review-`, confirmed via `search_pull_requests`, and the
