@@ -61,19 +61,19 @@ frontend/src/modules/medical-screening/
 
 ### `screening_requirements` Table
 
-| Column              | Type            | Description                                                                                                                  |
-| ------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `id`                | `String(36)`    | UUID primary key                                                                                                             |
-| `organization_id`   | `String(36)`    | FK to organizations                                                                                                          |
-| `name`              | `String(200)`   | Requirement name (e.g., "Annual Physical Exam")                                                                              |
-| `screening_type`    | `ScreeningType` | Type of screening                                                                                                            |
-| `description`       | `Text`          | Detailed description                                                                                                         |
-| `frequency_months`  | `Integer`       | Months between required screenings (NULL = one-time)                                                                         |
-| `applies_to_roles`  | `JSON`          | Array of role IDs. Stored, **not read** — every active member and prospect is evaluated (the dialog says "Not enforced yet") |
-| `is_active`         | `Boolean`       | Whether requirement is currently enforced                                                                                    |
-| `grace_period_days` | `Integer`       | Days after expiration before marking non-compliant (default: 30)                                                             |
-| `created_at`        | `DateTime`      | Creation timestamp                                                                                                           |
-| `updated_at`        | `DateTime`      | Last update timestamp                                                                                                        |
+| Column              | Type            | Description                                                                                                                                  |
+| ------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                | `String(36)`    | UUID primary key                                                                                                                             |
+| `organization_id`   | `String(36)`    | FK to organizations                                                                                                                          |
+| `name`              | `String(200)`   | Requirement name (e.g., "Annual Physical Exam")                                                                                              |
+| `screening_type`    | `ScreeningType` | Type of screening                                                                                                                            |
+| `description`       | `Text`          | Detailed description                                                                                                                         |
+| `frequency_months`  | `Integer`       | Months between required screenings (NULL = one-time)                                                                                         |
+| `applies_to_roles`  | `JSON`          | Array of position names or slugs. A member is graded on the requirement only if they hold one; blank = everyone; prospects are always graded |
+| `is_active`         | `Boolean`       | Whether requirement is currently enforced                                                                                                    |
+| `grace_period_days` | `Integer`       | Days after expiration before marking non-compliant (default: 30)                                                                             |
+| `created_at`        | `DateTime`      | Creation timestamp                                                                                                                           |
+| `updated_at`        | `DateTime`      | Last update timestamp                                                                                                                        |
 
 ### `screening_records` Table
 

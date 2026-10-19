@@ -196,29 +196,27 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
             )}
           </div>
 
-          {/* Applies to Roles: stored and shown next to the requirement's name,
-              but get_compliance_status (medical_screening_service.py) pulls every
-              active requirement for every subject regardless of role — nothing
-              reads this list to scope who a requirement applies to. Labelled
-              rather than silently wired, since wiring it changes who counts as
-              non-compliant on every installation that has set it. Delete this
-              notice in the change that makes compliance evaluation read it; see
-              tests/test_medical_screening_requirement_fields_are_unwired.py. */}
+          {/* Positions, by name or slug: the backend grades a member on this
+              requirement only if they hold one (medical_screening_service,
+              _applicable_requirements). The field is still stored as
+              `applies_to_roles`; renaming the column would be a breaking API
+              and schema change for no gain. */}
           <div>
             <label htmlFor="req-roles" className={labelClass}>
-              Applies to Roles (comma-separated)
+              Applies to Positions (comma-separated)
             </label>
             <input
               id="req-roles"
               type="text"
               value={appliesTo}
               onChange={(e) => setAppliesTo(e.target.value)}
-              placeholder="e.g., firefighter, emt, officer"
+              placeholder="e.g., Firefighter, Apparatus Manager"
+              aria-describedby="req-roles-note"
               className={inputClass}
             />
-            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
-              Not enforced yet — this requirement applies to every active member and prospect, whatever roles you list
-              here.
+            <p id="req-roles-note" className="text-theme-text-muted mt-1 text-xs">
+              Leave blank to apply to every member. Otherwise only members who hold one of these positions are screened
+              for it. Applicants in the pipeline hold no positions and are always screened.
             </p>
           </div>
 

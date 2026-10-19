@@ -4908,6 +4908,8 @@ MS-15).
 
 ## MS-16 — `grace_period_days` / `applies_to_roles` / `frequency_months` Are Stored and Read By Nothing (2026-10-15)
 
+**✅ `applies_to_roles` resolved 2026-10-19 (owner decision: it names _positions_).** A requirement listing positions now applies only to members who hold one of them, matched by position name or slug, ignoring case and word separators; a blank list applies to everyone; a prospect holds no positions and is graded on every requirement; a member left with nothing that applies reads `not_applicable` on the roster, never compliant. The form says so and the "Not enforced yet" notice is gone from that field (`_applicable_requirements` in `medical_screening_service.py`; `tests/test_medical_screening_requirement_positions.py`). **`grace_period_days` and `frequency_months` are unchanged and still open**, as described below.
+
 `screening_requirements.grace_period_days` (default 30) and `.applies_to_roles`
 have labelled, editable controls on `ScreeningRequirementForm.tsx`, each with
 a "Not enforced yet" notice beside it — but `_grade()`/`get_compliance_status`
