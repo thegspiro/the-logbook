@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (recorded below once opened)** (branch
+`claude/security-review-training-extended`). PR #3440 (Feature 17, Training
+core, pass 9) merged 2026-10-19 — not independently recordable here beyond
+what follows. This iteration (watchdog pickup — no open PR's head branch
+starts with `claude/security-review-`, confirmed via `search_pull_requests`,
+and the dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) reviewed Feature 18 (Training extended), pass 9 — 0 fixes, 0
+new findings; near-zero delta of 1 commit in scope (`list_imported_records`
+gains an optional `sync_log_id` filter, ANDed onto an already org- and
+provider-scoped query — cannot widen the result cross-tenant). No TRX
+finding is OPEN or FLAGGED as of pass 8; none re-opened. Rotation row 18 → ✅
+(pending this PR's merge); next is Feature 19 (Skills testing).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17 Training core pass 9, PR #3440, before it merged), preserved for history</summary>
+
 **PR [#3440](https://github.com/thegspiro/the-logbook/pull/3440)** (branch
 `claude/security-review-training-core`). PR #3438 (Feature 16, Events &
 requests, pass 9) and PR #3437 (the Alembic-heads fix it carried along)
@@ -26,6 +42,8 @@ near-zero delta of 1 commit in scope (wires an already-org-validated
 `instructor_id` through on a write, no new tenancy gap). TR7-1 re-verified
 still OPEN/FLAGGED at its pass-8 citation, unchanged. Rotation row 17 → ✅
 (pending this PR's merge); next is Feature 18 (Training extended).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16 Events & requests pass 9, PR #3438, before it merged), preserved for history</summary>
@@ -20247,7 +20265,7 @@ iteration's commit" rule.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
@@ -20271,6 +20289,38 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-19 — Feature 18 (Training extended, pass 9) — watchdog pickup, near-zero delta (1 of 1 commits in-scope touches one file), 0 fixed, 0 new findings
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). PR #3440 (Feature 17, Training core, pass 9) had
+already merged. Rotation row 18 (Training extended) was the next pending
+feature.
+
+**0 fixes applied, 0 new findings.** Baseline `a727c6b7` (PR #3302's
+merge, pass 8). Only one commit landed in the twelve declared files since:
+`9b4fcff2` ("Add a Sync History tab to the training integrations page")
+adds a 9-line optional `sync_log_id` query filter to
+`GET /training/external/providers/{provider_id}/imports`
+(`external_training.py:1416-1445`); the filter is ANDed onto that
+endpoint's existing `provider_id` + `organization_id` query, so a
+`sync_log_id` belonging to another organization can only narrow a result
+already confined to the caller's own org — verified by direct read, not
+assumed from the commit message. No new route (the existing
+`training.manage`-gated endpoint is unchanged in shape); the sync-log list
+endpoint it pairs with was already reviewed and org-scoped at an earlier
+pass. Eleven of the twelve declared files are byte-identical to pass 8.
+Every TRX finding re-checked: none is OPEN or FLAGGED as of pass 8, so
+none required re-opening. Route re-enumeration: 99/99 routes across the
+six endpoint files, 0 missing auth (AST walk); `check_route_permissions.py
+--strict` reports 272 total application routes (up from pass 8's 270 from
+unrelated features merging in the interim), 0 errors, 0 warnings.
+
+Full writeup: [`TRX-18-training-extended.md`](./TRX-18-training-extended.md)'s
+**Pass 9** section.
 
 ### 2026-10-19 — Feature 17 (Training core, pass 9) — watchdog pickup, near-zero delta (1 of 1 commits in-scope touches one file), 0 fixed, 0 new findings; TR7-1 re-confirmed unchanged
 
