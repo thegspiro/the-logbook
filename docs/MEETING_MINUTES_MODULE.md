@@ -305,6 +305,7 @@ The router is mounted at `/api/v1/minutes-records` and is gated on
 | `GET`    | `/api/v1/minutes-records`                           | `minutes.view`   | List minutes (non-managers get approved, non-executive only); each item carries `meeting_id` since 2026-10-03 |
 | `GET`    | `/api/v1/minutes-records/stats`                     | `minutes.view`   | Counts, including minutes awaiting approval                                                                   |
 | `GET`    | `/api/v1/minutes-records/search`                    | `minutes.view`   | Search minutes by title/content                                                                               |
+| `GET`    | `/api/v1/minutes-records/archive-search`            | `minutes.view`   | Search the words of titles, sections, motions and action items, grouped by minutes                            |
 | `GET`    | `/api/v1/minutes-records/{id}`                      | `minutes.view`   | Minutes detail with sections                                                                                  |
 | `POST`   | `/api/v1/minutes-records`                           | `minutes.manage` | Create minutes                                                                                                |
 | `POST`   | `/api/v1/minutes-records/from-meeting/{meeting_id}` | `minutes.manage` | Create minutes from a meeting record (title, date, type, location, attendees)                                 |
@@ -910,6 +911,40 @@ needs_motion, motion_text, documents[{id, name}]}`, at most 60. They are edited
   deleting it; an empty one is deleted. A change id that no longer names a
   difference (the agenda moved again) is ignored. Saving the agenda never changes
   minutes already drafted.
+
+### Searching the archive _(2026-10-19)_
+
+The search box on the Minutes page also searches the **words inside the
+minutes**, not only meeting titles. Typing two or more characters shows a
+"Found in the minutes" card under the box: one entry per set of minutes, newest
+meeting first, with each place it matched (a section, a motion and its
+discussion, an action item and its notes or assignee) and a snippet around the
+match with the found words highlighted. The meeting-type filter beside the box
+narrows it. Endpoint: `GET /minutes-records/archive-search?q=&meeting_type=&limit=`.
+
+- **Every word, anywhere.** All the words typed must appear somewhere in the
+  minutes — not necessarily in the same section — so `budget hose` finds minutes
+  that discuss both. A word matches where a word starts (`hose` finds `hoses`,
+  not `purchase`). A phrase in double quotes must appear as typed, whatever
+  line breaks separate its words.
+- **Who sees what.** The same rule as the listing: a caller without
+  `minutes.manage` searches only circulated or adopted, non-executive minutes,
+  so a member is never searched into — or quoted from — a draft or an executive
+  session. A manager searches everything and each result shows its status.
+  Prepared motions nobody has acted on are not part of the record and are not
+  searched. Always scoped to the caller's organization.
+- **Rich text is searched as words.** A section stored as HTML is turned into
+  text first, so `strong` does not find bold text. A snippet is returned as
+  plain and highlighted parts and drawn as text, never as markup.
+- **No schema change, no index.** Section text lives in a JSON column MySQL
+  cannot full-text index, so the matching is done in the application over the
+  newest 500 sets of minutes the caller may see. A department's archive of
+  several hundred is searched whole; past 500, the response reports
+  `truncated: true` and the screen says only the newest were searched (narrow by
+  meeting type to reach older ones). A search index would lift the limit at the
+  cost of a table that must be kept in step with every save — not built.
+- The older `GET /search` (title and legacy columns, one snippet per set of
+  minutes) is unchanged and no longer used by the page.
 
 ### Publishing _(2026-10-17)_
 

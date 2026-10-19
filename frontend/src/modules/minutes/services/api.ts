@@ -22,6 +22,7 @@ import type {
   MinutesReminderSettings,
   MinutesSignature,
   SignatureStatus,
+  ArchiveSearchResponse,
   MinutesSearchResult,
   MinutesListItem,
   AttendanceSuggestions,
@@ -215,6 +216,14 @@ export const minutesService = {
   async search(query: string, limit = 20): Promise<MinutesSearchResult[]> {
     const response = await api.get<MinutesSearchResult[]>('/minutes-records/search', { params: { q: query, limit } });
     return asArray(response.data);
+  },
+
+  /** The words of titles, sections, motions and action items, grouped by minutes. */
+  async searchArchive(query: string, meetingType?: string): Promise<ArchiveSearchResponse> {
+    const response = await api.get<ArchiveSearchResponse>('/minutes-records/archive-search', {
+      params: { q: query, ...(meetingType ? { meeting_type: meetingType } : {}) },
+    });
+    return { ...response.data, hits: asArray(response.data.hits) };
   },
 
   // ── Roll call ──

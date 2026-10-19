@@ -34,6 +34,7 @@ from app.schemas.minute import (
     ActionItemResponse,
     ActionItemUpdate,
     AdoptionProposal,
+    ArchiveSearchResponse,
     MinutesAdopt,
     MinutesCreate,
     MinutesListItem,
@@ -61,6 +62,7 @@ from app.services.minutes_print_data import adopting_title
 from app.services.minutes_publishing_service import MinutesPublishingService
 from app.services.template_service import TemplateService
 from app.utils.minutes_attendance import effective_listing
+from app.utils.minutes_search import parse_query
 from app.utils.minutes_settings import (
     load_attendance_listing,
     load_minutes_publishing_settings,
@@ -233,6 +235,42 @@ async def search_minutes(
     return await service.search_minutes(
         organization_id=current_user.organization_id,
         query=q.strip(),
+        limit=limit,
+        restricted=not can_manage,
+    )
+
+
+@router.get("/archive-search", response_model=ArchiveSearchResponse)
+async def search_archive(
+    q: str = Query(..., max_length=200),
+    meeting_type: str | None = None,
+    limit: int = Query(25, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.view")),
+):
+    """
+    Search the words of the minutes archive, grouped by minutes
+
+    Reads titles, every section, motions and action items. Callers without
+    ``minutes.manage`` search only circulated or adopted, non-executive minutes.
+
+    **Authentication required**
+    **Requires permission: minutes.view**
+    """
+    if not parse_query(q):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Enter at least one word of two or more characters",
+        )
+
+    can_manage = _has_permission(
+        "minutes.manage", _collect_user_permissions(current_user)
+    )
+    service = MinuteService(db)
+    return await service.search_archive(
+        organization_id=current_user.organization_id,
+        query=q,
+        meeting_type=meeting_type or None,
         limit=limit,
         restricted=not can_manage,
     )

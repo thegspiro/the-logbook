@@ -31,6 +31,7 @@ import { meetingsService } from '../../../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../../../services/api';
 import { minutesService } from '../services/api';
 import { AgendaEditorDialog } from '../components/AgendaEditorDialog';
+import { ArchiveSearchResults } from '../components/ArchiveSearchResults';
 import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
 import { AttendanceListingDialog } from '../components/AttendanceListingDialog';
@@ -457,7 +458,7 @@ const MinutesPage: React.FC = () => {
                 spellCheck={false}
                 id="minutes-search"
                 type="text"
-                placeholder="Search by title, agenda, or notes..."
+                placeholder="Search meetings, or any words in the minutes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="form-input placeholder-theme-text-muted pr-4 pl-10"
@@ -483,6 +484,8 @@ const MinutesPage: React.FC = () => {
             </div>
           </div>
         </div>
+
+        <ArchiveSearchResults query={searchQuery} meetingType={typeFilter} />
 
         {/* Error State */}
         {error && (
@@ -745,7 +748,7 @@ const MinutesPage: React.FC = () => {
                   <Archive className="mb-4 h-8 w-8 text-amber-700" />
                   <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Archives & Search</h3>
                   <p className="text-theme-text-secondary mb-3 text-sm">
-                    Search past meetings by title, agenda, or notes.
+                    Search past meetings by title, or by any words in their minutes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700">Search</span>

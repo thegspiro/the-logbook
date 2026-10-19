@@ -379,6 +379,36 @@ export interface MinutesSearchResult {
   match_field: string;
 }
 
+// ── Archive search ──
+
+export interface ArchiveSnippetPart {
+  text: string;
+  hit: boolean;
+}
+
+export interface ArchiveMatch {
+  kind: 'title' | 'section' | 'motion' | 'action_item';
+  label: string;
+  parts: ArchiveSnippetPart[];
+}
+
+export interface ArchiveHit {
+  id: string;
+  title: string;
+  meeting_type: MeetingType;
+  meeting_date: string;
+  status: MinutesStatus;
+  match_count: number;
+  matches: ArchiveMatch[];
+}
+
+export interface ArchiveSearchResponse {
+  terms: string[];
+  hits: ArchiveHit[];
+  searched: number;
+  truncated: boolean;
+}
+
 // ── Roll call suggestions ──
 
 export interface AttendanceSuggestions {
