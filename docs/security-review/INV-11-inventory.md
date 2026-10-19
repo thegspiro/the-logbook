@@ -1,6 +1,223 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), pass 9 (this PR)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), pass 10 (this PR)
+
+---
+
+## Pass 10 (2026-10-19) — watchdog pickup, real delta (25 commits, mostly Medical Supplies), 0 fixes, 0 new findings, INV-22 re-verified open/accepted
+
+**Watchdog pickup.** No PR with a `claude/security-review-` head branch was
+open (`search_pull_requests`, 0 results) and the dedicated `/loop 30m
+/security-review` session was not reachable (`ListAgents`). Per
+`PROGRESS.md`'s rotation table, row 11 (Inventory) was the first `⬜` in the
+current lap (rows 00–10 all `✅`, most recently row 10/Documents & legal via
+PR #3431).
+
+**Backend:** same 15 files pass 8/9 declared (`inventory.py`,
+`inventory_service.py`, `labels.py`, `label_service.py`,
+`label_printer_service.py`, `inventory_kiosk.py`, `inventory_last_seen.py`,
+`inventory_nfc.py`, `inventory_notification_service.py`,
+`inventory_audit_schedule_service.py`, `utils/inventory_nfc.py`,
+`utils/label_renderer.py`, `models/label_printer.py`, plus the inventory
+slice of `app/mcp/tools/inventory.py` / `app/mcp/tools/writes.py`),
+unchanged. **Frontend:** `modules/inventory/*` (unchanged scope).
+**Migrations:** one landed touching this feature's table —
+`0bbf263a5ff0` (`inventory_items_apparatus_only`), reviewed below; 623
+revisions total (up from 599 at pass 9), single head, no other migration in
+range touches an inventory table.
+
+### Scope
+
+Baseline is pass 9's own merge commit, `ccdf9750` (PR #3272) — confirmed an
+ancestor of `HEAD` via `git merge-base --is-ancestor`. `git log --no-merges
+ccdf9750..HEAD -- <every scope file>` returns **25** commits (374 non-merge
+commits landed repo-wide in the same range). All 25 were read via `git show`
+in full. Route decorators were diffed directly across all five endpoint
+files (`git diff ccdf9750..HEAD -- <files> | grep '^[+-]@router\.'`), which
+returned **nothing** — zero route lines added or removed since pass 9.
+Direct recount confirms `inventory.py` **148**, `labels.py` **12**,
+`inventory_kiosk.py` **4**, `inventory_last_seen.py` **2**,
+`inventory_nfc.py` **24** — all unchanged from pass 9.
+`check_route_permissions.py --strict`: **272** routes repo-wide (up from 270
+at pass 9), 0 errors, 0 warnings.
+
+Most of the real delta is new work on **Medical Supplies** (a sibling
+feature, MSUP-23, with its own endpoint file `medical_supplies.py` outside
+this feature's scope) that extends the five files/functions this feature
+does own in `inventory_service.py`/`models/inventory.py`/`schemas/inventory.py`
+and the shared `modules/inventory/*` frontend. Reviewed to the depth that
+shared surface warrants — the endpoint-level enumeration of
+`medical_supplies.py` itself is MSUP-23's own rotation turn, matching the
+"Feature-X-owned, reviewed only for this feature's own surface" precedent
+pass 9/pass 10-of-other-features already established (e.g. RPT-29 pass 9 on
+`saved_report_delivery`, DOC-10 pass 10 on the executive-minutes publishing
+path).
+
+### New real delta reviewed, all clean
+
+- **`d4cedd53`/`a9e7ffae`/`cb142452`/`6556baef`/`a30675f5`/`dce89db1`/`8a924f49`/`601d6a72`/`8b30e83d`/`20576fc8`
+  — "kept on the apparatus only" + shelf/apparatus stock breakdown.** New
+  `inventory_items.apparatus_only` column (migration `0bbf263a5ff0`: guarded
+  on table/column existence per Pitfall #26, additive, `nullable=False` +
+  `server_default="0"` matching the model's `Boolean, nullable=False,
+default=False, server_default="0"` — no Pitfall #2 concern, no FK
+  involved) and a new `InventoryService.stock_breakdown`/
+  `apparatus_ready_stock`/`_medical_item_ids`/`item_sizes`/
+  `storage_area_index`/`location_names`/`storage_paths_for`/
+  `item_ids_stored_in`/`item_ids_kept_in_stock`/`next_lot_expirations`/
+  `category_item_counts`/`pool_item_ids_by_name`/`get_lots_for_export`
+  method set. **Every one of these new methods takes `organization_id` as
+  an explicit parameter and filters on it directly in its own query** (not
+  merely trusting a caller that already filtered) — read each in full:
+  `_medical_item_ids`, `item_sizes`, `storage_paths_for`,
+  `item_ids_stored_in`, `item_ids_kept_in_stock`, `next_lot_expirations`,
+  `category_item_counts`, `get_lots_for_export` all carry an
+  `InventoryItem.organization_id == str(organization_id)` (or the
+  lot/category/area equivalent) predicate alongside any client-influenced
+  `id.in_(...)` filter, so even a caller passing an id from another org gets
+  nothing back rather than a cross-tenant read. `apparatus_ready_stock`
+  joins `CheckTemplateItem` → `CheckTemplateCompartment` →
+  `EquipmentCheckTemplate` filtered on `EquipmentCheckTemplate
+.organization_id == org` and is only ever called with item ids already
+  narrowed to the caller's org by `_medical_item_ids`. All call sites in
+  `medical_supplies.py` (`_attach_medical_list_extras`,
+  `/expiring-lots`, `/expiring-stock`) derive `org_id`/`item_ids` from
+  `current_user.organization_id` and the results of an already org-scoped
+  query — never from unvalidated client input.
+  - `is_pool_without_stock` gains an `apparatus_only` exception (a
+    zero-quantity apparatus-only supply is not a data error); confirmed
+    both `create_items_bulk` and the CSV import still share the one
+    definition (the drift this helper exists to prevent).
+  - `_shelf_lots_count` (new) excludes a medical supply's shelf lots from
+    "expiring"/"next expiry" once it is `apparatus_only`, scoped the same
+    way as every other predicate here.
+  - `update_item`'s pool-quantity branch now refuses an explicit
+    `quantity: null` by name (`"Pool item quantity is required"`) instead
+    of letting the `< 0` comparison raise `TypeError` — a robustness fix,
+    not new behavior; a pool item's quantity was never nullable.
+- **`8b30e83d`/`20576fc8` — Medical Supplies CSV import/export
+  (`medical_supplies.py`, outside this feature's own endpoint scope, but
+  the two inventory_service.py helpers it calls were read as part of the
+  shared-surface review above).** All four new routes
+  (`/items/export`, `/lots/export`, `/items/import-template`,
+  `/items/import`) use `SafeCsvWriter` (Pitfall #15) and are gated behind
+  `require_permission("inventory.manage_medical", "inventory.manage")`.
+  The import route caps the upload at `MAX_INVENTORY_CSV_BYTES` via
+  `read_upload_limited`, rejects non-`.csv` filenames, and runs
+  `reject_if_malicious` outside the generic try/except (so a malware
+  refusal isn't swallowed into a generic 400) — the same shape the
+  existing general import already uses.
+- **`601d6a72` — bulk-retire for Medical Supplies
+  (`ItemBulkRetireRequest`, capped at 200 ids).** The new
+  `POST /medical-supplies/items/bulk-retire` resolves
+  `items_in_domain(item_ids, org_id, MEDICAL_ITEM_TYPES)` before acting, and
+  each per-item `retire_item(...)` call repeats the org/domain check under
+  the item's own row lock (`required_item_types=MEDICAL_ITEM_TYPES`) —
+  double-checked exactly like the single-item retire route, no XC-1/XC-3
+  gap from the new batch path.
+- **`7468e9f9` — `ReorderRequestUpdate.category_id` added.** Routes through
+  the existing `_assert_reorder_fks_in_org` (`INV-4`/XC-1 helper, unchanged)
+  with `allow_none=True`, which both validates a non-null id is in the
+  caller's org and lets an explicit `null` clear the field — not a new
+  helper, just a new caller of one already covering this exactly per its
+  own docstring.
+- **`f6adb44d` — MCP: opt-in switch to share medical supply inventory with
+  Claude** (`app/mcp/tools/inventory.py` touched only by its module
+  docstring; the new tools live in the new `app/mcp/tools/medical_supplies.py`,
+  outside this feature's file list but reviewed given the shared gating
+  mechanism). Read `register()` in full: all four new tools
+  (`get_medical_supply_summary`, `list_medical_supply_items`,
+  `list_low_stock_medical_supplies`, `list_expiring_medical_lots`) pin
+  `item_types=MEDICAL_ITEM_TYPES`, derive `organization_id` from
+  `principal.organization_id`/`org_uuid(principal)` (never client input),
+  and require `gate="medical_supplies"` plus `permissions=
+("inventory.view_medical", "inventory.view")`. Followed the gate through
+  `registry.gate_allows` → `principal.expose_medical_supplies`, which is
+  populated from `ClaudeMcpConfig.expose_medical_supplies` (new field,
+  **defaults to `False`**) in both the OAuth path (`mcp/oauth.py`'s
+  `scope_reach`/`McpOAuthService`) and the service-key path
+  (`mcp/keys.py`'s `McpKeyService`) — a real server-side reader exists
+  before the UI switch does anything, the Pitfall #19 shape done correctly
+  from the start. For member OAuth sign-in the switch deliberately rides on
+  `mcp:read` rather than a new scope (documented reason: claude.ai only
+  requests the scope the 401 advertises, so a dedicated scope would never
+  be granted); `gate_allows` still separately requires the member's own
+  `inventory.view_medical`/`inventory.view` permission, so the switch alone
+  does not widen what an individual member's own connection can read.
+  Read-only: `create_reorder_request` still refuses a medical item
+  regardless of the switch (unchanged).
+- **Frontend-only commits** (`99555095`, `724ed2d3`, `25dc7d16`,
+  `53e37f9a`, `f16ef931`, `d16af4c4`, `d6862d0a`, `d696fcf0`'s frontend
+  half, `8a924f49`'s frontend half, `346a1837`, `99258edb`'s frontend half,
+  `6bf7d79f`, `9a0c70b2`) — phone-layout reflows for the apparatus/checklist
+  screens, equipment-check Present/Absent + replacement-date UI, and the
+  catalog auto-link report's Undo action (backend for the last two lives in
+  `equipment_check_service.py`/`equipment_check.py`, Feature 14's own
+  files, reviewed there — not re-derived here). Scanned all 30 non-test
+  frontend files in this window's diff for `dangerouslySetInnerHTML`,
+  `window.confirm`/`alert`/`prompt`, and a raw `axios`/`fetch` bypassing the
+  module's service layer: **zero matches**.
+
+### Re-verified: INV-22, still OPEN, owner-accepted, unchanged
+
+`get_fulfillment_options` / `get_requestable_categories`
+(`inventory_service.py:10917`, `:11108`) are untouched — neither function
+appears in this window's 25-commit diff (confirmed via `git log -L` on both
+definitions over the same range). `docs/KNOWN_LIMITATIONS.md`'s entry
+recording the owner's 2026-10-05 decision is unchanged; nothing new to add.
+
+### Verified good ✅ (pass 10)
+
+- **No route added or removed anywhere in this feature's five endpoint
+  files since pass 9** — confirmed by diffing `@router.` decorator lines
+  directly; route counts re-confirmed by direct recount.
+- **Every new `InventoryService` method added this window filters its own
+  query on `organization_id`**, rather than trusting an already-scoped
+  caller — read individually above, not spot-checked.
+- **The new MCP medical-supplies tool surface is gated server-side, not
+  only in the UI**: `expose_medical_supplies` defaults to `False` and is
+  read from the stored `ClaudeMcpConfig` on both the OAuth and service-key
+  principal-construction paths, matching the Pitfall #19 pattern from day
+  one (no "switch wired to nothing" gap, unlike the original
+  `notification_rules` finding that pattern exists to prevent).
+- **The new Medical Supplies bulk-retire and CSV import/export routes**
+  all stay inside the established safe patterns: `SafeCsvWriter`
+  (Pitfall #15), upload size cap + malware scan, `inventory.manage_medical`/
+  `inventory.manage` gating, and (for bulk-retire) an org+domain check
+  before acting plus a repeated check under the row's own lock.
+- **No new `.ilike()`/`.like()` without `escape=LIKE_ESCAPE_CHAR`**, no new
+  bare `csv.writer`, no new JSON-column shallow-copy mutation, and no new
+  `window.confirm`/`alert`/`prompt` or `dangerouslySetInnerHTML` anywhere in
+  this window's diff of this feature's scope files.
+- **INV-22's "leave as is" owner decision is unchanged** in code and in
+  `KNOWN_LIMITATIONS.md`.
+
+### Completion gate {#completion-gate-pass-10}
+
+| Check                                                                       | Result                                            |
+| --------------------------------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                               | ✅ 0 violations (repo-wide)                       |
+| `black --check app/ tests/ alembic/`                                        | ✅ clean, 2455 files unchanged                    |
+| `isort --check-only app/ tests/ alembic/`                                   | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`                           | ✅ single head (`2315d544d60a`), 623 revisions    |
+| `python3 scripts/check_route_permissions.py --strict`                       | ✅ 272 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -k "inventory or label or nfc or kiosk or medical_supplies"` | ✅ 1898 passed, 1 pre-existing skip (`pywebpush`) |
+| `npm run typecheck` (`tsc-native.mjs --noEmit`)                             | ✅ clean                                          |
+| `npm run lint` (`eslint --max-warnings 10`)                                 | ✅ clean                                          |
+| `npx vitest run src/modules/inventory`                                      | ✅ 1770 passed (118 files)                        |
+
+No application-code fix was needed this pass. The full 25-commit real delta
+since pass 9 — dominated by the Medical Supplies "apparatus only"/shelf-vs-
+apparatus stock feature, its CSV import/export and bulk-retire routes, and
+the new opt-in MCP medical-supplies tool surface — was reviewed fresh
+against all seven checklist dimensions and found sound throughout: every
+new query is independently org-scoped, the new MCP gate has a real
+server-side reader before its UI switch, the new CSV routes use
+`SafeCsvWriter` behind a size cap and malware scan, and the new additive
+migration is guarded and correctly non-nullable with a default. No new
+finding; INV-22 is the only standing item and remains unchanged.
+
+Rotation row 11 → ✅ (pending this PR merge). Next: Feature 12 (Facilities).
 
 ---
 
