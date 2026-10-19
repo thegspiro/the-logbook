@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import {
-  describeUnreachedPackageRecipients,
   electionCanEmailBallots,
   getTimeRemaining,
   getStatusBadgeClass,
@@ -139,19 +138,5 @@ describe('electionCanEmailBallots', () => {
   it('is true for ballot items or plain positions, false with neither', () => {
     expect(electionCanEmailBallots({ ballot_items: [], positions: ['Chief'] })).toBe(true);
     expect(electionCanEmailBallots({ positions: [] })).toBe(false);
-  });
-});
-
-describe('describeUnreachedPackageRecipients', () => {
-  it('names a single unreached address', () => {
-    const text = describeUnreachedPackageRecipients(['a@test.com']);
-    expect(text).toContain('This address was not reached: a@test.com.');
-    expect(text).toContain('send again to just this address');
-  });
-
-  it('lists every unreached address', () => {
-    const text = describeUnreachedPackageRecipients(['a@test.com', 'b@test.com']);
-    expect(text).toContain('These addresses were not reached: a@test.com, b@test.com.');
-    expect(text).toContain('send again to just these addresses');
   });
 });

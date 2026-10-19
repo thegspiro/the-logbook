@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Body,
     Depends,
     HTTPException,
@@ -123,10 +124,15 @@ from app.schemas.election import (
     seat_rule_error,
 )
 from app.services.ballot_send_jobs import (
+    BALLOT_GUARD_KINDS,
+    PACKAGE_GUARD_KINDS,
+    PACKAGE_IN_PROGRESS_DETAIL,
     SEND_IN_PROGRESS_DETAIL,
     BallotSend,
+    PackageSend,
     QueuedSend,
     ReminderSend,
+    announce_nominations_open,
     ensure_election_open,
     find_active_job,
     get_job,
@@ -1722,6 +1728,7 @@ async def close_election(
 @router.post("/{election_id}/open-nominations", response_model=ElectionResponse)
 async def open_nominations(
     election_id: UUID,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("elections.manage")),
 ):
@@ -1737,9 +1744,7 @@ async def open_nominations(
     """
     service = ElectionService(db)
     election, error = await service.open_nominations(
-        election_id,
-        current_user.organization_id,
-        acting_user_id=str(current_user.id),
+        election_id, current_user.organization_id
     )
     if error or election is None:
         status_code = (
@@ -1750,6 +1755,14 @@ async def open_nominations(
         raise HTTPException(
             status_code=status_code, detail=error or "An unexpected error occurred"
         )
+    # One message per member takes about a second each, so the announcement
+    # goes out after the response rather than holding the request open.
+    background_tasks.add_task(
+        announce_nominations_open,
+        str(election.id),
+        str(current_user.organization_id),
+        str(current_user.id),
+    )
     return await _build_election_response(db, election)
 
 
@@ -3024,7 +3037,12 @@ async def send_ballot_emails(
     # A queued send is about to mint every member a new token; one sent here
     # alongside it would void whichever links land first.
     if (
-        await find_active_job(db, election.id, str(current_user.organization_id))
+        await find_active_job(
+            db,
+            election.id,
+            str(current_user.organization_id),
+            kinds=BALLOT_GUARD_KINDS,
+        )
         is not None
     ):
         await db.commit()
@@ -3140,12 +3158,15 @@ async def _queue_send(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
-    if await find_active_job(db, election.id, organization_id) is not None:
+    active = await find_active_job(
+        db, election.id, organization_id, kinds=send.guard_kinds
+    )
+    if active is not None:
         # The abandoned jobs find_active_job just failed are kept either way.
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=SEND_IN_PROGRESS_DETAIL,
+            detail=send.in_progress_detail,
         )
 
     job = BallotSendJob(
@@ -3335,13 +3356,30 @@ async def send_pre_meeting_package(
 ):
     """
     Email the pre-meeting package PDF to the given (secretary-edited)
-    email list. Recipients are BCC'd so addresses are not exposed to
-    each other. Large lists go out in batches; ``unreached`` names the
-    addresses of any batch the mail provider refused.
+    email list, one message per address so no recipient sees another's.
+
+    ``unreached`` names every address the package could not be sent to.
+
+    Synchronous, and about a second per address: kept for API callers. The
+    election page queues the send with ``POST /{election_id}/package-send-jobs``.
 
     **Authentication required**
     **Requires permission: elections.manage**
     """
+    if (
+        await find_active_job(
+            db,
+            str(election_id),
+            str(current_user.organization_id),
+            kinds=PACKAGE_GUARD_KINDS,
+        )
+        is not None
+    ):
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=PACKAGE_IN_PROGRESS_DETAIL
+        )
+
     service = ElectionService(db)
     try:
         success, message, sent_count, unreached = (
@@ -3364,6 +3402,49 @@ async def send_pre_meeting_package(
 
     return PreMeetingPackageResponse(
         success=True, message=message, sent_count=sent_count, unreached=unreached
+    )
+
+
+@router.post(
+    "/{election_id}/package-send-jobs",
+    response_model=BallotSendJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_package_send_job_endpoint(
+    election_id: UUID,
+    payload: PreMeetingPackageSend,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Queue the pre-meeting package, one message per address, and return
+    without waiting.
+
+    Refused at once (400) for a closed or cancelled election; refused (409)
+    while another package send for the election is running. A ballot send
+    does not block it. Poll ``GET /{election_id}/ballot-send-jobs/{job_id}``
+    for the outcome, which names any address the package could not be sent to.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+
+    async def precheck(election: Election) -> None:
+        unavailable = ElectionService.package_unavailable_reason(election)
+        if unavailable:
+            raise ValueError(unavailable)
+
+    return await _queue_send(
+        db,
+        election_id,
+        current_user,
+        PackageSend(
+            sent_by=str(current_user.id),
+            recipient_emails=[str(e) for e in payload.recipient_emails],
+            message=payload.message,
+            include_full_roster=payload.include_full_roster,
+        ),
+        precheck,
     )
 
 
@@ -3416,7 +3497,12 @@ async def remind_non_voters(
     **Requires permission: elections.manage**
     """
     if (
-        await find_active_job(db, str(election_id), str(current_user.organization_id))
+        await find_active_job(
+            db,
+            str(election_id),
+            str(current_user.organization_id),
+            kinds=BALLOT_GUARD_KINDS,
+        )
         is not None
     ):
         await db.commit()

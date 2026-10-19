@@ -227,6 +227,7 @@ export type BallotSendJobStatus = (typeof BallotSendJobStatus)[keyof typeof Ball
 export const BallotSendJobKind = {
   BALLOTS: 'ballots',
   REMINDER: 'reminder',
+  PACKAGE: 'package',
 } as const;
 export type BallotSendJobKind = (typeof BallotSendJobKind)[keyof typeof BallotSendJobKind];
 
