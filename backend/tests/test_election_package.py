@@ -17,6 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.election_service import ElectionService
 
+
+async def _deliver_all(**kwargs):
+    """A send_email stand-in that accepts every address, one answer each."""
+    kwargs["results_out"].extend([True] * len(kwargs["to_emails"]))
+    return len(kwargs["to_emails"]), 0
+
+
 pytestmark = [pytest.mark.integration]
 
 
@@ -243,10 +250,9 @@ class TestPackageSend(TestPackageSetup):
 
         with patch(
             "app.services.email_service.EmailService.send_email",
-            new_callable=AsyncMock,
-            return_value=(1, 0),
+            new=AsyncMock(side_effect=_deliver_all),
         ) as mock_send:
-            success, message, sent_count, unreached = (
+            success, message, sent_count, unsent = (
                 await svc.generate_and_send_pre_meeting_package(
                     election_id=uuid.UUID(data["election_id"]),
                     organization_id=uuid.UUID(data["org_id"]),
@@ -263,33 +269,40 @@ class TestPackageSend(TestPackageSetup):
 
         assert success is True, message
         assert sent_count == 2, "Case-insensitive duplicates must collapse"
-        assert unreached == []
+        assert unsent == []
         kwargs = mock_send.call_args.kwargs
-        # Sender on To, edited list on BCC
-        assert kwargs["to_emails"] == ["pkgsec@test.com"]
-        assert set(kwargs["bcc_emails"]) == {
+        # One message per address — no BCC — and the secretary gets a copy
+        # without being counted in the list they chose.
+        assert kwargs["to_emails"] == [
             "pkgvoter@test.com",
             "counsel@lawfirm.example",
-        }
+            "pkgsec@test.com",
+        ]
+        assert not kwargs.get("bcc_emails")
         assert kwargs["attachment_paths"], "Package PDF must be attached"
         assert "Annual Officer Election 2027" in kwargs["subject"]
 
-    async def test_large_list_sent_in_batches_with_unreached_reported(
+    async def test_large_list_goes_one_message_per_address_with_unsent_named(
         self, db_session: AsyncSession, setup_package_election
     ):
-        from app.services.election_service import BULK_EMAIL_MAX_RECIPIENTS
-
+        # A department-sized list is never one message: each address is its
+        # own, so no provider recipient cap applies and a refusal costs only
+        # the addresses refused, which are named for a resend.
         data = setup_package_election
         svc = ElectionService(db_session)
         recipients = [f"member{i}@dept.example" for i in range(120)]
+        refused = set(recipients[49:98])
 
-        # Three batches of at most 49 BCC; the provider refuses the second.
+        async def refuse_some(**kwargs):
+            outcomes = [addr not in refused for addr in kwargs["to_emails"]]
+            kwargs["results_out"].extend(outcomes)
+            return sum(outcomes), len(outcomes) - sum(outcomes)
+
         with patch(
             "app.services.email_service.EmailService.send_email",
-            new_callable=AsyncMock,
-            side_effect=[(1, 0), (0, 1), (1, 0)],
+            new=AsyncMock(side_effect=refuse_some),
         ) as mock_send:
-            success, message, sent_count, unreached = (
+            success, message, sent_count, unsent = (
                 await svc.generate_and_send_pre_meeting_package(
                     election_id=uuid.UUID(data["election_id"]),
                     organization_id=uuid.UUID(data["org_id"]),
@@ -298,16 +311,14 @@ class TestPackageSend(TestPackageSetup):
                 )
             )
 
-        calls = [c.kwargs for c in mock_send.await_args_list]
-        assert len(calls) == 3
-        for kwargs in calls:
-            assert kwargs["to_emails"] == ["pkgsec@test.com"]
-            assert len(kwargs["bcc_emails"]) + 1 <= BULK_EMAIL_MAX_RECIPIENTS
-            assert kwargs["attachment_paths"], "Every batch carries the PDF"
+        kwargs = mock_send.await_args.kwargs
+        assert kwargs["to_emails"] == recipients + ["pkgsec@test.com"]
+        assert not kwargs.get("bcc_emails")
+        assert kwargs["attachment_paths"], "Every message carries the PDF"
         assert success is True
-        assert unreached == calls[1]["bcc_emails"]
-        assert sent_count == 120 - len(unreached)
-        assert f"{sent_count} of 120" in message
+        assert unsent == recipients[49:98]
+        assert sent_count == 120 - len(unsent)
+        assert f"Could not be sent to {len(unsent)}:" in message
 
     async def test_empty_recipient_list_rejected(
         self, db_session: AsyncSession, setup_package_election
@@ -315,7 +326,7 @@ class TestPackageSend(TestPackageSetup):
         data = setup_package_election
         svc = ElectionService(db_session)
 
-        success, message, sent_count, _ = (
+        success, message, sent_count, _unsent = (
             await svc.generate_and_send_pre_meeting_package(
                 election_id=uuid.UUID(data["election_id"]),
                 organization_id=uuid.UUID(data["org_id"]),
@@ -337,7 +348,7 @@ class TestPackageSend(TestPackageSetup):
             new_callable=AsyncMock,
             return_value=(0, 1),
         ):
-            success, message, sent_count, unreached = (
+            success, message, sent_count, unsent = (
                 await svc.generate_and_send_pre_meeting_package(
                     election_id=uuid.UUID(data["election_id"]),
                     organization_id=uuid.UUID(data["org_id"]),
@@ -347,4 +358,38 @@ class TestPackageSend(TestPackageSetup):
             )
         assert success is False
         assert sent_count == 0
-        assert unreached == ["pkgvoter@test.com"]
+        # The send gave no per-address answers: unanswered counts as unsent.
+        assert unsent == ["pkgvoter@test.com"]
+
+    async def test_a_refused_address_is_named_not_counted_as_sent(
+        self, db_session: AsyncSession, setup_package_election
+    ):
+        # A single BCC'd message reported every address as sent when the
+        # server accepted some and refused the rest.
+        data = setup_package_election
+        svc = ElectionService(db_session)
+
+        async def refuse_counsel(**kwargs):
+            outcomes = [
+                addr != "counsel@lawfirm.example" for addr in kwargs["to_emails"]
+            ]
+            kwargs["results_out"].extend(outcomes)
+            return sum(outcomes), len(outcomes) - sum(outcomes)
+
+        with patch(
+            "app.services.email_service.EmailService.send_email",
+            new=AsyncMock(side_effect=refuse_counsel),
+        ):
+            success, message, sent_count, unsent = (
+                await svc.generate_and_send_pre_meeting_package(
+                    election_id=uuid.UUID(data["election_id"]),
+                    organization_id=uuid.UUID(data["org_id"]),
+                    sent_by=uuid.UUID(data["secretary_id"]),
+                    recipient_emails=["pkgvoter@test.com", "counsel@lawfirm.example"],
+                )
+            )
+
+        assert success is True
+        assert sent_count == 1
+        assert unsent == ["counsel@lawfirm.example"]
+        assert "Could not be sent to 1: counsel@lawfirm.example" in message

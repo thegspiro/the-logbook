@@ -24,13 +24,23 @@ election's record of who was sent a ballot from what it read when it started,
 so whichever finishes last overwrites the other's. (Earlier links are not
 voided by a resend; only a reminder retires the links of the members it
 reaches.)
+
+The pre-meeting package goes the same way too, through
+``POST /elections/{id}/package-send-jobs``: one message per address, with the
+PDF attached, is as slow as a ballot send. It mints no tokens and records no
+recipients on the election, so it has its own one-at-a-time guard rather than
+sharing the ballots' — a package going out does not stop a ballot send.
+
+:func:`announce_nominations_open` runs the nominations-open announcement after
+the open-nominations response, in its own session. It has no job row: the
+announcement is best-effort and nobody waits on its outcome.
 """
 
 import asyncio
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Callable, List, Optional, Set, Union
+from typing import Callable, List, Optional, Sequence, Set, Union
 from uuid import UUID
 
 from loguru import logger
@@ -71,6 +81,25 @@ SEND_IN_PROGRESS_DETAIL = (
     "Ballot emails for this election are already being sent. "
     "Wait for that send to finish before sending again."
 )
+
+PACKAGE_INTERRUPTED_ERROR = (
+    "This send was interrupted before it finished, most likely by a server "
+    "restart. Some recipients may already have received the package."
+)
+
+PACKAGE_IN_PROGRESS_DETAIL = (
+    "The pre-meeting package for this election is already being sent. "
+    "Wait for that send to finish before sending again."
+)
+
+# Sends that share an in-progress guard. Ballots and reminders both mint
+# tokens and write the election's recipient record, so they exclude each
+# other; the package does neither, so it only excludes another package.
+BALLOT_GUARD_KINDS = (
+    BallotSendJobKind.BALLOTS.value,
+    BallotSendJobKind.REMINDER.value,
+)
+PACKAGE_GUARD_KINDS = (BallotSendJobKind.PACKAGE.value,)
 
 _ACTIVE_STATUSES = (
     BallotSendJobStatus.QUEUED.value,
@@ -289,6 +318,8 @@ class BallotSend:
     send_eligibility_summary: bool
 
     kind = BallotSendJobKind.BALLOTS
+    guard_kinds = BALLOT_GUARD_KINDS
+    in_progress_detail = SEND_IN_PROGRESS_DETAIL
 
     async def __call__(
         self, service: ElectionService, election: Election, organization_id: str
@@ -318,6 +349,8 @@ class ReminderSend:
     base_ballot_url: str
 
     kind = BallotSendJobKind.REMINDER
+    guard_kinds = BALLOT_GUARD_KINDS
+    in_progress_detail = SEND_IN_PROGRESS_DETAIL
 
     async def __call__(
         self, service: ElectionService, election: Election, organization_id: str
@@ -333,7 +366,89 @@ class ReminderSend:
         )
 
 
-QueuedSend = Union[BallotSend, ReminderSend]
+@dataclass(frozen=True)
+class PackageSend:
+    """A queued send of the pre-meeting package PDF, one message per address."""
+
+    sent_by: str
+    recipient_emails: List[str]
+    message: Optional[str]
+    include_full_roster: bool
+
+    kind = BallotSendJobKind.PACKAGE
+    guard_kinds = PACKAGE_GUARD_KINDS
+    in_progress_detail = PACKAGE_IN_PROGRESS_DETAIL
+
+    async def __call__(
+        self, service: ElectionService, election: Election, organization_id: str
+    ) -> EmailBallotResponse:
+        return await perform_package_send(
+            service,
+            UUID(str(election.id)),
+            organization_id,
+            sent_by=self.sent_by,
+            recipient_emails=self.recipient_emails,
+            message=self.message,
+            include_full_roster=self.include_full_roster,
+        )
+
+
+QueuedSend = Union[BallotSend, ReminderSend, PackageSend]
+
+
+async def perform_package_send(
+    service: ElectionService,
+    election_id: UUID,
+    organization_id: str,
+    *,
+    sent_by: str,
+    recipient_emails: List[str],
+    message: Optional[str],
+    include_full_roster: bool,
+) -> EmailBallotResponse:
+    """Send the pre-meeting package and report it.
+
+    Raises ValueError when nothing could be sent (no addresses, the PDF
+    failed, every message failed), so a job reads as failed with the reason.
+    """
+    success, outcome, sent_count, unsent = (
+        await service.generate_and_send_pre_meeting_package(
+            election_id=election_id,
+            organization_id=organization_id,
+            sent_by=sent_by,
+            recipient_emails=recipient_emails,
+            message=message,
+            include_full_roster=include_full_roster,
+        )
+    )
+    if not success:
+        raise ValueError(outcome)
+    return EmailBallotResponse(
+        success=not unsent,
+        recipients_count=sent_count,
+        failed_count=len(unsent),
+        skipped_count=0,
+        skipped_details=[],
+        message=outcome,
+    )
+
+
+async def announce_nominations_open(
+    election_id: str,
+    organization_id: str,
+    acting_user_id: Optional[str],
+    *,
+    session_factory: SessionFactory = async_session_factory,
+) -> None:
+    """Send the nominations-open announcement in a session of its own.
+
+    Run after the open-nominations response, whose session is closed by
+    then. ``ElectionService.announce_nominations_open`` already never raises.
+    """
+    async with session_factory() as db:
+        await ElectionService(db).announce_nominations_open(
+            election_id, organization_id, acting_user_id
+        )
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -342,9 +457,13 @@ def _as_utc(value: datetime) -> datetime:
 
 
 async def find_active_job(
-    db: AsyncSession, election_id: str, organization_id: str
+    db: AsyncSession,
+    election_id: str,
+    organization_id: str,
+    *,
+    kinds: Sequence[str],
 ) -> Optional[BallotSendJob]:
-    """The send still in progress for this election, if any.
+    """The send of one of ``kinds`` still in progress for this election.
 
     A locking read (CLAUDE.md pitfall #27): ``_queue_send`` already locks the
     election row before calling this, but a plain SELECT here would still
@@ -366,6 +485,7 @@ async def find_active_job(
         .where(BallotSendJob.election_id == str(election_id))
         .where(BallotSendJob.organization_id == str(organization_id))
         .where(BallotSendJob.status.in_(_ACTIVE_STATUSES))
+        .where(BallotSendJob.kind.in_(list(kinds)))
         .order_by(BallotSendJob.created_at.desc())
         .with_for_update()
     )
@@ -385,7 +505,11 @@ def _mark_interrupted(job: BallotSendJob, now: datetime) -> None:
         f"status={job.status} created_at={job.created_at}"
     )
     job.status = BallotSendJobStatus.FAILED.value
-    job.error = INTERRUPTED_JOB_ERROR
+    job.error = (
+        PACKAGE_INTERRUPTED_ERROR
+        if job.kind == BallotSendJobKind.PACKAGE.value
+        else INTERRUPTED_JOB_ERROR
+    )
     job.finished_at = now
 
 

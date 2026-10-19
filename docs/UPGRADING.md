@@ -548,7 +548,7 @@ checklist can no longer be **published** while one of its Date lines has no
 date. The builder lists each one under "Before publishing" and the server
 refuses the publish with `date item "<name>" needs an expiration date`. Drafts
 still save. A Date line linked to an inventory item is exempt, because its
-dates come from the lots aboard.
+dates come from the lots aboard, and so is a line with a dated lot aboard.
 
 - **A checklist that is already published keeps running.** Nothing is
   unpublished at upgrade. The rule applies the next time someone publishes it,
@@ -571,6 +571,10 @@ The same release adds two things that need no action:
   `check_template_compartments.is_inline` column. Migration `e99f068be43e` only
   adds that column (default false) and rewrites no rows, so it is safe on a
   running database. An emptied group is removed when the checklist is saved.
+  A second revision, `d80493f28236`, adds the same column under the same
+  existence guard; it was written in parallel and finds the column already
+  there, so on every database it changes nothing. Both are expected in
+  `alembic history`.
 - **A Present answer type** (Present / Absent). Absent fails the line and needs
   no note. No existing line is converted. A device still running the previous
   app shows a Present line as a Works line and files its Pass / Fail, which the

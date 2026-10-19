@@ -265,11 +265,17 @@ class EquipmentCheckService:
                     )
                 # A Date line with no date has nothing for the crew to confirm.
                 # A linked line is exempt: its dates come from the lots the
-                # inventory swap puts aboard, not from this column.
+                # inventory swap puts aboard, not from this column. So is a
+                # line with a dated lot aboard, because that is the date the
+                # form reads first.
                 if (
                     check_type in ("expiry", "date_lot")
                     and value(item, "expiration_date") is None
                     and not value(item, "inventory_item_id")
+                    and not any(
+                        value(lot, "expiration_date")
+                        for lot in (value(item, "deployed_lots", []) or [])
+                    )
                 ):
                     errors.append(
                         f'date item "{item_label or "Untitled"}" needs an '
@@ -5772,7 +5778,11 @@ class EquipmentCheckService:
             container_type=source.container_type,
             is_sealed=source.is_sealed,
             is_inline=getattr(source, "is_inline", False),
-            parent_compartment_id=parent_id,
+            # An inline group never sits inside a location; a legacy row that
+            # somehow does is not copied into one.
+            parent_compartment_id=(
+                None if getattr(source, "is_inline", False) else parent_id
+            ),
         )
         self.db.add(compartment)
         await self.db.flush()

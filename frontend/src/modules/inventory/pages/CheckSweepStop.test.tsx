@@ -152,6 +152,55 @@ describe('the expiry row', () => {
   });
 });
 
+describe('a presence row', () => {
+  const maps: CheckItemSpec = { id: 'maps', name: 'Map book', checkType: 'presence' };
+
+  it('answers in words, and Absent opens no fault fields', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([maps]);
+    expect(screen.getByRole('button', { name: 'Map book is present' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Map book is absent' }));
+    expect(onAnswer).toHaveBeenCalledWith('maps', { status: 'fail' });
+
+    setup([maps], { maps: { status: 'fail' } });
+    expect(screen.queryByTestId('function-note-maps')).not.toBeInTheDocument();
+  });
+});
+
+describe('dating a replacement in the sweep', () => {
+  const pads: CheckItemSpec = {
+    id: 'pads',
+    name: 'AED pads',
+    checkType: 'expiry',
+    expirationDate: YESTERDAY,
+    takesReplacementDate: true,
+  };
+
+  it('offers the field on an expired unlinked line and records a valid date', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([pads]);
+    await user.click(screen.getByRole('button', { name: 'Put in a replacement? Record its date' }));
+    fireEvent.change(screen.getByLabelText('Replacement expires'), { target: { value: FAR } });
+    expect(onAnswer).toHaveBeenCalledWith('pads', expect.objectContaining({ expirationFound: FAR }));
+  });
+
+  it('holds back a past date and says why', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([pads]);
+    await user.click(screen.getByRole('button', { name: 'Put in a replacement? Record its date' }));
+    fireEvent.change(screen.getByLabelText('Replacement expires'), { target: { value: '2000-01-01' } });
+    expect(onAnswer).toHaveBeenLastCalledWith('pads', expect.objectContaining({ expirationFound: undefined }));
+    expect(
+      screen.getByText('That date has already passed. Enter the date printed on the unit you put in.')
+    ).toBeInTheDocument();
+  });
+
+  it('does not offer it where the line does not accept one', () => {
+    setup([{ ...pads, takesReplacementDate: false }]);
+    expect(screen.queryByRole('button', { name: 'Put in a replacement? Record its date' })).not.toBeInTheDocument();
+  });
+});
+
 describe('layout rows', () => {
   it('renders a heading and an instruction, and asks nothing of either', () => {
     setup([
