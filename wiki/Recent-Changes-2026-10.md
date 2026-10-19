@@ -19,9 +19,8 @@ and finance timestamps are corrected to UTC.
 ### Read this first
 
 **If you run the server:** upgrade runs a one-time conversion of finance
-timestamps (nothing happens on a UTC server). `main` has two Alembic heads until
-PR #3437 merges, so `alembic upgrade head` fails until then; after it, `alembic
-heads` should report one.
+timestamps (nothing happens on a UTC server). `main` briefly had two Alembic heads
+on 2026-10-19; PR #3437 rejoined them, so `alembic heads` should report one.
 
 **If you administer a department:**
 

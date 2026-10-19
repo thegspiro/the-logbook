@@ -26,10 +26,7 @@ guarded: `89723c04ae94` (`minutes_public_copies`), `6dc58d6997df`
 `shift_equipment_checks` index), `e99f068be43e` (`check_template_compartments.is_inline`),
 `d80493f28236` (the same column from a parallel branch, re-pointed and now a
 guarded no-op), `da76465bc3d2` (finance timestamps to UTC), and two merge
-revisions (`2315d544d60a`, `4e18470473d6`). **`main` currently has two heads,
-`d80493f28236` and `4e18470473d6`, so `alembic upgrade head` fails** until
-[#3437](https://github.com/thegspiro/the-logbook/pull/3437) (open) merges them;
-run `alembic heads` after it lands and expect one.
+revisions (`2315d544d60a`, `4e18470473d6`). The two heads that #3422 and #3425 left on `main` were rejoined by `7ce50d36b948` (#3437, merged 2026-10-19 14:03 UTC); #3423 then added `01cdde60c919`, and `alembic heads` reports that single head.
 
 ### Read this first
 
@@ -115,12 +112,13 @@ and 06 / 05; the rest are spoken-line edits.
 
 ### Open items found while writing this pass
 
-- **Two Alembic heads on `main`** until #3437 merges (see above). The
-  session-start hook and `alembic upgrade head` fail in the meantime.
+- **Two Alembic heads on `main`** appeared for a few hours on 2026-10-19 and were
+  rejoined by #3437 (see above). Run `alembic heads` after any merge that brings
+  in migrations.
 - Open leads from the workflow review (W73-5 iCalendar switch with no reader,
   W71-1 grading half) remain in its progress ledger.
-- Open PRs not covered: #3430 (minutes motions, accept previous minutes) and #3423
-  (QuickBooks account names).
+- Not covered: #3430 (minutes motions, accept previous minutes), still open, and
+  #3423 (QuickBooks account names), merged after this pass was written.
 
 ## Change audit: October 16 – 18, 2026
 
