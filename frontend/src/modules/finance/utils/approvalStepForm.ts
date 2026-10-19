@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { ApprovalStepType, ApproverType } from '../types';
+import { MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE } from './moneyLimits';
 import type { ApprovalChainStep, ApprovalChainStepCreatePayload, ApprovalChainStepUpdatePayload } from '../types';
 
 export interface StepFormValues {
@@ -62,6 +63,8 @@ export function validateStepForm(values: StepFormValues): StepFormErrors {
     const amount = values.autoApproveUnder.trim();
     if (amount && !AMOUNT_PATTERN.test(amount)) {
       errors.autoApproveUnder = 'Enter an amount in dollars, such as 250 or 250.00.';
+    } else if (Number(amount) > MAX_MONEY_AMOUNT) {
+      errors.autoApproveUnder = MAX_MONEY_MESSAGE;
     }
   }
   return errors;

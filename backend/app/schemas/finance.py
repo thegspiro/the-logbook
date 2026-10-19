@@ -856,7 +856,9 @@ class ApprovalChainStepCreate(BaseModel):
     notification_emails: Optional[list[str]] = None
     email_template_id: Optional[str] = None
     allow_self_approval: bool = False
-    auto_approve_under: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
+    auto_approve_under: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
     required: bool = True
 
 
@@ -880,7 +882,9 @@ class ApprovalChainStepUpdate(BaseModel):
     notification_emails: Optional[list[str]] = None
     email_template_id: Optional[str] = None
     allow_self_approval: Optional[bool] = None
-    auto_approve_under: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
+    auto_approve_under: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
     required: Optional[bool] = None
 
 
@@ -904,6 +908,14 @@ class ApprovalChainStepResponse(UTCResponseBase):
     created_at: datetime
 
 
+def _require_ordered_range(
+    min_amount: Optional[Decimal], max_amount: Optional[Decimal]
+) -> None:
+    """A chain's minimum cannot be above its maximum: no amount could fit it."""
+    if min_amount is not None and max_amount is not None and min_amount > max_amount:
+        raise ValueError("The minimum amount cannot be above the maximum amount")
+
+
 class ApprovalChainCreate(BaseModel):
     """Create an approval chain"""
 
@@ -916,11 +928,16 @@ class ApprovalChainCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     applies_to: str
-    min_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
-    max_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
+    min_amount: Optional[Decimal] = Field(None, ge=0, max_digits=12, decimal_places=2)
+    max_amount: Optional[Decimal] = Field(None, ge=0, max_digits=12, decimal_places=2)
     budget_category_id: Optional[str] = None
     is_default: bool = False
     steps: Optional[list[ApprovalChainStepCreate]] = None
+
+    @model_validator(mode="after")
+    def _check_range(self) -> "ApprovalChainCreate":
+        _require_ordered_range(self.min_amount, self.max_amount)
+        return self
 
 
 class ApprovalChainUpdate(BaseModel):
@@ -935,11 +952,16 @@ class ApprovalChainUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     applies_to: Optional[str] = None
-    min_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
-    max_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
+    min_amount: Optional[Decimal] = Field(None, ge=0, max_digits=12, decimal_places=2)
+    max_amount: Optional[Decimal] = Field(None, ge=0, max_digits=12, decimal_places=2)
     budget_category_id: Optional[str] = None
     is_default: Optional[bool] = None
     is_active: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def _check_range(self) -> "ApprovalChainUpdate":
+        _require_ordered_range(self.min_amount, self.max_amount)
+        return self
 
 
 class ApprovalChainResponse(UTCResponseBase):

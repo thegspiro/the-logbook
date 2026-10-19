@@ -27,6 +27,7 @@ from app.api.v1.endpoints.elections import remind_non_voters as remind_endpoint
 from app.api.v1.endpoints.elections import send_ballot_emails as send_ballot_endpoint
 from app.api.v1.endpoints.elections import (
     start_ballot_send_job_endpoint,
+    start_package_send_job_endpoint,
     start_reminder_send_job_endpoint,
 )
 from app.models.election import (
@@ -35,12 +36,16 @@ from app.models.election import (
     BallotSendJobStatus,
     Election,
 )
-from app.schemas.election import EmailBallot
+from app.schemas.election import EmailBallot, PreMeetingPackageSend
 from app.services.ballot_send_jobs import (
+    BALLOT_GUARD_KINDS,
     INTERRUPTED_JOB_ERROR,
+    PACKAGE_IN_PROGRESS_DETAIL,
+    PACKAGE_INTERRUPTED_ERROR,
     SEND_IN_PROGRESS_DETAIL,
     STALE_JOB_AFTER,
     BallotSend,
+    PackageSend,
     ReminderSend,
     find_active_job,
     run_ballot_send_job,
@@ -236,7 +241,7 @@ class TestFindActiveJobLocksTheRead:
         db = AsyncMock()
         db.execute = AsyncMock(return_value=execute_result)
 
-        await find_active_job(db, _uid(), _uid())
+        await find_active_job(db, _uid(), _uid(), kinds=BALLOT_GUARD_KINDS)
 
         statement = db.execute.await_args.args[0]
         assert statement._for_update_arg is not None
@@ -575,3 +580,119 @@ async def test_tokens_are_saved_before_any_ballot_mail_goes_out(
         )
     ).scalar_one()
     assert count == 2
+
+
+SEND_EMAIL = "app.services.email_service.EmailService.send_email"
+
+
+async def _deliver_all(**kwargs):
+    kwargs["results_out"].extend([True] * len(kwargs["to_emails"]))
+    return len(kwargs["to_emails"]), 0
+
+
+async def _queue_package(db_session: AsyncSession, data: dict, emails) -> MagicMock:
+    start = MagicMock()
+    with patch(START_JOB, new=start):
+        response = await start_package_send_job_endpoint(
+            election_id=uuid.UUID(data["election_id"]),
+            payload=PreMeetingPackageSend(recipient_emails=emails),
+            db=db_session,
+            current_user=_user(data),
+        )
+    assert response.kind == BallotSendJobKind.PACKAGE.value
+    assert response.status == BallotSendJobStatus.QUEUED.value
+    return start
+
+
+async def test_a_package_job_mails_each_address_and_reports_it(
+    db_session: AsyncSession,
+):
+    data = await _make_election(db_session)
+    start = await _queue_package(
+        db_session, data, ["counsel@lawfirm.example", "board@lawfirm.example"]
+    )
+    job_id, org_id, send = start.call_args.args
+    assert isinstance(send, PackageSend)
+
+    send_email = AsyncMock(side_effect=_deliver_all)
+    with patch(SEND_EMAIL, new=send_email):
+        await run_ballot_send_job(
+            job_id, org_id, send, session_factory=_session_factory(db_session)
+        )
+
+    response = await get_ballot_send_job_endpoint(
+        election_id=uuid.UUID(data["election_id"]),
+        job_id=uuid.UUID(job_id),
+        db=db_session,
+        current_user=_user(data),
+    )
+    assert response.status == BallotSendJobStatus.COMPLETED.value
+    assert response.result is not None
+    assert response.result.success is True
+    assert response.result.recipients_count == 2
+    assert response.result.failed_count == 0
+    to_emails = send_email.await_args.kwargs["to_emails"]
+    assert to_emails[:2] == ["counsel@lawfirm.example", "board@lawfirm.example"]
+    assert not send_email.await_args.kwargs.get("bcc_emails")
+
+
+async def test_a_package_send_has_its_own_guard(db_session: AsyncSession):
+    # It mints no tokens, so a ballot send does not block it — but a second
+    # package send does.
+    data = await _make_election(db_session)
+    await _queue(db_session, data)
+
+    await _queue_package(db_session, data, ["counsel@lawfirm.example"])
+
+    with patch(START_JOB, new=MagicMock()) as start, pytest.raises(
+        HTTPException
+    ) as exc:
+        await start_package_send_job_endpoint(
+            election_id=uuid.UUID(data["election_id"]),
+            payload=PreMeetingPackageSend(recipient_emails=["x@lawfirm.example"]),
+            db=db_session,
+            current_user=_user(data),
+        )
+    assert exc.value.status_code == 409
+    assert exc.value.detail == PACKAGE_IN_PROGRESS_DETAIL
+    start.assert_not_called()
+
+
+async def test_a_package_for_a_closed_election_is_refused_before_queueing(
+    db_session: AsyncSession,
+):
+    data = await _make_election(db_session, status="closed")
+
+    with patch(START_JOB, new=MagicMock()) as start, pytest.raises(
+        HTTPException
+    ) as exc:
+        await start_package_send_job_endpoint(
+            election_id=uuid.UUID(data["election_id"]),
+            payload=PreMeetingPackageSend(recipient_emails=["x@lawfirm.example"]),
+            db=db_session,
+            current_user=_user(data),
+        )
+    assert exc.value.status_code == 400
+    assert "draft or open" in exc.value.detail
+    start.assert_not_called()
+
+
+async def test_an_interrupted_package_job_says_so_in_package_terms(
+    db_session: AsyncSession,
+):
+    data = await _make_election(db_session)
+    start = await _queue_package(db_session, data, ["counsel@lawfirm.example"])
+    job_id = start.call_args.args[0]
+    job = await db_session.get(BallotSendJob, job_id)
+    assert job is not None
+    job.created_at = datetime.now(timezone.utc) - STALE_JOB_AFTER - timedelta(minutes=1)
+    await db_session.commit()
+
+    response = await get_ballot_send_job_endpoint(
+        election_id=uuid.UUID(data["election_id"]),
+        job_id=uuid.UUID(job_id),
+        db=db_session,
+        current_user=_user(data),
+    )
+    assert response.status == BallotSendJobStatus.FAILED.value
+    assert response.error == PACKAGE_INTERRUPTED_ERROR

@@ -543,6 +543,7 @@ All election events are logged to the tamper-proof `audit_logs` table with `even
 | `pre_meeting_package_sent`                                              | Pre-meeting package emailed              | Election ID, recipient count, roster variant                                         |
 | `pre_meeting_package_downloaded`                                        | Package PDF downloaded                   | Election ID, variant                                                                 |
 | `nominations_opened` / `nominations_closed` / `nominations_auto_closed` | Nomination phase transitions             | Election ID (deadline for auto-close)                                                |
+| `nominations_announced`                                                 | Nominations-open email sent to members   | Election ID, recipient and unreached counts                                          |
 | `candidate_nominated`                                                   | A member nominated (self or third-party) | Election ID, position, nominee, nominator                                            |
 | `nomination_accepted` / `nomination_declined`                           | Nominee responded                        | Election ID, candidate ID (declines keep the record here after the entry is removed) |
 | `election_auto_opened` / `election_auto_closed`                         | Lifecycle task transition                | Election ID                                                                          |
