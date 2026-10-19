@@ -403,7 +403,10 @@ screenings.
 It shows **counts only**: how many screenings are overdue and how soon the next
 one runs out. It never shows a screening's name, type, date or result. The
 dashboard may be on a station tablet, where anyone walking past can read it.
-A member might see:
+Administrative members do not see this verdict (_2026-10-18_): it is a statement
+about riding, and they hold no riding role. Their certification expiries still
+appear under **Needs you** on the dashboard. An operational member with no
+qualifying seat yet still reads **Not clear**. A member might see:
 
 > **Not clear to respond** — 1 screening overdue
 

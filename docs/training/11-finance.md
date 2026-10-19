@@ -53,8 +53,14 @@ Every member holds the permission to raise requests, which is what lets them
 raise their own. A member who holds nothing else sees **Finance > My Purchase
 Requests**, **My Expense Reports** and **My Check Requests** — only the
 requests they raised, never anyone else's — and picks a budget line by its name
-and the amount left on it ("Training — $1,250.00 remaining"), without seeing
-the budget pages. They can edit a request until they submit it and withdraw a
+and, if they own the line or hold `finance.view` / `finance.manage`, the amount
+left on it ("Training — $1,250.00 remaining"), without seeing the budget pages.
+_(2026-10-18)_ Everyone else sees the line's name alone; the remaining amount is
+no longer sent to them. An expense report or check request is routed only
+through a chain set for its own type (a purchase-request chain never catches
+them); with no chain for the type it waits in Pending Approval to be decided by
+hand. Finance timestamps (Created, Updated) were corrected to UTC; see
+`UPGRADING.md`. They can edit a request until they submit it and withdraw a
 draft; once submitted, only the finance office can cancel it. A department that
 does not want members raising requests removes that permission from the
 **Member** position.

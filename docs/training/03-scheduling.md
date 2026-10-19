@@ -104,6 +104,13 @@ at the top. Use the arrows to move back or forward, and **Today** to come back
 to the current date. On a phone you get the month view, with a coloured bar
 for each shift.
 
+_(2026-10-18)_ An empty week or month looks up the first shift after it and offers
+**Go to the next shift**, so a member is not told nothing is published when next
+Monday is scheduled. An officer's button reads **Create a shift** once any shift
+exists, and creating one moves the board to that shift's date.
+
+_[Screenshot to create: an empty week showing Go to the next shift.]_
+
 If you refresh the page, or send someone a copied link, it opens on the same
 week or month you were looking at, not on today.
 
@@ -422,7 +429,9 @@ You see **Signed up for shift**, and the shift appears on **My Shifts**,
 where you can confirm it.
 
 **There is no officer approval step.** Your signup goes on the roster exactly
-as if an officer had assigned you. You leave a shift you signed up for the
+as if an officer had assigned you, and it is saved as **confirmed** straight away
+(_2026-10-18_), as the tab promises. An officer's assignment, or a standing
+claim, still waits for the member to confirm. You leave a shift you signed up for the
 same way as one you were assigned to.
 
 If you sign up for a driver's seat without the driver training the apparatus
@@ -432,6 +441,10 @@ sign up.
 **Signing up again after you declined.** If you declined a shift, or lost the
 seat because it was cancelled or because of approved time off, you can sign up
 for it again.
+
+_(2026-10-18)_ A shift that has already ended no longer appears on the board, for
+anyone, including scheduling officers (before, a shift dated today stayed listed
+after its end time, with a live **Sign Up** button for an officer).
 
 ![Open Shifts tab showing shifts with vacant positions](./images/03-05-open-shifts.png)
 
@@ -3077,7 +3090,7 @@ Select **New Template** to create one, or select a template to edit it.
 | **Name**                                                             | Required, for example "Day Shift A"                                                                                                                      |
 | **Description**                                                      | Optional                                                                                                                                                 |
 | **Category**                                                         | **Standard**, **Specialty Vehicle** or **Event / Special**                                                                                               |
-| Vehicle                                                              | Optional. A vehicle type loads that type's default seats from your settings; a specific vehicle links the template to it                                 |
+| Vehicle                                                              | Optional. A vehicle type loads that type's default seats from your settings. The template sets the vehicle _type_ only; the specific vehicle is picked on each shift                                 |
 | Start and end times                                                  | The shift's hours. The length is worked out for you; you type it only for a shift longer than a day                                                      |
 | Colour                                                               | How the template's shifts are tinted                                                                                                                     |
 | **Smallest crew that can run**                                       | Required. Below this number the shift is flagged as running short                                                                                        |

@@ -144,6 +144,26 @@ Screenshots to create or replace are in
 | Claude (MCP) member sign-in tool calls fixed                                                                | [16 — Integrations](./16-integrations.md)                                                               |
 | Plain-language rewrites of guides 02, 06–09, 11–15, 17                                                      | The guides themselves; moved screenshot notes are in [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) |
 
+# October 18–19, 2026 workflow updates
+
+Index for the tenth window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                                     | Now in                                                                                               |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Minutes: publish to the library and a public page; roll listing default                   | [04 — Events & Meetings](./04-events-meetings.md#publishing-adopted-minutes-library-and-public-page) |
+| Elections: one email per member for the package and nominations notice                    | [14 — Elections](./14-elections.md)                                                                  |
+| Equipment checks: Present / Absent, crew-dated replacements, items without a heading      | [03 — Scheduling](./03-scheduling.md)                                                                |
+| Purchase request saves as a draft while typed; amount limits; chain ranges and boundaries | [11 — Finance](./11-finance.md)                                                                      |
+| Budget picker hides remaining amounts; chains match their own request type                | [11 — Finance](./11-finance.md)                                                                      |
+| Scheduling: Go to the next shift; own sign-up confirmed; ended shifts leave Open Shifts   | [03 — Scheduling](./03-scheduling.md)                                                                |
+| Administrative members: no readiness verdict, no crew Operations rows                     | [13 — Medical Screening](./13-medical-screening.md), [05 — Inventory](./05-inventory.md)             |
+| Messages to Probationary / Retired match the membership status too                        | [08 — Admin & Reports](./08-admin-reports.md)                                                        |
+
+---
+
 # October 16–18, 2026 workflow updates
 
 Index for the ninth window. Audit:

@@ -1574,6 +1574,43 @@ So every approved meeting records who approved it and when. Creating,
 editing, deleting or approving a meeting — and changing its attendees or
 action items — is recorded in the audit log.
 
+### Who is listed on the roll (department default and per minutes)
+
+_(2026-10-18)_ The roll is always recorded in full; quorum and the attendance
+reports read all of it. A new setting chooses which statuses a **reader** of the
+minutes sees: **everyone**, **present and excused**, or **present only**. Guests
+are named under every choice. Open **Minutes** and select **Roll listing** to set
+the department default. On draft or rejected minutes the roll panel has its own
+selector that overrides the default for that one set of minutes (leave it on
+"follow the department" to inherit). The choice applies to the minutes page, the
+PDF, the library copy and the public copy; the public copy leaves out counts that
+are not listed rather than showing zero. Nothing changes until someone sets it.
+
+_[Screenshot to create: the Roll listing dialog, and the roll panel's per-minutes
+selector on a draft.]_
+
+### Publishing adopted minutes (library and public page)
+
+_(2026-10-18)_ Publishing adopted minutes files the library copy in Documents.
+When the department allows it, it also posts a **public copy** on a hosted
+`/public/minutes` page. Three settings, all **off** by default, are in the
+**Publishing settings** dialog on the Minutes page: public posting, and two
+switches for executive-session minutes (library, public).
+
+- **Republishing** replaces the library document and the public copy in place and
+  notes which version it replaced. Reopening adopted minutes marks the public copy
+  as **under correction**; a public copy can also be withdrawn on its own.
+- **The public copy is deliberately thinner than the PDF:** attendance as counts
+  plus the officers present, no individual votes, no closed-session participants
+  and no attachments. Settings are checked when posting and again on every public
+  read, so turning posting off hides the page at once.
+- **Executive-session minutes** go only to a leadership-only folder, and
+  publishing refuses if that folder's access was loosened.
+- The Minutes page shows a publishing status line for each set of minutes.
+
+_[Screenshot to create: the Publishing settings dialog; the publishing status
+note on adopted minutes; the public minutes page at phone and desktop widths.]_
+
 ### Circulating and adopting minutes
 
 _(2026-10-14)_ Most departments send the draft minutes round, take corrections
