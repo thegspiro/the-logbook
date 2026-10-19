@@ -1,5 +1,38 @@
 # Screenshot currency
 
+## Queued by the October 18 – 19 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).
+Nothing was captured by this pass. Placeholders for the new screens are in the
+guides as `_[Screenshot to create: …]_`.
+
+### New screens to create
+
+| Guide | Screen to capture | Notes |
+| ----- | ----------------- | ----- |
+| 04 | Minutes **Publishing settings** dialog (public posting, executive library, executive public) | Needs `minutes.manage` |
+| 04 | Publishing status note on adopted minutes (library filed, public copy live; and **under correction**) | |
+| 04 | `/public/minutes` page at 390px and desktop | Logged out |
+| 04 | **Roll listing** dialog; per-minutes roll selector on a draft | |
+| 14 | Email Pre-Meeting Package while the send runs, and the error naming unreached addresses | Seed a bounced address |
+| 03 | Empty week with **Go to the next shift** | |
+| 03 | Equipment check builder: an **Items** group between two locations; a **Present / Absent** line; a Date line missing its date in the to-fix list | |
+| 03 | Equipment check form: Present / Absent buttons; the replacement-date field on an unlinked Date line | |
+| 11 | Purchase request form with the "Draft saved at …" line and **Save Draft**; the leave-page prompt | |
+| 11 | Approval chain form refusing a minimum above the maximum | |
+
+### Existing images to replace or confirm
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `01-41` (My Account → Privacy) | **REPLACE** | Label now reads "Shared once the department allows it" beside an on switch |
+| `03-*` of My Shifts / Open Shifts after sign-up | **CHECK** | Own sign-up is saved confirmed |
+| `11-*` purchase request form and budget picker | **REPLACE** | Draft line, Save Draft, and the picker shows names only to members |
+| `11-*` approval-chain form | **CHECK** | Min/Max help text now says both are included |
+| `13-*` dashboard readiness line as an administrative member | **CHECK** | Verdict absent |
+| `05-*` Operations section strip as an administrative member | **CHECK** | My Checklists and Apparatus Inventory absent |
+| `04-*` roll panel on minutes | **REPLACE** | Gains the listing selector |
+
 ## Queued by the October 16 – 18 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-16--18-2026).

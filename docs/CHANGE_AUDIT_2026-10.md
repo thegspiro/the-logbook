@@ -5,6 +5,123 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 18 – 19, 2026
+
+Net changes merged to `main` from the close of the
+[October 16 – 18 pass](#change-audit-october-16--18-2026) (written against
+`7cb167e3`, 2026-10-18 13:19 UTC) to 2026-10-19 ~11:30 UTC, written against
+`764c733e`. About 40 non-merge commits outside the security-review ledgers and the
+regenerated schema doc. Themes: **Meeting Minutes publishing**, **finance form
+and routing fixes**, **equipment-check Present / Absent and ungrouped items**,
+**administrative-member views**, **election email delivery**, and the
+**workflow-review W55–W73** fixes. `CHANGELOG.md` is closed; this section and its
+wiki handoff are the record.
+
+Wiki handoff:
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-18--19-2026).
+
+**Migration route.** Eight revisions, all additive or data-correcting and
+guarded: `89723c04ae94` (`minutes_public_copies`), `6dc58d6997df`
+(`meeting_minutes.attendance_listing`), `7e5d6cf3292c` (drops the duplicate
+`shift_equipment_checks` index), `e99f068be43e` (`check_template_compartments.is_inline`),
+`d80493f28236` (the same column from a parallel branch, re-pointed and now a
+guarded no-op), `da76465bc3d2` (finance timestamps to UTC), and two merge
+revisions (`2315d544d60a`, `4e18470473d6`). **`main` currently has two heads,
+`d80493f28236` and `4e18470473d6`, so `alembic upgrade head` fails** until
+[#3437](https://github.com/thegspiro/the-logbook/pull/3437) (open) merges them;
+run `alembic heads` after it lands and expect one.
+
+### Read this first
+
+1. **Finance timestamps are corrected once, on upgrade.** `created_at` /
+   `updated_at` on 19 finance tables were stamped in the MySQL server's own zone
+   (compose files set `America/New_York`) while the app reads every DATETIME as
+   UTC, so a request's Created read hours before its Approved. New connections now
+   pin the session to UTC and `da76465bc3d2` converts older rows row by row
+   (daylight saving included), up to a cutoff; it does nothing on a UTC server and
+   refuses rather than write NULLs if the zone cannot be resolved. Recorded in
+   `UPGRADING.md`.
+2. **Public minutes are off by default.** Three settings (public posting,
+   executive library, executive public) read fail-closed; nothing is exposed
+   until an officer turns it on. Roll listing unset reads as "everyone", so no
+   printed or published copy changes.
+3. **Expense reports and check requests no longer fall into purchase chains.** A
+   chain is chosen only when its type matches the request. A department that
+   relied on the leak now has requests waiting in Pending Approval until it adds a
+   chain for the type.
+4. **Administrative members lose two crew Operations rows** (My Checklists,
+   Apparatus Inventory) and the "Clear to respond" verdict unless a position grants
+   them on purpose.
+
+### User-visible changes, by area
+
+| Area             | Change                                                                                                                                                                                                                                          | Where documented                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Minutes          | Publish adopted minutes to the library and an optional public `/public/minutes` page; republish replaces in place; withdraw; **under correction** on reopen; executive minutes to a leadership-only folder                                      | training 04; `MEETING_MINUTES_MODULE.md`                                                   |
+| Minutes          | **Roll listing**: department default and per-minutes override for which statuses a reader sees                                                                                                                                                  | training 04; `MEETING_MINUTES_MODULE.md`                                                   |
+| Elections        | Pre-meeting package and nominations notice go one message per member; package send is a queued job; unreached addresses listed                                                                                                                  | training 14; wiki `Module-Elections`, `Module-Elections-Developer`; `KNOWN_LIMITATIONS.md` |
+| Equipment checks | **Present / Absent** line type; Date lines always expire; crew can date a replacement; headingless **Items** groups                                                                                                                             | training 03; `UPGRADING.md`                                                                |
+| Finance          | Purchase request saves as a draft as it is typed; amounts above $9,999,999,999.99 refused; approval chain min/max validated and boundary settled; budget picker hides remaining amount; chains match their own type; dues past due read Overdue | training 11, 12; `FINANCE_MODULE.md`                                                       |
+| Scheduling       | Empty week offers **Go to the next shift**; own sign-up saved confirmed; ended shifts leave Open Shifts; training session times stored as UTC                                                                                                   | training 03                                                                                |
+| Dashboard        | **Take a Shift** decided by per-shift eligibility; readiness verdict hidden from administrative members                                                                                                                                         | training 00, 13                                                                            |
+| Operations       | Crew rows held back from administrative members                                                                                                                                                                                                 | training 05                                                                                |
+| Messages         | Probationary and Retired audiences match membership status too                                                                                                                                                                                  | training 08                                                                                |
+| Account          | Privacy switch label agrees with the switch position                                                                                                                                                                                            | training 01                                                                                |
+| Grants           | Eight update endpoints no longer answer 500 and lose the change                                                                                                                                                                                 | training 12                                                                                |
+| Forms            | Doubled "(optional)" on prompts removed; clearer purchase-request save error                                                                                                                                                                    | no screen changed                                                                          |
+
+**Workflow review W55–W73** (messages, notifications, email templates,
+suggestions, photo consent, budgets, approval chains, purchase and expense
+requests, check requests, dues, store, grants, fundraising, admin hours, medical
+screening, reports, integrations) fixed roughly 70 findings and flagged about 15
+leads; per-workflow detail is in `docs/workflow-review/PROGRESS.md`. Notable:
+fundraising edits were all 500s (W69-1), grant budget/compliance writes failed
+(W68), Reports offered reports `/available` hides (W72-1), the Admin Hours report
+dated evening entries by UTC (W72-2), and Integrations Disconnect acted on one tap
+(W73-1).
+
+Security-review passes (scheduling 9 with SCH-19 still open, equipment-check
+shifts 10, apparatus NFC 17, facilities 10, inventory 10, documents-legal 10,
+medical screening 10, membership pipeline 11, users and organizations 10,
+events-requests 9) found 0 new fixes; see `docs/security-review/PROGRESS.md`.
+
+### Documentation changes in this pass
+
+| File                                                                              | Change                                                                            |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `docs/training/03-scheduling.md`                                                  | Go to the next shift; confirmed sign-up; ended shifts; template sets vehicle type |
+| `docs/training/04-events-meetings.md`                                             | Roll listing; publishing adopted minutes                                          |
+| `docs/training/05-inventory.md`                                                   | Crew Operations rows for administrative members                                   |
+| `docs/training/08-admin-reports.md`                                               | Probationary / Retired audiences                                                  |
+| `docs/training/11-finance.md`                                                     | Remaining amount visibility; chains by type; UTC                                  |
+| `docs/training/13-medical-screening.md`                                           | Verdict hidden for administrative members                                         |
+| `docs/training/14-elections.md`                                                   | One message per member; queued package send                                       |
+| `docs/training/21-october-2026-release-changes.md`                                | Index for this window                                                             |
+| `docs/training/SCREENSHOT_CURRENCY.md`, `docs/youtube-scripts/SCRIPT_CURRENCY.md` | Queues                                                                            |
+| `wiki/Recent-Changes-2026-10.md`                                                  | Wiki handoff                                                                      |
+
+### Screenshots
+
+Nothing was captured. New screens and replacements are queued in
+`docs/training/SCREENSHOT_CURRENCY.md` under _Queued by the October 18 – 19
+documentation pass_ (minutes publishing and roll listing, package send, empty
+week, equipment-check Present / Absent and Items, purchase request draft line).
+`01-41` and the finance form shots should be replaced.
+
+### Scripts
+
+`docs/youtube-scripts/SCRIPT_CURRENCY.md` has a new queue. Re-record 07, 12, 04
+and 06 / 05; the rest are spoken-line edits.
+
+### Open items found while writing this pass
+
+- **Two Alembic heads on `main`** until #3437 merges (see above). The
+  session-start hook and `alembic upgrade head` fail in the meantime.
+- Open leads from the workflow review (W73-5 iCalendar switch with no reader,
+  W71-1 grading half) remain in its progress ledger.
+- Open PRs not covered: #3430 (minutes motions, accept previous minutes) and #3423
+  (QuickBooks account names).
+
 ## Change audit: October 16 – 18, 2026
 
 Net changes merged to `main` from the close of the

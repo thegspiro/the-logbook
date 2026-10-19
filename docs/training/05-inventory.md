@@ -2719,6 +2719,14 @@ This section covers building checklists, the settings, and the fleet views.
 
 ### One header across Operations
 
+_(2026-10-18)_ **My Checklists** and **Apparatus Inventory** are crew pages. An
+administrative member no longer gets them in the side nav, top nav or section
+strip just because the default member position carries the inventory view and
+check-submit grants; they need a grant a position is given on purpose
+(`inventory.check_view`, `check_manage` or `manage` for My Checklists;
+`inventory.check_view` for Apparatus Inventory). An Apparatus Manager's access is
+unchanged.
+
 Every Operations page (My Issued Gear, Inventory, Medical Supplies, My
 Checklists, Fleet Readiness, Apparatus Inventory, Apparatus and Facilities) now
 opens with the same title row: icon, title, a one-line description and the page's
