@@ -20230,7 +20230,7 @@ iteration's commit" rule.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
@@ -20255,6 +20255,36 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-19 — Feature 17 (Training core, pass 9) — watchdog pickup, near-zero delta (1 of 1 commits in-scope touches one file), 0 fixed, 0 new findings; TR7-1 re-confirmed unchanged
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-training`/`claude/security-review-tr-17`
+(`search_pull_requests`, 0 results), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`). PR
+#3438 (Feature 16, Events & requests, pass 9) had already merged.
+Rotation row 17 (Training core) was the next pending feature.
+
+**0 fixes applied, 0 new findings.** Baseline `5b711066` (PR #3298's
+merge, pass 8). Only one commit landed in the nine declared files since:
+`67e7bf74` wires `instructor_id` through on
+`create_recurring_training_session`'s write — a value that was already
+validated in-org by `_validate_linkage_ids` before this pass's change, so
+no new tenancy gap. TR7-1 (`POST /training/enrollments` duplicates and
+lags the fixed enrollment path) re-verified still OPEN/FLAGGED at its
+pass-8 citation, unchanged — guaranteed by the zero-diff on `training.py`
+and `training_program_service.py` over this window, and no owner decision
+recorded in `KNOWN_LIMITATIONS.md` since. `docs/module-audit/training.md`
+and `docs/app-review/training.md` re-checked per Step 2: every in-scope
+finding there is already ✅ FIXED; the one still-flagged in-scope item
+(TR-4's `year`-default semantics) is an unchanged owner decision. Route
+count unchanged (92 routes across the three endpoint files, 0 missing
+auth, per pass 8's automated enumeration — guaranteed current by the
+zero-diff on `training.py`/`training_programs.py`/`training_sessions.py`).
+
+Full writeup: [`TR-17-training-core.md`](./TR-17-training-core.md)'s
+**Pass 9** section.
 
 ### 2026-10-19 — Feature 16 (Events & requests, pass 9) — watchdog pickup, near-zero delta (3 of 271 commits in-scope), 0 fixed, 0 new findings; a repo-wide Alembic fork found and fixed, unrelated to this feature
 

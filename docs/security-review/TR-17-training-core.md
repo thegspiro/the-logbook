@@ -1,6 +1,7 @@
 # Security Review 17 — Training Core
 
-**Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-08-26 · **PR:** [#1851](https://github.com/thegspiro/the-logbook/pull/1851)
+**Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-10-19 (pass 9) ·
+**PR:** see `PROGRESS.md`'s **Open PR** row
 
 **Backend:** `api/v1/endpoints/training.py` (3,162 L),
 `api/v1/endpoints/training_programs.py` (2,142 L),
@@ -2615,3 +2616,121 @@ confirmed) and no change to `node_modules/typescript` vs.
 `node_modules/typescript-native`'s split. Both `npm run typecheck` and
 `npm run lint` then passed clean — **this sandbox's incomplete dependency
 install, not training-core's code, was what the first run hit.**
+
+---
+
+## Pass 9 (2026-10-19) — 0 fixed, 0 new findings; near-zero delta, TR7-1 re-confirmed unchanged
+
+**Prefix:** `TR9` (none assigned — no new finding this pass). Watchdog
+pickup: the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`, 0
+results), and no open PR's head branch starts with
+`claude/security-review-training` or `claude/security-review-tr-17`
+(`search_pull_requests`, 0 results). Rotation row 17 (Training core) was
+the next pending feature after row 16 (Events & requests, PR #3438) merged.
+
+**Scoped since pass 8's merge** (`5b711066`, PR #3298) **to current `main`**
+(`8da1eb88`):
+
+```
+git diff --stat 5b711066..8da1eb88 -- <the nine declared files>
+ backend/app/services/training_session_service.py | 5 +++++
+ 1 file changed, 5 insertions(+)
+```
+
+One commit in range, `67e7bf74` ("Fix training and event create forms that
+failed or dropped input," 2026-10-17) — a frontend/backend bug-fix batch
+spanning six unrelated form defects across this feature and Events; only
+one of its six items touches a training-core file. The in-scope change
+wires `instructor_id` through on `create_recurring_training_session`'s
+write (`training_session_service.py:721-725`, was previously read and
+checked but silently dropped before the row was built — a correctness
+bug, not new surface):
+
+```python
+instructor_id=(
+    str(session_data.instructor_id)
+    if session_data.instructor_id
+    else None
+),
+```
+
+**Verified good — no new tenancy gap.** `instructor_id` is a client-
+supplied FK (a `User` id) and this is exactly the shape CLAUDE.md Pitfall
+#14c and this checklist's XC-1 item cover. Read `_validate_linkage_ids`
+(`training_session_service.py:122-181`) directly: both call sites that
+build a session with `instructor_id` —`create_training_session` (line 446) and `create_recurring_training_session` (line 607) — call
+`self._validate_linkage_ids(session_data, organization_id)` and bail out
+on its error message **before** reaching the row construction this
+commit's write sits inside. The validator's own `instructor_id` branch
+(`:167-171`) rejects a foreign id via `is_in_org(self.db, User,
+instructor_id, organization_id)`. This is the same validator pass 7's
+"New functionality this window" section already reviewed in full for the
+sibling `create_training_session` path; this pass confirms
+`create_recurring_training_session` is gated by the identical call,
+so wiring the field through does not create a new unvalidated write —
+it only makes a value that was already org-checked actually land in the
+database instead of being silently discarded.
+
+**TR7-1 re-verified — still OPEN/FLAGGED, citation unchanged.** The
+zero-diff on `training.py` and `training_program_service.py` between
+`5b711066` and `8da1eb88` (confirmed by the `git diff --stat` above
+listing only `training_session_service.py`) guarantees
+`enroll_member_in_program`'s citation (`training.py:2232-2324`) and
+`TrainingProgramService.enroll_member`'s (`training_program_service.py:
+2391-2526`) are byte-identical to pass 8's reading — no re-read needed to
+confirm the defect (no lock, no unique constraint, no
+`RequirementProgress`/phase/recert/notification, and the prerequisite-
+enforcement gap pass 8 found widened) still applies exactly as described
+there. Checked `docs/KNOWN_LIMITATIONS.md`'s "Training —
+`POST /training/enrollments` Duplicates, and Lags, the Fixed Enrollment
+Path" entry: no owner decision recorded since pass 8. Carrying forward
+unchanged.
+
+**Module-audit / app-review cross-check:** re-read `docs/module-audit/
+training.md` and `docs/app-review/training.md` per this pass's Step 2.
+Every finding in those documents that falls inside this feature's three
+declared files (TR-1 `certifications/expiring`, TR-2 `POST /records`
+`user_id` validation, TR-4 the `year`-default dead-code removal) is
+already marked ✅ FIXED there. The one still-flagged item inside scope,
+TR-4's `year`-default semantics, is an acknowledged compliance-semantics
+decision reserved for the owner, unchanged since app-review pass 3 — not
+re-opened here. Everything else those two documents still flag (TR-5
+auto-approve SoD, TR-6 residual backstops, external-training decrypt) is
+`training_submissions.py`/`external_training.py` territory — Feature
+18/19's scope, not this feature's.
+
+### Verified good ✅ (pass 9 addition)
+
+- **`create_recurring_training_session`'s newly-wired `instructor_id`
+  write is validated in-org before it is reached** — traced the call to
+  `_validate_linkage_ids` at line 607, which runs before the row
+  construction at line 721, and confirmed the validator's own
+  `instructor_id` branch rejects a foreign id. No new finding.
+
+## Schema & migration notes (pass 9)
+
+No migration in this window touches a training-core table; the one
+in-scope commit is a service-layer field-wiring fix with no schema
+change.
+
+## Guard tests added (pass 9)
+
+None. No new finding this pass; TR7-1 remains flagged, not fixed, for the
+same reason passes 7 and 8 gave.
+
+## Completion gate (pass 9)
+
+| Check                                                 | Result                                            |
+| ----------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                   |
+| `black --check app/ tests/ alembic/`                  | ✅ clean (2467 files unchanged)                   |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean                                          |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ 629 revisions, single head `01cdde60c919`      |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 272 routes, 0 errors, 0 warnings               |
+| `pytest tests/ -q -k "training or compliance"`        | ✅ 1908 passed, 1 pre-existing skip (`pywebpush`) |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors                                       |
+| `cd frontend && npm run lint`                         | ✅ clean                                          |
+
+Rotation row 17 → ✅ (pending this PR's merge). Next: Feature 18 (Training
+extended).
