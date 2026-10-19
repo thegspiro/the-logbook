@@ -293,6 +293,13 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
           </div>
         </div>
 
+        {sending && (
+          <p className="text-theme-text-secondary px-6 pb-2 text-sm" role="status" aria-live="polite">
+            Sending the package to each recipient separately. A long list can take a few minutes. If you leave this page
+            the send carries on.
+          </p>
+        )}
+
         <div className="border-theme-surface-border flex justify-end space-x-3 border-t px-6 py-4">
           <button
             type="button"

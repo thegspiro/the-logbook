@@ -22,14 +22,20 @@ describe('validateStepForm', () => {
     expect(errors.approverValue).toBeTypeOf('string');
   });
 
-  it.each(['abc', '-5', '1.234', '1,000'])('rejects the auto-approve amount %s', (amount) => {
+  it.each(['abc', '-5', '1.234', '1,000', '10000000000'])('rejects the auto-approve amount %s', (amount) => {
     expect(validateStepForm({ ...EMPTY_STEP_FORM, name: 'x', autoApproveUnder: amount }).autoApproveUnder).toBeTypeOf(
       'string'
     );
   });
 
-  it.each(['250', '250.5', '250.00'])('accepts the auto-approve amount %s', (amount) => {
+  it.each(['250', '250.5', '250.00', '9999999999.99'])('accepts the auto-approve amount %s', (amount) => {
     expect(validateStepForm({ ...EMPTY_STEP_FORM, name: 'x', autoApproveUnder: amount })).toEqual({});
+  });
+
+  it('says an auto-approve amount is too large when it is more than the database can hold', () => {
+    expect(validateStepForm({ ...EMPTY_STEP_FORM, name: 'x', autoApproveUnder: '10000000000' }).autoApproveUnder).toBe(
+      'That amount is too large.'
+    );
   });
 
   it('ignores approver and amount fields on a notification step', () => {

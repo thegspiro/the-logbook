@@ -16,11 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3431](https://github.com/thegspiro/the-logbook/pull/3431)** (branch
-`claude/security-review-documents-legal-p10`). PR #3427 (Feature 09, Medical
-screening, pass 10) merged 2026-10-18; PR #3426 (the standalone Alembic-fork
-fix it needed, see below) also merged 2026-10-18 — neither independently
-recordable here beyond what follows.
+**PR [#3435](https://github.com/thegspiro/the-logbook/pull/3435)** (branch
+`claude/security-review-equipment-check-shifts`). PR #3434 (Feature 13,
+Apparatus & NFC, pass 17) merged 2026-10-19, docs-only — not independently
+recordable here beyond what follows. This iteration (watchdog pickup, same
+conditions as above) reviewed Feature 14 (Equipment check & shifts), pass
+10 — 0 fixes, 0 new findings; real delta of 9 commits, mostly Medical
+Supplies work, all verified correctly org-scoped and permissioned.
+Rotation row 14 → ✅ (pending this PR's merge); next is Feature 15
+(Scheduling).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 10, PR #3431, merged), preserved for history</summary>
 
 This iteration (a watchdog pickup — no open PR's head branch starts with
 `claude/security-review-`, confirmed via `search_pull_requests`, and the
@@ -45,6 +52,8 @@ it. Both merged 2026-10-18; `validate_migrations.py --strict` now reports a
 single head.
 
 Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 10, PR #3427, merged; and the standalone Alembic-fork fix, PR #3426, merged), preserved for history</summary>
@@ -20182,10 +20191,10 @@ iteration's commit" rule.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ⬜     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | 🔄     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
@@ -20213,6 +20222,98 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-19 — Feature 12 (Facilities, pass 10) — watchdog pickup, real delta (4 commits in-scope), 0 fixed, 0 new findings; FAC-30 re-confirmed the only standing item
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). PR #3432 (Feature 11, Inventory, pass 10) had
+already merged, docs-only. Rotation row 12 (Facilities) was the next `⬜`.
+
+**0 fixes applied, 0 new findings.** Baseline `026c924d` (PR #3288's
+merge-base, pass 9). Of 665 commits repo-wide in this window, 1 touched
+this feature's own scope (`f4798ad6` — new one-step photo/document upload
+routes, reviewed against all seven checklist dimensions: permission gate
+matches its existing siblings, org-scoped facility lookup before any file
+or folder op, same malware-scan/size-cap upload path apparatus and finance
+already use, transactional rollback discards the stored file on a failed
+record insert) and 3 touched shared `documents_service.py` (Documents'
+decision-30 admin-only-folder digest — confirmed it does not reach
+facility folders, for the same structural reason decision 29 did not in
+pass 9: facility folders are created via direct `db.add`, never through
+`create_folder`/`update_folder`). Routes: 100, up from 98 — both new routes
+carry the existing `facilities.create`/`.edit`/`.manage` grant, not a
+widened one. FAC-30 (P2, owner-accepted) re-confirmed unchanged; FAC-13,
+FAC-41, FAC-44 re-confirmed closed/intact. Full writeup:
+[`FAC-12-facilities.md`](./FAC-12-facilities.md)'s **Pass 10** section.
+
+### 2026-10-19 — Feature 11 (Inventory, pass 10) — watchdog pickup, real delta (25 commits, mostly Medical Supplies), 0 fixed, 0 new findings; INV-22 re-verified open/accepted
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session was not reachable (`ListAgents`). PR #3431 (Feature
+10, Documents & legal, pass 10) had already merged, docs-only. Rotation row
+11 (Inventory) was the next `⬜`.
+
+**0 fixes applied, 0 new findings.** Baseline `ccdf9750` (PR #3272's merge,
+pass 9). 25 non-merge commits touch this feature's scope, all read in full
+via `git show`; route decorators diffed directly across all five endpoint
+files — zero added or removed since pass 9 (148/12/4/2/24 routes,
+unchanged). Most of the real delta is Medical Supplies work (a sibling
+feature, MSUP-23) that extends functions this feature owns in
+`inventory_service.py`/`models/inventory.py`/`schemas/inventory.py` and the
+shared `modules/inventory/*` frontend:
+
+- A new `inventory_items.apparatus_only` column (migration `0bbf263a5ff0`,
+  guarded, additive, `nullable=False`/`server_default="0"` matching the
+  model) and a dozen new `InventoryService` read methods
+  (`stock_breakdown`, `apparatus_ready_stock`, `item_sizes`,
+  `storage_paths_for`, `item_ids_stored_in`, `item_ids_kept_in_stock`,
+  `next_lot_expirations`, `category_item_counts`, `pool_item_ids_by_name`,
+  `get_lots_for_export`, etc.) — every one read individually and confirmed
+  to filter its own query on `organization_id` directly, not merely trust
+  an already-scoped caller.
+- New Medical Supplies CSV import/export routes and a bulk-retire route
+  (`medical_supplies.py`, outside this feature's own endpoint scope but
+  reviewed given the shared `inventory_service.py` helpers they call): all
+  four CSV routes use `SafeCsvWriter` (Pitfall #15) behind
+  `inventory.manage_medical`/`inventory.manage`; the import has a size cap
+  and malware scan; bulk-retire org/domain-checks before acting and again
+  under each item's row lock.
+- A new opt-in MCP tool surface (`app/mcp/tools/medical_supplies.py`, four
+  read-only tools) sharing medical supply inventory with Claude. Followed
+  the gate end to end: `expose_medical_supplies` defaults to `False` and is
+  read from the stored integration config on both the OAuth and
+  service-key principal-construction paths — a real server-side reader
+  exists before the UI switch does anything, the Pitfall #19 shape done
+  correctly from day one.
+- 13 frontend-only commits (phone-layout reflows, equipment-check
+  Present/Absent UI, a catalog-link Undo action whose backend lives in
+  Feature 14's own files) — scanned for `dangerouslySetInnerHTML`,
+  `window.confirm`/`alert`/`prompt`, and a raw `axios`/`fetch` bypass:
+  zero matches across all 30 non-test files touched.
+
+**INV-22** (`get_fulfillment_options`/`get_requestable_categories`, owner
+decision to leave the full catalog materialization as is) re-verified
+unchanged — neither function appears in this window's diff.
+
+Full writeup: [`INV-11-inventory.md`](./INV-11-inventory.md)'s **Pass 10**
+section.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
+alembic/`; `validate_migrations.py --strict` — single head
+(`2315d544d60a`), 623 revisions; `check_route_permissions.py --strict` —
+272 routes, 0 errors/0 warnings; `pytest tests/ -q -k "inventory or label
+or nfc or kiosk or medical_supplies"` — 1898 passed, 1 pre-existing skip
+(`pywebpush`); frontend `npm run typecheck`/`npm run lint` both clean;
+`npx vitest run src/modules/inventory` — 1770 passed (118 files).
+
+No `KNOWN_LIMITATIONS.md` change needed — the existing INV-22 entry and the
+`expose_medical_supplies` switch both already match current code. Rotation
+row 11 → ✅. Next: Feature 12 (Facilities).
 
 ### 2026-10-18 — Feature 10 (Documents & legal, pass 10) — watchdog pickup, decision 30 reviewed in full, 0 fixed, 0 new findings; ported the Alembic-fork fix into PR #3427
 

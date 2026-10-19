@@ -56,6 +56,7 @@ def test_repeated_decimal_payments_add_without_binary_drift() -> None:
 @pytest.mark.parametrize("amount", [Decimal("10.00"), Decimal("20.00")])
 async def test_approval_amount_range_includes_exact_boundaries(amount: Decimal) -> None:
     chain = SimpleNamespace(
+        id="chain-1",
         applies_to=ApprovalEntityType.PURCHASE_REQUEST,
         min_amount=Decimal("10.00"),
         max_amount=Decimal("20.00"),

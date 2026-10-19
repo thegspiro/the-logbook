@@ -2925,6 +2925,39 @@ in-progress guard, because both mint fresh tokens. The synchronous
 `POST /elections/{id}/remind-non-voters` is kept for API callers and now also
 answers `409` while a send is running.
 
+## Elections — Broadcast Election Emails Go One Message Per Member (2026-10-18)
+
+The nominations-open announcement and the pre-meeting package used to go out as
+one message with every member BCC'd. When the mail server accepted some of
+those addresses and refused others, the code did not see it, and the package
+confirmation said "sent to N recipient(s)" for the whole list. Many mail
+providers also cap the recipients one message may carry, so a larger department
+would have lost addresses with no error.
+
+**Fixed (owner decision 2026-10-18: a separate email per member).** Both now
+send each address its own message and record each address's outcome.
+
+- **Pre-meeting package:** queued with `POST /elections/{id}/package-send-jobs`
+  as a `ballot_send_jobs` row of `kind = 'package'`, because one message per
+  address with the PDF attached runs past the request timeout just as ballots
+  did. The outcome names every address the package could not be sent to. The
+  sender still gets a copy, as they did when they were the visible To, but it
+  is not counted. A package send has its own one-at-a-time guard and does not
+  wait on a ballot send. `POST /elections/{id}/send-package` keeps the
+  synchronous path for API callers.
+- **Nominations-open announcement:** sent after the open-nominations response,
+  in its own session. It skips sending if nominations have closed again by
+  then.
+
+What remains:
+
+- **The announcement's outcome is only logged.** It was best-effort before
+  and still is: nobody is shown which members it missed, and a restart while
+  it runs stops it partway with no record beyond the log.
+- **A package job interrupted by a restart** has the same limits as an
+  interrupted ballot job (see the entry above): it reads as failed after 30
+  minutes, and some recipients may already have the package.
+
 ## Elections — Two Ballot Items Sharing an Alias String Can't Be Fully Disambiguated Without a Schema Change (2026-09-02)
 
 A legacy ballot item (one persisted without its own `position` field) is

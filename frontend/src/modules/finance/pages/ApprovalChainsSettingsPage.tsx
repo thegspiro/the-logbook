@@ -46,6 +46,8 @@ import { buildStepCreatePayload, buildStepUpdatePayload, stepToFormValues } from
 import type { StepFormValues } from '../utils/approvalStepForm';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { CHAIN_RANGE_HINT, chainRangeError } from '../utils/approvalChainRange';
+import { MAX_MONEY_AMOUNT } from '../utils/moneyLimits';
 // =============================================================================
 // Constants
 // =============================================================================
@@ -427,6 +429,11 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         toast.error('Chain name is required');
         return;
       }
+      const rangeError = chainRangeError(formData.minAmount, formData.maxAmount);
+      if (rangeError) {
+        toast.error(rangeError);
+        return;
+      }
 
       try {
         await createApprovalChain({
@@ -734,6 +741,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
                 type="number"
                 step="0.01"
                 min="0"
+                max={MAX_MONEY_AMOUNT}
                 className={inputClass}
                 placeholder="0.00"
                 value={formData.minAmount}
@@ -749,12 +757,14 @@ const ApprovalChainsSettingsPage: React.FC = () => {
                 type="number"
                 step="0.01"
                 min="0"
+                max={MAX_MONEY_AMOUNT}
                 className={inputClass}
                 placeholder="No limit"
                 value={formData.maxAmount}
                 onChange={(e) => setFormData({ ...formData, maxAmount: e.target.value })}
               />
             </div>
+            <p className="text-theme-text-secondary text-xs sm:col-span-2">{CHAIN_RANGE_HINT}</p>
             <div className="sm:col-span-2">
               <label className="flex items-center gap-2">
                 <input
