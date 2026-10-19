@@ -16,12 +16,12 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3432](https://github.com/thegspiro/the-logbook/pull/3432)** (branch
-`claude/security-review-inventory`). PR #3431 (Feature 10, Documents &
-legal, pass 10) merged 2026-10-18, docs-only — not independently
-recordable here beyond what follows. This iteration (watchdog pickup, same
-conditions as below) reviewed Feature 11 (Inventory), pass 10 — see the Log
-below for the full entry.
+**PR [#3433](https://github.com/thegspiro/the-logbook/pull/3433)** (branch
+`claude/security-review-facilities`). PR #3432 (Feature 11, Inventory, pass 10) merged 2026-10-19, docs-only — not independently recordable here beyond
+what follows. This iteration (watchdog pickup, same conditions as above)
+reviewed Feature 12 (Facilities), pass 10 — 0 fixes, 0 new findings; FAC-30
+re-confirmed the only standing item. Rotation row 12 → ✅ (pending this PR's
+merge); next is Feature 13 (Apparatus & NFC).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 10, PR #3431, merged), preserved for history</summary>
@@ -20189,7 +20189,7 @@ iteration's commit" rule.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
@@ -20219,6 +20219,32 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-19 — Feature 12 (Facilities, pass 10) — watchdog pickup, real delta (4 commits in-scope), 0 fixed, 0 new findings; FAC-30 re-confirmed the only standing item
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). PR #3432 (Feature 11, Inventory, pass 10) had
+already merged, docs-only. Rotation row 12 (Facilities) was the next `⬜`.
+
+**0 fixes applied, 0 new findings.** Baseline `026c924d` (PR #3288's
+merge-base, pass 9). Of 665 commits repo-wide in this window, 1 touched
+this feature's own scope (`f4798ad6` — new one-step photo/document upload
+routes, reviewed against all seven checklist dimensions: permission gate
+matches its existing siblings, org-scoped facility lookup before any file
+or folder op, same malware-scan/size-cap upload path apparatus and finance
+already use, transactional rollback discards the stored file on a failed
+record insert) and 3 touched shared `documents_service.py` (Documents'
+decision-30 admin-only-folder digest — confirmed it does not reach
+facility folders, for the same structural reason decision 29 did not in
+pass 9: facility folders are created via direct `db.add`, never through
+`create_folder`/`update_folder`). Routes: 100, up from 98 — both new routes
+carry the existing `facilities.create`/`.edit`/`.manage` grant, not a
+widened one. FAC-30 (P2, owner-accepted) re-confirmed unchanged; FAC-13,
+FAC-41, FAC-44 re-confirmed closed/intact. Full writeup:
+[`FAC-12-facilities.md`](./FAC-12-facilities.md)'s **Pass 10** section.
 
 ### 2026-10-19 — Feature 11 (Inventory, pass 10) — watchdog pickup, real delta (25 commits, mostly Medical Supplies), 0 fixed, 0 new findings; INV-22 re-verified open/accepted
 
