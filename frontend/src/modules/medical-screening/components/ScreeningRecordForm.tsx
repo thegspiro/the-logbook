@@ -16,6 +16,7 @@ import type {
   ScreeningSubjects,
 } from '../types';
 import { blankToNull } from '../../../utils/formValues';
+import { addCalendarMonths } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { medicalScreeningService } from '../services/api';
 
@@ -46,6 +47,24 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
   const [scheduledDate, setScheduledDate] = useState(record?.scheduled_date ?? '');
   const [completedDate, setCompletedDate] = useState(record?.completed_date ?? '');
   const [expirationDate, setExpirationDate] = useState(record?.expiration_date ?? '');
+  // The expiration this form last filled in, so a date the officer typed is
+  // never overwritten, while one the form suggested follows a corrected
+  // completed date or requirement.
+  const [suggestedExpiration, setSuggestedExpiration] = useState('');
+
+  // W71: a record with no expiration grades as compliant indefinitely, so a
+  // recurring requirement saved without one never fell due. Suggest the date
+  // the requirement's frequency implies; the officer can still change it.
+  const suggestExpiration = (nextRequirementId: string, nextCompletedDate: string) => {
+    const req = requirements.find((r) => r.id === nextRequirementId);
+    const months = req?.frequency_months;
+    const suggestion = months && nextCompletedDate ? addCalendarMonths(nextCompletedDate, months) : '';
+    if (expirationDate === '' || expirationDate === suggestedExpiration) {
+      setExpirationDate(suggestion);
+      setSuggestedExpiration(suggestion);
+    }
+  };
+  const suggestionMonths = requirements.find((r) => r.id === requirementId)?.frequency_months;
   const [providerName, setProviderName] = useState(record?.provider_name ?? '');
   const [resultSummary, setResultSummary] = useState(record?.result_summary ?? '');
   const [notes, setNotes] = useState(record?.notes ?? '');
@@ -203,6 +222,7 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
                   setRequirementId(e.target.value);
                   const req = requirements.find((r) => r.id === e.target.value);
                   if (req) setScreeningType(req.screening_type);
+                  suggestExpiration(e.target.value, completedDate);
                 }}
                 className={inputClass}
               >
@@ -273,7 +293,10 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
                 id="rec-completed"
                 type="date"
                 value={completedDate}
-                onChange={(e) => setCompletedDate(e.target.value)}
+                onChange={(e) => {
+                  setCompletedDate(e.target.value);
+                  suggestExpiration(requirementId, e.target.value);
+                }}
                 className={inputClass}
               />
             </div>
@@ -288,8 +311,17 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
               type="date"
               value={expirationDate}
               onChange={(e) => setExpirationDate(e.target.value)}
+              aria-describedby={
+                expirationDate && expirationDate === suggestedExpiration ? 'rec-expiration-hint' : undefined
+              }
               className={inputClass}
             />
+            {expirationDate && expirationDate === suggestedExpiration && suggestionMonths ? (
+              <p id="rec-expiration-hint" className="text-theme-text-muted mt-1 text-xs">
+                Filled in from the requirement&apos;s {suggestionMonths}-month frequency. Change it if the provider gave
+                a different date.
+              </p>
+            ) : null}
           </div>
 
           <div>

@@ -462,6 +462,12 @@ describe('ApprovalChainsSettingsPage', () => {
       ['not_found', 'specific_user', 'That member no longer exists'],
       ['not_found', 'permission', 'That permission no longer exists'],
       ['no_active_members', 'position', 'No active member can act on this step'],
+      // W63: the Chief filled the step but held no finance.approve.
+      [
+        'no_approve_permission',
+        'position',
+        'Nobody on this step has the finance approval permission, so they cannot approve or deny',
+      ],
     ] as const)('words the %s problem for a %s approver plainly', async (problem, approverType, text) => {
       mockGetCoverage.mockResolvedValue([
         coverageRow({ problem, approverType, eligibleActiveCount: 0, pendingRequestCount: 1 }),

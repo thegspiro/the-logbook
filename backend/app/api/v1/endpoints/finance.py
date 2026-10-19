@@ -926,9 +926,10 @@ async def list_budget_options(
 
     **Requires permission: finance.request, finance.view or finance.manage**
 
-    Each line is a label (its category, plus its station when it has one)
-    and the amount remaining. That is all a member choosing a line needs, and
-    all they see: the budget pages themselves stay behind the view grant.
+    Each line is a label (its category, plus its station when it has one).
+    The amount remaining is added only for ``finance.view`` / ``finance.manage``
+    holders and for the owner of that line; every other member gets the label
+    alone. The budget pages themselves stay behind the view grant.
     """
     # Registered before `/budgets/{budget_id}` for the reason
     # get_budget_summary gives.
@@ -937,6 +938,9 @@ async def list_budget_options(
         str(current_user.organization_id),
         fiscal_year_id,
         charger_id=_requester_scope(current_user),
+        amounts_for=str(current_user.id),
+        sees_all_amounts=user_has_permission(current_user, "finance.view")
+        or user_has_permission(current_user, "finance.manage"),
     )
 
 
@@ -3253,7 +3257,17 @@ async def submit_purchase_request(
             user_id=str(current_user.id),
             username=current_user.username,
         )
-        return pr
+        # With its steps, as the detail endpoint returns it: the screen shows
+        # this response as the request, and without them its Approval Timeline
+        # read "This request has no approval steps" until a reload.
+        return await _with_approval_steps(
+            service,
+            PurchaseRequestResponse.model_validate(pr),
+            ApprovalEntityType.PURCHASE_REQUEST,
+            pr.id,
+            str(current_user.organization_id),
+            current_user,
+        )
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
@@ -3598,10 +3612,19 @@ async def submit_expense_report(
     """
     service = FinanceService(db)
     try:
-        return await service.submit_expense_report(
+        er = await service.submit_expense_report(
             er_id,
             str(current_user.organization_id),
             requester_id=_requester_scope(current_user),
+        )
+        # With its steps, for the reason given in submit_purchase_request.
+        return await _with_approval_steps(
+            service,
+            ExpenseReportResponse.model_validate(er),
+            ApprovalEntityType.EXPENSE_REPORT,
+            er.id,
+            str(current_user.organization_id),
+            current_user,
         )
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -3799,10 +3822,19 @@ async def submit_check_request(
     """
     service = FinanceService(db)
     try:
-        return await service.submit_check_request(
+        cr = await service.submit_check_request(
             cr_id,
             str(current_user.organization_id),
             requester_id=_requester_scope(current_user),
+        )
+        # With its steps, for the reason given in submit_purchase_request.
+        return await _with_approval_steps(
+            service,
+            CheckRequestResponse.model_validate(cr),
+            ApprovalEntityType.CHECK_REQUEST,
+            cr.id,
+            str(current_user.organization_id),
+            current_user,
         )
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

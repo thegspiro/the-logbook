@@ -19,6 +19,7 @@ import { Modal } from '../../../components/Modal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 import { OrderStatusStepper } from '../components/OrderStatusStepper';
 import { PaymentOptions } from '../components/PaymentOptions';
 import { storefrontService } from '../services/api';
@@ -49,6 +50,7 @@ const itemCountLabel = (count: number): string => `${count} ${count === 1 ? 'ite
 
 const MyOrdersPage: React.FC = () => {
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   // `error` is read here deliberately: without it a failed load fell through to
   // the "No orders yet" empty state, telling a member who has orders that they
   // have none — a load failure presented as fact about their account.
@@ -123,6 +125,16 @@ const MyOrdersPage: React.FC = () => {
 
   const cancelOrder = useCallback(
     async (order: StoreOrder) => {
+      // A cancelled order cannot be reopened, and it took a single tap (W67).
+      const ok = await confirm({
+        title: `Cancel ${order.orderNumber}?`,
+        message:
+          'The order is cancelled and cannot be reopened. To get these items you would place a new order, while the window is still open.',
+        confirmLabel: 'Cancel order',
+        cancelLabel: 'Keep order',
+        variant: 'danger',
+      });
+      if (!ok) return;
       setSubmitting(true);
       try {
         await storefrontService.cancelMyOrder(order.id);
@@ -134,7 +146,7 @@ const MyOrdersPage: React.FC = () => {
         setSubmitting(false);
       }
     },
-    [loadMyOrders]
+    [confirm, loadMyOrders]
   );
 
   const renderOrderCard = (order: StoreOrder) => {
@@ -283,7 +295,7 @@ const MyOrdersPage: React.FC = () => {
       <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
         <Link
           to="/store"
-          className="text-theme-text-secondary hover:text-theme-text-primary mb-5 flex items-center gap-1 text-sm"
+          className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 mb-5 flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Back to the store

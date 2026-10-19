@@ -1056,6 +1056,8 @@ export const MinutesDetailPage: React.FC = () => {
           <AttendancePanel
             minutesId={minutes.id}
             attendees={minutes.attendees ?? []}
+            listing={minutes.attendance_listing_effective ?? 'all'}
+            listingOverride={minutes.attendance_listing ?? null}
             canEdit={Boolean(canManage && isEditable)}
             onSaved={refreshMinutes}
           />

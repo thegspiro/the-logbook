@@ -69,7 +69,8 @@ describe('StoreOrdersTab payment handling', () => {
     renderTab();
     await screen.findByText(/ORD-2026-0001/);
 
-    await user.click(screen.getByRole('button', { name: /^mark paid$/i }));
+    // Named for its order (W67): "Mark paid" alone was ambiguous in a list.
+    await user.click(screen.getByRole('button', { name: 'Mark ORD-2026-0001 paid' }));
 
     await waitFor(() => {
       expect(mockMarkOrderPaid).toHaveBeenCalledWith('o1', {
@@ -89,7 +90,7 @@ describe('StoreOrdersTab payment handling', () => {
     renderTab();
     await screen.findByText(/ORD-2026-0001/);
 
-    expect(screen.queryByRole('button', { name: /^mark paid$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Mark ORD-\S+ paid$/ })).not.toBeInTheDocument();
   });
 
   it('hides mark-paid on a cancelled order', async () => {
@@ -102,7 +103,7 @@ describe('StoreOrdersTab payment handling', () => {
     renderTab();
     await screen.findByText(/ORD-2026-0001/);
 
-    expect(screen.queryByRole('button', { name: /^mark paid$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Mark ORD-\S+ paid$/ })).not.toBeInTheDocument();
   });
 
   it('bulk-marks the selection paid with a reference', async () => {
@@ -289,5 +290,12 @@ describe('StoreOrdersTab payment handling', () => {
     renderTab();
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not load orders'));
+  });
+
+  // W67: each order's checkbox was a bare 16px box at 390px wide.
+  it('gives each order checkbox a touch-sized label', async () => {
+    renderTab();
+    await screen.findByRole('checkbox', { name: 'Select order ORD-2026-0001' });
+    expect(screen.getByTestId('select-order-o1')).toHaveClass('touch-target-phone');
   });
 });

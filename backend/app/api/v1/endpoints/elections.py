@@ -3336,14 +3336,15 @@ async def send_pre_meeting_package(
     """
     Email the pre-meeting package PDF to the given (secretary-edited)
     email list. Recipients are BCC'd so addresses are not exposed to
-    each other.
+    each other. Large lists go out in batches; ``unreached`` names the
+    addresses of any batch the mail provider refused.
 
     **Authentication required**
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
     try:
-        success, message, sent_count = (
+        success, message, sent_count, unreached = (
             await service.generate_and_send_pre_meeting_package(
                 election_id=election_id,
                 organization_id=current_user.organization_id,
@@ -3362,7 +3363,7 @@ async def send_pre_meeting_package(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     return PreMeetingPackageResponse(
-        success=True, message=message, sent_count=sent_count
+        success=True, message=message, sent_count=sent_count, unreached=unreached
     )
 
 

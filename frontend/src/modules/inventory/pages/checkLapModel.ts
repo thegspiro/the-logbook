@@ -69,6 +69,11 @@ export interface LapStop {
   containerType?: string | null | undefined;
   /** This container is sealed in normal operation. */
   isSealed?: boolean | undefined;
+  /**
+   * Items placed directly on the checklist rather than in a location. The
+   * stop screen gives it no heading; `name` is only the strip's label.
+   */
+  isInline?: boolean | undefined;
   /** The seal as it stands right now, for a sealed container. */
   seal?: SealState | undefined;
   items: CheckItemSpec[];
@@ -336,7 +341,15 @@ export function bulkClaim(items: CheckItemSpec[]): BulkClaim | null {
   // hold — which is a different sentence, and the one the crew can actually
   // check from where they are standing.
   const countLabel = anyOffPar ? `All ${n} counts as carried` : `All ${n} count${n === 1 ? '' : 's'} at par`;
-  const label = types.size === 1 ? ([...types][0] === CheckType.COUNT ? countLabel : `All ${n} work`) : `All ${n} good`;
+  const only = types.size === 1 ? [...types][0] : undefined;
+  const label =
+    only === CheckType.COUNT
+      ? countLabel
+      : only === CheckType.PRESENCE
+        ? `All ${n} present`
+        : only !== undefined
+          ? `All ${n} work`
+          : `All ${n} good`;
   return { items: claimable, label, quantities };
 }
 

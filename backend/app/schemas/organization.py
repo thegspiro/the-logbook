@@ -1351,6 +1351,13 @@ class MinutesSettingsUpdate(BaseModel):
             "page. Absent reads as off."
         ),
     )
+    attendance_listing: Optional[Literal["all", "present_excused", "present"]] = Field(
+        None,
+        description=(
+            "Which attendance statuses the minutes name. The roll is always "
+            "recorded in full. Absent reads as all."
+        ),
+    )
     executive_library_publishing: Optional[bool] = Field(
         None,
         description=(

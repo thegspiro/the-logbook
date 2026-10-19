@@ -12,6 +12,8 @@ export interface ItemSummarySource {
   lotNumber: string;
   hasExpiration: boolean;
   expirationDate: string;
+  /** A linked line's dates come from the lots aboard. */
+  inventoryItemId?: string | undefined;
 }
 
 export type ItemSummaryTone = 'neutral' | 'important' | 'problem';
@@ -45,7 +47,9 @@ export function formatItemSummary(item: ItemSummarySource): ItemSummaryLabel[] {
   if (item.checkType === CheckType.EXPIRY && !item.serialNumber.trim() && !item.lotNumber.trim()) {
     problems.push({ text: 'Needs serial or lot', tone: 'problem' });
   }
-  if (item.hasExpiration && !item.expirationDate.trim()) {
+  // A Date line needs its date to publish unless inventory supplies it.
+  const datedByType = item.checkType === CheckType.EXPIRY && !item.inventoryItemId;
+  if ((item.hasExpiration || datedByType) && !item.expirationDate.trim()) {
     problems.push({ text: 'Needs expiration date', tone: 'problem' });
   }
   if (

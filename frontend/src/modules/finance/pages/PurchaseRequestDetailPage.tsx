@@ -271,7 +271,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/purchase-requests"
-          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+          className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Purchase Requests
@@ -287,7 +287,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/purchase-requests"
-          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+          className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Purchase Requests
@@ -333,7 +333,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
       {/* Back link */}
       <Link
         to="/finance/purchase-requests"
-        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
+        className="touch:min-h-11 text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Purchase Requests
@@ -366,7 +366,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void navigate(`/finance/purchase-requests/${pr.id}/edit`)}
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium"
+                className="touch:min-h-11 border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium"
               >
                 <Edit className="h-3.5 w-3.5" />
                 Edit
@@ -377,7 +377,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={() => void handleSubmit()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="h-3.5 w-3.5" />
                 Submit for Approval
@@ -387,7 +387,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleMarkOrdered()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
               >
                 <Package className="h-3.5 w-3.5" />
                 Mark Ordered
@@ -397,7 +397,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleMarkReceived()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800"
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800"
               >
                 <Truck className="h-3.5 w-3.5" />
                 Mark Received
@@ -407,7 +407,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleMarkPaid()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800"
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800"
               >
                 <CreditCard className="h-3.5 w-3.5" />
                 Mark Paid
@@ -417,7 +417,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleCancel()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
               >
                 <XCircle className="h-3.5 w-3.5" />
                 Cancel Request

@@ -108,35 +108,35 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W52 | Action items: assign, work, close                                     | secretary → member | `/action-items`                                    | ✅     |
 | W53 | Documents: folders, upload, who can see what                          | secretary, member  | `/documents`                                       | ✅     |
 | W54 | Org chart and legal documents                                         | admin, member      | `/governance/org-chart`, `/governance/legal`       | ✅     |
-| W55 | Messages: send to a group, the member's inbox, message administration | admin → member     | `/communications/messages`, `/messages`            | ⬜     |
-| W56 | Notification rules and logs, the in-app bell                          | admin, member      | `/notifications`                                   | ⬜     |
-| W57 | Email templates: edit, preview, restore                               | admin              | `/communications/email-templates`                  | ⬜     |
-| W58 | Suggestion boxes and suggestions                                      | member → admin     | `/suggestions`, `/communications/suggestion-boxes` | ⬜     |
-| W59 | Photo-use consent                                                     | member, admin      | `/communications/photo-use-consent`                | ⬜     |
+| W55 | Messages: send to a group, the member's inbox, message administration | admin → member     | `/communications/messages`, `/messages`            | ✅     |
+| W56 | Notification rules and logs, the in-app bell                          | admin, member      | `/notifications`                                   | ✅     |
+| W57 | Email templates: edit, preview, restore                               | admin              | `/communications/email-templates`                  | ✅     |
+| W58 | Suggestion boxes and suggestions                                      | member → admin     | `/suggestions`, `/communications/suggestion-boxes` | ✅     |
+| W59 | Photo-use consent                                                     | member, admin      | `/communications/photo-use-consent`                | ✅     |
 | W60 | Forms: build, publish a public form, submit it, read submissions      | admin → anonymous  | `/forms`, `/f/:slug`                               | ✅     |
 
 ## Tier 9 — Money
 
 | #   | Activity                                                               | Acts as                   | Starts at                                                        | Status |
 | --- | ---------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------- | ------ |
-| W61 | Budgets                                                                | treasurer                 | `/finance/budgets`                                               | ⬜     |
-| W62 | Approval chains and finance settings, including the emailed approval   | treasurer                 | `/finance/settings/approval-chains`, `/finance/approvals/:token` | ⬜     |
-| W63 | A purchase request through its approval chain                          | member → treasurer, chief | `/finance/purchase-requests/new`                                 | ⬜     |
-| W64 | An expense report, from receipt to reimbursement                       | member → treasurer        | `/finance/expenses/new`                                          | ⬜     |
-| W65 | Check requests                                                         | treasurer                 | `/finance/check-requests`                                        | ⬜     |
-| W66 | Dues: set them, record a payment, who is behind                        | treasurer                 | `/finance/dues`                                                  | ⬜     |
-| W67 | The department store: shop, check out, my orders, store administration | member → quartermaster    | `/store`, `/inventory/admin/store`                               | ⬜     |
-| W68 | Grants: an opportunity, then an application through to its report      | treasurer                 | `/grants/opportunities`, `/grants/applications`                  | ⬜     |
-| W69 | Fundraising: campaigns, donors, donations, reports                     | treasurer                 | `/grants/campaigns`, `/grants/donations`                         | ⬜     |
+| W61 | Budgets                                                                | treasurer                 | `/finance/budgets`                                               | ✅     |
+| W62 | Approval chains and finance settings, including the emailed approval   | treasurer                 | `/finance/settings/approval-chains`, `/finance/approvals/:token` | ✅     |
+| W63 | A purchase request through its approval chain                          | member → treasurer, chief | `/finance/purchase-requests/new`                                 | ✅     |
+| W64 | An expense report, from receipt to reimbursement                       | member → treasurer        | `/finance/expenses/new`                                          | ✅     |
+| W65 | Check requests                                                         | treasurer                 | `/finance/check-requests`                                        | ✅     |
+| W66 | Dues: set them, record a payment, who is behind                        | treasurer                 | `/finance/dues`                                                  | ✅     |
+| W67 | The department store: shop, check out, my orders, store administration | member → quartermaster    | `/store`, `/inventory/admin/store`                               | ✅     |
+| W68 | Grants: an opportunity, then an application through to its report      | treasurer                 | `/grants/opportunities`, `/grants/applications`                  | ✅     |
+| W69 | Fundraising: campaigns, donors, donations, reports                     | treasurer                 | `/grants/campaigns`, `/grants/donations`                         | ✅     |
 
 ## Tier 10 — Everything else
 
 | #   | Activity                                                                  | Acts as          | Starts at                                  | Status |
 | --- | ------------------------------------------------------------------------- | ---------------- | ------------------------------------------ | ------ |
-| W70 | Administrative hours: clock in and out by QR, manage categories and hours | member → admin   | `/admin-hours`, `/admin-hours/manage`      | ⬜     |
-| W71 | Medical screening                                                         | admin            | `/medical-screening`                       | ⬜     |
-| W72 | Reports                                                                   | admin, chief     | `/reports`                                 | ⬜     |
-| W73 | Integrations                                                              | admin            | `/integrations`                            | ⬜     |
+| W70 | Administrative hours: clock in and out by QR, manage categories and hours | member → admin   | `/admin-hours`, `/admin-hours/manage`      | ✅     |
+| W71 | Medical screening                                                         | admin            | `/medical-screening`                       | ✅     |
+| W72 | Reports                                                                   | admin, chief     | `/reports`                                 | ✅     |
+| W73 | Integrations                                                              | admin            | `/integrations`                            | ✅     |
 | W74 | IP security, and a member's access request                                | member → admin   | `/ip-security/my-requests`, `/ip-security` | ⬜     |
 | W75 | Audit log, error monitoring and analytics                                 | admin            | `/admin/audit-log`, `/admin/errors`        | ⬜     |
 | W76 | Public portal and the public pages                                        | admin, anonymous | `/admin/public-portal`, `/`, `/privacy`    | ⬜     |
@@ -171,6 +171,19 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   Positions and Apparatus steps at 390px wide (W01-13), and the sign-in
   screen's "Forgot your password?", Privacy and Terms links (W02-5), and
   "Back to Login" on the forgot-password page (36px, W03).
+- **Any run touching the app shell** — nothing keeps `TopNavigation` and
+  `SideNavigation` in step. W55-1 found the inbox, the suggestion box and the
+  whole Forms & Comms admin group present only in the side layout. A test
+  comparing the two link sets would catch the next one (W55).
+- **Any run touching Finance Reports or the QuickBooks export settings** —
+  `FinanceReportsPage.tsx` and `QuickBooksExportSettingsPage.tsx` have table
+  cells with no `data-label`. Inside an `rwd-table` body, such a cell is
+  hidden under 768px; that is how W66-2 lost the dues actions on a phone.
+  Check those tables at 390×844.
+- **Any run that merges `main`** — two pull requests that each join the same
+  Alembic fork leave two heads, and nothing starts until a merge revision
+  joins them (W59-1). Run `alembic heads` after a merge that brings in
+  migrations.
 - **W79** — on the Legal Documents page at 390px, "Open /privacy" and each
   "Read this version" summary are 20px tall (W54-6).
 - **W79** — the checklist builder's header and chip controls are 30–40px tall
@@ -185,12 +198,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `user_id`; confirm on the audit page. Also `GET /audit-logs?event_type=runoff_election_created`
   returned 0 for a row visibly present in the table (W50, A10) — check the
   event-type filter.
-- **W57** — the shipped ballot template gained `meeting_date_html` /
-  `meeting_date_text` and reworded callouts (W50-68, carried into stored
-  templates by `cbd97eb`); a department that saved its own
-  `ballot_notification` keeps the old body. Check that the editor's variable
-  palette lists the two and that the preview's "Quorum Met" sample value
-  (`email_template_service.py` ~1062) reads as an example, not a claim.
 - **W50 follow-up** — the election meeting-link → Import Attendees → unlink
   round trip could not be driven in W50. W51 left a business-meeting event for
   it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
@@ -201,7 +208,707 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Minutes, a later pass** — the meetings list badges every meeting "Draft"
   forever (W51-9).
 
+- **Fundraising, a later pass** — the Donations list has a Receipt column
+  but nothing sends a receipt or marks one sent, and donors, donations and
+  campaigns (beyond status and restriction) have no edit control though
+  their `PUT`s now work (W69).
+- **Grants, a later pass** — budget lines and expenditures have update and
+  delete endpoints but no control on the detail page, and a compliance task
+  cannot be given an assignee when it is created (W68).
+- **Admin hours, a later pass** — scanning a second category's QR code while
+  clocked in is refused, but the page neither names the running session nor
+  offers its Clock Out (W70-5).
+- **Reports, a later pass** — every renderer prints its period and row dates
+  as ISO strings (`2026-01-01 — 2026-12-31`), unlike the rest of the app
+  (W72-4).
+
 ## Log
+
+### W73 — Integrations — 2026-10-17
+
+Driven as:
+
+- `admin` connecting, testing and disconnecting iCalendar, connecting Slack
+  with bad and unresolvable URLs and with no config, and disconnecting it
+  through the new confirmation at 390×844;
+- `chief`, `secretary` and `member` for access.
+
+Held:
+
+- a double-clicked Connect makes one connection;
+- bad webhook URLs are refused;
+- only `integrations.manage` holders manage the page;
+- members see on/off state only.
+
+Fixed:
+
+- W73-1 (MED — Disconnect acted on one tap, including Claude (MCP)'s, which
+  revokes every key).
+- W73-2 (LOW — card buttons all read "Connect" / "Disconnect").
+- W73-3 (LOW — an empty-config connect left Slack connected with no
+  webhook).
+- W73-4 (LOW — the messaging webhook field had no label).
+
+Flagged: W73-5 (MED — iCalendar is a switch with no reader).
+
+Environment: the sandbox has no outbound DNS, so no integration that needs
+a real service was driven past its URL check.
+
+Gate: typecheck and lint are clean; 49 integrations frontend tests and 121
+integration and MCP-key backend tests pass.
+
+Next: W74.
+
+### W72 — Reports — 2026-10-16
+
+Driven as:
+
+- `admin` generating all thirteen reports, the Admin Hours report on the page
+  with its CSV, and a saved report;
+- `chief` (`reports.view` without `admin_hours.manage`) on the page and the
+  report viewer at 390×844.
+
+Held:
+
+- every report generates;
+- Admin Hours totals match the admin-hours summary;
+- CSV export;
+- a double-clicked save records once;
+- the server refuses what the caller's permissions do not cover.
+
+Fixed:
+
+- W72-1 (MED — the page offered reports `/available` would have hidden, and
+  the catalog never listed Admin Hours, so it could not be hidden or saved).
+- W72-2 (MED — the Admin Hours report dated evening entries by their UTC
+  day).
+- W72-3 (LOW — "Qr Scan", unnamed Run / Edit on saved reports, viewer touch
+  targets).
+
+Open, as a lead: W72-4 (NIT — ISO dates in every renderer).
+
+Gate: typecheck and lint are clean; 74 reports frontend tests and 1,109
+report-related backend tests pass.
+
+Next: W73.
+
+### W71 — Medical screening — 2026-10-16
+
+Driven as:
+
+- `admin` adding a recurring and a one-time requirement, recording passed
+  physicals, reading the Compliance tab, and editing a record at 390×844;
+- `member`, `chief`, `membership_coordinator`, `training_officer` and
+  `secretary` for access, and `member`'s own dashboard standing.
+
+Held:
+
+- labelled forms, with the inert settings marked "Not enforced yet";
+- double-clicks record once;
+- the roster grades against every requirement;
+- only `admin` can see screenings; five other roles are refused on page and
+  API.
+
+Fixed:
+
+- W71-1 (MED — a recurring screening recorded without an expiration never
+  fell due; the record form now fills it in from the frequency).
+- W71-2 (MED — a record or requirement edit saved, then answered 500).
+- W71-3 (LOW — ISO dates and a missing completed date in the lists; record
+  buttons not naming the member; 16px Edit / Delete).
+
+Flagged: W71-1's grading half (MED — no-expiration records stay compliant
+forever, and records match requirements by type).
+
+Gate: typecheck and lint are clean; 166 medical-screening and date-utility
+frontend tests and 88 medical-screening backend tests pass.
+
+Next: W72.
+
+### W70 — Administrative hours: clock in and out by QR, manage categories and hours — 2026-10-16
+
+Driven as:
+
+- `admin` adding categories, opening a QR page, reviewing (approve, reject
+  with a reason), the summary, All Entries, the export, and ending a running
+  session at 390×844;
+- `member` at 390×844 clocking in and out through the QR URL, trying a second
+  category while clocked in, logging hours manually, and resubmitting a
+  rejected entry.
+
+Held:
+
+- double-clicks record once;
+- Chicago times stored as UTC and shown back correctly;
+- a second session, a future end and an empty reason are refused with
+  reasons;
+- review outcomes reach the member;
+- summary, list and CSV agree;
+- member refused on page and API.
+
+Fixed:
+
+- W70-1 (MED — two active categories could share a name, case-insensitively,
+  beside the seeded defaults).
+- W70-2 (LOW — category form fields and colour swatches unnamed; identical row
+  buttons).
+- W70-3 (LOW — Pending Review controls did not say whose entry).
+- W70-4 (LOW — raw status codes, unnamed manual-form fields and time pickers,
+  retired categories unmarked in the filter, "1 entries", touch targets).
+
+Open, as a lead: W70-5 (LOW — no way out from a second category's clock-in
+page).
+
+Gate: typecheck and lint are clean; 121 admin-hours frontend tests and 152
+admin-hours backend tests pass.
+
+Next: W71.
+
+### W69 — Fundraising: campaigns, donors, donations, reports — 2026-10-15
+
+Driven as:
+
+- `treasurer` creating campaigns, donors, donations, a pledge and its payment,
+  an event, then Reports and the dashboard;
+- `secretary` (view), `member` and `quartermaster` (none) for access, with an
+  anonymous gift on record;
+- 390×844 for every fundraising page.
+
+Held:
+
+- double-clicks record once;
+- donations move campaign totals and donor stats;
+- Chicago dates and times;
+- Reports' totals and method split;
+- access and anonymity, on screen and at the API.
+
+Fixed:
+
+- W69-1 (HIGH — every fundraising edit was a 500 and rolled back: campaign,
+  donor, donation, pledge, event; the W68 lead).
+- W69-2 (MED — a campaign could only ever be Draft: the create dropped the
+  status and nothing changed it after; no end date on the form).
+- W69-3 (MED — directory donors' gifts read "Unknown"; raw status; a failed
+  load read as an empty list).
+- W69-4 (MED — "Total Raised (12mo)" always $0: `totalRaised12Mo` on the
+  wire).
+- W69-5 (LOW — donor form labels, unnamed links and filters, "2026-10",
+  silent failure toasts, touch targets).
+
+Flagged: W69-6 (LOW — a business donor must be entered as a person).
+
+Gate: typecheck and lint are clean; 72 grants-fundraising frontend tests and
+821 fundraising and grant backend tests pass.
+
+Next: W70.
+
+### W68 — Grants: an opportunity, then an application through to its report — 2026-10-15
+
+Driven as:
+
+- `treasurer` adding an opportunity, starting an application from it, and
+  working it through budget, the status lifecycle to Reporting, an
+  expenditure, a compliance task, a note, the dashboard and Reports;
+- `secretary` (view), `chief` (manage), `member` and `quartermaster` (none)
+  for access;
+- 390×844 for opportunities, the detail page, the form, the list and the
+  budget dialog.
+
+Held:
+
+- the status picker follows the lifecycle;
+- awarding creates the inventory task;
+- the overspend warning;
+- Reports' totals;
+- access, on screen and at the API.
+
+Fixed:
+
+- W68-1 (HIGH — no budget line, expenditure, compliance task or note could be
+  added: each create schema required a body `application_id` the page never
+  sent).
+- W68-2 (HIGH — budget categories sent as labels).
+- W68-3 (HIGH — Mark Complete, and budget-line and opportunity edits, 500ed
+  after the write).
+- W68-4 (HIGH — any save with Key Contacts or Budget Summary filled was a
+  422).
+- W68-5 (MED — "Assigned To" was free text for a member id: dropped on
+  create, refused on edit).
+- W68-6 (MED — no way to record the award, award date or report dates).
+- W68-7 (MED — budget totals read "-"; over-budget compared strings).
+- W68-8 (LOW — note type, silent failure toasts, a task due today read
+  Overdue, Start Application offered to view-only members, touch targets).
+
+Flagged: W68-9 (LOW — key contacts: text or structured), W68-10 (LOW —
+opportunities cannot be edited or retired from the screen).
+
+Gate: typecheck and lint are clean; 64 grants frontend tests and 761 grant
+backend tests pass.
+
+Next: W69.
+
+### W67 — The department store — 2026-10-15
+
+Driven as:
+
+- `quartermaster` setting the store up (settings, a sized item with a
+  per-member limit, an order window) and working an order through payment
+  to fulfilled;
+- `member` shopping and checking out;
+- `member2` probing, ordering and cancelling;
+- 390×844 for the store, My Orders and the console.
+
+Held:
+
+- clear validation on items and windows;
+- every double-click records once;
+- the payment policy is stated at checkout;
+- status changes reach My Orders;
+- another member and the admin list refuse a member.
+
+Fixed:
+
+- W67-1 (MED — a per-member limit showed as "Only 2 left" in every size, and
+  would have read "Sold out" once reached; offers now carry
+  `stock_available`).
+- W67-2 (MED — the stepper went past the limit, and the refusal blamed
+  stock).
+- W67-3 (MED — cancelling an order took one tap).
+- W67-4 (LOW — the countdown announced 17 days beside a visible 16).
+- W67-5 (LOW — 16–20px checkboxes and back link; unnamed row buttons).
+
+Flagged: W67-6 (LOW — the cart is lost on a reload).
+
+Environment: today's merge needed `nh3` and `npm ci` before the schema and
+typecheck would build.
+
+Gate: typecheck and lint are clean; 207 storefront frontend and 416
+storefront backend tests pass.
+
+Next: W68.
+
+### W66 — Dues: set them, record a payment, who is behind — 2026-10-14
+
+Driven as:
+
+- `treasurer` creating two schedules, generating dues, recording payments,
+  waiving, and reading the history;
+- `member` probing for their own dues;
+- 390×844 for the dues page and the payment dialog.
+
+Held:
+
+- labelled dialogs with clear validation;
+- generation confirms and skips members already billed;
+- every double-click records once;
+- a waiver needs a reason, and the treasurer cannot waive their own;
+- a member gets 403.
+
+Fixed:
+
+- W66-1 (MED — dues generated after their due date read "Pending", so the
+  Overdue filter found nobody behind).
+- W66-2 (MED — on a phone the reflowed table hid every row's actions, so no
+  payment could be recorded).
+
+Flagged:
+
+- W66-3 (MED — an overpayment is accepted silently and counted as
+  collected).
+- W66-4 (MED — a member has no way to see their own dues, and is never told
+  they are due).
+
+Gate: typecheck and lint are clean; 565 finance frontend tests and 45 dues
+backend tests pass (4 new).
+
+Next: W67.
+
+### W65 — Check requests — 2026-10-14
+
+Driven as:
+
+- `treasurer` raising and submitting a check, then trying to approve and issue
+  their own;
+- `admin` approving, issuing and voiding it;
+- `member` probing;
+- 390×844 for the list, form and detail page.
+
+Held:
+
+- labelled form, with each missing field named;
+- every double-click records once;
+- separation of duties refuses the requester at approval and at issue;
+- issue and void move the budget line's spending and back;
+- a member gets 404 and 403.
+
+Fixed:
+
+- W65-1 (MED — a refused issue or void showed only "Failed to …").
+- W65-2 (MED — voiding, which is final and reverses spending, took one tap).
+- W65-3 (LOW — "You cannot issue check your own check request").
+- W65-4 (LOW — "Valley Fuel Co.." in the issue dialog).
+- W65-5 (LOW — small controls on the list and form).
+
+Flagged: none new. The check took a purchase-request chain, confirming W64-4.
+
+Gate: typecheck and lint are clean; the finance tests pass (6 new); the
+separation-of-duties backend tests pass.
+
+Next: W66.
+
+### W64 — An expense report, from receipt to reimbursement — 2026-10-14
+
+Driven as:
+
+- `member` building a two-line report, attaching receipts and submitting;
+- `treasurer` approving, overriding the emailed step and recording payment;
+- `member2` probing another member's report;
+- 390×844 for the list, form and detail page.
+
+Held:
+
+- validation;
+- receipts required before submit;
+- every double-click records once;
+- uploads fail closed, with a clear message, when no scanner is reachable;
+- another member gets 404, and only a finance manager can mark paid.
+
+Fixed:
+
+- W64-1 (HIGH — an approved report could never be marked paid: the endpoint
+  existed and no control called it).
+- W64-2 (LOW — unlabelled report and line fields).
+- W64-3 (LOW — small controls on four screens).
+
+Flagged:
+
+- W64-4 (HIGH — purchase-request chains also route expense reports and check
+  requests, and can outrank their own chains).
+- W64-5 (MED — an expense line cannot be charged to a budget, so a paid
+  reimbursement reaches no budget line).
+
+Harness: the review backend now runs with `CLAMAV_ENABLED=false` (overridable
+with `WR_CLAMAV_ENABLED`), because without a scanner no upload could be made.
+
+Gate: typecheck and lint are clean; 558 finance tests pass (6 new).
+
+Next: W65.
+
+### W63 — A purchase request through its approval chain — 2026-10-14
+
+Driven as:
+
+- `member` raising, submitting and following two requests;
+- `treasurer` adding a two-step "Large purchases" chain, approving, denying,
+  and marking a request ordered, received and paid;
+- `chief` as the named second approver;
+- `admin` overriding the Chief's step;
+- 390×844 for the list, form, detail page and queue.
+
+Held:
+
+- validation;
+- the more specific chain wins;
+- every double-click records once;
+- override and deny require a reason, and the member sees it;
+- the budget line commits on approval and spends on payment;
+- no overflow on a phone.
+
+Fixed:
+
+- W63-1 (MED — straight after submitting, the request said it had no
+  approval steps; purchase, expense and check submit responses now carry
+  them).
+- W63-2 (MED — the coverage report called a step covered when its approver
+  lacked `finance.approve`; new problem `no_approve_permission`).
+- W63-3 (LOW — seven unlabelled form fields).
+- W63-4 (LOW — 20–38px controls on four screens).
+
+Flagged:
+
+- W63-5 (MED — the approver a chain names may be unable to approve).
+- W63-6 (MED — nobody is told a request waits on them, or was decided).
+- W63-7 (MED — "Mark Paid" always records the estimate).
+
+Gate: typecheck and lint are clean; 560 frontend and 970 finance backend
+tests pass (7 new).
+
+Next: W64.
+
+### W62 — Approval chains, finance settings and the emailed approval — 2026-10-14
+
+Driven as:
+
+- `treasurer` configuring a three-step chain (position, email, notification)
+  and approving step 1;
+- `member` raising the request that ran through it;
+- a signed-out external approver on the emailed link, at 390×844;
+- five roles against the chain endpoints.
+
+Held:
+
+- chain create, reorder, rename and delete-with-confirm survive a reload;
+- configuration is finance-only;
+- each double-click recorded once;
+- the emailed link approves once and the member sees the result;
+- the notification step says it sends no email.
+
+Fixed:
+
+- W62-1 (MED — a used or cut-short approval link showed the API's raw
+  error to an outside approver).
+- W62-2 (MED — fiscal years displayed a day early).
+- W62-3 (LOW — the fiscal-year and category panels were not dialogs, ignored
+  Escape, and three fields were unlabelled).
+- W62-4 (LOW — six New Approval Chain fields were unlabelled).
+- W62-5 (LOW — two small tap targets).
+
+Flagged:
+
+- W62-6 (MED — an emailed approval that is never sent, or that expires, cannot
+  be re-sent, and nothing says it was not sent).
+- W62-7 (MED — the external approver is shown no title or amount).
+
+Gate: typecheck and lint are clean; 563 tests pass (6 new).
+
+Next: W63.
+
+### W61 — Budgets — 2026-10-14
+
+Driven as:
+
+- `treasurer` setting up a fiscal year and two categories (none existed), then
+  adding, editing and amending budget lines;
+- `admin` confirming the amendment;
+- `training_officer` reading the line they own, and refused another;
+- five roles against list and create;
+- 390×844 for the list and the add dialog.
+
+Held:
+
+- one record from each double-click;
+- the cleared notes saved as null;
+- an inherited owner shown in the form and the table;
+- an amendment held at "Pending confirmation" until a second officer
+  confirmed it, after which the budget rose;
+- finance-only list and edit, and owner-only reading of a line;
+- no unexpected failed requests.
+
+Fixed:
+
+- W61-1 (MED — an overspent line read "Near limit" in the list while its own
+  page said "Over budget").
+- W61-2 (LOW — the row's chevron link had no name, and both row links were
+  16px on a phone).
+- W61-3 (LOW — an overdrawn total showed in green).
+
+Flagged: none. Two W62 leads seen in Finance Settings while setting up.
+
+Gate: typecheck and lint are clean; the finance tests pass (500, 3 new).
+
+Next: W62.
+
+### W59 — Photo-use consent — 2026-10-13
+
+Driven as:
+
+- `member` agreeing, and `member2` declining, from My Account → Privacy;
+- `admin` reaching the roster from the Admin menu, then using its tiles,
+  chips, search, sort and the inactive toggle;
+- eight roles against the roster API, and three against the menu link;
+- 390×844 for the roster.
+
+Held:
+
+- both choices reach the roster, dated, and survive a reload;
+- the roster is read-only;
+- the API, the page and the menu agree on who may see it;
+- no console errors or failed requests.
+
+Fixed:
+
+- W59-1 (HIGH — `main` had two Alembic heads, so no install could upgrade
+  and the harness would not start; joined by an empty merge revision, pushed
+  on its own first).
+- W59-2 (MED — the roster told members to answer under Settings → Security;
+  it is My Account → Privacy).
+- W59-4 (LOW — chip clear buttons, "Clear all", the inactive toggle and name
+  links were 16–20px on a phone).
+
+Flagged: W59-3 (MED — a member cannot record "no" without first recording
+"yes", so the ledger shows an agreement that never happened and refusers stay
+"not answered").
+
+Gate: typecheck and lint are clean; 261 communications tests pass (2 new);
+`test_alembic_migrations.py` passes; flake8, black and isort are clean on the
+migration.
+
+Next: W61.
+
+### W58 — Suggestion boxes and suggestions — 2026-10-13
+
+Driven as:
+
+- `admin` creating, editing and (cancelling) deleting a box;
+- `member` submitting named and anonymous, then following both up (My
+  submissions, and the key);
+- `secretary` reviewing: disposition, response, internal note, reply, and
+  publish to the board;
+- `member2` voting and probing others' submissions;
+- `admin` as a box manager who reviews nothing;
+- board and submit form at 390×844.
+
+Database continued from W57; `main` merged in first.
+
+Held:
+
+- double-clicks acted once;
+- anonymity end to end: no name in review, in the key view or on the
+  board;
+- the internal note stays internal;
+- only reviewers read a box, and the manager cannot;
+- the vote toggles and survives a reload;
+- deleting a box with submissions requires its name and offers archive;
+- reviewer and submitter notices.
+
+Fixed: W58-1 (HIGH — every box made without intake questions, the screen's
+default, stored NULL. The review summary 500'd on it, so its reviewers never
+saw the Review tab).
+
+Flagged: none.
+
+Gate: typecheck and lint are clean; flake8, black and isort are clean on the
+changed Python files; 142 suggestion backend tests pass (2 new). The local test
+database had to be brought up to a migration from today's merge first.
+
+Next: W59.
+
+### W57 — Email templates: edit, preview, restore — 2026-10-13
+
+Driven as:
+
+- `admin` editing Event Reminder, switching templates mid-edit, saving,
+  resetting, sending a test with email off, and reading the Ballot
+  Notification and Election Report previews;
+- `member` refused;
+- the list at 390×844.
+
+Database continued from W56; `main` merged in first.
+
+Held:
+
+- the live preview follows the draft;
+- a double-clicked Save wrote once, and a tab change keeps the draft;
+- Reset asks, and truthfully says it cannot be undone;
+- the member was refused everywhere.
+
+The W50-68 lead is resolved: the meeting-date variables are in the palette,
+and the preview's quorum line is labelled sample data.
+
+Fixed:
+
+- W57-1 (MED — picking another template silently discarded an unsaved
+  edit; refresh now warns too);
+- W57-2 (MED — a test send with email off came back as a 500 "Email sent but
+  failed to log history", and both screens hid the reason);
+- W57-3 (LOW — unlabelled filter and preview member picker);
+- W57-4 (LOW — 28px group headers on a phone).
+
+Also updated `MessagesAdminPage.delivery.test.tsx`, new from `main`, to W55's
+per-message button names.
+
+Flagged: none.
+
+Gate: typecheck and lint are clean; flake8, black and isort are clean on the
+changed Python files. 258 communications frontend tests pass (4 new), as do 13
+test-send and history backend tests (1 new).
+
+Next: W58.
+
+### W56 — Notification rules and logs, the in-app bell — 2026-10-12
+
+Driven as:
+
+- `admin` creating a rule on an empty install, switching it off, and reading
+  the Send Log and Email Templates tabs;
+- `member` in the inbox (opening a stack, pinning, reading, following a
+  notification for a message deleted in W55), the bell, the Send Log, and the
+  rules API;
+- the inbox and Send Log repeated at 390×844.
+
+Database continued from W55.
+
+Held:
+
+- a double-clicked create made one rule;
+- the switch, a pin and a read each survived a reload;
+- the bell followed the inbox;
+- the member was refused every rules call;
+- `?tab=` was honoured only where allowed;
+- a deleted message's notification lands on "Message unavailable".
+
+Fixed:
+
+- W56-1 (MED — Tab reached the hidden buttons of a closed notification
+  card);
+- W56-2 (LOW — the rule switch had no name, the Trigger Event label was
+  linked to nothing, and the create error was not announced);
+- W56-3 (LOW — the Send Log filter showed its selection by colour alone, at
+  28px on a phone).
+
+Flagged: W56-4 (MED — a rule cannot be renamed or deleted from the screen,
+and deleting one quietly turns that trigger's notifications back on; in
+KNOWN_LIMITATIONS).
+
+Gate: typecheck and lint are clean. 72 notification frontend tests pass (4
+new). No backend change.
+
+Next: W57.
+
+### W55 — Messages: send to a group, the member's inbox, message administration — 2026-10-05
+
+Driven as:
+
+- `admin` composing to one member, to a role and to everyone; scheduling,
+  editing, deleting, and reading the acknowledgment report;
+- `member` reading and acknowledging;
+- `member2` as a non-recipient, trying the message's URL and the admin
+  endpoints;
+- the inbox, the message and the admin screen repeated at 390×844.
+
+Database continued from W54.
+
+Held:
+
+- targeting, scheduling and delete, each checked from the other member's
+  inbox;
+- double-clicks acted once;
+- a cleared expiry stayed cleared;
+- every refusal (404 to a non-recipient, 403 on admin endpoints);
+- email-first delivery with SMS only through the allowlist (read from code).
+
+Fixed:
+
+- W55-1 (HIGH — on the top-navigation layout, the inbox, the suggestion box
+  and the Forms & Comms admin screens had no menu entry);
+- W55-2 (MED — the compose form replaced the server's reason with "Try
+  again"; the expiry messages are reworded too);
+- W55-3 (LOW — every row's buttons had the same name, and were 32px on a
+  phone);
+- W55-4 (LOW — unlabelled member search, and 20px checkbox rows).
+
+Flagged: none.
+
+New leads:
+
+- nothing keeps the two navigation layouts in step;
+- W57, W58 and W59 should be reached from the navigation.
+
+Gate: typecheck and lint are clean; flake8 and black are clean on the changed
+Python files. 300 communications and layout frontend tests pass (7 new), as do
+79 messaging service tests.
+
+Next: W56.
 
 ### W54 — Org chart and legal documents — 2026-10-04
 

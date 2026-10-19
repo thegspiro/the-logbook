@@ -149,6 +149,18 @@ class TestGetAvailableReports:
         assert "compliance_status" in report_ids
         assert "call_volume" in report_ids
 
+    async def test_lists_the_admin_hours_report(self, service):
+        # W72: generate_report ran admin_hours, but the catalog never listed it,
+        # so the PII filter on /available and the Saved Reports picker never saw
+        # it.
+        reports = {
+            r["id"]: r
+            for r in (await service.get_available_reports())["available_reports"]
+        }
+
+        assert reports["admin_hours"]["category"] == "admin"
+        assert reports["admin_hours"]["usesDateRange"] is True
+
     async def test_new_reports_are_available(self, service):
         result = await service.get_available_reports()
         new_reports = {

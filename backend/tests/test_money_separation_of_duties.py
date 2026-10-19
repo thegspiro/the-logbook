@@ -45,7 +45,7 @@ class TestFinanceDisbursementSoD:
         db = MagicMock()
         db.execute = AsyncMock(return_value=_one(SimpleNamespace(requested_by="u1")))
         svc = FinanceService(db)
-        with pytest.raises(ValueError, match="cannot issue check your own"):
+        with pytest.raises(ValueError, match="cannot issue your own check request"):
             await svc.issue_check("cr1", "org1", "1001", acted_by="u1")
 
     async def test_member_cannot_waive_own_dues(self):

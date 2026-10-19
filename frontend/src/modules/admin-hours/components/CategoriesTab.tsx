@@ -249,15 +249,18 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
               <div className="flex items-center gap-2">
                 <Link
                   to={`/admin-hours/categories/${cat.id}/qr-code`}
-                  className="text-theme-text-secondary p-2 transition hover:text-blue-500"
+                  className="text-theme-text-secondary touch-target-phone p-2 transition hover:text-blue-500"
                   title="View QR Code"
+                  aria-label={`QR code for ${cat.name}`}
                 >
                   <QrCode className="h-5 w-5" />
                 </Link>
                 <button
                   onClick={() => startEdit(cat)}
-                  className="text-theme-text-secondary p-2 transition hover:text-blue-500"
+                  type="button"
+                  className="text-theme-text-secondary touch-target-phone p-2 transition hover:text-blue-500"
                   title="Edit"
+                  aria-label={`Edit ${cat.name}`}
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
@@ -266,8 +269,10 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
                     onClick={() => {
                       void handleDelete(cat.id);
                     }}
-                    className="text-theme-text-secondary p-2 transition hover:text-red-500"
+                    type="button"
+                    className="text-theme-text-secondary touch-target-phone p-2 transition hover:text-red-500"
                     title="Deactivate"
+                    aria-label={`Deactivate ${cat.name}`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
