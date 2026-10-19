@@ -1889,6 +1889,16 @@ class ExportLog(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # When the Treasurer confirmed the file was imported into QuickBooks. The
+    # export can only see that a file was produced; this is the one record of
+    # what QuickBooks actually holds, and sending its payments again is
+    # refused until the Treasurer confirms that too.
+    imported_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    imported_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relationships
     organization: Mapped["Organization"] = relationship(
@@ -1897,3 +1907,34 @@ class ExportLog(Base):
     exporter: Mapped["User"] = relationship("User", foreign_keys=[exported_by])
 
     __table_args__ = (Index("ix_export_logs_org_id", "organization_id"),)
+
+
+class QuickBooksChartAccount(Base):
+    """One account of the department's QuickBooks chart of accounts, as the
+    Treasurer last uploaded it.
+
+    The journal-entry import matches accounts by name, so a name the chart
+    does not hold fails at import, after the file has left. With a chart on
+    file the export refuses such a name first. Each upload replaces the whole
+    set; none on file turns the check off.
+    """
+
+    __tablename__ = "finance_qb_chart_accounts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The full name, subaccounts as Parent:Child, exactly as QuickBooks lists it.
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    account_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    uploaded_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (Index("ix_finance_qb_chart_accounts_org_id", "organization_id"),)

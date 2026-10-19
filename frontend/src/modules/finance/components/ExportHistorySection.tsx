@@ -8,11 +8,18 @@
  * "failed" (nothing was delivered). The status words are the backend's
  * states; this section only labels them.
  *
+ * The export can only see that a file was produced, so the Treasurer
+ * confirms here which complete files were actually imported into QuickBooks
+ * (`POST`/`DELETE /finance/export/logs/{id}/imported`). Sending a confirmed
+ * file's payments again is then refused until confirmed too
+ * (RunExportSection).
+ *
  * Loaded on its own so a failure here never hides the mappings above it.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { History } from 'lucide-react';
+import { CheckCircle, History } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { formatDate, formatDateTime, formatNumber } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
@@ -53,6 +60,7 @@ export const ExportHistorySection: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   const loadPage = useCallback(async (skip: number) => {
     const page = await exportMappingService.logs({ skip, limit: PAGE_SIZE });
@@ -87,11 +95,32 @@ export const ExportHistorySection: React.FC = () => {
     }
   };
 
+  const setImported = async (log: ExportLog, imported: boolean) => {
+    setSavingId(log.id);
+    try {
+      const updated = imported
+        ? await exportMappingService.confirmImported(log.id)
+        : await exportMappingService.withdrawImported(log.id);
+      setLogs((current) => current?.map((row) => (row.id === updated.id ? updated : row)) ?? current);
+      toast.success(imported ? 'Marked as imported into QuickBooks' : 'No longer marked as imported');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not update the export.'));
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const period = (log: ExportLog) => `${formatDate(log.dateRangeStart, tz)} – ${formatDate(log.dateRangeEnd, tz)}`;
+
   return (
     <section aria-labelledby="export-history-heading" className="space-y-3">
       <h2 id="export-history-heading" className="text-theme-text-primary text-lg font-semibold">
         Export history
       </h2>
+      <p className="text-theme-text-secondary text-sm">
+        Once you have imported a file into QuickBooks, mark it imported here. Sending its payments again is then refused
+        unless you confirm the earlier entries were deleted in QuickBooks.
+      </p>
       {error && <p className="alert-danger rounded-lg p-4 text-sm">{error}</p>}
       {logs === null ? (
         !error && <p className="text-theme-text-secondary text-sm">Loading export history…</p>
@@ -122,6 +151,9 @@ export const ExportHistorySection: React.FC = () => {
                   <th scope="col" className={HEADER_CELL}>
                     By
                   </th>
+                  <th scope="col" className={HEADER_CELL}>
+                    In QuickBooks
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -131,7 +163,7 @@ export const ExportHistorySection: React.FC = () => {
                       {formatDateTime(log.exportedAt, tz)}
                     </td>
                     <td data-label="Period" className={CELL}>
-                      {formatDate(log.dateRangeStart, tz)} – {formatDate(log.dateRangeEnd, tz)}
+                      {period(log)}
                     </td>
                     <td data-label="Transactions" className={CELL}>
                       {formatNumber(log.recordCount)}
@@ -150,6 +182,41 @@ export const ExportHistorySection: React.FC = () => {
                     </td>
                     <td data-label="By" className={CELL}>
                       {log.exportedByName || <span className="text-theme-text-secondary">Unknown</span>}
+                    </td>
+                    <td data-label="In QuickBooks" className={CELL}>
+                      {log.importedAt ? (
+                        <>
+                          <span className="inline-flex items-center gap-1 text-green-800 dark:text-green-400">
+                            <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                            Imported
+                          </span>
+                          <span className="text-theme-text-secondary block text-xs">
+                            {formatDateTime(log.importedAt, tz)}
+                            {log.importedByName ? ` by ${log.importedByName}` : ''}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void setImported(log, false)}
+                            disabled={savingId === log.id}
+                            className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 mt-1 text-xs underline"
+                            aria-label={`Undo marking the export for ${period(log)} as imported`}
+                          >
+                            Undo
+                          </button>
+                        </>
+                      ) : log.status === 'successful' ? (
+                        <button
+                          type="button"
+                          onClick={() => void setImported(log, true)}
+                          disabled={savingId === log.id}
+                          className="btn-secondary"
+                          aria-label={`Mark the export for ${period(log)} as imported into QuickBooks`}
+                        >
+                          Mark as imported
+                        </button>
+                      ) : (
+                        <span className="text-theme-text-secondary">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
