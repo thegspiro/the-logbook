@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3436](https://github.com/thegspiro/the-logbook/pull/3436)** (branch
+`claude/security-review-scheduling`). PR #3435 (Feature 14, Equipment check
+& shifts, pass 10) merged 2026-10-19 — not independently recordable here
+beyond what follows. This iteration (watchdog pickup, same conditions as
+above) reviewed Feature 15 (Scheduling), pass 9 — 0 fixes, 0 new findings;
+near-zero delta of 2 commits in scope, both verified clean; SCH-19
+re-confirmed OPEN. Rotation row 15 → ✅ (pending this PR's merge); next is
+Feature 16 (Events & requests).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 10, PR #3435, merged), preserved for history</summary>
+
 **PR [#3435](https://github.com/thegspiro/the-logbook/pull/3435)** (branch
 `claude/security-review-equipment-check-shifts`). PR #3434 (Feature 13,
 Apparatus & NFC, pass 17) merged 2026-10-19, docs-only — not independently
@@ -25,6 +37,8 @@ conditions as above) reviewed Feature 14 (Equipment check & shifts), pass
 Supplies work, all verified correctly org-scoped and permissioned.
 Rotation row 14 → ✅ (pending this PR's merge); next is Feature 15
 (Scheduling).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 10, PR #3431, merged), preserved for history</summary>
@@ -20194,8 +20208,8 @@ iteration's commit" rule.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | 🔄     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -20222,6 +20236,55 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-19 — Feature 15 (Scheduling, pass 9) — watchdog pickup, near-zero delta (2 commits in-scope), 0 fixed, 0 new findings; SCH-19 re-confirmed OPEN
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results), and the
+dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). PR #3435 (Feature 14, Equipment check & shifts,
+pass 10) had already merged. Rotation row 15 (Scheduling) was the next
+pending feature.
+
+**0 fixes applied, 0 new findings.** Baseline `2e187929d` (PR #3293's
+merge — pass 8's own PR #3291 plus its same-day addendum, SCH-18
+fixed/SCH-19 flagged, both already documented in `SCH-15-scheduling.md`).
+Only 2 non-merge commits touch the 13 declared files, confined to
+`scheduling.py` and `scheduling_service.py`: an empty-week "go to the next
+shift" pointer (frontend-only navigation hint, calling the existing
+`getShifts` endpoint) paired with a backend change that saves a member's
+own shift sign-up as confirmed rather than pending — a self-scoped write to
+the caller's own assignment row, no new id accepted from the client; and a
+fix that stops an already-ended shift from still offering a live Sign Up
+button on the Open Shifts board, which tightens an existing org-scoped
+query rather than loosening it. Two further repo-wide form-payload
+commits touch this module's edit forms only to apply the CLAUDE.md
+Pitfall #1 pattern correctly (`blankToNull`-equivalent `formCoercions()`
+sending an explicit `null` for a cleared field on edit); the one
+client-supplied FK involved, `apparatus_id` on `update_template`, is
+unchanged and still validated in-org server-side. Both scope-boundary
+groups flagged by earlier passes (External Shift Hours, SCH-15; the
+pre-shift-work/history-import group, SCH-17) have zero diff this window —
+recommendation to formally resolve their scope unchanged. SCH-19 (no
+size cap on `member_call_counts`/`reported_call_types`) re-confirmed OPEN
+by direct read; already mirrored in `KNOWN_LIMITATIONS.md`, not
+re-added. Route count: 111, unchanged — no route added, removed, or
+re-gated this pass.
+
+Full writeup: [`SCH-15-scheduling.md`](./SCH-15-scheduling.md)'s **Pass 9**
+section.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
+alembic/` (CI's pinned 7.3.0/26.5.1/9.0.1, installed fresh this session);
+`validate_migrations.py --strict` — 623 revisions, single head
+`2315d544d60a`; `check_route_permissions.py --strict` — 272 routes, 0
+errors; `pytest tests/ -q -k "scheduling or shift or swap or calcom or
+position_slots or call_tracking or call_type or pre_shift or pre_work or
+custom_crew or open_swap or xc1_scheduling"` — 1840 passed, 1 pre-existing
+skip (`pywebpush`); frontend `npm run typecheck`/`npm run lint` both clean.
+
+Rotation row 15 → ✅. Next: Feature 16 (Events & requests).
 
 ### 2026-10-19 — Feature 12 (Facilities, pass 10) — watchdog pickup, real delta (4 commits in-scope), 0 fixed, 0 new findings; FAC-30 re-confirmed the only standing item
 
