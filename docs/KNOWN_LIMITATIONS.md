@@ -1820,7 +1820,12 @@ inside that one:
   cannot see whether the Treasurer then imported the file. A file downloaded
   and never imported leaves its payments marked as sent; the Treasurer sends
   that period again with `includeExported`. The live connection would close
-  this, since it would know what QuickBooks accepted.
+  this, since it would know what QuickBooks accepted. _(2026-10-18)_ The
+  Treasurer can now mark a file as imported in **Export history**, and sending
+  a marked file's payments again is refused until they confirm the earlier
+  entries were deleted. That depends on the Treasurer marking it: an imported
+  file left unmarked is still not caught, and importing the same file twice
+  inside QuickBooks never reaches the module at all.
 - **Only voided checks are reversed.** Paid purchase requests and expense
   reports cannot be un-paid in the module, so there is nothing to reverse; a
   refund or correction after export is entered in QuickBooks by hand.
@@ -1831,6 +1836,15 @@ inside that one:
   a vendor or customer on those lines and the file has no Name column. The
   check recognizes QuickBooks' standard names only, so a renamed A/P or A/R
   account passes and fails at import instead.
+- **The chart of accounts check is only as current as the upload.**
+  _(2026-10-18)_ An account added or renamed in QuickBooks after the last
+  upload is refused here until the Treasurer uploads the Account List again,
+  and one deleted there still passes. Names are matched exactly, case
+  included; whether QuickBooks' import itself ignores case was not confirmed,
+  so a name differing only in case is refused rather than assumed to work. The
+  parser reads the Account List report's layout as Intuit has published it
+  ("Account" or "Full name" columns); a future change to that report could
+  need the parser updated.
 
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 
