@@ -671,8 +671,8 @@ The chain with the highest score wins. If no chain matches at all (or the matchi
 | **Name**            | A descriptive name for the chain (e.g., "Standard Purchase Approval")                       |
 | **Description**     | Optional notes about when this chain applies                                                |
 | **Applies To**      | Which request type this chain governs: Purchase Requests, Expense Reports or Check Requests |
-| **Min Amount**      | The minimum dollar amount for this chain to apply (leave blank for no minimum)              |
-| **Max Amount**      | The maximum dollar amount for this chain to apply (leave blank for no maximum)              |
+| **Min Amount**      | The lowest dollar amount this chain applies to, included (leave blank for no minimum)       |
+| **Max Amount**      | The highest dollar amount this chain applies to, included (leave blank for no maximum)      |
 | **Budget Category** | Optionally restrict this chain to requests in a specific budget category                    |
 | **Default chain**   | Whether this chain is the default fallback for its request type                             |
 | **Active**          | Whether the chain is in use. Inactive chains are ignored for new requests                   |
@@ -684,7 +684,7 @@ The chain with the highest score wins. If no chain matches at all (or the matchi
 3. Enter the chain **Name** and optional **Description**.
 4. Choose what it **Applies To**: Purchase Requests, Expense Reports, or Check Requests.
 5. Optionally choose a **Budget Category** (or leave **Any category**).
-6. Optionally set **Min Amount ($)** and **Max Amount ($)**.
+6. Optionally set **Min Amount ($)** and **Max Amount ($)**. Both are included in the range, the minimum cannot be above the maximum, and neither can be negative or more than $9,999,999,999.99. When an amount fits two chains (for example exactly $500.00 with one chain up to $500 and another from $500), it goes to the chain with the higher minimum.
 7. Tick **Default chain (preferred when no more specific chain matches)** if this should be the fallback for its request type.
 8. Select **Create Chain**.
 
@@ -798,7 +798,7 @@ A typical fire department might configure these chains:
 
 **Purchase Requests:**
 
-- "Small Purchases" (under $500): 1 step -- Captain Approval
+- "Small Purchases" (up to $499.99): 1 step -- Captain Approval
 - "Standard Purchases" ($500--$5,000): 2 steps -- Captain Approval, then Chief Approval
 - "Large Purchases" (over $5,000): 3 steps -- Captain Approval, Chief Approval, then Board Notification
 - "Training Purchases" (category: Training, any amount): 2 steps -- Training Officer Approval, then Chief Approval
@@ -1848,7 +1848,7 @@ The Falls Church Fire Department operates on a July 1 -- June 30 fiscal year. In
    - (and so on for each category)
 
 4. **Configure approval chains:** Open **Finance > Settings > Approval Chains** and set up:
-   - "Small Purchases" (Purchase Requests under $500): 1 step -- Captain Approval
+   - "Small Purchases" (Purchase Requests up to $499.99): 1 step -- Captain Approval
    - "Standard Purchases" (Purchase Requests $500--$2,500): 2 steps -- Captain Approval, then Chief Approval
    - "Large Purchases" (Purchase Requests over $2,500): 3 steps -- Captain Approval, Chief Approval, then Board Treasurer Notification
    - "Training Expenses" (Expense Reports, category: Training): 2 steps -- Training Officer Approval, then Chief Approval
@@ -1875,7 +1875,7 @@ At the June board meeting the board adopts FY 2027, and the Treasurer clicks **R
 1. The captain opens **Finance > Purchase Requests** and selects **New Purchase Request**.
 2. Fills in: Title "Hose Coupling Replacements", Budget "Equipment > Tools", Estimated Amount $350, Vendor "Fire Supply Co.", Priority "Medium".
 3. Selects **Save Draft**, then **Submit for Approval** on the draft.
-4. The $350 request matches the "Small Purchases" chain (under $500) -- only Captain approval is needed.
+4. The $350 request matches the "Small Purchases" chain (up to $499.99) -- only Captain approval is needed.
 5. The captain cannot approve their own request. A Position step sends no email, so the other captain sees it on **Finance > Approvals**.
 6. The other captain approves it there. The request moves to **Approved** and $350 is **encumbered** against the Tools budget.
 7. The captain orders the couplings, and the Treasurer selects **Mark as Ordered**.

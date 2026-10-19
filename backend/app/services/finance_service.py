@@ -10,7 +10,7 @@ import copy
 import html
 import io
 import secrets
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -547,6 +547,58 @@ def _aware_utc(value: datetime) -> datetime:
 def _short_label(name: str, limit: int = 40) -> str:
     name = name.strip()
     return name if len(name) <= limit else name[: limit - 3] + "..."
+
+
+def pick_approval_chain(
+    chains: Sequence[ApprovalChain],
+    amount: Decimal,
+    budget_category_id: Optional[str] = None,
+) -> Optional[ApprovalChain]:
+    """Choose the most specific chain whose range and category fit ``amount``.
+
+    A chain's minimum and maximum are both inclusive. So an amount exactly on
+    the edge between two chains ("up to $500" and "$500 and over") fits both;
+    the one with the higher minimum takes it, so the amount gets the approvals
+    meant for the larger purchases. A chain that is the only one to fit an
+    amount keeps it, which is why the maximum is not made exclusive: a lone
+    "up to $500" chain would otherwise stop covering exactly $500.00.
+
+    Chains the same in every respect are told apart by id, so the answer does
+    not depend on the order the database returned them in.
+    """
+    best_chain: Optional[ApprovalChain] = None
+    best_key: tuple[int, Decimal] = (-1, Decimal(0))
+
+    for chain in sorted(chains, key=lambda c: str(c.id)):
+        score = 0
+
+        if chain.min_amount is not None and amount < chain.min_amount:
+            continue
+        if chain.max_amount is not None and amount > chain.max_amount:
+            continue
+
+        if chain.budget_category_id and chain.budget_category_id == budget_category_id:
+            score += 4
+        elif (
+            chain.budget_category_id and chain.budget_category_id != budget_category_id
+        ):
+            continue  # Category mismatch
+
+        if chain.min_amount is not None or chain.max_amount is not None:
+            score += 2
+
+        if chain.is_default:
+            score += 1
+
+        key = (
+            score,
+            Decimal(chain.min_amount) if chain.min_amount is not None else Decimal(0),
+        )
+        if key > best_key:
+            best_key = key
+            best_chain = chain
+
+    return best_chain
 
 
 class FinanceService:
@@ -2443,6 +2495,11 @@ class FinanceService:
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
+        # A change to only one end is checked against the other end as stored.
+        new_min = kwargs["min_amount"] if "min_amount" in kwargs else chain.min_amount
+        new_max = kwargs["max_amount"] if "max_amount" in kwargs else chain.max_amount
+        if new_min is not None and new_max is not None and new_min > new_max:
+            raise ValueError("The minimum amount cannot be above the maximum amount")
         apply_updates(chain, kwargs)
         await self.db.flush()
         await self.db.refresh(chain, ["updated_at"])
@@ -2694,42 +2751,7 @@ class FinanceService:
         if not chains:
             return None
 
-        # Score chains by specificity
-        best_chain = None
-        best_score = -1
-
-        for chain in chains:
-            score = 0
-
-            # Check amount range
-            if chain.min_amount is not None and amount < chain.min_amount:
-                continue
-            if chain.max_amount is not None and amount > chain.max_amount:
-                continue
-
-            # Score by specificity
-            if (
-                chain.budget_category_id
-                and chain.budget_category_id == budget_category_id
-            ):
-                score += 4
-            elif (
-                chain.budget_category_id
-                and chain.budget_category_id != budget_category_id
-            ):
-                continue  # Category mismatch
-
-            if chain.min_amount is not None or chain.max_amount is not None:
-                score += 2
-
-            if chain.is_default:
-                score += 1
-
-            if score > best_score:
-                best_score = score
-                best_chain = chain
-
-        return best_chain
+        return pick_approval_chain(chains, amount, budget_category_id)
 
     async def create_approval_records(
         self,
