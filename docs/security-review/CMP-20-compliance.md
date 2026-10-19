@@ -11,7 +11,8 @@
 (pass 5, merged), [#2869](https://github.com/thegspiro/the-logbook/pull/2869)
 (pass 6, merged), [#2977](https://github.com/thegspiro/the-logbook/pull/2977)
 (pass 7, merged), [#3330](https://github.com/thegspiro/the-logbook/pull/3330)
-(pass 8, merged), (pass 9, this PR)
+(pass 8, merged), [#3449](https://github.com/thegspiro/the-logbook/pull/3449)
+(pass 9, this PR)
 
 ## Pass 9 (2026-10-19)
 
