@@ -3274,3 +3274,22 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   passed** · new file 159 pass, 9 fail without the fix, 0 under the unit job's marker
   expression · route-permission check 0 errors · no frontend change. See
   grants-fundraising.md → Pass 5. Next: B15 admin-hours.
+
+---
+
+## 🏁 Final page sweep (2026-10-20)
+
+A pre-deployment pass over all 249 fixed routes and 35 detail pages at phone,
+tablet and desktop widths, signed in as an administrator and as a plain member,
+plus the public pages signed out — driven in a real browser against a real
+backend. **Fixed:** pages that scrolled sideways at phone or tablet width, accessibility defects
+(unnamed controls, nested interactive rows, QR codes with no alternative, a
+malformed definition list), contrast failures in the orange, emerald and
+warning-text palettes and on the compliance print sheet, and two unused
+components. **Open (owner decision):** `GET /health/detailed` is
+unauthenticated, `/onboarding/*` renders on a configured installation, and an
+unknown URL redirects silently to the dashboard — mirrored to
+KNOWN_LIMITATIONS. **Verified good:** every protected route redirects signed
+out, a member is denied every administrative page, no token in a response body,
+secrets redacted for non-admins. See
+[final-sweep-2026-10.md](./final-sweep-2026-10.md).
