@@ -16,22 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3458](https://github.com/thegspiro/the-logbook/pull/3458)** (branch
-`claude/security-review-forms-p8`). This row was last updated for PR #3455
-(Feature 23, Medical supplies, pass 15); PR #3456 (Feature 24, Meetings &
-minutes, pass 8) and PR #3457 (Feature 25, Messaging & notifications, pass 8) both merged to `main` since, each recording itself in the Log below —
-see those entries rather than a superseded note here for either. With both
-merged, `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+**PR [#3467](https://github.com/thegspiro/the-logbook/pull/3467)** (branch
+`claude/security-review-integrations-p8`). This row was last updated for PR
+#3455 (Feature 23, Medical supplies, pass 15); PRs #3456 (Feature 24,
+Meetings & minutes, pass 8), #3457 (Feature 25, Messaging & notifications,
+pass 8) and #3458 (Feature 26, Forms, pass 8) all merged to `main` since,
+each recording itself in the Log below — see those entries rather than a
+superseded note here for any of them. With all three merged,
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
 returned 0 results, checked once before starting and again immediately
-before branching, so this iteration reviewed Feature 26 (Forms), pass 8.
-**0 fixed, 0 new findings** — a true zero-delta pass on the five backend
-scope files (`git log`/`git diff` against pass 7's merge `8372581e` both
-empty); route inventory and auth-dependency distribution re-enumerated
-programmatically and confirmed unchanged (22 routes). One frontend commit
-in the window (`4327cb29`) adds client-side fractional-value rejection on
-numeric fields plus accessibility wiring — correctness/accessibility only,
-no finding. See `FORM-26-forms.md`'s **Pass 8** section. Rotation row 26 →
-✅ (pending this PR's merge); next is Feature 27 (Integrations).
+before branching, so this iteration reviewed Feature 27 (Integrations),
+pass 8. **0 fixed, 0 new findings** — the real delta since pass 7 (the
+Google Workspace engine generalized into a provider-neutral
+directory-account engine, Microsoft 365 added as a second provider, and
+Outlook calendar OAuth connect added) was read in full and found clean;
+INT-11, carried forward as open across two passes, is corrected to ✅ FIXED
+— the control was already present and reachable, a review error rather than
+a regression. See `INT-27-integrations.md`'s **Pass 8** section. Rotation
+row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
+IP).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23 Medical supplies pass 15, PR #3455, merged), preserved for history</summary>
