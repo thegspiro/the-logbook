@@ -1987,8 +1987,9 @@ profile and printed record all follow this rule.
 
 ### Automated Certification Alerts
 
-The Logbook sends alerts automatically as certifications get close to expiry.
-There is no button to send them by hand.
+Once certification alerts are switched on for the department, The Logbook sends
+them automatically as certifications get close to expiry. There is no button to
+send them by hand.
 
 | Days before expiry | Who is told                               | How                              |
 | ------------------ | ----------------------------------------- | -------------------------------- |
@@ -1999,8 +2000,9 @@ There is no button to send them by hand.
 | Expired            | Member + all escalation officers          | In-app + email (officers copied) |
 
 Each stage is sent only once per certification. An expired certification is
-escalated to the training, compliance and chief officers, to both the
-member's department and personal email addresses.
+escalated to the training and compliance officers. The chief officers are
+copied, and the member's personal email address is added, only if the
+department has turned those options on.
 
 ---
 
@@ -2320,8 +2322,10 @@ on it. That is why the view can have rows before you have saved anything.
 
 ### Officer Analytics Dashboard
 
-The analytics sit at the top of the **Written by me** view. They cover the
-whole department, not only reports you filed:
+The analytics sit at the top of the **Written by me** view and cover only the
+reports you filed. Officers who may see department-wide figures also get a
+**Department** view beside it, which sums every officer's reports. The cards
+are:
 
 - **Summary cards** — total reports, total hours, total calls, average rating;
 - **Per-trainee table** — each trainee's report count, hours, calls and
@@ -2780,8 +2784,8 @@ deleting the program afterwards leaves them in your requirement list.
 
 - If the program uses a course your department already has, the existing
   course is reused. No duplicate is made.
-- If a phase name matches a phase in another of your programs, the new phase
-  gets " (Imported)" added to its name.
+- Phases are created with the names in the file, even if another of your
+  programs has a phase of the same name.
 - Registry codes from the other department come with it.
 
 ---
@@ -2804,12 +2808,13 @@ training records from a CSV file.
    matched, and which did not, with a filter for each.
 5. Confirm the import.
 
-**A bad value fails only its own row, with a reason.** Each row's training type
-and status are checked. A bad one fails just that row, with a message such as
-_"Row 12: Invalid training_type 'Certifcation'. Valid values: …"_. Every other
-row still imports. Capitals and spaces are forgiven, so _"Certification"_ is
-kept as a certification. A course set to be created with an invalid training
-type creates nothing, and its rows fail with that message. A bad **default**
+**A bad value does not stop the import.** A row whose training type is not a
+recognised type is imported with the import's default training type instead.
+Capitals and spaces are forgiven, so _"Certification"_ is kept as a
+certification. Every record takes the import's single default status. A course
+set to be created with an invalid training type creates nothing, and the rows
+that use it fail with a message such as _"Row 12: Invalid training_type
+'Certifcation'. Valid values: …"_. Every other row still imports. A bad **default**
 training type or status — which would apply to every row — stops the whole
 import before anything is saved.
 
@@ -2925,18 +2930,20 @@ qualifications.
 
 Each instructor qualification records:
 
-| Field                  | What it holds                                       |
-| ---------------------- | --------------------------------------------------- |
-| **Member**             | The qualified instructor                            |
-| **Qualification type** | Instructor, Evaluator, Lead Instructor or Mentor    |
-| **Course**             | Which course or courses they are qualified to teach |
-| **Certification date** | When the qualification was earned                   |
-| **Expiration date**    | When it expires, if it does                         |
+| Field                    | What it holds                                    |
+| ------------------------ | ------------------------------------------------ |
+| **Member**               | The qualified instructor                         |
+| **Qualification type**   | Instructor, Evaluator, Lead Instructor or Mentor |
+| **Certification level**  | The level held                                   |
+| **Certification number** | The number on the certificate                    |
+| **Issuing agency**       | Who issued it                                    |
+| **Issued date**          | When the qualification was earned                |
+| **Expiration date**      | When it expires, if it does                      |
 
 ![Instructor qualification roster with type, agency and expiry](./images/02-69-instructor-qualifications.png)
 
 The list's **Qualifies for** column names the course or skill a qualification
-covers. **Status** reads:
+covers when one is linked; the Add form has no field for it. **Status** reads:
 
 - **Expired** once the expiry date has passed (by your department's date),
   whether or not it was verified;
@@ -3019,7 +3026,7 @@ exercises, tabletops and full-scale exercises.
 
 ![Multi-agency exercises with participating departments and headcounts](./images/02-71-multi-agency-training.png)
 
-Each card shows the exercise type, date and total headcount. Each taking-part
+Each card shows the exercise type, date and total participants. Each taking-part
 organization has a chip with its role (host, participant, observer,
 evaluator). A **NIMS Compliant** badge marks an exercise recorded as such.
 Exercises have no planned / in progress / completed status — the date tells you
@@ -3028,11 +3035,14 @@ whether it has happened.
 ### Creating a Multi-Agency Session
 
 1. Select **Add Exercise**.
-2. Enter the exercise details (name, type, date, description).
-3. Add the taking-part organizations by name, with each one's role and
-   headcount.
-4. Enter the **Lead Agency** responsible for reporting.
-5. Select **Save**.
+2. Enter the **Exercise Name**, **Exercise Type** and **Exercise Date**, and
+   optionally a description and **Total Participants** (one number for the whole
+   exercise).
+3. Under **Participating Organization**, enter one organization's name and its
+   role (Host, Participant, Observer or Evaluator).
+4. Enter the **Lead Agency** responsible for reporting, and tick **NIMS/ICS
+   Compliant** if it applies.
+5. Select **Create Exercise**.
 
 ### Edge Cases
 
@@ -3112,11 +3122,14 @@ Generate a full yearly compliance report covering:
 
 - department-wide training completion rates;
 - certification status across all members;
-- a waiver summary and its effect;
-- a breakdown requirement by requirement;
-- a comparison with the year before.
+- admin hours by category, and recertification, instructor, multi-agency and
+  effectiveness summaries;
+- record completeness against NFPA 1401;
+- a breakdown requirement by requirement, and each member's compliance status.
 
-The report can be exported as a formatted document for regulatory filings.
+Pick the year (the current one or either of the two before it). **Export CSV**
+downloads the report. Waivers are applied when each member is graded, but the
+report has no separate waiver summary and no comparison with the previous year.
 
 A requirement nobody is held to — usually one used only inside a training
 program — reads **Not applicable** in the breakdown, not "0/0 — 0%".
@@ -3125,12 +3138,9 @@ program — reads **Not applicable** in the breakdown, not "0/0 — 0%".
 
 ### Compliance Forecast
 
-The forecast looks ahead using:
-
-- current training completion and pace;
-- upcoming certification expiries;
-- scheduled training sessions;
-- past compliance patterns.
+The forecast starts from each member's current compliance and subtracts the
+certifications that will have expired by then. It does not model training pace or
+scheduled sessions, so it shows the effect of expiries only.
 
 It looks **30, 60 and 90 days** ahead: summary cards across the top, then one
 row per member showing each period alongside the certifications expiring in
@@ -3140,8 +3150,6 @@ it.
 
 ### Edge Cases
 
-- The forecast uses past data. It is less reliable for departments with less
-  than 6 months of data.
 - Yearly reports include waiver adjustments. If a waiver's end date changes
   after the fact (a member returns from leave early), the report reflects the
   new adjustment.
@@ -3204,7 +3212,7 @@ Configuration**).
 | The member's membership type is exempt from training           | The member is exempt from all training requirements and shows green whatever their hours.                                                                                                                                                                                             |
 | The membership type is exempt from some training types         | The member is exempt only from requirements of those types. Other requirements still apply.                                                                                                                                                                                           |
 | The membership type's settings cannot be read                  | The member is treated as **not** exempt and must meet every requirement. Officers may see unexpected non-compliance for senior members; check the membership type's settings.                                                                                                         |
-| A **Courses** requirement with no courses picked               | Counts as complete (100%) and shows green.                                                                                                                                                                                                                                            |
+| A **Courses** requirement with no courses picked               | Nobody can meet it: it reads as not started (0%) until you pick the courses on the requirement.                                                                                                                                                                                       |
 | A **Certification** requirement                                | Credited through a course linked on the requirement, the training type, or the registry code in the certification number. Older requirements also match by course name, but only for records completed before they were upgraded. If nothing matches, the member shows non-compliant. |
 | An **Every 2 Years** requirement with an expired certification | Even with enough hours, the expired certification sets progress back to 0 until it is renewed.                                                                                                                                                                                        |
 | The member joined before an **Exempt existing members** cutoff | The requirement does not grade that member anywhere. Join date is the hire date, else the date the account was created.                                                                                                                                                               |
