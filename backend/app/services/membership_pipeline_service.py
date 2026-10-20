@@ -8,7 +8,6 @@ transfer to full membership.
 
 import asyncio
 import copy
-import re
 import secrets
 import unicodedata
 from dataclasses import dataclass
@@ -5257,15 +5256,10 @@ class MembershipPipelineService:
 
     @staticmethod
     def _sanitize_name_for_identifier(name: str) -> str:
-        """Normalize a name for use in usernames and email local parts.
+        """See :func:`department_email.sanitize_name_for_identifier`."""
+        from app.services.department_email import sanitize_name_for_identifier
 
-        Strips accents (François → francois), removes apostrophes and
-        non-alphanumeric characters, and lowercases the result.
-        """
-        nfkd = unicodedata.normalize("NFKD", name)
-        ascii_only = nfkd.encode("ascii", "ignore").decode("ascii")
-        lowered = ascii_only.lower()
-        return re.sub(r"[^a-z0-9]", "", lowered)
+        return sanitize_name_for_identifier(name)
 
     async def _generate_unique_username(
         self, first_name: str, last_name: str, organization_id: str
@@ -5318,53 +5312,11 @@ class MembershipPipelineService:
         Returns None when the feature is disabled or no domain is configured,
         letting callers fall back to the prospect's personal email.
         """
-        from app.services.organization_service import OrganizationService
+        from app.services.department_email import generate_department_email
 
-        org_service = OrganizationService(self.db)
-        org_settings = await org_service.get_organization_settings(organization_id)
-        dept = org_settings.department_email
-
-        if not dept.enabled or not dept.domain:
-            return None
-
-        from app.schemas.organization import DepartmentEmailFormat
-
-        first = self._sanitize_name_for_identifier(first_name)
-        last = self._sanitize_name_for_identifier(last_name)
-        if not first or not last:
-            logger.warning(
-                "Skipping department email generation: sanitized name is empty "
-                f"(first={first_name!r}, last={last_name!r})"
-            )
-            return None
-
-        if dept.format == DepartmentEmailFormat.FIRST_DOT_LAST:
-            local = f"{first}.{last}"
-        elif dept.format == DepartmentEmailFormat.FIRST_INITIAL_LAST:
-            local = f"{first[0]}{last}"
-        elif dept.format == DepartmentEmailFormat.FIRST_LAST:
-            local = f"{first}{last}"
-        elif dept.format == DepartmentEmailFormat.LAST_DOT_FIRST:
-            local = f"{last}.{first}"
-        else:
-            local = f"{first}.{last}"
-
-        candidate = f"{local}@{dept.domain}"
-
-        suffix = 0
-        while True:
-            existing = await self.db.execute(
-                select(func.count())
-                .select_from(User)
-                .where(
-                    User.organization_id == organization_id,
-                    User.email == candidate,
-                )
-            )
-            if (existing.scalar() or 0) == 0:
-                return candidate
-            suffix += 1
-            candidate = f"{local}{suffix}@{dept.domain}"
+        return await generate_department_email(
+            self.db, organization_id, first_name, last_name
+        )
 
     # =========================================================================
     # Kanban Board

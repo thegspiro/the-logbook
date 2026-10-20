@@ -66,11 +66,43 @@ and The Logbook treats that account as someone else's.
 
 ---
 
+## Members Added Outside the Pipeline
+
+**Add Member** offers **Create a Google Workspace account** while the
+integration is connected. It starts unticked, because each account uses a
+license and not every member added there needs one. Ticked, it works as a
+conversion does:
+
+- The member's department address is generated from their name, by the
+  **Organization Settings → Department Email** format, and becomes their
+  Logbook sign-in email and their Google account.
+- The email typed on the form is kept as their **personal** address, which
+  is where the temporary passwords go: in the welcome email, or on their own
+  when an initial password is set instead. The form's label changes to
+  **Personal email** while the box is ticked.
+- The account is created right after the member is saved. If Google refuses,
+  the member is still added, the reason is shown, and **Retry** on their
+  profile finishes it.
+
+Add Member refuses, before saving anything, when no directory is connected,
+when department addresses are off, or when the typed email is on the
+department domain (it would become the personal address the password is sent
+to, a mailbox that may not exist yet).
+
+Every other member added — Add Member with the box unticked, and **every row
+of a roster import** — is linked automatically when their email is exactly an
+account's primary address in the domain, under the same rules as **Link
+existing members** below. The import never creates accounts. A lookup that
+fails is logged and changes nothing; **Link existing members** picks those
+members up later.
+
+---
+
 ## Members Who Joined Before the Integration
 
 Accounts only get a record — and so only get suspended — when The Logbook
-creates or links them at conversion. For members who were already on the
-roster, an administrator clicks **Integrations → Google Workspace → Link
+creates or links them, at conversion or when a member is added. For members
+who were already on the roster, an administrator clicks **Integrations → Google Workspace → Link
 existing members**. The Logbook lists the domain's users (read only), shows
 how many members it would link and why it would skip the rest, and links them
 when confirmed.
