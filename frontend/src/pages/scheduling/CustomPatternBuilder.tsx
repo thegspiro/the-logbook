@@ -121,7 +121,7 @@ const CustomPatternBuilder: React.FC<CustomPatternBuilderProps> = ({ cyclePatter
               onClick={() => adjustLength(p.value)}
               className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                 cycleDays === p.value
-                  ? 'border-violet-600 bg-violet-600 text-white'
+                  ? 'border-violet-600 bg-violet-700 text-white'
                   : 'border-theme-surface-border text-theme-text-muted hover:border-violet-500'
               }`}
             >

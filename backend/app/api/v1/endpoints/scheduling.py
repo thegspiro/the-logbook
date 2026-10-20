@@ -137,6 +137,7 @@ from app.services.scheduling_service import (
     SchedulingService,
     SignupActor,
     open_ended_cushion_hours,
+    sunday_week_start,
 )
 from app.services.scheduling_widget_service import (
     MAX_WIDGET_WINDOW_DAYS,
@@ -1743,7 +1744,7 @@ async def get_week_calendar(
             start = date.fromisoformat(week_start)
         else:
             today = await resolve_org_today(db, current_user.organization_id)
-            start = today - timedelta(days=today.weekday())
+            start = sunday_week_start(today)
     except ValueError:
         raise HTTPException(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."

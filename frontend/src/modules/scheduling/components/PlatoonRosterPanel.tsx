@@ -149,7 +149,7 @@ export const PlatoonRosterPanel: React.FC = () => {
             void handleSave();
           }}
           disabled={saving || changed.length === 0}
-          className="mobile-touch-target gap-1.5 rounded-lg bg-violet-600 px-4 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+          className="mobile-touch-target gap-1.5 rounded-lg bg-violet-700 px-4 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
         >
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
           Save{changed.length > 0 ? ` (${changed.length})` : ''}
