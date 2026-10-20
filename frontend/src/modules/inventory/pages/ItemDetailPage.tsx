@@ -129,14 +129,17 @@ interface CardProps {
   title: string;
   icon?: React.ReactNode;
   children: React.ReactNode;
+  /** Buttons and notes that are not term/description pairs, so cannot live in the <dl>. */
+  actions?: React.ReactNode;
 }
-const Card: React.FC<CardProps> = ({ title, icon, children }) => (
+const Card: React.FC<CardProps> = ({ title, icon, children, actions }) => (
   <div className="card-secondary p-4">
     <h3 className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-semibold">
       {icon}
       {title}
     </h3>
     <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">{children}</dl>
+    {actions}
   </div>
 );
 
@@ -557,8 +560,31 @@ const ItemDetailPage: React.FC = () => {
 
         {/* Assignment — individual items */}
         {item.tracking_type === 'individual' && (
-          <Card title="Assignment" icon={<User className="h-4 w-4" />}>
-            {item.assigned_to_user_id ? (
+          <Card
+            title="Assignment"
+            icon={<User className="h-4 w-4" />}
+            actions={
+              item.assigned_to_user_id ? (
+                canManage && (
+                  <div className="mt-3">
+                    <button onClick={() => void handleUnassign()} className="btn-secondary btn-sm">
+                      Unassign
+                    </button>
+                  </div>
+                )
+              ) : (
+                <div>
+                  <p className="text-theme-text-muted mb-2 text-sm">Not currently assigned</p>
+                  {canManage && (
+                    <button onClick={() => setShowAssignModal(true)} className="btn-info btn-sm">
+                      Assign Item
+                    </button>
+                  )}
+                </div>
+              )
+            }
+          >
+            {item.assigned_to_user_id && (
               <>
                 <Field
                   label="Assigned To"
@@ -572,23 +598,7 @@ const ItemDetailPage: React.FC = () => {
                   }
                 />
                 <Field label="Assigned Date" value={formatDate(item.assigned_date, tz)} />
-                {canManage && (
-                  <div className="col-span-full mt-1">
-                    <button onClick={() => void handleUnassign()} className="btn-secondary btn-sm">
-                      Unassign
-                    </button>
-                  </div>
-                )}
               </>
-            ) : (
-              <div className="col-span-full">
-                <p className="text-theme-text-muted mb-2 text-sm">Not currently assigned</p>
-                {canManage && (
-                  <button onClick={() => setShowAssignModal(true)} className="btn-info btn-sm">
-                    Assign Item
-                  </button>
-                )}
-              </div>
             )}
           </Card>
         )}

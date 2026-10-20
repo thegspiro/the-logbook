@@ -858,7 +858,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                         {!collapsed ? (
                           <div className="px-4 pt-3 pb-2 md:pt-5">
                             <div className="border-theme-surface-border border-t" />
-                            <span className="text-theme-text-muted/70 mt-3 block text-[10px] font-bold tracking-widest uppercase">
+                            <span className="text-theme-text-muted mt-3 block text-[10px] font-bold tracking-widest uppercase">
                               {item.label}
                             </span>
                           </div>
