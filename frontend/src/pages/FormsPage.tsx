@@ -676,7 +676,7 @@ const FormsPage: React.FC = () => {
                     {form.is_public && form.status !== FormStatus.PUBLISHED && (
                       <div className="mb-3 flex items-center gap-2 rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-3 py-2">
                         <AlertTriangle
-                          className="h-4 w-4 shrink-0 text-yellow-600 dark:text-yellow-400"
+                          className="h-4 w-4 shrink-0 text-yellow-700 dark:text-yellow-400"
                           aria-hidden="true"
                         />
                         <span className="text-xs text-yellow-700 dark:text-yellow-300">
@@ -1189,7 +1189,7 @@ const FormsPage: React.FC = () => {
                         id="is_public"
                         checked={formData.is_public}
                         onChange={(e) => setFormData({ ...formData, is_public: e.target.checked })}
-                        className="h-4 w-4 rounded-sm text-cyan-600"
+                        className="h-4 w-4 rounded-sm text-cyan-700 dark:text-cyan-600"
                       />
                       <label htmlFor="is_public" className="cursor-pointer text-sm">
                         <span className="font-medium text-cyan-700 dark:text-cyan-300">Public Form</span>

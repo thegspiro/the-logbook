@@ -81,7 +81,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actio
     <div className="card p-6">
       <div className="mb-4 flex items-start gap-3">
         <div className="rounded-lg bg-green-100 p-2 dark:bg-green-500/20">
-          <DollarSign className="h-5 w-5 text-green-600" />
+          <DollarSign className="h-5 w-5 text-green-700 dark:text-green-600" />
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-theme-text-primary text-lg font-semibold">{categoryName}</h2>

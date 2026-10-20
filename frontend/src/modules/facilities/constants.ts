@@ -78,9 +78,9 @@ export const MAX_ROOM_NESTING_DEPTH = 5;
 export const CONDITION_OPTIONS = ['excellent', 'good', 'fair', 'poor', 'critical'] as const;
 
 export const CONDITION_COLORS: Record<string, string> = {
-  excellent: 'text-emerald-600 dark:text-emerald-400',
+  excellent: 'text-emerald-700 dark:text-emerald-400',
   good: 'text-blue-600 dark:text-blue-400',
-  fair: 'text-amber-600 dark:text-amber-400',
-  poor: 'text-orange-600 dark:text-orange-400',
+  fair: 'text-amber-700 dark:text-amber-400',
+  poor: 'text-orange-700 dark:text-orange-400',
   critical: 'text-red-600 dark:text-red-400',
 };

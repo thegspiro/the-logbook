@@ -316,7 +316,7 @@ const PositionRosterPage: React.FC = () => {
                     <div className="sm:w-72 sm:shrink-0">
                       {member.evoc_level_number !== null ? (
                         <p className="text-theme-text-secondary inline-flex items-center gap-1.5 text-xs font-medium">
-                          <Shield className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                          <Shield className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" aria-hidden="true" />
                           EVOC {member.evoc_level_number}
                           {member.evoc_level_name ? ` · ${member.evoc_level_name}` : ''}
                         </p>

@@ -170,7 +170,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
       {categories.length === 0 && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-400" />
             <p className="text-sm text-yellow-800 dark:text-yellow-300">
               No admin hours categories exist yet. Create categories in the Admin Hours settings before configuring
               event hour mappings.

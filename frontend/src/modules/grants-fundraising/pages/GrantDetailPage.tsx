@@ -192,8 +192,8 @@ const getDueDateClasses = (dueDate: string): string => {
   const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) return 'text-red-600 font-semibold';
-  if (diffDays <= 7) return 'text-orange-600 font-semibold';
-  if (diffDays <= 30) return 'text-yellow-600';
+  if (diffDays <= 7) return 'text-orange-700 dark:text-orange-600 font-semibold';
+  if (diffDays <= 30) return 'text-yellow-700 dark:text-yellow-600';
   return 'text-theme-text-secondary';
 };
 

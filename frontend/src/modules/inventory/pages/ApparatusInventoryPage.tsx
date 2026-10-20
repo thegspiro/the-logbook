@@ -349,7 +349,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                 </span>
               )}
               {item.targetQuantity != null && (
-                <span className={item.isShort ? 'font-medium text-orange-600 dark:text-orange-400' : ''}>
+                <span className={item.isShort ? 'font-medium text-orange-700 dark:text-orange-400' : ''}>
                   {item.quantityOnTruck ?? item.targetQuantity} of {item.targetQuantity}
                   {item.unitOfMeasure ? ` ${item.unitOfMeasure}` : ''} aboard
                 </span>
@@ -420,7 +420,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                 type="button"
                 disabled={busy}
                 onClick={() => setUsedTarget(item)}
-                className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-orange-600 hover:text-orange-700 disabled:opacity-50"
+                className="mobile-touch-target flex items-center gap-1 text-xs font-medium text-orange-700 hover:text-orange-700 disabled:opacity-50 dark:text-orange-600"
               >
                 {/* On a counted position the minus button is what records use,
                     so this is the place to say *why* — damaged, contaminated,

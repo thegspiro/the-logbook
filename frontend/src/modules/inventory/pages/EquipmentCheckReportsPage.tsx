@@ -810,8 +810,8 @@ const StatCard: React.FC<{ label: string; value: string; color?: 'green' | 'ambe
   color,
 }) => {
   const colorClasses = {
-    green: 'text-green-600 dark:text-green-400',
-    amber: 'text-amber-600 dark:text-amber-400',
+    green: 'text-green-700 dark:text-green-400',
+    amber: 'text-amber-700 dark:text-amber-400',
     red: 'text-red-600 dark:text-red-400',
   };
 

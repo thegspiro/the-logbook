@@ -1215,7 +1215,7 @@ const EnrollmentProgressModal: React.FC<{
                     )}
                     {complete && (
                       <CheckCircle2
-                        className="h-4 w-4 text-green-600 dark:text-green-400"
+                        className="h-4 w-4 text-green-700 dark:text-green-400"
                         aria-label="Phase complete"
                       />
                     )}
@@ -1935,7 +1935,7 @@ const PipelineDetailPage: React.FC = () => {
             <div className="card p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-theme-text-primary flex items-center gap-2 font-medium">
-                  <Flag className="h-4 w-4 text-yellow-600 dark:text-yellow-400" /> Milestones
+                  <Flag className="h-4 w-4 text-yellow-700 dark:text-yellow-400" /> Milestones
                 </h3>
                 {canManage && (
                   <button

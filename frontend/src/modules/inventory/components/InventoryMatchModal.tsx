@@ -156,7 +156,7 @@ const InventoryMatchModal: React.FC<InventoryMatchModalProps> = ({ templateId, i
 
             {matches.length === 0 ? (
               <div className="py-8 text-center">
-                <Check className="mx-auto mb-2 h-8 w-8 text-green-600 dark:text-green-400" />
+                <Check className="mx-auto mb-2 h-8 w-8 text-green-700 dark:text-green-400" />
                 <p className="text-theme-text-primary text-sm font-medium">Everything is already linked.</p>
               </div>
             ) : (

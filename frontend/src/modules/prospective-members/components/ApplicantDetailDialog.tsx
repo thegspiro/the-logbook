@@ -405,7 +405,7 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
                               void saveContactEdits();
                             }}
                             disabled={isSavingContact}
-                            className="flex items-center gap-1 text-xs text-emerald-600 transition-colors hover:text-emerald-500 disabled:opacity-50"
+                            className="flex items-center gap-1 text-xs text-emerald-700 transition-colors hover:text-emerald-500 disabled:opacity-50 dark:text-emerald-600"
                           >
                             {isSavingContact ? (
                               <Loader2 className="h-3 w-3 animate-spin" />

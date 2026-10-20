@@ -900,7 +900,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
                               onClick={() => onTogglePin(item)}
                               className={`btn-icon-sm ${
                                 item.pin_position != null
-                                  ? 'text-amber-600 dark:text-amber-400'
+                                  ? 'text-amber-700 dark:text-amber-400'
                                   : 'text-theme-text-muted hover:text-theme-text-primary'
                               }`}
                               aria-label={`${item.pin_position != null ? 'Unpin' : 'Pin'} ${getDisplayName(item)}`}
@@ -2314,7 +2314,7 @@ const InventoryItemsPage: React.FC = () => {
               into maintenance is exactly what its owner needs to see. */}
           <ItemTable
             label="Pinned"
-            icon={<Pin className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+            icon={<Pin className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
             items={pinnedItems}
             categories={categories}
             locations={locations}
@@ -2335,7 +2335,7 @@ const InventoryItemsPage: React.FC = () => {
           />
           <ItemTable
             label="Available"
-            icon={<CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />}
+            icon={<CheckCircle2 className="h-4 w-4 text-green-700 dark:text-green-400" />}
             items={availableItems}
             categories={categories}
             locations={locations}

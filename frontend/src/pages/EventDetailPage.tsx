@@ -1501,7 +1501,10 @@ export const EventDetailPage: React.FC = () => {
                       {event.custom_fields.issues_certification && (
                         <div className="sm:col-span-2">
                           <div className="flex items-center rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-500/30 dark:bg-green-500/10">
-                            <CheckCircle className="mr-2 h-5 w-5 text-green-600" aria-hidden="true" />
+                            <CheckCircle
+                              className="mr-2 h-5 w-5 text-green-700 dark:text-green-600"
+                              aria-hidden="true"
+                            />
                             <span className="text-sm font-medium text-green-800 dark:text-green-400">
                               This training issues a certification upon completion
                             </span>

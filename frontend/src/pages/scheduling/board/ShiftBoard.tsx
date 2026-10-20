@@ -634,7 +634,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
             {urgentDaysThisWeek > 0 && (
               <div className="alert-warning mb-3 flex items-start gap-3">
                 <AlertTriangle
-                  className="mt-0.5 h-[18px] w-[18px] shrink-0 text-amber-600 dark:text-amber-400"
+                  className="mt-0.5 h-[18px] w-[18px] shrink-0 text-amber-700 dark:text-amber-400"
                   aria-hidden="true"
                 />
                 <p className="text-sm text-amber-800 dark:text-amber-200">

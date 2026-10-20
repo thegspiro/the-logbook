@@ -1350,7 +1350,7 @@ export const ElectionDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setLastSkippedDetails([])}
-                className="ml-4 shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200"
+                className="ml-4 shrink-0 text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200"
                 aria-label="Dismiss skipped voters banner"
               >
                 &times;
@@ -1788,7 +1788,7 @@ export const ElectionDetailPage: React.FC = () => {
                     {election.status === ElectionStatus.OPEN && election.email_sent && (
                       <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
                         <svg
-                          className="h-4 w-4 text-green-600"
+                          className="h-4 w-4 text-green-700 dark:text-green-600"
                           fill="currentColor"
                           viewBox="0 0 20 20"
                           aria-hidden="true"

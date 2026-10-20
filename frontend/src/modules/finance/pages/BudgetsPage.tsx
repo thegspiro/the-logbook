@@ -78,7 +78,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({ budgets }) => {
     {
       label: 'Total Budgeted',
       value: formatCurrencyWhole(totalBudgeted),
-      color: 'text-green-600',
+      color: 'text-green-700 dark:text-green-600',
     },
     {
       label: 'Total Spent',
@@ -88,12 +88,12 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({ budgets }) => {
     {
       label: 'Encumbered',
       value: formatCurrencyWhole(totalEncumbered),
-      color: 'text-yellow-600',
+      color: 'text-yellow-700 dark:text-yellow-600',
     },
     {
       label: 'Remaining',
       value: formatCurrencyWhole(totalRemaining),
-      color: totalRemaining < 0 ? 'text-red-600' : 'text-green-600',
+      color: totalRemaining < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-600',
     },
   ];
 

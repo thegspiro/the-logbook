@@ -431,7 +431,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                   <li key={issue.member_id} className="flex items-center gap-2 text-sm">
                     <span className="text-theme-text-primary font-medium">{issue.member_name}</span>
                     <span className="text-theme-text-muted text-xs">&mdash;</span>
-                    <code className="bg-theme-surface-secondary rounded-sm px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+                    <code className="bg-theme-surface-secondary rounded-sm px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-400">
                       {issue.rank_code}
                     </code>
                   </li>

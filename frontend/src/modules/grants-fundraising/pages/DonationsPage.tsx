@@ -99,7 +99,7 @@ const DonationsPage: React.FC = () => {
       <div className="card p-4">
         <div className="flex items-center gap-3">
           <div className="rounded-lg bg-green-100 p-2 dark:bg-green-500/20">
-            <DollarSign className="h-5 w-5 text-green-600" />
+            <DollarSign className="h-5 w-5 text-green-700 dark:text-green-600" />
           </div>
           <div>
             <p className="text-theme-text-secondary text-sm">

@@ -213,7 +213,7 @@ const ScoreCriterion: React.FC<{
     ? 'text-theme-text-muted'
     : isCritical
       ? isPassing
-        ? 'text-green-600'
+        ? 'text-green-700 dark:text-green-600'
         : 'text-red-600'
       : 'text-blue-600 dark:text-blue-400';
 

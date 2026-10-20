@@ -58,8 +58,8 @@ function daysUntilDue(nextDue?: string): number | null {
 function getDueColor(days: number | null): string {
   if (days === null) return 'text-theme-text-muted';
   if (days < 0) return 'text-red-600 dark:text-red-400 font-semibold';
-  if (days <= 7) return 'text-orange-600 dark:text-orange-400 font-medium';
-  if (days <= 30) return 'text-yellow-600 dark:text-yellow-400';
+  if (days <= 7) return 'text-orange-700 dark:text-orange-400 font-medium';
+  if (days <= 30) return 'text-yellow-700 dark:text-yellow-400';
   return 'text-theme-text-secondary';
 }
 
@@ -383,7 +383,7 @@ const InventoryMaintenancePage: React.FC = () => {
   };
 
   const tabCls = (active: boolean) =>
-    `touch:min-h-11 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${active ? 'border-orange-500 text-orange-600 dark:text-orange-400' : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'}`;
+    `touch:min-h-11 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${active ? 'border-orange-500 text-orange-700 dark:text-orange-400' : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'}`;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
@@ -401,7 +401,7 @@ const InventoryMaintenancePage: React.FC = () => {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="shrink-0 rounded-lg bg-orange-500/10 p-2">
-            <Wrench className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+            <Wrench className="h-6 w-6 text-orange-700 dark:text-orange-400" />
           </div>
           <div>
             <h1 className="text-theme-text-primary text-2xl font-bold">Maintenance &amp; Inspections</h1>
@@ -423,7 +423,7 @@ const InventoryMaintenancePage: React.FC = () => {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card-secondary flex items-center gap-3 p-4">
           <div className="rounded-lg bg-yellow-500/10 p-2">
-            <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+            <Clock className="h-5 w-5 text-yellow-700 dark:text-yellow-400" />
           </div>
           <div>
             <p className="text-theme-text-primary text-2xl font-bold">{dueWithin30}</p>
@@ -441,7 +441,7 @@ const InventoryMaintenancePage: React.FC = () => {
         </div>
         <div className="card-secondary flex items-center gap-3 p-4">
           <div className="rounded-lg bg-orange-500/10 p-2">
-            <Wrench className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+            <Wrench className="h-5 w-5 text-orange-700 dark:text-orange-400" />
           </div>
           <div>
             <p className="text-theme-text-primary text-2xl font-bold">{inMaintenanceItems.length}</p>

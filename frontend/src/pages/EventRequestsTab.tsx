@@ -876,7 +876,7 @@ const EventRequestsTab: React.FC = () => {
                                       className="hover:bg-theme-surface flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition-colors disabled:opacity-50"
                                     >
                                       {isCompleted ? (
-                                        <CheckSquare className="h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+                                        <CheckSquare className="h-5 w-5 shrink-0 text-green-700 dark:text-green-400" />
                                       ) : (
                                         <Square className="text-theme-text-muted h-5 w-5 shrink-0" />
                                       )}
@@ -1292,7 +1292,7 @@ const EventRequestsTab: React.FC = () => {
                                           key={v.user_id}
                                           className="text-theme-text-secondary flex items-center gap-2 text-sm"
                                         >
-                                          <UserCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                          <UserCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                           <span className="text-theme-text-primary font-medium">{v.member_name}</span>
                                           <span className="text-theme-text-muted text-xs">
                                             {v.outreach_role_label || positionLabel(v.position)}

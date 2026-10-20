@@ -102,7 +102,12 @@ const BallotPreviewModal: React.FC<BallotPreviewModalProps> = ({ election, candi
                           </div>
                         )}
                         <div className="border-theme-surface-border flex items-center gap-3 rounded-lg border p-3">
-                          <input type="radio" disabled className="h-4 w-4 text-green-600" aria-label="Approve" />
+                          <input
+                            type="radio"
+                            disabled
+                            className="h-4 w-4 text-green-700 dark:text-green-600"
+                            aria-label="Approve"
+                          />
                           <span className="text-theme-text-primary font-medium">Approve</span>
                         </div>
                         <div className="border-theme-surface-border flex items-center gap-3 rounded-lg border p-3">

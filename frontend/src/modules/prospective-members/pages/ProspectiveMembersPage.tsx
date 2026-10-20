@@ -1029,7 +1029,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               </div>
             ) : inactiveApplicants.length === 0 ? (
               <div className="card bg-theme-input-bg border-dashed py-20 text-center">
-                <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-600" />
+                <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-700 dark:text-emerald-600" />
                 <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No inactive applications</h3>
                 <p className="text-theme-text-muted text-sm">
                   Applications with no activity past the inactivity timeout appear here.

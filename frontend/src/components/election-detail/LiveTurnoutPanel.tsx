@@ -112,7 +112,7 @@ const LiveTurnoutPanel: React.FC<LiveTurnoutPanelProps> = ({ electionId, electio
               {election.quorum_type === 'count' ? `${election.quorum_value} voters` : `${election.quorum_value}%`})
             </span>
             <span
-              className={quorumMet ? 'font-medium text-green-600 dark:text-green-400' : 'text-theme-text-secondary'}
+              className={quorumMet ? 'font-medium text-green-700 dark:text-green-400' : 'text-theme-text-secondary'}
             >
               {quorumMet ? 'MET' : `${Math.round(turnout)}%`}
             </span>

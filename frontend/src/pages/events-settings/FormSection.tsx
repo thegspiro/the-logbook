@@ -111,7 +111,7 @@ const FormSection: React.FC<FormSectionProps> = ({
                         aria-label="Copy public URL"
                       >
                         {copiedSlug === form.public_slug ? (
-                          <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                          <Check className="h-3.5 w-3.5 text-green-700 dark:text-green-400" />
                         ) : (
                           <Copy className="h-3.5 w-3.5" />
                         )}
@@ -146,7 +146,7 @@ const FormSection: React.FC<FormSectionProps> = ({
                     </div>
                   </div>
                   <div className="mt-2 flex items-center gap-2 rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-3 py-2">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-yellow-700 dark:text-yellow-400" />
                     <span className="text-xs text-yellow-700 dark:text-yellow-300">
                       This form must be published before it can accept submissions. Go to Forms to edit and publish.
                     </span>

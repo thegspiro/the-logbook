@@ -6382,7 +6382,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   onClick={() => void loadVehiclePreset(key)}
                   className="border-theme-surface-border hover:bg-theme-surface-hover flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:rounded-b-xl last:border-b-0"
                 >
-                  <Truck className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" aria-hidden="true" />
+                  <Truck className="h-4 w-4 shrink-0 text-orange-700 dark:text-orange-400" aria-hidden="true" />
                   <span className="min-w-0 flex-1">
                     <span className="text-theme-text-primary block text-sm font-semibold">{preset.label}</span>
                     <span className="text-theme-text-muted block text-xs">
@@ -6415,7 +6415,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     onClick={() => setShowPresetPicker(true)}
                     className="border-theme-surface-border hover:bg-theme-surface-hover flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:rounded-b-xl last:border-b-0"
                   >
-                    <Truck className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" aria-hidden="true" />
+                    <Truck className="h-4 w-4 shrink-0 text-orange-700 dark:text-orange-400" aria-hidden="true" />
                     <span className="min-w-0 flex-1">
                       <span className="text-theme-text-primary block text-sm font-semibold">Use a vehicle layout</span>
                       <span className="text-theme-text-muted block text-xs">
@@ -6916,7 +6916,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <div className="space-y-3">
                   {changelogEntries.map((entry) => {
                     const actionColors: Record<string, string> = {
-                      add: 'text-green-600',
+                      add: 'text-green-700 dark:text-green-600',
                       update: 'text-blue-600',
                       delete: 'text-red-600',
                       swap: 'text-violet-600',

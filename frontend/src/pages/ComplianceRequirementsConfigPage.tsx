@@ -764,7 +764,7 @@ export default function ComplianceRequirementsConfigPage() {
           {!config && (
             <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-900/20">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                <AlertTriangle className="h-5 w-5 text-yellow-700 dark:text-yellow-600" />
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
                   Save the compliance thresholds first before creating profiles.
                 </p>

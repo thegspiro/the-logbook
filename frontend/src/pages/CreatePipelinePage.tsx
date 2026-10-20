@@ -828,7 +828,7 @@ const StepRequirements: React.FC<{
                     {(req.requirement_type === 'hours' || req.requirement_type === 'courses') && (
                       <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
                         <AlertCircle
-                          className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+                          className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400"
                           aria-hidden="true"
                         />
                         <div>

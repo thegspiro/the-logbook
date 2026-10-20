@@ -123,7 +123,7 @@ export const SealPanel: React.FC<SealPanelProps> = ({
     return (
       <div className="rounded-xl border-2 border-green-500/40 bg-green-500/10 p-3">
         <div className="flex items-start gap-3">
-          <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-600 dark:text-green-400" aria-hidden="true" />
+          <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-700 dark:text-green-400" aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-green-700 dark:text-green-300">Seal intact</p>
             <p className="mt-0.5 text-xs text-green-700/80 dark:text-green-400/80">

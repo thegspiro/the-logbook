@@ -212,7 +212,7 @@ export default function MaintenanceListPage() {
                       }}
                       title="Mark completed"
                       aria-label="Mark completed"
-                      className="rounded-lg p-1.5 text-emerald-600 transition-colors hover:bg-emerald-500/10"
+                      className="rounded-lg p-1.5 text-emerald-700 transition-colors hover:bg-emerald-500/10 dark:text-emerald-600"
                     >
                       <CheckCircle2 className="h-4 w-4" />
                     </button>

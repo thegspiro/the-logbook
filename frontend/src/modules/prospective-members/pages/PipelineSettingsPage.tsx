@@ -688,7 +688,7 @@ export const PipelineSettingsPage: React.FC = () => {
                       icon={CheckCircle2}
                       label="Converted"
                       value={pipelineStats.converted_count}
-                      color="text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
+                      color="text-emerald-700 dark:text-emerald-400 bg-emerald-500/10"
                     />
                     <StatCard
                       icon={XCircle}

@@ -87,7 +87,7 @@ const SummaryCards: React.FC<{ summary: DuesSummary }> = ({ summary }) => (
     </div>
     <div className="card p-4">
       <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
-        <DollarSign className="h-4 w-4 text-green-600" />
+        <DollarSign className="h-4 w-4 text-green-700 dark:text-green-600" />
         Collected
       </div>
       <p className="mt-1 text-xl font-bold text-green-700 dark:text-green-600">

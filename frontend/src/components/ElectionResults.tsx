@@ -229,7 +229,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
           <div className="flex items-center space-x-2">
             {results.quorum_met ? (
               <svg
-                className="h-5 w-5 text-green-600 dark:text-green-400"
+                className="h-5 w-5 text-green-700 dark:text-green-400"
                 fill="currentColor"
                 viewBox="0 0 20 20"
                 aria-hidden="true"

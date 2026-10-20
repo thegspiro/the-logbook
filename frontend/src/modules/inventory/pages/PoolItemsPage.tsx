@@ -534,7 +534,7 @@ const PoolItemsPage: React.FC = () => {
         <SummaryCard
           label="Total On-Hand"
           value={totalOnHand}
-          icon={<ArrowDownToLine size={20} className="text-green-600 dark:text-green-400" />}
+          icon={<ArrowDownToLine size={20} className="text-green-700 dark:text-green-400" />}
           accent="bg-green-500/10"
         />
         <SummaryCard
@@ -546,7 +546,7 @@ const PoolItemsPage: React.FC = () => {
         <SummaryCard
           label="Low Stock Alerts"
           value={lowStockCount}
-          icon={<AlertTriangle size={20} className="text-amber-600 dark:text-amber-400" />}
+          icon={<AlertTriangle size={20} className="text-amber-700 dark:text-amber-400" />}
           accent="bg-amber-500/10"
         />
       </div>

@@ -226,7 +226,7 @@ export const CourseLibraryPicker: React.FC<CourseLibraryPickerProps> = ({
 
       {selectedIds.length === 0 && !loading && !error && courses.length > 0 && (
         <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
           <p className="text-theme-text-secondary text-xs">
             {variant === 'certification' ? (
               <>

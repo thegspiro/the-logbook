@@ -1686,7 +1686,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
           {/* Warning for items without barcodes */}
           {itemsWithoutBarcodes.length > 0 && (
             <div className="mb-4 flex items-start gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-400" />
               <div>
                 <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
                   {itemsWithoutBarcodes.length} item{itemsWithoutBarcodes.length !== 1 ? 's' : ''} missing barcode

@@ -1010,7 +1010,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
               </div>
               {timeOffConflicts.length > 0 && (
                 <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
                   <div className="text-sm text-amber-700 dark:text-amber-300">
                     <p className="font-medium">
                       You have {timeOffConflicts.length} shift{timeOffConflicts.length > 1 ? 's' : ''} during this

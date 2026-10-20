@@ -1172,7 +1172,7 @@ export const MinutesDetailPage: React.FC = () => {
               {canManage && isEditable && (
                 <button
                   onClick={() => setShowAddSection(true)}
-                  className="mt-3 text-sm text-cyan-600 hover:text-cyan-800"
+                  className="mt-3 text-sm text-cyan-700 hover:text-cyan-800 dark:text-cyan-600"
                 >
                   Add your first section
                 </button>

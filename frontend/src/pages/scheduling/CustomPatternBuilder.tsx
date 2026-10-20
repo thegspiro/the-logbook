@@ -136,7 +136,7 @@ const CustomPatternBuilder: React.FC<CustomPatternBuilderProps> = ({ cyclePatter
         <span className="text-theme-text-muted text-xs">Quick fill:</span>
         <button
           onClick={() => fillRange('day')}
-          className="rounded-sm border border-amber-400/50 px-2 py-1 text-[11px] text-amber-600 transition-colors hover:bg-amber-500/10 dark:text-amber-400"
+          className="rounded-sm border border-amber-400/50 px-2 py-1 text-[11px] text-amber-700 transition-colors hover:bg-amber-500/10 dark:text-amber-400"
         >
           All Day
         </button>

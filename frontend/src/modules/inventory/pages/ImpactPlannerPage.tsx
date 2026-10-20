@@ -675,13 +675,13 @@ const ImpactPlannerPage: React.FC = () => {
                     iconBg="bg-purple-500/10"
                   />
                   <StatCard
-                    icon={<CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />}
+                    icon={<CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-400" />}
                     value={result.members_with_related_item}
                     label="Already have one"
                     iconBg="bg-green-500/10"
                   />
                   <StatCard
-                    icon={<Ruler className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
+                    icon={<Ruler className="h-5 w-5 text-amber-700 dark:text-amber-400" />}
                     value={result.members_missing_sizes}
                     label="Missing size info"
                     iconBg="bg-amber-500/10"
@@ -692,7 +692,7 @@ const ImpactPlannerPage: React.FC = () => {
                 {result.members_missing_sizes > 0 && (
                   <div className="card-secondary flex flex-col justify-between gap-2 p-3 sm:flex-row sm:items-center">
                     <span className="text-theme-text-muted flex items-center gap-2 text-sm">
-                      <Ruler className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                      <Ruler className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
                       {result.members_missing_sizes} member{result.members_missing_sizes === 1 ? '' : 's'} need the item
                       but have no size on file.
                     </span>

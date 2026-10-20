@@ -2004,7 +2004,7 @@ export const ShiftReportsTab: React.FC = () => {
                             key={member.user_id}
                             className="bg-theme-surface-hover flex items-center gap-3 rounded-lg px-4 py-3 opacity-60"
                           >
-                            <Check className="h-4 w-4 shrink-0 text-green-600" />
+                            <Check className="h-4 w-4 shrink-0 text-green-700 dark:text-green-600" />
                             <div className="min-w-0 flex-1">
                               <span className="text-theme-text-muted text-sm line-through">{member.user_name}</span>
                               <span className="text-theme-text-muted ml-2 text-xs">Already reported</span>

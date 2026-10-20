@@ -1232,7 +1232,11 @@ const EffectivenessSection: React.FC = () => {
                     <td className="py-2 pr-4">{ev.overall_rating != null ? `${ev.overall_rating}/5` : '-'}</td>
                     <td className="py-2 pr-4">
                       {ev.knowledge_gain_percentage != null ? (
-                        <span className={ev.knowledge_gain_percentage >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        <span
+                          className={
+                            ev.knowledge_gain_percentage >= 0 ? 'text-green-700 dark:text-green-600' : 'text-red-600'
+                          }
+                        >
                           {ev.knowledge_gain_percentage > 0 ? '+' : ''}
                           {/* Computed as a ratio of two scores, so it arrives
                               with full float precision (58.620689655…). */}
@@ -1551,9 +1555,9 @@ const ReportsSection: React.FC = () => {
                         <span
                           className={
                             f.current_compliance_percentage >= 80
-                              ? 'text-green-600'
+                              ? 'text-green-700 dark:text-green-600'
                               : f.current_compliance_percentage >= 50
-                                ? 'text-yellow-600'
+                                ? 'text-yellow-700 dark:text-yellow-600'
                                 : 'text-red-600'
                           }
                         >

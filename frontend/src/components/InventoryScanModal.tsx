@@ -884,7 +884,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                   >
                     <div className="flex items-start gap-2">
                       {r.success ? (
-                        <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        <Check className="h-4 w-4 text-green-700 dark:text-green-400" />
                       ) : (
                         <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
                       )}
@@ -1049,7 +1049,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                                 >
                                   {result.item.status}
                                 </span>
-                                {isAlreadyAdded && <Check className="h-3.5 w-3.5 text-green-600" />}
+                                {isAlreadyAdded && <Check className="h-3.5 w-3.5 text-green-700 dark:text-green-600" />}
                               </div>
                             </button>
                           );
@@ -1112,13 +1112,13 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
               {/* Lookup error */}
               {lookupError && (
                 <div className="flex items-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-2 dark:border-yellow-800 dark:bg-yellow-900/20">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-600" />
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-700 dark:text-yellow-600" />
                   <p className="text-sm text-yellow-700 dark:text-yellow-400">{lookupError}</p>
                 </div>
               )}
               {nfcEnabled && nfcError && (
                 <div className="flex items-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-2 dark:border-yellow-800 dark:bg-yellow-900/20">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-600" />
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-700 dark:text-yellow-600" />
                   <p className="text-sm text-yellow-700 dark:text-yellow-400">{nfcError}</p>
                 </div>
               )}

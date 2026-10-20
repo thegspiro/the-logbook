@@ -53,7 +53,7 @@ export const ElectionSummaryCards: React.FC<ElectionSummaryCardsProps> = ({ elec
           <div className={`rounded-lg p-2 ${needsAttention > 0 ? 'bg-amber-500/10' : 'bg-theme-surface-secondary'}`}>
             <AlertTriangle
               className={`h-5 w-5 ${
-                needsAttention > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-theme-text-muted'
+                needsAttention > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-theme-text-muted'
               }`}
             />
           </div>

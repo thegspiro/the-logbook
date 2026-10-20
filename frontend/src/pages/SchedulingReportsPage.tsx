@@ -1026,7 +1026,7 @@ export const SchedulingReportsPage: React.FC = () => {
                 <StatCard
                   label="Checks Met"
                   value={complianceData.reduce((sum, r) => sum + r.compliant_count, 0)}
-                  icon={<CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" aria-hidden="true" />}
+                  icon={<CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-400" aria-hidden="true" />}
                 />
                 <StatCard
                   label="Checks Not Met"

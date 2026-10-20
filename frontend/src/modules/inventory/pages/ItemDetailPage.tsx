@@ -847,7 +847,7 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId, ca
               <p className="text-theme-text-primary text-sm font-medium">
                 {rec.maintenance_type.replace('_', ' ')}{' '}
                 {rec.passed != null && (
-                  <span className={rec.passed ? 'text-green-600' : 'text-red-600'}>
+                  <span className={rec.passed ? 'text-green-700 dark:text-green-600' : 'text-red-600'}>
                     ({rec.passed ? 'Passed' : 'Failed'})
                   </span>
                 )}
@@ -901,11 +901,11 @@ const ExposuresTab: React.FC<ExposuresTabProps> = ({ records, tz, canManage, onA
             )}
             {rec.description && <p className="text-theme-text-muted mt-0.5 text-xs">{rec.description}</p>}
             <div className="mt-1 flex gap-3 text-xs">
-              <span className={rec.decon_required ? 'text-orange-600' : 'text-theme-text-muted'}>
+              <span className={rec.decon_required ? 'text-orange-700 dark:text-orange-600' : 'text-theme-text-muted'}>
                 Decon: {rec.decon_required ? 'Required' : 'Not required'}
               </span>
               {rec.decon_required && (
-                <span className={rec.decon_completed ? 'text-green-600' : 'text-red-600'}>
+                <span className={rec.decon_completed ? 'text-green-700 dark:text-green-600' : 'text-red-600'}>
                   {rec.decon_completed ? `Completed ${formatDate(rec.decon_completed_date, tz)}` : 'Pending'}
                 </span>
               )}

@@ -142,7 +142,7 @@ const TemplateRow: React.FC<{
             className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
             title="Publish"
           >
-            <Send className="h-4 w-4 text-green-600" />
+            <Send className="h-4 w-4 text-green-700 dark:text-green-600" />
           </button>
         )}
         <button
@@ -280,13 +280,13 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           <SummaryCard
             label="Pass Rate"
             value={percentOrDash(summary.pass_rate)}
-            icon={<TrendingUp className="h-5 w-5 text-green-600" />}
+            icon={<TrendingUp className="h-5 w-5 text-green-700 dark:text-green-600" />}
             color="bg-green-100 dark:bg-green-900/30"
           />
           <SummaryCard
             label="Avg Score"
             value={percentOrDash(summary.average_score)}
-            icon={<BarChart3 className="h-5 w-5 text-orange-600" />}
+            icon={<BarChart3 className="h-5 w-5 text-orange-700 dark:text-orange-600" />}
             color="bg-orange-100 dark:bg-orange-900/30"
           />
         </div>

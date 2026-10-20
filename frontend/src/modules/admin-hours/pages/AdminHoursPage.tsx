@@ -614,7 +614,7 @@ const AdminHoursPage: React.FC = () => {
         <article className="card p-4">
           <div className="flex items-center justify-between">
             <p className="text-theme-text-secondary text-sm font-medium">Approved</p>
-            <CheckCircle2 className="h-5 w-5 text-green-600" aria-hidden="true" />
+            <CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-600" aria-hidden="true" />
           </div>
           <p className="mt-2 text-3xl font-bold text-green-700 dark:text-green-400">
             {formatHours(mySummary?.approvedHours)}
@@ -632,7 +632,7 @@ const AdminHoursPage: React.FC = () => {
         >
           <div className="flex items-center justify-between">
             <p className="text-theme-text-secondary text-sm font-medium">Awaiting review</p>
-            <ListChecks className="h-5 w-5 text-amber-600" aria-hidden="true" />
+            <ListChecks className="h-5 w-5 text-amber-700 dark:text-amber-600" aria-hidden="true" />
           </div>
           <p className="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-400">
             {formatHours(mySummary?.pendingHours)}
