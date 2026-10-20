@@ -220,7 +220,7 @@ jobs:
       # skips when its dependency is missing is a test that never runs.
       - name: Install script-test dependencies
         if: "!cancelled()"
-        run: pip install 'PyYAML==6.0.2' 'Pillow==12.3.0'
+        run: pip install 'PyYAML==6.0.2' 'Pillow==13.0.0'
 
       - name: Run repo-root script tests
         if: "!cancelled()"
@@ -1155,7 +1155,7 @@ jobs:
       # Pinned to the version backend/requirements.txt already declares, so this
       # job and the application cannot drift onto different Pillow behaviour.
       - name: Install image-audit dependency
-        run: pip install 'Pillow==12.3.0'
+        run: pip install 'Pillow==13.0.0'
 
       # Catches the staleness nothing else can see: a global stylesheet change
       # alters captured screenshots without touching a guide, a placeholder or
