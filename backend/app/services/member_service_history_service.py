@@ -42,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import MemberServicePeriod, Organization, User, UserStatus
 from app.schemas.organization import RejoinServiceCredit
 from app.utils.org_timezone import (
+    local_date,
     resolve_org_today,
     resolve_scheduling_timezone,
     today_in,
@@ -135,6 +136,43 @@ def _stint_closed_by(
         return None
     closed = [p for p in periods if p.separation_status == separation_status.value]
     return closed[-1] if closed else None
+
+
+def effective_separation_at(
+    recorded_at: datetime,
+    periods: Sequence[MemberServicePeriod],
+    separation_status: UserStatus,
+    tz: tzinfo,
+) -> datetime:
+    """When a separation took effect, for the clocks that count from it.
+
+    ``recorded_at`` (``status_changed_at``) is when an officer entered the
+    drop; the stint the drop closed ends on its effective date, the day the
+    member actually left. A drop entered three weeks late is three weeks old,
+    so this is ``recorded_at`` moved back by the days it was back-dated,
+    counted on the department's calendar. It keeps the recording's time of
+    day, so a drop that was not back-dated keeps exactly the moment it always
+    had.
+
+    It is never later than the recording: the stint's end can be edited in
+    the service history afterwards, and moving it forward must not restart
+    the clocks -- the undo-drop window would turn into a backdating tool, and
+    a member mid-way to their 90-day property reminder would start again.
+    With no stint closed by this separation (history entered by hand, or rows
+    older than service history), the recording is all there is.
+
+    The undo-drop window and the property-return reminders both count from
+    this; keep them on the one definition so they cannot disagree.
+    """
+    if recorded_at.tzinfo is None:
+        recorded_at = recorded_at.replace(tzinfo=timezone.utc)
+    stint = _stint_closed_by(periods, separation_status)
+    if stint is None or stint.end_date is None:
+        return recorded_at
+    backdated_days = (local_date(recorded_at, tz) - stint.end_date).days
+    if backdated_days <= 0:
+        return recorded_at
+    return recorded_at - timedelta(days=backdated_days)
 
 
 def implicit_separation_date(member: Any, today: date, tz: tzinfo) -> date:
@@ -366,19 +404,6 @@ class MemberServiceHistoryService:
         )
         self.db.add(period)
         return period
-
-    async def separation_date(
-        self, member: User, separation_status: UserStatus
-    ) -> Optional[date]:
-        """The effective date of the drop or retirement the member is in now.
-
-        The end of the stint that :meth:`undo_separation` would reopen, so the
-        two always agree on which stint the separation closed. ``None`` when
-        there is no such stint.
-        """
-        periods = await self.list_periods(member.organization_id, member.id)
-        stint = _stint_closed_by(periods, separation_status)
-        return stint.end_date if stint else None
 
     async def undo_separation(
         self, member: User, separation_status: UserStatus
