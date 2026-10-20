@@ -24,7 +24,7 @@ from app.models.call_tracking import (
     UNCLASSIFIED_CALL_TYPE,
     CallTrackingMode,
 )
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
 from app.utils.positions import SEAT_NAME_MAX_LENGTH, canonical_position
 
 _response_config = ConfigDict(from_attributes=True)
@@ -83,8 +83,8 @@ class ShiftCreate(BaseModel):
     """Schema for creating a shift"""
 
     shift_date: date
-    start_time: datetime
-    end_time: Optional[datetime] = None
+    start_time: UTCDateTime
+    end_time: Optional[UTCDateTime] = None
     apparatus_id: Optional[str] = None
     station_id: Optional[str] = None
     shift_officer_id: Optional[str] = None
@@ -110,8 +110,8 @@ class ShiftUpdate(BaseModel):
     """Schema for updating a shift"""
 
     shift_date: Optional[date] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    start_time: Optional[UTCDateTime] = None
+    end_time: Optional[UTCDateTime] = None
     apparatus_id: Optional[str] = None
     station_id: Optional[str] = None
     shift_officer_id: Optional[str] = None
@@ -232,15 +232,15 @@ class ShiftAttendanceCreate(BaseModel):
     """Schema for recording shift attendance"""
 
     user_id: UUID
-    checked_in_at: Optional[datetime] = None
-    checked_out_at: Optional[datetime] = None
+    checked_in_at: Optional[UTCDateTime] = None
+    checked_out_at: Optional[UTCDateTime] = None
 
 
 class ShiftAttendanceUpdate(BaseModel):
     """Schema for updating shift attendance"""
 
-    checked_in_at: Optional[datetime] = None
-    checked_out_at: Optional[datetime] = None
+    checked_in_at: Optional[UTCDateTime] = None
+    checked_out_at: Optional[UTCDateTime] = None
     duration_minutes: Optional[int] = None
 
 
@@ -403,8 +403,8 @@ class CloseoutAttendanceEntry(BaseModel):
     """One member's actual on/off times, as confirmed by the officer."""
 
     user_id: UUID
-    checked_in_at: Optional[datetime] = None
-    checked_out_at: Optional[datetime] = None
+    checked_in_at: Optional[UTCDateTime] = None
+    checked_out_at: Optional[UTCDateTime] = None
 
     @model_validator(mode="after")
     def _order(self) -> "CloseoutAttendanceEntry":
@@ -845,9 +845,9 @@ class ShiftCallCreate(BaseModel):
     # payloads. responding_members holds user-id strings.
     incident_number: Optional[str] = Field(None, max_length=100)
     incident_type: str = Field(min_length=1, max_length=100)
-    dispatched_at: Optional[datetime] = None
-    on_scene_at: Optional[datetime] = None
-    cleared_at: Optional[datetime] = None
+    dispatched_at: Optional[UTCDateTime] = None
+    on_scene_at: Optional[UTCDateTime] = None
+    cleared_at: Optional[UTCDateTime] = None
     cancelled_en_route: bool = False
     medical_refusal: bool = False
     responding_members: Optional[List[Annotated[str, Field(max_length=64)]]] = Field(
@@ -861,9 +861,9 @@ class ShiftCallUpdate(BaseModel):
 
     incident_number: Optional[str] = Field(None, max_length=100)
     incident_type: Optional[str] = Field(None, min_length=1, max_length=100)
-    dispatched_at: Optional[datetime] = None
-    on_scene_at: Optional[datetime] = None
-    cleared_at: Optional[datetime] = None
+    dispatched_at: Optional[UTCDateTime] = None
+    on_scene_at: Optional[UTCDateTime] = None
+    cleared_at: Optional[UTCDateTime] = None
     cancelled_en_route: Optional[bool] = None
     medical_refusal: Optional[bool] = None
     responding_members: Optional[List[Annotated[str, Field(max_length=64)]]] = Field(

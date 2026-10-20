@@ -25,7 +25,7 @@ from app.models.event import (
     RecurrencePattern,
     RSVPStatus,
 )
-from app.schemas.base import UTCResponseBase, as_utc
+from app.schemas.base import UTCDateTime, UTCResponseBase, as_utc
 from app.schemas.training_session import TrainingSessionAttach
 
 _response_config = ConfigDict(from_attributes=True)
@@ -1582,8 +1582,8 @@ class AttendancePetitionCreate(BaseModel):
 class AttendancePetitionApprove(BaseModel):
     """The reviewer's confirmed times. Required: they decide the credit."""
 
-    check_in_at: datetime
-    check_out_at: datetime
+    check_in_at: UTCDateTime
+    check_out_at: UTCDateTime
     review_note: Optional[str] = Field(None, max_length=1000)
 
     @model_validator(mode="after")
