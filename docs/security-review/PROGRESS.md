@@ -16,25 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3467](https://github.com/thegspiro/the-logbook/pull/3467)** (branch
-`claude/security-review-integrations-p8`). This row was last updated for PR
-#3455 (Feature 23, Medical supplies, pass 15); PRs #3456 (Feature 24,
-Meetings & minutes, pass 8), #3457 (Feature 25, Messaging & notifications,
-pass 8) and #3458 (Feature 26, Forms, pass 8) all merged to `main` since,
-each recording itself in the Log below — see those entries rather than a
-superseded note here for any of them. With all three merged,
+**PR [#3475](https://github.com/thegspiro/the-logbook/pull/3475)** (branch
+`claude/security-review-security-audit-ip-p8`). This row was last updated
+for PR #3455 (Feature 23, Medical supplies, pass 15); PRs #3456 (Feature
+24, Meetings & minutes, pass 8), #3457 (Feature 25, Messaging &
+notifications, pass 8), #3458 (Feature 26, Forms, pass 8) and #3467
+(Feature 27, Integrations, pass 8) all merged to `main` since, each
+recording itself in the Log below — see those entries rather than a
+superseded note here for any of them. With all four merged,
 `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
 returned 0 results, checked once before starting and again immediately
-before branching, so this iteration reviewed Feature 27 (Integrations),
-pass 8. **0 fixed, 0 new findings** — the real delta since pass 7 (the
-Google Workspace engine generalized into a provider-neutral
-directory-account engine, Microsoft 365 added as a second provider, and
-Outlook calendar OAuth connect added) was read in full and found clean;
-INT-11, carried forward as open across two passes, is corrected to ✅ FIXED
-— the control was already present and reachable, a review error rather than
-a regression. See `INT-27-integrations.md`'s **Pass 8** section. Rotation
-row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
-IP).
+before branching, so this iteration reviewed Feature 28 (Security, audit &
+IP), pass 8. **0 fixed, 0 new findings** — the one real delta since pass 7
+(the new weekly security/audit report's `GET`/`PUT /security/weekly-report`
+endpoints) was read in full from this feature's own angle — org scoping,
+permission gating, audit logging, deep-copy-safe JSON mutation — and found
+clean. See `SEC2-28-security-audit-ip.md`'s **Pass 8** section. Rotation
+row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23 Medical supplies pass 15, PR #3455, merged), preserved for history</summary>
@@ -20411,7 +20410,7 @@ iteration's commit" rule.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
@@ -20456,6 +20455,40 @@ review error repeated across two passes, confirmed by reading that exact
 commit's file content directly rather than trusting the prior write-up.
 Marked ✅ FIXED this pass. Rotation row 27 → ✅ (pending this PR's merge);
 next is Feature 28 (Security, audit & IP).
+
+### 2026-10-20 — Feature 28 (Security, audit & IP, pass 8) — 0 fixed, 0 new findings
+
+`search_pull_requests` (`repo:thegspiro/the-logbook is:pr is:open
+head:claude/security-review-`) returned 0 results immediately before
+starting, and again immediately before branching. PR #3467 (Feature 27,
+Integrations, pass 8) had merged with nothing started for Feature 28
+since; row 28 was the first `⬜`.
+
+**Delta.** Baseline pass 7's merge (`20e31ed8`, PR #3376). One real commit
+since: `c2aff901` (weekly security/audit report emailed to the IT
+Manager) — read in full from this feature's own checklist angle (org
+scoping on the new `/security/weekly-report` GET/PUT, permission gating,
+audit logging on change, deep-copy-safe JSON mutation, org-scoped
+recipient/alert/error queries, deliberate installation-wide scope for the
+audit-chain integrity count, `html.escape`d counts-only email body). Found
+clean — see `SEC2-28-security-audit-ip.md`'s **Pass 8** section. Route
+surface: 35 → 37 (+2, the new weekly-report pair). Standing findings
+SEC2-28-6 (LOW, TOCTOU) and the dead-detector-code note re-confirmed open
+and unchanged. No `KNOWN_LIMITATIONS.md` change needed.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/
+tests/ alembic/` (CI-pinned 7.3.0/26.5.1/9.0.1); `validate_migrations.py
+--strict` — 631 revisions, single head `ca0c2111466f`; `pytest tests/ -q
+-k "audit or security_monitoring or ip_security or privilege_ceiling or
+suspicious_ip or w50_audit_username or signing_key_cutover or
+security_alert_workflow or ip_allowlist_middleware or
+ip_exception_lookup_db or task_error_reporting or integration_dns_pinning
+or audit_chain_sealing or security_weekly_report"` — 552 passed, 1
+pre-existing skip (`pywebpush`); frontend `npm run typecheck`/`npm run
+lint` both clean.
+
+Rotation row 28 → ✅ (pending this PR's merge). Next: Feature 29 (Reports
+& analytics).
 
 ### 2026-10-20 — Feature 26 (Forms, pass 8) — true zero-delta on backend, 0 fixed, 0 new findings
 
