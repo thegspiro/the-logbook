@@ -82,7 +82,7 @@ export default function LearningPathPage() {
                       alt={step.screenshot.alt}
                       loading="lazy"
                       decoding="async"
-                      className="border-theme-surface-border mt-4 h-auto w-full rounded-lg border"
+                      className="border-theme-surface-border mt-4 h-auto max-w-full rounded-lg border"
                     />
                   )}
 

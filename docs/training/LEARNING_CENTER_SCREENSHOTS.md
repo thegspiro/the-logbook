@@ -2,14 +2,14 @@
 
 Where the in-app Learning Center ([`learningPaths.ts`](../../frontend/src/pages/learning/learningPaths.ts))
 needs pictures, which existing guide images already show the same screen, and
-what has to be captured fresh. Nothing in this file has been captured or wired
-into the app yet; it is the plan, written after the lessons were brought back in
-line with the screens (see the pull request that added it).
+what has been captured. The lessons were brought back in line with the screens
+first; eleven screenshots have since been captured and attached (see
+[Captured](#captured)), and the rest of this file records what is still open.
 
 ## Where things stand
 
 The six lessons (Getting Started, Phone, Events, Training, Scheduling, Gear) are
-data in `learningPaths.ts` and carry **no images**. That was deliberate: the
+data in `learningPaths.ts` and were written with **no images**, deliberately: the
 frontend image copies only `frontend/`, so the guide library and its 766 images
 are not in the build, and the service worker precaches only `css`, `html` and
 `js`. A lesson therefore works with no signal and no picture. Any screenshot
@@ -92,38 +92,59 @@ lesson step showing **Open the screen** and **Mark complete**. These belong in
 guide 00 (Getting Started) and the dashboard's orientation prompt, not in the
 lessons themselves.
 
-## The decision that has to come first: how an image ships
+## Captured
 
-This is not settled and should not be guessed. Three options, and the offline
-property is what separates them:
+Eleven images in `frontend/public/lesson-images/`, taken as the ordinary demo
+member by [`scripts/screenshots/learning-center.mjs`](../../scripts/screenshots/learning-center.mjs)
+and attached to a step through its optional `screenshot` field:
 
-| Option                                                       | Offline                                                    | Cost                                                                                                                                                              |
-| ------------------------------------------------------------ | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Link to the guide image on GitHub**                     | No; fails on a self-hosted install with no route to GitHub | Zero bundle weight, but the "Read the full reference guide" link already makes this assumption and a lesson that depends on it contradicts its own header comment |
-| **B. Serve from `frontend/public/learning/`, not precached** | Images absent offline; alt text and the lesson text remain | A few hundred KB of static files in the image; `globPatterns` already excludes `png`/`webp`, so the service worker is untouched                                   |
-| **C. Precache them**                                         | Full                                                       | Adds every image to first install on every phone; needs a size budget                                                                                             |
+| Step                            | File                                |
+| ------------------------------- | ----------------------------------- |
+| `getting-started.dashboard`     | `getting-started-dashboard.png`     |
+| `getting-started.notifications` | `getting-started-notifications.png` |
+| `getting-started.directory`     | `getting-started-directory.png`     |
+| `mobile.offline`                | `mobile-offline.png`                |
+| `events.checkin`                | `events-checkin.png`                |
+| `training.submit`               | `training-submit.png`               |
+| `training.verify`               | `training-verify.png`               |
+| `scheduling.my-shifts`          | `scheduling-my-shifts.png`          |
+| `scheduling.open-shifts`        | `scheduling-open-shifts.png`        |
+| `scheduling.requests`           | `scheduling-requests.png`           |
+| `gear.issued`                   | `gear-issued.png`                   |
 
-**Recommendation: B**, with images resized to the 720px lesson column, WebP or
-`pngquant`-reduced, `loading="lazy"`, and non-empty alt text required. It keeps
-the offline promise honest — the text teaches, the picture helps when there is
-signal — and needs no service-worker change.
+Still to capture, because the demo cannot reach the state without mocking or
+extra seed data: the **Needs you** card, the phone install banner, the push
+switch, the check-out state, **Join Waitlist**, the pending-with-**Withdraw**
+attendance request, the not-eligible sign-up dialog, the Requests list with
+**Pick up**, **My Sizes** and **My Requests**. The `account`, `install`, `push`,
+`rsvp`, `missed-checkin`, `history`, `sizes` and `request` steps therefore have
+no image yet.
 
-If B is chosen, the code change is small: an optional
-`screenshot?: { src: string; alt: string }` on `LearningStep`, rendered by
-`LearningPathPage`, plus a test that every `src` exists under `public/learning/`
-and every `alt` is non-empty, in the style of the existing label test in
-`learningPaths.test.ts`.
+## How an image ships
+
+Decided: **local copies, not precached.** Files live in `frontend/public/lesson-images/`
+and are served by the app itself, so a self-hosted install with no route to GitHub
+still shows them. The service worker precaches only `css`, `html` and `js`, so
+offline the picture is absent and the lesson text still teaches the task; nothing in
+a step may depend on the image being visible. Images are cropped to the part of
+the screen the step is about, quantised to 128 colours, and total about 450 KB.
+Precaching them (full offline pictures) is a one-line `globPatterns` change if that
+is ever wanted, at the cost of putting every image in first install.
+
+`learningPaths.test.ts` fails if a step names a file that does not exist or gives
+it fewer than 20 characters of alt text.
 
 ## Capture mechanics
 
-`scripts/screenshots/` is built around guide placeholders: each manifest entry
-names a placeholder, and `apply_placeholders.py` rewrites the markdown. Lesson
-shots have no placeholder, so reusing the pipeline needs two small additions
-rather than a second tool: an output directory option on `capture.mjs`, and a
-manifest id prefix (for example `LC-`) that `apply_placeholders.py` ignores.
-Everything else — `dev_env.sh`, the demo seeder, the member and
-second-member sessions, route mocks — is reused as it is. Shoot as the ordinary
-demo member, at 1440×900 and 390×844, per
+`scripts/screenshots/capture.mjs` is keyed to guide placeholders, and a lesson
+step has none, so lesson shots have their own small script,
+`learning-center.mjs`, which reuses the demo member credentials from `manifest.mjs`.
+Everything else — `dev_env.sh`, the demo seeder, the stack — is reused as it is.
+Each shot is a locator plus an optional `crop`, because a lesson column is about
+700px wide and a full-length page shrinks its text past reading. Run
+`seed_demo_data.py` first; a full seed takes over an hour because the login
+limiter paces its member sign-ins, and a capture run straight after it can be
+throttled for several minutes. See
 [`scripts/screenshots/README.md`](../../scripts/screenshots/README.md).
 
 Demo states the seeder may need, none of which are made by default:

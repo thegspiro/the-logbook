@@ -81,11 +81,16 @@ export const learningPaths: LearningPath[] = [
         why: 'The dashboard is the one screen that answers "what do I need to do next" without you going looking for it. On a normal day most members need nothing else.',
         how: [
           'If a Needs you card is at the top, deal with it first: a certification that is expiring or expired (Start Renewal), a department message waiting for your Acknowledge, or applicants waiting on your sign-off. The card is absent when nothing needs you.',
+          'A readiness banner sits above the quick actions: Clear to respond, Clear, with conditions, or Not clear to respond. It names what is overdue or expiring — certifications, screenings and seats — and opens the detail.',
           'Read the Next 30 Days list — your shifts, drills, events, and any open shifts you could pick up all appear together there.',
           'Read My Updates for anything addressed to you personally.',
           'The My Training and My Issued Gear panels are summaries and appear only once there is something to show — a training enrollment, or gear issued or on loan to you. The full screens live behind them.',
           'Log Training and Clock In (administrative hours) sit above the list. Take a Shift appears only if you are able to hold a seat on a shift.',
         ],
+        screenshot: {
+          file: 'getting-started-dashboard.png',
+          alt: 'The dashboard as a member sees it: a New here prompt, a red Not clear to respond readiness banner, the Log Training, Take a Shift and Clock In buttons, and the first rows of the Next 30 Days list with Going and Can’t buttons on events awaiting an answer.',
+        },
         success:
           'Nothing is left under Needs you, and you can name your next commitment or confirm you have none this week.',
       },
@@ -112,6 +117,10 @@ export const learningPaths: LearningPath[] = [
           'Leave Email Notifications on unless you are certain: it is the switch that silences reminder emails, and the in-app entry is then the only copy you get.',
           'Press Save Preferences. The email switches do nothing until you do. Urgent Text Messages is the exception — it saves the moment you flip it.',
         ],
+        screenshot: {
+          file: 'getting-started-notifications.png',
+          alt: 'Account, Notifications tab: the Email Notifications and Urgent Text Messages switches, then the start of the Emails you can turn off list. Save Preferences is at the foot of the page, below the Always emailed to you list.',
+        },
         success:
           'Your inbox is clear, your preferences are saved, and you can say which notices reach you by email even with reminders switched off.',
       },
@@ -126,6 +135,10 @@ export const learningPaths: LearningPath[] = [
           'Choose what of yours is shared under Account → Privacy → Profile visibility. Leadership can always see everything, and your date of birth and emergency contacts are never shown to other members.',
           'Find the officer for the area you are joining.',
         ],
+        screenshot: {
+          file: 'getting-started-directory.png',
+          alt: 'Account, Privacy tab, Profile visibility: five contact details, each with a switch and a label such as Shared once the department allows it or Only you and leadership, and a note that date of birth and emergency contacts are never shown to other members.',
+        },
         success:
           'You can reach an officer without having to ask someone else for their number, and you know which of your details other members can see.',
       },
@@ -159,10 +172,14 @@ export const learningPaths: LearningPath[] = [
         how: [
           'Check the App tab for your installed version, and use Check for updates to see whether a newer one is waiting.',
           'Open any form you might need while you still have signal. Once it is open you can fill it in and send it with none; a form you try to open with no signal shows an error instead.',
-          'Look for the pill that reads Offline · N pending. On a phone it is in the menu; on a wide screen it is in the top bar.',
+          'Look for the offline notice. In the side menu and the phone menu it reads Offline — will sync when reconnected, or Offline · N pending when work is waiting. With a top navigation bar it is a pill in that bar.',
           'Back online it reads N pending sync — tap it to send now. Equipment checks and shift reports send from their own pages: open the equipment check, or the Shift Reports tab in Scheduling, with a connection.',
           'Treat a queued action as unfinished until the pill clears.',
         ],
+        screenshot: {
+          file: 'mobile-offline.png',
+          alt: 'The side menu’s offline notice, which reads Offline — will sync when reconnected.',
+        },
         success: 'You know where to look to tell whether your last action actually reached the server.',
       },
       {
@@ -220,12 +237,17 @@ export const learningPaths: LearningPath[] = [
         path: '/events',
         why: 'RSVP says you meant to come; check-in proves you did. Attendance credit and any requirement tied to the event come from the check-in, not the RSVP.',
         how: [
-          'At the event, find the posted QR code and scan it with your phone camera. Sign in if you are asked to.',
+          'If the event is happening now, a green Check In button appears in the Needs You band at the top of the Events page. It opens the same check-in page the QR code does.',
+          'Otherwise, at the event, find the posted QR code and scan it with your phone camera. Sign in if you are asked to.',
           'On the Event Check-In page, tap Check In to This Event. The confirmation reads You’re Checked In. If you never answered the RSVP, you are recorded as Going.',
           'When you leave, scan the code again and tap Check Out of This Event.',
           'If there is no code, ask whoever is running the event to check you in.',
           'Confirm the event shows you as attended afterwards. On a training event the hours reach your training record when the organizer finalizes attendance, not at the moment you check in.',
         ],
+        screenshot: {
+          file: 'events-checkin.png',
+          alt: 'The Events page’s Needs You band listing events that are happening now, each with a green Check In button and the time check-in closes.',
+        },
         success: 'The event lists you as checked in, not merely as having RSVPed.',
       },
       {
@@ -276,6 +298,10 @@ export const learningPaths: LearningPath[] = [
           'Attach the certificate or roster sheet if you have one — it is what the reviewer checks.',
           'Not ready? Save Draft keeps it in your list until you submit it. Otherwise press Submit Training, and expect it to sit in Pending Review rather than crediting instantly.',
         ],
+        screenshot: {
+          file: 'training-submit.png',
+          alt: 'Submit External Training: a notice that a training officer asked for a change, then The Class, When and Details cards, with Submit Training and Save Draft on the right.',
+        },
         success: 'Your submission appears under Recent Submissions with a Pending Review status.',
       },
       {
@@ -289,6 +315,10 @@ export const learningPaths: LearningPath[] = [
           'If it says Needs Edits, a notice on the Submit Training page explains what was missing. Fix it there and send it back.',
           'Once approved, the training is added to your record on My Training.',
         ],
+        screenshot: {
+          file: 'training-verify.png',
+          alt: 'Recent Submissions on the Submit Training page, showing the status badges Needs Edits, Approved and Pending Review.',
+        },
         success: 'You can tell the difference between a submitted record and a credited one.',
       },
     ],
@@ -312,6 +342,10 @@ export const learningPaths: LearningPath[] = [
           'Note the date, times, station, and seat you are filling.',
           'Check its status. If it still shows Assigned, use Confirm so the officers know you will be there.',
         ],
+        screenshot: {
+          file: 'scheduling-my-shifts.png',
+          alt: 'My Shifts: upcoming shifts each marked Assigned with Confirm, Decline, Swap and Details buttons, and Request Time Off at the top.',
+        },
         success: 'You know when you are next on, and you have confirmed it.',
       },
       {
@@ -325,6 +359,10 @@ export const learningPaths: LearningPath[] = [
           'Pick a Position, then press Confirm Sign Up. Your own sign-up is saved as confirmed — there is no second Confirm to press.',
           'Or just note a shift to aim for.',
         ],
+        screenshot: {
+          file: 'scheduling-open-shifts.png',
+          alt: 'Open Shifts: shifts with open seats grouped by day, each with a Sign Up button and a Details button.',
+        },
         success: 'You can tell an open shift you can take from one you are not yet qualified for.',
       },
       {
@@ -338,6 +376,10 @@ export const learningPaths: LearningPath[] = [
           'Confirm that a pending request has not yet released you from the shift.',
           'Swap Requests also shows open swaps from other members. Pick up takes one on, if you are eligible.',
         ],
+        screenshot: {
+          file: 'scheduling-requests.png',
+          alt: 'Requests: the Swap Requests and Time Off tabs, the Pending status filter, and one pending swap request.',
+        },
         success: 'You can tell whether a request has been granted or is still waiting.',
       },
     ],
@@ -361,6 +403,10 @@ export const learningPaths: LearningPath[] = [
           'Read the list below them and check each item is one you actually have.',
           'Tell your quartermaster about anything listed that you never received, or anything you hold that is not listed.',
         ],
+        screenshot: {
+          file: 'gear-issued.png',
+          alt: 'My Issued Gear: tiles for Issued to me, Temporary loans with one overdue, and Pending requests; the Request Equipment, My Requests and My Sizes buttons; then the Issued to Me list.',
+        },
         success: 'The list matches what is physically in your locker and on the truck.',
       },
       {

@@ -42,35 +42,33 @@ const settle = async (page) => {
 
 /**
  * Each shot: `id` is the file name, `route` the page, `viewport` defaults to
- * WIDE, `prepare` drives the UI into the pictured state, and `clip` picks the
- * region (a locator factory) — omitted means the viewport.
+ * WIDE, `prepare` drives the UI into the pictured state, `clip` picks the
+ * region (a locator factory; omitted means the viewport) and `crop` keeps only
+ * the top `height` pixels of that region, below `top`. A lesson column is
+ * ~700px wide, so a full-length page is trimmed to the part the step is about.
  */
 const shots = [
   {
     id: "getting-started-dashboard",
     route: "/dashboard",
     clip: (page) => page.locator("[data-page-main], main").first(),
+    crop: { top: 0, height: 830 },
   },
   {
     id: "getting-started-notifications",
     route: "/account?tab=notifications",
-    prepare: async (page) => {
-      await page
-        .getByText("Emails you can turn off")
-        .first()
-        .scrollIntoViewIfNeeded();
-    },
     clip: (page) => page.locator("main").first(),
+    crop: { top: 0, height: 700 },
   },
   {
     id: "getting-started-directory",
     route: "/account?tab=privacy",
     clip: (page) => page.locator("main").first(),
+    crop: { top: 0, height: 780 },
   },
   {
     id: "mobile-offline",
     route: "/dashboard",
-    viewport: WIDE,
     prepare: async (page) => {
       await page.context().setOffline(true);
       await page.evaluate(() => window.dispatchEvent(new Event("offline")));
@@ -84,48 +82,49 @@ const shots = [
       page
         .getByText(/^Offline/)
         .first()
-        .locator("xpath=ancestor::*[self::header or self::nav][1]"),
+        .locator("xpath=.."),
   },
   {
-    id: "events-rsvp",
+    id: "events-checkin",
     route: "/events",
     clip: (page) => page.locator("main").first(),
+    crop: { top: 0, height: 640 },
   },
   {
     id: "training-submit",
     route: "/training/submit",
     clip: (page) => page.locator("main").first(),
+    crop: { top: 0, height: 1250 },
   },
   {
     id: "training-verify",
     route: "/training/submit",
-    prepare: async (page) => {
-      await page
-        .getByText("Recent Submissions")
-        .first()
-        .scrollIntoViewIfNeeded();
-    },
-    clip: (page) => page.locator("main").first(),
+    clip: (page) =>
+      page.getByText("Recent Submissions").first().locator("xpath=../.."),
   },
   {
     id: "scheduling-my-shifts",
     route: "/scheduling?tab=my-shifts",
     clip: (page) => page.locator("main").first(),
+    crop: { top: 0, height: 830 },
   },
   {
     id: "scheduling-open-shifts",
     route: "/scheduling?tab=open-shifts",
     clip: (page) => page.locator("main").first(),
+    crop: { top: 0, height: 620 },
   },
   {
     id: "scheduling-requests",
     route: "/scheduling?tab=requests",
     clip: (page) => page.locator("main").first(),
+    crop: { top: 0, height: 390 },
   },
   {
     id: "gear-issued",
     route: "/inventory/my-equipment",
     clip: (page) => page.locator("main").first(),
+    crop: { top: 0, height: 560 },
   },
 ];
 
@@ -179,7 +178,19 @@ for (const shot of shots) {
     if (shot.prepare) await shot.prepare(page);
     const target = shot.clip ? shot.clip(page) : null;
     const path = resolve(OUT_DIR, `${shot.id}.png`);
-    if (target) await target.screenshot({ path });
+    if (target && shot.crop) {
+      // Tall enough that nothing scrolls, so the box is in page coordinates.
+      const width = (shot.viewport || WIDE).width;
+      await page.setViewportSize({ width, height: 2600 });
+      await page.waitForTimeout(400);
+      const box = await target.boundingBox();
+      if (!box) throw new Error("clip region is not on the page");
+      const height = Math.min(shot.crop.height, box.height - shot.crop.top);
+      await page.screenshot({
+        path,
+        clip: { x: box.x, y: box.y + shot.crop.top, width: box.width, height },
+      });
+    } else if (target) await target.screenshot({ path });
     else await page.screenshot({ path });
     console.log(`ok   ${shot.id}`);
   } catch (error) {
