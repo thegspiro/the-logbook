@@ -428,19 +428,19 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
           <div className="bg-theme-input-bg flex rounded-lg p-1">
             <button
               onClick={() => setView('upcoming')}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'upcoming' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'upcoming' ? 'bg-violet-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               Upcoming ({upcoming.length})
             </button>
             <button
               onClick={() => setView('past')}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'past' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'past' ? 'bg-violet-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               Past ({past.length})
             </button>
             <button
               onClick={() => setView('hours')}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'hours' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'hours' ? 'bg-violet-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               Hours
             </button>
@@ -943,7 +943,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                   submittingSwap || (swapForm.mode === 'exchange' && !selectedExchange) || swapBlockedReason !== null
                 }
                 aria-describedby={swapBlockedReason ? 'swap-blocked-reason' : undefined}
-                className="rounded-lg bg-violet-600 px-4 py-2 text-white hover:bg-violet-700 disabled:opacity-50"
+                className="rounded-lg bg-violet-700 px-4 py-2 text-white hover:bg-violet-800 disabled:opacity-50"
               >
                 {submittingSwap ? 'Submitting...' : 'Submit Request'}
               </button>
@@ -1044,7 +1044,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                   void handleTimeOffRequest();
                 }}
                 disabled={submittingTimeOff || !timeOffForm.start_date}
-                className="rounded-lg bg-violet-600 px-4 py-2 text-white hover:bg-violet-700 disabled:opacity-50"
+                className="rounded-lg bg-violet-700 px-4 py-2 text-white hover:bg-violet-800 disabled:opacity-50"
               >
                 {submittingTimeOff ? 'Submitting...' : 'Submit Request'}
               </button>

@@ -131,10 +131,18 @@ def test_input_checks_keep_their_own_message(config, expected):
     assert message == expected
 
 
+def _setup_in_progress():
+    """Onboarding is still open, so the completion guard lets the call through."""
+    service = MagicMock()
+    service.needs_onboarding = AsyncMock(return_value=True)
+    return patch("app.api.v1.onboarding.OnboardingService", return_value=service)
+
+
 async def test_endpoint_uses_the_uniform_test_for_self_hosted():
     request = SimpleNamespace(platform="selfhosted", config=dict(_CONFIG))
     with (
         patch("app.api.v1.onboarding.validate_session", AsyncMock()),
+        _setup_in_progress(),
         _smtp_raising(ConnectionRefusedError(111, "Connection refused")),
     ):
         response = await verify_email_configuration(
@@ -158,6 +166,7 @@ async def test_endpoint_outer_timeout_is_uniform_for_self_hosted():
 
     with (
         patch("app.api.v1.onboarding.validate_session", AsyncMock()),
+        _setup_in_progress(),
         patch("app.api.v1.onboarding.asyncio.timeout", return_value=_Expired()),
     ):
         response = await verify_email_configuration(

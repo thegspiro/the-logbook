@@ -389,6 +389,17 @@ class AdminUserCreate(MembershipClassificationFields):
     send_welcome_email: bool = Field(
         default=True, description="Send welcome email with password setup link"
     )
+    # Also create the member an account in the connected directory (Google
+    # Workspace or Microsoft 365). The member's Logbook email then becomes a
+    # generated department address -- the account's -- and the email given
+    # above is kept as their personal address, where passwords are sent.
+    create_directory_account: bool = Field(
+        default=False,
+        description=(
+            "Create an account in the connected Google Workspace or Microsoft "
+            "365 directory at a generated department address"
+        ),
+    )
 
 
 class UserUpdate(MembershipClassificationFields):
@@ -624,6 +635,23 @@ class UserWithRolesResponse(UserResponse):
     )
 
     model_config = _response_config
+
+
+class MemberDirectoryAccountSummary(BaseModel):
+    """The directory account outcome of adding a member, when one applied."""
+
+    provider: str
+    provider_name: str
+    status: str
+    email: str
+    credentials_sent: bool = False
+    last_error: Optional[str] = None
+
+
+class MemberCreateResponse(UserWithRolesResponse):
+    """A created member, with what happened in the connected directory."""
+
+    directory_account: Optional[MemberDirectoryAccountSummary] = None
 
 
 class MemberEmailChoice(BaseModel):

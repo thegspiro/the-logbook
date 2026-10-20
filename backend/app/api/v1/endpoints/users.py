@@ -42,6 +42,7 @@ from app.core.permissions import get_rank_default_permissions
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
+from app.models.directory_account import DirectoryAccountStatus
 from app.models.document import Document
 from app.models.inventory import ItemAssignment, ItemIssuance
 from app.models.training import TrainingRecord as TrainingRecordModel
@@ -54,6 +55,8 @@ from app.schemas.user import (
     ContactInfoUpdate,
     DeletionImpactResponse,
     MemberAuditLogEntry,
+    MemberCreateResponse,
+    MemberDirectoryAccountSummary,
     MemberDirectoryEntry,
     MemberEmailChoice,
     MemberEmailChoicesResponse,
@@ -69,6 +72,13 @@ from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
     assert_positions_retain_administrator,
+)
+from app.services.department_email import generate_department_email
+from app.services.directory_account_service import (
+    DirectoryAccountService,
+    credentials_html,
+    credentials_text,
+    provider_info,
 )
 from app.services.email_policy import (
     EMAIL_POLICIES,
@@ -247,6 +257,49 @@ def _validated_phone_changes(user: User, sent: dict) -> dict:
     return changes
 
 
+async def _department_email_for_directory_account(
+    db: AsyncSession, user_data: AdminUserCreate, organization_id: str
+) -> Optional[str]:
+    """The department address a new member's directory account is created at,
+    or None when none was asked for. Refuses, before anything is written, a
+    request that could only produce a failed account."""
+    if not user_data.create_directory_account:
+        return None
+    info = await DirectoryAccountService(db).connected_provider(organization_id)
+    if info is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "No Google Workspace or Microsoft 365 integration is connected, "
+                "so there is no directory to create the account in."
+            ),
+        )
+    department_email = await generate_department_email(
+        db, organization_id, user_data.first_name, user_data.last_name
+    )
+    if department_email is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Department email addresses are not turned on (Organization "
+                "Settings → Department Email), so there is no address to create "
+                f"the {info.product} account at."
+            ),
+        )
+    typed_domain = user_data.email.rsplit("@", 1)[-1].lower()
+    if typed_domain == department_email.rsplit("@", 1)[-1].lower():
+        # The typed address becomes the personal one the passwords go to; on
+        # the department domain it is a mailbox that may not exist yet.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Enter the member's personal email address. Their department "
+                f"address and {info.product} account are created for them."
+            ),
+        )
+    return department_email
+
+
 WELCOME_EMAIL_UNAVAILABLE_DETAIL = (
     "Email is not set up for this department, so a temporary password cannot "
     "be sent to the new member. Set an initial password for them instead."
@@ -254,7 +307,7 @@ WELCOME_EMAIL_UNAVAILABLE_DETAIL = (
 
 
 @router.post(
-    "", response_model=UserWithRolesResponse, status_code=status.HTTP_201_CREATED
+    "", response_model=MemberCreateResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_member(
     user_data: AdminUserCreate,
@@ -268,6 +321,13 @@ async def create_member(
 
     Allows secretaries and admins to create new member accounts with initial roles.
     A temporary password will be generated and sent via email if send_welcome_email is True.
+
+    With ``create_directory_account``, the member also gets an account in the
+    connected Google Workspace or Microsoft 365 directory, at a generated
+    department address that becomes their Logbook email; the email given is
+    kept as their personal address, where the passwords are sent. Without it,
+    a member whose email is already a directory account's own address is
+    linked to that account, so leaving suspends it.
 
     **Authentication required**
 
@@ -337,6 +397,10 @@ async def create_member(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists"
         )
+
+    department_email = await _department_email_for_directory_account(
+        db, user_data, str(current_user.organization_id)
+    )
 
     # Use admin-provided password or generate a temporary one
     if user_data.password:
@@ -434,7 +498,10 @@ async def create_member(
         id=str(uuid4()),
         organization_id=current_user.organization_id,
         username=user_data.username,
-        email=user_data.email,
+        # A member getting a directory account signs in at its address; the
+        # address typed is theirs, and where the passwords are sent.
+        email=department_email or user_data.email,
+        personal_email=user_data.email if department_email else None,
         password_hash=password_hash,
         first_name=user_data.first_name,
         middle_name=user_data.middle_name,
@@ -525,6 +592,21 @@ async def create_member(
     # Capture assigned role IDs before commit expires the relationship
     assigned_role_ids = [str(r.id) for r in roles] if user_data.role_ids else []
 
+    # Staged in this transaction, before the directory is called, so a crash
+    # between the commit and the call leaves a record the profile can retry.
+    directory_provision_id: Optional[str] = None
+    if department_email:
+        staged = await DirectoryAccountService(db).stage_for_transfer(
+            organization_id=str(current_user.organization_id),
+            user_id=str(new_user.id),
+            department_email=department_email,
+            created_by=str(current_user.id),
+        )
+        if staged is not None:
+            await db.flush()
+            if staged.status == DirectoryAccountStatus.PENDING.value:
+                directory_provision_id = str(staged.id)
+
     await db.commit()
 
     # Re-query with eager loading so Pydantic can serialize roles without lazy loading
@@ -554,6 +636,31 @@ async def create_member(
         username=current_user.username,
     )
 
+    # Built now: the directory work below commits, which expires new_user.
+    response = MemberCreateResponse.model_validate(new_user)
+    new_user_id = str(new_user.id)
+    organization_id = str(current_user.organization_id)
+    personal_email = new_user.personal_email
+    member_email = str(new_user.email)
+
+    # The member is committed: nothing after this point may turn the response
+    # into an error. What fails is on the account record, where the member's
+    # profile offers a retry.
+    directory_service = DirectoryAccountService(db)
+    directory_password: Optional[str] = None
+    try:
+        if directory_provision_id is not None:
+            directory_password = await directory_service.provision(
+                directory_provision_id, organization_id
+            )
+        elif not department_email:
+            await directory_service.link_new_member(
+                new_user_id, organization_id, actor_id=str(current_user.id)
+            )
+    except Exception:
+        logger.exception(f"Directory account work failed for new member {new_user_id}")
+        await db.rollback()
+
     # Send welcome email with temporary password via background task
     if user_data.send_welcome_email:
         from app.models.user import Organization as OrgModel
@@ -578,12 +685,27 @@ async def create_member(
         # The background task runs after this request's DB session has closed, so
         # it must open its own session and reload the org rather than reuse the
         # request `db` or the detached `organization` ORM object.
-        welcome_email = new_user.email
+        # A mailbox being created now cannot receive the password that opens
+        # it: the welcome goes to the personal address instead.
+        welcome_email = (
+            personal_email
+            if directory_provision_id is not None and personal_email
+            else member_email
+        )
         # Greet the member by the name they go by.
-        welcome_first = new_user.preferred_name or new_user.first_name or ""
-        welcome_last = new_user.last_name or ""
-        welcome_username = new_user.username
-        welcome_org_id = str(current_user.organization_id)
+        welcome_first = response.preferred_name or response.first_name or ""
+        welcome_last = response.last_name or ""
+        welcome_username = response.username
+        welcome_org_id = organization_id
+        welcome_directory = (
+            (
+                directory_provision_id,
+                member_email,
+                directory_password,
+            )
+            if directory_password and directory_provision_id is not None
+            else None
+        )
 
         async def _send_welcome():
             try:
@@ -594,7 +716,20 @@ async def create_member(
                         )
                     ).scalar_one_or_none()
                     email_svc = EmailService(org)
-                    await email_svc.send_welcome_email(
+                    appended_html = appended_text = ""
+                    if welcome_directory is not None:
+                        account = await DirectoryAccountService(session).get_for_user(
+                            new_user_id, welcome_org_id
+                        )
+                        if account is not None:
+                            info = provider_info(account.provider)
+                            appended_html = credentials_html(
+                                info, welcome_directory[1], welcome_directory[2]
+                            )
+                            appended_text = credentials_text(
+                                info, welcome_directory[1], welcome_directory[2]
+                            )
+                    sent = await email_svc.send_welcome_email(
                         to_email=welcome_email,
                         first_name=welcome_first,
                         last_name=welcome_last,
@@ -604,15 +739,46 @@ async def create_member(
                         login_url=login_url,
                         db=session,
                         organization_id=welcome_org_id,
+                        appended_html=appended_html,
+                        appended_text=appended_text,
                     )
+                    if sent and appended_html and welcome_directory is not None:
+                        await DirectoryAccountService(session).mark_credentials_sent(
+                            welcome_directory[0], welcome_org_id
+                        )
             except Exception as e:
                 logger.error(f"Failed to send welcome email to {welcome_email}: {e}")
 
         background_tasks.add_task(_send_welcome)
+    elif directory_password and directory_provision_id is not None:
+        # No welcome email: the directory password goes on its own.
+        try:
+            await directory_service.send_credentials_email(
+                directory_provision_id, organization_id, directory_password
+            )
+        except Exception:
+            logger.exception(
+                f"Directory credentials email failed for new member {new_user_id}"
+            )
+            await db.rollback()
 
-    # Build response — temporary passwords are communicated only via the
-    # welcome email, never in API responses (prevents caching/logging leaks).
-    response = UserWithRolesResponse.model_validate(new_user)
+    try:
+        account = await directory_service.get_for_user(new_user_id, organization_id)
+        if account is not None:
+            response.directory_account = MemberDirectoryAccountSummary(
+                provider=account.provider,
+                provider_name=provider_info(account.provider).product,
+                status=account.status,
+                email=account.primary_email,
+                credentials_sent=bool(account.credentials_sent),
+                last_error=account.last_error,
+            )
+    except Exception:
+        logger.exception(f"Directory account summary failed for {new_user_id}")
+        await db.rollback()
+
+    # Temporary passwords are communicated only by email, never in API
+    # responses (prevents caching/logging leaks).
     return response
 
 

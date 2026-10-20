@@ -119,7 +119,7 @@ The **My Training** tab shows:
 
 - **Summary tiles.** **Completed Courses** and **Completed Hours** count the
   calendar year so far; each tile is labelled with the year. **Required
-  Training** is the share of your requirements that you meet. Your lifetime
+  Training** is your average progress across your requirements (one that is half done counts as 50%). Your lifetime
   totals are on the History tab. The tiles use the calendar year because there
   is no department-wide "training year". Each requirement keeps its own
   counting window.
@@ -140,8 +140,9 @@ The **My Training** tab shows:
 
 ![My Training as a member: this year's course and hour tiles, Required Training with its "3 of 4 requirements met" line, upcoming expirations, the requirements and the sections below them](./images/02-01-my-training.png)
 
-**Required Training** shows the percentage of your requirements that you
-currently meet, with "X of Y requirements met" beneath it. When no requirement
+**Required Training** shows your average progress across your requirements (one
+that is half done counts as 50%), with "X of Y requirements met" beneath it for
+the ones you have fully met. When no requirement
 applies to you, it reads **None assigned** — "Your department has not assigned
 you any required training yet." This means nothing is asked of you yet. It is
 not a fault.
@@ -293,7 +294,9 @@ with a red asterisk.
 
 - Your record waits for an officer's review.
 - A training officer approves it, rejects it, or sends it back to you.
-- You are notified when they decide.
+- You are told in the app if the officer rejects it, sends it back, or approves
+  it with changes. A plain approval sends no notice: the hours appear on My
+  Training.
 - Approved records join your training history and count toward requirements.
 
 > **What if an officer sends it back?** A notice appears at the top of Submit
@@ -346,10 +349,12 @@ time shows the start time as blank.
 ## Course Library
 
 Select **Training > Course Library** to browse your department's courses.
-Officers also reach it from **Training Admin → Curriculum → Course Library**.
+For training officers this opens the same list inside **Training Admin →
+Curriculum → Course Library**, with the management controls.
 
-The library shows every active course your department has created, grouped by
-category. Each course shows:
+The library shows every active course your department has created, as a grid of
+cards you can narrow with the search box and **Filters** (type and category).
+Each course shows:
 
 - its name and description;
 - its category;
@@ -474,8 +479,10 @@ later"** — the way most officers describe a schedule out loud.
    - tick any suggested holidays to skip them, then select **Recalculate**.
 6. **Roster** — select the members taking the course. They are enrolled in
    the pipeline and added to every class on their calendar.
-7. **Generate** — tick **Build a matching pipeline** if the course does not
-   have one yet, then confirm.
+7. **Generate** — review the summary. If the course has no pipeline yet,
+   **Build a matching pipeline** is ticked for you (untick it if you do not want
+   one); if it already has one, members are enrolled in that pipeline instead.
+   Then select **Generate N classes**.
 
 Generating creates **one training event per class**, each with a linked
 training session. Students see the classes on their calendar, sign in and out
@@ -495,7 +502,6 @@ time, status, credit hours, instructor, how many members signed up, and an
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | **Reschedule**                | Moves the class and its calendar event together. Everyone who signed up stays signed up.                                       |
 | **Cancel class**              | Cancels the event instead of deleting it, so anyone signed up sees the cancellation. The class stays listed for the record.    |
-| **Add class**                 | Adds a make-up session or an extra class that was never on the syllabus. The roster is invited automatically.                  |
 | **Shift remaining**           | Moves every class that has not happened yet later (or earlier) by a number of days. Classes that already ran keep their dates. |
 | **Create _N_ missing events** | Appears only when a class has no event — because scheduling it failed, or someone deleted the event. It only fills gaps.       |
 
@@ -659,8 +665,9 @@ step**. Its steps are:
 
 ![Training pipeline wizard with program details and phase list](./images/02-11-pipeline-wizard.png)
 
-> **Hint:** The **Program Code** must be unique in your department. Use a
-> short, memorable code. It appears on printed program pages and travels with
+> **Hint:** The **Program Code** is optional, and nothing stops two programs
+> sharing one, so pick a code that is distinct. It is shown in upper case, up to
+> 50 characters. It appears on printed program pages and travels with
 > the program when it is exported and shared with other departments.
 
 **Deleting a pipeline** — **Delete pipeline** on its page — permanently removes
@@ -887,7 +894,7 @@ depends on the phase's approval setting:
 - **Require officer approval to advance** — the phase stays complete until an
   officer opens the member's progress and selects **Advance to next phase**.
 
-When a member advances, the **member** and their **mentors** are notified.
+When a member advances, the **member** gets an in-app notification.
 
 **Advance to next phase** sits at the top of every phased member's progress,
 beside **Start new cycle**, for any training officer. It is there whatever the
@@ -1086,16 +1093,16 @@ training requirements.
 
 ### Requirement Types
 
-| Type                  | What the member must do                 | What you enter                           |
-| --------------------- | --------------------------------------- | ---------------------------------------- |
-| **Hours**             | Build up a number of training hours     | Required hours                           |
-| **Courses**           | Complete a specific list of courses     | Courses picked from the course library   |
-| **Certification**     | Get or keep a specific certification    | —                                        |
-| **Shifts**            | Complete a number of qualifying shifts  | Required shifts                          |
-| **Calls**             | Respond to a number of qualifying calls | Required calls                           |
-| **Skills Evaluation** | Pass a hands-on skills evaluation       | —                                        |
-| **Checklist**         | Complete a set of check-off items       | Checklist items                          |
-| **Knowledge Test**    | Pass a written test                     | Passing score (%), optional max attempts |
+| Type                  | What the member must do                 | What you enter                                                              |
+| --------------------- | --------------------------------------- | --------------------------------------------------------------------------- |
+| **Hours**             | Build up a number of training hours     | Required hours                                                              |
+| **Courses**           | Complete a specific list of courses     | Courses picked from the course library                                      |
+| **Certification**     | Get or keep a specific certification    | Courses that earn it, from the course library (**Certification earned by**) |
+| **Shifts**            | Complete a number of qualifying shifts  | Required shifts                                                             |
+| **Calls**             | Respond to a number of qualifying calls | Required calls                                                              |
+| **Skills Evaluation** | Pass a hands-on skills evaluation       | —                                                                           |
+| **Checklist**         | Complete a set of check-off items       | Checklist items                                                             |
+| **Knowledge Test**    | Pass a written test                     | Passing score (%), optional max attempts                                    |
 
 The form shows the right value box for the type you choose, and checks it
 before saving.
@@ -1589,7 +1596,7 @@ members submitted and that is waiting for review.
 ### Who Is Told, In-App
 
 Both officers and members get in-app notifications (the bell and the dashboard
-inbox) about submissions. Email notices are sent as well.
+inbox) about submissions. Submissions do not send email.
 
 **Officers.** Every active member holding the **Training Officer** position
 gets one notification per submission: "Training submission awaiting approval
@@ -1980,8 +1987,9 @@ profile and printed record all follow this rule.
 
 ### Automated Certification Alerts
 
-The Logbook sends alerts automatically as certifications get close to expiry.
-There is no button to send them by hand.
+Once certification alerts are switched on for the department, The Logbook sends
+them automatically as certifications get close to expiry. There is no button to
+send them by hand.
 
 | Days before expiry | Who is told                               | How                              |
 | ------------------ | ----------------------------------------- | -------------------------------- |
@@ -1992,8 +2000,9 @@ There is no button to send them by hand.
 | Expired            | Member + all escalation officers          | In-app + email (officers copied) |
 
 Each stage is sent only once per certification. An expired certification is
-escalated to the training, compliance and chief officers, to both the
-member's department and personal email addresses.
+escalated to the training and compliance officers. The chief officers are
+copied, and the member's personal email address is added, only if the
+department has turned those options on.
 
 ---
 
@@ -2313,8 +2322,10 @@ on it. That is why the view can have rows before you have saved anything.
 
 ### Officer Analytics Dashboard
 
-The analytics sit at the top of the **Written by me** view. They cover the
-whole department, not only reports you filed:
+The analytics sit at the top of the **Written by me** view and cover only the
+reports you filed. Officers who may see department-wide figures also get a
+**Department** view beside it, which sums every officer's reports. The cards
+are:
 
 - **Summary cards** — total reports, total hours, total calls, average rating;
 - **Per-trainee table** — each trainee's report count, hours, calls and
@@ -2773,8 +2784,8 @@ deleting the program afterwards leaves them in your requirement list.
 
 - If the program uses a course your department already has, the existing
   course is reused. No duplicate is made.
-- If a phase name matches a phase in another of your programs, the new phase
-  gets " (Imported)" added to its name.
+- Phases are created with the names in the file, even if another of your
+  programs has a phase of the same name.
 - Registry codes from the other department come with it.
 
 ---
@@ -2797,12 +2808,13 @@ training records from a CSV file.
    matched, and which did not, with a filter for each.
 5. Confirm the import.
 
-**A bad value fails only its own row, with a reason.** Each row's training type
-and status are checked. A bad one fails just that row, with a message such as
-_"Row 12: Invalid training_type 'Certifcation'. Valid values: …"_. Every other
-row still imports. Capitals and spaces are forgiven, so _"Certification"_ is
-kept as a certification. A course set to be created with an invalid training
-type creates nothing, and its rows fail with that message. A bad **default**
+**A bad value does not stop the import.** A row whose training type is not a
+recognised type is imported with the import's default training type instead.
+Capitals and spaces are forgiven, so _"Certification"_ is kept as a
+certification. Every record takes the import's single default status. A course
+set to be created with an invalid training type creates nothing, and the rows
+that use it fail with a message such as _"Row 12: Invalid training_type
+'Certifcation'. Valid values: …"_. Every other row still imports. A bad **default**
 training type or status — which would apply to every row — stops the whole
 import before anything is saved.
 
@@ -2918,18 +2930,20 @@ qualifications.
 
 Each instructor qualification records:
 
-| Field                  | What it holds                                       |
-| ---------------------- | --------------------------------------------------- |
-| **Member**             | The qualified instructor                            |
-| **Qualification type** | Instructor, Evaluator, Lead Instructor or Mentor    |
-| **Course**             | Which course or courses they are qualified to teach |
-| **Certification date** | When the qualification was earned                   |
-| **Expiration date**    | When it expires, if it does                         |
+| Field                    | What it holds                                    |
+| ------------------------ | ------------------------------------------------ |
+| **Member**               | The qualified instructor                         |
+| **Qualification type**   | Instructor, Evaluator, Lead Instructor or Mentor |
+| **Certification level**  | The level held                                   |
+| **Certification number** | The number on the certificate                    |
+| **Issuing agency**       | Who issued it                                    |
+| **Issued date**          | When the qualification was earned                |
+| **Expiration date**      | When it expires, if it does                      |
 
 ![Instructor qualification roster with type, agency and expiry](./images/02-69-instructor-qualifications.png)
 
 The list's **Qualifies for** column names the course or skill a qualification
-covers. **Status** reads:
+covers when one is linked; the Add form has no field for it. **Status** reads:
 
 - **Expired** once the expiry date has passed (by your department's date),
   whether or not it was verified;
@@ -3012,7 +3026,7 @@ exercises, tabletops and full-scale exercises.
 
 ![Multi-agency exercises with participating departments and headcounts](./images/02-71-multi-agency-training.png)
 
-Each card shows the exercise type, date and total headcount. Each taking-part
+Each card shows the exercise type, date and total participants. Each taking-part
 organization has a chip with its role (host, participant, observer,
 evaluator). A **NIMS Compliant** badge marks an exercise recorded as such.
 Exercises have no planned / in progress / completed status — the date tells you
@@ -3021,11 +3035,14 @@ whether it has happened.
 ### Creating a Multi-Agency Session
 
 1. Select **Add Exercise**.
-2. Enter the exercise details (name, type, date, description).
-3. Add the taking-part organizations by name, with each one's role and
-   headcount.
-4. Enter the **Lead Agency** responsible for reporting.
-5. Select **Save**.
+2. Enter the **Exercise Name**, **Exercise Type** and **Exercise Date**, and
+   optionally a description and **Total Participants** (one number for the whole
+   exercise).
+3. Under **Participating Organization**, enter one organization's name and its
+   role (Host, Participant, Observer or Evaluator).
+4. Enter the **Lead Agency** responsible for reporting, and tick **NIMS/ICS
+   Compliant** if it applies.
+5. Select **Create Exercise**.
 
 ### Edge Cases
 
@@ -3105,11 +3122,14 @@ Generate a full yearly compliance report covering:
 
 - department-wide training completion rates;
 - certification status across all members;
-- a waiver summary and its effect;
-- a breakdown requirement by requirement;
-- a comparison with the year before.
+- admin hours by category, and recertification, instructor, multi-agency and
+  effectiveness summaries;
+- record completeness against NFPA 1401;
+- a breakdown requirement by requirement, and each member's compliance status.
 
-The report can be exported as a formatted document for regulatory filings.
+Pick the year (the current one or either of the two before it). **Export CSV**
+downloads the report. Waivers are applied when each member is graded, but the
+report has no separate waiver summary and no comparison with the previous year.
 
 A requirement nobody is held to — usually one used only inside a training
 program — reads **Not applicable** in the breakdown, not "0/0 — 0%".
@@ -3118,12 +3138,9 @@ program — reads **Not applicable** in the breakdown, not "0/0 — 0%".
 
 ### Compliance Forecast
 
-The forecast looks ahead using:
-
-- current training completion and pace;
-- upcoming certification expiries;
-- scheduled training sessions;
-- past compliance patterns.
+The forecast starts from each member's current compliance and subtracts the
+certifications that will have expired by then. It does not model training pace or
+scheduled sessions, so it shows the effect of expiries only.
 
 It looks **30, 60 and 90 days** ahead: summary cards across the top, then one
 row per member showing each period alongside the certifications expiring in
@@ -3133,8 +3150,6 @@ it.
 
 ### Edge Cases
 
-- The forecast uses past data. It is less reliable for departments with less
-  than 6 months of data.
 - Yearly reports include waiver adjustments. If a waiver's end date changes
   after the fact (a member returns from leave early), the report reflects the
   new adjustment.
@@ -3197,7 +3212,7 @@ Configuration**).
 | The member's membership type is exempt from training           | The member is exempt from all training requirements and shows green whatever their hours.                                                                                                                                                                                             |
 | The membership type is exempt from some training types         | The member is exempt only from requirements of those types. Other requirements still apply.                                                                                                                                                                                           |
 | The membership type's settings cannot be read                  | The member is treated as **not** exempt and must meet every requirement. Officers may see unexpected non-compliance for senior members; check the membership type's settings.                                                                                                         |
-| A **Courses** requirement with no courses picked               | Counts as complete (100%) and shows green.                                                                                                                                                                                                                                            |
+| A **Courses** requirement with no courses picked               | Nobody can meet it: it reads as not started (0%) until you pick the courses on the requirement.                                                                                                                                                                                       |
 | A **Certification** requirement                                | Credited through a course linked on the requirement, the training type, or the registry code in the certification number. Older requirements also match by course name, but only for records completed before they were upgraded. If nothing matches, the member shows non-compliant. |
 | An **Every 2 Years** requirement with an expired certification | Even with enough hours, the expired certification sets progress back to 0 until it is renewed.                                                                                                                                                                                        |
 | The member joined before an **Exempt existing members** cutoff | The requirement does not grade that member anywhere. Join date is the hire date, else the date the account was created.                                                                                                                                                               |
@@ -3429,8 +3444,10 @@ Import them the same way as NFPA and Pro Board: on **Training > Programs**,
 open the **Requirements** tab and use the **Import from Registry** panel. Each
 registry is its own button; then tick the requirements you want. Each registry
 names its NCCR topic areas (Airway, Cardiology, Trauma, Medical, Operations)
-and splits its hours into the national, local and individual parts the model
-defines.
+sets a total hours target for the level, and sets a minimum number of hours in
+each topic area. Importing also creates a training category for each topic area
+in your department, so courses and sessions can be tagged to them, and brings in
+the level's certification requirements (for example CPR/BLS).
 
 The registries are national ones; there is no Virginia-specific version. There
 is no separate NCCR progress card. Track category minimums the usual way — as
@@ -3445,17 +3462,19 @@ member's profile or in this module. Set them under **Operations > Apparatus >
 _(a rig)_ > Operators**. Each department sets up its own levels.
 
 Each apparatus can name a required EVOC level. The Scheduling module checks
-driver/operator assignments against it and warns rather than blocks.
+driver/operator assignments against it and, by default, blocks a member who
+does not hold it. A chief can approve a time-limited driving exception, and a
+department can turn off **Enforce EVOC for drivers** so the check only warns.
 
 For how the check picks a member's level and what happens when it has expired,
 see [Membership > EVOC Certification](./01-membership.md#evoc-certification).
 
 ### Edge Cases
 
-| What happened                        | What it means                                                   |
-| ------------------------------------ | --------------------------------------------------------------- |
-| A training record has no category    | It is not counted toward requirements limited to a category.    |
-| A member has no EVOC level for a rig | They can still be assigned to drive it, but a warning is shown. |
+| What happened                        | What it means                                                                                                                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A training record has no category    | It is not counted toward requirements limited to a category.                                                                                                                                                              |
+| A member has no EVOC level for a rig | By default they are blocked from the driver seat of that rig unless a chief has approved a driving exception. If the department has turned off **Enforce EVOC for drivers**, they can be assigned and a warning is shown. |
 
 ---
 
@@ -3472,11 +3491,14 @@ regulatory filings, yearly reviews and member files.
 
 The printed record includes:
 
-- the member's name, rank, station and membership dates;
-- a training hours summary (current period and all time);
-- certification status and expiry dates;
-- compliance colors (green / yellow / red) for every active requirement;
-- every training record, with course name, date, hours, category and status.
+- the member's name and the date printed, with their overall compliance status;
+- a summary of Total Hours, Hours This Year, Active Certifications and Completed
+  Courses;
+- how many requirements are met, and how many certifications are expiring soon
+  or expired;
+- the member's program enrollments with status and progress;
+- a table of certifications with number, issuing agency and expiry;
+- every training record, with course, type, date, hours, instructor and status.
 
 ![Print layout for a member training history](./images/02-62-print-member-history.png)
 
@@ -3488,10 +3510,14 @@ The printed record includes:
 
 The printed program includes:
 
-- the program's name, description, type (phases or one list) and status;
-- each phase with all its requirements;
-- milestones and what completes them;
-- the enrollment roster with each member's progress percentage.
+- the program's name, description, code and version;
+- its structure, target position, time limit and the number enrolled;
+- a table of phases, and a table of every requirement with its phase and whether
+  it is required;
+- the enrolled members with status, progress percentage, enrollment and target
+  dates and current phase.
+
+Milestones are not printed.
 
 ![Print layout for a training program with phases and requirements](./images/02-63-print-program.png)
 
@@ -3583,7 +3609,7 @@ full progress** shows every phase at once.
 **Edge case — enrolling twice:** Later that week, Lt. Park tries to enroll Alex
 in the same program. The picker shows her as already **Enrolled** and does not
 let him select her. If a second enrollment reaches The Logbook another way, it
-is refused: "Member is already enrolled in this program". A member can have only
+is refused with an error saying the member is already enrolled in this program. A member can have only
 one active enrollment per program.
 
 ### Part 2: Phase 1 — Orientation (March 25 – April 5)
@@ -3602,13 +3628,17 @@ Phase 1 asks Alex to complete 4 orientation tasks, each done a different way:
 Alex opens **Training > Submit Training**, types "Department History", sets
 2 hours, and selects **Submit Training**. The record waits for review. Capt.
 Davis sees it in **Training Admin → Records → Submissions to Review**, checks
-the details and selects **Approve**. Alex's hours count from then on.
+the details, ticks **Apply this training toward a pipeline requirement**, picks
+the program and "Department History Course", and selects **Approve**. Alex's
+hours count from then on. Approval alone would file the record but would not move
+the program requirement.
 
 For the SOPs Review, Alex submits but forgets to attach the signed
 acknowledgment form. Capt. Davis notices and selects **Request Revision** with
 the note "Please upload your signed acknowledgment form." Alex sees the note at
 the top of Submit Training, selects **Fix and Resubmit**, attaches the PDF and
-submits again. Capt. Davis approves it.
+submits again. Capt. Davis approves it, applying it to "SOPs Review" the same
+way.
 
 **Requirements an officer marks complete (3 and 4):**
 
@@ -3633,25 +3663,28 @@ Phase 1 is complete. No officer action is needed unless the phase is set to
 
 Phase 2 covers fireground skills seen during regular shifts. Over 12 shifts,
 shift officers file completion reports recording the skills Alex showed. Each
-skill needs 3 sign-offs before the requirement is complete.
+approved report that shows a skill is recorded as a sign-off and raises Alex's
+competency level for it. A skills requirement is not completed by the count:
+Capt. Davis reviews the sign-offs and selects **Mark complete** on it.
 
 **How shift reports credit requirements:**
 
 After each shift, the shift officer closes out the shift, which creates a draft
 report for each trainee. The officer then finishes Alex's report, scoring the
 skills she showed from 1 to 5. When the report is submitted and approved, The
-Logbook credits the matching Phase 2 requirements.
+Logbook records a sign-off for each skill ticked as demonstrated and moves the
+matching Phase 2 requirements to In Progress.
 
 **Progress after 12 shifts** (a summary of the example, not a screen):
 
-| Requirement       | Sign-offs needed | Sign-offs done | Scores    | Status            |
-| ----------------- | ---------------- | -------------- | --------- | ----------------- |
-| Hose Operations   | 3                | 3              | 2 → 3 → 4 | Complete          |
-| Ladder Operations | 3                | 3              | 2 → 3 → 3 | Complete          |
-| SCBA              | 3                | 3              | 3 → 4 → 4 | Complete          |
-| Forcible Entry    | 3                | 2              | 3 → 3     | In Progress (67%) |
-| Search & Rescue   | 3                | 3              | 3 → 3 → 4 | Complete          |
-| Ventilation       | 3                | 3              | 2 → 3 → 4 | Complete          |
+| Requirement       | Sign-offs done | Scores    | Status                                  |
+| ----------------- | -------------- | --------- | --------------------------------------- |
+| Hose Operations   | 3              | 2 → 3 → 4 | Marked complete by Capt. Davis          |
+| Ladder Operations | 3              | 2 → 3 → 3 | Marked complete by Capt. Davis          |
+| SCBA              | 3              | 3 → 4 → 4 | Marked complete by Capt. Davis          |
+| Forcible Entry    | 2              | 3 → 3     | In Progress, waiting for a third report |
+| Search & Rescue   | 3              | 3 → 3 → 4 | Marked complete by Capt. Davis          |
+| Ventilation       | 3              | 2 → 3 → 4 | Marked complete by Capt. Davis          |
 
 There is no separate phase page and no chart of scores. A member's phases
 appear together on their progress page, each requirement with a percentage
@@ -3670,31 +3703,33 @@ The skill is not credited. Only skills ticked as demonstrated count.
 
 Phase 3 has 3 requirements:
 
-| #   | Requirement            | How it is completed               |
-| --- | ---------------------- | --------------------------------- |
-| 1   | CPR/AED Certification  | Outside certificate, submitted    |
-| 2   | First Responder Course | Submitted by the member (40 hrs)  |
-| 3   | Patient Assessment     | Shift report sign-offs (2 needed) |
+| #   | Requirement            | How it is completed                                        |
+| --- | ---------------------- | ---------------------------------------------------------- |
+| 1   | CPR/AED Certification  | Outside certificate, submitted                             |
+| 2   | First Responder Course | Submitted by the member (40 hrs)                           |
+| 3   | Patient Assessment     | Shift report sign-offs, then marked complete by an officer |
 
 **Outside certification (requirement 1):** Alex already holds CPR/AED from a
 previous employer. She opens **Training > Submit Training**, enters the
 course, ticks **This training earned a certification**, adds the dates, and
-attaches the certificate PDF. Capt. Davis approves it, and the Phase 3
-requirement is credited.
+attaches the certificate PDF. Capt. Davis approves it and applies it to the
+Phase 3 CPR/AED requirement.
 
 **Course (requirement 2):** Alex finishes a 40-hour First Responder course at
 the community college. She submits it with 40 hours and the completion
-certificate. Capt. Davis approves it.
+certificate. Capt. Davis approves it and applies it to the First Responder
+requirement.
 
 **Shift report sign-offs (requirement 3):** On two medical calls in June, shift
-officers record Alex's patient assessment in their reports. After the second
-approved report, the requirement is complete.
+officers record Alex's patient assessment in their reports. Each approved report
+adds a sign-off and raises her competency level; once Capt. Davis is satisfied he
+selects **Mark complete** on the requirement.
 
 Phase 3 is now 100% complete, and Alex moves on to Phase 4.
 
 **Edge case — certification expiring soon:** Alex's CPR/AED card expires in
 September. It appears on **Expiring Certs**, and on her list of upcoming
-expirations. At 90 days before expiry, Alex gets an in-app and email alert. Her
+expirations. If your department has certification alerts turned on, Alex gets an in-app and email alert at 90 days before expiry. Her
 compliance card shows yellow.
 
 ### Part 5: Phase 4 — Live Fire & Graduation (August – September)
@@ -3766,7 +3801,7 @@ Lt. Santos opens **Events > Create Event** and fills in the drill:
 | Event Type           | Training                                              |
 | Recurring            | No                                                    |
 | Date                 | Saturday, June 13, 2026                               |
-| Time                 | 08:00 – 12:00                                         |
+| Time                 | 08:30 – 12:30                                         |
 | Location             | 415 Industrial Pkwy (acquired structure)              |
 | RSVP Required        | Yes                                                   |
 | RSVP Fields          | Dietary restrictions, accessibility needs (for lunch) |
@@ -3831,7 +3866,7 @@ By 08:15, 24 of the 28 have checked in. Two more arrive by 08:20 and scan in.
 phone camera. Lt. Santos opens the event's check-in list on his tablet, finds
 Thompson, and checks him in.
 
-Final attendance at 08:30: 27 present out of 28. FF Garcia called in sick.
+Final attendance at 08:30: 26 present out of 28. FF Garcia called in sick and one other member did not come.
 
 ### Part 4: Drill Execution & Documentation
 
@@ -3850,8 +3885,9 @@ shift reports afterwards.
 
 ### Part 5: Post-Drill Reports (Same Evening)
 
-After the drill, Lt. Santos finalizes the event's attendance, which credits
-everyone the 4 hours of "Structural Firefighting Operations". The three
+After the drill, Lt. Santos selects **End Event** at 12:30 and then finalizes the
+event's attendance. Each member is credited the time they were there, so everyone
+who stayed to the end gets the 4 hours of "Structural Firefighting Operations". The three
 apparatus officers then file shift completion reports for their crews.
 
 Each officer starts from the drill shift. The form fills in the date, hours and
@@ -3877,8 +3913,8 @@ roof ventilation. All 10 get 4 hours.
 | Measure            | Value                              |
 | ------------------ | ---------------------------------- |
 | Reports filed      | 26 (one per trainee present)       |
-| Credit hours each  | 4                                  |
-| Total hours logged | 104                                |
+| Credit hours each  | 4 (2 for FF Patel)                 |
+| Total hours logged | 102                                |
 | Linked course      | Structural Firefighting Operations |
 
 ![The Crew summary table on Scheduling > Shift Reports — one row per crew member with report count, hours, calls and average rating](./images/02-90-crew-summary-table.png)
@@ -3968,7 +4004,7 @@ have moved, been renamed or work differently.
 - **Training Admin → Records → Shift Reports** has **New Report**, **Filed**
   and **My Reports** tabs. Reports are filed from Shift Scheduling's **Shift
   Reports** tab.
-- **The two-year frequency** reads **Every 2 Years** (it was "Biannual"). It
+- **The two-year frequency** reads **Every 2 Years** in the requirement form's Frequency list (it was "Biannual", and still shows as "biannual" on requirement cards and in the Compliance Matrix). It
   means once every two years, not twice a year.
 - **The member export period** "Lifetime" reads **All Time**.
 - **The Compliance Matrix** is a list grouped by standing that you step

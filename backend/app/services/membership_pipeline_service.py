@@ -8,7 +8,6 @@ transfer to full membership.
 
 import asyncio
 import copy
-import re
 import secrets
 import unicodedata
 from dataclasses import dataclass
@@ -189,6 +188,53 @@ DUPLICATE_MEMBER_REFUSAL = (
     "convert them automatically. Review the existing members list, then "
     "convert or reactivate from there."
 )
+
+
+class DuplicateApplicantError(Exception):
+    """An active applicant already holds the email an officer typed.
+
+    Raised by :meth:`MembershipPipelineService.create_prospect` only when the
+    caller asks for it (``reject_duplicate=True``). The staff form must not
+    report "added" for a record it did not create, while the public
+    application form keeps returning the existing applicant silently. Not a
+    ValueError, so the staff endpoint's 400 handler cannot swallow it.
+    """
+
+    def __init__(self, existing: ProspectiveMember) -> None:
+        super().__init__("An active applicant already uses this email")
+        self.existing = existing
+
+
+def describe_existing_applicant(prospect: ProspectiveMember) -> Dict[str, Any]:
+    """Name an existing applicant for the officer about to add a duplicate.
+
+    Only what the pipeline board already shows staff — name, pipeline and
+    stage. The email is left out because the caller has just typed it. Reads
+    ``pipeline`` and ``current_step``, which ``_find_active_prospect_by_email``
+    eager-loads.
+    """
+    pipeline = prospect.pipeline
+    step = prospect.current_step
+    return {
+        "prospect_id": str(prospect.id),
+        "name": f"{prospect.first_name} {prospect.last_name}".strip(),
+        "pipeline_name": pipeline.name if pipeline is not None else None,
+        "stage_name": step.name if step is not None else None,
+    }
+
+
+def duplicate_applicant_message(summary: Dict[str, Any]) -> str:
+    """The refusal the staff create endpoint returns for an existing applicant."""
+    where = (
+        f" in the {summary['pipeline_name']} pipeline"
+        if summary.get("pipeline_name")
+        else ""
+    )
+    stage = f" (stage: {summary['stage_name']})" if summary.get("stage_name") else ""
+    return (
+        f"{summary['name']} is already an active applicant{where}{stage}. "
+        "A second applicant can't be added with the same email."
+    )
 
 
 def effective_step_type(step: MembershipPipelineStep) -> PipelineStepType:
@@ -1675,6 +1721,8 @@ class MembershipPipelineService:
         organization_id: str,
         data: Dict[str, Any],
         created_by: Optional[str] = None,
+        *,
+        reject_duplicate: bool = False,
     ) -> ProspectiveMember:
         """Create a new prospective member.
 
@@ -1682,10 +1730,18 @@ class MembershipPipelineService:
         organization, a duplicate notification email is sent to the
         applicant (with the department BCC'd) and the existing prospect
         is returned instead of creating a new record.
+
+        ``reject_duplicate=True`` raises :class:`DuplicateApplicantError`
+        instead, without emailing the applicant: an officer's refused entry is
+        not a re-submitted application. The flag rather than a second lookup in
+        the caller, because the decision is made here — including when the
+        unique index catches a concurrent insert the preflight missed.
         """
         email = data.get("email", "").strip().lower()
         if email:
             existing = await self._find_active_prospect_by_email(organization_id, email)
+            if existing and reject_duplicate:
+                raise DuplicateApplicantError(existing)
             if existing:
                 # Fire-and-forget: send duplicate notification email
                 await self._notify_duplicate_application(existing, organization_id)
@@ -1790,6 +1846,8 @@ class MembershipPipelineService:
             existing = await self._find_active_prospect_by_email(
                 organization_id, email, current_read=True
             )
+            if existing and reject_duplicate:
+                raise DuplicateApplicantError(existing)
             if existing:
                 await self._notify_duplicate_application(existing, organization_id)
                 return existing
@@ -5257,15 +5315,10 @@ class MembershipPipelineService:
 
     @staticmethod
     def _sanitize_name_for_identifier(name: str) -> str:
-        """Normalize a name for use in usernames and email local parts.
+        """See :func:`department_email.sanitize_name_for_identifier`."""
+        from app.services.department_email import sanitize_name_for_identifier
 
-        Strips accents (François → francois), removes apostrophes and
-        non-alphanumeric characters, and lowercases the result.
-        """
-        nfkd = unicodedata.normalize("NFKD", name)
-        ascii_only = nfkd.encode("ascii", "ignore").decode("ascii")
-        lowered = ascii_only.lower()
-        return re.sub(r"[^a-z0-9]", "", lowered)
+        return sanitize_name_for_identifier(name)
 
     async def _generate_unique_username(
         self, first_name: str, last_name: str, organization_id: str
@@ -5318,53 +5371,11 @@ class MembershipPipelineService:
         Returns None when the feature is disabled or no domain is configured,
         letting callers fall back to the prospect's personal email.
         """
-        from app.services.organization_service import OrganizationService
+        from app.services.department_email import generate_department_email
 
-        org_service = OrganizationService(self.db)
-        org_settings = await org_service.get_organization_settings(organization_id)
-        dept = org_settings.department_email
-
-        if not dept.enabled or not dept.domain:
-            return None
-
-        from app.schemas.organization import DepartmentEmailFormat
-
-        first = self._sanitize_name_for_identifier(first_name)
-        last = self._sanitize_name_for_identifier(last_name)
-        if not first or not last:
-            logger.warning(
-                "Skipping department email generation: sanitized name is empty "
-                f"(first={first_name!r}, last={last_name!r})"
-            )
-            return None
-
-        if dept.format == DepartmentEmailFormat.FIRST_DOT_LAST:
-            local = f"{first}.{last}"
-        elif dept.format == DepartmentEmailFormat.FIRST_INITIAL_LAST:
-            local = f"{first[0]}{last}"
-        elif dept.format == DepartmentEmailFormat.FIRST_LAST:
-            local = f"{first}{last}"
-        elif dept.format == DepartmentEmailFormat.LAST_DOT_FIRST:
-            local = f"{last}.{first}"
-        else:
-            local = f"{first}.{last}"
-
-        candidate = f"{local}@{dept.domain}"
-
-        suffix = 0
-        while True:
-            existing = await self.db.execute(
-                select(func.count())
-                .select_from(User)
-                .where(
-                    User.organization_id == organization_id,
-                    User.email == candidate,
-                )
-            )
-            if (existing.scalar() or 0) == 0:
-                return candidate
-            suffix += 1
-            candidate = f"{local}{suffix}@{dept.domain}"
+        return await generate_department_email(
+            self.db, organization_id, first_name, last_name
+        )
 
     # =========================================================================
     # Kanban Board
@@ -5859,6 +5870,24 @@ class MembershipPipelineService:
     # =========================================================================
     # Duplicate Detection
     # =========================================================================
+
+    async def find_existing_applicant(
+        self, organization_id: str, email: str
+    ) -> Optional[Dict[str, Any]]:
+        """Summarize the active applicant holding ``email``, if any.
+
+        The staff form's pre-check. "Active" is the same status set
+        :meth:`create_prospect` treats as a duplicate (and the
+        ``uq_prospect_org_active_email`` index enforces), so the warning and
+        the refusal can never disagree about who blocks an email.
+        """
+        normalized = email.strip().lower()
+        if not normalized:
+            return None
+        existing = await self._find_active_prospect_by_email(
+            organization_id, normalized
+        )
+        return describe_existing_applicant(existing) if existing else None
 
     async def find_active_prospect_by_email(
         self, organization_id: str, email: str

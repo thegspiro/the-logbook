@@ -7,46 +7,30 @@ new page. The engineering audit behind each pass is in
 
 ## Recent changes: October 19 – 20, 2026
 
-This wiki handoff is usable without the repository `docs/` tree. The engineering
-audit is
+The engineering audit is
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
-Predecessor: [October 18 – 19](#recent-changes-october-18--19-2026).
 
-**The headline:** Minutes settings live on one page, the Minutes search box finds
-words inside the minutes, and medical-screening requirements now apply only to the
-positions they name.
+- **Minutes settings are one screen.** The Reminders, Roll listing, Publishing and
+  Signers buttons on the Minutes page are replaced by **Settings**, which has
+  Attendance, Signatures, Reminders and Publishing sections. Anyone who manages
+  minutes can read them; changing one needs the settings permission.
+- **Search inside the minutes.** The Minutes search box also finds words in the
+  minutes themselves, within what the person may already read.
+- **Accepting the previous minutes.** The Approval of Previous Minutes motion is
+  prepared with the minutes, records whether they were accepted as submitted or as
+  revised, and fills in the adoption form.
+- **Screenshots.** Nothing was re-captured. The gap report is in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
 
-### Read this first
-
-**If you run the server:** no migrations and nothing to configure.
-
-**If you administer a department:**
+**Also in this window:**
 
 - **Check your screening requirements.** If **Applies to Positions** has text in
-  it, that list now decides who is graded. Leave it blank for everyone. A member
-  with no applicable requirement reads **Not applicable**.
+  it, that list now decides who is graded; blank means everyone, and a member with
+  nothing that applies reads **Not applicable**.
 - **The dashboard's overdue-dues number may drop.** Part-paid dues are Partial,
-  not overdue, matching the dues page.
-
-### What changed, by area
-
-- **Minutes:** a single **Settings** button opens a page with Attendance,
-  Signatures, Reminders and Publishing sections; each can be bookmarked. The old
-  separate buttons and dialogs are gone.
-- **Minutes search:** type two or more characters to search titles, sections,
-  motions and action items. All words must appear; use quotes for a phrase.
-  Members only find circulated or adopted, non-executive minutes. The newest 500
-  sets are searched.
-- **Medical screening:** requirements can be limited to positions; prospects are
-  graded on all of them.
-- **Finance dashboard:** the overdue-dues count follows the dues page.
+  matching the dues page.
 - **iPad and iPhone:** date and time fields no longer overlap the field beside
-  them (Edit Member).
-- **Reliability:** removing a prepared motion now returns the right minutes
-  (security review MM-18); the signer panel keeps what you type.
-
-Screenshots to create are listed in the repository's `SCREENSHOT_CURRENCY.md`:
-Minutes Settings page, search results card, and the Applies to Positions form.
+  them on Edit Member.
 
 ## Recent changes: October 18 – 19, 2026
 

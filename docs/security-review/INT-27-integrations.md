@@ -1,6 +1,193 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** #3374+1 (pass 7, this PR); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-10-20 (pass 8, this PR), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 8); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 8 (2026-10-20) — directory-account engine generalized, Microsoft 365 added, Outlook calendar OAuth connect; 0 fixes, 0 new findings; one stale finding corrected (INT-11 closed)
+
+Step 0: `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results immediately before starting, and again immediately before
+branching — PR #3458 (Feature 26, Forms, pass 8) had just merged with nothing
+started for Feature 27 since.
+
+**Real delta since pass 7's baseline (`715c4b3f`, PR #3375):** four real
+(non-merge-noise) commits touch this feature's scope — a fifth, `381e8ffc`,
+is a merge bringing in history already reviewed on a long-lived branch,
+confirmed by its reported file sizes matching pass 7's own documented state
+exactly, so it is not a real delta:
+
+| Commit                           | What                                                                                                                                                                                                                                                                 | Disposition                                                                               |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `24061bc6`                       | Outlook calendar publishing via a Microsoft sign-in (OAuth + PKCE), extracting the shared state/nonce/PKCE machinery into a new `calendar_oauth_common.py` and refactoring Google Calendar's OAuth onto the same module                                              | Read in full, clean                                                                       |
+| `b1ae3236`                       | Generalizes the Google-only provisioning engine into a provider-neutral `directory_account_service.py` (`google_workspace_provisioning_service.py` → renamed; `models/google_workspace*.py` → `models/directory_account*.py`; `google_user_id` → `external_user_id`) | Read in full, clean                                                                       |
+| `d5c8f664`                       | Adds Microsoft 365 as the second directory provider (Microsoft Graph via the client-credentials flow)                                                                                                                                                                | Read in full, clean                                                                       |
+| `86387e0e` (workflow-review W73) | `integrations.py` gains `_missing_required_fields`, refusing a connect that leaves a required setting neither sent nor stored (and flags, per W73-5/Pitfall #19, that the separate "iCalendar (ICS)" catalog entry is a switch with no reader)                       | Correctness fix already reviewed by workflow-review; re-verified no access-control change |
+
+### The directory-account engine, generalized — read in full
+
+`directory_account_service.py` (1202 L), `models/directory_account.py` (134
+L) and `models/directory_account_departure.py` (233 L, the session-level
+`before_flush`/`after_commit` hook, now provider-neutral). Every by-id path
+still filters `organization_id` and (`user_id` or `provision_id`) in one
+query (`_load`, 14a) — re-verified for `get_for_user`, `provision`, `retry`
+and `suspend_detached`. `link_existing_members` takes no client-supplied FK:
+it matches the org's own member roster against the directory's own listing,
+links one account to at most one member (an address matching two members
+links neither — owner decision, 2026-10-17), and a repeated run with
+`expected` set refuses rather than linking a roster that changed underneath
+it. The departure hook's hard-delete capture (`_capture_before_hard_delete`)
+and the Session-level `before_flush`/`after_commit` pair are unchanged in
+mechanism from pass 7's review of the Google-only version — generalizing to
+a `provider` column changed no query shape.
+
+### Microsoft 365 — new provider, read in full
+
+`microsoft_365_service.py` (593 L). Client-credentials OAuth reuses
+`app/utils/microsoft_oauth.py` (shared with Microsoft 365 SMTP, now gaining
+an optional scope parameter — SMTP keeps its Exchange default, confirmed by
+reading the diff). Every Graph call goes through `create_integration_client`
+(the SSRF-pinned, deadline-bounded transport this feature's other connectors
+already use — not a second, unreviewed HTTP path). OData `$filter` values are
+escaped via `_odata_string` (doubles embedded single quotes) before being
+interpolated into a filter string, mirroring this feature's existing SOQL
+defense for Salesforce. A paging `@odata.nextLink` is only followed when it
+starts with the fixed `GRAPH_BASE + "/"` — a response cannot redirect the
+bearer-token-bearing request elsewhere. Error translation (`_translate`)
+classifies by HTTP status and Graph's own `error.code`/`error.message` but
+never echoes either back to the caller — matching this feature's existing
+rule that provider error bodies are not shown or logged verbatim. Accounts
+are tagged with `member_id` in `extensionAttribute15` at creation (one
+request, so a retry's "already exists" can be told from a stranger's
+account at the address without a second call). On-premises-synced accounts
+are never blocked or reset through Graph (`Microsoft365ManagedOnPremisesError`).
+`Microsoft365Config` (`schemas/integration.py`): `extra="forbid"`;
+`client_secret` length/control-character capped and already in
+`SECRET_CONFIG_KEYS` (shared key, pre-existing — encrypted at rest, never
+echoed back); `tenant_id`/`client_id` validated through the existing
+`microsoft_oauth` validators; `domain`/`usage_location`/`license_sku_id`
+regex-checked; `groups` deduplicated and capped at 20.
+`_require_directory_admin` (renamed from `_require_google_workspace_admin`)
+and `_check_directory_ready` (renamed from `_check_google_workspace_ready`)
+apply the same `admin.access` gate and domain/credential/single-directory
+checks to both providers uniformly — confirmed by direct read, not inferred
+from the rename.
+
+### Outlook Calendar OAuth connect — new, read in full
+
+`outlook_calendar_oauth.py` (229 L) mirrors `google_calendar_oauth.py`'s
+structure exactly, both now built on the shared `calendar_oauth_common.py`
+(422 L). A connect attempt is bound three ways, each checked by
+`open_callback`: (1) a signed, 10-minute-TTL JWT `state` (HS256,
+`settings.SECRET_KEY`) naming the organization, integration, administrator
+and a random nonce, with a per-provider `purpose` claim so one provider's
+state cannot complete the other's attempt; (2) the nonce double-submitted
+through an httpOnly, `SameSite=Lax`, path-scoped cookie (`secrets.compare_digest`,
+constant-time) — `_COOKIE_PATH` ends in a slash per Pitfall #6 and covers
+only this router; (3) the same nonce, administrator id and PKCE verifier
+stored as a single pending attempt on the integration row, consumed
+(removed) and committed _before_ any network call, so a replayed state finds
+nothing to use and a lock is never held across the token exchange. Token
+exchange (`exchange_code`) binds the redirect_uri to the one used at
+`/oauth/start`, requires PKCE's `code_verifier`, goes through
+`create_integration_client`, and never echoes Microsoft's error body.
+`_account_email` reads the ID token's claims unverified (per OIDC Core
+3.1.3.7 — received directly from the token endpoint over TLS) but still
+checks `aud` against the client id and `iss` against the Microsoft identity
+platform v2 issuer pattern before trusting it, and uses it only as a display
+label. `may_still_manage` re-checks the administrator still holds
+`integrations.manage` at callback time, not just at `/oauth/start`. The
+callback route itself is intentionally unauthenticated (Microsoft redirects
+the bare browser back, whose session may have lapsed); every other check
+above is the compensating control (checklist §1).
+
+### Checked, no new finding
+
+- **New migrations** (`73594b326e68`, `d3bb8f81ed07`): both guard the
+  table's existence first (Pitfall #26); no new `ondelete="SET NULL"` column
+  (the one FK, `created_by`, was already `nullable=True` from pass 7).
+  `validate_migrations.py --strict`: single head, confirmed below.
+- **Route surface re-enumerated programmatically**: `integrations.py` 11
+  (unchanged), `salesforce_sync.py` 9, `calcom_sync.py` 1, `mcp_keys.py` 4,
+  `google_workspace.py` 4 (unchanged), `google_calendar_oauth.py` 2
+  (unchanged — refactored internals only), **`outlook_calendar_oauth.py` 2
+  (new)**, `app/api/public/calendar.py` 2, `integrations_webhook.py` 2,
+  `salesforce_webhook.py` 1. Net **+2 routes** since pass 7, both the new
+  Outlook OAuth pair reviewed above; every other file's count is unchanged.
+- **LIKE-pattern usage, CSV export**: none in this feature's scope, same as
+  every prior pass.
+- **Frontend** (`IntegrationsPage.tsx`, `calendarProviders.ts` — new, 83 L):
+  no `window.confirm`/`alert`/`prompt`, no `dangerouslySetInnerHTML`, no bare
+  `??` on an optional form value anywhere touched this pass; error codes
+  returned from a failed OAuth connect are mapped through a fixed
+  `Record<string, string>` (`calendarConnectError`), never interpolated into
+  markup.
+
+### Correction to a standing finding — INT-11 is FIXED, not open
+
+**INT-11** ("Salesforce 'clear the refresh token' has no reachable UI
+control") was carried forward as **OPEN** through passes 6 and 7, including
+pass 7's explicit note that "no clear control added this pass." Checking the
+actual commit pass 7 reviewed (`715c4b3f`) directly —
+`git show 715c4b3f:frontend/src/pages/IntegrationsPage.tsx` — shows
+`handleSwitchSalesforceToClientCredentials` already present at that exact
+commit: a confirmed (`useConfirm()`, not `window.confirm`), reachable button
+that calls `updateIntegration(id, {refresh_token: ''})`, which the backend
+treats as "switch to the client-credentials flow" and discards the stored
+tokens. It remains present and wired to a button
+(`IntegrationsPage.tsx:2663`) today. This was a review error repeated across
+two passes — the control was never actually missing — not a code
+regression introduced and later fixed. **INT-11 is now marked ✅ FIXED.**
+
+### Re-verified from passes 1–7 (all hold)
+
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist): unchanged, still
+  an explicit owner decision.
+- INT-2, INT-3, INT-4, INT-6, INT-8; SOQL injection defense, instance-URL
+  domain pinning, secret handling, webhook replay dedup, module gating, the
+  DNS-rebinding transport pin, the wall-clock deadline, Retry Sync's
+  lock-then-read ordering, the PayPal backfill's idempotency: none of the
+  files carrying them changed since pass 7 per the diff above; re-confirmed
+  by direct read where this pass's own changes touched the same file.
+- **W73-5 / `KNOWN_LIMITATIONS.md`** ("Integrations — Connecting iCalendar
+  (ICS) Does Nothing"): re-confirmed open, owner-decision item, unchanged —
+  and distinct from the working, pass-7-reviewed department iCalendar feed
+  (`/org/{token}.ics`), which is unaffected.
+
+**Route surface**: see the enumeration above — net +2 since pass 7.
+
+## Schema & migration notes (pass 8)
+
+Two migrations since pass 7: `73594b326e68` (renames
+`google_account_provisions` → `directory_account_provisions`, adds
+`provider` `NOT NULL DEFAULT 'google'`), `d3bb8f81ed07` (`license_pending`,
+`managed_on_premises`, both `NOT NULL DEFAULT 0`). Both guard the table's
+existence before touching it (Pitfall #26); the rename migration also
+guards against a `create_all`-built empty table already sitting under the
+new name, and its downgrade deletes non-Google rows first since the old
+table has no `provider` column to read them back correctly.
+`validate_migrations.py --strict`: 631 revisions, single head
+`ca0c2111466f`, PASSED.
+
+## Guard tests added
+
+None by this pass — every new mechanism above shipped with its own test
+coverage before this pass started (`test_directory_account_provisions_migration.py`,
+`test_directory_account_flags_migration.py`, `test_outlook_calendar_connect.py`,
+`test_google_workspace_provisioning.py`); re-run as part of the scoped suite
+below and confirmed still passing.
+
+## Completion gate (pass 8)
+
+| Check                                                                                                                                                                                                                                   | Result                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                           | ✅ 0 violations                                                                                                                              |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                    | ✅ 2476 files unchanged                                                                                                                      |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.1)                                                                                                                                                                             | ✅ clean                                                                                                                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                       | ✅ 631 revisions, single head, PASSED                                                                                                        |
+| backend tests, scope (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key or google_calendar or google_workspace or ical or calendar or outlook or directory_account or microsoft_365"`) | ✅ 7573 passed, 22 skipped (environment-only — `pywebpush`, Docker daemon/registry, opt-in API-contract suite, no-timezone-tables), 0 failed |
+| `npm run typecheck` (frontend)                                                                                                                                                                                                          | ✅ 0 errors                                                                                                                                  |
+| `npm run lint` (frontend)                                                                                                                                                                                                               | ✅ exit 0, 0 warnings                                                                                                                        |
 
 ---
 

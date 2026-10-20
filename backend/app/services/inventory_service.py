@@ -10,7 +10,7 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Literal, Optional, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
@@ -444,6 +444,14 @@ LABEL_HIDE_NAME = "no_name"
 _AREA_PATH_SEPARATOR = " > "
 
 _RETIRE_VIA_RETIRE_ACTION = "Use the item's retire action to deactivate it"
+
+# Identifiers checked for a clash before an insert/update reaches the matching
+# uq_item_org_* constraint. serial_number has its own wrapper; these two are
+# the ones whose violation used to surface as a generic error.
+_UNIQUE_IDENTIFIERS: Tuple[Tuple[Literal["asset_tag", "barcode"], str], ...] = (
+    ("asset_tag", "Asset tag"),
+    ("barcode", "Barcode"),
+)
 
 
 # How many item names a fuzzy search will rank. Names are short and the scan is
@@ -1024,6 +1032,37 @@ class InventoryService:
         inventory_category: Optional[InventoryCategory] = result.scalar_one_or_none()
         return inventory_category
 
+    async def _assert_not_under_itself(
+        self,
+        category_id: UUID | str,
+        parent_id: UUID | str,
+        organization_id: UUID | str,
+    ) -> None:
+        """Refuse a parent that is the category itself or one of its descendants.
+
+        Walks up from the proposed parent: reaching the category means the move
+        would close a loop. ``seen`` also stops the walk on a loop that is
+        already stored, so an old bad row cannot hang the next edit.
+        """
+        target = str(category_id)
+        current: Optional[str] = str(parent_id)
+        seen: Set[str] = set()
+        while current and current not in seen:
+            if current == target:
+                raise ValueError(
+                    "A category cannot be placed under itself or one of its "
+                    "own subcategories"
+                )
+            seen.add(current)
+            result = await self.db.execute(
+                select(InventoryCategory.parent_category_id).where(
+                    InventoryCategory.id == current,
+                    InventoryCategory.organization_id == str(organization_id),
+                )
+            )
+            parent = result.scalar_one_or_none()
+            current = str(parent) if parent else None
+
     async def update_category(
         self,
         category_id: UUID,
@@ -1050,6 +1089,12 @@ class InventoryService:
                     allow_none=True,
                     label="parent category",
                 )
+                if update_data.get("parent_category_id"):
+                    await self._assert_not_under_itself(
+                        category.id,
+                        update_data["parent_category_id"],
+                        organization_id,
+                    )
 
             apply_updates(category, update_data, skip={"id", "organization_id"})
 
@@ -1783,6 +1828,34 @@ class InventoryService:
     # Item Management
     # ============================================
 
+    async def _check_identifier_unique(
+        self,
+        column: Literal["serial_number", "asset_tag", "barcode"],
+        label: str,
+        value: Optional[str],
+        organization_id: UUID | str,
+        exclude_item_id: Optional[UUID] = None,
+    ) -> Optional[str]:
+        """Check that an item identifier is unique within the organization.
+
+        Retired items are counted: the uq_item_org_* constraints span every
+        row, so a retired item still holds its identifier. Skipping them here
+        let the insert reach the constraint, which surfaced as a generic
+        "unexpected error" instead of naming the clash.
+        """
+        if not value:
+            return None
+        query = select(func.count(InventoryItem.id)).where(
+            InventoryItem.organization_id == str(organization_id),
+            getattr(InventoryItem, column) == value,
+        )
+        if exclude_item_id:
+            query = query.where(InventoryItem.id != str(exclude_item_id))
+        result = await self.db.execute(query)
+        if result.scalar():
+            return f"{label} '{value}' is already in use by another item in this organization"
+        return None
+
     async def _check_serial_number_unique(
         self,
         serial_number: str,
@@ -1790,19 +1863,13 @@ class InventoryService:
         exclude_item_id: Optional[UUID] = None,
     ) -> Optional[str]:
         """Check that serial_number is unique within the organization."""
-        if not serial_number:
-            return None
-        query = select(func.count(InventoryItem.id)).where(
-            InventoryItem.organization_id == str(organization_id),
-            InventoryItem.serial_number == serial_number,
-            InventoryItem.active.is_(True),
+        return await self._check_identifier_unique(
+            "serial_number",
+            "Serial number",
+            serial_number,
+            organization_id,
+            exclude_item_id,
         )
-        if exclude_item_id:
-            query = query.where(InventoryItem.id != str(exclude_item_id))
-        result = await self.db.execute(query)
-        if result.scalar():
-            return f"Serial number '{serial_number}' is already in use by another item in this organization"
-        return None
 
     # INV-4 (XC-1): client-supplied FKs on an item, other than category_id
     # (validated separately via _validate_category_requirements). Only the keys
@@ -1902,6 +1969,13 @@ class InventoryService:
             )
             if sn_err:
                 return None, sn_err
+
+            for column, label in _UNIQUE_IDENTIFIERS:
+                id_err = await self._check_identifier_unique(
+                    column, label, item_data.get(column), organization_id
+                )
+                if id_err:
+                    return None, id_err
 
             # Validate status/condition state
             status_val = ItemStatus(item_data.get("status", "available"))
@@ -3156,6 +3230,7 @@ class InventoryService:
                     "assigned_to_user_id",
                     "quantity",
                     "quantity_issued",
+                    "tracking_type",
                 }
                 & update_data.keys()
             )
@@ -3206,6 +3281,36 @@ class InventoryService:
                 )
                 if sn_err:
                     return None, sn_err
+
+            for column, label in _UNIQUE_IDENTIFIERS:
+                if column in update_data and update_data[column] != getattr(
+                    item, column
+                ):
+                    id_err = await self._check_identifier_unique(
+                        column,
+                        label,
+                        update_data[column],
+                        organization_id,
+                        exclude_item_id=item_id,
+                    )
+                    if id_err:
+                        return None, id_err
+
+            # An individually tracked item is held by one member and a pool is
+            # issued out in quantity; flipping the mode under a live
+            # assignment or issuance leaves a record the other mode's screens
+            # cannot read (a pool item "assigned" to someone, or issuances
+            # against an individual one). Make the caller return it first.
+            if (
+                "tracking_type" in update_data
+                and update_data["tracking_type"] != item.tracking_type.value
+                and (item.assigned_to_user_id or (item.quantity_issued or 0) > 0)
+            ):
+                return (
+                    None,
+                    "Tracking type cannot be changed while the item is assigned "
+                    "or has stock issued. Return it first.",
+                )
 
             # Validate pool quantity constraints
             if item.tracking_type == TrackingType.POOL and "quantity" in update_data:

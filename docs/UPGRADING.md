@@ -504,6 +504,41 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Ranked-choice paper ballots are counted, and entered ballot by ballot (2026-10-20)
+
+Paper votes in a **ranked-choice** race were miscounted. The instant-runoff
+count groups votes into ballots by voter, a paper vote has no voter, and every
+paper vote in the race was pooled into a single ballot: a stack of thirty
+counted as one. Plurality, supermajority and approval races were not affected,
+and neither were electronic ranked ballots.
+
+- **Past results can change.** Results are computed from the stored votes each
+  time they are read, so a ranked-choice race that took paper votes now reports
+  each paper vote as its own ballot — on screen and on the certified results
+  PDF. Where paper votes were a large share of the box, the winner can change.
+  To list the elections affected, run against the database:
+
+  ```sql
+  SELECT DISTINCT e.id, e.title, e.status
+  FROM elections e
+  JOIN votes v ON v.election_id = e.id
+  WHERE v.is_manual = 1 AND v.deleted_at IS NULL
+    AND (e.voting_method = 'ranked_choice'
+         OR e.ballot_items LIKE '%"ranked_choice"%');
+  ```
+
+  Paper votes recorded before this upgrade carry no ranking — the form only
+  took totals — so each counts as a first choice and nothing further can be
+  recovered from them.
+
+- **Record Paper Ballots asks for rankings in a ranked race.** Each ballot's
+  1st, 2nd, 3rd... choices are entered, and identical ballots once with a copy
+  count. Totals per candidate are refused for a ranked race (the request
+  returns 400 with a message saying so); every other race is entered as before.
+- **One new column, `votes.paper_ballot_id`.** The migration only adds it
+  (nullable, no backfill). `alembic downgrade -1` drops it, after which ranked
+  paper ballots recorded since the upgrade are counted one row at a time again.
+
 ### Finance timestamps recorded before the UTC fix are corrected (2026-10-18)
 
 Finance records showed times hours off from each other — a purchase request's

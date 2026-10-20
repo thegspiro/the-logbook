@@ -103,8 +103,11 @@ from app.services.file_storage_service import (
     stored_file_response,
 )
 from app.services.membership_pipeline_service import (
+    DuplicateApplicantError,
     ElectionStageAmbiguousError,
     MembershipPipelineService,
+    describe_existing_applicant,
+    duplicate_applicant_message,
 )
 from app.utils import download_names
 from app.utils.org_timezone import resolve_scheduling_timezone
@@ -1080,6 +1083,11 @@ async def check_existing_members_for_prospect(
     decide whether to reactivate an archived member instead of creating a
     duplicate entry.
 
+    ``existing_applicant`` names the active applicant already holding this
+    email (name, pipeline, stage), or is null. It is reported separately from
+    ``matches`` because it is not a judgement call: ``POST /prospects``
+    refuses that email with a 409, so the form can say so before submitting.
+
     **Requires permission: members.create or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
@@ -1099,10 +1107,14 @@ async def check_existing_members_for_prospect(
         }
         for m in matches
     ]
+    existing_applicant = await service.find_existing_applicant(
+        organization_id=current_user.organization_id, email=email
+    )
     return {
         "has_matches": len(matches) > 0,
         "match_count": len(matches),
         "matches": safe_matches,
+        "existing_applicant": existing_applicant,
     }
 
 
@@ -1153,6 +1165,11 @@ async def create_prospect(
     email. If an archived member is found, a 409 Conflict is returned with
     the match details and a recommendation to reactivate instead.
 
+    If an active applicant already holds the email, a 409 Conflict names them
+    (name, pipeline, stage) and nothing is created or audited. The public
+    application form returns the existing applicant instead; this form must
+    not report "added" for a record it did not create.
+
     **Requires permission: members.create or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
@@ -1195,6 +1212,12 @@ async def create_prospect(
             organization_id=current_user.organization_id,
             data=prospect_data,
             created_by=current_user.id,
+            reject_duplicate=True,
+        )
+    except DuplicateApplicantError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=duplicate_applicant_message(describe_existing_applicant(e.existing)),
         )
     except ValueError as e:
         # Rejected foreign keys (pipeline, referring member) are client errors.

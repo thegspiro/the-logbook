@@ -96,6 +96,36 @@ def _stored_time(wall: datetime, tz: ZoneInfo) -> datetime:
     return wall.replace(tzinfo=tz).astimezone(dt_timezone.utc)
 
 
+def rsvp_deadline_lead(
+    deadline: datetime, start_wall: datetime, tz: ZoneInfo
+) -> timedelta:
+    """How far an RSVP deadline sits before a start given as wall time in ``tz``.
+
+    Measured in the department's wall-clock time, so a deadline "two days
+    before at 7pm" stays at 7pm on an occurrence across a daylight-saving
+    change. Negative when the deadline is after the start.
+    """
+    return _wall_time(deadline, tz) - start_wall
+
+
+def rsvp_deadline_at(
+    occurrence_start: datetime, lead: timedelta, tz: ZoneInfo
+) -> datetime:
+    """An occurrence's own RSVP deadline: ``lead`` (from
+    :func:`rsvp_deadline_lead`) applied to its start.
+
+    The one rule for every occurrence of a series: creating it, extending a
+    rolling one, and editing "this and all future". A series given one
+    absolute deadline closed RSVPs for every later occurrence on the first
+    one's date. The result is naive UTC when the start is, matching how
+    ``_generate_recurrence_dates`` hands occurrences back.
+    """
+    deadline = _stored_time(_wall_time(occurrence_start, tz) + lead, tz)
+    return (
+        deadline.replace(tzinfo=None) if occurrence_start.tzinfo is None else deadline
+    )
+
+
 BULK_ADD_MAX_SIZE = 200
 
 # Ceiling on how many waitlisted parties one seat release may promote. Freeing
@@ -1202,7 +1232,9 @@ class EventService:
                 - _wall_time(anchor.start_datetime, tz)
             )
             if timing.get("rsvp_deadline") is not None:
-                deadline_lead = _wall_time(timing["rsvp_deadline"], tz) - new_start
+                deadline_lead = rsvp_deadline_lead(
+                    timing["rsvp_deadline"], new_start, tz
+                )
 
         # EV-17 / XC-1: this path writes the same client-supplied attachment
         # dictionaries as update_event, across every future occurrence.
@@ -1281,9 +1313,7 @@ class EventService:
                 event.rsvp_deadline = (
                     None
                     if deadline_lead is None
-                    else _stored_time(
-                        _wall_time(event.start_datetime, tz) + deadline_lead, tz
-                    )
+                    else rsvp_deadline_at(event.start_datetime, deadline_lead, tz)
                 )
             if updated_by:
                 event.updated_by = str(updated_by)
@@ -5185,8 +5215,9 @@ class EventService:
             return [], str(exc)
 
         # Generate occurrence dates
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
         occurrences = self._generate_recurrence_dates(
-            timezone_=await resolve_scheduling_timezone(self.db, organization_id),
+            timezone_=tz,
             start_datetime=event_data["start_datetime"],
             end_datetime=event_data["end_datetime"],
             pattern=recurrence_pattern,
@@ -5204,6 +5235,22 @@ class EventService:
         if len(occurrences) > 365:
             return [], "Too many occurrences (max 365). Please narrow the date range."
 
+        # The deadline is entered against the series' start; each occurrence
+        # keeps that same lead before its own start (see rsvp_deadline_at).
+        rsvp_deadline = event_data.pop("rsvp_deadline", None)
+        deadline_lead = (
+            None
+            if rsvp_deadline is None
+            else rsvp_deadline_lead(
+                rsvp_deadline, _wall_time(event_data["start_datetime"], tz), tz
+            )
+        )
+
+        def _occurrence_deadline(start: datetime) -> Optional[datetime]:
+            if deadline_lead is None:
+                return None
+            return rsvp_deadline_at(start, deadline_lead, tz)
+
         # Create parent event (first occurrence)
         parent_event = Event(
             organization_id=str(organization_id),
@@ -5219,6 +5266,7 @@ class EventService:
             recurrence_exceptions=recurrence_exceptions,
             start_datetime=occurrences[0][0],
             end_datetime=occurrences[0][1],
+            rsvp_deadline=_occurrence_deadline(occurrences[0][0]),
             **{
                 k: v
                 for k, v in event_data.items()
@@ -5240,6 +5288,7 @@ class EventService:
                 recurrence_pattern=RecurrencePattern(recurrence_pattern),
                 start_datetime=start,
                 end_datetime=end,
+                rsvp_deadline=_occurrence_deadline(start),
                 **{
                     k: v
                     for k, v in event_data.items()

@@ -7,8 +7,10 @@ splits their hours across rows nobody can tell apart.
 """
 
 import uuid
+from unittest.mock import patch
 
 import pytest
+from sqlalchemy.dialects import mysql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import Organization, User
@@ -118,3 +120,91 @@ class TestCategoryNames:
             await setup["service"].update_category(
                 setup["existing"].id, setup["org_id"], setup["user_id"], is_active=True
             )
+
+
+async def _statements_run_by(db_session: AsyncSession, action) -> list[str]:
+    """The SQL *action* emits, compiled for MySQL and whitespace-normalised."""
+    seen: list[str] = []
+    real_execute = db_session.execute
+
+    async def spy(statement, *args, **kwargs):
+        seen.append(" ".join(str(statement.compile(dialect=mysql.dialect())).split()))
+        return await real_execute(statement, *args, **kwargs)
+
+    with patch.object(db_session, "execute", spy):
+        await action()
+    return seen
+
+
+class TestTheNameCheckSerializesConcurrentWrites:
+    """Two officers adding one name at once must not both succeed (AH-18).
+
+    The check is a read followed by the caller's write, so it needs the two
+    halves of CLAUDE.md pitfall #27: a lock on the contended parent row to
+    serialize the decision, and a locking read for the check itself, because
+    under REPEATABLE READ a plain SELECT answers from the transaction's first
+    snapshot, which predates the lock. Two sessions cannot be raced inside the
+    rolled-back test transaction, so this asserts the SQL the service emits.
+    """
+
+    @staticmethod
+    def _lock_and_check(statements: list[str]) -> tuple[int, int]:
+        locks = [
+            i
+            for i, sql in enumerate(statements)
+            if "FROM organizations" in sql and sql.endswith("FOR UPDATE")
+        ]
+        checks = [
+            i
+            for i, sql in enumerate(statements)
+            if "FROM admin_hours_categories" in sql and "lower(trim(" in sql
+        ]
+        assert len(locks) == 1, statements
+        assert len(checks) == 1, statements
+        return locks[0], checks[0]
+
+    async def test_create_locks_the_organization_before_a_locking_check(
+        self, setup, db_session
+    ):
+        statements = await _statements_run_by(
+            db_session,
+            lambda: setup["service"].create_category(
+                organization_id=setup["org_id"],
+                created_by=setup["user_id"],
+                name="Grounds",
+            ),
+        )
+
+        lock, check = self._lock_and_check(statements)
+        assert lock < check
+        assert statements[check].endswith("FOR UPDATE")
+
+    async def test_rename_locks_the_organization_before_a_locking_check(
+        self, setup, db_session
+    ):
+        statements = await _statements_run_by(
+            db_session,
+            lambda: setup["service"].update_category(
+                setup["existing"].id,
+                setup["org_id"],
+                setup["user_id"],
+                name="Station Upkeep",
+            ),
+        )
+
+        lock, check = self._lock_and_check(statements)
+        assert lock < check
+        assert statements[check].endswith("FOR UPDATE")
+
+    async def test_deactivating_a_category_takes_no_lock(self, setup, db_session):
+        statements = await _statements_run_by(
+            db_session,
+            lambda: setup["service"].update_category(
+                setup["existing"].id,
+                setup["org_id"],
+                setup["user_id"],
+                is_active=False,
+            ),
+        )
+
+        assert not any(sql.endswith("FOR UPDATE") for sql in statements), statements

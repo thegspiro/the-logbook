@@ -3,26 +3,66 @@
 ## Queued by the October 19 – 20 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
-Nothing was captured by this pass.
+Nothing was captured by this pass. It is a gap report: the screens below are the
+ones the Minutes settings consolidation, archive search and accepted-previous-minutes
+changes (merged after the October 18 – 19 pass) put on screen, plus the rows of the
+earlier passes that named screens which no longer exist in that form. Placeholders
+for the new screens are in [04](./04-events-meetings.md) as `_[Screenshot to create: …]_`.
 
 ### New screens to create
 
 | Guide | Screen to capture | Notes |
 | ----- | ----------------- | ----- |
-| 04 | Minutes page header with the single **Settings** button | Needs `minutes.manage` |
-| 04 | **Minutes > Settings** at desktop width (Attendance section) and at 390px (tab strip) | |
-| 04 | Settings **Signatures**, **Reminders** and **Publishing** sections | Replaces the dialog shots queued on October 18 – 19 |
-| 04 | **Found in the minutes** search card for a two-word search, highlighted snippets, and the newest-500 note | Seed minutes that mention both words |
-| 13 | Requirement form showing **Applies to Positions** with two positions; roster row reading **Not applicable** | |
+| 04 | **Minutes Settings** (`/minutes/settings`), Attendance section, with the section list | `minutes.manage` and `settings.manage` |
+| 04 | The same screen as a member who manages minutes but not settings: controls disabled, no Save, the "settings administrator changes it" line | Second auth context |
+| 04 | Minutes Settings → **Reminders** (email switch, first-reminder days, repeat days, weekly list) | |
+| 04 | Minutes Settings → **Signatures** with the two default slots | Replaces the "Minutes → Signers" row below |
+| 04 | Minutes Settings → **Publishing**, including the executive-session confirmation | Replaces the "Publishing settings dialog" row below |
+| 04 | **Found in the minutes** card under the Minutes search box, two results, words highlighted | Search a word the seeded minutes share |
+| 04 | A **prepared Approval of Previous Minutes** motion on a draft, with **As submitted / As revised** | Needs earlier circulated minutes of the same meeting type |
+| 04 | Circulated minutes with the note that a later meeting accepted them, and **Adopt these minutes** opened already filled in | Seed a passed acceptance motion |
 
-### Replace
+**Pipeline status.** Every row above is in `scripts/screenshots/manifest.mjs`
+(`04-70` to `04-78`; the last row is two shots) with placeholders in the comment form the applier reads. The
+accepted-previous-minutes shots (`04-76` to `04-78`) are seeded by
+`_guide04_accepted_minutes` in `seed_demo_data.py`: three business meetings dated
+90, 62 and 48 days back, so the Spring minutes are circulated and accepted by the
+Late Spring meeting, and the Early Summer minutes carry a prepared motion waiting
+for a result. Re-run the seeder before capturing. Nothing here has been captured,
+and the seeder change has not been run end to end.
 
-| Image | Why |
-| ----- | --- |
-| `04-14-meeting-minutes.png` | Four settings buttons became one **Settings** button; action buttons wrap under the title |
-| Edit Member shot showing Date of Birth | Date and time fields are now pinned inside their column on iOS; re-shoot on a tablet width if one exists |
-| Any 13 requirement-form shot | Field renamed to positions; the "Not enforced yet" notice is gone (grace period keeps its notice) |
-| Queued 10-18 dialog shots (Publishing settings, Roll listing, Signers) | Superseded; capture the Settings page sections instead |
+### Existing images to replace or confirm
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `04-14-meeting-minutes` | **REPLACE** | The header now has Outlines and **Settings**; the Reminders, Roll listing, Publishing and Signers buttons are gone, and its alt text names the old row of buttons |
+| `04-65-minutes-adopt-dialog` | **CHECK** | Gains a "Filled in from the motion recorded at …" note when a later meeting accepted the minutes; the seeded shot has none, so it is still accurate for that case |
+| `04-66-minutes-folded-panels` | **CHECK** | Motions count now excludes prepared (pending) motions |
+
+### Rows of earlier passes that now describe a different screen
+
+| Earlier row | Now |
+| ----------- | --- |
+| October 18 – 19: Minutes **Publishing settings** dialog | Capture Minutes Settings → Publishing (above) |
+| October 18 – 19: **Roll listing** dialog | Capture Minutes Settings → Attendance (above); the per-minutes roll selector on a draft is unchanged |
+| October 16 – 18: **Minutes > Signers** | Capture Minutes Settings → Signatures (above); the Sign dialog and Signatures panel are unchanged |
+| October 18 – 19: `04-*` roll panel on minutes | Still **REPLACE** (the per-minutes selector); unaffected by the move |
+
+### Images whose captions describe text corrected by the Training guide audit
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `02-71-multi-agency-training` | **CHECK** | Alt text says "headcounts"; the form takes one organization and a single Total Participants number |
+| `02-74-annual-compliance-report` | **CHECK** | The report has no waiver summary or year-over-year comparison |
+| `02-62-print-member-history`, `02-63-print-program` | **CHECK** | Printed contents are narrower than the guide described; confirm the captions say only what the page shows |
+
+### Medical screening and dashboard changes merged after the last pass
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `13-05-add-requirement` | **REPLACE** | Shot 2026-10-17 with the label **Applies to Roles** and the amber "Not enforced yet" note under it. The field is now **Applies to Positions** with a plain explanation (blank applies to everyone; applicants are always screened); only the Grace Period field still says "Not enforced yet" |
+| Any other `13-*` form shot showing the requirement form | **CHECK** | Same field |
+| Dashboard finance tile (overdue dues) | **CHECK** | The count now follows the dues screen's rule (a part-paid record is Partial, not overdue). No guide text quotes the number; confirm any dashboard shot of the tile against the Dues page |
 
 ## Queued by the October 18 – 19 documentation pass
 

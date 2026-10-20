@@ -28,8 +28,8 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({ steps, currentStep
           const isComplete = index < currentStep;
           const isCurrent = index === currentStep;
           return (
-            <li key={index} className={`flex items-center ${index < steps.length - 1 ? 'flex-1' : ''}`}>
-              <div className="flex items-center gap-2">
+            <li key={index} className={`flex min-w-0 items-center ${index < steps.length - 1 ? 'flex-1' : ''}`}>
+              <div className="flex min-w-0 items-center gap-2">
                 <div
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-medium transition-colors ${
                     isComplete
@@ -42,7 +42,7 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({ steps, currentStep
                 >
                   {isComplete ? <Check className="h-4 w-4" /> : index + 1}
                 </div>
-                <div className="hidden md:block">
+                <div className="hidden min-w-0 md:block">
                   <p
                     className={`text-sm font-medium ${isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}
                   >

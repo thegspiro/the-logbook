@@ -531,6 +531,10 @@ Authorize the service account's client ID in the Google Admin console (**Securit
 
 The account is created **after** the conversion is saved, so a Google failure never undoes it. The temporary Google password goes to the member's **personal** email — in the welcome email when one is sent, otherwise on its own — and Google asks for a new one at first sign-in. The conversion result says what happened, and the member's profile shows the account with a **Retry** for anything unfinished. If the address already belongs to a Google account, The Logbook links to it and changes nothing.
 
+### Members Added Another Way
+
+**Add Member** has a **Create a Google Workspace account** box (unticked by default). Ticked, the member's department address is generated from their name and becomes their sign-in email, the email you typed is kept as their personal address, and the temporary passwords go there. Every member added without it — including each row of a roster import — is linked automatically when their email is already a Google account's primary address. An import never creates accounts.
+
 ### When a Member Leaves
 
 Dropping a member (voluntary or involuntary) or deleting them **suspends** their Google account; undoing the drop, a rejoin or reactivating an archived member lifts it again. Retired, on-leave and inactive members keep their account. The Logbook only lifts a suspension it applied itself — an account someone had already suspended in Google stays suspended. If Google cannot be reached, the departure still goes through and the member's profile offers a **Retry**.

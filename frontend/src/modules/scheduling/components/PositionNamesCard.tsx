@@ -152,7 +152,7 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
           <button
             onClick={addCustomPosition}
             disabled={!newPositionLabel.trim() || allPositionOptions.some((p) => p.value === newPositionValue)}
-            className="mobile-touch-target shrink-0 rounded-lg bg-violet-600 px-4 text-sm text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mobile-touch-target shrink-0 rounded-lg bg-violet-700 px-4 text-sm text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Add Position
           </button>
