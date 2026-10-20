@@ -510,14 +510,14 @@ Modules), stored in the organization's `enabled_modules` setting. See
 
 ## 📱 Useful URLs (Default Ports)
 
-| Resource               | URL                                                         |
-| ---------------------- | ----------------------------------------------------------- |
-| **Frontend**           | http://localhost:3000                                       |
-| **API Docs (Swagger)** | http://localhost:3001/docs                                  |
-| **API Docs (ReDoc)**   | http://localhost:3001/redoc                                 |
-| **API JSON**           | http://localhost:3001/openapi.json                          |
-| **Health Check**       | http://localhost:3001/health                                |
-| **Detailed Health**    | http://localhost:3001/health/detailed (non-production only) |
+| Resource               | URL                                                      |
+| ---------------------- | -------------------------------------------------------- |
+| **Frontend**           | http://localhost:3000                                    |
+| **API Docs (Swagger)** | http://localhost:3001/docs                               |
+| **API Docs (ReDoc)**   | http://localhost:3001/redoc                              |
+| **API JSON**           | http://localhost:3001/openapi.json                       |
+| **Health Check**       | http://localhost:3001/health                             |
+| **Detailed Health**    | http://localhost:3001/health/detailed (development only) |
 
 ---
 
