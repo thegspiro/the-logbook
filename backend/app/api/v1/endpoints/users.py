@@ -1253,23 +1253,25 @@ async def _enforce_account_reset_ceiling(
     current_user: User,
     target_user: User,
     db: AsyncSession,
+    *,
+    action: str = "account-reset",
+    detail: str = "You cannot reset the account of a user with privileges beyond your own.",
 ) -> None:
     """Prevent account resets from becoming a privilege-escalation path.
 
     Member managers may assist users whose effective permissions are within
     their own permission ceiling, but may not reset credentials or MFA for a
-    user who has permissions they do not possess.
+    user who has permissions they do not possess. Member deletion applies the
+    same ceiling: removing an account is no less a takeover of it than
+    resetting its password.
     """
     caller_perms = _collect_user_permissions(current_user)
     target_perms = _collect_user_permissions(target_user)
     if any(not _has_permission(perm, caller_perms) for perm in target_perms):
         await report_privilege_escalation_attempt(
-            db, str(current_user.id), f"account-reset:{target_user.id}", None
+            db, str(current_user.id), f"{action}:{target_user.id}", None
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You cannot reset the account of a user with privileges beyond your own.",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
 BASE_POSITION_REMOVAL_REFUSED = (
@@ -2252,9 +2254,13 @@ async def delete_user(
         )
 
     # For hard delete, include soft-deleted users too
-    query = select(User).where(
-        User.id == str(user_id),
-        User.organization_id == str(current_user.organization_id),
+    query = (
+        select(User)
+        .where(
+            User.id == str(user_id),
+            User.organization_id == str(current_user.organization_id),
+        )
+        .options(selectinload(User.positions))
     )
     if not hard:
         query = query.where(User.deleted_at.is_(None))
@@ -2267,6 +2273,16 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+
+    # members.manage alone let a member manager delete the System Owner or
+    # any other account holding permissions the manager lacks.
+    await _enforce_account_reset_ceiling(
+        current_user,
+        user,
+        db,
+        action="member-delete",
+        detail="You cannot delete a member with privileges beyond your own.",
+    )
 
     # The self-delete check above stops an admin removing themselves, but not
     # one admin removing the other and only remaining one.
