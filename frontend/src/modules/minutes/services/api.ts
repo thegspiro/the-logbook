@@ -7,6 +7,7 @@
 
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
+  AdoptionProposal,
   AgendaSyncPreview,
   MeetingMinutes,
   Motion,
@@ -21,6 +22,7 @@ import type {
   MinutesReminderSettings,
   MinutesSignature,
   SignatureStatus,
+  ArchiveSearchResponse,
   MinutesSearchResult,
   MinutesListItem,
   AttendanceSuggestions,
@@ -88,6 +90,12 @@ export const minutesService = {
   async approve(minutesId: string, adoption?: AdoptionDetails): Promise<MeetingMinutes> {
     const response = await api.post<MeetingMinutes>(`/minutes-records/${minutesId}/approve`, adoption ?? null);
     return response.data;
+  },
+
+  /** What a later meeting's passed acceptance motion implies for these minutes' adoption, if anything. */
+  async getAdoptionProposal(minutesId: string): Promise<AdoptionProposal | null> {
+    const response = await api.get<AdoptionProposal | null>(`/minutes-records/${minutesId}/adoption-proposal`);
+    return response.data ?? null;
   },
 
   /** Take circulated minutes back to draft so suggestions can be worked in. */
@@ -208,6 +216,14 @@ export const minutesService = {
   async search(query: string, limit = 20): Promise<MinutesSearchResult[]> {
     const response = await api.get<MinutesSearchResult[]>('/minutes-records/search', { params: { q: query, limit } });
     return asArray(response.data);
+  },
+
+  /** The words of titles, sections, motions and action items, grouped by minutes. */
+  async searchArchive(query: string, meetingType?: string): Promise<ArchiveSearchResponse> {
+    const response = await api.get<ArchiveSearchResponse>('/minutes-records/archive-search', {
+      params: { q: query, ...(meetingType ? { meeting_type: meetingType } : {}) },
+    });
+    return { ...response.data, hits: asArray(response.data.hits) };
   },
 
   // ── Roll call ──

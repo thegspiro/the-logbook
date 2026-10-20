@@ -2967,3 +2967,79 @@ describe('EquipmentCheckTemplateBuilder details and rows (W46)', () => {
     expect(handle).toHaveAttribute('aria-roledescription', 'sortable');
   });
 });
+
+describe('EquipmentCheckTemplateBuilder date lines and checklist items', () => {
+  // The Date type is an expiring item by definition and cannot publish without
+  // a date; items can also sit directly on the checklist, between locations.
+  const withRadioAs = (over: Record<string, unknown>) => {
+    const t = structuredClone(template);
+    const cab = t.compartments[0];
+    if (cab) cab.items = [{ ...(cab.items[0] as (typeof cab.items)[number]), ...over }];
+    return t;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    addCompartment.mockReset();
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockResolvedValue({});
+    updateEquipmentCheckTemplate.mockResolvedValue(template);
+    reorderItems.mockResolvedValue(undefined);
+  });
+
+  it('lists a Date line with no date as something to fix before publishing', async () => {
+    mockViewport('laptop');
+    getTemplate.mockResolvedValue(withRadioAs({ checkType: 'expiry', hasExpiration: true }));
+    renderBuilder();
+
+    expect(await screen.findByRole('button', { name: /Radio needs an expiration date/ })).toBeInTheDocument();
+  });
+
+  it('does not list one that has its date', async () => {
+    mockViewport('laptop');
+    getTemplate.mockResolvedValue(
+      withRadioAs({ checkType: 'expiry', hasExpiration: true, expirationDate: '2099-01-01' })
+    );
+    renderBuilder();
+
+    await screen.findByRole('button', { name: /Collapse Cab|Expand Cab/ });
+    expect(screen.queryByRole('button', { name: /Radio needs an expiration date/ })).not.toBeInTheDocument();
+  });
+
+  it('locks Has Expiration on for a Date line', async () => {
+    mockViewport('phone');
+    getTemplate.mockResolvedValue(withRadioAs({ checkType: 'expiry', hasExpiration: false }));
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.click(await screen.findByRole('button', { name: 'Edit Radio' }));
+
+    const box = screen.getByRole('checkbox', { name: /Has Expiration/ });
+    expect(box).toBeChecked();
+    expect(box).toBeDisabled();
+  });
+
+  it('adds items directly to the checklist as a headingless group', async () => {
+    mockViewport('laptop');
+    getTemplate.mockResolvedValue(structuredClone(template));
+    addCompartment.mockResolvedValue({
+      id: 'loose',
+      templateId: 'template-1',
+      name: '',
+      sortOrder: 3,
+      isInline: true,
+      items: [],
+    });
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByRole('button', { name: /Collapse Cab|Expand Cab/ });
+
+    // Spot 0 is the place above the first location.
+    await user.click(screen.getByTestId('add-item-here-0'));
+
+    await waitFor(() =>
+      expect(addCompartment).toHaveBeenCalledWith('template-1', expect.objectContaining({ is_inline: true, name: '' }))
+    );
+    expect(await screen.findByTestId('inline-group-loose')).toBeInTheDocument();
+  });
+});

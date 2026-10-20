@@ -137,3 +137,30 @@ def vote_summary(motion: Any) -> str:
     if note:
         extras.append(note)
     return text + (f" ({', '.join(extras)})" if extras else "")
+
+
+ACCEPTANCE_LABELS = {
+    "as_submitted": "Accepted as submitted",
+    "as_revised": "Accepted as revised",
+}
+
+
+def recorded_motions(motions):
+    """The motions the meeting acted on, in their given order.
+
+    A prepared motion the meeting has not acted on is ``pending``: wording with
+    no mover and no vote. It is not part of the record, so nothing printed,
+    published, posted or sealed includes it.
+    """
+    return [
+        m
+        for m in (motions or [])
+        if (m.status if isinstance(m.status, str) else m.status.value) != "pending"
+    ]
+
+
+def acceptance_label(motion) -> str | None:
+    """ "Accepted as submitted/revised", for a passed previous-minutes motion."""
+    value = getattr(motion, "acceptance", None)
+    status = motion.status if isinstance(motion.status, str) else motion.status.value
+    return ACCEPTANCE_LABELS.get(value) if value and status == "passed" else None

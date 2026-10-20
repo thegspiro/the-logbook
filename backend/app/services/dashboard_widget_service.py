@@ -3,7 +3,7 @@
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from decimal import Decimal
 
-from sqlalchemy import case, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event, EventExternalAttendee, EventRSVP, EventType
@@ -11,7 +11,6 @@ from app.models.event_request import EventRequest, EventRequestStatus
 from app.models.finance import (
     Budget,
     DuesPayment,
-    DuesStatus,
     ExpenseReport,
     ExpenseReportStatus,
     FiscalYear,
@@ -26,6 +25,7 @@ from app.models.grant import (
     GrantOpportunity,
     PaymentStatus,
 )
+from app.services.finance_service import dues_overdue_clause
 from app.utils.org_timezone import resolve_scheduling_timezone, today_in
 
 PERIOD_LABELS = {
@@ -113,29 +113,12 @@ class DashboardWidgetService:
                 )
             )
         ).one()
+        # The dues screen's rule, not the due date alone: a part-paid record
+        # past its date stays PARTIAL there, so it is not counted here either.
         overdue = await self.db.scalar(
-            select(
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                MemberDues.status.in_(
-                                    [
-                                        DuesStatus.PENDING.value,
-                                        DuesStatus.PARTIAL.value,
-                                        DuesStatus.OVERDUE.value,
-                                    ]
-                                ),
-                                1,
-                            ),
-                            else_=0,
-                        )
-                    ),
-                    0,
-                )
-            ).where(
+            select(func.count(MemberDues.id)).where(
                 MemberDues.organization_id == organization_id,
-                MemberDues.due_date < min(now, end),
+                dues_overdue_clause(now),
             )
         )
         budget = (

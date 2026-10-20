@@ -103,7 +103,8 @@ class TestRollCall:
         assert resp.status_code == 400
         assert "not recorded as present" in resp.json()["detail"]
         async with _client(world.db, world.secretary) as c:
-            assert (await c.get(f"/minutes/{minutes['id']}")).json()["motions"] == []
+            listed = (await c.get(f"/minutes/{minutes['id']}")).json()["motions"]
+            assert [m for m in listed if m["status"] != "pending"] == []
 
     async def test_a_member_cannot_vote_twice(self, world):
         minutes = await _minutes(world)

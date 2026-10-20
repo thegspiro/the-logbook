@@ -817,13 +817,15 @@ class BallotSendJobStatus(str, Enum):
 
 
 class BallotSendJobKind(str, Enum):
-    """What a background send mails: the ballot itself, or a reminder to
-    the members who have not voted yet. Both write the election's record of
-    who was sent a ballot, which is why they share one table and one
-    in-progress guard."""
+    """What a background send mails: the ballot itself, a reminder to the
+    members who have not voted yet, or the pre-meeting package. Ballots and
+    reminders both write the election's record of who was sent a ballot, so
+    they share one in-progress guard; the package writes neither and has its
+    own (``ballot_send_jobs.PACKAGE_GUARD_KINDS``)."""
 
     BALLOTS = "ballots"
     REMINDER = "reminder"
+    PACKAGE = "package"
 
 
 class BallotSendJob(Base):

@@ -1,5 +1,24 @@
 # Script currency
 
+## Flagged by the 2026-10-18 → 10-19 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).
+Rows are **Open**; nothing was re-recorded. Grep a label before it goes in a script.
+
+**Re-record or shoot new footage:** 07 (minutes publishing), 12 (package send), 04 (purchase request draft), 06 / 05 (equipment check Present / Absent).
+
+| Script                  | Beat                   | Was                                         | Now                                                                                                             |
+| ----------------------- | ---------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **07** (secretary)      | Adopting minutes       | Library copy only                           | **Publishing settings**; optional public page; executive minutes to a leadership folder; **Roll listing**       |
+| **12** (elections)      | Pre-meeting package    | One email, everyone hidden in the copy line | One email per member, queued with progress; unreached addresses listed                                          |
+| **04** (finance)        | Purchase request       | Create Request, draft only after            | Saves as a draft while typed; **Save Draft**; amounts capped at $9,999,999,999.99                               |
+| **04**                  | Approval chains        | Boundary amount fit both chains             | Min and Max both included; the higher minimum wins; invalid ranges refused                                      |
+| **06 / 05**             | Equipment check        | Works / Count / Level / Date                | **Present / Absent** line; Date lines always expire; crew types a replacement's printed date; Items w/o heading |
+| **06**                  | Open Shifts            | Today's ended shifts still listed           | Ended shifts drop off; own sign-up lands confirmed                                                              |
+| **06**                  | Empty schedule         | "Nothing published"                         | **Go to the next shift**                                                                                        |
+| **06** (administrative) | Dashboard / Operations | Clear-to-respond verdict, crew rows         | Verdict hidden; My Checklists and Apparatus Inventory need a deliberate grant                                   |
+| **03** (IT)             | Upgrading              | —                                           | Finance timestamps corrected to UTC on upgrade; MySQL session pinned to UTC                                     |
+
 ## Flagged by the 2026-10-16 → 10-18 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-16--18-2026).

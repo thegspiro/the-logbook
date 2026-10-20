@@ -413,8 +413,12 @@ async def test_unadopted_minutes_stay_out_of_the_list(world, mail):
 
 
 def _drop_publishing(body):
-    """Publishing has its own tests; this file checks the reminder fields."""
-    for key in [k for k in body if k.startswith(("executive_", "public_"))]:
+    """Publishing and attendance have their own tests; this file checks reminders."""
+    for key in [
+        k
+        for k in body
+        if k.startswith(("executive_", "public_")) or k == "attendance_listing"
+    ]:
         body.pop(key)
 
 

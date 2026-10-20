@@ -100,10 +100,10 @@ describe('navigation gates match the routes they target', () => {
   it('draws the Operations rows on both surfaces from the one shared list', () => {
     for (const surface of NAV_SURFACES) {
       expect(read(surface), `${surface}: Operations rows are not the shared list`).toContain(
-        'subItems: operationsNavItems(isModuleOn)'
+        'subItems: operationsNavItems(isModuleOn'
       );
     }
-    expect(read('components/operations/OperationsPageHeader.tsx')).toContain('operationsNavItems(isModuleOn)');
+    expect(read('components/operations/OperationsPageHeader.tsx')).toContain('operationsNavItems(isModuleOn');
   });
 
   it('shares the Facilities route gate with every discovery surface', () => {

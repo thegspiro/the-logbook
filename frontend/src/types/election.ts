@@ -583,12 +583,6 @@ export interface PreMeetingPackageSend {
   include_full_roster: boolean;
 }
 
-export interface PreMeetingPackageResponse {
-  success: boolean;
-  message: string;
-  sent_count: number;
-}
-
 // Vote receipt verification
 export interface VoteReceiptResponse {
   verified: boolean;

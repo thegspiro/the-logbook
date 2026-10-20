@@ -338,6 +338,11 @@ class MotionBase(BaseModel):
     status: str = Field(
         default="passed", description="Motion result: passed, failed, tabled, withdrawn"
     )
+    acceptance: Optional[Literal["as_submitted", "as_revised"]] = Field(
+        None,
+        description="For the motion that accepts the previous minutes: accepted "
+        "as submitted or as revised",
+    )
     votes_for: Optional[int] = Field(None, ge=0)
     votes_against: Optional[int] = Field(None, ge=0)
     votes_abstain: Optional[int] = Field(None, ge=0)
@@ -383,6 +388,7 @@ class MotionUpdate(BaseModel):
     discussion_notes: Optional[str] = None
     section_key: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = None
+    acceptance: Optional[Literal["as_submitted", "as_revised"]] = None
     votes_for: Optional[int] = Field(None, ge=0)
     votes_against: Optional[int] = Field(None, ge=0)
     votes_abstain: Optional[int] = Field(None, ge=0)
@@ -403,6 +409,10 @@ class MotionResponse(MotionBase):
     minutes_id: str
     order: int
     election_title: Optional[str] = None
+    # The minutes this motion accepts, when it is the previous-minutes motion.
+    previous_minutes_id: Optional[str] = None
+    previous_minutes_title: Optional[str] = None
+    previous_minutes_status: Optional[str] = None
     suggested_status: Optional[str] = Field(
         None,
         description="passed or failed when the counts and threshold decide it; "
@@ -623,6 +633,13 @@ class MinutesUpdate(BaseModel):
     quorum_met: Optional[bool] = None
     quorum_count: Optional[int] = Field(None, ge=0)
     event_id: Optional[str] = None
+    attendance_listing: Optional[Literal["all", "present_excused", "present"]] = Field(
+        None,
+        description=(
+            "Which attendance statuses these minutes name; null follows "
+            "the department default"
+        ),
+    )
     sections: Optional[List[SectionEntry]] = Field(
         None, description="Full sections replacement"
     )
@@ -657,6 +674,9 @@ class MinutesResponse(UTCResponseBase):
     called_to_order_at: Optional[datetime] = None
     adjourned_at: Optional[datetime] = None
     attendees: Optional[List[AttendeeEntry]] = None
+    # This set's own choice (null = department default) and what is in force.
+    attendance_listing: Optional[str] = None
+    attendance_listing_effective: str = "all"
     quorum_met: Optional[bool] = None
     quorum_count: Optional[int] = None
     meeting_id: Optional[str] = None
@@ -709,6 +729,23 @@ class MinutesListItem(UTCResponseBase):
     created_at: datetime
 
     model_config = _response_config
+
+
+class AdoptionProposal(BaseModel):
+    """The adoption a passed acceptance motion implies for these minutes.
+
+    Taken from the motion that accepted them at a later meeting, so the
+    adoption form opens already filled in. It is a proposal: the officer who
+    confirms it is still someone other than whoever circulated the minutes.
+    """
+
+    motion_id: str
+    adopted_on: datetime
+    adopting_minutes_id: str
+    adopting_minutes_title: str
+    as_amended: bool
+    moved_by: Optional[str] = None
+    seconded_by: Optional[str] = None
 
 
 class MinutesAdopt(BaseModel):
@@ -806,6 +843,7 @@ class MinutesReminderSettingsResponse(BaseModel):
     # work out the three-switch rule itself.
     executive_effective_library: bool = False
     executive_effective_public: bool = False
+    attendance_listing: Literal["all", "present_excused", "present"] = "all"
 
 
 class PublishingStatusResponse(BaseModel):
@@ -890,6 +928,46 @@ class MinutesSearchResult(UTCResponseBase):
     match_field: str = Field(..., description="Which field matched")
 
     model_config = _response_config
+
+
+class ArchiveSnippetPart(BaseModel):
+    """A run of a snippet, marked when it is what the search found."""
+
+    text: str
+    hit: bool
+
+
+class ArchiveMatch(BaseModel):
+    """One place in a set of minutes where the search found its words."""
+
+    kind: str = Field(..., description="title, section, motion or action_item")
+    label: str = Field(..., description="Which section, motion or item")
+    parts: List[ArchiveSnippetPart]
+
+
+class ArchiveHit(UTCResponseBase):
+    """A set of minutes the search matched, with where it matched."""
+
+    id: str
+    title: str
+    meeting_type: str
+    meeting_date: datetime
+    status: str
+    match_count: int = Field(..., description="Places matched, including any not shown")
+    matches: List[ArchiveMatch]
+
+    model_config = _response_config
+
+
+class ArchiveSearchResponse(BaseModel):
+    """Archive search results, grouped by minutes, newest meeting first."""
+
+    terms: List[str] = Field(..., description="The words and phrases searched for")
+    hits: List[ArchiveHit]
+    searched: int = Field(..., description="Sets of minutes read")
+    truncated: bool = Field(
+        ..., description="True when older minutes were left out of the search"
+    )
 
 
 # ============================================

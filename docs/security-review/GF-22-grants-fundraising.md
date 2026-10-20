@@ -2,11 +2,235 @@
 
 **Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
-(pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8) ·
-**PR:** [#1904](https://github.com/thegspiro/the-logbook/pull/1904) (pass 1),
-pass 7 merged as commit `9da13118` (no PR — pushed directly), pass 6 merged
-as PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875), pass 8
-(this PR)
+(pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8),
+2026-10-20 (pass 9) · **PR:** [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
+(pass 1), pass 7 merged as commit `9da13118` (no PR — pushed directly), pass
+6 merged as PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875),
+pass 8 merged as PR [#3339](https://github.com/thegspiro/the-logbook/pull/3339),
+pass 9 (this PR)
+
+---
+
+## Pass 9 (2026-10-20) — watchdog pickup, real delta (not zero-delta), 0 fixed by this pass itself, 0 new findings, GF-9's open two-thirds re-confirmed and extended to a new field group
+
+**Watchdog pickup.** PR #3451 (Feature 21, Admin hours, pass 9) merged to
+`main` with no open PR whose head branch starts with `claude/security-review-`
+(`list_pull_requests`/`search_pull_requests`, both 0 results) and nothing
+started for Feature 22 since. Per `PROGRESS.md`'s rotation table, row 22 is
+the next `⬜` after row 21.
+
+**Backend (unchanged file set):** `app/api/v1/endpoints/grants.py` (45
+endpoints), `app/services/grant_service.py`, `app/services/fundraising_service.py`,
+`app/models/grant.py`, `app/schemas/grant.py`, `app/utils/model_updates.py`
+(the `reload_updated_at` helper, shared with 6 other modules but exercised
+here). **Frontend:** `frontend/src/modules/grants-fundraising/` (pages,
+services, store, types, the new `utils/applicationStructuredFields.ts`).
+
+### Diff-scoping methodology
+
+Baseline: `5b2270fa` (PR #3339's merge, pass 8). `git log 5b2270fa..HEAD`
+is 412 commits total (mostly unrelated merges and other features), but
+path-filtering on this feature's scope files finds a **real, non-trivial
+delta** — unlike passes 6-8, which were each near-zero-delta. Four
+substantive commits touch grants/fundraising code, all from feature-dev
+sessions (not this rotation), all dated 2026-10-16/17:
+
+1. `5ead6074` — app-review B14 (`docs/app-review/grants-fundraising.md`
+   pass 5, GF2-1): 8 of 10 `PUT` endpoints (opportunity, budget item,
+   compliance task, campaign, donor, donation, pledge, fundraising event)
+   answered 500 and rolled back the write, because `updated_at` is
+   `onupdate=func.now()` (MySQL/MariaDB can't return it from an `UPDATE`,
+   so SQLAlchemy expires it and the response model's lazy read raises
+   `MissingGreenlet` outside a greenlet). Fixed with a shared
+   `reload_updated_at(db, instance)` helper (`app/utils/model_updates.py:100`),
+   one `refresh(instance, ["updated_at"])` per call, after the flush in all
+   8 methods.
+2. `ad2c7ff5` — a pure typing fix (mypy override compatibility): the two
+   JSON-column fields (`budget_summary`, `key_contacts`) moved off
+   `GrantApplicationBase` onto `GrantApplicationCreate`/`Update` so the
+   response can declare a looser read-back shape without an incompatible
+   override. No behavior change, no wire-format change.
+3. `7468e9f9` / `0913cf9b` (docs) — W69 fundraising workflow review: a
+   missing `status` field on `CampaignCreate` (silently dropped a chosen
+   starting status), and — the grants half — `budget_summary`/`key_contacts`
+   went from permissive `Dict[str, Any]` / `List[Dict[str, Any]]` to two
+   new strict schemas, `GrantBudgetSummary` and `GrantKeyContact`
+   (`app/schemas/grant.py:290-323`).
+4. `7d5be0bb` / `3b12bd71` (docs) — W68 grants workflow review: the four
+   child-create schemas (`GrantBudgetItemCreate`, `GrantExpenditureCreate`,
+   `GrantComplianceTaskCreate`, `GrantNoteCreate`) had each required an
+   `application_id` the endpoint discarded in favor of the URL path — the
+   body/schema mismatch 422'd every create. `application_id` is now absent
+   from all four create schemas (URL is the only source, as it already was
+   in practice). `assigned_to` — previously response-only, so a client
+   could never set it — is now accepted on `GrantApplicationCreate` and
+   validated in-org by the existing `_validate_application_fks` (unchanged
+   helper, now exercised on create as well as update).
+
+Each read against the current code, not taken from its own commit message.
+Two workflow-review docs (`docs/workflow-review/W68-grants.md`,
+`W69-fundraising.md`) record the same fixes from the UI-driven angle; their
+OPEN items (W68-9 key-contacts-as-free-text vs. structured, W68-10
+opportunities not editable from the UI, W69-6 donor requires a person's
+name) are **product/UX gaps, not security findings** — already mirrored to
+`KNOWN_LIMITATIONS.md` by those passes, not re-flagged here under a `GF-`
+id.
+
+### Re-verified by direct code read (not re-cited from the fix commits)
+
+1. **`reload_updated_at` call sites are all correctly placed.** Checked
+   all 8: `update_opportunity` (`grant_service.py:182-194`),
+   `update_budget_item` (`:741-748`), `update_compliance_task`
+   (`:1083-1149`), `update_campaign`, `update_donor`, `update_donation`,
+   `update_pledge`, `update_fundraising_event`
+   (`fundraising_service.py`) — every one calls it **after** the
+   row-not-found `None` guard and after `apply_updates`/the recompute
+   work, never on a row that might not exist. `update_donation`'s
+   campaign/donor reassignment FK validation and the `_lock_campaign`/
+   `_lock_donor` calls (GF-1, GF-15) still run before the reload, in the
+   same order as before the helper was added.
+2. **`assigned_to` on create is in-org validated, not a new unchecked FK.**
+   `create_application` (`grant_service.py:436-443`) calls
+   `_validate_application_fks(data, organization_id)` — the same helper
+   that already validated `linked_campaign_id`/`assigned_to` on update
+   (GF-6) — before constructing the row. A foreign `assignedTo` raises
+   `ValueError` -> 400, matching GF-6's existing contract.
+3. **The four child-create schemas dropping `application_id` is a no-op
+   for security**, not a new surface: the endpoints already discarded the
+   body value in favor of the URL-derived, org-scoped application id
+   (`item_data.pop("application_id", None)` before this pass's baseline);
+   removing the dead field from the schema and the now-redundant `.pop()`
+   calls changes nothing about which id is actually used. `create_budget_item`,
+   `create_expenditure`, `create_compliance_task`, `create_note`
+   (`grant_service.py:711-725, 820-860, 1061-1082, 1195-1220`) each still
+   resolve the parent via `get_application(application_id, organization_id)`
+   before writing — the parent-resolution shape, unchanged.
+4. **`GrantBudgetSummary`/`GrantKeyContact` tighten validation; they do not
+   loosen it.** Both carry `model_config = ConfigDict(extra="forbid")`;
+   `GrantKeyContact.email` is `Optional[EmailStr]` (already an established
+   dependency — `app/schemas/auth.py` uses it); `GrantBudgetSummary.notes`
+   is length-capped (`max_length=5000`); `key_contacts` is list-capped
+   (`max_length=50`). The response schema (`GrantApplicationResponse`,
+   `:398-406`) deliberately keeps the old permissive `Dict[str, Any]` /
+   `List[Dict[str, Any]]` shape for **reads only** — a documented,
+   intentional choice (comment at the same lines) so a row written before
+   this schema tightened does not 500 the whole application on read. The
+   write path (`apply_updates`, called with a plain new dict from
+   `model_dump()`) replaces the JSON column's value wholesale rather than
+   mutating a shared in-place reference, so Pitfall #12 (shallow-copy
+   JSON-column mutation) does not apply here.
+5. **Frontend `||`/`??` discipline holds in the new code.**
+   `applicationStructuredFields.ts`'s `buildBudgetSummary`/`buildKeyContacts`
+   return an explicit `null` (not an omitted key) when every box is empty,
+   so clearing the last budget line or contact on an edit actually clears
+   the stored value rather than being silently dropped — the Pitfall #1
+   update-path corollary. `GrantApplicationFormPage.tsx`'s submit payload
+   uses the shared `formCoercions(isEditing)` helper (`@/utils/formValues`,
+   not feature-local) for `assignedTo`/`amountAwarded`, which already
+   implements the omit-on-create / explicit-null-on-edit distinction
+   correctly; no new hand-rolled `??` coercion was introduced.
+6. **Route surface — re-enumerated from scratch, unchanged.** 45
+   `@router.` decorators, 45 `require_permission(...)` calls (27
+   `fundraising.manage`, 18 `fundraising.view`), both counts identical to
+   pass 8. `scripts/check_route_permissions.py --strict`: 273 routes
+   repo-wide, 0 errors, 0 warnings. No route added, removed, or regated.
+
+### GF-9 stays split; its open two-thirds now also covers the new budget-summary fields
+
+Re-verified directly against current code, not carried forward from pass
+8's wording:
+
+- **Zero/unbounded amounts — still open, and the new `GrantBudgetSummary`
+  fields are minted in the same shape.** `app/schemas/grant.py:301-309`
+  (`equipment`, `personnel`, `training`, `contractual`, `supplies`,
+  `travel`, `construction`, `indirect`, `other`) are each
+  `Optional[float] = Field(None, ge=0)` — zero accepted, no upper bound —
+  exactly the pattern every other money field in this schema module
+  already carries. This is not a new, separate finding: it is this pass's
+  own diff landing squarely inside GF-9's existing scope, which is why it
+  is recorded here rather than under a new id.
+- **Donor-PII gate breadth — still open, unchanged.** `DonorResponse`
+  still carries full contact fields to any `fundraising.view` holder; no
+  code in this pass's diff touches `donor_privacy.py` or `DonorResponse`
+  (confirmed via `git diff 5b2270fa..HEAD -- app/services/donor_privacy.py`
+  — empty).
+
+### Re-confirmed unchanged (not re-derived)
+
+- **GF-1 through GF-6** (cross-org FK validation on donation/expenditure/
+  pledge/event/application writes) — all helpers (`_entity_in_org`,
+  `_opportunity_in_org`, `_budget_item_in_application`,
+  `_validate_pledge_fks`, `_validate_fundraising_event_fks`,
+  `_validate_application_fks`) unchanged in logic; `assigned_to` is now
+  additionally exercised on create (see above), using the same helper.
+- **GF-7/GF-8/GF-24a/GF-27a/GF-33** — unchanged since pass 8; none of this
+  pass's four commits touch `APPLICATION_STATUS_TRANSITIONS`,
+  `donor_privacy.py`, `resolve_local_range_utc` call sites, or
+  `APPLICATION_STATUS_GROUPS`/pagination.
+- **GF-35** (SQL-side pagination) and the capacity-locking sites (GF-15:
+  `_lock_campaign`/`_lock_donor`, the budget-item `FOR UPDATE` before an
+  expenditure insert) — unchanged; no new limited-capacity concept was
+  introduced this pass.
+- **LIKE escaping** — no new `.ilike()` call site added this pass; every
+  existing one still carries `escape=LIKE_ESCAPE_CHAR` via `like_pattern()`.
+- **CSV export** — n/a, unchanged: this module has no CSV/export endpoint.
+
+**No new findings.** 0 fixed by this pass itself: all four fixable items
+above had already landed via non-rotation commits before this pass began
+(the same shape as passes 6-8), so there was nothing left for this pass to
+apply.
+
+### Out of scope, noted but not reviewed
+
+`7468e9f9` is a shared commit that also touched `elections.py`,
+`inventory_service.py`, `inventory.py` schemas, and
+`equipment_check_service.py` for unrelated fixes (candidate null-position
+handling, reorder-request category edits, equipment-compartment null
+guards) — those belong to other rotation features (Elections, Inventory,
+Equipment check) and were not reviewed here beyond confirming the
+repo-wide `flake8`/`black`/`isort` gate (below) is clean, which covers
+them incidentally.
+
+### Schema & migration notes
+
+No migration written or needed this pass. `GrantBudgetSummary`/
+`GrantKeyContact` are request-schema-only shapes over the same two
+pre-existing `JSON` columns (`budget_summary`, `key_contacts` —
+`app/models/grant.py:545-549`, plain `JSON`, no `MutableDict` wrapper,
+unchanged); no column was added, renamed, or retyped. Chain re-validated:
+631 revisions, single head `ca0c2111466f`, no duplicate ids.
+
+### Guard tests (already in place, re-run this pass)
+
+All added by their respective fix commits before this pass began; this
+pass added none of its own, since it fixed nothing itself.
+`tests/test_grants_update_endpoints_integration.py` (GF2-1, 159 cases),
+`tests/test_fundraising_updates.py` (the fundraising half of GF2-1),
+`tests/test_grant_create_payloads.py` (the four child-create schemas'
+`application_id` removal + `assigned_to` on create),
+`tests/test_grant_application_structured_fields.py` (`GrantBudgetSummary`/
+`GrantKeyContact` validation), plus the standing `test_grant_lifecycle.py`
+(GF-7), `test_anonymous_donations.py` (GF-8), `test_report_range_timezone.py`
+(GF-24a), `test_grant_applications_paging.py` (GF-27a/33).
+
+### Completion gate (pass 9)
+
+| Check                                                 | Result                                               |
+| ----------------------------------------------------- | ---------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                      |
+| `black --check app/ tests/ alembic/`                  | ✅ 2476 files unchanged                              |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned) | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ 631 revisions, single head                        |
+| `pytest tests/ -q -k "grant or fundraising"`          | ✅ 1033 passed, 1 pre-existing skip (up from 827)    |
+| `python3 scripts/check_route_permissions.py --strict` | ✅ 273 routes, 0 errors, 0 warnings                  |
+| `cd frontend && npm run typecheck`                    | ✅ 0 errors                                          |
+| `cd frontend && npm run lint`                         | ✅ 0 errors, 0 warnings (`eslint --max-warnings 10`) |
+| `npx vitest run src/modules/grants-fundraising`       | ✅ 109/109 passed (22 files, up from 61/14)          |
+
+No source file is modified by this pass — every fixable item found had
+already landed via non-rotation commits (app-review B14, W68, W69) before
+this pass began; this pass's own diff is documentation-only (this file +
+`PROGRESS.md`).
 
 ---
 

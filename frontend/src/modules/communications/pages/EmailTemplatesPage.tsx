@@ -45,6 +45,8 @@ import {
   Users,
 } from 'lucide-react';
 import { Breadcrumbs, ConfirmDialog, SkeletonPage } from '../../../components/ux';
+import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges';
 import { SettingsLayout, type SettingsSection } from '../../../components/settings/SettingsLayout';
 import { useEmailTemplatesStore } from '../store/emailTemplatesStore';
 import { useOfficersStore } from '../store/officersStore';
@@ -61,8 +63,9 @@ import OfficersPanel from '../components/OfficersPanel';
 import FootersPanel from '../components/FootersPanel';
 import { EmailLinkReachabilityNotice } from '../components/EmailLinkReachabilityNotice';
 import { useTemplateDraft } from '../hooks/useTemplateDraft';
-import type { EmailAttachment } from '../types';
+import type { EmailAttachment, EmailTemplate } from '../types';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface PreviewMember {
   id: string;
@@ -124,6 +127,31 @@ const EmailTemplatesPage: React.FC = () => {
   const [isTogglingActive, setIsTogglingActive] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const draft = useTemplateDraft(selectedTemplate);
+  const { confirm } = useConfirm();
+  useUnsavedChanges({ hasChanges: draft.isDirty });
+
+  /**
+   * Picking another template re-seeds the draft from it, so an unsaved edit
+   * was silently thrown away. Ask first; switching tabs already keeps the
+   * draft and needs no guard.
+   */
+  const handleSelectTemplate = useCallback(
+    async (template: EmailTemplate) => {
+      if (template.id === selectedTemplate?.id) return;
+      if (draft.isDirty) {
+        const discard = await confirm({
+          title: 'Discard your changes?',
+          message: `Your unsaved changes to ${selectedTemplate?.name ?? 'this template'} will be lost.`,
+          confirmLabel: 'Discard changes',
+          cancelLabel: 'Keep editing',
+          variant: 'warning',
+        });
+        if (!discard) return;
+      }
+      selectTemplate(template);
+    },
+    [selectedTemplate, draft.isDirty, confirm, selectTemplate]
+  );
   const officerVariables = useOfficersStore((s) => s.variables);
   const fetchOfficers = useOfficersStore((s) => s.fetchOfficers);
   const footers = useFootersStore((s) => s.footers);
@@ -369,8 +397,10 @@ const EmailTemplatesPage: React.FC = () => {
       } else {
         toast.error(`Test email failed: ${result.error_message ?? 'Unknown error'}`);
       }
-    } catch {
-      toast.error('Failed to send test email');
+    } catch (err: unknown) {
+      // The server refuses a test outright when email is not set up; its
+      // reason is the answer the admin pressed the button for.
+      toast.error(getErrorMessage(err, 'Failed to send test email'));
     } finally {
       setIsSendingTest(false);
     }
@@ -547,7 +577,11 @@ const EmailTemplatesPage: React.FC = () => {
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[296px_minmax(0,1fr)_468px]">
             {/* Column 1 — template list */}
             <div className="card p-4 lg:sticky lg:top-28">
-              <TemplateList templates={templates} selectedId={selectedTemplate?.id ?? null} onSelect={selectTemplate} />
+              <TemplateList
+                templates={templates}
+                selectedId={selectedTemplate?.id ?? null}
+                onSelect={(t) => void handleSelectTemplate(t)}
+              />
             </div>
 
             {selectedTemplate ? (

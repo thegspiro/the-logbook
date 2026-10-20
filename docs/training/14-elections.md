@@ -340,9 +340,12 @@ themselves, the label goes away.
   refused.
 - One member may have at most **10** pending nominations of other people in
   one election.
-- Opening nominations emails an announcement to all active members, with
-  addresses hidden from each other. A failed email never stops nominations
-  opening.
+- Opening nominations emails an announcement to every opted-in active member,
+  **one message per member** (_2026-10-18_; it used to be one message with every
+  address hidden in the copy line, which a provider with a recipient cap could
+  refuse whole). It goes out just after nominations open, so a failed email never
+  stops nominations opening, and it is skipped if nominations were closed again
+  in the meantime.
 - Only candidates who **accepted** reach the ballot.
 - **Members see pending nominations only while nominations are open**, so
   nominees can find and answer theirs. After closing, members see accepted
@@ -514,7 +517,14 @@ The package contains:
 3. Tick **Include full roster detail (ineligibility reasons)** for the full
    version. It is ticked for you when you fill the list from Leadership.
 4. Add an optional **Message**, and select **Send to _n_ recipients**.
-   Recipients cannot see each other's addresses.
+   Each person gets their own email, so recipients cannot see each other's
+   addresses. _(2026-10-18)_ The send is queued and shows progress like the
+   ballot emails (one package send at a time per election; a second is refused
+   until it finishes). If some addresses could not be reached, an error message
+   lists them so you can send again to just those people.
+
+_[Screenshot to create: the Email Pre-Meeting Package window while the send runs,
+and the error message naming the addresses that were not reached.]_
 
 ### Or just download it
 

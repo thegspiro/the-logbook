@@ -1366,7 +1366,7 @@ Owner-decision items from the feature-by-feature review under
 | **Grants: `is_anonymous` donations showed donor identity to staff**                                                                  | ✅ Resolved 2026-10-11 (owner decision: hide from `.view`, show to `.manage`)                            | **Resolved per the owner's decision.** `app/services/donor_privacy.py` presents gifts and donors for the caller: to a caller without `fundraising.manage`, an anonymous donation comes back with `donor_name`, `donor_email` and `donor_id` cleared (`GET /grants/donations`, and the dashboard's `recent_donations`), and an anonymous donor comes back as first/last name "Anonymous" / "donor" with email, phone, address, company, notes and `user_id` cleared (`GET /grants/donors`, `GET /grants/donors/{id}`), `is_anonymous` still true beside the placeholder. A view-only donor search no longer matches anonymous donors, so the hidden name cannot be confirmed by searching for it. `fundraising.manage` sees everything, for receipting. Amount, date, campaign and payment fields stay visible — totals are built from them. **Accepted:** the donation flag and the donor flag are applied separately (a named gift from an anonymous donor shows the name typed on the gift), the donors list is still ordered by the real name, and a donor's id remains visible as the record's own id. Tests: `tests/test_anonymous_donations.py`. (GF-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Grants: dashboard KPI status links don't match the multi-status aggregate the KPI counts**                                         | ✅ Resolved 2026-10-11 (owner decision: grouped filter option — links match counts)                      | **Resolved per the owner's decision.** The status sets the dashboard counts are now one definition, `APPLICATION_STATUS_GROUPS` in `app/models/grant.py` — `active` (active, reporting), `pending` (researching through under_review) and `funded` (awarded, active, reporting, closed) — used by both `get_dashboard_data()` and a new `status_group` filter on `GET /grants/applications` (unknown group → 400). The **Active Grants**, **Pending Applications** and **Total Grant Funding** cards link to `/grants/applications?group=active                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | pending | funded`, and the applications page's Status filter offers the three groups beside the single statuses. In the pipeline each column asks for its own status *within* the group, so the server decides membership and the page does not re-derive it. `?status=<one value>`links still work. Tests:`tests/test_grant_applications_paging.py`, `GrantsDashboardPage.kpiLinks.test.tsx`, `GrantApplicationsPage.paging.test.tsx`. (GF-27a) |
 | **Grants: the applications page loads at most 1,000 applications, in either view**                                                   | ✅ Resolved 2026-10-11 (owner decision: build pagination — no truncation)                                | **Resolved per the owner's decision.** `GET /grants/applications` now reports the number of matching applications in `X-Total-Count` and takes `search` (program name or agency, `like_pattern`-escaped), `sort` (a whitelisted camelCase field; priority sorts by urgency; missing dates/amounts last) and `order` — all additive; the response body is unchanged. The table view pages through the server with the shared pager (25 a page by default, sizes 10–100) and sorts server-side, so a sort covers every application rather than the loaded page. Each pipeline column fetches its own status 25 cards at a time with **Show more**, and its header shows the server's total for the column. **Behaviour change:** search no longer matches the assignee — the field holds a user id, so the old client-side match was against a UUID. Tests: `tests/test_grant_applications_paging.py` (unit + integration), `GrantApplicationsPage.paging.test.tsx`. (GF-33)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **Grants/fundraising: money fields accept any non-negative amount; full donor PII goes to `fundraising.view`**                       | ⬜ Open (needs an owner decision)                                                                        | **Two of GF-9's three original gaps, not yet decided; the third (float-money math in the two report methods) was fixed 2026-10-07 and is not part of this row.** (1) Every money field in `app/schemas/grant.py` — grant amounts, pledge/donation amounts, campaign goals — is `Field(..., ge=0)`/`Field(None, ge=0)`: rejects negative, accepts $0, has no upper bound. A $0 or absurdly large award/donation is accepted and flows into every total and report unflagged. (2) `app/services/donor_privacy.py` (GF-8, resolved 2026-10-11) only masks a donor's identity when is_anonymous=True; for every other donor, list_donors/get_donor still return the full DonorResponse — email, phone, address, company, lifetime total, dates — to any fundraising.view holder, with no narrower read-only projection for non-managers. Re-confirmed open at security-review pass 8 (2026-10-16), by direct code read, not carried forward from pass 7's wording. See docs/security-review/GF-22-grants-fundraising.md's "GF-9 split" section (introduced pass 7) and its Pass 8 re-verification. (GF-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Grants/fundraising: money fields accept any non-negative amount; full donor PII goes to `fundraising.view`**                       | ⬜ Open (needs an owner decision)                                                                        | **Two of GF-9's three original gaps, not yet decided; the third (float-money math in the two report methods) was fixed 2026-10-07 and is not part of this row.** (1) Every money field in `app/schemas/grant.py` — grant amounts, pledge/donation amounts, campaign goals — is `Field(..., ge=0)`/`Field(None, ge=0)`: rejects negative, accepts $0, has no upper bound. A $0 or absurdly large award/donation is accepted and flows into every total and report unflagged. (2) `app/services/donor_privacy.py` (GF-8, resolved 2026-10-11) only masks a donor's identity when is_anonymous=True; for every other donor, list_donors/get_donor still return the full DonorResponse — email, phone, address, company, lifetime total, dates — to any fundraising.view holder, with no narrower read-only projection for non-managers. Re-confirmed open at security-review pass 9 (2026-10-20), by direct code read, not carried forward from pass 8's wording; pass 9 also found that the new `GrantBudgetSummary` fields added that pass (an amount per budget category, `app/schemas/grant.py:301-309`) are minted in gap (1)'s exact shape (`Field(None, ge=0)`, no upper bound), so the open item now covers them too, without a new finding id. See docs/security-review/GF-22-grants-fundraising.md's "GF-9 split" section (introduced pass 7) and its Pass 8/Pass 9 re-verifications. (GF-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **Medical supplies: expiring-lot list has no row cap**                                                                               | ✅ Accepted by the owner (2026-10-05: leave as is; LOW)                                                  | `InventoryService.get_expiring_lots` (backs `GET /medical-supplies/lots/expiring`, the equivalent gear-side route, and the low-stock/expiring alert email) has no `limit`/pagination — a department that never clears old zero-or-positive-quantity expired lots gets every matching row back to the start of the `days_ahead` window, unbounded. Not a mechanical medical-supplies patch: the method is shared with the main inventory router and `scheduled_tasks.py`'s alert email, so a cap changes those callers' contracts too (would the alert silently omit rows past the cap?) — needs a decision on page size per caller, not a drive-by limit. Found by Codex review, security-review PR #2075 (MSUP-23 pass 2); see `docs/security-review/MSUP-23-medical-supplies.md` MSUP-4. (MSUP-4) **Owner decision (2026-10-05): leave as is.** No cap is added to `get_expiring_lots` for any caller; the alert email keeps listing every matching lot.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Medical/gear supplies: a single item's stock-lot list has no row cap**                                                             | ✅ Accepted by the owner (2026-10-05: leave as is; LOW)                                                  | `InventoryService.list_lots` (backs `GET /medical-supplies/items/{id}/lots` and the equivalent gear-side route) returns every lot ever recorded against one item with no `limit`/pagination, and neither frontend screen pages through the result — both treat it as the item's complete lot history. An item restocked frequently over years without its depleted lots ever being deleted accumulates an unbounded row count. Not a mechanical patch: a cap changes what "the item's lots" means to both callers, with no pagination UI on either screen to receive a later page — needs the same kind of per-caller page-size decision MSUP-4 needed, not a drive-by limit. Found by Codex review, security-review PR #2301 (MSUP-23 pass 3); see `docs/security-review/MSUP-23-medical-supplies.md` MSUP-11 (this row was mislabeled MSUP-10 until security review pass 11, 2026-09-11 — MSUP-10 is a different, already-fixed finding in that same pass, the `add_lot` opening-balance race). (MSUP-11) **Owner decision (2026-10-05): leave as is.** An item's lot list stays its complete history, unpaginated, with depleted lots included.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Medical/gear supplies: the general item edit form has no lot-stocked awareness**                                                   | ✅ Resolved (2026-10-11, owner decision, docket MSUP-15: hide with a read-only lot note)                 | **Resolved 2026-10-11:** `ItemFormModal.tsx` now reads `is_lot_stocked` off the item being edited (the list and detail endpoints already attach it via `_attach_lot_stock`); for a lot-stocked item it replaces the Quantity input with the same read-only "N from stock lots — adjust by receiving a delivery or editing the item's lots" note `MedicalItemFormModal` shows, and leaves `quantity` out of the update payload. Items with no lots, and creation, are unchanged; `PATCH /inventory/items/{id}` itself still accepts `quantity` for an API caller. Pinned by `ItemFormModal.test.tsx` ("a lot-stocked pool item"). Original finding: `modules/inventory/components/ItemFormModal.tsx`'s "Quantity" input always reads from and writes to `InventoryItem.quantity` directly, with no indication that for a lot-stocked item that column is a best-effort mirror, not the authoritative on-hand count (the sum of the item's in-date stock lots). An admin who opens this form for a lot-stocked item, sees the stale mirror value, and "corrects" it to match the detail page's lot-derived number writes into a column no lot backs, until the next delivery's carry-forward silently overwrites it again. No data corruption occurs today from this alone — nothing treats the edited mirror value as authoritative over the lots — so it is not gated as a security finding, but it is a live trap for exactly the workflow this module exists to support. `modules/medical-supplies/components/MedicalItemFormModal.tsx` (the medical-domain-specific form `MedicalSuppliesPage.tsx` actually uses) already has this awareness — it hides the Quantity input behind a read-only "N from stock lots" note for a lot-stocked item and omits `quantity` from the update payload entirely — so this is reachable today only through the general Inventory page's edit flow on a medical item (a broad `inventory.manage` holder can reach any item's detail page and its edit modal, by design), not through the medical supplies module's own screens. Closing it needs a decision — hide/disable/relabel the field for a lot-stocked item, or route an edit through a lot adjustment instead of the raw column — which is a UX/product call, not a mechanical patch. Found by Codex review, security-review PR #2301 (MSUP-23 pass 4); see `docs/security-review/MSUP-23-medical-supplies.md` MSUP-15. (MSUP-15) |
@@ -1823,7 +1823,12 @@ inside that one:
   cannot see whether the Treasurer then imported the file. A file downloaded
   and never imported leaves its payments marked as sent; the Treasurer sends
   that period again with `includeExported`. The live connection would close
-  this, since it would know what QuickBooks accepted.
+  this, since it would know what QuickBooks accepted. _(2026-10-18)_ The
+  Treasurer can now mark a file as imported in **Export history**, and sending
+  a marked file's payments again is refused until they confirm the earlier
+  entries were deleted. That depends on the Treasurer marking it: an imported
+  file left unmarked is still not caught, and importing the same file twice
+  inside QuickBooks never reaches the module at all.
 - **Only voided checks are reversed.** Paid purchase requests and expense
   reports cannot be un-paid in the module, so there is nothing to reverse; a
   refund or correction after export is entered in QuickBooks by hand.
@@ -1834,6 +1839,15 @@ inside that one:
   a vendor or customer on those lines and the file has no Name column. The
   check recognizes QuickBooks' standard names only, so a renamed A/P or A/R
   account passes and fails at import instead.
+- **The chart of accounts check is only as current as the upload.**
+  _(2026-10-18)_ An account added or renamed in QuickBooks after the last
+  upload is refused here until the Treasurer uploads the Account List again,
+  and one deleted there still passes. Names are matched exactly, case
+  included; whether QuickBooks' import itself ignores case was not confirmed,
+  so a name differing only in case is refused rather than assumed to work. The
+  parser reads the Account List report's layout as Intuit has published it
+  ("Account" or "Full name" columns); a future change to that report could
+  need the parser updated.
 
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 
@@ -2913,6 +2927,39 @@ refused before anything is queued. Ballot sends and reminders share the
 in-progress guard, because both mint fresh tokens. The synchronous
 `POST /elections/{id}/remind-non-voters` is kept for API callers and now also
 answers `409` while a send is running.
+
+## Elections — Broadcast Election Emails Go One Message Per Member (2026-10-18)
+
+The nominations-open announcement and the pre-meeting package used to go out as
+one message with every member BCC'd. When the mail server accepted some of
+those addresses and refused others, the code did not see it, and the package
+confirmation said "sent to N recipient(s)" for the whole list. Many mail
+providers also cap the recipients one message may carry, so a larger department
+would have lost addresses with no error.
+
+**Fixed (owner decision 2026-10-18: a separate email per member).** Both now
+send each address its own message and record each address's outcome.
+
+- **Pre-meeting package:** queued with `POST /elections/{id}/package-send-jobs`
+  as a `ballot_send_jobs` row of `kind = 'package'`, because one message per
+  address with the PDF attached runs past the request timeout just as ballots
+  did. The outcome names every address the package could not be sent to. The
+  sender still gets a copy, as they did when they were the visible To, but it
+  is not counted. A package send has its own one-at-a-time guard and does not
+  wait on a ballot send. `POST /elections/{id}/send-package` keeps the
+  synchronous path for API callers.
+- **Nominations-open announcement:** sent after the open-nominations response,
+  in its own session. It skips sending if nominations have closed again by
+  then.
+
+What remains:
+
+- **The announcement's outcome is only logged.** It was best-effort before
+  and still is: nobody is shown which members it missed, and a restart while
+  it runs stops it partway with no record beyond the log.
+- **A package job interrupted by a restart** has the same limits as an
+  interrupted ballot job (see the entry above): it reads as failed after 30
+  minutes, and some recipients may already have the package.
 
 ## Elections — Two Ballot Items Sharing an Alias String Can't Be Fully Disambiguated Without a Schema Change (2026-09-02)
 
@@ -4378,6 +4425,49 @@ made these choices. Everything is off until the department switches it on.
 
 ---
 
+## Minutes — Attendance Listing (2026-10-18)
+
+**Open — owner decisions to confirm.** See
+[MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#who-the-minutes-name-2026-10-18).
+
+- **Unset reads as "everyone", not "present only".** The owner preferred present
+  only as the default, but an installation that never chose would otherwise
+  start hiding absences on printed and published copies the moment it upgraded.
+  A department switches to present only under Minutes → Settings → Attendance. To make
+  present only the default for new installs, change `DEFAULT_ATTENDANCE_LISTING`
+  in `app/utils/minutes_attendance.py` (existing installs that never set it
+  would change too).
+- **The listing applies when a copy is shown, not when minutes are adopted.**
+  Changing the department default changes how already adopted minutes print,
+  and a library copy already filed keeps the listing it was published with
+  until it is republished. The sealed approved version is unaffected: it does
+  not depend on the display choice.
+
+---
+
+## Minutes — Prepared Motions and Accepting the Previous Minutes (2026-10-18)
+
+**Open — owner decisions to confirm.** See
+[MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#prepared-motions-and-accepting-the-previous-minutes-2026-10-18).
+
+- **Outlines a department already saved are not changed.** Only the built-in
+  outlines mark approval of previous minutes and adjournment as needing a motion,
+  so a department with its own saved outline ticks the box on the Outlines screen
+  before its minutes get prepared motions. Setting the flag on every saved
+  outline's sections of those two keys would be a data migration; it was not done
+  because it would change what existing departments' next minutes contain.
+- **Minutes made before this change get their prepared motions when next edited**
+  (sections saved, an outline applied, an agenda synced), not at once.
+- **"Previous minutes" means the latest earlier circulated or adopted minutes of
+  the same kind of meeting.** A trustee meeting accepts the last trustee minutes,
+  not the last business ones. A draft set is skipped, and if none has been
+  circulated the motion reads generically and links nothing.
+- **Passing the acceptance motion does not adopt the previous minutes.** An
+  officer other than the one who circulated them confirms the pre-filled
+  adoption, because the separation-of-duties rule was kept.
+
+---
+
 ## MM-17 — `set_meeting_quorum_config` Has No Finalization Guard on Approved Minutes (2026-09-13)
 
 > ✅ **Resolved (2026-10-11), as the owner chose: lock on APPROVED, with a
@@ -4439,6 +4529,45 @@ First surfaced as an unfiled observation in
 "Looked suspicious, not fixed"); promoted to a tracked finding with an id and
 disposition in pass 4, when a related fix (MM-15) touched the same
 validation block.
+
+## MM-19 — A Prepared Motion's Find-or-Create Has No Lock (2026-10-20)
+
+**Open — low severity, left for a future pass with a reason to touch this
+method.** `MinuteService.ensure_section_motions` checks whether a section
+already has a motion and, if not, inserts one, with no `.with_for_update()`
+on the parent `MeetingMinutes` row and no unique constraint on
+`(minutes_id, section_key)`. Two `minutes.manage` holders racing a save on
+the same draft (one toggling a section's "needs a motion" flag while another
+applies an agenda sync, say) within the same instant could each see no
+existing motion and both insert one, leaving a duplicate pending motion for
+that section — a secretary would notice and could delete it, not a
+tenant-isolation or privilege gap. Same shape, and the same "not fixed"
+disposition, as the already-documented unlocked find-or-create in
+`AttendanceDashboardService.grant_waiver` (pass 5 of this same review).
+Closing it means adding a locking read to a method four other call sites
+share (`update_minutes`, `recall_minutes`, `apply_outline`, the agenda-sync
+apply path, and `create_minutes` itself), which is a reasonable thing to do
+but wasn't the reason this pass was in the file.
+
+Found by `docs/security-review/MM-24-meetings-minutes.md` (feature 24, pass
+8, finding MM-19).
+
+## MM-20 — Publishing a Public Minutes Copy Has No Lock Either (2026-10-20)
+
+**Open — low severity.** `MinutesPublishingService._post_public`'s
+find-or-create for the `MinutesPublicCopy` row has no locking read, but
+unlike MM-19 the column it keys on (`minutes_id`) carries a database-level
+`unique=True` constraint, so a genuine race cannot silently duplicate the
+row — the loser's `commit()` raises `IntegrityError` instead, which the app's
+generic exception handler turns into a sanitized 500 rather than a clean
+"already published, try again." Two `minutes.manage` holders would have to
+click "Publish" on the same minutes within the same instant to hit it. The
+database already prevents the corrupted state a lock would prevent; what's
+missing is a graceful retry or message, which is a UX polish rather than a
+data-integrity gap.
+
+Found by `docs/security-review/MM-24-meetings-minutes.md` (feature 24, pass
+8, finding MM-20).
 
 ## MSG-12 — A Failed or Throttled Department-Message Delivery Is Never Retried (2026-08-31, stranded-pending sub-case fixed 2026-09-06)
 
@@ -4820,6 +4949,8 @@ not an enterprise table. Found in
 MS-15).
 
 ## MS-16 — `grace_period_days` / `applies_to_roles` / `frequency_months` Are Stored and Read By Nothing (2026-10-15)
+
+**✅ `applies_to_roles` resolved 2026-10-19 (owner decision: it names _positions_).** A requirement listing positions now applies only to members who hold one of them, matched by position name or slug, ignoring case and word separators; a blank list applies to everyone; a prospect holds no positions and is graded on every requirement; a member left with nothing that applies reads `not_applicable` on the roster, never compliant. The form says so and the "Not enforced yet" notice is gone from that field (`_applicable_requirements` in `medical_screening_service.py`; `tests/test_medical_screening_requirement_positions.py`). **`grace_period_days` and `frequency_months` are unchanged and still open**, as described below.
 
 `screening_requirements.grace_period_days` (default 30) and `.applies_to_roles`
 have labelled, editable controls on `ScreeningRequirementForm.tsx`, each with
@@ -5813,6 +5944,23 @@ server. Doing it for these two endpoints would close all three items at once.
 Until then the two screens are reliable for small organizations and quietly
 partial for large ones.
 
+## Notifications — Rules Cannot Be Renamed or Deleted From the Screen (2026-10-12)
+
+Found driving W56 (`docs/workflow-review/W56-notifications.md`, W56-4).
+
+- **What the screen offers:** the rules tab creates a rule and switches it on
+  or off, and nothing else. A rule with a typo in its name, or on the wrong
+  trigger, stays on the list for good.
+- **What the API already supports:** `PATCH /notifications/rules/{id}` and
+  `DELETE /notifications/rules/{id}`, both behind `notifications.manage`.
+- **Why it is not simply a Delete button:** with no rule for a trigger, that
+  trigger's notifications go out with their default settings (pitfall 19). So
+  deleting the one switched-off rule for, say, event reminders turns the
+  reminders back on, with nothing on the screen to say so.
+- **Decisions needed before building it:**
+  - whether to offer edit only, or delete as well;
+  - if delete, whether it warns that the trigger reverts to sending.
+
 - **MM5-4 — Two people editing one set of minutes silently overwrite each
   other's sections.** _(app-review B6, 2026-10-13)_ The minutes page saves,
   reorders, adds and deletes a section by sending the **entire** `sections` list
@@ -5931,6 +6079,212 @@ on the endpoint not re-fetching before it responds. **Owner decision:** let each
 module's rotation pass drive its own update with a real change (the test pattern is in
 `backend/tests/test_grants_update_endpoints_integration.py`) and apply
 `reload_updated_at` where it fails — or ask for one sweep that drives all seven now.
+
+## Privacy Choices — A Member Cannot Record "No" Without First Recording "Yes" (2026-10-13)
+
+Found driving W59 (`docs/workflow-review/W59-photo-use-consent.md`, W59-3).
+
+- **What the screen offers:** My Account → Privacy → Privacy Choices shows
+  photo use, public roster listing and SMS texts as one checkbox each. An
+  unanswered choice is an unticked box marked "(not answered)".
+- **What goes wrong:** leaving the box unticked records nothing. A member who
+  means "no" must tick it, which records an agreement, and then untick it.
+  - The audit ledger, which is the consent record, then shows an agreement
+    the member never gave.
+  - A member who does not find that trick stays "Not answered". The
+    photo-use roster says those members "can still be asked", so the PIO
+    keeps asking someone who has refused.
+- **Why it was not changed in the review:** an explicit Yes / No choice is
+  the obvious fix, but the same control carries the SMS consent, a TCPA
+  record whose switch also sets the SMS notification preference through a
+  shared handler.
+- **Decisions needed:**
+  - whether each choice becomes an explicit Yes / No;
+  - whether SMS changes with the other two, or keeps its switch on the
+    Notifications section.
+
+## Finance — Emailed Approvals Cannot Be Re-Sent, and Show the Approver Nothing to Decide On (2026-10-14)
+
+Found driving W62 (`docs/workflow-review/W62-approval-chains-and-finance-settings.md`,
+W62-6 and W62-7).
+
+- **A link that never arrives is invisible.** When a request reaches an
+  "Email" approver step, the link is minted once and emailed.
+  - If email is off or the send fails, `send_approval_request_email` returns
+    False and nothing records or shows it. The queue reads "waiting on
+    board-chair@example.org" either way.
+  - A link that expires after its 7 days is never replaced.
+  - The only way forward is an approvals admin's "Approve as admin", which
+    overrides the external approver rather than reaching them.
+- **The approver decides blind.** The emailed page shows the request's type
+  and the step's name, then Approve and Deny. No title, amount, vendor or
+  requester. The email itself carries only the step name. This is
+  deliberate, because the link is a bearer token, but it leaves the approver
+  nothing to judge.
+- **Decisions needed:**
+  - whether staff may re-send a link, and whether the screen should say when
+    one was not sent;
+  - whether staff may ever see or copy a link, since it is a bearer token for
+    someone else's approval;
+  - which details the emailed page and the email may show. At least the title
+    and amount are needed to make the decision; the requester's name and the
+    description are more sensitive.
+
+## Finance — Purchase Requests: Named Approvers, Notices and the Paid Amount (2026-10-14)
+
+Found driving W63 (`docs/workflow-review/W63-purchase-request-approval.md`,
+W63-5, W63-6 and W63-7).
+
+- **A chain can name an approver who cannot approve.** Approve, deny and the
+  Approvals queue require `finance.approve`. A chain step naming a position
+  (the Chief, here) whose holders lack it leaves them a 403 on the queue and
+  a 404 on the request. Only an approvals admin's override moves it on.
+  - The chain screen now says so ("Nobody on this step has the finance
+    approval permission", W63-2).
+  - Decision: either naming a position or member in a chain lets them act on
+    that step, or saving such a step is refused.
+- **Nobody is told.** No email, bell entry or text goes to:
+  - an approver whose step a request has reached;
+  - the requester when it is approved or denied.
+
+  The existing entries record this for dual approval's second approval and
+  for amendments. It holds for every ordinary step and for the decision too.
+  Decision: which events notify whom (email first, pitfall 18).
+
+- **The paid amount is always the estimate.** "Mark Paid" sends no amount,
+  though `POST /finance/purchase-requests/{id}/mark-paid` takes
+  `actual_amount` and the service records it. An invoice that differs from
+  the quote leaves the budget line's spent and committed figures wrong, with
+  no way to correct them on screen. Decision: whether "Mark Paid" asks for
+  the amount, and how a difference from the commitment is shown.
+
+## Finance — Expense Reports: Routed by Purchase Chains, and Charged to No Budget (2026-10-14)
+
+Found driving W64 (`docs/workflow-review/W64-expense-report.md`, W64-4 and
+W64-5).
+
+- **Purchase-request chains route everything.** `resolve_approval_chain`
+  matches chains whose `applies_to` is the request's type **or
+  `PURCHASE_REQUEST`**, and scores them without preferring the exact type.
+  - Every chain marked "Purchase Requests" also routes expense reports and
+    check requests.
+  - A purchase chain with an amount range or category outranks a default
+    expense or check chain.
+  - In this review an expense reimbursement went to the board chair's emailed
+    sign-off. `FINANCE_MODULE.md`'s own example ("Large Purchase" $5,000+
+    beside "General Expense") would send a $6,000 reimbursement to the Board
+    of Trustees.
+  - It has worked this way since the module was added, so changing it
+    re-routes live requests.
+  - Decision: match only the request's own type (with an `UPGRADING.md` note
+    and perhaps a migration copying purchase chains to the other types), add
+    an explicit "All requests" option, or keep it and say so on the chain
+    screen.
+- **Expense lines carry no budget.** The form offers no budget line, so
+  `budget_id` is null, and `mark_expense_paid` posts spending only to lines
+  that have one. A paid reimbursement reaches no budget line, and nothing
+  commits it on approval as a purchase request's amount is. Decision: who
+  picks the line (the member, or the Treasurer on approval), and whether
+  approval commits it.
+
+## Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14)
+
+Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
+
+- **An overpayment is accepted silently.** `record_dues_payment` has no check
+  against the balance. In the review, $75 recorded against a $70 balance left
+  "$125.00 paid of $120.00", and the extra $5 counted as collected.
+  Decision: refuse, warn and allow, or carry the excess as a credit to the
+  member's next dues.
+- **A member cannot see their own dues.**
+  - No screen shows a member what they owe; `/finance/dues` needs
+    `finance.view`.
+  - `GET /finance/dues` already confines a non-manager to their own records,
+    but its `finance.view` gate refuses a plain member first.
+  - Nothing tells a member their dues are due or overdue.
+  - Decision: whether members get a "My dues" view (and on what gate), and
+    which dues reminders go out (email first, pitfall 18).
+
+## Department Store — The Cart Does Not Survive a Reload (2026-10-15)
+
+Found driving W67 (`docs/workflow-review/W67-department-store.md`, W67-6).
+
+- **What happens:** the cart lives only in the page's memory. A reload, or a
+  phone browser discarding the tab while the member switches apps, empties
+  it.
+- **Why it is not simply fixed:** keeping it means choosing where (browser
+  storage on that device, or saved on the server so it follows the member)
+  and how long it lasts, against an order window that closes.
+- **Decision:** whether to keep the cart, and where.
+
+## Grants — Opportunities Cannot Be Edited (2026-10-15)
+
+Found driving W68 (`docs/workflow-review/W68-grants.md`, W68-10). W68-9, key
+contacts edited as free text, was closed by the structured contacts editor on
+the application form.
+
+- **What happens:** `PUT` and `DELETE /grants/{opportunity_id}` exist, but no
+  control on the opportunities page reaches either, so a mistyped deadline or
+  a program that has closed stays as entered. The four Federal Programs cards
+  are fixed text with no way to start an application from them.
+- **Decision:** whether opportunities get edit and retire controls, and whether
+  the federal programs become real, seeded opportunities.
+
+## Fundraising — A Donor Must Have a Person's Name (2026-10-15)
+
+Found driving W69 (`docs/workflow-review/W69-fundraising.md`, W69-6).
+
+- **What happens:** `first_name` and `last_name` are required on every donor
+  (`DonorBase` in `schemas/grant.py`, and the Add Donor form), whatever the
+  donor type. A business is entered under its contact ("Dale Harmon (Valley
+  Hardware)"); a foundation or business with no named contact cannot be
+  added at all.
+- **Decision:** whether business, foundation and government donors may be
+  recorded by organization name alone, which would make the name fields
+  optional for those types (a schema change, and the list and receipts would
+  need to name such a donor by `company_name`).
+
+## Medical Screening — A Screening With No Expiration Date Never Falls Due (2026-10-16)
+
+Found driving W71 (`docs/workflow-review/W71-medical-screening.md`, W71-1).
+
+- **What happens:** `_grade` in `medical_screening_service.py` counts a
+  passed, completed or waived record with no `expiration_date` as compliant
+  indefinitely, and nothing reads a requirement's `frequency_months`. An
+  annual physical recorded without an expiration therefore never lapses,
+  never appears under "Expiring within 30 days", and the requirement card's
+  "Every 12 months" describes nothing.
+- **Since W71:** the record form fills in completed date + frequency, so new
+  records linked to a recurring requirement carry an expiration. Records
+  already saved without one, and records not linked to a requirement, are
+  unchanged.
+- **Also:** records are matched to a requirement by screening _type_, not by
+  `requirement_id`, so two requirements of the same type are satisfied by
+  one record.
+- **Decision:** whether grading should fall back to completed date +
+  `frequency_months` when a record has no expiration (which changes the
+  standing of existing records on upgrade), and whether a record should
+  satisfy only the requirement it is linked to.
+
+## Integrations — Connecting iCalendar (ICS) Does Nothing (2026-10-17)
+
+Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
+
+- **What happens:** the catalog offers "iCalendar (ICS) — Subscribe to
+  department events via standard iCal feed URL … Filtered feeds". Connecting
+  it shows Connected, but no feed URL appears anywhere, and nothing reads the
+  integration's status or its config (`feed_token`, `included_event_types`,
+  `include_shifts` in `ICalConfig`).
+- **What does work:** each member's personal shift feed, from
+  `GET /scheduling/calendar-feed` (`/api/public/v1/calendar/{token}.ics`),
+  whether or not this integration is connected.
+- **Decision:**
+  - build the department events feed the card describes;
+  - mark the entry unavailable; or
+  - re-describe it as the members' personal shift feeds.
+
+  The catalog row is seeded per organization, so the last two also need a
+  data change for existing installations.
 
 ## Process
 

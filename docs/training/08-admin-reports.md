@@ -1318,7 +1318,7 @@ require acknowledgement with a report of who has not acknowledged, can be
 scheduled, and can be edited after posting.
 
 1. Open **Messages** and select **New message**.
-2. Enter the title and body, and set the priority and audience.
+2. Enter the title and body, and set the priority and audience. _(2026-10-18)_ An audience of **By status → Probationary** or **Retired** now matches a member on either their membership status or their account status, so a new member added as a probationary member is included without an admin changing the account status. Active, Leave and Inactive still match the account status only.
 3. Optionally tick **Keep in inbox after it is read** (persistent) or **Require
    acknowledgment**, or set a send time.
 4. Members see it in the app, and **every message is also emailed**. A member

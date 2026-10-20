@@ -139,6 +139,12 @@ Scheduling → Settings → General.
 | ---------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | LB-DOC-001 | A folder's access settings would admit no active member except full administrators (nothing was saved). | Choose a permission or position members hold, or loosen a folder above it. If it is meant for administrators only, confirm when asked. |
 
+## Finance (LB-FIN)
+
+| Code       | Meaning                                                                                                                   | What to do                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| LB-FIN-001 | A QuickBooks export would resend payments from a file confirmed as imported into QuickBooks, which would post them twice. | Leave out payments already sent. If the earlier entries were deleted in QuickBooks, confirm when the QuickBooks Export screen asks. |
+
 ## Automatic fallback (LB-API-\<status\>)
 
 Any error without a curated code gets `LB-API-<HTTP status>`:

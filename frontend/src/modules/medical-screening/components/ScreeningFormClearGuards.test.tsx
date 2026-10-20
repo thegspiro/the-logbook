@@ -117,7 +117,7 @@ describe('ScreeningRequirementForm — edit clears as null, not omitted', () => 
     render(<ScreeningRequirementForm requirement={baseRequirement} onSave={onSave} onClose={vi.fn()} />);
 
     await user.clear(screen.getByLabelText('Description'));
-    await user.clear(screen.getByLabelText('Applies to Roles (comma-separated)'));
+    await user.clear(screen.getByLabelText('Applies to Positions (comma-separated)'));
     await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     const payload = onSave.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -147,5 +147,17 @@ describe('ScreeningRequirementForm — edit clears as null, not omitted', () => 
 
     const payload = onSave.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(payload.description).toBeUndefined();
+  });
+});
+
+describe('ScreeningRequirementForm — position scoping', () => {
+  it('explains that listed positions are enforced, and only the grace period still says it is not', () => {
+    render(<ScreeningRequirementForm requirement={baseRequirement} onSave={vi.fn()} onClose={vi.fn()} />);
+
+    expect(screen.getByLabelText('Applies to Positions (comma-separated)')).toHaveAccessibleDescription(
+      /Leave blank to apply to every member\. Otherwise only members who hold one of these positions/
+    );
+    // The grace period is still stored and read by nothing, and says so.
+    expect(screen.getAllByText(/Not enforced yet/)).toHaveLength(1);
   });
 });

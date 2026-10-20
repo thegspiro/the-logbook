@@ -1,7 +1,7 @@
 # Security Review 19 — Skills Testing
 
-**Prefix:** `SKT` · **Iteration:** 19 · **Reviewed:** 2026-08-26 (pass 1) ·
-**PR:** [#1901](https://github.com/thegspiro/the-logbook/pull/1901) (pass 1)
+**Prefix:** `SKT` · **Iteration:** 19 · **Reviewed:** 2026-10-19 (pass 9) ·
+**PR:** see `PROGRESS.md`'s **Open PR** row
 
 **Backend:** `app/api/v1/endpoints/skills_testing.py` (29 routes, 3,723 L — grown
 2.6x from 1,412 L at the last module-audit pass), `app/services/skills_testing_service.py`
@@ -2271,3 +2271,125 @@ the existing disclosure machinery, and bounded to one member's rows. The
 route surface (29/29), the org-scoping sweep (87/87), and all standing
 fixes from passes 1–7 were re-verified directly against current code. No
 open findings remain in this feature.
+
+## Pass 9 (2026-10-19) — watchdog pickup, true zero delta, 0 new findings
+
+**Prefix:** `SKT9` · **PR:** see `PROGRESS.md`'s **Open PR** row.
+
+**Watchdog note.** No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`-equivalent `list_pull_requests`
+check, 0 results) and the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable via `ListAgents`. PR
+#3444 (Feature 18, Training extended, pass 9) had just merged, docs-only, and
+is not independently recordable. Rotation row 19 (Skills testing) was the
+next pending feature.
+
+### Scope check — zero delta since pass 8
+
+Pass 8 (PR #3307) diffed against base commit `cef8a679` and found no finding;
+this pass diffs against that **same** commit (PR #3307 made no application
+source change — its own diff was documentation only, confirmed by reading
+the PR body directly), since it is the most recent commit at which this
+feature's files are known-reviewed-clean.
+
+```
+git diff cef8a67945932ab59cf63f7a2bf9e948e5a393dc..origin/main -- \
+  backend/app/api/v1/endpoints/skills_testing.py \
+  backend/app/services/skills_testing_service.py \
+  backend/app/schemas/skills_testing.py \
+  backend/app/models/skills_testing.py
+```
+
+Empty output — byte-identical across all four declared scope files. 504
+commits landed on `main` in that window across the rest of the application;
+zero touched any of these four files. Also checked this feature's one
+external caller noted at pass 8, `training_module_config.py`'s
+`GET /training/my-training` (the sole consumer of `member_skill_expirations`):
+also zero commits since the same baseline. This is a stronger result than a
+"near-zero delta" pass — nothing to diff, read, or re-verify line-by-line
+beyond confirming the baseline itself is still what pass 8 said it was.
+
+### Re-verification, by direct grep against current code (not re-cited)
+
+Since the files are provably unchanged, every standing mechanism pass 8
+confirmed is unchanged by construction. Spot-confirmed anyway, directly
+against current line numbers (all match pass 8's own citations exactly,
+consistent with the zero diff):
+
+- **SKT-1** — `update_template` still routes through `apply_updates`.
+- **SKT-2/SKT-3 and all four separation-of-duties sites** —
+  `assert_different_person(...)` still present at `skills_testing.py:1574`
+  (`create_test`), `:2402` (`validate_test`), `:3049` (`void_test`), `:3219`
+  (`return_test_for_correction`) — identical line numbers to pass 8's
+  citation.
+- **SKT-4** — `lock_attempt_capacity` (`skills_testing_service.py:752`) still
+  locks with `.with_for_update()`; the capacity count's own
+  `.with_for_update(of=SkillTest)` still at `:891`; `validate_test` still
+  calls `lock_attempt_capacity` ahead of the per-test lock
+  (`skills_testing.py:2350`).
+- **SKT2-1** — zero `is_practice ==` comparisons (`grep -c`), `.is_(...)`
+  throughout.
+- **SKT3-1** — `add_test_viewer` still rejects naming both candidate and
+  examiner before the grant lookup.
+- **SKT3-2 / SKT4-1 / SKT4-2 / SKT4-3 / SKT4-7 / SKT4-4 / SKT4-5 / SKT4-6 /
+  SKT5-1** — all re-confirmed present (paging/export bounds, item caps,
+  officer-gated summary figures, `update_test`'s outcome-setting refusal,
+  the email disclosure guard, enum `field_validator`s with `max_length`
+  caps and fail-closed resolution, voided-before-validation redaction,
+  `waive_reason` scrub in the `scores` view).
+- **Pass 8's own new surface** (skill expiration tracking —
+  `valid_for_months`, `skill_test_expiration()`, `member_skill_expirations()`)
+  — unchanged; its 20 guard tests in `tests/test_skill_test_expirations.py`
+  still collected and passing (see gate below), including the two
+  disclosure-withholding tests pass 8 named directly.
+
+**Route surface.** Fresh AST walk (every `@router.get/post/put/patch/delete`
+decorator plus its function's `Depends(...)` defaults, written this pass, not
+reused from any prior script): **29/29 routes**, 0 with no auth dependency —
+identical count to passes 7–8.
+
+**Org-scoping sweep.** `grep -c "select("` across the two backend files:
+**87** in `skills_testing.py` (unchanged from pass 8's cited count) + 6 in
+`skills_testing_service.py` = 93 total call sites; the endpoint-file count
+(87) is the one pass 7/8 tracked and it is unchanged. Since the files are
+provably byte-identical to the pass-8-reviewed state, every one of these is
+still org-filtered or resolves through an already-org-scoped parent, exactly
+as pass 8 verified by direct read.
+
+### Cross-feature scope note (unchanged, not this feature's to fix)
+
+`docs/KNOWN_LIMITATIONS.md`'s "Training — Online Knowledge Tests Have No
+Owning Feature In The Security Rotation" entry is still accurate:
+`knowledge_tests.py`/`knowledge_test.py` still carry no declared owning
+feature in the rotation (checked against Feature 17's pass 9 scope, PR #3440,
+and Feature 18's pass 9 scope, PR #3444 — neither names these files). No
+action taken here; this remains a rotation-process gap for Feature 17 or 18
+to pick up, not a defect in Feature 19's own files.
+
+### Corrections to prior write-ups
+
+None.
+
+## Guard tests added
+
+None — no code change in scope.
+
+## Completion gate (pass 9)
+
+| Check                                                        | Result                                                                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations (`flake8==7.3.0`, CI's pin)                                                 |
+| `black --check app/ tests/ alembic/`                         | ✅ 2471 files unchanged (`black==26.5.1`, CI's pin)                                         |
+| `isort --check-only app/ tests/ alembic/`                    | ✅ clean (`isort==9.0.1`, CI's pin)                                                         |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 631 revisions, single head `ca0c2111466f`                                                |
+| `python3 scripts/check_route_permissions.py --strict` (root) | ✅ 273 routes, 0 errors, 0 warnings                                                         |
+| `pytest tests/ -q -k "skill or skt"`                         | ✅ 565 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) — identical to pass 8 |
+| `cd frontend && npm run typecheck`                           | ✅ 0 errors                                                                                 |
+| `cd frontend && npm run lint`                                | ✅ 0 errors, 0 warnings (`--max-warnings 10`)                                               |
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** A true
+zero-delta pass — no commit touched any of the four declared scope files, or
+the feature's one external caller, since pass 8's reviewed baseline. Every
+standing fix from passes 1–8 re-confirmed present at identical line numbers.
+Route surface (29/29) and org-scoping sweep (87 endpoint-file call sites)
+unchanged. No open findings remain in this feature.

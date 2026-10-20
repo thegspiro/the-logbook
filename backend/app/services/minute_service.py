@@ -10,9 +10,12 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import func, or_, select
+from sqlalchemy import func
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
+from sqlalchemy.orm.base import NO_VALUE
 
 from app.core.utils import generate_uuid
 from app.models.document import Document
@@ -23,8 +26,10 @@ from app.models.minute import (
     DEFAULT_BUSINESS_SECTIONS,
     DEFAULT_COMMITTEE_SECTIONS,
     DEFAULT_EXECUTIVE_SECTIONS,
+    DEFAULT_MOTION_SECTIONS,
     DEFAULT_SPECIAL_SECTIONS,
     DEFAULT_TRUSTEE_SECTIONS,
+    PREVIOUS_MINUTES_SECTION,
     ActionItem,
     ActionItemPriority,
     MeetingMinutes,
@@ -55,11 +60,17 @@ from app.utils.agenda_items import (
     sections_from_agenda,
 )
 from app.utils.minutes_attendance import normalize_attendee
+from app.utils.minutes_search import (
+    Source,
+    compile_terms,
+    parse_query,
+    search_sources,
+)
 from app.utils.model_updates import apply_updates
-from app.utils.motion_votes import settle_roll_call, tally
+from app.utils.motion_votes import recorded_motions, settle_roll_call, tally
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
-from app.utils.rich_text import normalize_format, section_is_blank
+from app.utils.rich_text import normalize_format, section_is_blank, section_text
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 _DEFAULT_SECTIONS_BY_TYPE = {
@@ -89,6 +100,67 @@ def member_visible_conditions() -> tuple:
         ),
         MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
     )
+
+
+# The newest minutes read by one archive search. Section text is JSON and is
+# matched in the application, so the read is bounded; a department's archive of
+# several hundred sets of minutes is searched whole, and the screen says when an
+# older tail was left out.
+ARCHIVE_SCAN_LIMIT = 500
+
+_LEGACY_BODY_FIELDS = (
+    ("agenda", "Agenda"),
+    ("old_business", "Old business"),
+    ("new_business", "New business"),
+    ("treasurer_report", "Treasurer's report"),
+    ("chief_report", "Chief's report"),
+    ("committee_reports", "Committee reports"),
+    ("announcements", "Announcements"),
+    ("notes", "Notes"),
+)
+
+
+def _enum_value(value) -> str:
+    return value if isinstance(value, str) else value.value
+
+
+def _archive_sources(minutes: MeetingMinutes) -> list[Source]:
+    """Every place in *minutes* that holds words a member might search for.
+
+    The legacy body columns are searched too, because minutes written before
+    sections existed keep their text there; one whose text a section repeats is
+    skipped so the same words are not reported twice.
+    """
+    sources = [Source("title", "Title", minutes.title or "")]
+    section_texts: set[str] = set()
+    for section in sorted(minutes.sections or [], key=lambda s: s.get("order", 0)):
+        text = section_text(section)
+        section_texts.add(text)
+        sources.append(
+            Source(
+                "section",
+                str(section.get("title") or section.get("key") or "Section"),
+                text,
+            )
+        )
+    for name, label in _LEGACY_BODY_FIELDS:
+        text = (getattr(minutes, name) or "").strip()
+        if text and text not in section_texts:
+            sources.append(Source("section", label, text))
+    for motion in recorded_motions(minutes.motions):
+        sources.append(Source("motion", "Motion", motion.motion_text or ""))
+        sources.append(
+            Source("motion", "Motion discussion", motion.discussion_notes or "")
+        )
+    for item in minutes.action_items or []:
+        sources.append(Source("action_item", "Action item", item.description or ""))
+        sources.append(
+            Source("action_item", "Action item notes", item.completion_notes or "")
+        )
+        sources.append(
+            Source("action_item", "Action item assigned to", item.assignee_name or "")
+        )
+    return sources
 
 
 def _default_sections_for(meeting_type) -> list:
@@ -390,8 +462,9 @@ class MinuteService:
             section["order"] = index
 
         minutes.sections = sections
+        await self.ensure_section_motions(minutes, organization_id)
         await self.db.commit()
-        return await self.get_minutes(minutes_id, organization_id)
+        return await self.get_minutes(minutes_id, organization_id, refresh=True)
 
     @staticmethod
     def _pin_agenda_fields(sections: list, stored: list) -> list:
@@ -490,6 +563,178 @@ class MinuteService:
                 "The meeting must be adjourned after it is called to order"
             )
 
+    async def _previous_minutes(
+        self, minutes: MeetingMinutes, organization_id: UUID | str
+    ) -> Optional[MeetingMinutes]:
+        """The minutes this meeting would be asked to accept.
+
+        The latest earlier set of the same kind of meeting that has been
+        circulated or adopted: a draft is not ready to be accepted. Found by the
+        server from the department's own records, never named by a client.
+        """
+        if minutes.meeting_date is None:
+            return None
+        found = await self.db.execute(
+            select(MeetingMinutes)
+            .where(
+                MeetingMinutes.organization_id == str(organization_id),
+                MeetingMinutes.id != minutes.id,
+                MeetingMinutes.meeting_type == minutes.meeting_type,
+                MeetingMinutes.meeting_date < minutes.meeting_date,
+                MeetingMinutes.status.in_(
+                    [MinutesStatus.SUBMITTED.value, MinutesStatus.APPROVED.value]
+                ),
+            )
+            .order_by(MeetingMinutes.meeting_date.desc(), MeetingMinutes.id)
+            .limit(1)
+        )
+        return found.scalar_one_or_none()
+
+    async def adoption_proposal(
+        self, minutes_id: str, organization_id: UUID | str
+    ) -> Optional[dict]:
+        """What the body decided about these minutes at a later meeting.
+
+        The latest passed motion, in this department, that accepted these
+        minutes as submitted or as revised. ``None`` when there is none.
+        """
+        found = await self.db.execute(
+            select(Motion, MeetingMinutes)
+            .join(MeetingMinutes, MeetingMinutes.id == Motion.minutes_id)
+            .where(
+                Motion.previous_minutes_id == str(minutes_id),
+                Motion.status == MotionStatus.PASSED,
+                Motion.acceptance.is_not(None),
+                MeetingMinutes.organization_id == str(organization_id),
+            )
+            .order_by(MeetingMinutes.meeting_date.desc(), Motion.updated_at.desc())
+            .limit(1)
+        )
+        row = found.first()
+        if row is None:
+            return None
+        motion, adopting = row
+        return {
+            "motion_id": motion.id,
+            "adopted_on": adopting.meeting_date,
+            "adopting_minutes_id": adopting.id,
+            "adopting_minutes_title": adopting.title,
+            "as_amended": motion.acceptance == "as_revised",
+            "moved_by": motion.moved_by,
+            "seconded_by": motion.seconded_by,
+        }
+
+    async def ensure_section_motions(
+        self, minutes: MeetingMinutes, organization_id: UUID | str
+    ) -> None:
+        """Give every section that needs a motion its prepared motion.
+
+        A section an outline marks ``needs_motion`` gets a *pending* motion with
+        its wording, so the secretary records who moved and the vote instead of
+        building the motion. The motion that accepts the previous minutes is
+        worded with, and linked to, those minutes. A motion the meeting has
+        already acted on is never touched, and a pending one whose section no
+        longer needs a motion is removed. Does not commit; the caller's commit
+        carries it.
+        """
+        sections = [s for s in minutes.get_sections() if s.get("needs_motion")]
+        wanted = {s["key"]: s for s in sections if s.get("key")}
+        rows = (
+            (
+                await self.db.execute(
+                    select(Motion).where(Motion.minutes_id == minutes.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_section = {m.section_key: m for m in rows if m.section_key}
+        # ``rows`` comes from a query against Motion directly, not from the
+        # ``minutes.motions`` collection, so deleting one here does not by
+        # itself update that collection if it is already loaded on this same
+        # ``minutes`` instance (e.g. because the caller's own ``get_minutes``
+        # fetch eagerly loaded it moments ago, in this same request). Without
+        # this, a response built from ``minutes.motions`` right after this
+        # call — which is exactly what ``update_minutes``'s caller does — would
+        # still list the motion this method just deleted.
+        loaded_motions = sa_inspect(minutes).attrs.motions.loaded_value
+        if loaded_motions is NO_VALUE:
+            loaded_motions = None
+        for stale in rows:
+            if (
+                stale.status == MotionStatus.PENDING
+                and stale.section_key
+                and stale.section_key not in wanted
+            ):
+                await self.db.delete(stale)
+                if loaded_motions is not None and stale in loaded_motions:
+                    loaded_motions.remove(stale)
+
+        order = {s.get("key"): s.get("order", 0) for s in minutes.get_sections()}
+        for key, section in wanted.items():
+            motion = by_section.get(key)
+            previous = None
+            if key == PREVIOUS_MINUTES_SECTION and (
+                motion is None
+                or (
+                    motion.status == MotionStatus.PENDING
+                    and not motion.previous_minutes_id
+                )
+            ):
+                previous = await self._previous_minutes(minutes, organization_id)
+            if motion is None:
+                text = await self._motion_wording(
+                    section, previous, minutes, organization_id
+                )
+                self.db.add(
+                    Motion(
+                        minutes_id=minutes.id,
+                        order=order.get(key, 0),
+                        motion_text=text,
+                        section_key=key,
+                        status=MotionStatus.PENDING,
+                        previous_minutes_id=previous.id if previous else None,
+                    )
+                )
+            elif previous is not None:
+                motion.previous_minutes_id = previous.id
+                motion.motion_text = await self._motion_wording(
+                    section, previous, minutes, organization_id
+                )
+
+    async def _motion_wording(
+        self,
+        section: dict,
+        previous: Optional[MeetingMinutes],
+        minutes: MeetingMinutes,
+        organization_id: UUID | str,
+    ) -> str:
+        """The wording a prepared motion starts with."""
+        text = (section.get("motion_text") or "").strip()
+        generic = DEFAULT_MOTION_SECTIONS.get(section.get("key", ""), "")
+        if previous is None:
+            return (text or generic or section.get("title") or "Motion")[:2000]
+        if text and text != generic:
+            return text[:2000]
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        when = previous.meeting_date
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        local = when.astimezone(tz)
+        kind = (
+            previous.meeting_type
+            if isinstance(previous.meeting_type, str)
+            else previous.meeting_type.value
+        ).replace("_", " ")
+        date_text = f" of the {local:%B} {local.day}, {local.year} "
+        return f"Motion to accept the minutes{date_text}{kind} meeting."
+
+    @staticmethod
+    def _check_motion_result(status) -> None:
+        """A recorded motion has a result; "pending" is only ever the system's."""
+        if status == MotionStatus.PENDING.value:
+            raise ValueError("A motion's result is passed, failed, tabled or withdrawn")
+
     @staticmethod
     def _check_motion_section(minutes: MeetingMinutes, section_key) -> None:
         """A motion's section must be one of these minutes' own sections."""
@@ -559,8 +804,9 @@ class MinuteService:
             minutes.header_config = copy.deepcopy(outline.header_config)
         if not minutes.footer_config and outline.footer_config:
             minutes.footer_config = copy.deepcopy(outline.footer_config)
+        await self.ensure_section_motions(minutes, organization_id)
         await self.db.commit()
-        return await self.get_minutes(minutes_id, organization_id)
+        return await self.get_minutes(minutes_id, organization_id, refresh=True)
 
     # ============================================
     # Meeting Minutes CRUD
@@ -715,6 +961,7 @@ class MinuteService:
                 )
                 self.db.add(item)
 
+        await self.ensure_section_motions(minutes, organization_id)
         await self.db.commit()
         await self.db.refresh(minutes)
 
@@ -968,8 +1215,13 @@ class MinuteService:
             minutes.rejected_by = None
             minutes.rejection_reason = None
 
+        if "sections" in update_data:
+            await self.ensure_section_motions(minutes, organization_id)
         await self.db.commit()
-        return await self.get_minutes(minutes_id, organization_id)
+        # A prepared motion removed above is gone from the database but not from
+        # the session's loaded collection (expire_on_commit is off), so without
+        # refresh the response would still list it.
+        return await self.get_minutes(minutes_id, organization_id, refresh=True)
 
     async def delete_minutes(
         self, minutes_id: str, organization_id: UUID | str
@@ -1317,9 +1569,23 @@ class MinuteService:
             raise ValueError("Can only add motions to draft or rejected minutes")
 
         self._check_motion_section(minutes, data.section_key)
+        self._check_motion_result(data.status)
         await self._check_motion_ballot(
             data.election_id, data.ballot_item_id, organization_id
         )
+        prepared = None
+        if data.section_key:
+            prepared = (
+                await self.db.execute(
+                    select(Motion).where(
+                        Motion.minutes_id == minutes.id,
+                        Motion.section_key == data.section_key,
+                        Motion.status == MotionStatus.PENDING,
+                    )
+                )
+            ).scalar_one_or_none()
+        if data.acceptance and not (prepared and prepared.previous_minutes_id):
+            raise ValueError("Only the motion accepting the previous minutes has that")
         votes = {
             "votes_for": data.votes_for,
             "votes_against": data.votes_against,
@@ -1327,20 +1593,31 @@ class MinuteService:
             "votes_recused": data.votes_recused,
             **self._vote_record(data.roll_call, minutes.attendees),
         }
-        motion = Motion(
-            minutes_id=minutes_id,
-            order=data.order,
-            motion_text=data.motion_text,
-            moved_by=data.moved_by,
-            seconded_by=data.seconded_by,
-            section_key=data.section_key,
-            discussion_notes=data.discussion_notes,
-            status=MotionStatus(data.status),
-            threshold=data.threshold,
-            election_id=data.election_id,
-            ballot_item_id=data.ballot_item_id,
+        fields = {
+            "motion_text": data.motion_text,
+            "moved_by": data.moved_by,
+            "seconded_by": data.seconded_by,
+            "discussion_notes": data.discussion_notes,
+            "status": MotionStatus(data.status),
+            "acceptance": data.acceptance,
+            "threshold": data.threshold,
+            "election_id": data.election_id,
+            "ballot_item_id": data.ballot_item_id,
             **votes,
-        )
+        }
+        if prepared is not None:
+            # The section's motion was prepared with the minutes: recording it
+            # fills that motion in rather than adding a second one.
+            for name, value in fields.items():
+                setattr(prepared, name, value)
+            motion = prepared
+        else:
+            motion = Motion(
+                minutes_id=minutes_id,
+                order=data.order,
+                section_key=data.section_key,
+                **fields,
+            )
         self.db.add(motion)
         await self.db.commit()
         await self.db.refresh(motion)
@@ -1375,8 +1652,11 @@ class MinuteService:
 
         update_data = data.model_dump(exclude_unset=True)
         if "status" in update_data:
+            self._check_motion_result(update_data["status"])
             update_data["status"] = MotionStatus(update_data["status"])
         self._check_motion_section(minutes, update_data.get("section_key"))
+        if update_data.get("acceptance") and not motion.previous_minutes_id:
+            raise ValueError("Only the motion accepting the previous minutes has that")
 
         # A roll call replaces the totals; clearing it leaves the totals as
         # they were, since they are then the record of a vote taken by count.
@@ -1735,6 +2015,67 @@ class MinuteService:
 
         return results
 
+    async def search_archive(
+        self,
+        organization_id: UUID | str,
+        query: str,
+        meeting_type: Optional[str] = None,
+        limit: int = 25,
+        restricted: bool = False,
+    ) -> dict:
+        """Search the words of the department's minutes, grouped by minutes.
+
+        Covers titles, every section, motions (with their discussion) and
+        action items. ``restricted=True`` (a caller without ``minutes.manage``)
+        confines the search to circulated or adopted, non-executive minutes —
+        the same rule the listing applies — so a draft or an executive session
+        is never searched, let alone quoted.
+        """
+        terms = parse_query(query)
+        patterns = compile_terms(terms)
+        if not patterns:
+            return {"terms": [], "hits": [], "searched": 0, "truncated": False}
+
+        stmt = (
+            select(MeetingMinutes)
+            .options(
+                selectinload(MeetingMinutes.motions),
+                selectinload(MeetingMinutes.action_items),
+            )
+            .where(MeetingMinutes.organization_id == str(organization_id))
+            .order_by(MeetingMinutes.meeting_date.desc())
+            .limit(ARCHIVE_SCAN_LIMIT)
+        )
+        if meeting_type:
+            stmt = stmt.where(MeetingMinutes.meeting_type == meeting_type)
+        if restricted:
+            stmt = stmt.where(*member_visible_conditions())
+
+        rows = list((await self.db.execute(stmt)).scalars().all())
+        hits: list[dict] = []
+        for minutes in rows:
+            found = search_sources(patterns, _archive_sources(minutes))
+            if found is None:
+                continue
+            hits.append(
+                {
+                    "id": minutes.id,
+                    "title": minutes.title,
+                    "meeting_type": _enum_value(minutes.meeting_type),
+                    "meeting_date": minutes.meeting_date,
+                    "status": _enum_value(minutes.status),
+                    **found,
+                }
+            )
+            if len(hits) == limit:
+                break
+        return {
+            "terms": terms,
+            "hits": hits,
+            "searched": len(rows),
+            "truncated": len(rows) == ARCHIVE_SCAN_LIMIT and len(hits) < limit,
+        }
+
     # ============================================
     # Cross-module Bridges
     # ============================================
@@ -1874,6 +2215,7 @@ class MinuteService:
         )
 
         self.db.add(minutes)
+        await self.ensure_section_motions(minutes, organization_id)
         await self.db.commit()
         await self.db.refresh(minutes)
         return minutes

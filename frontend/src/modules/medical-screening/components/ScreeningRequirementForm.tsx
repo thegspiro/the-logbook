@@ -181,36 +181,42 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
                   min={1}
                   value={frequencyMonths}
                   onChange={(e) => setFrequencyMonths(e.target.value)}
+                  aria-describedby="req-frequency-note"
                   className={inputClass + ' w-32'}
                 />
+                {/* W71: grading reads only a record's expiration date, never this
+                    value (medical_screening_service._grade); the record form uses it
+                    to fill that date in. Say so, or "Every 12 months" reads as enforced. */}
+                <p id="req-frequency-note" className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
+                  Fills in the expiration date when a record for this requirement is added. A record saved without an
+                  expiration date counts as compliant until it is given one.
+                </p>
                 {errors.frequency && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.frequency}</p>}
               </div>
             )}
           </div>
 
-          {/* Applies to Roles: stored and shown next to the requirement's name,
-              but get_compliance_status (medical_screening_service.py) pulls every
-              active requirement for every subject regardless of role — nothing
-              reads this list to scope who a requirement applies to. Labelled
-              rather than silently wired, since wiring it changes who counts as
-              non-compliant on every installation that has set it. Delete this
-              notice in the change that makes compliance evaluation read it; see
-              tests/test_medical_screening_requirement_fields_are_unwired.py. */}
+          {/* Positions, by name or slug: the backend grades a member on this
+              requirement only if they hold one (medical_screening_service,
+              _applicable_requirements). The field is still stored as
+              `applies_to_roles`; renaming the column would be a breaking API
+              and schema change for no gain. */}
           <div>
             <label htmlFor="req-roles" className={labelClass}>
-              Applies to Roles (comma-separated)
+              Applies to Positions (comma-separated)
             </label>
             <input
               id="req-roles"
               type="text"
               value={appliesTo}
               onChange={(e) => setAppliesTo(e.target.value)}
-              placeholder="e.g., firefighter, emt, officer"
+              placeholder="e.g., Firefighter, Apparatus Manager"
+              aria-describedby="req-roles-note"
               className={inputClass}
             />
-            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
-              Not enforced yet — this requirement applies to every active member and prospect, whatever roles you list
-              here.
+            <p id="req-roles-note" className="text-theme-text-muted mt-1 text-xs">
+              Leave blank to apply to every member. Otherwise only members who hold one of these positions are screened
+              for it. Applicants in the pipeline hold no positions and are always screened.
             </p>
           </div>
 

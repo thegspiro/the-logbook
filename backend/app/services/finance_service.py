@@ -10,7 +10,7 @@ import copy
 import html
 import io
 import secrets
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -24,6 +24,7 @@ from sqlalchemy import (
     and_,
     case,
     cast,
+    delete,
     exists,
     func,
     literal,
@@ -72,6 +73,7 @@ from app.models.finance import (
     MemberDues,
     PurchaseRequest,
     PurchaseRequestStatus,
+    QuickBooksChartAccount,
 )
 from app.models.user import Organization, Position, User
 from app.services.cash_advances import (
@@ -114,7 +116,7 @@ from app.services.separation_of_duties import (
     SeparationOfDutiesError,
     assert_different_person,
 )
-from app.utils.csv_export import SafeCsvWriter
+from app.utils.csv_export import SafeCsvWriter, csv_safe_cell
 from app.utils.finance_settings import (
     FINANCE_SETTINGS_KEY,
     FUND_OVERSPEND_BLOCK,
@@ -133,6 +135,7 @@ from app.utils.model_updates import apply_updates
 from app.utils.org_locks import QUICKBOOKS_EXPORT, lock_organization_scope
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
+from app.utils.quickbooks_chart import ChartAccount
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
 # The statuses that genuinely resolve a step, so a later step may become
@@ -193,6 +196,20 @@ class ExportInProgressError(Exception):
         super().__init__(
             "Another QuickBooks export is still being prepared. Wait for it to "
             "finish, then export again."
+        )
+
+
+class ReimportConfirmationRequired(Exception):
+    """Sending a period again would resend payments whose file the Treasurer
+    confirmed was imported into QuickBooks (→ 409 until confirmed)."""
+
+    def __init__(self, count: int) -> None:
+        self.count = count
+        noun = "payment" if count == 1 else "payments"
+        super().__init__(
+            f"{count:,} {noun} in this period went out in a file already "
+            "confirmed as imported into QuickBooks. Importing them again posts "
+            "them twice unless you delete those entries in QuickBooks first."
         )
 
 
@@ -435,6 +452,72 @@ def _refuse_name_required(*accounts: Optional[str]) -> None:
             )
 
 
+def _unsafe_account_name(account: Optional[str]) -> bool:
+    """True for a name the export's formula-injection escaping would alter.
+
+    SafeCsvWriter puts an apostrophe before a cell starting with =, +, -, @
+    (or a tab or carriage return), and QuickBooks then reads that apostrophe
+    as part of the account name, which matches no account.
+    """
+    name = (account or "").strip()
+    return bool(name) and csv_safe_cell(name) != name
+
+
+def _refuse_unsafe_account_name(*accounts: Optional[str]) -> None:
+    for account in accounts:
+        if _unsafe_account_name(account):
+            raise ValueError(
+                "An account name can't start with =, +, - or @: the export "
+                "escapes those so spreadsheets don't run them as formulas, and "
+                "QuickBooks would then not recognize the account. Rename it in "
+                "QuickBooks and here."
+            )
+
+
+def _refuse_unusable_accounts(*accounts: Optional[str]) -> None:
+    """Refuse an account no journal-entry import can post to."""
+    _refuse_name_required(*accounts)
+    _refuse_unsafe_account_name(*accounts)
+
+
+@dataclass(frozen=True)
+class _Chart:
+    """The QuickBooks chart of accounts the Treasurer last uploaded."""
+
+    names: frozenset[str]
+
+    def missing(self, *accounts: str) -> tuple[str, ...]:
+        """The accounts the chart does not hold, in the order given.
+
+        Matched exactly, case included: the import matches by name, and a
+        name that differs only in case or spacing is not one this check can
+        promise QuickBooks will accept.
+        """
+        out: list[str] = []
+        for account in accounts:
+            if account and account not in self.names and account not in out:
+                out.append(account)
+        return tuple(out)
+
+
+def _account_issue(
+    chart: Optional[_Chart], *accounts: str
+) -> tuple[Optional[str], tuple[str, ...]]:
+    """The problem with a set of resolved accounts the import would reject,
+    beyond a missing one or Accounts Payable/Receivable, and which accounts
+    the uploaded chart lacks."""
+    if any(_unsafe_account_name(a) for a in accounts):
+        return "unsafe_account_name", ()
+    missing = chart.missing(*accounts) if chart is not None else ()
+    if missing:
+        return "not_in_chart", missing
+    return None, ()
+
+
+def _quoted(accounts: Iterable[str]) -> str:
+    return " and ".join(f"'{_short_label(a)}'" for a in accounts)
+
+
 def _qb_amount(value: Decimal) -> Decimal:
     return Decimal(value).quantize(Decimal("0.01"))
 
@@ -460,10 +543,14 @@ class _CategoryAccounts:
     # The ancestor each piece came from, when the category had none of its own.
     account_inherited_from: Optional[str] = None
     offset_inherited_from: Optional[str] = None
+    # The accounts an uploaded chart of accounts does not hold.
+    not_in_chart: tuple[str, ...] = ()
 
 
 def _resolve_category_accounts(
-    categories: list[BudgetCategory], mappings: dict[str, list[ExportMapping]]
+    categories: list[BudgetCategory],
+    mappings: dict[str, list[ExportMapping]],
+    chart: Optional[_Chart] = None,
 ) -> dict[str, _CategoryAccounts]:
     """Resolve every category's QuickBooks accounts, inheriting from ancestors.
 
@@ -511,6 +598,7 @@ def _resolve_category_accounts(
                 if not offset and parent.offset:
                     offset = parent.offset
                     offset_from = parent.offset_inherited_from or parent_cat.name
+        not_in_chart: tuple[str, ...] = ()
         if not account:
             problem: Optional[str] = "no_account"
         elif not offset:
@@ -518,9 +606,15 @@ def _resolve_category_accounts(
         elif _needs_qb_name(account) or _needs_qb_name(offset):
             problem = "payable_receivable"
         else:
-            problem = None
+            problem, not_in_chart = _account_issue(chart, account, offset)
         result = _CategoryAccounts(
-            account, offset, problem, source, account_from, offset_from
+            account,
+            offset,
+            problem,
+            source,
+            account_from,
+            offset_from,
+            not_in_chart,
         )
         resolved[category_id] = result
         return result
@@ -544,9 +638,72 @@ def _aware_utc(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+def _user_label(
+    first_name: Optional[str],
+    last_name: Optional[str],
+    preferred_name: Optional[str],
+    username: Optional[str],
+) -> Optional[str]:
+    return (
+        format_display_name(first_name, last_name, preferred_name) or username or None
+    )
+
+
 def _short_label(name: str, limit: int = 40) -> str:
     name = name.strip()
     return name if len(name) <= limit else name[: limit - 3] + "..."
+
+
+def pick_approval_chain(
+    chains: Sequence[ApprovalChain],
+    amount: Decimal,
+    budget_category_id: Optional[str] = None,
+) -> Optional[ApprovalChain]:
+    """Choose the most specific chain whose range and category fit ``amount``.
+
+    A chain's minimum and maximum are both inclusive. So an amount exactly on
+    the edge between two chains ("up to $500" and "$500 and over") fits both;
+    the one with the higher minimum takes it, so the amount gets the approvals
+    meant for the larger purchases. A chain that is the only one to fit an
+    amount keeps it, which is why the maximum is not made exclusive: a lone
+    "up to $500" chain would otherwise stop covering exactly $500.00.
+
+    Chains the same in every respect are told apart by id, so the answer does
+    not depend on the order the database returned them in.
+    """
+    best_chain: Optional[ApprovalChain] = None
+    best_key: tuple[int, Decimal] = (-1, Decimal(0))
+
+    for chain in sorted(chains, key=lambda c: str(c.id)):
+        score = 0
+
+        if chain.min_amount is not None and amount < chain.min_amount:
+            continue
+        if chain.max_amount is not None and amount > chain.max_amount:
+            continue
+
+        if chain.budget_category_id and chain.budget_category_id == budget_category_id:
+            score += 4
+        elif (
+            chain.budget_category_id and chain.budget_category_id != budget_category_id
+        ):
+            continue  # Category mismatch
+
+        if chain.min_amount is not None or chain.max_amount is not None:
+            score += 2
+
+        if chain.is_default:
+            score += 1
+
+        key = (
+            score,
+            Decimal(chain.min_amount) if chain.min_amount is not None else Decimal(0),
+        )
+        if key > best_key:
+            best_key = key
+            best_chain = chain
+
+    return best_chain
 
 
 class FinanceService:
@@ -1061,7 +1218,7 @@ class FinanceService:
         charge_position_ids = kwargs.pop("charge_position_ids", None)
         await self._validate_budget_category_fks(org_id, kwargs)
         await self._validate_charge_positions(org_id, charge_position_ids)
-        _refuse_name_required(kwargs.get("qb_account_name"))
+        _refuse_unusable_accounts(kwargs.get("qb_account_name"))
         cat = BudgetCategory(organization_id=org_id, **kwargs)
         self.db.add(cat)
         await self.db.flush()
@@ -1076,7 +1233,7 @@ class FinanceService:
         charge_position_ids = kwargs.pop("charge_position_ids", None)
         await self._validate_budget_category_fks(org_id, kwargs)
         await self._validate_charge_positions(org_id, charge_position_ids)
-        _refuse_name_required(kwargs.get("qb_account_name"))
+        _refuse_unusable_accounts(kwargs.get("qb_account_name"))
         cat = await self.get_budget_category(cat_id, org_id)
         if not cat:
             raise ValueError("Budget category not found")
@@ -2226,14 +2383,25 @@ class FinanceService:
         }
 
     async def list_budget_options(
-        self, org_id: str, fiscal_year_id: str, charger_id: Optional[str] = None
+        self,
+        org_id: str,
+        fiscal_year_id: str,
+        charger_id: Optional[str] = None,
+        amounts_for: Optional[str] = None,
+        sees_all_amounts: bool = True,
     ) -> list[dict]:
         """The budget lines a requester may charge, as a label and what is left.
 
         The narrow read behind the request forms' budget picker. A member who
-        holds only ``finance.request`` chooses a line by name and sees the
-        remaining amount, nothing else: the budgeted, spent and encumbered
-        figures, notes and the summary stay behind ``finance.view``.
+        holds only ``finance.request`` chooses a line by name and nothing
+        else: the budgeted, spent and encumbered figures, notes and the
+        summary stay behind ``finance.view``, and so does the amount left.
+
+        ``amount_remaining`` is filled only for a caller who ``sees_all_amounts``
+        (``finance.view`` / ``finance.manage``) or who owns that line
+        (``amounts_for`` is the caller's id; ownership is
+        ``owned_budgets_query``, the one definition of the rule). For anyone
+        else it is None, so the figure never leaves the server.
 
         ``charger_id`` leaves out the restricted lines that member may not
         charge (app/services/finance_budget_access.py); None, for
@@ -2251,6 +2419,12 @@ class FinanceService:
             if charger_id
             else set()
         )
+        owned_ids: set[str] = set()
+        if not sees_all_amounts and amounts_for:
+            owned_result = await self.db.execute(
+                owned_budgets_query(org_id, amounts_for).with_only_columns(Budget.id)
+            )
+            owned_ids = {str(budget_id) for budget_id in owned_result.scalars()}
         result = await self.db.execute(
             select(
                 Budget.id,
@@ -2308,9 +2482,11 @@ class FinanceService:
                 {
                     "id": row.id,
                     "label": label,
-                    "amount_remaining": row.amount_budgeted
-                    - row.amount_spent
-                    - row.amount_encumbered,
+                    "amount_remaining": (
+                        row.amount_budgeted - row.amount_spent - row.amount_encumbered
+                        if sees_all_amounts or str(row.id) in owned_ids
+                        else None
+                    ),
                 }
             )
         return options
@@ -2424,6 +2600,11 @@ class FinanceService:
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
+        # A change to only one end is checked against the other end as stored.
+        new_min = kwargs["min_amount"] if "min_amount" in kwargs else chain.min_amount
+        new_max = kwargs["max_amount"] if "max_amount" in kwargs else chain.max_amount
+        if new_min is not None and new_max is not None and new_min > new_max:
+            raise ValueError("The minimum amount cannot be above the maximum amount")
         apply_updates(chain, kwargs)
         await self.db.flush()
         await self.db.refresh(chain, ["updated_at"])
@@ -2675,42 +2856,7 @@ class FinanceService:
         if not chains:
             return None
 
-        # Score chains by specificity
-        best_chain = None
-        best_score = -1
-
-        for chain in chains:
-            score = 0
-
-            # Check amount range
-            if chain.min_amount is not None and amount < chain.min_amount:
-                continue
-            if chain.max_amount is not None and amount > chain.max_amount:
-                continue
-
-            # Score by specificity
-            if (
-                chain.budget_category_id
-                and chain.budget_category_id == budget_category_id
-            ):
-                score += 4
-            elif (
-                chain.budget_category_id
-                and chain.budget_category_id != budget_category_id
-            ):
-                continue  # Category mismatch
-
-            if chain.min_amount is not None or chain.max_amount is not None:
-                score += 2
-
-            if chain.is_default:
-                score += 1
-
-            if score > best_score:
-                best_score = score
-                best_chain = chain
-
-        return best_chain
+        return pick_approval_chain(chains, amount, budget_category_id)
 
     async def create_approval_records(
         self,
@@ -3515,10 +3661,22 @@ class FinanceService:
                     continue
                 approver_type = normalize_approver_type(step.approver_type)
                 value = (step.approver_value or "").strip()
+                # Approve and deny need finance.approve as well as a match
+                # (step_actor_flags, and the endpoints' gate). Counting the
+                # match alone reported a Chief step as covered while the Chief,
+                # holding no finance.approve, got 403 on the queue and 404 on
+                # the request. An email approver acts from the emailed link, so
+                # the grant does not apply to them.
+                needs_grant = approver_type != ApproverType.EMAIL
+                matched = 0
                 eligible = 0
                 for member in members:
                     if await user_matches_step(self.db, member, step, org_id):
-                        eligible += 1
+                        matched += 1
+                        if not needs_grant or user_has_permission(
+                            member, FINANCE_APPROVE
+                        ):
+                            eligible += 1
                 rows.append(
                     {
                         "chain_id": chain.id,
@@ -3534,7 +3692,7 @@ class FinanceService:
                         "assignee_label": await describe_assignee(step, directory),
                         "eligible_active_count": eligible,
                         "problem": await self._coverage_problem(
-                            approver_type, value, eligible, directory
+                            approver_type, value, eligible, directory, matched
                         ),
                         "pending_request_count": pending_by_step.get(step.id, 0),
                     }
@@ -3547,6 +3705,7 @@ class FinanceService:
         value: str,
         eligible: int,
         directory: ApproverDirectory,
+        matched: int = 0,
     ) -> Optional[str]:
         if approver_type is None:
             return None if eligible else "no_active_members"
@@ -3565,7 +3724,11 @@ class FinanceService:
         elif approver_type == ApproverType.PERMISSION:
             if not is_known_permission(value):
                 return "not_found"
-        return None if eligible else "no_active_members"
+        if eligible:
+            return None
+        # Somebody fills the step, but none of them may approve: distinct from
+        # an empty position, because the fix is a grant, not a person.
+        return "no_approve_permission" if matched else "no_active_members"
 
     # ========================================
     # Manual approval (no approval chain applies)
@@ -5308,7 +5471,7 @@ class FinanceService:
             raise ValueError("Check request not found")
         # SoD (FIN-4): the person who issues the check must not be the requester.
         assert_different_person(
-            acted_by, cr.requested_by, action="issue check", record="check request"
+            acted_by, cr.requested_by, action="issue", record="check request"
         )
         if cr.status != CheckRequestStatus.APPROVED:
             raise ValueError("Only approved requests can have checks issued")
@@ -5606,7 +5769,7 @@ class FinanceService:
         self, org_id: str, created_by: str, **kwargs
     ) -> DuesSchedule:
         await self._validate_finance_fks(org_id, kwargs)
-        _refuse_name_required(
+        _refuse_unusable_accounts(
             kwargs.get("qb_income_account"), kwargs.get("qb_deposit_account")
         )
         schedule = DuesSchedule(organization_id=org_id, created_by=created_by, **kwargs)
@@ -5622,7 +5785,7 @@ class FinanceService:
         if not schedule:
             raise ValueError("Dues schedule not found")
         await self._validate_finance_fks(org_id, kwargs)
-        _refuse_name_required(
+        _refuse_unusable_accounts(
             kwargs.get("qb_income_account"), kwargs.get("qb_deposit_account")
         )
         apply_updates(schedule, kwargs)
@@ -5644,6 +5807,19 @@ class FinanceService:
         result = await self.db.execute(query)
         users = list(result.scalars().all())
 
+        # A schedule entered with a due date already past bills its members as
+        # overdue straight away. Left PENDING, they read "Pending" until the
+        # daily run_mark_overdue_dues, so a treasurer generating last spring's
+        # dues saw nobody behind and the Overdue filter came back empty (W66).
+        due = schedule.due_date
+        if due is not None and due.tzinfo is None:
+            due = due.replace(tzinfo=timezone.utc)
+        initial_status = (
+            DuesStatus.OVERDUE
+            if due is not None and due < datetime.now(timezone.utc)
+            else DuesStatus.PENDING
+        )
+
         count = 0
         for user in users:
             # Check if dues already exist for this user + schedule
@@ -5662,6 +5838,7 @@ class FinanceService:
                 user_id=user.id,
                 amount_due=schedule.amount,
                 due_date=schedule.due_date,
+                status=initial_status,
             )
             self.db.add(dues)
             count += 1
@@ -5972,7 +6149,7 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def create_export_mapping(self, org_id: str, **kwargs) -> ExportMapping:
-        _refuse_name_required(
+        _refuse_unusable_accounts(
             kwargs.get("qb_account_name"), kwargs.get("qb_offset_account_name")
         )
         mapping = ExportMapping(organization_id=org_id, **kwargs)
@@ -5993,7 +6170,7 @@ class FinanceService:
         mapping: ExportMapping | None = result.scalar_one_or_none()
         if not mapping:
             raise ValueError("Export mapping not found")
-        _refuse_name_required(
+        _refuse_unusable_accounts(
             kwargs.get("qb_account_name"), kwargs.get("qb_offset_account_name")
         )
         apply_updates(mapping, kwargs)
@@ -6043,7 +6220,8 @@ class FinanceService:
         )
         categories = list(result.scalars())
         mappings = await self._export_mappings_by_category(org_id)
-        accounts = _resolve_category_accounts(categories, mappings)
+        chart = await self._chart(org_id)
+        accounts = _resolve_category_accounts(categories, mappings, chart)
 
         rows = []
         for category in categories:
@@ -6060,6 +6238,7 @@ class FinanceService:
                     "account_inherited_from": resolved.account_inherited_from,
                     "offset_account_name": resolved.offset or None,
                     "offset_inherited_from": resolved.offset_inherited_from,
+                    "accounts_not_in_chart": list(resolved.not_in_chart),
                     "mapping_ids": [m.id for m in matches],
                 }
             )
@@ -6076,6 +6255,7 @@ class FinanceService:
             "unmatched_mapping_ids": unmatched,
             "dues": await self._dues_accounts(org_id),
             "advances": await self._advance_accounts(org_id),
+            "chart_uploaded": chart is not None,
         }
 
     async def _resolve_export_accounts(
@@ -6125,7 +6305,9 @@ class FinanceService:
         all_categories = list(category_rows.scalars())
         names = {c.id: c.name for c in all_categories}
         mappings = await self._export_mappings_by_category(org_id)
-        accounts = _resolve_category_accounts(all_categories, mappings)
+        accounts = _resolve_category_accounts(
+            all_categories, mappings, await self._chart(org_id)
+        )
 
         resolved: dict[str, tuple[str, str]] = {}
         problems: dict[str, str] = {}
@@ -6147,6 +6329,13 @@ class FinanceService:
                 problems[name] = f"'{label}' has no offset account"
             elif problem == "payable_receivable":
                 problems[name] = f"'{label}' posts to Accounts Payable or Receivable"
+            elif problem == "unsafe_account_name":
+                problems[name] = f"'{label}' has an account starting with =, +, - or @"
+            elif problem == "not_in_chart":
+                problems[name] = (
+                    f"'{label}' posts to {_quoted(category_accounts.not_in_chart)}, "
+                    "not in the uploaded chart of accounts"
+                )
             else:
                 resolved[budget_id] = (account, offset)
 
@@ -6185,6 +6374,7 @@ class FinanceService:
         batch_size: int = 500,
         max_rows: int = QB_IMPORT_MAX_ROWS,
         include_exported: bool = False,
+        confirm_reimport: bool = False,
     ) -> AsyncIterator[str]:
         """Prepare a bounded export and return its incremental CSV stream.
 
@@ -6198,6 +6388,10 @@ class FinanceService:
         Payments are stamped as exported only once the whole file has been
         produced; an interrupted stream stamps nothing, so its payments go out
         again with the next export.
+
+        Sending again payments whose file the Treasurer confirmed was imported
+        into QuickBooks is refused (``ReimportConfirmationRequired``) unless
+        ``confirm_reimport``: those are the ones a second import doubles.
         """
         pr_filters = [
             PurchaseRequest.organization_id == org_id,
@@ -6291,6 +6485,18 @@ class FinanceService:
         return_count = await self.db.scalar(
             select(func.count()).select_from(AdvanceReturn).where(*return_filters)
         )
+        if include_exported and not confirm_reimport:
+            reimported = await self._count_confirmed_imported(
+                pr_filters,
+                cr_filters,
+                er_filters,
+                void_filters,
+                dues_filters if dues_setup["enabled"] else None,
+                return_filters,
+                org_id,
+            )
+            if reimported:
+                raise ReimportConfirmationRequired(reimported)
         # Reports that account for a cash advance, and advances not yet given
         # the accounts they were exported to.
         settling_count = await self.db.scalar(
@@ -6356,6 +6562,16 @@ class FinanceService:
                     other_issues.append(f"dues '{label}' has no income account")
                 elif row["status"] == "no_deposit":
                     other_issues.append(f"dues '{label}' has no deposit account")
+                elif row["status"] == "unsafe_account_name":
+                    other_issues.append(
+                        f"dues '{label}' has an account starting with =, +, - or @"
+                    )
+                elif row["status"] == "not_in_chart":
+                    other_issues.append(
+                        f"dues '{label}' posts to "
+                        f"{_quoted(row['accounts_not_in_chart'])}, not in the "
+                        "uploaded chart of accounts"
+                    )
                 else:
                     other_issues.append(
                         f"dues '{label}' posts to Accounts Payable or Receivable"
@@ -6370,6 +6586,14 @@ class FinanceService:
                 {
                     "no_advances_account": "cash advances have no advances account",
                     "no_cash_account": "cash advances have no bank account",
+                    "unsafe_account_name": (
+                        "cash advances have an account starting with =, +, - or @"
+                    ),
+                    "not_in_chart": (
+                        "cash advances post to "
+                        f"{_quoted(advance_setup['accounts_not_in_chart'])}, not "
+                        "in the uploaded chart of accounts"
+                    ),
                 }.get(
                     advance_setup["status"],
                     "cash advances post to Accounts Payable or Receivable",
@@ -6847,7 +7071,7 @@ class FinanceService:
         schedule names none. Blank or None clears one."""
         income = (income or "").strip()
         deposit = (deposit or "").strip()
-        _refuse_name_required(income, deposit)
+        _refuse_unusable_accounts(income, deposit)
         result = await self.db.execute(
             select(Organization).where(Organization.id == org_id).with_for_update()
         )
@@ -6882,6 +7106,7 @@ class FinanceService:
             )
         ).scalar_one_or_none()
         default_income, default_deposit = dues_default_accounts(org_settings)
+        chart = await self._chart(org_id)
         rows = await self.db.execute(
             select(DuesSchedule)
             .where(DuesSchedule.organization_id == org_id)
@@ -6893,6 +7118,7 @@ class FinanceService:
             own_deposit = (schedule.qb_deposit_account or "").strip()
             income = own_income or default_income
             deposit = own_deposit or default_deposit
+            not_in_chart: tuple[str, ...] = ()
             if not income:
                 status = "no_income"
             elif not deposit:
@@ -6900,7 +7126,8 @@ class FinanceService:
             elif _needs_qb_name(income) or _needs_qb_name(deposit):
                 status = "payable_receivable"
             else:
-                status = "ready"
+                issue, not_in_chart = _account_issue(chart, income, deposit)
+                status = issue or "ready"
             schedules.append(
                 {
                     "schedule_id": schedule.id,
@@ -6915,6 +7142,7 @@ class FinanceService:
                     "deposit_source": (
                         "schedule" if own_deposit else "default" if deposit else None
                     ),
+                    "accounts_not_in_chart": list(not_in_chart),
                 }
             )
         # Dues go to QuickBooks once the department names an account for
@@ -6944,7 +7172,7 @@ class FinanceService:
         clears one."""
         advances = (advances or "").strip()
         cash = (cash or "").strip()
-        _refuse_name_required(advances, cash)
+        _refuse_unusable_accounts(advances, cash)
         result = await self.db.execute(
             select(Organization).where(Organization.id == org_id).with_for_update()
         )
@@ -6975,6 +7203,7 @@ class FinanceService:
             )
         ).scalar_one_or_none()
         advances, cash = advance_accounts(org_settings)
+        not_in_chart: tuple[str, ...] = ()
         if not advances:
             status = "no_advances_account"
         elif not cash:
@@ -6982,11 +7211,15 @@ class FinanceService:
         elif _needs_qb_name(advances) or _needs_qb_name(cash):
             status = "payable_receivable"
         else:
-            status = "ready"
+            issue, not_in_chart = _account_issue(
+                await self._chart(org_id), advances, cash
+            )
+            status = issue or "ready"
         return {
             "status": status,
             "advances_account": advances or None,
             "cash_account": cash or None,
+            "accounts_not_in_chart": list(not_in_chart),
         }
 
     async def _stamp_exported(
@@ -7063,7 +7296,31 @@ class FinanceService:
     async def list_export_logs(
         self, org_id: str, pagination: PaginationParams
     ) -> list[dict]:
-        """Export history, newest first, each with who ran it by name."""
+        """Export history, newest first, each with who ran it, and who
+        confirmed it imported, by name."""
+        return await self._export_log_rows(
+            org_id, skip=pagination.skip, limit=pagination.limit
+        )
+
+    async def get_export_log_row(self, org_id: str, log_id: str) -> dict:
+        """One export as the history lists it."""
+        rows = await self._export_log_rows(org_id, log_id=log_id)
+        if not rows:
+            raise ValueError("Export not found")
+        return rows[0]
+
+    async def _export_log_rows(
+        self,
+        org_id: str,
+        *,
+        log_id: Optional[str] = None,
+        skip: int = 0,
+        limit: Optional[int] = None,
+    ) -> list[dict]:
+        importer = aliased(User)
+        filters = [ExportLog.organization_id == org_id]
+        if log_id is not None:
+            filters.append(ExportLog.id == log_id)
         result = await self.db.execute(
             select(
                 ExportLog,
@@ -7071,23 +7328,195 @@ class FinanceService:
                 User.last_name,
                 User.preferred_name,
                 User.username,
+                importer.first_name,
+                importer.last_name,
+                importer.preferred_name,
+                importer.username,
             )
             .outerjoin(User, User.id == ExportLog.exported_by)
-            .where(ExportLog.organization_id == org_id)
+            .outerjoin(importer, importer.id == ExportLog.imported_by)
+            .where(*filters)
             .order_by(ExportLog.exported_at.desc(), ExportLog.id)
-            .offset(pagination.skip)
-            .limit(pagination.limit)
+            .offset(skip)
+            .limit(limit)
         )
         rows = []
-        for log, first_name, last_name, preferred_name, username in result.all():
+        for log, *names in result.all():
             data = {
                 column.key: getattr(log, column.key)
                 for column in ExportLog.__table__.columns
             }
-            name = format_display_name(first_name, last_name, preferred_name)
-            data["exported_by_name"] = name or username or None
+            data["exported_by_name"] = _user_label(*names[:4])
+            data["imported_by_name"] = (
+                _user_label(*names[4:]) if log.imported_by else None
+            )
             rows.append(data)
         return rows
+
+    async def _export_log(self, org_id: str, log_id: str) -> ExportLog:
+        log = await self.db.scalar(
+            select(ExportLog).where(
+                ExportLog.id == log_id, ExportLog.organization_id == org_id
+            )
+        )
+        if log is None:
+            raise ValueError("Export not found")
+        return log
+
+    async def confirm_export_imported(
+        self, org_id: str, log_id: str, user_id: str
+    ) -> ExportLog:
+        """Record that a complete export's file was imported into QuickBooks.
+
+        Only a complete transactions export can be: an interrupted one is a
+        file the Treasurer is told not to import. Confirming twice keeps the
+        first confirmation.
+        """
+        log = await self._export_log(org_id, log_id)
+        if log.export_type != "transactions" or log.status != "successful":
+            raise ValueError(
+                "Only a complete export can be confirmed as imported. Run the "
+                "period again and import that file instead."
+            )
+        if log.imported_at is None:
+            log.imported_at = datetime.now(timezone.utc)
+            log.imported_by = user_id
+            await self.db.flush()
+        return log
+
+    async def withdraw_export_imported(self, org_id: str, log_id: str) -> ExportLog:
+        """Undo a confirmation made by mistake."""
+        log = await self._export_log(org_id, log_id)
+        log.imported_at = None
+        log.imported_by = None
+        await self.db.flush()
+        return log
+
+    async def _count_confirmed_imported(
+        self,
+        pr_filters: list,
+        cr_filters: list,
+        er_filters: list,
+        void_filters: list,
+        dues_filters: Optional[list],
+        return_filters: list,
+        org_id: str,
+    ) -> int:
+        """How many of a resend's payments a confirmed-imported file carried.
+
+        An expense report counts once, as it is stamped whole. A voided
+        check's reversal counts by the export that carried the reversal.
+        """
+        imported_logs = select(ExportLog.id).where(
+            ExportLog.organization_id == org_id, ExportLog.imported_at.is_not(None)
+        )
+        counts = [
+            select(func.count())
+            .select_from(PurchaseRequest)
+            .where(*pr_filters, PurchaseRequest.qb_export_log_id.in_(imported_logs)),
+            select(func.count())
+            .select_from(CheckRequest)
+            .where(*cr_filters, CheckRequest.qb_export_log_id.in_(imported_logs)),
+            select(func.count())
+            .select_from(ExpenseReport)
+            .where(*er_filters, ExpenseReport.qb_export_log_id.in_(imported_logs)),
+            select(func.count())
+            .select_from(CheckRequest)
+            .where(
+                *void_filters, CheckRequest.qb_void_export_log_id.in_(imported_logs)
+            ),
+            select(func.count())
+            .select_from(AdvanceReturn)
+            .where(*return_filters, AdvanceReturn.qb_export_log_id.in_(imported_logs)),
+        ]
+        if dues_filters is not None:
+            counts.append(
+                select(func.count())
+                .select_from(DuesPayment)
+                .where(*dues_filters, DuesPayment.qb_export_log_id.in_(imported_logs))
+            )
+        total = 0
+        for statement in counts:
+            total += int(await self.db.scalar(statement) or 0)
+        return total
+
+    # ========================================
+    # QuickBooks chart of accounts
+    # ========================================
+
+    async def _chart(self, org_id: str) -> Optional[_Chart]:
+        """The uploaded chart of accounts, or None when there is none."""
+        result = await self.db.execute(
+            select(QuickBooksChartAccount.name).where(
+                QuickBooksChartAccount.organization_id == org_id
+            )
+        )
+        names = frozenset(result.scalars())
+        return _Chart(names) if names else None
+
+    async def get_chart_of_accounts(self, org_id: str) -> dict:
+        result = await self.db.execute(
+            select(QuickBooksChartAccount)
+            .where(QuickBooksChartAccount.organization_id == org_id)
+            .order_by(QuickBooksChartAccount.name)
+        )
+        accounts = list(result.scalars())
+        uploaded_by_name: Optional[str] = None
+        first = accounts[0] if accounts else None
+        if first is not None and first.uploaded_by:
+            user = await self.db.scalar(
+                select(User).where(
+                    User.id == first.uploaded_by, User.organization_id == org_id
+                )
+            )
+            if user is not None:
+                uploaded_by_name = _user_label(
+                    user.first_name, user.last_name, user.preferred_name, user.username
+                )
+        return {
+            "uploaded_at": first.uploaded_at if first else None,
+            "uploaded_by_name": uploaded_by_name,
+            "accounts": [
+                {"name": a.name, "account_type": a.account_type} for a in accounts
+            ],
+        }
+
+    async def replace_chart_of_accounts(
+        self, org_id: str, user_id: str, accounts: list[ChartAccount]
+    ) -> None:
+        """Replace the department's chart of accounts with an upload's.
+
+        Under the export lock, so an export running meanwhile checks against
+        one chart or the other, never half of each.
+        """
+        await lock_organization_scope(self.db, org_id, QUICKBOOKS_EXPORT)
+        await self.db.execute(
+            delete(QuickBooksChartAccount).where(
+                QuickBooksChartAccount.organization_id == org_id
+            )
+        )
+        uploaded_at = datetime.now(timezone.utc)
+        self.db.add_all(
+            QuickBooksChartAccount(
+                organization_id=org_id,
+                name=account.name,
+                account_type=account.account_type,
+                uploaded_at=uploaded_at,
+                uploaded_by=user_id,
+            )
+            for account in accounts
+        )
+        await self.db.flush()
+
+    async def clear_chart_of_accounts(self, org_id: str) -> None:
+        """Remove the uploaded chart, which turns the account check off."""
+        await lock_organization_scope(self.db, org_id, QUICKBOOKS_EXPORT)
+        await self.db.execute(
+            delete(QuickBooksChartAccount).where(
+                QuickBooksChartAccount.organization_id == org_id
+            )
+        )
+        await self.db.flush()
 
     # ========================================
     # Dashboard

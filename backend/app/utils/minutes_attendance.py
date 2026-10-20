@@ -17,7 +17,7 @@ member and never counts. The migration that settled the existing rows inlines
 its own copy of this mapping, so this module is free to change.
 """
 
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 
 ATTENDANCE_STATUSES = (
     "present",
@@ -76,3 +76,44 @@ def normalize_attendees(
     if entries is None:
         return None
     return [normalize_attendee(e) for e in entries if isinstance(e, Mapping)]
+
+
+# Which statuses the minutes name, as the department chose. Quorum and the
+# attendance reports always read the whole roll; this is only what a reader of
+# the minutes sees. A guest was in the room, so every choice lists guests.
+ATTENDANCE_LISTINGS = ("all", "present_excused", "present")
+DEFAULT_ATTENDANCE_LISTING = "all"
+
+_LISTED_STATUSES = {
+    "present": frozenset({"present", "late", "left_early", "guest"}),
+    "present_excused": frozenset({"present", "late", "left_early", "guest", "excused"}),
+    "all": frozenset(ATTENDANCE_STATUSES),
+}
+
+
+def normalize_listing(value: Any, default: str = DEFAULT_ATTENDANCE_LISTING) -> str:
+    """A known listing, or *default* for anything else (never raises)."""
+    return value if isinstance(value, str) and value in _LISTED_STATUSES else default
+
+
+def effective_listing(override: Any, department: Any) -> str:
+    """The listing in force: the minutes' own choice, else the department's."""
+    if isinstance(override, str) and override in _LISTED_STATUSES:
+        return override
+    return normalize_listing(department)
+
+
+def is_listed(status: str, listing: str) -> bool:
+    """Whether a roll-call status is named under this listing."""
+    return status in _LISTED_STATUSES[normalize_listing(listing)]
+
+
+def listed_attendees(
+    entries: Optional[Sequence[Mapping[str, Any]]], listing: str
+) -> list[Mapping[str, Any]]:
+    """The entries a reader of the minutes is shown under *listing*."""
+    return [
+        e
+        for e in (entries or [])
+        if isinstance(e, Mapping) and is_listed(derive_status(e), listing)
+    ]

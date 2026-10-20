@@ -21,6 +21,7 @@ import {
 import { messageHistoryService } from '../../../services/api';
 import type { MessageHistoryRecord, EmailTemplate } from '../types';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '../../../utils/errorHandling';
 import { localToUTC, formatShortDateTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
@@ -96,8 +97,10 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
       setTestEmail('');
       setTestTemplateId('');
       void fetchHistory();
-    } catch {
-      toast.error('Failed to send test email');
+    } catch (err: unknown) {
+      // The server refuses a test outright when email is not set up; its
+      // reason is the answer the admin pressed the button for.
+      toast.error(getErrorMessage(err, 'Failed to send test email'));
     } finally {
       setIsSendingTest(false);
     }

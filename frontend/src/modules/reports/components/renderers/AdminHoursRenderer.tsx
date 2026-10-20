@@ -8,6 +8,7 @@ import { toStr } from '../../utils/export';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
 import { formatHours, sumHoursToQuarter } from '@/utils/hoursFormatting';
+import { ADMIN_HOURS_ENTRY_METHOD_LABELS } from '@/constants/enums';
 
 interface Props {
   data: AdminHoursReport;
@@ -40,7 +41,12 @@ export const AdminHoursRenderer: React.FC<Props> = ({ data }) => {
     {
       key: 'entry_method',
       header: 'Method',
-      render: (v: unknown) => <span className="capitalize">{toStr(v, '-').replace(/_/g, ' ')}</span>,
+      // The admin-hours screens' own labels: `capitalize` turned qr_scan into
+      // "Qr Scan" and nfc_station into "Nfc Station" (W72).
+      render: (v: unknown) => {
+        const method = toStr(v, '-');
+        return ADMIN_HOURS_ENTRY_METHOD_LABELS[method] ?? method.replace(/_/g, ' ');
+      },
     },
     {
       key: 'status',

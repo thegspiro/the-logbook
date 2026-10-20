@@ -1,6 +1,7 @@
 # Security Review 18 — Training Extended
 
-**Prefix:** `TRX` · **Iteration:** 18 · **Reviewed:** 2026-08-26 · **PR:** [#1873](https://github.com/thegspiro/the-logbook/pull/1873)
+**Prefix:** `TRX` · **Iteration:** 18 · **Reviewed:** 2026-10-19 (pass 9) ·
+**PR:** see `PROGRESS.md`'s **Open PR** row
 
 **Backend:** `api/v1/endpoints/training_submissions.py` (730 L),
 `api/v1/endpoints/training_waivers.py` (238 L),
@@ -2786,3 +2787,107 @@ One sandbox hiccup, same shape as Feature 17 pass 8's own note:
 `frontend/node_modules/` was missing several packages unrelated to this
 feature (a fresh `RichTextEditor.tsx` dependency); resolved with `npm ci` from
 the repo root, confirmed zero `package-lock.json` change afterward.
+
+## Pass 9 (2026-10-19) — watchdog pickup, near-zero delta, 0 new findings
+
+**Prefix:** `TRX9` · **PR:** (recorded in `PROGRESS.md`'s Open PR section)
+
+**Watchdog note.** No open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results) and the
+dedicated `/loop 30m /security-review` session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was not reachable via `ListAgents`. PR #3440 (Feature 17, Training core,
+pass 9) had just merged. Rotation row 18 (Training extended) was the next
+pending feature.
+
+### Scope check — near-zero delta since pass 8
+
+Baseline: `a727c6b7` (PR #3302's merge, pass 8). `git log a727c6b7..HEAD` over
+all twelve declared files (the six endpoint files plus
+`training_submission_service.py`, `training_waiver_service.py`,
+`training_enhancement_service.py`, `external_training_service.py`,
+`course_cohort_service.py`, `course_syllabus_service.py`) returns exactly one
+commit: `9b4fcff2` ("Add a Sync History tab to the training integrations
+page"). Eleven of the twelve files are byte-identical to pass 8; the twelfth,
+`external_training.py`, gained a 9-line change to one existing endpoint —
+everything else in that commit is frontend (`ExternalSyncHistoryPanel.tsx`
+and its test, `ExternalTrainingPage.tsx`, `trainingServices.ts`,
+`types/training.ts`) plus docs, outside this feature's backend-security
+scope.
+
+### `list_imported_records` gains an optional `sync_log_id` filter — verified good
+
+The only backend change in scope. `GET
+/training/external/providers/{provider_id}/imports` already built its query
+filtered on both `ExternalTrainingImport.provider_id == str(provider_id)` and
+`ExternalTrainingImport.organization_id ==
+str(current_user.organization_id)` (`external_training.py:1434-1440`,
+unchanged by this commit); the new `sync_log_id: UUID | None` query param is
+ANDed onto that same already-org-scoped query
+(`external_training.py:1444-1445`). A `sync_log_id` naming a run that belongs
+to another organization, or that does not exist, cannot widen the result —
+it can only narrow a result that was already confined to the caller's own
+org and provider. No new route was added (the endpoint and its
+`require_permission("training.manage")` dependency are unchanged); the
+sync-log list itself (`GET .../sync-logs`, line 1052) was already reviewed
+and already org-scoped, and is untouched this pass.
+
+No finding — this is an additional filter on an already-correct query, not a
+new query shape.
+
+### Frontend surface (read, not in this feature's declared backend scope)
+
+`ExternalSyncHistoryPanel.tsx` renders provider-sourced run/class/member data
+through ordinary JSX interpolation; no `dangerouslySetInnerHTML` or
+equivalent in the new component (confirmed by direct grep), so React's
+default escaping applies. Noted for completeness; this feature's declared
+scope and every standing TRX finding are backend.
+
+### Standing findings re-verified at their current citation
+
+The findings file carries no OPEN or FLAGGED item as of pass 8 — confirmed by
+grep across the full file before starting this pass. TRX-1 through TRX-10 and
+TRX3-1/TRX4-7/TRX4-8/TRX7-1 (SSRF-pinned transport, secret redaction,
+`_validate_references` on every `*Service`, separation-of-duties guards) were
+all re-read directly at pass 8 and are unchanged by this pass's single
+9-line, additive-filter commit — none of the changed lines touch any of
+their mechanisms.
+
+### Route re-enumeration
+
+AST-walked (not regex) every `@router.get/post/put/patch/delete` across all
+six endpoint files: **99/99 routes**, identical to pass 8's count — this
+pass added a query parameter, not a route. Every one of the 99 carries
+`get_current_user`, `require_permission`, or `require_all_permissions` as a
+parameter default (0 missing). `python3 scripts/check_route_permissions.py
+--strict` (repo root): **272 total application routes, 0 errors, 0
+warnings** — up from pass 8's 270 from features elsewhere in the rotation
+merging in the interim; confirms no new top-level page from this feature
+(Pitfall #30a n/a).
+
+### CLAUDE.md pitfall sweep
+
+The one in-scope change is a single `.where()` clause added to an existing,
+already-correctly-scoped query. None of #1, #2, #9, #12, #14, #15, #20, #25,
+#26, #27, #29, #30a, #30b apply to a change of this shape — no new FK, no new
+migration, no new cache, no new JSON mutation, no new `.like()`, no new
+route, no new DB-backed test file.
+
+### Findings
+
+**0 new findings.** One backend commit in scope since pass 8, adding an
+optional filter to an already org- and provider-scoped query; verified the
+filter cannot widen the result set across organizations. Every standing TRX
+finding re-verified unchanged (none are OPEN or FLAGGED as of pass 8).
+
+## Completion gate (pass 9)
+
+| Check                                                                                                                     | Result                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                             | ✅ 0 violations                                                        |
+| `black --check app/ tests/ alembic/`                                                                                      | ✅ 2471 files unchanged                                                |
+| `isort --check-only app/ tests/ alembic/`                                                                                 | ✅ clean                                                               |
+| `python3 scripts/validate_migrations.py --strict`                                                                         | ✅ 631 revisions, single head `ca0c2111466f`                           |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi or crew"` | ✅ 2050 passed, 1 skipped (pre-existing `pywebpush` optional-dep skip) |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                         | ✅ 272 routes, 0 errors, 0 warnings                                    |
+| `cd frontend && npm run typecheck`                                                                                        | ✅ 0 errors                                                            |
+| `cd frontend && npm run lint`                                                                                             | ✅ 0 errors, 0 warnings                                                |

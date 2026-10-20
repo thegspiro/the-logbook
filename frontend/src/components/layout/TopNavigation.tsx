@@ -16,6 +16,7 @@ import {
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
+import { isAdministrativeMember } from '../../utils/membership';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import { offersSkillsTesting, usePracticalSkillsMethod } from '../../stores/practicalSkillsStore';
 import { useConnectedIntegrations } from '../../hooks/useConnectedIntegrations';
@@ -165,6 +166,11 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     { label: 'Members', path: '/members' },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
+    // Every member's inbox for department announcements, and the suggestion
+    // box. SideNavigation has always listed both; without them here a
+    // department on this layout had no way to reach either screen.
+    { label: 'Messages', path: '/messages' },
+    { label: 'Suggestions', path: '/suggestions' },
     { label: 'Learning Center', path: '/learning' },
     // Gate mirrors SideNavigation's Department Store — see there.
     ...(isModuleOn('storefront')
@@ -196,12 +202,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
       path: '/inventory',
       // One list with SideNavigation and the section strip on every
       // Operations page; the reasoning behind each row's gate lives there.
-      subItems: operationsNavItems(isModuleOn).map(({ label, path, permission, anyPermission }) => ({
-        label,
-        path,
-        ...(permission ? { permission } : {}),
-        ...(anyPermission ? { anyPermission } : {}),
-      })),
+      subItems: operationsNavItems(isModuleOn, isAdministrativeMember(undefined, currentUser?.membership_type)).map(
+        ({ label, path, permission, anyPermission }) => ({
+          label,
+          path,
+          ...(permission ? { permission } : {}),
+          ...(anyPermission ? { anyPermission } : {}),
+        })
+      ),
     },
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),
     // Neither the org chart nor Legal Documents is behind a module flag: every
@@ -304,6 +312,20 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 : []),
               { label: 'Admin Hours', path: '/admin-hours/manage', permission: 'admin_hours.manage' },
               DIV,
+              // The Forms & Comms group from SideNavigation, with the same gates.
+              { label: 'Email Templates', path: '/communications/email-templates', permission: 'settings.manage' },
+              {
+                label: 'Member Emails & Texts',
+                path: '/communications/member-emails',
+                anyPermission: ['settings.manage', 'organization.update_settings', 'notifications.manage'],
+              },
+              { label: 'Department Messages', path: '/communications/messages', permission: 'notifications.manage' },
+              { label: 'Suggestion Boxes', path: '/communications/suggestion-boxes', permission: 'suggestions.manage' },
+              {
+                label: 'Photo Use Consent',
+                path: '/communications/photo-use-consent',
+                anyPermission: ['users.view_consents', 'notifications.manage', 'members.manage', 'users.edit'],
+              },
               ...(isModuleOn('forms') ? [{ label: 'Forms', path: '/forms', permission: 'forms.manage' }] : []),
               ...(isModuleOn('integrations')
                 ? [{ label: 'Integrations', path: '/integrations', permission: 'settings.manage' }]

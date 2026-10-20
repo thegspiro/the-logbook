@@ -657,7 +657,10 @@ and statements, the voter-eligibility roster and a per-item eligibility block
   attendance details are never broadcast to the general membership
 - **Editable recipients**: the send modal prefills from leadership or the
   eligible-voter roster, and the secretary edits the list freely — remove
-  anyone, add outside addresses (e.g. board counsel). Recipients are BCC'd
+  anyone, add outside addresses (e.g. board counsel). Each recipient gets
+  their own email, so nobody sees another's address, and the confirmation
+  names any address the package could not be sent to. The send runs in the
+  background, so a long list does not time out
 - **Download-only flow**: the PDF can be downloaded directly (no email) and
   attached to the secretary's own communication or filed with the minutes
 - **Email backends**: the PDF attaches on SMTP and on the Cloudflare email

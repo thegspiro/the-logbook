@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**316 tables · 5228 columns · 1066 foreign keys**
+**317 tables · 5240 columns · 1070 foreign keys**
 
 ---
 
@@ -95,7 +95,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`apparatus_statuses`](#apparatus_statuses) | `ApparatusStatus` | 17 | Apparatus Status model for tracking vehicle availability |
 | [`apparatus_types`](#apparatus_types) | `ApparatusType` | 14 | Apparatus Type model for categorizing vehicles |
 | [`check_item_deployed_lots`](#check_item_deployed_lots) | `CheckItemDeployedLot` | 11 | A lot physically on the apparatus for one checklist position. |
-| [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 12 | A named section/area within a checklist template. |
+| [`check_template_compartments`](#check_template_compartments) | `CheckTemplateCompartment` | 13 | A named section/area within a checklist template. |
 | [`check_template_items`](#check_template_items) | `CheckTemplateItem` | 28 | An individual item to check within a compartment. |
 | [`driver_exceptions`](#driver_exceptions) | `DriverException` | 17 | A chief-approved, time-boxed exception to the EVOC driving requirement. |
 | [`equipment_check_bulk_delete_requests`](#equipment_check_bulk_delete_requests) | `EquipmentCheckBulkDeleteRequest` | 7 | Durable result ledger for retry-safe atomic template-item deletion. |
@@ -274,8 +274,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 17 | Schedule for dues collection |
 | [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 14 | Individual line item within an expense report |
 | [`expense_reports`](#expense_reports) | `ExpenseReport` | 26 | Expense report submitted by a member for reimbursement |
-| [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
+| [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 14 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
+| [`finance_qb_chart_accounts`](#finance_qb_chart_accounts) | `QuickBooksChartAccount` | 6 | One account of the department's QuickBooks chart of accounts, as the |
 | [`fiscal_years`](#fiscal_years) | `FiscalYear` | 21 | Fiscal year definition for the organization |
 | [`member_dues`](#member_dues) | `MemberDues` | 18 | Individual member dues payment record |
 | [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 32 | Purchase request submitted by a member |
@@ -439,8 +440,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 47 | Meeting Minutes model |
-| [`meeting_motions`](#meeting_motions) | `Motion` | 19 | Motion model |
+| [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 48 | Meeting Minutes model |
+| [`meeting_motions`](#meeting_motions) | `Motion` | 21 | Motion model |
 | [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 15 | Action Item model |
 | [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 13 | A file kept with a set of minutes: reports, handouts, the signed copy. |
 | [`minutes_closed_sessions`](#minutes_closed_sessions) | `MinutesClosedSession` | 13 | A closed (executive) session held during a meeting. |
@@ -1633,6 +1634,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `container_type` | VARCHAR(50) | no |  | `compartment` |  |
 | `parent_compartment_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_template_compartments.id` ON DELETE SET NULL |
 | `is_sealed` | BOOL | no |  | `0` |  |
+| `is_inline` | BOOL | no |  | `0` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -4222,6 +4224,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status` | VARCHAR(20) | no |  | `'pending'` |  |
 | `error_message` | VARCHAR(500) | yes |  |  |  |
 | `completed_at` | DATETIME | yes |  |  |  |
+| `imported_at` | DATETIME | yes |  |  |  |
+| `imported_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 
 **Indexes**
 
@@ -4248,6 +4252,25 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_export_mappings_org_id` (`organization_id`)
+
+### `finance_qb_chart_accounts`
+
+**QuickBooksChartAccount** · `app/models/finance.py`
+
+> One account of the department's QuickBooks chart of accounts, as the Treasurer last uploaded it. The journal-entry import matches accounts by name, so a name the chart does not hold fails at import, after the file has left. With a chart on file the export refuses such a name first. Each upload replaces the whole set; none on file turns the check off.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(255) | no |  |  |  |
+| `account_type` | VARCHAR(100) | yes |  |  |  |
+| `uploaded_at` | DATETIME | no |  |  |  |
+| `uploaded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- `ix_finance_qb_chart_accounts_org_id` (`organization_id`)
 
 ### `fiscal_years`
 
@@ -6660,6 +6683,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `adopted_as_amended` | BOOL | yes |  |  |  |
 | `adoption_moved_by` | VARCHAR(200) | yes |  |  |  |
 | `adoption_seconded_by` | VARCHAR(200) | yes |  |  |  |
+| `attendance_listing` | VARCHAR(20) | yes |  |  |  |
 | `adopting_minutes_id` | VARCHAR(36) | yes | FK |  | → `meeting_minutes.id` ON DELETE SET NULL |
 | `event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `meeting_id` | VARCHAR(36) | yes | FK |  | → `meetings.id` ON DELETE SET NULL |
@@ -6690,9 +6714,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `seconded_by` | VARCHAR(200) | yes |  |  |  |
 | `discussion_notes` | TEXT | yes |  |  |  |
 | `section_key` | VARCHAR(100) | yes |  |  |  |
+| `previous_minutes_id` | VARCHAR(36) | yes | FK |  | → `meeting_minutes.id` ON DELETE SET NULL |
+| `acceptance` | VARCHAR(20) | yes |  |  |  |
 | `election_id` | VARCHAR(36) | yes | FK |  | → `elections.id` ON DELETE SET NULL |
 | `ballot_item_id` | VARCHAR(100) | yes |  |  |  |
-| `status` | ENUM(`passed`, `failed`, `tabled`, `withdrawn`) | no |  | `passed` |  |
+| `status` | ENUM(`pending`, `passed`, `failed`, `tabled`, `withdrawn`) | no |  | `passed` |  |
 | `votes_for` | INTEGER | yes |  |  |  |
 | `votes_against` | INTEGER | yes |  |  |  |
 | `votes_abstain` | INTEGER | yes |  |  |  |
@@ -9858,7 +9884,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_shift_equip_check_org_date` (`organization_id`, `checked_at`)
 - `idx_shift_equip_check_shift_timing` (`shift_id`, `check_timing`)
-- `idx_shift_equip_check_shift_tmpl` (`shift_id`, `template_id`)
 - `idx_shift_equip_check_template` (`template_id`)
 - `idx_shift_equip_check_user` (`checked_by`)
 
@@ -11017,7 +11042,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (391 references)
+### → `users` (393 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11171,6 +11196,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `facility_utility_accounts` | `created_by` | SET NULL | yes |
 | `facility_utility_readings` | `created_by` | SET NULL | yes |
 | `finance_export_logs` | `exported_by` | RESTRICT | no |
+| `finance_export_logs` | `imported_by` | SET NULL | yes |
+| `finance_qb_chart_accounts` | `uploaded_by` | SET NULL | yes |
 | `fiscal_years` | `adoption_recorded_by` | SET NULL | yes |
 | `fiscal_years` | `created_by` | RESTRICT | no |
 | `fiscal_years` | `locked_by` | SET NULL | yes |
@@ -11413,7 +11440,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `user_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (259 references)
+### → `organizations` (260 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -11520,6 +11547,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `facility_utility_readings` | `organization_id` | CASCADE | no |
 | `finance_export_logs` | `organization_id` | CASCADE | no |
 | `finance_export_mappings` | `organization_id` | CASCADE | no |
+| `finance_qb_chart_accounts` | `organization_id` | CASCADE | no |
 | `fiscal_years` | `organization_id` | CASCADE | no |
 | `form_integrations` | `organization_id` | CASCADE | no |
 | `form_submissions` | `organization_id` | CASCADE | no |
@@ -11787,6 +11815,22 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
 
+### → `meeting_minutes` (11 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `meeting_minutes` | `adopting_minutes_id` | SET NULL | yes |
+| `meeting_motions` | `minutes_id` | CASCADE | no |
+| `meeting_motions` | `previous_minutes_id` | SET NULL | yes |
+| `minutes_action_items` | `minutes_id` | CASCADE | no |
+| `minutes_attachments` | `minutes_id` | CASCADE | no |
+| `minutes_closed_sessions` | `minutes_id` | CASCADE | no |
+| `minutes_election_results` | `minutes_id` | CASCADE | no |
+| `minutes_public_copies` | `minutes_id` | CASCADE | no |
+| `minutes_revisions` | `minutes_id` | CASCADE | no |
+| `minutes_signatures` | `minutes_id` | CASCADE | no |
+| `minutes_suggestions` | `minutes_id` | CASCADE | no |
+
 ### → `positions` (11 references)
 
 | From table | Column | On delete | Nullable |
@@ -11818,21 +11862,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
 | `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
 | `training_submissions` | `shift_id` | SET NULL | yes |
-
-### → `meeting_minutes` (10 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `meeting_minutes` | `adopting_minutes_id` | SET NULL | yes |
-| `meeting_motions` | `minutes_id` | CASCADE | no |
-| `minutes_action_items` | `minutes_id` | CASCADE | no |
-| `minutes_attachments` | `minutes_id` | CASCADE | no |
-| `minutes_closed_sessions` | `minutes_id` | CASCADE | no |
-| `minutes_election_results` | `minutes_id` | CASCADE | no |
-| `minutes_public_copies` | `minutes_id` | CASCADE | no |
-| `minutes_revisions` | `minutes_id` | CASCADE | no |
-| `minutes_signatures` | `minutes_id` | CASCADE | no |
-| `minutes_suggestions` | `minutes_id` | CASCADE | no |
 
 ### → `training_courses` (10 references)
 

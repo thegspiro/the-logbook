@@ -5,8 +5,9 @@ Business logic for managing medical screening requirements,
 records, and compliance tracking.
 """
 
+import re
 from datetime import date, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import Select, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +19,7 @@ from app.models.medical_screening import (
     ScreeningStatus,
 )
 from app.models.membership_pipeline import ProspectiveMember, ProspectStatus
-from app.models.user import User, UserStatus
+from app.models.user import Position, User, UserStatus, user_positions
 from app.schemas.medical_screening import (
     ComplianceItem,
     ComplianceRoster,
@@ -65,6 +66,52 @@ _SCREENABLE_PROSPECT_STATUSES = (ProspectStatus.ACTIVE, ProspectStatus.ON_HOLD)
 def _is_self(actor_id: Optional[str], subject_user_id: Optional[str]) -> bool:
     """Whether the person writing a record is the member it is about."""
     return bool(actor_id) and str(actor_id) == str(subject_user_id or "")
+
+
+def _role_key(value: str) -> str:
+    """A position name or slug in the one spelling they are compared by.
+
+    "Safety Officer" is the name and ``safety_officer`` the slug of the same
+    position; an officer typing either, in any case, means it.
+    """
+    return " ".join(re.split(r"[\s_\-]+", value.strip().casefold())).strip()
+
+
+def _requirement_roles(requirement: ScreeningRequirement) -> Set[str]:
+    """The positions a requirement is scoped to; empty when it is not scoped.
+
+    ``applies_to_roles`` is unvalidated JSON, so anything that is not a list of
+    non-blank strings reads as "not scoped". That is the safe direction for a
+    medical-compliance check: a malformed value grades the requirement for
+    everyone rather than silently dropping a screening from a member who owes
+    it. A blank list, the default, is the same: the requirement applies to all.
+    """
+    roles = getattr(requirement, "applies_to_roles", None)
+    if not isinstance(roles, (list, tuple)):
+        return set()
+    return {key for role in roles if isinstance(role, str) and (key := _role_key(role))}
+
+
+def _applicable_requirements(
+    requirements: List[ScreeningRequirement],
+    held_positions: Optional[Set[str]],
+) -> List[ScreeningRequirement]:
+    """The requirements a subject is graded on.
+
+    ``held_positions`` is the subject's position names and slugs run through
+    :func:`_role_key`. ``None`` means the subject holds no positions at all (a
+    prospect), and such a subject is graded on every requirement: a role-scoped
+    requirement cannot be shown not to apply to someone who has no role yet, and
+    the pipeline gate that screening feeds should not quietly lose a screening.
+    """
+    if held_positions is None:
+        return requirements
+    applicable = []
+    for requirement in requirements:
+        roles = _requirement_roles(requirement)
+        if not roles or roles & held_positions:
+            applicable.append(requirement)
+    return applicable
 
 
 def _grade(
@@ -241,6 +288,10 @@ class MedicalScreeningService:
         # IntegrityError instead of the clean 400 apply_updates raises.
         apply_updates(requirement, data.model_dump(exclude_unset=True))
         await self.db.flush()
+        # W71: as on create — `onupdate` expires updated_at at the flush, and the
+        # response model's lazy read raised MissingGreenlet. The endpoint has
+        # already committed, so the officer was told a saved edit had failed.
+        await self.db.refresh(requirement)
         return requirement
 
     async def delete_requirement(
@@ -445,6 +496,7 @@ class MedicalScreeningService:
         if reviewed_by and "status" in changes:
             record.self_recorded = _is_self(reviewed_by, record.user_id)
         await self.db.flush()
+        await self.db.refresh(record)  # see update_requirement (W71)
         return record
 
     async def try_advance_pipeline_stage(
@@ -507,6 +559,32 @@ class MedicalScreeningService:
 
     # --- Compliance ---
 
+    async def _position_keys(
+        self, organization_id: str, user_id: Optional[str] = None
+    ) -> Dict[str, Set[str]]:
+        """Each member's position names and slugs, as :func:`_role_key` forms.
+
+        Scoped through ``Position.organization_id``, so an id from another
+        organization resolves no positions rather than another tenant's. One
+        member when ``user_id`` is given, otherwise every assignment in the org.
+        """
+        query = (
+            select(user_positions.c.user_id, Position.name, Position.slug)
+            .select_from(user_positions)
+            .join(Position, Position.id == user_positions.c.position_id)
+            .where(Position.organization_id == organization_id)
+        )
+        if user_id is not None:
+            query = query.where(user_positions.c.user_id == str(user_id))
+
+        held: Dict[str, Set[str]] = {}
+        for member_id, name, slug in (await self.db.execute(query)).all():
+            keys = held.setdefault(str(member_id), set())
+            keys.update(
+                key for key in (_role_key(name or ""), _role_key(slug or "")) if key
+            )
+        return held
+
     async def get_compliance_status(
         self,
         organization_id: str,
@@ -514,11 +592,21 @@ class MedicalScreeningService:
         prospect_id: Optional[str] = None,
     ) -> ComplianceSummary:
         """
-        Check compliance status for a user or prospect against all
-        active screening requirements.
+        Check compliance status for a user or prospect against the active
+        screening requirements that apply to them.
+
+        A requirement lists the positions it applies to (``applies_to_roles``);
+        a member is graded on it only if they hold one of them, and a requirement
+        listing none applies to everyone. A prospect holds no positions and is
+        graded on every requirement.
         """
         # Get active requirements
         requirements = await self.list_requirements(organization_id, is_active=True)
+        if user_id and any(_requirement_roles(r) for r in requirements):
+            held = (await self._position_keys(organization_id, user_id)).get(
+                str(user_id), set()
+            )
+            requirements = _applicable_requirements(requirements, held)
 
         # Get records for this subject
         records = await self.list_records(
@@ -581,9 +669,16 @@ class MedicalScreeningService:
         With no active requirement every row is ``not_applicable`` and every
         total is zero: an empty requirement set grades nobody, so it must not
         report the department as compliant (and ``?standing=compliant`` then
-        matches nobody).
+        matches nobody). The same holds for one row whose position leaves it
+        with no requirement that applies: it is ``not_applicable``, not
+        compliant. ``total_requirements`` stays the department's active set.
         """
         requirements = await self.list_requirements(organization_id, is_active=True)
+        held_by_member = (
+            await self._position_keys(organization_id)
+            if any(_requirement_roles(r) for r in requirements)
+            else None
+        )
         subjects = await self.list_subjects(organization_id)
         records = await self.list_records(organization_id)
         today = await resolve_org_today(self.db, organization_id)
@@ -604,10 +699,17 @@ class MedicalScreeningService:
             ("prospect", subjects.prospects, by_prospect),
         ):
             for person in people:
-                _, compliant, expiring, _ = _grade(
-                    requirements, held.get(str(person.id), []), today
+                applicable = (
+                    _applicable_requirements(
+                        requirements, held_by_member.get(str(person.id), set())
+                    )
+                    if subject_type == "user" and held_by_member is not None
+                    else requirements
                 )
-                not_met = len(requirements) - compliant
+                _, compliant, expiring, _ = _grade(
+                    applicable, held.get(str(person.id), []), today
+                )
+                not_met = len(applicable) - compliant
                 rows.append(
                     ComplianceRosterRow(
                         subject_id=str(person.id),
@@ -618,7 +720,7 @@ class MedicalScreeningService:
                         expiring_soon_count=expiring,
                         standing=(
                             "not_applicable"
-                            if not requirements
+                            if not applicable
                             else (
                                 "not_compliant"
                                 if not_met

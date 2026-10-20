@@ -44,6 +44,7 @@ class TestSubmissionObservationValidation:
             "expiration_date": None,
             "deployed_lots": [],
             "quantity_on_truck": None,
+            "inventory_item_id": None,
         }
         values.update(overrides)
         return SimpleNamespace(**values)

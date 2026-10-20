@@ -5,6 +5,49 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 18 – 19, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).
+Predecessor: [October 16 – 18](#recent-changes-october-16--18-2026).
+
+**The headline:** adopted minutes can be published to a public page, purchase
+requests save themselves as drafts, equipment checks gain Present / Absent lines,
+and finance timestamps are corrected to UTC.
+
+### Read this first
+
+**If you run the server:** upgrade runs a one-time conversion of finance
+timestamps (nothing happens on a UTC server). `main` briefly had two Alembic heads
+on 2026-10-19; PR #3437 rejoined them, so `alembic heads` should report one.
+
+**If you administer a department:**
+
+- **Public minutes** are off until you turn them on under **Minutes > Publishing
+  settings**. The public copy shows counts and officers present only.
+- **Expense reports and check requests** use only chains made for their own type.
+  Add one if you relied on a purchase chain catching them.
+- **Administrative members** no longer see the clear-to-respond verdict, My
+  Checklists or Apparatus Inventory unless a position grants them.
+
+### What changed, by area
+
+- **Minutes:** library and public publishing, executive-session switches,
+  republish in place, **Roll listing** default and per-minutes override.
+- **Elections:** package and nominations notice sent one message per member;
+  package send runs in the background and lists unreached addresses.
+- **Equipment checks:** Present / Absent lines, crew-dated replacements, items
+  placed between locations without a heading.
+- **Finance:** draft autosave on purchase requests, amount limits, approval chain
+  range checks, chains by request type, budget remaining hidden from members who
+  may not see it, past-due dues read Overdue.
+- **Scheduling:** Go to the next shift, own sign-up confirmed, ended shifts leave
+  Open Shifts, training session times stored as UTC.
+- **Messages:** Probationary and Retired audiences match membership status.
+- **Workflow review W55–W73:** about 70 fixes across communications, finance,
+  grants, reports and integrations; see the repository ledger.
+
 ## Recent changes: October 16 – 18, 2026
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering

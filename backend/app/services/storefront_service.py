@@ -1099,6 +1099,18 @@ class StorefrontService:
                 member_totals=member_totals,
                 max_per_member=max_per_member,
             )
+            # The same caps without the member's own allowance. ``available``
+            # folds that in, and the storefront read every low figure as stock:
+            # an untracked item with a limit of 2 per member read "Only 2 left"
+            # in every size, and a member who had ordered their 2 was told it
+            # was sold out (W67).
+            stock_available = self._remaining_units(
+                product=product,
+                offering=offering,
+                window_totals=window_totals,
+                member_totals=member_totals,
+                max_per_member=None,
+            )
 
             variants = []
             for variant in product.variants:
@@ -1113,6 +1125,9 @@ class StorefrontService:
                         "label": variant.label,
                         "price": _money(price + _money(variant.price_delta)),
                         "available_quantity": variant_remaining,
+                        "stock_available": self._variant_remaining(
+                            variant, window_totals, stock_available
+                        ),
                         "is_available": variant_remaining is None
                         or variant_remaining > 0,
                     }
@@ -1151,6 +1166,7 @@ class StorefrontService:
                         product.personalization_method
                     ),
                     "available_quantity": available,
+                    "stock_available": stock_available,
                     "is_available": available is None or available > 0,
                     "variants": variants,
                 }
@@ -1692,6 +1708,29 @@ class StorefrontService:
             # The cap applies to the product as a whole, so compare it against
             # the combined ask across every variant of that product in the cart.
             if remaining is not None and requested_per_product[product.id] > remaining:
+                stock_remaining = self._remaining_units(
+                    product=product,
+                    offering=offering,
+                    window_totals=window_totals,
+                    member_totals=member_totals,
+                    max_per_member=None,
+                )
+                # Name the limit that binds. "Only 2 remain available" for a
+                # member at their per-member limit read as the item selling
+                # out, when anybody else could still order it (W67).
+                if max_per_member is not None and (
+                    stock_remaining is None or stock_remaining > remaining
+                ):
+                    if remaining == 0:
+                        raise ValueError(
+                            f"You have already ordered the most allowed of "
+                            f"'{product.name}' in this window "
+                            f"({max_per_member} per member)"
+                        )
+                    raise ValueError(
+                        f"You can order {remaining} more of '{product.name}' "
+                        f"in this window ({max_per_member} per member)"
+                    )
                 raise ValueError(
                     f"Only {remaining} of '{product.name}' remain available"
                 )

@@ -8,6 +8,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Users, Plus, Search, X, Mail, Phone, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { fundraisingService } from '../services/api';
 import type { Donor, DonorType } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -178,8 +179,8 @@ export const DonorsPage: React.FC = () => {
       toast.success('Donor added');
       resetForm();
       void loadDonors();
-    } catch {
-      toast.error('Failed to add donor');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to add donor'));
     } finally {
       setIsSubmitting(false);
     }
@@ -202,7 +203,7 @@ export const DonorsPage: React.FC = () => {
         {canManage && (
           <button
             onClick={() => setShowForm((prev) => !prev)}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+            className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
           >
             {showForm ? (
               <>
@@ -227,10 +228,11 @@ export const DonorsPage: React.FC = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* First Name */}
             <div>
-              <label className={labelClass}>
+              <label htmlFor="donor-firstName" className={labelClass}>
                 First Name <span className="text-red-500">*</span>
               </label>
               <input
+                id="donor-firstName"
                 type="text"
                 value={form.firstName}
                 onChange={(e) => updateField('firstName', e.target.value)}
@@ -242,10 +244,11 @@ export const DonorsPage: React.FC = () => {
 
             {/* Last Name */}
             <div>
-              <label className={labelClass}>
+              <label htmlFor="donor-lastName" className={labelClass}>
                 Last Name <span className="text-red-500">*</span>
               </label>
               <input
+                id="donor-lastName"
                 type="text"
                 value={form.lastName}
                 onChange={(e) => updateField('lastName', e.target.value)}
@@ -257,10 +260,13 @@ export const DonorsPage: React.FC = () => {
 
             {/* Email */}
             <div>
-              <label className={labelClass}>Email</label>
+              <label htmlFor="donor-email" className={labelClass}>
+                Email
+              </label>
               <div className="relative">
                 <Mail className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                 <input
+                  id="donor-email"
                   type="email"
                   value={form.email}
                   onChange={(e) => updateField('email', e.target.value)}
@@ -272,10 +278,13 @@ export const DonorsPage: React.FC = () => {
 
             {/* Phone */}
             <div>
-              <label className={labelClass}>Phone</label>
+              <label htmlFor="donor-phone" className={labelClass}>
+                Phone
+              </label>
               <div className="relative">
                 <Phone className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                 <input
+                  id="donor-phone"
                   type="tel"
                   value={form.phone}
                   onChange={(e) => updateField('phone', e.target.value)}
@@ -287,8 +296,11 @@ export const DonorsPage: React.FC = () => {
 
             {/* Donor Type */}
             <div>
-              <label className={labelClass}>Donor Type</label>
+              <label htmlFor="donor-donorType" className={labelClass}>
+                Donor Type
+              </label>
               <select
+                id="donor-donorType"
                 value={form.donorType}
                 onChange={(e) => updateField('donorType', e.target.value as DonorType)}
                 className={selectClass}
@@ -304,8 +316,11 @@ export const DonorsPage: React.FC = () => {
             {/* Company Name (shown for business / foundation) */}
             {showCompanyField && (
               <div>
-                <label className={labelClass}>Company Name</label>
+                <label htmlFor="donor-companyName" className={labelClass}>
+                  Company Name
+                </label>
                 <input
+                  id="donor-companyName"
                   type="text"
                   value={form.companyName}
                   onChange={(e) => updateField('companyName', e.target.value)}
@@ -317,8 +332,11 @@ export const DonorsPage: React.FC = () => {
 
             {/* Address Line 1 */}
             <div>
-              <label className={labelClass}>Address</label>
+              <label htmlFor="donor-addressLine1" className={labelClass}>
+                Address
+              </label>
               <input
+                id="donor-addressLine1"
                 type="text"
                 value={form.addressLine1}
                 onChange={(e) => updateField('addressLine1', e.target.value)}
@@ -329,8 +347,11 @@ export const DonorsPage: React.FC = () => {
 
             {/* City */}
             <div>
-              <label className={labelClass}>City</label>
+              <label htmlFor="donor-city" className={labelClass}>
+                City
+              </label>
               <input
+                id="donor-city"
                 type="text"
                 value={form.city}
                 onChange={(e) => updateField('city', e.target.value)}
@@ -341,8 +362,11 @@ export const DonorsPage: React.FC = () => {
 
             {/* State */}
             <div>
-              <label className={labelClass}>State</label>
+              <label htmlFor="donor-state" className={labelClass}>
+                State
+              </label>
               <input
+                id="donor-state"
                 type="text"
                 value={form.state}
                 onChange={(e) => updateField('state', e.target.value)}
@@ -353,8 +377,11 @@ export const DonorsPage: React.FC = () => {
 
             {/* Postal Code */}
             <div>
-              <label className={labelClass}>Postal Code</label>
+              <label htmlFor="donor-postalCode" className={labelClass}>
+                Postal Code
+              </label>
               <input
+                id="donor-postalCode"
                 type="text"
                 value={form.postalCode}
                 onChange={(e) => updateField('postalCode', e.target.value)}
@@ -402,6 +429,7 @@ export const DonorsPage: React.FC = () => {
           />
         </div>
         <select
+          aria-label="Filter by donor type"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
           className={selectClass}
@@ -533,8 +561,9 @@ export const DonorsPage: React.FC = () => {
                         {donor.email && (
                           <a
                             href={`mailto:${donor.email}`}
-                            className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded p-1 transition-colors"
+                            className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone rounded p-1 transition-colors"
                             title="Send email"
+                            aria-label={`Email ${donor.firstName} ${donor.lastName}`}
                           >
                             <Mail className="h-4 w-4" />
                           </a>
@@ -542,8 +571,9 @@ export const DonorsPage: React.FC = () => {
                         {donor.phone && (
                           <a
                             href={`tel:${donor.phone}`}
-                            className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded p-1 transition-colors"
+                            className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone rounded p-1 transition-colors"
                             title="Call"
+                            aria-label={`Call ${donor.firstName} ${donor.lastName}`}
                           >
                             <Phone className="h-4 w-4" />
                           </a>

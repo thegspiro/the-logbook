@@ -1,16 +1,20 @@
-"""`screening_requirements.grace_period_days` / `.applies_to_roles` are stored
-and read by nothing in the compliance calculation.
+"""`screening_requirements.grace_period_days` is stored and read by nothing in
+the compliance calculation.
+
+(`applies_to_roles` was the other half of this file until it was wired: a
+requirement listing positions now applies only to members holding one of them.
+That reader is covered by `test_medical_screening_requirement_positions.py`,
+and the field's "Not enforced yet" notice is gone from the form.)
 
 Pitfall #19: a setting whose only effect is being stored invites somebody to
-believe it changes an outcome when it does not. Both fields have a labelled,
-editable control on `ScreeningRequirementForm.tsx` with no such caveat before
-this fix — an officer configuring "Grace Period (days past expiration)" or
-listing specific roles under "Applies to Roles" gets a success toast and no
-change to who `get_compliance_status` (`medical_screening_service.py`) marks
-non-compliant: it evaluates every active requirement against every subject
-with a hard `expiration_date >= today` cutoff, never consulting either field.
+believe it changes an outcome when it does not. The field has a labelled,
+editable control on `ScreeningRequirementForm.tsx` — an officer configuring
+"Grace Period (days past expiration)" gets a success toast and no change to
+who `get_compliance_status` (`medical_screening_service.py`) marks
+non-compliant: it applies a hard `expiration_date >= today` cutoff, never
+consulting the field.
 
-For `grace_period_days` this is the same shape MS-09 pass 3 found already
+This is the same shape MS-09 pass 3 found already
 fixed once, for a *different* table with the same field name
 (`compliance_configs.grace_period_days`,
 `tests/test_compliance_grace_period_is_unwired.py`) — same remedy applied
@@ -18,20 +22,11 @@ here: a UI notice rather than a silently-different compliance outcome on
 every installation holding a non-default value (this column defaults to 30,
 so that is not a rare opt-in).
 
-`applies_to_roles` was worse un-labelled: before this fix, the field sat under
-literal copy reading "Leave blank to apply to all members", which asserted a
-targeting behavior that does not exist — a requirement scoped to `["emt"]`
-still applies to every member and prospect in the org. That caption was later
-dropped as redundant once the "Not enforced yet" notice below covered the
-same ground; this paragraph is left describing the original motivation, not
-the current copy.
-
-Wiring either is a product decision (it changes who counts as non-compliant,
-and for `applies_to_roles`, changes which requirements even apply to whom)
-so this pass labels rather than wires. This test keeps the two halves
-honest: it fails when a genuine reader appears in the compliance calculation
-without the notice being removed, and it fails if a notice is removed while
-the gap remains.
+Wiring it is a product decision (it changes who counts as non-compliant), so
+this pass labels rather than wires. This test keeps the two halves honest: it
+fails when a genuine reader appears in the compliance calculation without the
+notice being removed, and it fails if the notice is removed while the gap
+remains.
 """
 
 import ast
@@ -60,7 +55,7 @@ _FORM = (
 #: file — in particular one reading from the ORM instance
 #: (`requirement.grace_period_days`) inside `get_compliance_status` or
 #: `get_expiring_soon` — is a reader and means the gap has been closed.
-_FIELDS = {"grace_period_days", "applies_to_roles"}
+_FIELDS = {"grace_period_days"}
 _KNOWN_WRITE_SITE_OBJECT_NAME = "data"
 
 
@@ -81,24 +76,19 @@ def _reader_sites() -> list:
     return sites
 
 
-def test_no_compliance_calculation_reads_grace_period_or_applies_to_roles():
+def test_no_compliance_calculation_reads_grace_period():
     sites = _reader_sites()
 
     assert not sites, (
-        "A reader for ScreeningRequirement.grace_period_days or "
-        f".applies_to_roles now exists in medical_screening_service.py: "
-        f"{sites}. Remove the matching 'not enforced' notice from "
-        "ScreeningRequirementForm.tsx and delete this test (or narrow it, if "
-        "only one of the two fields was wired)."
+        "A reader for ScreeningRequirement.grace_period_days now exists in "
+        f"medical_screening_service.py: {sites}. Remove the 'not enforced' "
+        "notice from ScreeningRequirementForm.tsx and delete this test."
     )
 
 
 @pytest.mark.parametrize(
     ("field_label", "notice_fragment"),
-    [
-        ("Grace Period", "Not enforced"),
-        ("Applies to Roles", "Not enforced"),
-    ],
+    [("Grace Period", "Not enforced")],
 )
 def test_the_form_says_the_field_is_not_enforced(field_label, notice_fragment):
     source = _FORM.read_text(encoding="utf-8")

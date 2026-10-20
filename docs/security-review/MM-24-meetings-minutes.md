@@ -1,6 +1,6 @@
 # Security Review — Meetings & Minutes
 
-**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), #2303 (pass 3), [#2502](https://github.com/thegspiro/the-logbook/pull/2502) (pass 4), [#2881](https://github.com/thegspiro/the-logbook/pull/2881) (pass 5), pass 6 (this PR)
+**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), #2303 (pass 3), [#2502](https://github.com/thegspiro/the-logbook/pull/2502) (pass 4), [#2881](https://github.com/thegspiro/the-logbook/pull/2881) (pass 5), pass 6 PR recorded in `PROGRESS.md`, pass 7 PR recorded in `PROGRESS.md`, pass 8 (this PR)
 
 ## Pass 1 (2026-08-26)
 
@@ -1833,3 +1833,348 @@ dimensions, not authored by this pass. The diff this pass contributes is
 this findings file, `docs/security-review/PROGRESS.md`, and
 `docs/KNOWN_LIMITATIONS.md` (no change needed there — both entries already
 accurately reflect the resolved state, re-confirmed rather than rewritten).
+
+---
+
+## Pass 8 (2026-10-20) — the flaky-test lead was a real bug, found and fixed; two pre-existing races flagged
+
+**Backend:** `app/api/v1/endpoints/meetings.py` (675 L, was 623),
+`app/api/v1/endpoints/minutes.py` (1,570 L, was 1,379),
+`app/api/v1/endpoints/minutes_records.py` (1,250 L, was 1,366 — net shrink
+from extracting `build_print_data`), `app/services/meetings_service.py`
+(763 L, was 688), `app/services/minute_service.py` (2,218 L, was 1,589 — the
+single largest delta), `app/services/quorum_service.py` (unchanged),
+`app/services/attendance_dashboard_service.py` (unchanged),
+`app/services/minutes_signature_service.py` (unchanged),
+`app/services/minutes_reminder_service.py` (unchanged),
+`app/services/minutes_record_service.py` (unchanged),
+`app/services/minutes_notifications.py` (unchanged),
+`app/models/minute.py`/`app/models/meeting.py`, `app/schemas/minute.py`/
+`app/schemas/meetings.py`, `app/mcp/tools/meetings.py` (unchanged),
+`app/utils/minutes_pdf.py`, `app/utils/motion_votes.py`, `app/utils/rich_text.py`.
+New files read in full: `app/services/agenda_document_access.py`,
+`app/services/minutes_publishing_service.py`, `app/utils/minutes_public.py`,
+`app/utils/minutes_search.py`, `app/api/public/minutes.py` (the new
+unauthenticated surface).
+**Frontend:** spot-checked the publishing/attendance-listing/signer settings
+panels and the agenda-outline UI named by the delta's commits; not read in
+full (see Scope).
+**Migrations:** several new revisions since pass 7 for `agenda_items`,
+`previous_minutes_id`/`acceptance` on `meeting_motions`,
+`attendance_listing`/`published_revision_version`/`published_at` on
+`meeting_minutes`, and the new `minutes_public_copies` table. Chain validated
+at 631 revisions, single head `ca0c2111466f`.
+
+### Scope
+
+`search_pull_requests`/`list_pull_requests` (state open, head
+`claude/security-review-`) returned 0 before starting and again immediately
+before pushing — no collision. `git log` against every file this feature
+names found pass 7's merge (`97aa9834`) 12 non-merge commits behind `HEAD`,
+landing: e-signature-adjacent agenda outlining (`869fa96b`, "agenda items
+become the minutes outline"), a crash fix on `Meeting` updates (`54568209`),
+public posting of adopted minutes (`f8dd56a1`, "Publish adopted minutes to the
+library and a public page"), a department-wide attendance-listing default
+(`6e8b82ac`), prepared/previous-minutes motions (`0862bfa2`, "motions prepared
+with the minutes; accept previous minutes as submitted or revised"), a
+settings-page consolidation (`35b65b34`), a frontend mounting-order bug fix in
+the signer panel (`362a57b9`), full-text archive search (`d9f5ebad`), and two
+pure-frontend/pure-copy fixes (`0916bf2a`, `2966d7c0`) out of this rotation's
+scope. Every substantive file was read in full against its current state
+(`minute_service.py` nearly doubled; diffed in sections against pass 7's
+reviewed text rather than re-read cold). The two new unauthenticated files
+(`app/api/public/minutes.py`, and the service/util pair it depends on) were
+read in full since this is the first pass to cover them.
+
+### The flaky-test lead, investigated to a real bug — ✅ FIXED (MM-18)
+
+The task brief's lead was
+`tests/test_minutes_prepared_motions_integration.py::TestPreparedMotions::test_removing_the_flag_removes_only_the_unacted_motion`,
+reported red once on CI (`got {'adjournment', 'approval_of_previous'}`,
+`expected {'adjournment'}`) then green on re-run, with the **same job**
+(a different DB-matrix leg) also red on `main` at the commit just before this
+feature's own baseline — i.e. not plausibly caused by this feature's own
+delta, and not confined to one test-ordering seed.
+
+**Reproduced locally, deterministically reproducible and non-deterministic in
+exactly the way CI described.** Running the single test in isolation passed
+8/8. Running the whole file under `pytest-randomly`'s default (seeded-but-
+varying) ordering failed roughly 1 run in 3 — confirmed over 6 attempts,
+matching "flaky under the full file, not under `-k` isolation" exactly.
+
+**Root cause, found by instrumenting `ensure_section_motions` and the two
+service methods around it, then removed before committing:**
+`MinuteService.ensure_section_motions` finds motions to delete via a **raw**
+`select(Motion).where(Motion.minutes_id == minutes.id)` query — not through
+the `MeetingMinutes.motions` ORM relationship — and calls
+`self.db.delete(stale)` directly on what it finds. SQLAlchemy's cascade
+(`cascade="all, delete-orphan"`) removes the row from the database correctly
+(confirmed with a throwaway post-commit query inside the instrumented code: the
+DELETE lands every single time), **but it does not update an already-loaded
+`minutes.motions` Python collection**, because the delete never went through
+that collection. If `.motions` had already been eagerly loaded on this same
+`MeetingMinutes` object earlier in the **same request** — which happens on
+every `PUT /minutes/{id}` call, since `update_minutes`'s own leading
+`get_minutes()` fetch always eager-loads it — the stale, now-deleted `Motion`
+instance keeps sitting in that in-memory list for the rest of the object's
+life in the session's identity map.
+
+Two distinct symptoms follow from this one cause:
+
+1. **Deterministic, every time, within the one request:** `update_minutes`'s
+   endpoint (`PUT /minutes/{id}`) returns `await _respond(db, current_user,
+minutes)` built from that **same** `minutes` object — so the PUT's own
+   response body lists the just-deleted motion, in the same response that
+   reports 200 OK. The test never checked this (only the status code), which
+   is why it alone never caught the defect in six passes of this feature's own
+   review.
+2. **Non-deterministic, GC-timing dependent, across the test's own two
+   separate GET requests:** whether the test's _later_, separate
+   `GET /minutes/{id}` call sees the same stale object (and therefore the
+   same stale answer) or a freshly-loaded one depends on whether CPython's
+   garbage collector had already reclaimed the first object by the time that
+   request ran — nothing else in the test holds a reference to it. That is
+   exactly the kind of timing CPython does not guarantee, which is why the
+   test's own assertion (built on the second symptom, not the first) is
+   flaky rather than reliably red or green, and why it was equally flaky on
+   `main` before this feature's own delta: `ensure_section_motions` and this
+   calling shape both predate this pass's work, and the test itself was the
+   only thing that happened to be watching for it.
+
+This is a genuine application-defect, not a test-infrastructure artifact
+("just a flake" is explicitly ruled out): a secretary unchecking "needs a
+motion" on a section with an unacted prepared motion gets back a 200 response
+that still lists that motion as present, from the same call that deleted it.
+A frontend that trusts the mutation response to update its own state (a common
+SPA pattern, and the one `MinutesDetailPage.tsx` otherwise follows for every
+other field on this same endpoint) would show a motion that no longer exists
+until the page is reloaded.
+
+**Where:** `app/services/minute_service.py`, `ensure_section_motions`.
+**Fix:** after queuing the delete, also remove `stale` from
+`minutes.motions` **if that collection is already loaded** (checked via
+`sqlalchemy.inspect(minutes).attrs.motions.loaded_value`, which returns the
+live `InstrumentedList` without triggering a lazy load when it is _not_
+loaded — the two cases this bug conflated are now handled explicitly instead
+of left to accident). This keeps the in-memory collection consistent with the
+database for the rest of the request regardless of what loaded it or when.
+Every other call site of `ensure_section_motions` (`update_minutes`,
+`recall_minutes`, `apply_outline`, `sync_agenda`'s apply path, and the one
+inside `create_minutes` itself) is covered by this single fix, since it is
+the one place the delete happens.
+
+**Verification:** 25 consecutive full-file runs under `pytest-randomly`'s
+default ordering passed 25/25 after the fix (0/6 clean before it, matching
+CI's own report of an intermittent failure). A new guard test (below) makes
+the deterministic half of the bug (symptom 1) fail every time without relying
+on GC timing, so the fix does not depend on the flake continuing to be
+reproducible to stay caught.
+
+### MM-18 — MED — `ensure_section_motions`'s raw-query delete left a stale motion in the same request's own response — ✅ FIXED
+
+**What/Where/Fix:** as described above.
+**Failure scenario:** `PUT /minutes/{id}` with a `sections` payload that turns
+off `needs_motion` on a section whose prepared motion is still `pending`
+returns 200 with that motion still present in the response body's `motions`
+list, even though the row was deleted from the database by the same call.
+**Impact:** a correctness/data-integrity defect confined to the acting
+session's own request/response; not a cross-tenant or authorization issue (no
+other organization's data is involved, and the caller already holds
+`minutes.manage` on this exact record). Severity is MED rather than LOW
+because the staleness is not cosmetic — it can mislead a client that trusts
+the mutation response, and it was concretely responsible for the intermittent
+CI failures on `main`, i.e. it already had an observable production-adjacent
+blast radius before this pass.
+
+### MM-19 — LOW — the same method's find-or-create for a new prepared motion has no lock — FLAGGED, not fixed
+
+**What:** `ensure_section_motions`'s loop over `wanted.items()` does a
+plain `select` to check whether a section's motion already exists
+(`by_section.get(key)`) and, if not, `self.db.add(Motion(...))`. There is no
+`.with_for_update()` on the `MeetingMinutes` row and no unique constraint on
+`(minutes_id, section_key)`. Two `minutes.manage` holders racing a save on the
+same draft's `sections` (e.g. one toggling `needs_motion` on while the other
+applies an agenda sync) within the same instant could each see "no motion for
+this section yet" and both insert one.
+**Where:** `app/services/minute_service.py`, `ensure_section_motions`
+(the `for key, section in wanted.items():` loop).
+**Why flagged, not fixed:** the same Pitfall #27 shape as
+`AttendanceDashboardService.grant_waiver`'s unlocked find-or-create (pass 5's
+"Looked at, not a finding" note, never promoted to a tracked id because the
+consequence there is a duplicate attendance row, not a security bypass).
+Here the consequence is a duplicate **pending** motion for one section — a
+cosmetic double entry a secretary would notice and could delete, not a
+tenant-isolation or privilege gap, and not reachable without two people
+editing the exact same draft within milliseconds of each other. Consistent
+with this project's own precedent for this exact shape (pass 5's note, and
+CLAUDE.md Pitfall #27's own text acknowledging lock-free find-or-create as a
+data-integrity rather than security concern when nothing it protects is a
+capacity cap or a security decision), left open rather than adding a lock
+this pass did not have a reason to add elsewhere in the same method.
+
+### MM-20 — LOW — `MinutesPublishingService._post_public`'s find-or-create for the public copy has no lock — FLAGGED, not fixed
+
+**What:** `_post_public` looks up an existing `MinutesPublicCopy` by
+`minutes_id` (`_copy_for`), and either updates it or inserts a new one. No
+locking read, but `MinutesPublicCopy.minutes_id` **does** carry a DB-level
+`unique=True` constraint (confirmed in `app/models/minute.py`) — so unlike
+MM-19, a genuine race cannot silently duplicate the row; the loser's `INSERT`
+raises `IntegrityError`.
+**Where:** `app/services/minutes_publishing_service.py`, `_post_public`/
+`_copy_for`.
+**Failure scenario:** two `minutes.manage` holders both click "Publish" on
+the same minutes within the same instant; one succeeds, the other's `commit()`
+raises an unhandled `IntegrityError`, surfacing as a plain 500 (caught only by
+the app's generic exception handler, which sanitizes the message — no
+information disclosure) rather than a clean "already published, try again"
+response.
+**Why flagged, not fixed:** the database already prevents the corrupted state
+a lock would prevent; what is missing is a graceful retry/message, a UX
+polish rather than a security or data-integrity gap, and distinct enough from
+MM-19's shape (no unique constraint there) that folding them into one fix
+would have papered over the difference. Left open for a future pass with a
+reason to touch this method.
+
+### Verified good ✅ (pass 8 additions, beyond what pass 7 already re-confirmed)
+
+- **The new public, unauthenticated surface (`app/api/public/minutes.py`) is
+  properly gated for what it is.** Rate-limited at 60/min per IP
+  (`_rate_limit_minutes`, the same `public_rate_limit` helper other public
+  routes use); fails closed to 404 on any deployment with other than exactly
+  one organization (`_the_organization`, the same pattern the public legal-text
+  endpoint already uses, re-read directly rather than trusted from its own
+  comment); fails closed again if the `minutes` module is disabled for that
+  org; `Cache-Control: no-store` on both responses so a withdrawal or a
+  settings flip takes effect immediately rather than being served stale from a
+  shared cache; `list_public`/`get_public` both **re-check** the department's
+  publishing settings on every read (`_servable`), not only at post time, so
+  switching public posting off takes the page down at once.
+- **Executive-session minutes need all three settings, not a bypassable one.**
+  `MinutesPublishingSettings.public_allowed` requires `public_posting` **and**
+  both `executive_library`/`executive_public` for an executive meeting type;
+  all three default to `False` (fail closed) when unset, confirmed in
+  `minutes_publishing_settings_in`. `MinutesPublishingService.publish` also
+  independently checks `library_allowed` before the library copy is even filed,
+  so a public copy of an executive set cannot exist without the library copy
+  first being permitted.
+- **The public copy's content is built by naming every field that may leave,
+  not by redacting a superset.** `app/utils/minutes_public.narrow_for_public`
+  never touches its input in place; it constructs a new dict field by field
+  (attendance counts and officers-present only, never the full roll; motion
+  wording/mover/seconder/totals/result, never individual votes or discussion
+  notes; closed-session metadata only, never the summary or participant list;
+  election tallies, never voter-level detail; no attachments, no library
+  links). This is a stricter cut than the PDF export's own data, by design,
+  confirmed by reading the module's own docstring against its code, field by
+  field, not merely trusting the comment.
+- **Document links on an agenda item are validated in-org and per-viewer, not
+  merely in-org (XC-1 plus a second, narrower check).**
+  `MeetingsService.settle_agenda_items` resolves a client-supplied document id
+  via an org-scoped query **and** `DocumentsService.can_access_document`
+  against the _linking_ user's own folder permissions before it is stored;
+  `app/services/agenda_document_access.narrow_documents` then re-checks every
+  stored reference against the _reading_ user's own access on every response
+  that carries one (`meetings.py`'s list/get/create/update routes and
+  `minutes.py`'s `_respond`), so a member who can read the meeting but not a
+  leadership-only folder never sees that file's name. `can_access_document`
+  fails closed on an unresolvable folder (confirmed at
+  `documents_service.py:651-654`).
+- **The previous-minutes link and the later adoption-proposal lookup are both
+  resolved by the server, in-org, never by a client-supplied id** — re-read
+  `_previous_minutes` and `adoption_proposal` directly (new since pass 7;
+  neither existed in the version that file reviewed): both filter
+  `MeetingMinutes.organization_id`/join through it, and `previous_minutes_id`
+  on a `Motion` is only ever set by `ensure_section_motions`'s own server-side
+  lookup, never accepted from a request body (`MotionCreate`/`MotionUpdate`
+  carry no such field — confirmed by reading both schemas).
+- **`GET /minutes/{id}/adoption-proposal` requires `minutes.manage`, not
+  merely `minutes.view`**, and 404s (not 403s) for another organization's
+  minutes id — re-verified directly against `TestAdoptionProposal`'s own test
+  suite (`test_a_member_cannot_read_one` → 403, `test_another_department_
+cannot_read_a_proposal` → 404), which this pass ran rather than merely read.
+- **The second-approver rule (MM-5's `assert_different_person`, pass 1) now
+  also covers the new previous-minutes acceptance path**: `approve_minutes`
+  still rejects the officer who submitted the minutes from being the one who
+  confirms the proposed adoption (`TestAdoptionProposal::
+test_the_officer_who_circulated_still_cannot_adopt_them`, read and run, not
+  merely cited).
+- **`search_archive`'s matching is Python-side `re`, not SQL `LIKE`, and is
+  safe on both counts that matter for that shape.** Every term is
+  `re.escape()`-d before being compiled (`app/utils/minutes_search.py:
+compile_terms`) — no regex-injection surface — and the term count/length are
+  capped (`MAX_TERMS=8`, `MAX_QUERY_LENGTH=200`, `MIN_TERM_LENGTH=2`) before
+  any pattern is compiled, so a hostile query cannot build a catastrophic-
+  backtracking pattern from unbounded input. The underlying row scan is
+  capped at `ARCHIVE_SCAN_LIMIT=500` and eager-loads motions/action items in
+  the same query (no N+1), and still applies the same `restricted`/
+  `member_visible_conditions()` gate as `list_minutes`/`search_minutes` when
+  the caller lacks `minutes.manage`.
+- **The settings this pass's new UI writes (`public_posting`,
+  `executive_library_publishing`, `executive_public_posting`,
+  `attendance_listing`) go through the organization-settings endpoint's
+  existing `copy.deepcopy()` + deep-merge path**
+  (`OrganizationService.update_organization_settings`), not a new ad-hoc
+  writer — re-read that method directly to confirm the Pitfall #12 deep-copy
+  and the ORU-9 deep-merge are both still in place and apply to this new
+  `"minutes"` settings section exactly as they do to every other section. The
+  write is gated on `settings.manage`/`organization.update_settings` (not
+  `minutes.manage`), matching the frontend's own `canEdit` check
+  (`checkPermission('settings.manage') || checkPermission('organization.update_settings')`)
+  — a secretary cannot unilaterally turn on public posting of executive
+  minutes.
+- **No `window.confirm`/`alert`/`prompt` in the new frontend.** The one
+  genuinely consequential toggle this pass adds — allowing executive-session
+  minutes onto the public page — is gated behind `useConfirm()`
+  (`PublishingSettingsPanel.tsx`), with the dialog's body naming the actual
+  consequence ("anyone who has already read it keeps what they read") rather
+  than a generic yes/no.
+- **No new CSV/spreadsheet export.** Grepped `csv\.`/`StreamingResponse`
+  across every file this pass added or touched: zero hits, same disposition
+  as every prior pass.
+- **E-signatures (`minutes_signature_service.py`) are byte-identical to pass
+  7's reviewed state** — confirmed via `git diff`, not re-read in full a
+  second time, since nothing in this delta touches that file.
+
+### Not re-derived, re-confirmed from pass 7 by reading the current code at its cited line
+
+MM-1 through MM-17, the 73-route inventory's permission/org-scoping pattern,
+the LIKE-escaping convention, JSON-column handling, and the `minutes.view_
+executive` tier's continued absence — all re-checked at their current
+locations (several shifted by this pass's line-count growth) and found
+unchanged. Not reproduced verbatim a second time; see pass 7's own "Confirmed
+still-intact" section for the full list this pass re-verified rather than
+re-derived.
+
+### Guard tests added
+
+- `backend/tests/test_minutes_prepared_motions_integration.py::
+TestPreparedMotions::test_the_update_response_itself_drops_the_removed_motion`
+  (new) — asserts the **PUT `/minutes/{id}` response body itself** (not a
+  separate, later GET) no longer lists a motion `ensure_section_motions` just
+  deleted, after that same request's own `get_minutes()` call has already
+  eager-loaded `minutes.motions`. This is the deterministic half of MM-18
+  (symptom 1 above), so it fails every time against the unfixed code rather
+  than depending on the GC-timing race that made the original test flaky.
+  Verified to fail 3/3 against the code as it stood before this pass's fix
+  (reverted locally and re-run), and to pass 8/8 after it. The original
+  flaky test itself was also re-run 25 times under `pytest-randomly`'s
+  default ordering after the fix (0 failures), up from failing roughly 1 run
+  in 3 before it.
+
+## Completion gate (pass 8)
+
+| Check                                                      | Result                                                                                |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                              | clean (0 violations)                                                                  |
+| `black --check app/ tests/ alembic/`                       | clean (2,476 files unchanged)                                                         |
+| `isort --check-only app/ tests/ alembic/`                  | clean (one import reordered by this pass's own edit; `isort` applied and re-verified) |
+| `python3 scripts/validate_migrations.py --strict`          | PASSED — 631 revisions, single head `ca0c2111466f`                                    |
+| backend tests, scope (`-k "meeting or minutes or motion"`) | 1,061 passed, 1 skipped (pre-existing, `pywebpush`)                                   |
+| `cd frontend && npm run typecheck`                         | 0 errors                                                                              |
+| `cd frontend && npm run lint`                              | 0 errors, 0 warnings                                                                  |
+
+Only one backend file carries a behavior change this pass
+(`app/services/minute_service.py`, the MM-18 fix); the guard test above lives
+in its own existing integration-test file. No frontend file was touched, so
+`npm run lint`/`typecheck` re-confirm a clean baseline rather than check new
+code.

@@ -3,20 +3,122 @@
 **Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 (pass 1),
 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4), 2026-09-15
 (pass 5), 2026-09-17 (pass 6), 2026-10-06 (pass 7), 2026-10-14 (pass 8),
-2026-10-15 (pass 9) · **PR:**
+2026-10-15 (pass 9), 2026-10-19 (pass 10) · **PR:**
 [#1842](https://github.com/thegspiro/the-logbook/pull/1842) (pass 1),
 [#2625](https://github.com/thegspiro/the-logbook/pull/2625) (pass 6, 0
 fixed, 0 flagged, merged), [#2970](https://github.com/thegspiro/the-logbook/pull/2970)
 (pass 7, 0 fixed, 0 new findings), [#3195](https://github.com/thegspiro/the-logbook/pull/3195) (pass 8, 1 fixed, 0 flagged),
-[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings)
+[#3290](https://github.com/thegspiro/the-logbook/pull/3290) (pass 9, 0 fixed, 0 new findings), pass 10 PR recorded in `PROGRESS.md`
 
-**Backend:** `api/v1/endpoints/equipment_check.py` (52 routes, unchanged since
-pass 8), `api/v1/endpoints/shift_completion.py` (21 routes),
+**Backend:** `api/v1/endpoints/equipment_check.py` (54 routes, up from 52 at
+pass 9), `api/v1/endpoints/shift_completion.py` (21 routes),
 `services/equipment_check_service.py` (5,368 L),
 `services/shift_completion_service.py` (1,930 L)
 **Frontend:** in-app (no dedicated module directory)
 **Migrations:** none this iteration (no schema change to this feature's own
 tables)
+
+---
+
+## Pass 10 (2026-10-19) — real delta (9 non-merge commits touching the primary files, mostly Medical Supplies extending this feature's shared service), 0 fixed, 0 new findings
+
+**Watchdog pickup.** `search_pull_requests` for `repo:thegspiro/the-logbook
+is:pr is:open head:claude/security-review` returned 0 results. The
+dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable via `ListAgents`.
+PR #3434 (Feature 13, Apparatus & NFC, pass 17) had already merged,
+docs-only. Rotation row 14 (Equipment check & shifts) was the next `⬜`.
+
+**Baseline.** Pass 9 merged as `3d10ff0c` (PR #3290's merge-base). 626
+non-merge-adjacent commits landed repo-wide in the window
+(`git log --oneline 3d10ff0c..origin/main | wc -l`); of those, **9** touch
+this feature's declared primary files directly, each read via `git show`
+in full:
+
+| Commit                                         | What it changed                                                                                                                                                                                                                                                                                                 | Security reading                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `99258edb`                                     | New `POST /equipment-checks/inventory-links/auto` — auto-links checklist positions to the catalog on an exact/strong, non-tied match                                                                                                                                                                            | Gated `inventory.check_manage`, same as its manual sibling. Writes through the already-reviewed `link_inventory_items_across_templates`, which resolves every `CheckTemplateItem` id through an org-scoped join on `EquipmentCheckTemplate.organization_id` under `.with_for_update()` (XC-1, locked) before writing, and validates every target `inventory_item_id` is in-org before accepting it. Clean.                                                                                                                                                                                                                                                                                                                                                                                                |
+| `d696fcf0`                                     | New `POST /equipment-checks/inventory-links/undo`                                                                                                                                                                                                                                                               | Same gate, same org-scoped/locked resolution shape (mirrors the link side: clears a link only while it still points at the expected item, org-scoped by the same join). Clean.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `a9e7ffae`, `6556baef`, `cb142452`, `dce89db1` | Medical Supplies' "where it's kept" / truck-stock / expiry work, landing mostly in `equipment_check_service.py` as new read helpers (`apparatus_counts_for_items`, `apparatus_places_for_items`, `_compartment_paths`, `apparatus_expiring_stock`) and a count-triggered reorder hook (`_reorder_after_counts`) | Every new query filters `EquipmentCheckTemplate.organization_id`/`InventoryItem.organization_id`/`Apparatus.organization_id` explicitly — none trusts an unscoped parent. `_compartment_paths` resolves compartments by `template_id` with no org filter of its own, but every caller passes only template ids already proven in-org by a preceding org-scoped query (the correct parent-resolution shape, Pitfall #14a(b)) — not a new by-id bypass. Its in-memory parent walk has an explicit `seen` cycle guard, so a corrupted `parent_compartment_id` loop can't hang the request. `_reorder_after_counts` runs after commit, in the request's existing org/user context; its lookup failure is caught and logged, never surfaced to the caller or allowed to roll back the check that triggered it. |
+| `d6862d0a`                                     | "Critical means strictly below the minimum" — a pure comparison-operator fix (`<` vs `<=`) in the pass/fail verdict logic                                                                                                                                                                                       | No query, no auth, no scoping touched.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `4fb185d2`                                     | Count-unit/Min-to-Pass rework (migration `12e20092c1a8` adds three nullable columns, guarded/idempotent)                                                                                                                                                                                                        | `equipment_check.py`'s own +7 hunk is PDF-export response passthrough (`quantity_found`, `expected_quantity`, `count_unit`) — no new query. New columns are plain nullable strings/floats, no FK, so Pitfall #2 doesn't apply.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `99555095`                                     | Inline checklist groups / Present-Absent check type / unlinked Date-line replacement tracking (migration `e99f068be43e` adds one nullable boolean column)                                                                                                                                                       | Read the full `+257` hunk in `equipment_check_service.py`: every new write path operates on an already-org-scoped `CheckTemplateItem`/`CheckTemplateCompartment` resolved the same way the rest of the file does; no new client-supplied FK accepted without validation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+
+`equipment_check_pdf.py` (+17/−9, `4fb185d2`'s PDF-export passthrough and
+`99555095`'s Present/Absent rendering), `schemas/equipment_check.py`
+(+176/−0 across four commits, all new response/request fields), and
+`models/apparatus.py` (+15/−0, two plain nullable columns) are accounted
+for above. `shift_completion.py`/`shift_completion_service.py` are
+byte-identical to pass 9.
+
+**Shared-dependency and adjacent-surface files** (`org_scoping.py`,
+`core/permissions.py`, `core/audit.py`, `utils/model_updates.py`,
+`utils/sql_search.py`, `core/dependencies.py`, `utils/csv_export.py`,
+`frontend/src/utils/apiCache.ts`) — all eight byte-identical to the pass-9
+baseline.
+
+**Frontend.** `git log --no-merges -- <this feature's own pages>`
+(`EquipmentCheckTemplateBuilder.tsx`, `CheckLogPage.tsx`,
+`MyChecklistsPage.tsx`, `ShiftCheckInPage.tsx`) returns zero commits in
+this window — every frontend change in the window belongs to the Medical
+Supplies module (out of this feature's scope) or the Operations
+shared-header refactor (reviewed under Apparatus & NFC pass 17, no
+equipment-check page in its diff).
+
+**Re-verified: every prior fix and open item, read at its current location.**
+
+- **EC-16** (SAVEPOINT duplicate-report guard) — intact,
+  `shift_completion_service.py` byte-identical to pass 9.
+- **EC-6, EC-13** — intact; neither touched file this window.
+- **`.ilike()` escaping**, **`SafeCsvWriter`** — intact; `equipment_check_service.py`'s
+  new hunks add no new search or export path.
+- **EC-7 / EC-11** — resolved by owner decision 2026-10-11 (per
+  `KNOWN_LIMITATIONS.md`), unchanged this window.
+- **EC-8** — still open/accepted as harmless; not touched.
+- **EC2-3/EC2-4** (app-review, dangling-FK-on-setattr-loop) — re-checked
+  directly at `update_item` (`equipment_check_service.py:1246-1248`):
+  already closed by `_validate_item_fks(data, organization_id)`, called
+  before `apply_updates`; not touched by any commit in this window.
+- **`get_item_deployments` vs. its sibling permission-gate discrepancy** —
+  still present, still an owner-decision item per `KNOWN_LIMITATIONS.md`;
+  neither route's decorator touched this window.
+- **Route inventory** — `equipment_check.py` **54, up from 52** (the two
+  new inventory-links routes), `shift_completion.py` 21, unchanged. Both
+  new routes carry `require_permission("inventory.check_manage")`,
+  byte-identical to their manual-link sibling's gate — not a widened
+  grant. Re-counted via `grep -c "^@router\.(get|post|put|patch|delete)"`.
+- **JSON mutation (Pitfall #12), SMS allowlist (Pitfall #18), unbounded
+  in-memory caches (Pitfall #9)** — no new nested-JSON write, no new
+  `SMSService` call, no new module-level dict/set tracker introduced by
+  any of the nine commits; grepped fresh.
+
+**No new finding.** The two new routes extend an already-reviewed,
+org-scoped, lock-guarded write path with no change to its invariants; every
+other real change is either Medical Supplies' own feature work consuming
+this file's models through correctly org-scoped queries, or a mechanical
+comparison/passthrough fix with no auth or tenancy surface.
+
+### Completion gate (pass 10)
+
+| Check                                                                                                                       | Result                                           |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                               | ✅ 0 violations                                  |
+| `black --check app/ tests/ alembic/`                                                                                        | ✅ 2455 files unchanged                          |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                                                 | ✅ clean                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                                           | ✅ single head `2315d544d60a`, 623 revisions     |
+| `python3 scripts/check_route_permissions.py --strict`                                                                       | ✅ 272 routes, 0 errors, 0 warnings              |
+| `pytest tests/ -q -k "equipment_check or shift_completion"`                                                                 | ✅ 590 passed, 1 pre-existing skip (`pywebpush`) |
+| Tenancy/migration guard tests (LIKE escaping, capacity locking, CSV sweep, org-scoping ratchet, migration create-all/chain) | ✅ 166 passed, 1 pre-existing skip               |
+| `cd frontend && npm run typecheck`                                                                                          | ✅ 0 errors                                      |
+| `cd frontend && npm run lint`                                                                                               | ✅ 0 errors, 0 warnings                          |
+
+No frontend file this feature owns changed this window, so the targeted
+backend `-k` run plus the route/migration checks are the suite that could
+actually observe a regression, per CLAUDE.md's "match the verification to
+the change."
+
+Rotation row 14 → ✅ (pending this PR's merge). Next: Feature 15
+(Scheduling).
 
 ---
 

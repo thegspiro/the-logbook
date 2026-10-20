@@ -10,6 +10,7 @@ import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { useMedicalScreeningStore } from '../store/medicalScreeningStore';
 import { SCREENING_TYPE_LABELS } from '../types';
+import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { SelfRecordedBadge } from './SelfRecordedBadge';
 import { SubjectCompliancePanel, type ComplianceSubject } from './SubjectCompliancePanel';
 import { ComplianceRoster } from './ComplianceRoster';
@@ -70,7 +71,9 @@ export const ComplianceDashboard: React.FC = () => {
                   >
                     {screening.days_until_expiration} day{screening.days_until_expiration === 1 ? '' : 's'}
                   </p>
-                  <p className="text-theme-text-muted text-xs">Expires {screening.expiration_date}</p>
+                  <p className="text-theme-text-muted text-xs">
+                    Expires {formatCalendarDate(screening.expiration_date)}
+                  </p>
                 </div>
               </div>
             ))}

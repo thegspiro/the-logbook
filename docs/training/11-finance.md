@@ -53,8 +53,14 @@ Every member holds the permission to raise requests, which is what lets them
 raise their own. A member who holds nothing else sees **Finance > My Purchase
 Requests**, **My Expense Reports** and **My Check Requests** — only the
 requests they raised, never anyone else's — and picks a budget line by its name
-and the amount left on it ("Training — $1,250.00 remaining"), without seeing
-the budget pages. They can edit a request until they submit it and withdraw a
+and, if they own the line or hold `finance.view` / `finance.manage`, the amount
+left on it ("Training — $1,250.00 remaining"), without seeing the budget pages.
+_(2026-10-18)_ Everyone else sees the line's name alone; the remaining amount is
+no longer sent to them. An expense report or check request is routed only
+through a chain set for its own type (a purchase-request chain never catches
+them); with no chain for the type it waits in Pending Approval to be decided by
+hand. Finance timestamps (Created, Updated) were corrected to UTC; see
+`UPGRADING.md`. They can edit a request until they submit it and withdraw a
 draft; once submitted, only the finance office can cancel it. A department that
 does not want members raising requests removes that permission from the
 **Member** position.
@@ -671,8 +677,8 @@ The chain with the highest score wins. If no chain matches at all (or the matchi
 | **Name**            | A descriptive name for the chain (e.g., "Standard Purchase Approval")                       |
 | **Description**     | Optional notes about when this chain applies                                                |
 | **Applies To**      | Which request type this chain governs: Purchase Requests, Expense Reports or Check Requests |
-| **Min Amount**      | The minimum dollar amount for this chain to apply (leave blank for no minimum)              |
-| **Max Amount**      | The maximum dollar amount for this chain to apply (leave blank for no maximum)              |
+| **Min Amount**      | The lowest dollar amount this chain applies to, included (leave blank for no minimum)       |
+| **Max Amount**      | The highest dollar amount this chain applies to, included (leave blank for no maximum)      |
 | **Budget Category** | Optionally restrict this chain to requests in a specific budget category                    |
 | **Default chain**   | Whether this chain is the default fallback for its request type                             |
 | **Active**          | Whether the chain is in use. Inactive chains are ignored for new requests                   |
@@ -684,7 +690,7 @@ The chain with the highest score wins. If no chain matches at all (or the matchi
 3. Enter the chain **Name** and optional **Description**.
 4. Choose what it **Applies To**: Purchase Requests, Expense Reports, or Check Requests.
 5. Optionally choose a **Budget Category** (or leave **Any category**).
-6. Optionally set **Min Amount ($)** and **Max Amount ($)**.
+6. Optionally set **Min Amount ($)** and **Max Amount ($)**. Both are included in the range, the minimum cannot be above the maximum, and neither can be negative or more than $9,999,999,999.99. When an amount fits two chains (for example exactly $500.00 with one chain up to $500 and another from $500), it goes to the chain with the higher minimum.
 7. Tick **Default chain (preferred when no more specific chain matches)** if this should be the fallback for its request type.
 8. Select **Create Chain**.
 
@@ -798,7 +804,7 @@ A typical fire department might configure these chains:
 
 **Purchase Requests:**
 
-- "Small Purchases" (under $500): 1 step -- Captain Approval
+- "Small Purchases" (up to $499.99): 1 step -- Captain Approval
 - "Standard Purchases" ($500--$5,000): 2 steps -- Captain Approval, then Chief Approval
 - "Large Purchases" (over $5,000): 3 steps -- Captain Approval, Chief Approval, then Board Notification
 - "Training Purchases" (category: Training, any amount): 2 steps -- Training Officer Approval, then Chief Approval
@@ -994,7 +1000,7 @@ Purchase request numbers are made automatically in the form **PR-YYYY-0001**. YY
 | **Facility**         | No       | If the purchase is for a specific fire station or facility            |
 | **Notes**            | No       | Additional notes for approvers                                        |
 
-4. Select **Create Request**. The request is saved as a **Draft** — the form says so: _"Saved as a draft. Submit it for approval from the next page."_ Editing a draft later saves with **Save Changes**.
+4. The request is saved as a **Draft** on its own as you type, as soon as it has a title, a fiscal year and an amount above zero; the line under the form shows _"Draft saved at …"_. **Save Draft** saves the latest entries and opens the request, where you submit it for approval. **Close** leaves the form with the draft kept, and asks first only when what you have entered cannot be saved yet. **Discard draft** withdraws a saved draft. A draft you reopen from the list keeps saving as you edit; once a request is submitted, changes are saved with **Save Changes**.
 
 ![Create Purchase Request form with budget, vendor, and priority fields](./images/11-08-create-purchase-request.png)
 
@@ -1696,13 +1702,15 @@ The export produces a **QuickBooks Online journal-entry import file** (CSV). Eac
 
 Open **Finance › QuickBooks Export**. The **Budget categories** table shows, for every category, the account its spending posts to, the account it is paid from, and whether an export would accept it:
 
-| Status                         | What to do                                                                                     |
-| ------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **Ready**                      | Nothing — its spending exports                                                                 |
-| **No account**                 | Add a mapping, or enter a **QuickBooks account** on the category in Finance Settings           |
-| **No paid-from account**       | Add the account it is paid from to its mapping                                                 |
-| **More than one mapping**      | Delete all but one of its mappings                                                             |
-| **Payable/receivable account** | Change it: QuickBooks can't import journal lines to Accounts Payable or Receivable (see below) |
+| Status                          | What to do                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Ready**                       | Nothing — its spending exports                                                                 |
+| **No account**                  | Add a mapping, or enter a **QuickBooks account** on the category in Finance Settings           |
+| **No paid-from account**        | Add the account it is paid from to its mapping                                                 |
+| **More than one mapping**       | Delete all but one of its mappings                                                             |
+| **Payable/receivable account**  | Change it: QuickBooks can't import journal lines to Accounts Payable or Receivable (see below) |
+| **Not in chart of accounts**    | Fix the spelling to match QuickBooks, or upload the chart again if you added the account since |
+| **Account name not importable** | Rename the account so it doesn't start with `=`, `+`, `-` or `@`, in QuickBooks and here       |
 
 Select **Add mapping** (or **Edit mapping**) on a category and enter:
 
@@ -1714,6 +1722,15 @@ A category's own **QuickBooks account** (set in its dialog on Finance Settings) 
 **Subcategories use their parent's accounts.** A subcategory with no account or mapping of its own posts where its parent does — map **Operations** once and **Turnout gear** under it exports too. The table shows where each account came from (**From Operations**). A subcategory can still name its own expense account; it then keeps its parent's paid-from account unless its own mapping gives one.
 
 > **Accounts Payable and Accounts Receivable can't be used.** QuickBooks requires a vendor or customer on every journal line posting to those accounts, and the export carries none, so the import would fail. The mapping and category dialogs refuse them, and an older mapping that uses one shows **Payable/receivable account**. The check recognizes QuickBooks' standard names ("Accounts Payable (A/P)", "Accounts Receivable (A/R)"); if you renamed those accounts, the check can't tell, so don't use them.
+
+### Checking Account Names Against QuickBooks
+
+QuickBooks matches the file's accounts by name, so a misspelled or renamed account only fails once you import. Upload your chart of accounts and the export catches it first:
+
+1. In QuickBooks Online, open **Reports › Account List** and export it to Excel (or CSV).
+2. On **Finance › QuickBooks Export**, under **QuickBooks chart of accounts**, select **Upload chart of accounts** and choose that file.
+
+Every category, dues schedule and cash-advance account is then checked against it, and any account the chart doesn't list shows **Not in chart of accounts**, naming the account. An export that would post to one is refused until it is fixed. Names must match exactly, capitals included. Upload the chart again whenever you add or rename an account in QuickBooks; **Remove chart** turns the check off.
 
 ### Dues Payments
 
@@ -1790,13 +1807,14 @@ Intuit's requirements for a journal-entry import. They are also listed at the bo
 
 **Finance › QuickBooks Export** lists every export run under **Export history**, newest first, 25 at a time (**Show older exports** loads the next 25):
 
-| Column           | Contents                                                                     |
-| ---------------- | ---------------------------------------------------------------------------- |
-| **Exported**     | When the export was run                                                      |
-| **Period**       | The start and end dates of the exported period                               |
-| **Transactions** | How many transactions (an expense report counts once per line) were included |
-| **Status**       | Whether the file was delivered whole (see below)                             |
-| **By**           | The officer who ran it                                                       |
+| Column            | Contents                                                                     |
+| ----------------- | ---------------------------------------------------------------------------- |
+| **Exported**      | When the export was run                                                      |
+| **Period**        | The start and end dates of the exported period                               |
+| **Transactions**  | How many transactions (an expense report counts once per line) were included |
+| **Status**        | Whether the file was delivered whole (see below)                             |
+| **By**            | The officer who ran it                                                       |
+| **In QuickBooks** | Whether you marked the file as imported into QuickBooks, when, and by whom   |
 
 | Status           | Meaning                                                                                                   |
 | ---------------- | --------------------------------------------------------------------------------------------------------- |
@@ -1804,6 +1822,8 @@ Intuit's requirements for a journal-entry import. They are also listed at the bo
 | **Interrupted**  | Some transactions reached the browser before an error or a closed tab stopped it. Do not import that file |
 | **Failed**       | Nothing was delivered                                                                                     |
 | **Not finished** | The log was opened but the download never reported an end. Run the period again                           |
+
+**Mark each file as imported.** After importing a complete file into QuickBooks, select **Mark as imported** on its row (**Undo** reverses a mistake). If you later tick **Include payments already sent to QuickBooks** for a period that includes those payments, the export stops and tells you how many were in a file already imported. Choose **They were deleted, include them** only if you deleted those entries in QuickBooks first; otherwise choose **Leave them out**. A file you never mark is not protected this way.
 
 > **Hint:** Export frequently (monthly or quarterly) rather than waiting for year-end. This makes reconciliation with QuickBooks easier and catches mapping issues early. Each export creates a log entry so you can track what has been exported and when.
 
@@ -1848,7 +1868,7 @@ The Falls Church Fire Department operates on a July 1 -- June 30 fiscal year. In
    - (and so on for each category)
 
 4. **Configure approval chains:** Open **Finance > Settings > Approval Chains** and set up:
-   - "Small Purchases" (Purchase Requests under $500): 1 step -- Captain Approval
+   - "Small Purchases" (Purchase Requests up to $499.99): 1 step -- Captain Approval
    - "Standard Purchases" (Purchase Requests $500--$2,500): 2 steps -- Captain Approval, then Chief Approval
    - "Large Purchases" (Purchase Requests over $2,500): 3 steps -- Captain Approval, Chief Approval, then Board Treasurer Notification
    - "Training Expenses" (Expense Reports, category: Training): 2 steps -- Training Officer Approval, then Chief Approval
@@ -1874,8 +1894,8 @@ At the June board meeting the board adopts FY 2027, and the Treasurer clicks **R
 
 1. The captain opens **Finance > Purchase Requests** and selects **New Purchase Request**.
 2. Fills in: Title "Hose Coupling Replacements", Budget "Equipment > Tools", Estimated Amount $350, Vendor "Fire Supply Co.", Priority "Medium".
-3. Selects **Create Request**, then **Submit for Approval** on the draft.
-4. The $350 request matches the "Small Purchases" chain (under $500) -- only Captain approval is needed.
+3. Selects **Save Draft**, then **Submit for Approval** on the draft.
+4. The $350 request matches the "Small Purchases" chain (up to $499.99) -- only Captain approval is needed.
 5. The captain cannot approve their own request. A Position step sends no email, so the other captain sees it on **Finance > Approvals**.
 6. The other captain approves it there. The request moves to **Approved** and $350 is **encumbered** against the Tools budget.
 7. The captain orders the couplings, and the Treasurer selects **Mark as Ordered**.

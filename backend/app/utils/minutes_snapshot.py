@@ -26,6 +26,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
 
+from app.utils.motion_votes import recorded_motions
 from app.utils.rich_text import FORMAT_HTML, normalize_format
 
 # Filed after approval and so outside what approval covers; see the module
@@ -151,9 +152,16 @@ def build_snapshot(
                     if getattr(m, "section_key", None)
                     else {}
                 ),
+                **(
+                    {"acceptance": m.acceptance}
+                    if getattr(m, "acceptance", None)
+                    else {}
+                ),
                 **_vote_detail(m),
             }
-            for m in sorted(minutes.motions or [], key=lambda m: (m.order, m.id))
+            for m in sorted(
+                recorded_motions(minutes.motions), key=lambda m: (m.order, m.id)
+            )
         ],
         "action_items": [
             {

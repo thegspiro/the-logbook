@@ -545,6 +545,7 @@ class TestQuickBooks:
             "status": "ready",
             "advances_account": "Employee Advances",
             "cash_account": "Operating Checking",
+            "accounts_not_in_chart": [],
         }
         org = await db_session.get(Organization, dept["org_id"])
         await db_session.refresh(org)
@@ -694,6 +695,7 @@ class TestEndpoints:
             "status": "no_cash_account",
             "advancesAccount": "Employee Advances",
             "cashAccount": None,
+            "accountsNotInChart": [],
         }
         assert refused.status_code == 400
 

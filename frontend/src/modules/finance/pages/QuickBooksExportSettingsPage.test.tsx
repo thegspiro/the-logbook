@@ -12,7 +12,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { ConfirmProvider } from '@/contexts/ConfirmContext';
-import type { ExportLog, ExportMapping, ExportReadiness } from '../types';
+import type { ExportLog, ExportMapping, ExportReadiness, QuickBooksChart } from '../types';
 
 const toastError = vi.fn();
 const toastSuccess = vi.fn();
@@ -32,6 +32,11 @@ const listLogs = vi.fn();
 const runExport = vi.fn();
 const setDuesDefaults = vi.fn();
 const setAdvanceAccounts = vi.fn();
+const getChart = vi.fn();
+const uploadChart = vi.fn();
+const clearChart = vi.fn();
+const confirmImported = vi.fn();
+const withdrawImported = vi.fn();
 const mockSaveFile = vi.fn();
 vi.mock('@/hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
 vi.mock('@/utils/dateFormatting', async (importOriginal) => ({
@@ -53,6 +58,11 @@ vi.mock('../services/api', () => ({
     run: (...args: unknown[]) => runExport(...args) as unknown,
     setDuesDefaults: (...args: unknown[]) => setDuesDefaults(...args) as unknown,
     setAdvanceAccounts: (...args: unknown[]) => setAdvanceAccounts(...args) as unknown,
+    chart: (...args: unknown[]) => getChart(...args) as unknown,
+    uploadChart: (...args: unknown[]) => uploadChart(...args) as unknown,
+    clearChart: (...args: unknown[]) => clearChart(...args) as unknown,
+    confirmImported: (...args: unknown[]) => confirmImported(...args) as unknown,
+    withdrawImported: (...args: unknown[]) => withdrawImported(...args) as unknown,
   },
 }));
 
@@ -181,9 +191,15 @@ beforeEach(() => {
     mockSaveFile,
     setDuesDefaults,
     setAdvanceAccounts,
+    getChart,
+    uploadChart,
+    clearChart,
+    confirmImported,
+    withdrawImported,
   ]) {
     mock.mockReset();
   }
+  getChart.mockResolvedValue({ uploadedAt: null, uploadedByName: null, accounts: [] });
   runExport.mockResolvedValue({ blob: new Blob(['x']), filename: 'quickbooks-journal_2026-09-01_2026-09-30.csv' });
   listMappings.mockResolvedValue([fuelMapping, strayMapping]);
   readiness.mockResolvedValue(report);
@@ -626,5 +642,198 @@ describe('QuickBooksExportSettingsPage cash advances', () => {
 
     expect(await within(advances).findByRole('alert')).toHaveTextContent("can't be used");
     expect(setAdvanceAccounts).toHaveBeenCalledWith({ advancesAccount: null, cashAccount: null });
+  });
+});
+
+const fuelReadiness = report.categories.find((c) => c.categoryId === 'cat-fuel') ?? report.categories[0];
+if (!fuelReadiness) throw new Error('The report fixture has no Fuel category');
+
+describe('QuickBooksExportSettingsPage chart of accounts', () => {
+  const section = () => screen.findByRole('region', { name: 'QuickBooks chart of accounts' });
+  const chart: QuickBooksChart = {
+    uploadedAt: '2026-10-18T14:00:00Z',
+    uploadedByName: 'Ann Lee',
+    accounts: [
+      { name: 'Operating Checking', accountType: 'Bank' },
+      { name: 'Training Expense', accountType: 'Expenses' },
+    ],
+  };
+
+  it('says names are not checked until a chart is uploaded', async () => {
+    renderPage();
+
+    expect(await within(await section()).findByText(/No chart of accounts uploaded/)).toBeInTheDocument();
+    expect(within(await section()).queryByRole('button', { name: 'Remove chart' })).not.toBeInTheDocument();
+  });
+
+  it('uploads the Account List report and reloads the readiness tables', async () => {
+    uploadChart.mockResolvedValue(chart);
+    const user = userEvent.setup();
+    renderPage();
+    const panel = await section();
+    await within(panel).findByText(/No chart of accounts uploaded/);
+    readiness.mockClear();
+
+    const file = new File(['Account,Type'], 'Account List.xlsx');
+    await user.upload(within(panel).getByLabelText('Upload chart of accounts'), file);
+
+    await waitFor(() => expect(uploadChart).toHaveBeenCalledWith(file));
+    expect(await within(panel).findByText(/2 accounts, uploaded .* by Ann Lee\./)).toBeInTheDocument();
+    expect(toastSuccess).toHaveBeenCalledWith('Chart of accounts uploaded: 2 accounts');
+    await waitFor(() => expect(readiness).toHaveBeenCalled());
+  });
+
+  it("shows the server's refusal of an unreadable file", async () => {
+    uploadChart.mockRejectedValue(new Error('No account column was found.'));
+    const user = userEvent.setup();
+    renderPage();
+    const panel = await section();
+
+    await user.upload(within(panel).getByLabelText('Upload chart of accounts'), new File(['x'], 'chart.csv'));
+
+    expect(await within(panel).findByRole('alert')).toHaveTextContent('No account column was found.');
+  });
+
+  it('removes the chart only once confirmed', async () => {
+    getChart.mockResolvedValue(chart);
+    clearChart.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderPage();
+    const panel = await section();
+
+    await user.click(await within(panel).findByRole('button', { name: 'Remove chart' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep it' }));
+    expect(clearChart).not.toHaveBeenCalled();
+
+    await user.click(within(panel).getByRole('button', { name: 'Remove chart' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove chart' }));
+    await waitFor(() => expect(clearChart).toHaveBeenCalled());
+    expect(await within(panel).findByText(/No chart of accounts uploaded/)).toBeInTheDocument();
+  });
+
+  it('names the accounts the chart lacks on a category', async () => {
+    readiness.mockResolvedValue({
+      ...report,
+      chartUploaded: true,
+      categories: [
+        {
+          ...fuelReadiness,
+          status: 'not_in_chart',
+          accountsNotInChart: ['Vehicle Expense:Fuel'],
+        },
+      ],
+    });
+    renderPage();
+
+    const fuel = await rowFor('Fuel');
+    expect(within(fuel).getByText('Not in chart of accounts')).toBeInTheDocument();
+    expect(within(fuel).getByText(/Not in the uploaded chart of accounts: Vehicle Expense:Fuel\./)).toBeInTheDocument();
+  });
+
+  it('explains an account name the export would escape', async () => {
+    readiness.mockResolvedValue({
+      ...report,
+      categories: [{ ...fuelReadiness, status: 'unsafe_account_name' }],
+    });
+    renderPage();
+
+    const fuel = await rowFor('Fuel');
+    expect(within(fuel).getByText('Account name not importable')).toBeInTheDocument();
+    expect(within(fuel).getByText(/starts with =, \+, - or @/)).toBeInTheDocument();
+  });
+});
+
+describe('QuickBooksExportSettingsPage confirming an import', () => {
+  const history = () => screen.findByRole('region', { name: 'Export history' });
+
+  it('marks a complete export as imported and offers to undo it', async () => {
+    listLogs.mockResolvedValue([exportLog({}), exportLog({ id: 'log-2', status: 'partial' })]);
+    confirmImported.mockResolvedValue(
+      exportLog({ importedAt: '2026-10-02T12:00:00Z', importedBy: 'u-t', importedByName: 'Ann Lee' })
+    );
+    withdrawImported.mockResolvedValue(exportLog({}));
+    const user = userEvent.setup();
+    renderPage();
+    const section = await history();
+
+    // Only the complete export offers it; an interrupted file is not to be imported.
+    const buttons = await within(section).findAllByRole('button', { name: /Mark the export for .* as imported/ });
+    expect(buttons).toHaveLength(1);
+    await user.click(within(section).getByRole('button', { name: /Mark the export for .* as imported/ }));
+
+    await waitFor(() => expect(confirmImported).toHaveBeenCalledWith('log-1'));
+    expect(await within(section).findByText('Imported')).toBeInTheDocument();
+    expect(toastSuccess).toHaveBeenCalledWith('Marked as imported into QuickBooks');
+
+    await user.click(within(section).getByRole('button', { name: /Undo marking the export/ }));
+    await waitFor(() => expect(withdrawImported).toHaveBeenCalledWith('log-1'));
+    expect(
+      await within(section).findByRole('button', { name: /Mark the export for .* as imported/ })
+    ).toBeInTheDocument();
+  });
+
+  it("shows the server's refusal", async () => {
+    listLogs.mockResolvedValue([exportLog({})]);
+    confirmImported.mockRejectedValue(new Error('Only a complete export can be confirmed as imported.'));
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await within(await history()).findByRole('button', { name: /Mark the export for/ }));
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Only a complete export can be confirmed as imported.')
+    );
+  });
+});
+
+describe('QuickBooksExportSettingsPage resending an imported file', () => {
+  const panel = () => screen.findByRole('region', { name: 'Run an export' });
+  const refusal = Object.assign(
+    new Error('3 payments in this period went out in a file already confirmed as imported into QuickBooks.'),
+    {
+      isAxiosError: true,
+      response: {
+        status: 409,
+        statusText: 'Conflict',
+        data: {
+          detail: '3 payments in this period went out in a file already confirmed as imported into QuickBooks.',
+          code: 'LB-FIN-001',
+        },
+      },
+    }
+  );
+
+  const resend = async (user: ReturnType<typeof userEvent.setup>) => {
+    const section = await panel();
+    await user.click(within(section).getByLabelText('Include payments already sent to QuickBooks'));
+    await user.click(within(section).getByRole('button', { name: /Download QuickBooks file/ }));
+    await user.click(await screen.findByRole('button', { name: 'Include them' }));
+    return section;
+  };
+
+  it('asks again, naming the count, and sends with confirmReimport when told the entries were deleted', async () => {
+    runExport.mockRejectedValueOnce(refusal);
+    const user = userEvent.setup();
+    renderPage();
+
+    await resend(user);
+    expect(await screen.findByText(/3 payments in this period went out/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'They were deleted, include them' }));
+
+    await waitFor(() => expect(runExport).toHaveBeenLastCalledWith(expect.objectContaining({ confirmReimport: true })));
+    expect(mockSaveFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('produces nothing when the Treasurer leaves them out', async () => {
+    runExport.mockRejectedValueOnce(refusal);
+    const user = userEvent.setup();
+    renderPage();
+
+    const section = await resend(user);
+    await user.click(await screen.findByRole('button', { name: 'Leave them out' }));
+
+    expect(runExport).toHaveBeenCalledTimes(1);
+    expect(mockSaveFile).not.toHaveBeenCalled();
+    expect(within(section).queryByRole('alert')).not.toBeInTheDocument();
   });
 });

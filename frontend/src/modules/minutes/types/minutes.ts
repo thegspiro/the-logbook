@@ -4,7 +4,10 @@
 
 export type MeetingType = 'business' | 'special' | 'committee' | 'board' | 'trustee' | 'executive' | 'annual' | 'other';
 export type MinutesStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
-export type MotionStatus = 'passed' | 'failed' | 'tabled' | 'withdrawn';
+/** `pending` is a motion the outline prepared that the meeting has not acted on; it is never part of the record. */
+export type MotionStatus = 'pending' | 'passed' | 'failed' | 'tabled' | 'withdrawn';
+/** The previous minutes were accepted as submitted, or as revised. */
+export type MotionAcceptance = 'as_submitted' | 'as_revised';
 export type ActionItemStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'overdue';
 export type ActionItemPriority = 'low' | 'medium' | 'high' | 'urgent';
 
@@ -147,6 +150,12 @@ export interface Motion {
   section_key?: string | null;
   discussion_notes?: string;
   status: MotionStatus;
+  /** For the motion accepting the previous minutes: how they were accepted. */
+  acceptance?: MotionAcceptance | null;
+  /** The minutes this motion accepts, set by the server; and where they stand. */
+  previous_minutes_id?: string | null;
+  previous_minutes_title?: string | null;
+  previous_minutes_status?: string | null;
   votes_for?: number;
   votes_against?: number;
   votes_abstain?: number;
@@ -197,6 +206,9 @@ export interface MyActionItem extends ActionItem {
   minutes_status: MinutesStatus;
 }
 
+/** Which attendance statuses minutes name; the roll is always recorded in full. */
+export type AttendanceListing = 'all' | 'present_excused' | 'present';
+
 export interface MeetingMinutes {
   id: string;
   organization_id: string;
@@ -210,6 +222,10 @@ export interface MeetingMinutes {
   called_to_order_at?: string;
   adjourned_at?: string;
   attendees?: AttendeeEntry[];
+  /** This set's own choice; null follows the department default. */
+  attendance_listing?: AttendanceListing | null;
+  /** What is in force: the choice above, else the department default. */
+  attendance_listing_effective?: AttendanceListing;
   quorum_met?: boolean;
   quorum_count?: number;
   event_id?: string;
@@ -291,6 +307,7 @@ export interface MotionCreate {
   section_key?: string | undefined;
   discussion_notes?: string | undefined;
   status?: MotionStatus | undefined;
+  acceptance?: MotionAcceptance | null | undefined;
   votes_for?: number | undefined;
   votes_against?: number | undefined;
   votes_abstain?: number | undefined;
@@ -303,20 +320,22 @@ export interface MotionCreate {
 }
 
 export interface MotionUpdate {
-  motion_text?: string;
-  moved_by?: string;
-  seconded_by?: string;
-  discussion_notes?: string;
-  status?: MotionStatus;
-  votes_for?: number;
-  votes_against?: number;
-  votes_abstain?: number;
-  votes_recused?: number;
-  threshold?: MotionThreshold;
-  roll_call?: RollCallEntry[] | null;
-  order?: number;
-  election_id?: string | null;
-  ballot_item_id?: string | null;
+  motion_text?: string | undefined;
+  moved_by?: string | undefined;
+  seconded_by?: string | undefined;
+  discussion_notes?: string | undefined;
+  status?: MotionStatus | undefined;
+  /** An explicit null clears it. */
+  acceptance?: MotionAcceptance | null | undefined;
+  votes_for?: number | undefined;
+  votes_against?: number | undefined;
+  votes_abstain?: number | undefined;
+  votes_recused?: number | undefined;
+  threshold?: MotionThreshold | undefined;
+  roll_call?: RollCallEntry[] | null | undefined;
+  order?: number | undefined;
+  election_id?: string | null | undefined;
+  ballot_item_id?: string | null | undefined;
 }
 
 /** A member an action item may be assigned to (W52-6). */
@@ -358,6 +377,36 @@ export interface MinutesSearchResult {
   status: MinutesStatus;
   snippet: string;
   match_field: string;
+}
+
+// ── Archive search ──
+
+export interface ArchiveSnippetPart {
+  text: string;
+  hit: boolean;
+}
+
+export interface ArchiveMatch {
+  kind: 'title' | 'section' | 'motion' | 'action_item';
+  label: string;
+  parts: ArchiveSnippetPart[];
+}
+
+export interface ArchiveHit {
+  id: string;
+  title: string;
+  meeting_type: MeetingType;
+  meeting_date: string;
+  status: MinutesStatus;
+  match_count: number;
+  matches: ArchiveMatch[];
+}
+
+export interface ArchiveSearchResponse {
+  terms: string[];
+  hits: ArchiveHit[];
+  searched: number;
+  truncated: boolean;
 }
 
 // ── Roll call suggestions ──
@@ -547,6 +596,17 @@ export interface MinutesSuggestion {
   created_at: string;
 }
 
+/** What a later meeting's passed acceptance motion implies for these minutes' adoption. */
+export interface AdoptionProposal {
+  motion_id: string;
+  adopted_on: string;
+  adopting_minutes_id: string;
+  adopting_minutes_title: string;
+  as_amended: boolean;
+  moved_by?: string | null;
+  seconded_by?: string | null;
+}
+
 export interface AdoptionDetails {
   adopted_on?: string | undefined;
   adopting_minutes_id?: string | undefined;
@@ -569,6 +629,17 @@ export interface MinutesReminderSettings {
   /** What the server will actually do for executive-session minutes, whatever the switches read. */
   executive_effective_library: boolean;
   executive_effective_public: boolean;
+  attendance_listing: AttendanceListing;
+}
+
+/** What every panel on the minutes settings page is given. */
+export interface MinutesSettingsPanelProps {
+  /** The department's settings as the server applies them. */
+  settings: MinutesReminderSettings;
+  /** Whether the viewer may change them (`settings.manage`); anyone else reads. */
+  canEdit: boolean;
+  /** Called after a save so the page re-reads what the server now holds. */
+  onSaved: () => Promise<void> | void;
 }
 
 /** Where one set of minutes stands: the library copy, the public copy, and what the settings allow. */

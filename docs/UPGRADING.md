@@ -504,6 +504,82 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Finance timestamps recorded before the UTC fix are corrected (2026-10-18)
+
+Finance records showed times hours off from each other — a purchase request's
+"Created" four hours before its "Approved", for example. The database stamped
+`created_at` and `updated_at` in the **MySQL server's own time zone** while the
+application reads every stored time as UTC. Connections now pin the session to
+UTC, which stops the skew for new rows. This upgrade corrects the rows written
+before it, in the 19 finance tables only (purchase, expense and check requests,
+budgets and their categories, amendments and requests, approval chains and
+records, dues, fiscal years, QuickBooks export mappings and logs).
+
+- **Nothing happens if your MySQL server runs on UTC**, which was never skewed.
+  The migration reads the server's own zone and checks it is not UTC before
+  touching a row. The shipped Unraid compose files set `America/New_York`, so
+  those installations are corrected.
+- **Daylight saving is applied row by row.** A January row moves five hours, a
+  July row four, using the same rules the server used to stamp them. The one
+  hour a year when local clocks repeat (the autumn change) cannot be told apart,
+  so a row stamped in that hour may be off by an hour.
+- **Deploy it together with the UTC fix, or tell it when the fix started.** The
+  migration treats every row up to the moment it runs as old. If the build that
+  pins UTC has already been serving for a while, rows written since then are
+  correct and must not be shifted again: set `FINANCE_TS_FIX_CUTOFF_UTC` (for
+  example `2026-10-18 17:00:00`, in UTC) to when that build started, in the
+  backend container's environment, before restarting.
+- **If the zone cannot be resolved the upgrade stops and changes nothing.** A
+  named server zone needs MySQL's time zone tables; the message says so. Load
+  them (`mysql_tzinfo_to_sql`), or set `FINANCE_TS_FIX_SOURCE_TZ` to a fixed
+  offset such as `-05:00` (accepting one offset for the whole year).
+- **Other modules are not corrected.** Their timestamps carry the same skew, but
+  some are covered by integrity hashes (the audit log, election records) and
+  others are written by code on some paths, so each needs its own reviewed
+  migration. Rows written after this upgrade are correct everywhere.
+- **Back up first.** The downgrade (`alembic downgrade -1`) converts back, and is
+  exact apart from the repeated autumn hour, but run it straight after a bad
+  upgrade, not after the application has been writing new rows.
+
+### Equipment checklists: a Date line needs its date to publish (2026-10-18)
+
+A **Date** line (stored as `expiry`) checks the expiration date on record, so a
+checklist can no longer be **published** while one of its Date lines has no
+date. The builder lists each one under "Before publishing" and the server
+refuses the publish with `date item "<name>" needs an expiration date`. Drafts
+still save. A Date line linked to an inventory item is exempt, because its
+dates come from the lots aboard, and so is a line with a dated lot aboard.
+
+- **A checklist that is already published keeps running.** Nothing is
+  unpublished at upgrade. The rule applies the next time someone publishes it,
+  which also happens after any structural edit, since those return a checklist
+  to draft. Add the missing dates, or switch those lines to another type,
+  before then.
+- **Choosing Date turns Has Expiration on**, and it cannot be turned off on a
+  Date line. Other types can still tick it.
+- **Crews can record a replacement's date.** On a Date line not linked to
+  inventory, the crew can enter the date (and optionally the lot) printed on a
+  replacement unit they put in. The line's date on the checklist is updated to
+  it, the change log names the member and the check, and the checklist stays
+  published. A date in the past is refused. Inventory-linked lines keep using
+  Swap.
+
+The same release adds two things that need no action:
+
+- **Items can sit directly on a checklist**, between locations, with no
+  heading. They are stored as a headingless group, using the new
+  `check_template_compartments.is_inline` column. Migration `e99f068be43e` only
+  adds that column (default false) and rewrites no rows, so it is safe on a
+  running database. An emptied group is removed when the checklist is saved.
+  A second revision, `d80493f28236`, adds the same column under the same
+  existence guard; it was written in parallel and finds the column already
+  there, so on every database it changes nothing. Both are expected in
+  `alembic history`.
+- **A Present answer type** (Present / Absent). Absent fails the line and needs
+  no note. No existing line is converted. A device still running the previous
+  app shows a Present line as a Works line and files its Pass / Fail, which the
+  server stores the same way.
+
 ### A weekly security report is emailed to the IT Manager (2026-10-16)
 
 Every department now receives a weekly email of **counts** — security alerts by

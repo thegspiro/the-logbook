@@ -104,6 +104,13 @@ at the top. Use the arrows to move back or forward, and **Today** to come back
 to the current date. On a phone you get the month view, with a coloured bar
 for each shift.
 
+_(2026-10-18)_ An empty week or month looks up the first shift after it and offers
+**Go to the next shift**, so a member is not told nothing is published when next
+Monday is scheduled. An officer's button reads **Create a shift** once any shift
+exists, and creating one moves the board to that shift's date.
+
+_[Screenshot to create: an empty week showing Go to the next shift.]_
+
 If you refresh the page, or send someone a copied link, it opens on the same
 week or month you were looking at, not on today.
 
@@ -422,7 +429,9 @@ You see **Signed up for shift**, and the shift appears on **My Shifts**,
 where you can confirm it.
 
 **There is no officer approval step.** Your signup goes on the roster exactly
-as if an officer had assigned you. You leave a shift you signed up for the
+as if an officer had assigned you, and it is saved as **confirmed** straight away
+(_2026-10-18_), as the tab promises. An officer's assignment, or a standing
+claim, still waits for the member to confirm. You leave a shift you signed up for the
 same way as one you were assigned to.
 
 If you sign up for a driver's seat without the driver training the apparatus
@@ -432,6 +441,10 @@ sign up.
 **Signing up again after you declined.** If you declined a shift, or lost the
 seat because it was cancelled or because of approved time off, you can sign up
 for it again.
+
+_(2026-10-18)_ A shift that has already ended no longer appears on the board, for
+anyone, including scheduling officers (before, a shift dated today stayed listed
+after its end time, with a live **Sign Up** button for an officer).
 
 ![Open Shifts tab showing shifts with vacant positions](./images/03-05-open-shifts.png)
 
@@ -2398,7 +2411,7 @@ scored.
 
 #### Answering each item
 
-Every item asks for one of four kinds of answer:
+Every item asks for one of five kinds of answer:
 
 | Type         | What you do                                                    | What passing means                                                                                                  |
 | ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -2406,10 +2419,24 @@ Every item asks for one of four kinds of answer:
 | **Count**    | Set the count with the stepper                                 | The count is at or above its **Min to Pass**. Short of _par_ but at the minimum passes and becomes a restock line   |
 | **Level**    | Enter the reading, then pass or fail                           | The reading meets its minimum. An empty box means "not read yet", not zero. The reading is kept, so trends show     |
 | **Expiry**   | Check the serial number, lot number and expiry date on record, then pass or fail | The date on record has not passed. Items close to their date show amber on every shift until they are replaced |
+| **Present**  | Select **Present** or **Absent**                               | It is on the truck. **Absent** fails the item without a note — it already says what is wrong. **Not on truck** and **Out of service** are not offered |
 
-The expiry date, lot and serial number come from the department's stock
-records. You cannot change them on the check form. To record a replacement, use
-**Swap** (below) or [Apparatus Inventory](#apparatus-inventory--what-the-truck-is-carrying-right-now).
+For an item linked to the department's stock, the expiry date, lot and serial
+number come from the stock records and you cannot change them on the check
+form. To record a replacement, use **Swap** (below) or
+[Apparatus Inventory](#apparatus-inventory--what-the-truck-is-carrying-right-now).
+
+**Replaced an expiring item that is not linked to stock?** Select **Put in a
+replacement? Record its date** and enter the date printed on the unit you put
+aboard, and its lot number if you read one. The item then reads as in date and
+passes. When you submit, the new date replaces the old one on the checklist,
+and the checklist's change log records that you made the change. A date that
+has already passed is refused.
+
+**Items with no location.** Some items sit directly on the checklist rather
+than in a compartment or bag, such as the radios or the map book. They appear
+between the locations, wherever the checklist places them, with no heading of
+their own.
 
 **When an item fails.** After you select **Fail**, two more choices appear:
 
@@ -3063,7 +3090,7 @@ Select **New Template** to create one, or select a template to edit it.
 | **Name**                                                             | Required, for example "Day Shift A"                                                                                                                      |
 | **Description**                                                      | Optional                                                                                                                                                 |
 | **Category**                                                         | **Standard**, **Specialty Vehicle** or **Event / Special**                                                                                               |
-| Vehicle                                                              | Optional. A vehicle type loads that type's default seats from your settings; a specific vehicle links the template to it                                 |
+| Vehicle                                                              | Optional. A vehicle type loads that type's default seats from your settings. The template sets the vehicle _type_ only; the specific vehicle is picked on each shift                                 |
 | Start and end times                                                  | The shift's hours. The length is worked out for you; you type it only for a shift longer than a day                                                      |
 | Colour                                                               | How the template's shifts are tinted                                                                                                                     |
 | **Smallest crew that can run**                                       | Required. Below this number the shift is flagged as running short                                                                                        |

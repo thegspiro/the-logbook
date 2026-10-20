@@ -51,6 +51,7 @@ interface PublicMotion {
   moved_by: string | null;
   seconded_by: string | null;
   vote_display: string | null;
+  acceptance?: string | null;
 }
 
 interface PublicCandidate {
@@ -68,8 +69,9 @@ interface PublicContent {
   quorum_display: string | null;
   attendance: {
     present: number;
-    excused: number;
-    absent: number;
+    // Left out by the server when the department does not report them.
+    excused?: number;
+    absent?: number;
     guests: number;
     officers_present: { name: string; role: string }[];
   };
@@ -286,8 +288,8 @@ const MinutesDocument: React.FC<{ id: string }> = ({ id }) => {
         <h2 className={heading}>Attendance</h2>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat label="Present" value={a.present} />
-          <Stat label="Excused" value={a.excused} />
-          <Stat label="Absent" value={a.absent} />
+          {a.excused !== undefined && <Stat label="Excused" value={a.excused} />}
+          {a.absent !== undefined && <Stat label="Absent" value={a.absent} />}
           <Stat label="Guests" value={a.guests} />
         </div>
         {a.officers_present.length > 0 && (
@@ -331,7 +333,7 @@ const MinutesDocument: React.FC<{ id: string }> = ({ id }) => {
                       .join(', ')}
                   </p>
                   <p className="text-theme-text-secondary mt-1">
-                    {[motion.status, motion.vote_display].filter(Boolean).join(' · ')}
+                    {[motion.status, motion.vote_display, motion.acceptance].filter(Boolean).join(' · ')}
                   </p>
                 </li>
               ))}

@@ -38,7 +38,6 @@ import type {
   ManualBallotBatch,
   PackageRecipient,
   PackageVariant,
-  PreMeetingPackageResponse,
   PreMeetingPackageSend,
   ProxyAuthorization,
   ProxyAuthorizationCreate,
@@ -750,10 +749,14 @@ export const electionService = {
   },
 
   /**
-   * Email the pre-meeting package PDF to a secretary-edited email list.
+   * Queue the pre-meeting package PDF to a secretary-edited email list, one
+   * message per address. The send runs on the server after this returns;
+   * follow it with {@link waitForBallotSendJob}, whose outcome names any
+   * address the package could not be sent to. Answers 409 while another
+   * package send for the election is running.
    */
-  async sendPreMeetingPackage(electionId: string, payload: PreMeetingPackageSend): Promise<PreMeetingPackageResponse> {
-    const response = await api.post<PreMeetingPackageResponse>(`/elections/${electionId}/send-package`, payload);
+  async startPackageSendJob(electionId: string, payload: PreMeetingPackageSend): Promise<BallotSendJob> {
+    const response = await api.post<BallotSendJob>(`/elections/${electionId}/package-send-jobs`, payload);
     return response.data;
   },
 

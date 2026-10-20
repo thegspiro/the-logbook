@@ -31,8 +31,9 @@ from app.models.minute import (
     MinutesStatus,
 )
 from app.models.user import Organization
-from app.utils.minutes_attendance import derive_status
-from app.utils.motion_votes import vote_summary
+from app.utils.minutes_attendance import derive_status, effective_listing, is_listed
+from app.utils.minutes_settings import attendance_listing_in
+from app.utils.motion_votes import acceptance_label, recorded_motions, vote_summary
 from app.utils.rich_text import (
     FORMAT_HTML,
     normalize_format,
@@ -256,7 +257,13 @@ class DocumentService:
             .scalars()
             .all()
         )
-        html = self._generate_minutes_html(minutes, tz_name, filed_results, sessions)
+        listing = effective_listing(
+            minutes.attendance_listing,
+            attendance_listing_in(org.settings if org else None),
+        )
+        html = self._generate_minutes_html(
+            minutes, tz_name, filed_results, sessions, listing
+        )
         version = await self._current_revision_version(minutes.id, organization_id)
         note = self._replacement_note(minutes, tz_name)
         if note:
@@ -571,8 +578,13 @@ class DocumentService:
         tz_name: Optional[str] = None,
         election_results: Sequence[MinutesElectionResult] = (),
         closed_sessions: Sequence[MinutesClosedSession] = (),
+        attendance_listing: str = "all",
     ) -> str:
-        """Generate formatted HTML for published meeting minutes"""
+        """Generate formatted HTML for published meeting minutes.
+
+        ``attendance_listing`` is the listing already in force for these
+        minutes; the roll is recorded in full and only what it names is shown.
+        """
         header = minutes.get_effective_header() or {}
         footer = minutes.get_effective_footer() or {}
 
@@ -663,7 +675,8 @@ class DocumentService:
             # an excused member and a guest under Absent.
             by_status: dict = {}
             for entry in minutes.attendees:
-                by_status.setdefault(derive_status(entry), []).append(entry)
+                if is_listed(derive_status(entry), attendance_listing):
+                    by_status.setdefault(derive_status(entry), []).append(entry)
             in_room = [
                 (e, status)
                 for status in ("present", "late", "left_early")
@@ -735,12 +748,13 @@ class DocumentService:
                     parts.append("</div>")
 
         # Motions
-        if minutes.motions:
+        recorded = recorded_motions(minutes.motions)
+        if recorded:
             parts.append('<div class="minutes-motions" style="margin-bottom:24px;">')
             parts.append(
-                f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">Motions ({len(minutes.motions)})</h4>'
+                f'<h4 style="color:#1e3a5f; border-bottom:1px solid #ddd; padding-bottom:4px;">Motions ({len(recorded)})</h4>'
             )
-            for i, motion in enumerate(minutes.motions, 1):
+            for i, motion in enumerate(recorded, 1):
                 status = (
                     motion.status
                     if isinstance(motion.status, str)
@@ -767,6 +781,8 @@ class DocumentService:
                     detail_parts.append(f"Seconded by: {escape(motion.seconded_by)}")
                 if vote_summary(motion):
                     detail_parts.append(escape(vote_summary(motion)))
+                if acceptance_label(motion):
+                    detail_parts.append(escape(acceptance_label(motion) or ""))
                 ballot = getattr(getattr(motion, "election", None), "title", None)
                 if ballot:
                     detail_parts.append(f"Decided by ballot: {escape(ballot)}")

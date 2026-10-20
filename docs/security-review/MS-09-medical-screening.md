@@ -1,6 +1,86 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, (this PR) (pass 9)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9, PR [#3256](https://github.com/thegspiro/the-logbook/pull/3256) — corrected here from "(this PR)", which pass 9's own section never filled in after merge), 2026-10-18 (pass 10) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), [#2409](https://github.com/thegspiro/the-logbook/pull/2409) (pass 4), [#2557](https://github.com/thegspiro/the-logbook/pull/2557) (pass 5), [#2608](https://github.com/thegspiro/the-logbook/pull/2608) (pass 6) — corrected here from "(this PR)", which pass 6's own section never filled in after merge, [#2957](https://github.com/thegspiro/the-logbook/pull/2957) (pass 7) — likewise never filled in after merge, corrected here, [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 8) — also never filled in after merge; found via its own PR title ("security(medical-screening): 0 fixes, 1 flagged (MS-15)") rather than assumed, [#3256](https://github.com/thegspiro/the-logbook/pull/3256) (pass 9)
+
+---
+
+## Pass 10 (2026-10-18) — watchdog pickup: near-zero delta (one frontend-only form-validation fix), 0 fixed, 0 new findings; MS-14/MS-15 re-confirmed unchanged
+
+**Scope.** Pass 9 merged as `7a16ea19c` (PR #3256). `git log --no-merges
+7a16ea19c..HEAD` over the five declared files
+(`endpoints/medical_screening.py`, `services/medical_screening_service.py`,
+`models/medical_screening.py`, `schemas/medical_screening.py`,
+`mcp/tools/medical.py`) plus the full `frontend/src/modules/
+medical-screening/` directory: exactly **1 non-merge commit**
+(`7468e9f9e`), read in full. No medical-screening-table migration landed
+(no new migration references `medical_screening`/`screening_requirement`/
+`screening_record`, confirmed by scanning each new migration body, not
+just by pathspec).
+
+**The one commit is frontend-only and carries no security implication.**
+`7468e9f9e` ("Fix edit forms that refused to save…") touches
+`ScreeningRequirementForm.tsx` plus its own new test file — none of the
+five backend files, no migration. It fixes a classic falsy-coercion bug:
+the save payload built `grace_period_days` as `Number(gracePeriodDays) ||
+30`, which silently turned an intentionally-entered `0` into `30` (the
+same family of bug CLAUDE.md Pitfall #1 describes for empty strings, here
+hitting a falsy number instead). The fix drops the `|| 30` fallback and
+adds client-side validation requiring the field (the column is `NOT
+NULL` server-side). No backend change, no PHI handling touched, no
+route, no permission string. Confirmed by reading the full diff, not
+inferred from the commit message.
+
+**All 16 routes re-enumerated, unchanged from pass 9** — none of their
+`Depends`/`require_permission` arguments were touched by this window's
+one commit (which changed no backend file at all).
+
+**Re-verified unchanged, by direct read (no file in this window's
+delta touches either):**
+
+- **MS-14** (`medical_screening.view` grants full narrative PHI with no
+  finer-grained read tier, FLAGGED, owner decision) — unchanged.
+- **MS-15** (the compliance roster loads every screening record in the
+  organization, unbounded, FLAGGED, same class as MS-6/FIN-9/ELEC-12/
+  USR-5/MP-10/DOC-9) — unchanged.
+
+**Tenant isolation and PHI encryption, re-confirmed present by direct
+read of the unchanged files** (not re-copied from pass 9's own account):
+every by-id getter still filters `organization_id` in the same `and_()`;
+`create_record`'s three client-supplied FKs (`user_id`, `prospect_id`,
+`requirement_id`) still route through `assert_in_org(...,
+allow_none=True)`; `provider_name`/`result_summary`/`notes` are still
+`EncryptedText`, `result_data` still `EncryptedJSON`.
+
+**0 application-code defects found, 0 fixes needed, 0 new findings.**
+
+**Unrelated, repo-wide issue found and fixed separately, not folded into
+this pass:** this pass's own `validate_migrations.py --strict` run
+surfaced a 3-way forked Alembic chain
+(`6dc58d6997df`/`7e5d6cf3292c`/`e99f068be43e`, three independently-merged
+PRs that each revised the same parent) — unrelated to medical screening,
+blocking `alembic upgrade head` for every PR, not just this one. Fixed in
+its own standalone PR (#3426, a no-op merge revision, per the repo's own
+precedent) rather than bundled into this docs-only security-review PR,
+since it is a repo-wide build issue, not a medical-screening finding.
+The migration-validation row below was re-run after applying that fix
+locally (`alembic upgrade head` against the real database, then
+`validate_migrations.py --strict` against the merged chain) to confirm
+this feature's own migration history is still a clean single chain
+underneath the unrelated fork.
+
+### Completion gate (pass 10)
+
+| Check                                                             | Result                                                                                       |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                     | ✅ 0 violations                                                                              |
+| `black --check app/ tests/ alembic/`                              | ✅ 2445 files unchanged                                                                      |
+| `isort --check-only app/ tests/ alembic/`                         | ✅ clean                                                                                     |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ single head, after separately fixing the unrelated 3-way fork (PR #3426) — see note above |
+| `python3 scripts/check_route_permissions.py --strict` (repo root) | ✅ 272 routes, 0 errors, 0 warnings                                                          |
+| `pytest tests/ -q -k "medical_screening or screening"`            | ✅ 122 passed, 1 skipped (environment-only, `pywebpush`)                                     |
+| `frontend: npm run typecheck`                                     | ✅ clean                                                                                     |
+| `frontend: npm run lint`                                          | ✅ clean                                                                                     |
+| `npx vitest run src/modules/medical-screening`                    | ✅ 54 passed (9 files)                                                                       |
 
 ---
 
