@@ -16,14 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None yet. PR #3449 (Feature 20, Compliance, pass 9) merged 2026-10-20,
-docs-only — not independently recordable here beyond what follows. This
-iteration (watchdog pickup — no open PR's head branch starts with
-`claude/security-review-` (`list_pull_requests`/`search_pull_requests`), and
-the dedicated `/loop 30m /security-review` session was not reachable via
-`ListAgents`) is reviewing Feature 21 (Admin hours), pass 9 — 0 fixes, 0 new
-findings; the only real delta since pass 8's merge (`f698cdc2f`) is a
-non-rotation `docs/workflow-review` commit (`1ae0d0ac8`, W70) that added an
+**PR [#3450](https://github.com/thegspiro/the-logbook/pull/3450)** (branch
+`claude/security-review-admin-hours`). PR #3449 (Feature 20, Compliance,
+pass 9) merged 2026-10-20, docs-only — not independently recordable here
+beyond what follows. This iteration (watchdog pickup — no open PR's head
+branch starts with `claude/security-review-`
+(`list_pull_requests`/`search_pull_requests`), and the dedicated
+`/loop 30m /security-review` session was not reachable via `ListAgents`)
+reviewed Feature 21 (Admin hours), pass 9 — 0 fixes, 0 new findings; the
+only real delta since pass 8's merge (`f698cdc2f`) is a non-rotation
+`docs/workflow-review` commit (`1ae0d0ac8`, W70) that added an
 active-category name-uniqueness check to `admin_hours_service.py`, reviewed
 in full and found correctly org-scoped, gated and bounded. Rotation row 21 →
 ✅ (pending this PR's merge); next is Feature 22 (Grants & fundraising).
