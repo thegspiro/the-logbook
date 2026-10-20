@@ -2964,7 +2964,8 @@ It has no heading, so there would be nothing left to find it by.
 in place." were Works checks before the **Present** type existed. When a
 checklist still has any, **Tools** offers **Switch "in place" checks to
 Present** with the number found. It lists the lines first, and switches all of
-them in one step. Other Works lines are never changed.
+them in one step. Other Works lines are never changed. The built-in vehicle
+layouts and equipment kits already add these lines as **Present**.
 
 #### Starting from a vehicle layout
 
