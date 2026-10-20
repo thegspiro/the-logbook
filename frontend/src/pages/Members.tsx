@@ -408,9 +408,9 @@ const Members: React.FC = () => {
 
         {/* Actions Bar */}
         <div className="card mb-6 p-4">
-          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+          <div className="flex flex-col items-center justify-between gap-4 md:flex-row md:flex-wrap">
             {/* Search */}
-            <div className="relative w-full flex-1 md:max-w-md">
+            <div className="relative w-full flex-1 md:min-w-[16rem] md:max-w-md">
               <Search className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 transform" />
               <input
                 autoCapitalize="none"
@@ -449,7 +449,7 @@ const Members: React.FC = () => {
               <div className="flex w-full items-center space-x-2 sm:space-x-3 md:w-auto">
                 <button
                   onClick={() => void navigate('/members/import')}
-                  className="touch:min-h-[44px] flex flex-1 items-center justify-center space-x-2 rounded-lg bg-purple-600 px-3 py-2 text-white transition-colors hover:bg-purple-700 sm:px-4 md:flex-none"
+                  className="btn-secondary flex flex-1 items-center justify-center space-x-2 px-3 sm:px-4 md:flex-none"
                 >
                   <Upload className="h-4 w-4" />
                   <span className="hidden sm:inline">Import CSV</span>

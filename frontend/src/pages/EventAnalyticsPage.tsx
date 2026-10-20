@@ -242,7 +242,7 @@ export const EventAnalyticsPage: React.FC = () => {
         <Breadcrumbs underHub="/events/admin" />
 
         {/* Header */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-center gap-3">
             <Link
               to="/events"
