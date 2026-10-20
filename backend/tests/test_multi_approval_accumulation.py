@@ -301,6 +301,19 @@ class TestPaddedApproverRoles:
         assert added.status == StepProgressStatus.COMPLETED
         service._advance_current_step.assert_awaited_once()
 
+    async def test_refusal_names_missing_signers_by_office_label(self):
+        """The coordinator reads this refusal; it named the stored keys
+        ("ems_supply_officer") rather than the offices."""
+        step = _step(required=("chief", "ems_supply_officer"))
+        prospect = _prospect(step)
+        service = _service(prospect, _signer("fire_chief", "Fire Chief"))
+
+        with pytest.raises(
+            ValueError,
+            match=r"^Approval still needed from: Chief, EMS Supply Officer\.$",
+        ):
+            await service._validate_step_completion(prospect, step, {})
+
     async def test_blank_role_still_keeps_the_stage_closed(self):
         """Stripping must not turn a blank entry into "no approvers
         required", which would let the stage complete unsigned."""

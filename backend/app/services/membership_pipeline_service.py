@@ -2188,7 +2188,8 @@ class MembershipPipelineService:
                 ]
                 if missing:
                     raise ValueError(
-                        f"Approval still needed from: {', '.join(missing)}."
+                        "Approval still needed from: "
+                        f"{', '.join(office_label(r) for r in missing)}."
                     )
 
         elif step_type == PipelineStepType.REFERENCE_CHECK:
