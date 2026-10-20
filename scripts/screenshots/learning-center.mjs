@@ -36,9 +36,7 @@ const onlyIndex = process.argv.indexOf("--only");
 const only = onlyIndex > -1 ? process.argv[onlyIndex + 1] : null;
 
 const settle = async (page) => {
-  await page
-    .waitForLoadState("networkidle", { timeout: 15_000 })
-    .catch(() => {});
+  await page.waitForLoadState("networkidle", { timeout: 15_000 });
   await page.waitForTimeout(400);
 };
 
@@ -188,7 +186,16 @@ for (const shot of shots) {
     failed += 1;
     console.log(`FAIL ${shot.id}: ${String(error.message).split("\n")[0]}`);
   } finally {
-    if (shot.cleanup) await shot.cleanup(page).catch(() => {});
+    if (shot.cleanup) {
+      try {
+        await shot.cleanup(page);
+      } catch (error) {
+        failed += 1;
+        console.log(
+          `FAIL ${shot.id} cleanup: ${String(error.message).split("\n")[0]}`,
+        );
+      }
+    }
   }
 }
 
