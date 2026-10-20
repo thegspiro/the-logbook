@@ -57,11 +57,17 @@ from app.utils.agenda_items import (
     sections_from_agenda,
 )
 from app.utils.minutes_attendance import normalize_attendee
+from app.utils.minutes_search import (
+    Source,
+    compile_terms,
+    parse_query,
+    search_sources,
+)
 from app.utils.model_updates import apply_updates
-from app.utils.motion_votes import settle_roll_call, tally
+from app.utils.motion_votes import recorded_motions, settle_roll_call, tally
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
-from app.utils.rich_text import normalize_format, section_is_blank
+from app.utils.rich_text import normalize_format, section_is_blank, section_text
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 _DEFAULT_SECTIONS_BY_TYPE = {
@@ -91,6 +97,67 @@ def member_visible_conditions() -> tuple:
         ),
         MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
     )
+
+
+# The newest minutes read by one archive search. Section text is JSON and is
+# matched in the application, so the read is bounded; a department's archive of
+# several hundred sets of minutes is searched whole, and the screen says when an
+# older tail was left out.
+ARCHIVE_SCAN_LIMIT = 500
+
+_LEGACY_BODY_FIELDS = (
+    ("agenda", "Agenda"),
+    ("old_business", "Old business"),
+    ("new_business", "New business"),
+    ("treasurer_report", "Treasurer's report"),
+    ("chief_report", "Chief's report"),
+    ("committee_reports", "Committee reports"),
+    ("announcements", "Announcements"),
+    ("notes", "Notes"),
+)
+
+
+def _enum_value(value) -> str:
+    return value if isinstance(value, str) else value.value
+
+
+def _archive_sources(minutes: MeetingMinutes) -> list[Source]:
+    """Every place in *minutes* that holds words a member might search for.
+
+    The legacy body columns are searched too, because minutes written before
+    sections existed keep their text there; one whose text a section repeats is
+    skipped so the same words are not reported twice.
+    """
+    sources = [Source("title", "Title", minutes.title or "")]
+    section_texts: set[str] = set()
+    for section in sorted(minutes.sections or [], key=lambda s: s.get("order", 0)):
+        text = section_text(section)
+        section_texts.add(text)
+        sources.append(
+            Source(
+                "section",
+                str(section.get("title") or section.get("key") or "Section"),
+                text,
+            )
+        )
+    for name, label in _LEGACY_BODY_FIELDS:
+        text = (getattr(minutes, name) or "").strip()
+        if text and text not in section_texts:
+            sources.append(Source("section", label, text))
+    for motion in recorded_motions(minutes.motions):
+        sources.append(Source("motion", "Motion", motion.motion_text or ""))
+        sources.append(
+            Source("motion", "Motion discussion", motion.discussion_notes or "")
+        )
+    for item in minutes.action_items or []:
+        sources.append(Source("action_item", "Action item", item.description or ""))
+        sources.append(
+            Source("action_item", "Action item notes", item.completion_notes or "")
+        )
+        sources.append(
+            Source("action_item", "Action item assigned to", item.assignee_name or "")
+        )
+    return sources
 
 
 def _default_sections_for(meeting_type) -> list:
@@ -1928,6 +1995,67 @@ class MinuteService:
                     )
 
         return results
+
+    async def search_archive(
+        self,
+        organization_id: UUID | str,
+        query: str,
+        meeting_type: Optional[str] = None,
+        limit: int = 25,
+        restricted: bool = False,
+    ) -> dict:
+        """Search the words of the department's minutes, grouped by minutes.
+
+        Covers titles, every section, motions (with their discussion) and
+        action items. ``restricted=True`` (a caller without ``minutes.manage``)
+        confines the search to circulated or adopted, non-executive minutes —
+        the same rule the listing applies — so a draft or an executive session
+        is never searched, let alone quoted.
+        """
+        terms = parse_query(query)
+        patterns = compile_terms(terms)
+        if not patterns:
+            return {"terms": [], "hits": [], "searched": 0, "truncated": False}
+
+        stmt = (
+            select(MeetingMinutes)
+            .options(
+                selectinload(MeetingMinutes.motions),
+                selectinload(MeetingMinutes.action_items),
+            )
+            .where(MeetingMinutes.organization_id == str(organization_id))
+            .order_by(MeetingMinutes.meeting_date.desc())
+            .limit(ARCHIVE_SCAN_LIMIT)
+        )
+        if meeting_type:
+            stmt = stmt.where(MeetingMinutes.meeting_type == meeting_type)
+        if restricted:
+            stmt = stmt.where(*member_visible_conditions())
+
+        rows = list((await self.db.execute(stmt)).scalars().all())
+        hits: list[dict] = []
+        for minutes in rows:
+            found = search_sources(patterns, _archive_sources(minutes))
+            if found is None:
+                continue
+            hits.append(
+                {
+                    "id": minutes.id,
+                    "title": minutes.title,
+                    "meeting_type": _enum_value(minutes.meeting_type),
+                    "meeting_date": minutes.meeting_date,
+                    "status": _enum_value(minutes.status),
+                    **found,
+                }
+            )
+            if len(hits) == limit:
+                break
+        return {
+            "terms": terms,
+            "hits": hits,
+            "searched": len(rows),
+            "truncated": len(rows) == ARCHIVE_SCAN_LIMIT and len(hits) < limit,
+        }
 
     # ============================================
     # Cross-module Bridges

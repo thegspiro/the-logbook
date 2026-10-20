@@ -29,6 +29,7 @@ import { meetingsService } from '../../../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../../../services/api';
 import { minutesService } from '../services/api';
 import { AgendaEditorDialog } from '../components/AgendaEditorDialog';
+import { ArchiveSearchResults } from '../components/ArchiveSearchResults';
 import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -324,7 +325,7 @@ const MinutesPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-8 flex flex-col gap-4">
           <div className="flex items-center space-x-3">
             <div className="shrink-0 rounded-lg bg-cyan-600 p-2">
               <ClipboardList className="h-6 w-6 text-white" aria-hidden="true" />
@@ -336,7 +337,7 @@ const MinutesPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-2">
             {canManage && (
               <Link to="/minutes/outlines" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
                 <ListOrdered className="h-4 w-4" aria-hidden="true" />
@@ -413,7 +414,7 @@ const MinutesPage: React.FC = () => {
                 spellCheck={false}
                 id="minutes-search"
                 type="text"
-                placeholder="Search by title, agenda, or notes..."
+                placeholder="Search meetings, or any words in the minutes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="form-input placeholder-theme-text-muted pr-4 pl-10"
@@ -439,6 +440,8 @@ const MinutesPage: React.FC = () => {
             </div>
           </div>
         </div>
+
+        <ArchiveSearchResults query={searchQuery} meetingType={typeFilter} />
 
         {/* Error State */}
         {error && (
@@ -701,7 +704,7 @@ const MinutesPage: React.FC = () => {
                   <Archive className="mb-4 h-8 w-8 text-amber-700" />
                   <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Archives & Search</h3>
                   <p className="text-theme-text-secondary mb-3 text-sm">
-                    Search past meetings by title, agenda, or notes.
+                    Search past meetings by title, or by any words in their minutes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700">Search</span>

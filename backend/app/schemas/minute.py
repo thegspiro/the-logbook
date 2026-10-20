@@ -930,6 +930,46 @@ class MinutesSearchResult(UTCResponseBase):
     model_config = _response_config
 
 
+class ArchiveSnippetPart(BaseModel):
+    """A run of a snippet, marked when it is what the search found."""
+
+    text: str
+    hit: bool
+
+
+class ArchiveMatch(BaseModel):
+    """One place in a set of minutes where the search found its words."""
+
+    kind: str = Field(..., description="title, section, motion or action_item")
+    label: str = Field(..., description="Which section, motion or item")
+    parts: List[ArchiveSnippetPart]
+
+
+class ArchiveHit(UTCResponseBase):
+    """A set of minutes the search matched, with where it matched."""
+
+    id: str
+    title: str
+    meeting_type: str
+    meeting_date: datetime
+    status: str
+    match_count: int = Field(..., description="Places matched, including any not shown")
+    matches: List[ArchiveMatch]
+
+    model_config = _response_config
+
+
+class ArchiveSearchResponse(BaseModel):
+    """Archive search results, grouped by minutes, newest meeting first."""
+
+    terms: List[str] = Field(..., description="The words and phrases searched for")
+    hits: List[ArchiveHit]
+    searched: int = Field(..., description="Sets of minutes read")
+    truncated: bool = Field(
+        ..., description="True when older minutes were left out of the search"
+    )
+
+
 # ============================================
 # Attendance Suggestions
 # ============================================
