@@ -10,9 +10,12 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import func, or_, select
+from sqlalchemy import func
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
+from sqlalchemy.orm.base import NO_VALUE
 
 from app.core.utils import generate_uuid
 from app.models.document import Document
@@ -646,6 +649,17 @@ class MinuteService:
             .all()
         )
         by_section = {m.section_key: m for m in rows if m.section_key}
+        # ``rows`` comes from a query against Motion directly, not from the
+        # ``minutes.motions`` collection, so deleting one here does not by
+        # itself update that collection if it is already loaded on this same
+        # ``minutes`` instance (e.g. because the caller's own ``get_minutes``
+        # fetch eagerly loaded it moments ago, in this same request). Without
+        # this, a response built from ``minutes.motions`` right after this
+        # call — which is exactly what ``update_minutes``'s caller does — would
+        # still list the motion this method just deleted.
+        loaded_motions = sa_inspect(minutes).attrs.motions.loaded_value
+        if loaded_motions is NO_VALUE:
+            loaded_motions = None
         for stale in rows:
             if (
                 stale.status == MotionStatus.PENDING
@@ -653,6 +667,8 @@ class MinuteService:
                 and stale.section_key not in wanted
             ):
                 await self.db.delete(stale)
+                if loaded_motions is not None and stale in loaded_motions:
+                    loaded_motions.remove(stale)
 
         order = {s.get("key"): s.get("order", 0) for s in minutes.get_sections()}
         for key, section in wanted.items():
