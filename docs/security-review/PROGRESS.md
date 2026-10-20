@@ -20407,7 +20407,7 @@ iteration's commit" rule.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
@@ -20422,6 +20422,37 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-20 — Feature 27 (Integrations, pass 8) — directory-account engine generalized, Microsoft 365 added, Outlook calendar OAuth; 0 fixed, 0 new findings; INT-11 corrected to FIXED
+
+`search_pull_requests` (`repo:thegspiro/the-logbook is:pr is:open
+head:claude/security-review-`) returned 0 results immediately before
+starting, and again immediately before branching — no collision either
+time. PR #3458 (Feature 26, Forms, pass 8) had merged with nothing started
+for Feature 27 since; row 27 was the first `⬜`.
+
+**Delta.** Baseline `715c4b3f` (pass 7's merge, PR #3375). Four real
+commits since: `24061bc6` adds Outlook calendar OAuth connect, extracting
+the shared state/nonce/PKCE binding into a new `calendar_oauth_common.py`
+also used by the now-refactored Google Calendar OAuth; `b1ae3236`
+generalizes the Google-only provisioning engine into a provider-neutral
+`directory_account_service.py`; `d5c8f664` adds Microsoft 365 as the second
+directory provider; `86387e0e` (workflow-review W73) adds a required-field
+check to `integrations.py`'s connect endpoint. All four read in full and
+clean — see `INT-27-integrations.md`'s **Pass 8** section for the detail,
+including the OAuth state/nonce/PKCE binding, the Microsoft Graph client's
+OData escaping and next-link pinning, and the generalized engine's org
+scoping. Route surface re-enumerated: net +2 since pass 7 (the new Outlook
+OAuth pair), everything else unchanged.
+
+**One correction, not a new finding:** INT-11 ("Salesforce 'clear the
+refresh token' has no reachable UI control") was carried forward as OPEN
+through passes 6 and 7 although the control (`handleSwitchSalesforceToClientCredentials`)
+was already present and reachable at pass 7's own reviewed commit — a
+review error repeated across two passes, confirmed by reading that exact
+commit's file content directly rather than trusting the prior write-up.
+Marked ✅ FIXED this pass. Rotation row 27 → ✅ (pending this PR's merge);
+next is Feature 28 (Security, audit & IP).
 
 ### 2026-10-20 — Feature 26 (Forms, pass 8) — true zero-delta on backend, 0 fixed, 0 new findings
 
