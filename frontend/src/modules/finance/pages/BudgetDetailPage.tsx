@@ -144,11 +144,13 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actio
         </div>
         <div>
           <p className="text-theme-text-secondary text-sm">Committed</p>
-          <p className="text-xl font-bold text-yellow-600">{formatCurrencyWhole(Number(budget.amountEncumbered))}</p>
+          <p className="text-xl font-bold text-yellow-700 dark:text-yellow-600">
+            {formatCurrencyWhole(Number(budget.amountEncumbered))}
+          </p>
         </div>
         <div>
           <p className="text-theme-text-secondary text-sm">Remaining</p>
-          <p className={`text-xl font-bold ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}>
+          <p className={`text-xl font-bold ${remaining < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}>
             {formatCurrencyWhole(remaining)}
           </p>
         </div>

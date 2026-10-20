@@ -358,7 +358,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                     <div className="flex gap-2">
                       <button
                         onClick={selectAll}
-                        className="text-xs font-medium text-emerald-600 hover:text-emerald-700"
+                        className="text-xs font-medium text-emerald-700 hover:text-emerald-700 dark:text-emerald-600"
                       >
                         Select All
                       </button>

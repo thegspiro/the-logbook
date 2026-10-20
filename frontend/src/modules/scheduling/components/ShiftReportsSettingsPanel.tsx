@@ -1130,7 +1130,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{label}</p>
                   <p
-                    className={`text-xs ${isActive ? 'text-violet-600/70 dark:text-violet-400/70' : 'text-theme-text-muted'}`}
+                    className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-400/70' : 'text-theme-text-muted'}`}
                   >
                     {description}
                   </p>

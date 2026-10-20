@@ -571,7 +571,7 @@ export const GrantDetailPage: React.FC = () => {
                 <DollarSign className="h-4 w-4" />
                 Amount Awarded
               </div>
-              <p className="mt-1 text-xl font-bold text-emerald-600">
+              <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-600">
                 {formatCurrencyWhole(application.amountAwarded)}
               </p>
             </div>
@@ -792,7 +792,9 @@ export const GrantDetailPage: React.FC = () => {
               </div>
               <div className="card p-4 text-center">
                 <p className="text-theme-text-secondary text-sm">Remaining</p>
-                <p className={`mt-1 text-xl font-bold ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <p
+                  className={`mt-1 text-xl font-bold ${remainingTotal >= 0 ? 'text-green-700 dark:text-green-600' : 'text-red-600'}`}
+                >
                   {formatCurrency(remainingTotal)}
                 </p>
               </div>
@@ -883,7 +885,7 @@ export const GrantDetailPage: React.FC = () => {
                               {formatCurrency(item.amountSpent)}
                             </td>
                             <td
-                              className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${isOver ? 'text-red-600' : 'text-green-600'}`}
+                              className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${isOver ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
                             >
                               {formatCurrency(remaining)}
                             </td>
@@ -912,7 +914,7 @@ export const GrantDetailPage: React.FC = () => {
                           {formatCurrency(spentTotal)}
                         </td>
                         <td
-                          className={`px-4 py-3 text-right text-sm whitespace-nowrap ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                          className={`px-4 py-3 text-right text-sm whitespace-nowrap ${remainingTotal >= 0 ? 'text-green-700 dark:text-green-600' : 'text-red-600'}`}
                         >
                           {formatCurrency(remainingTotal)}
                         </td>

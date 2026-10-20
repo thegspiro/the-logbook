@@ -1029,7 +1029,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                                 ))}
                               </select>
                               {availablePositions.length === 0 && (
-                                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                                   All positions already have ballot items.
                                 </p>
                               )}
@@ -1331,7 +1331,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                           ))}
                         </select>
                         {availablePositions.length === 0 && (
-                          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                          <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                             All positions already have ballot items.
                           </p>
                         )}

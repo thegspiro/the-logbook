@@ -267,7 +267,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                         void onMoveRank(idx, 'up');
                       }}
                       disabled={idx === 0}
-                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone inline-flex min-h-6 min-w-6 items-center justify-center p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
                       aria-label="Move up"
                     >
                       <ChevronUp className="h-3.5 w-3.5" />
@@ -278,7 +278,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                         void onMoveRank(idx, 'down');
                       }}
                       disabled={idx === ranks.length - 1}
-                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone inline-flex min-h-6 min-w-6 items-center justify-center p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
                       aria-label="Move down"
                     >
                       <ChevronDown className="h-3.5 w-3.5" />
@@ -418,7 +418,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
                 {rankValidationIssues.length} active member{rankValidationIssues.length !== 1 ? 's' : ''} with
                 unrecognized rank{rankValidationIssues.length !== 1 ? 's' : ''}
               </p>

@@ -242,7 +242,7 @@ const DonationsPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {donation.receiptSent ? (
-                        <span className="flex items-center gap-1 text-xs text-green-600">
+                        <span className="flex items-center gap-1 text-xs text-green-700 dark:text-green-600">
                           <Receipt className="h-3 w-3" /> Sent
                         </span>
                       ) : (

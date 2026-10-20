@@ -474,7 +474,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
       ? `${getEventTypeLabel(eventType).toLowerCase()} (${category})`
       : getEventTypeLabel(eventType).toLowerCase();
     if (!nextEvent) {
-      return <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">No upcoming {label} events found.</p>;
+      return <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">No upcoming {label} events found.</p>;
     }
     return (
       <div className="border-theme-surface-border bg-theme-surface-hover mt-2 rounded-md border p-3">

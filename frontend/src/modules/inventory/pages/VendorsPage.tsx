@@ -1148,7 +1148,7 @@ export const VendorsPage: React.FC = () => {
             <p className="text-theme-text-muted text-xs">Active Vendors</p>
           </div>
           <div className="card-secondary p-3 text-center">
-            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.preferred}</p>
+            <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{stats.preferred}</p>
             <p className="text-theme-text-muted text-xs">Preferred</p>
           </div>
           <div className="card-secondary p-3 text-center">

@@ -223,7 +223,7 @@ export const SealPanel: React.FC<SealPanelProps> = ({
         disabled={disabled}
       />
       {draft.trim() !== '' && (
-        <p className={`mt-1.5 text-xs ${canClear ? 'text-green-600 dark:text-green-400' : 'text-amber-600'}`}>
+        <p className={`mt-1.5 text-xs ${canClear ? 'text-green-700 dark:text-green-400' : 'text-amber-700'}`}>
           {canClear
             ? 'Matches the last count — nothing inside has been touched.'
             : lastNumber === ''

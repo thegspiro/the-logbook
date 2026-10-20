@@ -86,7 +86,7 @@ export const PlatoonSelector: React.FC<PlatoonSelectorProps> = ({ members, plato
       </div>
 
       {platoons.every((p) => countForPlatoon(p) === 0) && (
-        <p className="text-[11px] text-amber-600 dark:text-amber-400">
+        <p className="text-[11px] text-amber-700 dark:text-amber-400">
           No members are assigned to these platoons yet — shifts will be created but left unstaffed until members are
           given a platoon on their profile.
         </p>

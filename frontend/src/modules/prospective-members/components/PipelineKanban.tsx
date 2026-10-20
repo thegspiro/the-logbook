@@ -202,7 +202,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
                     onToggleSelect(applicant.id);
                   }}
                   aria-label={`Select ${applicant.first_name} ${applicant.last_name}`}
-                  className="form-checkbox touch:h-6 touch:w-6 text-red-700 dark:text-red-500"
+                  className="form-checkbox h-6 w-6 text-red-700 dark:text-red-500"
                 />
               </div>
             )}

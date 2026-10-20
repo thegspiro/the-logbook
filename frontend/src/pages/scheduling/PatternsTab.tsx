@@ -880,7 +880,7 @@ export const PatternsTab: React.FC = () => {
                         ))}
                       </select>
                       {activeTemplates.length === 0 && (
-                        <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                        <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
                           No templates found. Create one in the Templates tab first.
                         </p>
                       )}

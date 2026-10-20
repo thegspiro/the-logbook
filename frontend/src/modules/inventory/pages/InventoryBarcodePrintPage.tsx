@@ -1692,7 +1692,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                   {itemsWithoutBarcodes.length} item{itemsWithoutBarcodes.length !== 1 ? 's' : ''} missing barcode
                   values
                 </p>
-                <p className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+                <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-400">
                   These items have no barcode, asset tag, or serial number and will print without a scannable barcode:{' '}
                   {itemsWithoutBarcodes.map((i) => i.name).join(', ')}
                 </p>

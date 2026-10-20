@@ -317,7 +317,7 @@ const ShiftCheckInPage: React.FC = () => {
             {/* Say why it is unavailable. Offering a live-looking button that the
                 API then refuses is the state this replaces. */}
             {shift.checkin_closed_reason && !shift.is_finalized && (
-              <p className="text-center text-xs text-amber-600 dark:text-amber-400">{shift.checkin_closed_reason}</p>
+              <p className="text-center text-xs text-amber-700 dark:text-amber-400">{shift.checkin_closed_reason}</p>
             )}
             {/* Outside the check-in window, prep done ahead of an early shift
                 can still be timed — against whichever upcoming shift it is for. */}
@@ -329,7 +329,7 @@ const ShiftCheckInPage: React.FC = () => {
               <CheckCircle2 className="h-5 w-5 text-green-600" />
               <div>
                 <p className="text-sm font-medium text-green-700 dark:text-green-400">Checked in</p>
-                <p className="text-xs text-green-600/70 dark:text-green-400/70">
+                <p className="text-xs text-green-700 dark:text-green-400/70">
                   <Clock className="mr-1 inline h-3 w-3" />
                   {formatTime(attendance.checked_in_at, tz)}
                 </p>
@@ -380,7 +380,7 @@ const ShiftCheckInPage: React.FC = () => {
         )}
 
         {shift.is_finalized && (
-          <p className="text-center text-xs text-amber-600 dark:text-amber-400">
+          <p className="text-center text-xs text-amber-700 dark:text-amber-400">
             This shift is finalized, so check-in and check-out are closed.
           </p>
         )}

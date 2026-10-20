@@ -1533,7 +1533,7 @@ export const MemberProfilePage: React.FC = () => {
                   </div>
                 )}
                 {(newStatus === UserStatus.DROPPED_VOLUNTARY || newStatus === UserStatus.DROPPED_INVOLUNTARY) && (
-                  <p className="rounded-md border border-yellow-500/20 bg-yellow-500/10 p-2 text-xs text-yellow-600 dark:text-yellow-400">
+                  <p className="rounded-md border border-yellow-500/20 bg-yellow-500/10 p-2 text-xs text-yellow-800 dark:text-yellow-400">
                     Dropping a member creates a property return report and may send an email notification.
                   </p>
                 )}

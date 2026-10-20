@@ -1009,7 +1009,7 @@ const ImpactPlannerPage: React.FC = () => {
                                       {sizeLabel(m.needed_size)}
                                     </span>
                                   ) : (
-                                    <span className="text-xs text-amber-600 dark:text-amber-400">No size on file</span>
+                                    <span className="text-xs text-amber-700 dark:text-amber-400">No size on file</span>
                                   )}
                                 </td>
                               )}

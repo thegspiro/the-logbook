@@ -1403,10 +1403,10 @@ export default function ComplianceRequirementsConfigPage() {
                       <div
                         className={`rounded-full p-2 ${
                           report.status === 'completed'
-                            ? 'bg-green-100 text-green-600 dark:bg-green-900/20'
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-600'
                             : report.status === 'failed'
                               ? 'bg-red-100 text-red-600 dark:bg-red-900/20'
-                              : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/20'
+                              : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-600'
                         }`}
                       >
                         {report.status === 'completed' ? (

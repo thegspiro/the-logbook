@@ -189,7 +189,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                 placeholder="Reason for granting voting eligibility override..."
               />
               {reason.trim().length > 0 && reason.trim().length < 10 && (
-                <p className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+                <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-400">
                   {10 - reason.trim().length} more character{10 - reason.trim().length !== 1 ? 's' : ''} needed
                 </p>
               )}

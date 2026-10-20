@@ -478,7 +478,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
             <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
               <h2 className="text-theme-text-primary text-lg font-bold">{requirement.name}</h2>
               {requirement.requirement_type && (
-                <span className="text-theme-text-primary rounded-sm bg-green-700 px-2 py-1 text-xs font-semibold">
+                <span className="rounded-sm bg-green-700 px-2 py-1 text-xs font-semibold text-white">
                   {getRequirementTypeLabel(requirement.requirement_type)}
                 </span>
               )}
@@ -486,20 +486,18 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   (unused) due date type here read as a recurring schedule —
                   "Calendar Period" implies an annual Dec 31 reset. */}
               {requirement.frequency === 'one_time' ? (
-                <span className="text-theme-text-primary rounded bg-teal-700 px-2 py-1 text-xs font-semibold">
-                  One Time
-                </span>
+                <span className="rounded bg-teal-700 px-2 py-1 text-xs font-semibold text-white">One Time</span>
               ) : (
                 <span
                   className={`rounded px-2 py-1 text-xs font-semibold ${
                     requirement.due_date_type === 'rolling'
-                      ? 'bg-purple-600'
+                      ? 'bg-purple-600 text-white'
                       : requirement.due_date_type === 'calendar_period'
-                        ? 'bg-blue-600'
+                        ? 'bg-blue-600 text-white'
                         : requirement.due_date_type === 'certification_period'
-                          ? 'bg-orange-600'
-                          : 'bg-theme-surface-hover'
-                  } text-theme-text-primary`}
+                          ? 'bg-orange-700 text-white'
+                          : 'bg-theme-surface-hover text-theme-text-primary'
+                  }`}
                 >
                   {getDueDateTypeLabel(requirement.due_date_type)}
                 </span>

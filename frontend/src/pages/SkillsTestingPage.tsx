@@ -120,7 +120,7 @@ const TestHistoryCard: React.FC<{
                 <XCircle className="h-5 w-5 text-red-500" />
               ) : null}
               <p
-                className={`text-lg font-bold ${test.result === 'pass' ? 'text-green-600' : test.result === 'fail' ? 'text-red-600' : 'text-theme-text-primary'}`}
+                className={`text-lg font-bold ${test.result === 'pass' ? 'text-green-700 dark:text-green-600' : test.result === 'fail' ? 'text-red-600' : 'text-theme-text-primary'}`}
               >
                 {Math.round(test.overall_score)}%
               </p>

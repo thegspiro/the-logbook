@@ -1290,7 +1290,7 @@ export const ElectionDetailPage: React.FC = () => {
                       <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
                         Every ballot link already sent was invalidated because the ballot changed
                       </h3>
-                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                         The links in the ballot emails sent{' '}
                         {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} showed the old
                         ballot, so they no longer work.{' '}
@@ -1304,7 +1304,7 @@ export const ElectionDetailPage: React.FC = () => {
                       <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
                         Every ballot link already sent was invalidated by the rollback
                       </h3>
-                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                         Reopening regenerated the anonymity salt, so the links in the ballot emails sent{' '}
                         {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} no longer
                         work. Resend ballots so members can vote.
@@ -1330,7 +1330,7 @@ export const ElectionDetailPage: React.FC = () => {
                   {lastSkippedDetails.length} member(s) skipped when sending{' '}
                   {lastSkippedSource === 'reminders' ? 'reminders' : 'ballots'}
                 </h3>
-                <p className="mt-1 mb-2 text-xs text-amber-600 dark:text-amber-400">
+                <p className="mt-1 mb-2 text-xs text-amber-700 dark:text-amber-400">
                   These members were not sent a {lastSkippedSource === 'reminders' ? 'reminder' : 'ballot'}, for the
                   reason shown. To let one of them vote, add a voter override on the Overrides tab.
                 </p>
@@ -1338,7 +1338,7 @@ export const ElectionDetailPage: React.FC = () => {
                   {lastSkippedDetails.map((d, i) => (
                     <li key={i} className="flex gap-2">
                       <span className="shrink-0 font-medium">{d.name}:</span>
-                      <span className="text-amber-600 dark:text-amber-400">{d.reason}</span>
+                      <span className="text-amber-700 dark:text-amber-400">{d.reason}</span>
                     </li>
                   ))}
                 </ul>

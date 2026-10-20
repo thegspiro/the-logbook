@@ -198,7 +198,7 @@ const CriterionEditor: React.FC<{
                     nothing. Said here as well as in the save-time errors
                     because this is where the author can still fix it. */}
                 {(criterion.max_score == null || criterion.max_score <= 0) && (
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                     Without a maximum this step earns no points toward the score.
                   </p>
                 )}

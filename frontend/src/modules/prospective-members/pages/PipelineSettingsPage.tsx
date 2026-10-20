@@ -694,7 +694,7 @@ export const PipelineSettingsPage: React.FC = () => {
                       icon={XCircle}
                       label="Rejected"
                       value={pipelineStats.rejected_count}
-                      color="text-red-600 dark:text-red-400 bg-red-500/10"
+                      color="text-red-700 dark:text-red-400 bg-red-500/10"
                     />
                     <StatCard
                       icon={TrendingUp}

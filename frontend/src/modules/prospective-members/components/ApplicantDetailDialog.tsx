@@ -342,7 +342,7 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
                 <div className="mx-4 mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
                   <div className="mb-1 flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
-                    <span className="text-sm font-medium text-amber-600 dark:text-amber-300">Application Inactive</span>
+                    <span className="text-sm font-medium text-amber-700 dark:text-amber-300">Application Inactive</span>
                   </div>
                   <p className="text-theme-text-muted text-xs">
                     This application was marked inactive

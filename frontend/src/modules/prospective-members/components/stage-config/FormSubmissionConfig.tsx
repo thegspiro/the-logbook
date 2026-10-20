@@ -157,7 +157,7 @@ const FormSubmissionConfig: React.FC<FormSubmissionConfigProps> = ({
                       <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-400" />
                       <span className="text-green-800 dark:text-green-300">
                         {friendly[field]}{' '}
-                        <span className="text-green-600/70 dark:text-green-400/70">
+                        <span className="text-green-700 dark:text-green-400/70">
                           — mapped from &ldquo;{mapped.label}&rdquo;
                         </span>
                       </span>

@@ -118,7 +118,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
           <p className="text-theme-text-muted text-xs">{categoryName}</p>
         </div>
         {onHand <= 0 && (
-          <span className="shrink-0 rounded bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600 dark:text-red-400">
+          <span className="shrink-0 rounded bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
             Out of stock
           </span>
         )}

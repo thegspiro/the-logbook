@@ -577,9 +577,9 @@ const InventoryMaintenancePage: React.FC = () => {
               <div
                 className={`mt-0.5 rounded-full p-1.5 ${
                   rec.passed === true
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-400'
                     : rec.passed === false
-                      ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                      ? 'bg-red-500/10 text-red-700 dark:text-red-400'
                       : 'bg-theme-surface-hover text-theme-text-muted'
                 }`}
               >

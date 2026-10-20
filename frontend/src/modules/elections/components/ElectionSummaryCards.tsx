@@ -63,7 +63,7 @@ export const ElectionSummaryCards: React.FC<ElectionSummaryCardsProps> = ({ elec
           </div>
         </div>
         {needsAttention > 0 && (
-          <div className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+          <div className="mt-2 text-xs text-amber-700 dark:text-amber-400">
             {draftElections.length > 0 && <span>{draftElections.length} draft(s) to finalize</span>}
             {draftElections.length > 0 && expiredOpenElections.length > 0 && <span> · </span>}
             {expiredOpenElections.length > 0 && <span>{expiredOpenElections.length} expired to close</span>}

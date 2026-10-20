@@ -1761,7 +1761,7 @@ const Dashboard: React.FC = () => {
               </div>
             ) : dashboardEligiblePositions.length === 0 ? (
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-amber-600 dark:text-amber-400">Not eligible for this shift.</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400">Not eligible for this shift.</p>
                 <button
                   onClick={() => setSignupExpandedId(null)}
                   className="text-theme-text-muted hover:text-theme-text-primary px-2 py-2 text-xs"

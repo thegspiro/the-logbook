@@ -400,7 +400,7 @@ const BudgetsPage: React.FC = () => {
                           {formatCurrencyWhole(Number(budget.amountEncumbered))}
                         </td>
                         <td
-                          className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}
+                          className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${remaining < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
                         >
                           {formatCurrencyWhole(remaining)}
                         </td>
@@ -467,7 +467,7 @@ const BudgetsPage: React.FC = () => {
                     {formatCurrencyWhole(visibleBudgets.reduce((s, b) => s + Number(b.amountEncumbered), 0))}
                   </td>
                   <td
-                    className={`px-4 py-3 text-right text-sm font-bold whitespace-nowrap ${totalRemaining < 0 ? 'text-red-600' : 'text-green-600'}`}
+                    className={`px-4 py-3 text-right text-sm font-bold whitespace-nowrap ${totalRemaining < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
                   >
                     {formatCurrencyWhole(totalRemaining)}
                   </td>

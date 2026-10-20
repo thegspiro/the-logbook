@@ -203,7 +203,7 @@ const CustomPatternBuilder: React.FC<CustomPatternBuilderProps> = ({ cyclePatter
         {dayCount > 0 && (
           <span className="flex items-center gap-1">
             <Sun className="h-3 w-3 text-amber-500" />
-            Day: <span className="font-semibold text-amber-600 dark:text-amber-400">{dayCount}</span>
+            Day: <span className="font-semibold text-amber-700 dark:text-amber-400">{dayCount}</span>
           </span>
         )}
         {nightCount > 0 && (

@@ -628,7 +628,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                   Printer fault: {printResult.printer_errors.join(', ')}
                 </p>
               ) : printResult.printer_warnings.length > 0 ? (
-                <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
+                <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
                   Printer warning: {printResult.printer_warnings.join(', ')}
                 </p>
               ) : !printResult.status_known ? (
@@ -636,7 +636,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                   Delivery could not be confirmed because this printer does not report its status. Check the tray.
                 </p>
               ) : (
-                <p className="mt-1 text-sm text-emerald-600 dark:text-emerald-400">The printer reported no faults.</p>
+                <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-400">The printer reported no faults.</p>
               )}
             </div>
           ) : null}
@@ -753,7 +753,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                   </select>
                   {printerStockMismatch && selectedPrinter ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
                         This printer is set up for{' '}
                         <strong>
                           {LABEL_PRESETS.find((lp) => lp.id === selectedPrinter.label_format)?.name ??

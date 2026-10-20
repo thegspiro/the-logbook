@@ -196,7 +196,7 @@ export default function InspectionsListPage() {
                   {!insp.inspectorName && insp.inspectorOrganization && <span>{insp.inspectorOrganization}</span>}
                   {insp.nextInspectionDate && <span>Next: {formatDate(insp.nextInspectionDate, tz)}</span>}
                   {insp.correctiveActions && !insp.correctiveActionCompleted && (
-                    <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                    <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
                       <AlertTriangle className="h-3 w-3" /> Corrective action needed
                     </span>
                   )}

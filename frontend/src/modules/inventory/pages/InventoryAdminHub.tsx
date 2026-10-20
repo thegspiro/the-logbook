@@ -159,7 +159,7 @@ const TONE_CLASSES: Record<InventoryHubTone, string> = {
   cyan: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
   yellow: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
   green: 'bg-green-500/10 text-green-600 dark:text-green-400',
-  red: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  red: 'bg-red-500/10 text-red-700 dark:text-red-400',
   indigo: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
   amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
   sky: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',

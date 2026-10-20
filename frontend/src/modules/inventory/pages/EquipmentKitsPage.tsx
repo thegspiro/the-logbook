@@ -614,7 +614,7 @@ const EquipmentKitsPage: React.FC = () => {
                             <Ruler className="h-3 w-3" /> Size select
                           </span>
                         )}
-                        {li.optional && <span className="text-amber-600 dark:text-amber-400">Optional</span>}
+                        {li.optional && <span className="text-amber-700 dark:text-amber-400">Optional</span>}
                       </div>
                     </div>
                   ))}

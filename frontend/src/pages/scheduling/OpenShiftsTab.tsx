@@ -383,7 +383,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                     </div>
                   ) : isExcluded || eligiblePositions.length === 0 ? (
                     <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-                      <p className="text-sm text-amber-600 dark:text-amber-400">
+                      <p className="text-sm text-amber-700 dark:text-amber-400">
                         You are not eligible to sign up for this shift. Ask a scheduling admin if you think that is
                         wrong.
                       </p>
@@ -393,7 +393,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                        is taken. Saying "not eligible" here sends the member to
                        an admin about qualifications that are perfectly fine. */
                     <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-                      <p className="text-sm text-amber-600 dark:text-amber-400">
+                      <p className="text-sm text-amber-700 dark:text-amber-400">
                         Every seat you are cleared for on this shift has been filled. Other positions may still be open,
                         but not ones you are qualified to ride.
                       </p>

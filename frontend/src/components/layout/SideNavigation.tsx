@@ -1086,7 +1086,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               aria-pressed={theme === 'high-contrast'}
               className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg transition-all focus:ring-2 focus:outline-hidden ${
                 theme === 'high-contrast'
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                  ? 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
                   : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
               } ${collapsed ? 'justify-center p-3' : 'px-4 py-3'}`}
               title={

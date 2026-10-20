@@ -326,7 +326,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
               <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
                 <div className="rounded-lg bg-green-500/10 p-3 text-center">
                   <div className="text-2xl font-bold text-green-700 dark:text-green-400">{roster.total_eligible}</div>
-                  <div className="text-xs font-medium text-green-600 dark:text-green-500">
+                  <div className="text-xs font-medium text-green-700 dark:text-green-500">
                     {roster.total_ballots_sent > 0 ? 'Eligible' : 'Will Receive Ballot'}
                   </div>
                 </div>

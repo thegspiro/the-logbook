@@ -828,7 +828,7 @@ export const ReorderRequestsPage: React.FC = () => {
             <p className="text-theme-text-muted text-xs">Total Requests</p>
           </div>
           <div className="card-secondary p-3 text-center">
-            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.pending}</p>
+            <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{stats.pending}</p>
             <p className="text-theme-text-muted text-xs">Pending</p>
           </div>
           <div className="card-secondary p-3 text-center">
@@ -956,7 +956,7 @@ export const ReorderRequestsPage: React.FC = () => {
                     <td data-label="Qty" className="text-theme-text-primary px-4 py-3">
                       {req.quantity_requested}
                       {req.quantity_received != null && (
-                        <span className="ml-1 text-xs text-green-600 dark:text-green-400">
+                        <span className="ml-1 text-xs text-green-700 dark:text-green-400">
                           ({req.quantity_received} received)
                         </span>
                       )}

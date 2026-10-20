@@ -265,7 +265,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
           {results.quorum_detail && (
             <p
               className={`mt-1 text-sm ${
-                results.quorum_met ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                results.quorum_met ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'
               }`}
             >
               {results.quorum_detail}

@@ -1530,7 +1530,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         </span>
                       )}
                       {outstandingStartChecks > 0 && (
-                        <span className="text-amber-600 dark:text-amber-400">
+                        <span className="text-amber-700 dark:text-amber-400">
                           {outstandingStartChecks} start-of-shift check{outstandingStartChecks > 1 ? 's' : ''} pending
                         </span>
                       )}
@@ -1616,7 +1616,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   <div className="text-sm">
                     <span className="font-medium text-amber-700 dark:text-amber-300">This shift is cancelled.</span>
                     {shift.cancellation_reason && (
-                      <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{shift.cancellation_reason}</p>
+                      <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">{shift.cancellation_reason}</p>
                     )}
                   </div>
                 </div>
@@ -1697,7 +1697,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                           <span className="font-medium text-amber-700 dark:text-amber-400">
                             Equipment check status could not be read
                           </span>
-                          <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-300">
+                          <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-300">
                             Reading them needs an Inventory checklist permission your account may not have, so
                             outstanding checks are not counted below.
                             {requireEndOfShiftChecks
@@ -1713,7 +1713,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                           <span className="font-medium text-amber-700 dark:text-amber-400">
                             End-of-shift equipment checks incomplete
                           </span>
-                          <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-300">
+                          <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-300">
                             {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length} end-of-shift checklist
                             {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length !== 1 ? 's' : ''} still
                             pending. The shift will close with them outstanding.
@@ -1771,13 +1771,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                               {checkedOut.length > 0 && `, ${checkedOut.length} checked out`}
                             </span>
                             {checkedIn.length < totalAssigned && totalAssigned > 0 && (
-                              <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
+                              <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
                                 {totalAssigned - checkedIn.length} member
                                 {totalAssigned - checkedIn.length !== 1 ? 's' : ''} never checked in
                               </p>
                             )}
                             {checkedIn.length > checkedOut.length && (
-                              <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
+                              <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
                                 {checkedIn.length - checkedOut.length} member
                                 {checkedIn.length - checkedOut.length !== 1 ? 's' : ''} still on shift &mdash; will be
                                 checked out automatically at the shift end time
@@ -2254,7 +2254,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       <Truck className="h-4 w-4" /> Crew Board — {shift.apparatus_unit_number}
                     </h3>
                     {openPositions.length > 0 && (
-                      <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                      <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
                         {openPositions.length} open
                       </span>
                     )}
@@ -2819,7 +2819,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       somebody is checked in, a closed window is the state of
                       the shift rather than an obstacle in front of them. */}
                       {shift.checkin_closed_reason && !myAttendance?.checked_in_at && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400">{shift.checkin_closed_reason}</p>
+                        <p className="text-xs text-amber-700 dark:text-amber-400">{shift.checkin_closed_reason}</p>
                       )}
                     </div>
                   )}

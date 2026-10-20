@@ -954,13 +954,13 @@ export const ShiftReportsTab: React.FC = () => {
           )}
           {traineeStats.total_calls != null && (
             <div className="rounded-lg border border-green-500/15 bg-green-500/5 p-3 text-center">
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{traineeStats.total_calls}</p>
+              <p className="text-2xl font-bold text-green-700 dark:text-green-400">{traineeStats.total_calls}</p>
               <p className="text-theme-text-muted mt-0.5 text-xs">Calls</p>
             </div>
           )}
           {traineeStats.avg_rating != null && (
             <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 p-3 text-center">
-              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{traineeStats.avg_rating}</p>
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{traineeStats.avg_rating}</p>
               <p className="text-theme-text-muted mt-0.5 text-xs">Avg Rating</p>
             </div>
           )}
@@ -1034,7 +1034,7 @@ export const ShiftReportsTab: React.FC = () => {
             <p className="text-theme-text-muted mt-0.5 text-xs">Shift hours covered</p>
           </div>
           <div className="rounded-lg border border-green-500/15 bg-green-500/5 p-3 text-center">
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{officerAnalytics.total_calls}</p>
+            <p className="text-2xl font-bold text-green-700 dark:text-green-400">{officerAnalytics.total_calls}</p>
             <p className="text-theme-text-muted mt-0.5 text-xs">Calls covered</p>
           </div>
           {/* These two lead somewhere, so they are buttons and say where. As
@@ -1058,7 +1058,7 @@ export const ShiftReportsTab: React.FC = () => {
               className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-center transition-colors hover:bg-amber-500/10"
               onClick={() => setViewMode('pending-review')}
             >
-              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingCount}</p>
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{pendingCount}</p>
               <p className="text-theme-text-muted mt-0.5 text-xs">
                 Awaiting review <span aria-hidden="true">→</span>
               </p>
@@ -1173,7 +1173,7 @@ export const ShiftReportsTab: React.FC = () => {
                   days >= 7
                     ? 'text-red-600 dark:text-red-400'
                     : days >= 3
-                      ? 'text-amber-600 dark:text-amber-400'
+                      ? 'text-amber-700 dark:text-amber-400'
                       : 'text-theme-text-muted'
                 }`}
               >

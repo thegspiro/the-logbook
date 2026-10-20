@@ -207,7 +207,7 @@ export const MySkillTestResultPage: React.FC = () => {
                 approximate instead of shown as an ordinary stopwatch reading —
                 the same marking the printed scorecard carries. */}
             {currentTest.timing_verified === false && (
-              <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                 Not verified — the evaluation was resumed after an interruption, so this time is approximate.
               </p>
             )}
