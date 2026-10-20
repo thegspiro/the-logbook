@@ -94,31 +94,35 @@ lessons themselves.
 
 ## Captured
 
-Eleven images in `frontend/public/lesson-images/`, taken as the ordinary demo
-member by [`scripts/screenshots/learning-center.mjs`](../../scripts/screenshots/learning-center.mjs)
-and attached to a step through its optional `screenshot` field:
+Twenty-five images in `frontend/public/lesson-images/` (about 700 KB), taken as
+the ordinary demo member by
+[`scripts/screenshots/learning-center.mjs`](../../scripts/screenshots/learning-center.mjs)
+and attached to a step through its `screenshots` list. Every step now has at
+least one. Shots are cropped to the part of the screen the step is about.
 
-| Step                            | File                                |
-| ------------------------------- | ----------------------------------- |
-| `getting-started.dashboard`     | `getting-started-dashboard.png`     |
-| `getting-started.notifications` | `getting-started-notifications.png` |
-| `getting-started.directory`     | `getting-started-directory.png`     |
-| `mobile.offline`                | `mobile-offline.png`                |
-| `events.checkin`                | `events-checkin.png`                |
-| `training.submit`               | `training-submit.png`               |
-| `training.verify`               | `training-verify.png`               |
-| `scheduling.my-shifts`          | `scheduling-my-shifts.png`          |
-| `scheduling.open-shifts`        | `scheduling-open-shifts.png`        |
-| `scheduling.requests`           | `scheduling-requests.png`           |
-| `gear.issued`                   | `gear-issued.png`                   |
+Most are the live app against the seeded demo. These six show a state the demo
+cannot reach, so the script mocks the one answer that produces it. The screen
+itself is the real UI; only the data behind it is substituted:
 
-Still to capture, because the demo cannot reach the state without mocking or
-extra seed data: the **Needs you** card, the phone install banner, the push
-switch, the check-out state, **Join Waitlist**, the pending-with-**Withdraw**
-attendance request, the not-eligible sign-up dialog, the Requests list with
-**Pick up**, **My Sizes** and **My Requests**. The `account`, `install`, `push`,
-`rsvp`, `missed-checkin`, `history`, `sizes` and `request` steps therefore have
-no image yet.
+| Image                       | What is mocked                                                             |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `getting-started-needs-you` | One certification expiring in 21 days added to the live my-training answer |
+| `mobile-install-android`    | A synthetic `beforeinstallprompt` event, which the dev server never fires  |
+| `mobile-install-iphone`     | An iPhone Safari user agent, so the banner shows Share-sheet instructions  |
+| `mobile-push`               | The push config answer, so the switch renders without server VAPID keys    |
+| `events-waitlist`           | One unanswered event reported as full                                      |
+| `scheduling-not-eligible`   | The eligibility answer replaced with "not cleared"                         |
+| `scheduling-pick-up`        | One open swap from another member                                          |
+
+**No check-out image, and no check-out step.** The check-in page has a
+**Check Out of This Event** prompt, but nothing sets the state that shows it:
+`setShowCheckOutPrompt(true)` is never called in `EventSelfCheckInPage.tsx`, and
+the server answers a repeat scan with the existing record, which the page shows
+as a plain check-in confirmation (workflow review W20 saw the same). The lesson
+therefore does not tell members to tap it. Guide 04 still describes the prompt
+(`04-events-meetings.md`, "For Members (Checking In)" and the edge-case table);
+that wants either the page fixed or the guide corrected, and is left for the
+owner to decide.
 
 ## How an image ships
 
@@ -127,7 +131,7 @@ and are served by the app itself, so a self-hosted install with no route to GitH
 still shows them. The service worker precaches only `css`, `html` and `js`, so
 offline the picture is absent and the lesson text still teaches the task; nothing in
 a step may depend on the image being visible. Images are cropped to the part of
-the screen the step is about, quantised to 128 colours, and total about 450 KB.
+the screen the step is about, quantised to 128 colours, and total about 700 KB.
 Precaching them (full offline pictures) is a one-line `globPatterns` change if that
 is ever wanted, at the cost of putting every image in first install.
 

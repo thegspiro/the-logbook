@@ -35,13 +35,13 @@ export interface LearningStep {
   /** What proves the step is done, so marking it complete means something. */
   success: string;
   /**
-   * A picture of the screen, served from `public/lesson-images/`.
+   * Pictures of the screen, served from `public/lesson-images/`.
    *
    * Deliberately outside the service worker's precache (it holds css, html and
    * js only), so offline the picture is absent and `how` still teaches the task.
    * Nothing in a step may depend on the image being visible.
    */
-  screenshot?: LearningScreenshot;
+  screenshots?: LearningScreenshot[];
 }
 
 export interface LearningScreenshot {
@@ -87,10 +87,16 @@ export const learningPaths: LearningPath[] = [
           'The My Training and My Issued Gear panels are summaries and appear only once there is something to show — a training enrollment, or gear issued or on loan to you. The full screens live behind them.',
           'Log Training and Clock In (administrative hours) sit above the list. Take a Shift appears only if you are able to hold a seat on a shift.',
         ],
-        screenshot: {
-          file: 'getting-started-dashboard.png',
-          alt: 'The dashboard as a member sees it: a New here prompt, a red Not clear to respond readiness banner, the Log Training, Take a Shift and Clock In buttons, and the first rows of the Next 30 Days list with Going and Can’t buttons on events awaiting an answer.',
-        },
+        screenshots: [
+          {
+            file: 'getting-started-dashboard.png',
+            alt: 'The dashboard as a member sees it: a New here prompt, a red Not clear to respond readiness banner, the Log Training, Take a Shift and Clock In buttons, and the first rows of the Next 30 Days list with Going and Can’t buttons on events awaiting an answer.',
+          },
+          {
+            file: 'getting-started-needs-you.png',
+            alt: 'The Needs you card at the top of the dashboard: a certification expiring in 21 days with a Start Renewal button.',
+          },
+        ],
         success:
           'Nothing is left under Needs you, and you can name your next commitment or confirm you have none this week.',
       },
@@ -103,6 +109,12 @@ export const learningPaths: LearningPath[] = [
           'On the Account tab, confirm the Phone and Mobile numbers are ones you actually answer. Urgent text messages, if you switch them on, need a number here.',
           'Open the Security tab and enable two-factor authentication with an authenticator app.',
           'Open Emergency Contacts and add at least one person the department can call for you.',
+        ],
+        screenshots: [
+          {
+            file: 'getting-started-account.png',
+            alt: 'Account, Account tab: Personal Information fields, then Contact Information with the Phone and Mobile numbers the department uses to reach you.',
+          },
         ],
         success: 'Your phone numbers are correct, two-factor is on, and one emergency contact is saved.',
       },
@@ -117,10 +129,12 @@ export const learningPaths: LearningPath[] = [
           'Leave Email Notifications on unless you are certain: it is the switch that silences reminder emails, and the in-app entry is then the only copy you get.',
           'Press Save Preferences. The email switches do nothing until you do. Urgent Text Messages is the exception — it saves the moment you flip it.',
         ],
-        screenshot: {
-          file: 'getting-started-notifications.png',
-          alt: 'Account, Notifications tab: the Email Notifications and Urgent Text Messages switches, then the start of the Emails you can turn off list. Save Preferences is at the foot of the page, below the Always emailed to you list.',
-        },
+        screenshots: [
+          {
+            file: 'getting-started-notifications.png',
+            alt: 'Account, Notifications tab: the Email Notifications and Urgent Text Messages switches, then the start of the Emails you can turn off list. Save Preferences is at the foot of the page, below the Always emailed to you list.',
+          },
+        ],
         success:
           'Your inbox is clear, your preferences are saved, and you can say which notices reach you by email even with reminders switched off.',
       },
@@ -135,10 +149,12 @@ export const learningPaths: LearningPath[] = [
           'Choose what of yours is shared under Account → Privacy → Profile visibility. Leadership can always see everything, and your date of birth and emergency contacts are never shown to other members.',
           'Find the officer for the area you are joining.',
         ],
-        screenshot: {
-          file: 'getting-started-directory.png',
-          alt: 'Account, Privacy tab, Profile visibility: five contact details, each with a switch and a label such as Shared once the department allows it or Only you and leadership, and a note that date of birth and emergency contacts are never shown to other members.',
-        },
+        screenshots: [
+          {
+            file: 'getting-started-directory.png',
+            alt: 'Account, Privacy tab, Profile visibility: five contact details, each with a switch and a label such as Shared once the department allows it or Only you and leadership, and a note that date of birth and emergency contacts are never shown to other members.',
+          },
+        ],
         success:
           'You can reach an officer without having to ask someone else for their number, and you know which of your details other members can see.',
       },
@@ -162,6 +178,16 @@ export const learningPaths: LearningPath[] = [
           'On an iPhone there is no install prompt: tap Share in Safari, then choose "Add to Home Screen".',
           'Open it from your home screen and sign in once.',
         ],
+        screenshots: [
+          {
+            file: 'mobile-install-android.png',
+            alt: 'The Install The Logbook banner on a phone where the browser offers installation, with Dismiss and Install buttons.',
+          },
+          {
+            file: 'mobile-install-iphone.png',
+            alt: 'The Install The Logbook banner on an iPhone, which has no Install button: it says to tap the Share button in Safari, then choose Add to Home Screen.',
+          },
+        ],
         success: 'The Logbook icon is on your home screen and you are signed in from it.',
       },
       {
@@ -176,10 +202,12 @@ export const learningPaths: LearningPath[] = [
           'Back online it reads N pending sync — tap it to send now. Equipment checks and shift reports send from their own pages: open the equipment check, or the Shift Reports tab in Scheduling, with a connection.',
           'Treat a queued action as unfinished until the pill clears.',
         ],
-        screenshot: {
-          file: 'mobile-offline.png',
-          alt: 'The side menu’s offline notice, which reads Offline — will sync when reconnected.',
-        },
+        screenshots: [
+          {
+            file: 'mobile-offline.png',
+            alt: 'The side menu’s offline notice, which reads Offline — will sync when reconnected.',
+          },
+        ],
         success: 'You know where to look to tell whether your last action actually reached the server.',
       },
       {
@@ -191,6 +219,12 @@ export const learningPaths: LearningPath[] = [
           'On your phone, turn on Push Notifications on This Device and accept the browser prompt. The switch only appears if your browser supports push and your department has set it up.',
           'Under Emails you can turn off, choose which emails you want, then press Save Preferences. Turning one off stops the email; the notice still appears in your bell.',
           'Optionally switch on Urgent Text Messages, which adds a text when an officer marks a department message urgent. It needs a mobile number on the Account tab, and you are emailed either way.',
+        ],
+        screenshots: [
+          {
+            file: 'mobile-push.png',
+            alt: 'Account, Notifications tab: the Push Notifications on This Device switch above the Email Notifications switch, shown on a device and server that support push.',
+          },
         ],
         success: 'Push is on for your phone, and you know which emails you can turn off and which always arrive.',
       },
@@ -229,6 +263,16 @@ export const learningPaths: LearningPath[] = [
           'For anything more — a guest count, a note, or Maybe where the organizer allows it — open the event and press RSVP Now (Update RSVP once you have answered), choose under Your Response, then Submit RSVP.',
           'Change it if your plans change; the officers see the current answer, not the first one.',
         ],
+        screenshots: [
+          {
+            file: 'events-rsvp-card.png',
+            alt: 'An event card marked Response needed, with Going and Not Going buttons at the foot.',
+          },
+          {
+            file: 'events-waitlist.png',
+            alt: 'An event card whose roster is full, reading Roster full — you’d be waitlisted, with a Join Waitlist button.',
+          },
+        ],
         success: 'Your response shows on the event and you know you can change it later.',
       },
       {
@@ -240,14 +284,20 @@ export const learningPaths: LearningPath[] = [
           'If the event is happening now, a green Check In button appears in the Needs You band at the top of the Events page. It opens the same check-in page the QR code does.',
           'Otherwise, at the event, find the posted QR code and scan it with your phone camera. Sign in if you are asked to.',
           'On the Event Check-In page, tap Check In to This Event. The confirmation reads You’re Checked In. If you never answered the RSVP, you are recorded as Going.',
-          'When you leave, scan the code again and tap Check Out of This Event.',
+          'Scanning the code a second time does not check you in twice: the page offers Check In to This Event again, and tapping it just shows your original check-in time.',
           'If there is no code, ask whoever is running the event to check you in.',
           'Confirm the event shows you as attended afterwards. On a training event the hours reach your training record when the organizer finalizes attendance, not at the moment you check in.',
         ],
-        screenshot: {
-          file: 'events-checkin.png',
-          alt: 'The Events page’s Needs You band listing events that are happening now, each with a green Check In button and the time check-in closes.',
-        },
+        screenshots: [
+          {
+            file: 'events-checkin.png',
+            alt: 'The Events page’s Needs You band listing events that are happening now, each with a green Check In button and the time check-in closes.',
+          },
+          {
+            file: 'events-check-in-page.png',
+            alt: 'The Event Check-In page reached from the QR code: the event name, type and time, and a green Check In to This Event button.',
+          },
+        ],
         success: 'The event lists you as checked in, not merely as having RSVPed.',
       },
       {
@@ -259,6 +309,12 @@ export const learningPaths: LearningPath[] = [
           'Open the event after its check-in has closed and press I was there.',
           'Say why there is no check-in and, if you can, when you arrived and left, then send it.',
           'Sent it with the wrong times? Press Withdraw request while it is still waiting and send a corrected one. You can do this twice per event; after that the request stays as it is until the organizer answers.',
+        ],
+        screenshots: [
+          {
+            file: 'events-missed-checkin.png',
+            alt: 'On an event whose check-in has closed: Were you at this event but never checked in? Ask the organizer to mark you present, with an I was there button.',
+          },
         ],
         success:
           'The event shows your request as waiting, then as confirmed or declined — and you know a decided request is final.',
@@ -285,6 +341,12 @@ export const learningPaths: LearningPath[] = [
           'Check its deadline. A requirement counted in rolling months has no due date; it shows which months it is counting instead.',
           'Your full record is under Recent Training. A History tab appears too if your department lets members see it.',
         ],
+        screenshots: [
+          {
+            file: 'training-history.png',
+            alt: 'My Training: the Required Training tile, Upcoming Expirations & Due Dates for the next six months, and the first Training Requirements cards with their progress.',
+          },
+        ],
         success: 'You can name one requirement you still owe and what closes it out.',
       },
       {
@@ -298,10 +360,12 @@ export const learningPaths: LearningPath[] = [
           'Attach the certificate or roster sheet if you have one — it is what the reviewer checks.',
           'Not ready? Save Draft keeps it in your list until you submit it. Otherwise press Submit Training, and expect it to sit in Pending Review rather than crediting instantly.',
         ],
-        screenshot: {
-          file: 'training-submit.png',
-          alt: 'Submit External Training: a notice that a training officer asked for a change, then The Class, When and Details cards, with Submit Training and Save Draft on the right.',
-        },
+        screenshots: [
+          {
+            file: 'training-submit.png',
+            alt: 'Submit External Training: a notice that a training officer asked for a change, then The Class, When and Details cards, with Submit Training and Save Draft on the right.',
+          },
+        ],
         success: 'Your submission appears under Recent Submissions with a Pending Review status.',
       },
       {
@@ -315,10 +379,12 @@ export const learningPaths: LearningPath[] = [
           'If it says Needs Edits, a notice on the Submit Training page explains what was missing. Fix it there and send it back.',
           'Once approved, the training is added to your record on My Training.',
         ],
-        screenshot: {
-          file: 'training-verify.png',
-          alt: 'Recent Submissions on the Submit Training page, showing the status badges Needs Edits, Approved and Pending Review.',
-        },
+        screenshots: [
+          {
+            file: 'training-verify.png',
+            alt: 'Recent Submissions on the Submit Training page, showing the status badges Needs Edits, Approved and Pending Review.',
+          },
+        ],
         success: 'You can tell the difference between a submitted record and a credited one.',
       },
     ],
@@ -342,10 +408,12 @@ export const learningPaths: LearningPath[] = [
           'Note the date, times, station, and seat you are filling.',
           'Check its status. If it still shows Assigned, use Confirm so the officers know you will be there.',
         ],
-        screenshot: {
-          file: 'scheduling-my-shifts.png',
-          alt: 'My Shifts: upcoming shifts each marked Assigned with Confirm, Decline, Swap and Details buttons, and Request Time Off at the top.',
-        },
+        screenshots: [
+          {
+            file: 'scheduling-my-shifts.png',
+            alt: 'My Shifts: upcoming shifts each marked Assigned with Confirm, Decline, Swap and Details buttons, and Request Time Off at the top.',
+          },
+        ],
         success: 'You know when you are next on, and you have confirmed it.',
       },
       {
@@ -359,10 +427,16 @@ export const learningPaths: LearningPath[] = [
           'Pick a Position, then press Confirm Sign Up. Your own sign-up is saved as confirmed — there is no second Confirm to press.',
           'Or just note a shift to aim for.',
         ],
-        screenshot: {
-          file: 'scheduling-open-shifts.png',
-          alt: 'Open Shifts: shifts with open seats grouped by day, each with a Sign Up button and a Details button.',
-        },
+        screenshots: [
+          {
+            file: 'scheduling-open-shifts.png',
+            alt: 'Open Shifts: shifts with open seats grouped by day, each with a Sign Up button and a Details button.',
+          },
+          {
+            file: 'scheduling-not-eligible.png',
+            alt: 'The Sign Up for Shift dialog for a shift the member is not cleared for: You are not eligible to sign up for this shift. Ask a scheduling admin if you think that is wrong.',
+          },
+        ],
         success: 'You can tell an open shift you can take from one you are not yet qualified for.',
       },
       {
@@ -376,10 +450,16 @@ export const learningPaths: LearningPath[] = [
           'Confirm that a pending request has not yet released you from the shift.',
           'Swap Requests also shows open swaps from other members. Pick up takes one on, if you are eligible.',
         ],
-        screenshot: {
-          file: 'scheduling-requests.png',
-          alt: 'Requests: the Swap Requests and Time Off tabs, the Pending status filter, and one pending swap request.',
-        },
+        screenshots: [
+          {
+            file: 'scheduling-requests.png',
+            alt: 'Requests: the Swap Requests and Time Off tabs, the Pending status filter, and one pending swap request.',
+          },
+          {
+            file: 'scheduling-pick-up.png',
+            alt: 'Open shifts you can pick up: an open swap from another member, with the date, apparatus, seat, reason and a Pick up button.',
+          },
+        ],
         success: 'You can tell whether a request has been granted or is still waiting.',
       },
     ],
@@ -403,10 +483,12 @@ export const learningPaths: LearningPath[] = [
           'Read the list below them and check each item is one you actually have.',
           'Tell your quartermaster about anything listed that you never received, or anything you hold that is not listed.',
         ],
-        screenshot: {
-          file: 'gear-issued.png',
-          alt: 'My Issued Gear: tiles for Issued to me, Temporary loans with one overdue, and Pending requests; the Request Equipment, My Requests and My Sizes buttons; then the Issued to Me list.',
-        },
+        screenshots: [
+          {
+            file: 'gear-issued.png',
+            alt: 'My Issued Gear: tiles for Issued to me, Temporary loans with one overdue, and Pending requests; the Request Equipment, My Requests and My Sizes buttons; then the Issued to Me list.',
+          },
+        ],
         success: 'The list matches what is physically in your locker and on the truck.',
       },
       {
@@ -417,6 +499,12 @@ export const learningPaths: LearningPath[] = [
         how: [
           'Open My Sizes, enter your sizes, and press Save Sizes.',
           'Be accurate rather than optimistic — gear that does not fit is a safety problem, not a comfort one.',
+        ],
+        screenshots: [
+          {
+            file: 'gear-sizes.png',
+            alt: 'The My Sizes dialog: shirt, jacket, pant waist and inseam, boot size and optional extra sizes, with Cancel and Save Sizes buttons.',
+          },
         ],
         success: 'Your sizes are saved so the next order can include you.',
       },
@@ -429,6 +517,12 @@ export const learningPaths: LearningPath[] = [
           'Tap Request Equipment and ask for what you need.',
           'Say what you need and why in the request itself.',
           'Press My Requests (it reads Hide Requests while open) to see its status, and any return requests, rather than asking again in person.',
+        ],
+        screenshots: [
+          {
+            file: 'gear-request.png',
+            alt: 'The Request Equipment dialog: a search box, category chips, a list of items with how many are on hand, a box for something not listed, and a Submit Request button.',
+          },
         ],
         success: 'Your request is listed with a status you can check without chasing anyone.',
       },

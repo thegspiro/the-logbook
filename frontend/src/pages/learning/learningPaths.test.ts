@@ -92,7 +92,6 @@ describe('learning path content', () => {
       ['events.rsvp', 'RSVP Now', 'pages/EventDetailPage.tsx'],
       ['events.rsvp', 'Submit RSVP', 'components/event-detail/EventRSVPModal.tsx'],
       ['events.checkin', 'Check In to This Event', 'pages/EventSelfCheckInPage.tsx'],
-      ['events.checkin', 'Check Out of This Event', 'pages/EventSelfCheckInPage.tsx'],
       ['training.history', 'Upcoming Expirations & Due Dates', 'pages/MyTrainingPage.tsx'],
       ['training.submit', 'Save Draft', 'pages/SubmitTrainingPage.tsx'],
       ['training.verify', 'Needs Edits', 'components/training/submit/SubmissionStatusBadge.tsx'],
@@ -124,10 +123,11 @@ describe('learning path content', () => {
     const imageDir = path.resolve(SRC, '../public/lesson-images');
     for (const learningPath of learningPaths) {
       for (const step of learningPath.steps) {
-        if (!step.screenshot) continue;
-        const key = `${learningPath.id}.${step.id}`;
-        expect(fs.existsSync(path.join(imageDir, step.screenshot.file)), `${key} image exists`).toBe(true);
-        expect(step.screenshot.alt.trim().length, `${key} alt text`).toBeGreaterThan(20);
+        for (const shot of step.screenshots ?? []) {
+          const key = `${learningPath.id}.${step.id}`;
+          expect(fs.existsSync(path.join(imageDir, shot.file)), `${key} image ${shot.file} exists`).toBe(true);
+          expect(shot.alt.trim().length, `${key} alt text for ${shot.file}`).toBeGreaterThan(20);
+        }
       }
     }
   });
