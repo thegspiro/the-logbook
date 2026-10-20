@@ -742,8 +742,9 @@ UNDATED_YEAR = "undated"
 def _record_year_filter(year: str | None) -> list[Any]:
     """The WHERE clause for one year group of the history, or none for all.
 
-    ``undated`` selects records still awaiting approval, which have no
-    completion date and so belong to no year.
+    ``undated`` selects records with no completion date, which belong to no
+    year: classes not yet finished, and completed records imported without
+    one.
     """
     if year is None:
         return []
@@ -827,7 +828,7 @@ async def get_my_training_records(
         if show_hours:
             entry["hours"] = float(row[2])
         years.append(entry)
-    # Newest year first, pending records (no year) ahead of all of them.
+    # Newest year first, undated records (no year) ahead of all of them.
     years.sort(key=lambda y: (y["year"] == UNDATED_YEAR, y["year"]), reverse=True)
 
     total = (

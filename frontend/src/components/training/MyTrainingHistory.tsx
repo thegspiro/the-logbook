@@ -36,7 +36,10 @@ interface YearRows {
   error: string | null;
 }
 
-const yearLabel = (year: string): string => (year === UNDATED_YEAR ? 'Awaiting approval' : year);
+// Undated is not the same as pending: a scheduled class has no completion date
+// yet, but neither does a completed record imported without one. Each row
+// carries its own status badge, so the group names only what its rows share.
+const yearLabel = (year: string): string => (year === UNDATED_YEAR ? 'No completion date' : year);
 
 const plural = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 
