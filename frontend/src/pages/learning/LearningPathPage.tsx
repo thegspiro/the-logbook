@@ -76,6 +76,16 @@ export default function LearningPathPage() {
                     ))}
                   </ol>
 
+                  {step.screenshot && (
+                    <img
+                      src={`/lesson-images/${step.screenshot.file}`}
+                      alt={step.screenshot.alt}
+                      loading="lazy"
+                      decoding="async"
+                      className="border-theme-surface-border mt-4 h-auto max-w-full rounded-lg border"
+                    />
+                  )}
+
                   <p className="border-theme-surface-border text-theme-text-primary mt-4 flex items-start gap-2 rounded-lg border border-dashed p-3 text-sm">
                     <Target className="mt-0.5 h-4 w-4 shrink-0 text-green-600" aria-hidden="true" />
                     <span>

@@ -47,7 +47,7 @@ describe('LearningPathPage', () => {
     // concrete moves, and what finished looks like.
     expect(screen.getByText(/what do I need to do next/)).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { name: 'How to do it' })).toHaveLength(4);
-    expect(screen.getByText(/You can name your next commitment/)).toBeInTheDocument();
+    expect(screen.getByText(/you can name your next commitment/)).toBeInTheDocument();
 
     expect(
       screen.getByRole('link', { name: /Open the screen for: Read your dashboard top to bottom/ })
