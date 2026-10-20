@@ -84,6 +84,7 @@ from app.services.inventory_service import (
     InventoryService,
     ItemNameTakenOutsideDomainError,
     ItemOutsideDomainError,
+    LotReceivedAgainstReorderError,
     is_pool_without_stock,
 )
 from app.services.upload_scanning import reject_if_malicious
@@ -2006,9 +2007,15 @@ async def delete_medical_lot(
     if not await service.lot_in_domain(lot_id, org_id, MEDICAL_ITEM_TYPES):
         raise HTTPException(status_code=404, detail="Stock lot not found")
 
-    if not await service.delete_lot(
-        lot_id, org_id, required_item_types=MEDICAL_ITEM_TYPES
-    ):
+    try:
+        deleted = await service.delete_lot(
+            lot_id, org_id, required_item_types=MEDICAL_ITEM_TYPES
+        )
+    except LotReceivedAgainstReorderError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
+    if not deleted:
         raise HTTPException(status_code=404, detail="Stock lot not found")
 
 
