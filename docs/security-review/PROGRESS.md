@@ -16,8 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this branch, `claude/security-review-grants-fundraising`), not yet
-numbered at commit time.** PR #3451 (Feature 21, Admin hours, pass 9) merged
+**PR [#3454](https://github.com/thegspiro/the-logbook/pull/3454)** (branch
+`claude/security-review-grants-fundraising-p9` — a distinct name, not the
+reused `claude/security-review-grants-fundraising` every prior pass of this
+feature used, per CLAUDE.md Pitfall #24). PR #3451 (Feature 21, Admin hours, pass 9) merged
 to `main` with no open PR whose head branch starts with
 `claude/security-review-` (`list_pull_requests`/`search_pull_requests`, both
 0 results) and nothing started for Feature 22 since, so this iteration
