@@ -522,6 +522,45 @@ export function openFirstFromApi(apiPath, routeFor, listKey, match) {
 }
 
 /**
+ * The accepted skills-test result that is held for release: release on
+ * request, accepted, not yet released.
+ *
+ * Found by those three facts rather than by position because the list rows
+ * carry none of them and the weighted sheet's tests hold other states. Returns
+ * the row's id and its candidate's name, so a shot can open the result or find
+ * its row in the Test Records tab.
+ */
+export async function findHeldResult(page) {
+  const held = await page.evaluate(async () => {
+    const api = async (path) => {
+      const response = await fetch(`/api/v1${path}`, {
+        credentials: "include",
+      });
+      return response.ok ? response.json() : null;
+    };
+    const body = await api("/training/skills-testing/tests?limit=100");
+    const rows = Array.isArray(body)
+      ? body
+      : (body?.items ?? body?.tests ?? []);
+    for (const row of rows) {
+      if (!row.validated_at || row.voided_at || row.is_practice) continue;
+      const detail = await api(`/training/skills-testing/tests/${row.id}`);
+      if (
+        detail?.effective_result_release === "on_release" &&
+        !detail.released_at
+      ) {
+        return { id: row.id, candidateName: row.candidate_name };
+      }
+    }
+    return null;
+  });
+  if (!held) {
+    throw new Error("no accepted result is held for release");
+  }
+  return held;
+}
+
+/**
  * Open the first facility's **Rooms** section.
  *
  * The section list is sidebar navigation inside the facility detail page, not a
@@ -9772,36 +9811,8 @@ export const SHOTS = [
       'The Officer actions card on an accepted result that is held for release, with the "Release to candidate" button',
     alt: "The Officer actions card on an accepted result held for release, with the green Release to candidate button and the line saying what the candidate will see once it is released",
     route: "/training/skills-testing",
-    // The held result is found by what makes it this fixture -- release on
-    // request, accepted, not yet released -- because the list rows carry none of
-    // that and the weighted sheet's tests hold other states.
     prepare: async (page) => {
-      const testId = await page.evaluate(async () => {
-        const api = async (path) => {
-          const response = await fetch(`/api/v1${path}`, {
-            credentials: "include",
-          });
-          return response.ok ? response.json() : null;
-        };
-        const body = await api("/training/skills-testing/tests?limit=100");
-        const rows = Array.isArray(body)
-          ? body
-          : (body?.items ?? body?.tests ?? []);
-        for (const row of rows) {
-          if (!row.validated_at || row.voided_at || row.is_practice) continue;
-          const detail = await api(`/training/skills-testing/tests/${row.id}`);
-          if (
-            detail?.effective_result_release === "on_release" &&
-            !detail.released_at
-          ) {
-            return row.id;
-          }
-        }
-        return null;
-      });
-      if (!testId) {
-        throw new Error("no accepted result is held for release");
-      }
+      const { id: testId } = await findHeldResult(page);
       await page.goto(
         new URL(
           `/training/skills-testing/test/${testId}`,
@@ -9816,6 +9827,37 @@ export const SHOTS = [
     },
     selector: "div.card:has(> p:text-is('Officer actions'))",
     expect: "Release to candidate",
+  },
+  {
+    id: "09-27-release-icon-test-records",
+    doc: "09-skills-testing.md",
+    line: 1265,
+    anchor:
+      "A Test Records row for an accepted result with the release icon beside the void icon",
+    alt: "A Skills Test Records row for an accepted result, with the release icon, a paper plane, beside the void icon at the right of the row",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // One row rather than the page: the icons are 16px, and a page shot renders
+    // the row's controls too small to tell apart. The row is the held result
+    // (see findHeldResult), not whichever happens to be first, and it is marked
+    // for the selector because its candidate's name is not known until run time.
+    selector: "[data-shot-subject]",
+    expect: {
+      selector: "[data-shot-subject] button[aria-label^='Release results to']",
+    },
+    prepare: async (page) => {
+      const { candidateName } = await findHeldResult(page);
+      const release = page.getByRole("button", {
+        name: `Release results to ${candidateName}`,
+      });
+      await release.first().waitFor({ state: "visible", timeout: 15_000 });
+      await release.first().scrollIntoViewIfNeeded();
+      await release.first().evaluate((button) => {
+        button
+          .closest("div[role='button']")
+          ?.setAttribute("data-shot-subject", "");
+      });
+      await page.waitForTimeout(400);
+    },
   },
   {
     id: "09-09-member-skills-testing",
