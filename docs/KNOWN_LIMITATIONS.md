@@ -479,6 +479,20 @@ guides can point at one place and an owner can decide it.
   information that `members.view` reads; what is gated is the assembled,
   scannable badge.
 
+## Inventory — Input Rules Deliberately Left Open (2026-10-20)
+
+Found by driving the module end to end. The rest of that pass (blank names,
+numbers a column cannot hold, duplicate identifiers, a tracking-mode change
+under a live assignment, the assign URL/body mismatch, category loops) is fixed;
+these were left because each is a policy choice or needs a schema change.
+
+| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.               |
+| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                       |
+| Same overflow class on the other inventory schemas    | Open          | Bounds now match the column types on item create/update, category create/update and the bulk-entry name. Other request schemas with unbounded `int`/`Decimal` fields (stock lots, issuances, requests, kits) were not audited and will still report a 1264 overflow as a generic error. |
+| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                  |
+
 ## Medical Supplies — Automatic Reorders Land in a Queue the EMS Officer Cannot Open (2026-10-11)
 
 **Accepted.** A lot swap that leaves shelf stock at its reorder point files a

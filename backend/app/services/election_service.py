@@ -197,10 +197,50 @@ def ballot_item_candidate_positions(item: Dict) -> Set[str]:
     return {value for value in (item.get("title"), item.get("id")) if value}
 
 
+def ballot_item_for_position(
+    ballot_items: Optional[List[Any]], position: Optional[str]
+) -> Optional[Dict]:
+    """The ballot item a position's candidates belong to, or None.
+
+    Matched by the same alias set every other item/position lookup uses. The
+    tally reads the item's method and victory overrides through this, and so
+    does paper-ballot entry, so both agree on how a race is counted.
+    """
+    if not position:
+        return None
+    return next(
+        (
+            item
+            for item in ballot_items or []
+            if isinstance(item, dict)
+            and position in ballot_item_candidate_positions(item)
+        ),
+        None,
+    )
+
+
+def contest_is_ranked(election: "Election", position: Optional[str]) -> bool:
+    """Whether a position's votes are counted by instant runoff.
+
+    An Approve/Deny item never is, whatever the election's method: it
+    decides one question, and its paper tally is a plain count.
+    """
+    item = ballot_item_for_position(election.ballot_items, position)
+    if item is not None and item.get("vote_type") == "approval":
+        return False
+    return _effective_voting_method(election, item) == "ranked_choice"
+
+
 # The two option rows an approval item (a motion, a membership vote) is
 # voted through. The names are what the token ballot, the package sync and
 # every results reader match on.
 APPROVAL_OPTION_NAMES: Tuple[str, str] = ("Approve", "Deny")
+
+# Ranked paper ballots become one row per ranked candidate, so a batch's row
+# count is ballots × ranks. Each row is signed and chained one at a time; past
+# this many a single request holds the election lock too long, and an honest
+# stack can always be entered as several batches.
+_MAX_RANKED_PAPER_ROWS = 5000
 
 
 def approval_option_position(item: Any) -> Optional[str]:
@@ -2353,6 +2393,12 @@ class ElectionService:
             f":{vote.proxy_delegating_user_id}:{voted_at_canon}"
             f":{bool(vote.is_manual)}"
         )
+        # Which paper ballot a ranked row belongs to decides how the runoff
+        # reads it, so it is signed — appended only when set, so every vote
+        # without one keeps the exact message (and signature) it always had.
+        paper_ballot_id = getattr(vote, "paper_ballot_id", None)
+        if paper_ballot_id:
+            data += f":paper_ballot:{paper_ballot_id}"
         return hmac.new(
             key=signing_key.encode(),
             msg=data.encode(),
@@ -3014,6 +3060,18 @@ class ElectionService:
         )
         manual_counts = manual_by_position if is_single_choice else manual_by_candidate
         paper_ballots = max(manual_counts.values()) if manual_counts else 0
+        # Ranked paper ballots keep their grouping, so within one race their
+        # number is exact rather than estimated: two distinct ballots for the
+        # same race cannot be the same sheet of paper.
+        ranked_paper: Dict[Optional[str], Set[str]] = {}
+        for vote in all_votes:
+            ballot_id = getattr(vote, "paper_ballot_id", None)
+            if getattr(vote, "is_manual", False) and ballot_id:
+                ranked_paper.setdefault(vote.position, set()).add(ballot_id)
+        if ranked_paper:
+            paper_ballots = max(
+                paper_ballots, max(len(ids) for ids in ranked_paper.values())
+            )
 
         # Prefer counts the recording officer attested (ManualBallotBatch.
         # ballots_cast) over the tally-derived estimate. Each recorded count
@@ -3268,19 +3326,9 @@ class ElectionService:
         )
 
         # The ballot item a position's candidates belong to, so the tally
-        # applies the item's victory-condition override (W50 S04). Matched
-        # by the same alias set every other item/position lookup uses.
+        # applies the item's victory-condition override (W50 S04).
         def _item_for_position(position: Optional[str]) -> Optional[Dict]:
-            if not position:
-                return None
-            return next(
-                (
-                    i
-                    for i in election.ballot_items or []
-                    if position in ballot_item_candidate_positions(i)
-                ),
-                None,
-            )
+            return ballot_item_for_position(election.ballot_items, position)
 
         # Calculate results by position
         results_by_position = []
@@ -3680,10 +3728,20 @@ class ElectionService:
         candidate_map = {str(c.id): c for c in candidates}
         active_candidates = set(candidate_map.keys())
 
-        # Group votes by voter (voter_hash or voter_id)
+        # Group votes into ballots: an electronic ballot by its voter, a
+        # ranked paper ballot by its paper_ballot_id, and any other paper
+        # vote as a ballot of its own. A paper vote has no voter, and
+        # ``str(vote.voter_id)`` turned that None into the string "None",
+        # which pooled every paper vote into a single ballot — a stack of
+        # thirty counted as one.
         voter_ballots: Dict[str, List[Vote]] = {}
         for vote in votes:
-            voter_key = vote.voter_hash or str(vote.voter_id) or vote.id
+            voter_key = (
+                vote.voter_hash
+                or (str(vote.voter_id) if vote.voter_id else None)
+                or getattr(vote, "paper_ballot_id", None)
+                or str(vote.id)
+            )
             if voter_key not in voter_ballots:
                 voter_ballots[voter_key] = []
             voter_ballots[voter_key].append(vote)
@@ -4928,10 +4986,17 @@ class ElectionService:
         notes: Optional[str] = None,
         allow_over_count: bool = False,
         ballots_cast: Optional[int] = None,
+        ranked_ballots: Optional[List[Dict]] = None,
     ) -> Tuple[int, Optional[str], Optional[str]]:
         """Record an in-room paper-ballot tally as vote rows.
 
-        Each entry is {"candidate_id", "count"}. The created votes carry no
+        Each entry is {"candidate_id", "count"}: per-candidate totals for a
+        single-choice or approval race. Each ranked ballot is
+        {"rankings": [candidate ids, first choice first], "count"}: a
+        ranked-choice race is entered ballot by ballot, because instant
+        runoff needs each ballot's order and totals cannot carry it. Every
+        physical ranked ballot becomes one row per ranked candidate, sharing
+        a ``paper_ballot_id`` the count groups them by. The created votes carry no
         voter identity and no dedup hash — the recording officer's attested
         count is the source of truth, attributed via recorded_by and the
         audit log. Votes are signed and chained like electronic ones so
@@ -4973,14 +5038,27 @@ class ElectionService:
                 "Paper-ballot entry is disabled for this organization — "
                 "enable it in Election Settings",
             )
-        if not entries:
+        ranked_ballots = ranked_ballots or []
+        if not entries and not ranked_ballots:
             return 0, None, "No ballot entries provided"
 
-        total = sum(int(e.get("count", 0)) for e in entries)
-        if total <= 0:
+        ranked_total = sum(int(b.get("count", 0)) for b in ranked_ballots)
+        total = sum(int(e.get("count", 0)) for e in entries) + ranked_total
+        if total <= 0 or any(int(b.get("count", 0)) < 1 for b in ranked_ballots):
             return 0, None, "Ballot counts must be positive"
         if total > 2000:
             return 0, None, "Cannot record more than 2000 paper ballots at once"
+        ranked_rows = sum(
+            int(b.get("count", 0)) * len(b.get("rankings") or [])
+            for b in ranked_ballots
+        )
+        if ranked_rows > _MAX_RANKED_PAPER_ROWS:
+            return (
+                0,
+                None,
+                "This batch holds too many rankings to record at once — "
+                "split the stack into smaller batches",
+            )
 
         if ballots_cast is not None:
             # One physical ballot can select a given candidate at most once,
@@ -4993,6 +5071,13 @@ class ElectionService:
                 per_candidate[cid] = per_candidate.get(cid, 0) + int(
                     entry.get("count", 0)
                 )
+            # A ranked ballot names each candidate at most once too.
+            for ballot in ranked_ballots:
+                for ranked_id in ballot.get("rankings") or []:
+                    cid = str(ranked_id)
+                    per_candidate[cid] = per_candidate.get(cid, 0) + int(
+                        ballot.get("count", 0)
+                    )
             largest = max(per_candidate.values())
             if ballots_cast < largest:
                 return (
@@ -5003,13 +5088,60 @@ class ElectionService:
                     f"ballot(s). Double-check the ballot count.",
                 )
 
-        candidate_ids = [str(e["candidate_id"]) for e in entries]
+        candidate_ids = [str(e["candidate_id"]) for e in entries] + [
+            str(cid) for b in ranked_ballots for cid in b.get("rankings") or []
+        ]
         cand_result = await self.db.execute(
             select(Candidate)
             .where(Candidate.election_id == str(election_id))
             .where(Candidate.id.in_(candidate_ids))
         )
         candidates = {c.id: c for c in cand_result.scalars().all()}
+        if len(candidates) != len(set(candidate_ids)):
+            return (
+                0,
+                None,
+                "One or more candidates do not belong to this election",
+            )
+
+        # Each kind of entry goes only to the race it can be counted in:
+        # totals lose a ranked ballot's order, and a ranking means nothing
+        # to a race that is not counted by instant runoff.
+        for entry in entries:
+            entry_candidate = candidates[str(entry["candidate_id"])]
+            if contest_is_ranked(election, entry_candidate.position):
+                return (
+                    0,
+                    None,
+                    f"{entry_candidate.position or 'This race'} is a "
+                    "ranked-choice race: "
+                    "enter each paper ballot's rankings rather than totals "
+                    "per candidate",
+                )
+        for ballot in ranked_ballots:
+            ranked = [candidates[str(cid)] for cid in ballot["rankings"]]
+            for ranked_candidate in ranked:
+                if not ranked_candidate.accepted and not ranked_candidate.is_write_in:
+                    return (
+                        0,
+                        None,
+                        f"{ranked_candidate.name} has not accepted nomination",
+                    )
+            positions = {c.position for c in ranked}
+            if len(positions) != 1:
+                return (
+                    0,
+                    None,
+                    "A ranked paper ballot can rank candidates from one race only",
+                )
+            position = next(iter(positions))
+            if not contest_is_ranked(election, position):
+                return (
+                    0,
+                    None,
+                    f"{position or 'This race'} is not a ranked-choice race: "
+                    "enter its paper votes as totals per candidate",
+                )
 
         # ── Sanity guard: per-position plausibility ──────────────────
         # cap = eligible voters × votes each voter may legitimately cast
@@ -5027,6 +5159,13 @@ class ElectionService:
                     new_by_position[cand.position] = new_by_position.get(
                         cand.position, 0
                     ) + int(entry.get("count", 0))
+            # A ranked ballot is one ballot however many names it ranks.
+            for ballot in ranked_ballots:
+                first = candidates[str(ballot["rankings"][0])]
+                if first.position:
+                    new_by_position[first.position] = new_by_position.get(
+                        first.position, 0
+                    ) + int(ballot.get("count", 0))
 
             if new_by_position or ballots_cast is not None:
                 eligible_count = await self._count_eligible_voters(
@@ -5058,6 +5197,9 @@ class ElectionService:
                         .where(Vote.is_test.is_(False))
                         .where(self._is_attested_vote(election_id))
                         .where(Vote.position.in_(list(new_by_position.keys())))
+                        # A ranked ballot is stored as one row per ranked
+                        # candidate; its first choice stands for the ballot.
+                        .where(or_(Vote.vote_rank.is_(None), Vote.vote_rank == 1))
                         .group_by(Vote.position)
                     )
                     existing_by_position = dict(existing_rows.all())
@@ -5147,6 +5289,40 @@ class ElectionService:
                 election.last_chain_hash = vote.chain_hash
                 recorded += 1
             breakdown.append({"candidate": cand.name, "count": count})
+
+        for ballot in ranked_ballots:
+            ranked = [candidates[str(cid)] for cid in ballot["rankings"]]
+            count = int(ballot["count"])
+            for _ in range(count):
+                paper_ballot_id = str(uuid4())
+                for rank, ranked_candidate in enumerate(ranked, start=1):
+                    vote = Vote(
+                        id=str(uuid4()),
+                        election_id=str(election_id),
+                        candidate_id=ranked_candidate.id,
+                        voter_id=None,
+                        voter_hash=None,
+                        position=ranked_candidate.position,
+                        vote_rank=rank,
+                        voted_at=now,
+                        is_test=False,
+                        is_manual=True,
+                        recorded_by=str(recorded_by),
+                        manual_batch_id=batch_id,
+                        paper_ballot_id=paper_ballot_id,
+                        vote_dedup_hash=None,
+                    )
+                    signature = self._apply_vote_signature(vote)
+                    vote.chain_hash = self._compute_chain_hash(
+                        election.last_chain_hash, signature
+                    )
+                    vote.receipt_hash = self._compute_receipt_hash(
+                        str(vote.id), signature
+                    )
+                    self.db.add(vote)
+                    election.last_chain_hash = vote.chain_hash
+                recorded += 1
+            breakdown.append({"rankings": [c.name for c in ranked], "count": count})
 
         await self.db.commit()
 
@@ -5343,6 +5519,9 @@ class ElectionService:
             .where(Vote.election_id == str(election_id))
             .where(Vote.is_manual.is_(True))
             .where(Vote.manual_batch_id.in_([b.id for b in batches]))
+            # A ranked paper ballot is one row per ranked candidate; counting
+            # its first choice only keeps total_ballots a count of ballots.
+            .where(or_(Vote.vote_rank.is_(None), Vote.vote_rank == 1))
             .group_by(Vote.manual_batch_id, Candidate.id)
         )
         totals_by_batch: Dict[str, List[Dict]] = {}

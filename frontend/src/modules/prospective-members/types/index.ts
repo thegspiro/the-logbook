@@ -692,6 +692,23 @@ export interface BulkActionResult {
   results: BulkActionItemResult[];
 }
 
+/** The active applicant already holding an email, as the staff pre-check names them. */
+export interface ExistingApplicantMatch {
+  prospect_id: string;
+  name: string;
+  pipeline_name: string | null;
+  stage_name: string | null;
+}
+
+export interface ExistingRecordCheck {
+  /** Existing members (any status) matching the email or name. */
+  has_matches: boolean;
+  match_count: number;
+  matches: Array<{ status: string; match_type: string }>;
+  /** An active applicant with this email; the create endpoint refuses it with a 409. */
+  existing_applicant: ExistingApplicantMatch | null;
+}
+
 export interface AdvanceStageRequest {
   notes?: string | undefined;
   /** Ticks for a checklist stage, graded on the advance that completes it. */

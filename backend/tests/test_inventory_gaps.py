@@ -13,6 +13,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +31,7 @@ from app.models.inventory import (
     RequestStatus,
     RequestType,
 )
+from app.schemas.inventory import IssuanceAllowanceCreate, IssuanceAllowanceUpdate
 from app.services.inventory_service import InventoryService
 
 pytestmark = [pytest.mark.integration]
@@ -218,6 +220,66 @@ class TestIssuanceAllowanceEnforcement:
         )
         assert err is None
         assert issuance is not None
+
+
+class TestZeroAllowance:
+    """A maximum of 0 is "none may be issued", never "no limit"."""
+
+    def test_schemas_accept_zero_and_refuse_negative(self):
+        created = IssuanceAllowanceCreate.model_validate(
+            {"category_id": _uid(), "max_quantity": 0}
+        )
+        assert created.max_quantity == 0
+        assert (
+            IssuanceAllowanceUpdate.model_validate({"max_quantity": 0}).max_quantity
+            == 0
+        )
+        with pytest.raises(ValidationError):
+            IssuanceAllowanceCreate.model_validate(
+                {"category_id": _uid(), "max_quantity": -1}
+            )
+        with pytest.raises(ValidationError):
+            IssuanceAllowanceUpdate.model_validate({"max_quantity": -1})
+
+    @pytest.mark.asyncio
+    async def test_issue_refused_against_zero_allowance(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        cat, item = await _make_pool_item(svc, org_id, user_id)
+
+        db_session.add(
+            IssuanceAllowance(
+                organization_id=org_id,
+                category_id=cat.id,
+                role_id=None,
+                max_quantity=0,
+                period_type="annual",
+                is_active=True,
+            )
+        )
+        await db_session.flush()
+
+        check = await svc.check_allowance(
+            uuid.UUID(member_id), uuid.UUID(cat.id), uuid.UUID(org_id)
+        )
+        assert check["max_quantity"] == 0
+        assert check["remaining"] == 0
+
+        issuance, err = await svc.issue_from_pool(
+            item_id=uuid.UUID(item.id),
+            user_id=uuid.UUID(member_id),
+            organization_id=uuid.UUID(org_id),
+            issued_by=uuid.UUID(user_id),
+            quantity=1,
+        )
+        assert issuance is None
+        assert err is not None
+        assert "allowance" in err.lower()
+
+        over = await svc._get_over_allowance_uids(org_id, cat.id, [member_id])
+        assert over == {member_id}
 
 
 # ── Retirement Notification on Write-Off ───────────────────────────

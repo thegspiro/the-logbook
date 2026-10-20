@@ -398,8 +398,10 @@ class MultiAgencyTrainingBase(BaseModel):
     description: Optional[str] = None
     training_session_id: Optional[UUID] = None
     training_record_id: Optional[UUID] = None
+    # May be empty: an exercise is often logged before the other agencies are
+    # confirmed, and the create form says organizations can be added later.
     participating_organizations: List[ParticipatingOrganization] = Field(
-        ..., min_length=1
+        default_factory=list
     )
     lead_agency: Optional[str] = Field(None, max_length=255)
     total_participants: Optional[int] = Field(None, ge=0)

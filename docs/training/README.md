@@ -104,7 +104,7 @@ read the guide; open the file's source to see it:
 Some older branches still use a visible blockquote (`> **Screenshot needed:**`);
 both are counted and filled the same way.
 
-Screenshots are captured from a running demo department rather than taken by hand, so they can be refreshed in bulk after a UI change. See [`scripts/screenshots/README.md`](../../scripts/screenshots/README.md) for how to stand up the demo environment, declare a shot, and capture it. [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md) tracks which placeholders are filled; [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) tracks whether what was captured still matches the application, which is a different question and the one that goes stale silently.
+Screenshots are captured from a running demo department rather than taken by hand, so they can be refreshed in bulk after a UI change. See [`scripts/screenshots/README.md`](../../scripts/screenshots/README.md) for how to stand up the demo environment, declare a shot, and capture it. [SCREENSHOT_STATUS.md](./SCREENSHOT_STATUS.md) tracks which placeholders are filled; [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) tracks whether what was captured still matches the application, which is a different question and the one that goes stale silently. [LEARNING_CENTER_SCREENSHOTS.md](./LEARNING_CENTER_SCREENSHOTS.md) plans where the in-app Learning Center lessons need pictures.
 
 If you are adding one by hand instead:
 

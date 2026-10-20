@@ -1733,6 +1733,19 @@ async def verify_email_configuration(
     """
     # Require valid session to prevent unauthenticated SSRF
     await validate_session(raw_request, db)
+
+    # A session issued before completion stays valid until it idles out or
+    # reaches SESSION_MAX_LIFETIME_HOURS, and this route opens outbound SMTP
+    # connections to a host the caller chooses. Every other session route
+    # refuses once setup is done; this one must not be the exception.
+    service = OnboardingService(db)
+    if not await service.needs_onboarding():
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
+        )
+
     platform = request.platform
     config = request.config
 

@@ -555,12 +555,14 @@ export const electionService = {
 
   /**
    * Record an in-room paper-ballot tally (one vote row per ballot,
-   * attributed to the recording officer).
+   * attributed to the recording officer). Ranked-choice contests go in
+   * `ranked_ballots`, ballot by ballot; the server refuses totals for them.
    */
   async recordManualBallots(
     electionId: string,
     payload: {
       entries: Array<{ candidate_id: string; count: number }>;
+      ranked_ballots?: Array<{ rankings: string[]; count: number }> | undefined;
       notes?: string | undefined;
       allow_over_count?: boolean | undefined;
       ballots_cast?: number | undefined;

@@ -79,7 +79,28 @@ describe('learning path content', () => {
   it('quotes controls by the names their screens actually render', () => {
     const quoted: [step: string, label: string, source: string][] = [
       ['getting-started.dashboard', 'Next 30 Days', 'pages/Dashboard.tsx'],
+      ['getting-started.dashboard', 'Needs you', 'components/dashboard/DashboardNeedsYou.tsx'],
+      ['getting-started.dashboard', 'My Updates', 'pages/Dashboard.tsx'],
       ['getting-started.notifications', 'My Notifications', 'pages/NotificationsPage.tsx'],
+      ['getting-started.notifications', 'Save Preferences', 'pages/UserSettingsPage.tsx'],
+      ['getting-started.notifications', 'Always emailed to you', 'pages/UserSettingsPage.tsx'],
+      ['getting-started.directory', 'Profile visibility', 'pages/UserSettingsPage.tsx'],
+      ['mobile.offline', 'Check for updates', 'components/settings/AppVersionSection.tsx'],
+      ['mobile.offline', 'pending sync', 'components/layout/TopNavigation.tsx'],
+      ['mobile.push', 'Urgent Text Messages', 'pages/UserSettingsPage.tsx'],
+      ['events.rsvp', 'Join Waitlist', 'components/events/EventListCard.tsx'],
+      ['events.rsvp', 'RSVP Now', 'pages/EventDetailPage.tsx'],
+      ['events.rsvp', 'Submit RSVP', 'components/event-detail/EventRSVPModal.tsx'],
+      ['events.checkin', 'Check In to This Event', 'pages/EventSelfCheckInPage.tsx'],
+      ['events.checkin', 'Check Out of This Event', 'pages/EventSelfCheckInPage.tsx'],
+      ['training.history', 'Upcoming Expirations & Due Dates', 'pages/MyTrainingPage.tsx'],
+      ['training.submit', 'Save Draft', 'pages/SubmitTrainingPage.tsx'],
+      ['training.verify', 'Needs Edits', 'components/training/submit/SubmissionStatusBadge.tsx'],
+      ['training.verify', 'Recent Submissions', 'pages/SubmitTrainingPage.tsx'],
+      ['scheduling.open-shifts', 'Confirm Sign Up', 'pages/scheduling/OpenShiftsTab.tsx'],
+      ['scheduling.requests', 'Request Time Off', 'pages/scheduling/MyShiftsTab.tsx'],
+      ['scheduling.requests', 'All Statuses', 'pages/scheduling/RequestsTab.tsx'],
+      ['gear.sizes', 'Save Sizes', 'modules/inventory/components/SizePreferencesModal.tsx'],
       ['events.missed-checkin', 'I was there', 'components/event-detail/EventAttendancePetitionPrompt.tsx'],
       ['events.missed-checkin', 'Withdraw request', 'components/event-detail/EventAttendancePetitionPrompt.tsx'],
       ['mobile.push', 'Push Notifications on This Device', 'pages/UserSettingsPage.tsx'],
@@ -94,6 +115,20 @@ describe('learning path content', () => {
       const step = findLearningPath(pathId)?.steps.find((candidate) => candidate.id === stepId);
       expect(step?.how.join(' '), `${key} names ${label}`).toContain(label);
       expect(fs.readFileSync(path.join(SRC, source), 'utf8'), `${source} renders ${label}`).toContain(label);
+    }
+  });
+
+  // The image is an enhancement served outside the precache, so a missing file
+  // is a broken picture on a phone with signal and nothing at all offline.
+  it('points every screenshot at a file that exists and describes it', () => {
+    const imageDir = path.resolve(SRC, '../public/lesson-images');
+    for (const learningPath of learningPaths) {
+      for (const step of learningPath.steps) {
+        if (!step.screenshot) continue;
+        const key = `${learningPath.id}.${step.id}`;
+        expect(fs.existsSync(path.join(imageDir, step.screenshot.file)), `${key} image exists`).toBe(true);
+        expect(step.screenshot.alt.trim().length, `${key} alt text`).toBeGreaterThan(20);
+      }
     }
   });
 

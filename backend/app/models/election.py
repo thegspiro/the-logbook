@@ -692,6 +692,12 @@ class Vote(Base):
     manual_batch_id: Mapped[Optional[str]] = mapped_column(
         String(36), nullable=True, index=True
     )
+    # Ties together the rows of one ranked paper ballot (rank 1, rank 2, ...)
+    # so the instant-runoff count reads them as a single voter's preferences.
+    # A paper ballot has no voter identity to group by, and it must not be
+    # given one: voter_hash/voter_id feed turnout and double-vote checks.
+    # NULL on every electronic vote and on unranked paper votes.
+    paper_ballot_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     # Proxy voting — tracks when a vote is cast on behalf of another member
     is_proxy_vote: Mapped[bool] = mapped_column(
