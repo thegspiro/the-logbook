@@ -2,28 +2,34 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
-import type { ApplicantListItem, BulkActionResult, Pipeline } from '../types';
+import type { ApplicantListItem, BulkActionResult, ExistingRecordCheck, Pipeline } from '../types';
 
 const mockBulkSetStatus = vi.fn();
 const mockBulkAdvance = vi.fn();
 const mockRefreshPipelineView = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
+const mockToast = vi.fn();
 const mockPurge = vi.fn();
+const mockCheckExisting = vi.fn();
+const mockCreateApplicant = vi.fn();
+const mockFetchApplicant = vi.fn();
 
 vi.mock('../services/api', () => ({
   applicantService: {
     bulkSetStatus: (...a: unknown[]) => mockBulkSetStatus(...a) as unknown,
     bulkAdvance: (...a: unknown[]) => mockBulkAdvance(...a) as unknown,
+    checkExisting: (...a: unknown[]) => mockCheckExisting(...a) as unknown,
+    createApplicant: (...a: unknown[]) => mockCreateApplicant(...a) as unknown,
   },
   eventLinkService: { getSourceEvents: () => Promise.resolve([]) },
 }));
 
 vi.mock('react-hot-toast', () => ({
-  default: {
+  default: Object.assign((...a: unknown[]) => mockToast(...a) as unknown, {
     success: (...a: unknown[]) => mockToastSuccess(...a) as unknown,
     error: (...a: unknown[]) => mockToastError(...a) as unknown,
-  },
+  }),
 }));
 
 // Neither is open in these tests, and each reads store fields of its own.
@@ -105,7 +111,7 @@ const storeState = {
   fetchPipelineStats: vi.fn(),
   refreshPipelineView: (...a: unknown[]) => mockRefreshPipelineView(...a) as unknown,
   fetchApplicants: vi.fn(),
-  fetchApplicant: vi.fn(),
+  fetchApplicant: (...a: unknown[]) => mockFetchApplicant(...a) as unknown,
   fetchInactiveApplicants: vi.fn(),
   fetchWithdrawnApplicants: vi.fn(),
   fetchRejectedApplicants: vi.fn(),
@@ -278,5 +284,126 @@ describe('ProspectiveMembersPage — Add Applicant (workflow review W16)', () =>
 
     expect(screen.getByRole('button', { name: /add applicant/i })).toBeDisabled();
     storeState.currentPipeline = pipeline;
+  });
+});
+
+describe('ProspectiveMembersPage — adding an applicant who already exists', () => {
+  const noMatches: ExistingRecordCheck = {
+    has_matches: false,
+    match_count: 0,
+    matches: [],
+    existing_applicant: null,
+  };
+  const applicantMatch: ExistingRecordCheck = {
+    ...noMatches,
+    existing_applicant: {
+      prospect_id: 'p-existing',
+      name: 'Jordan Vale',
+      pipeline_name: 'Career Pipeline',
+      stage_name: 'Interview',
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCheckExisting.mockReset();
+    mockCreateApplicant.mockReset();
+    mockFetchApplicant.mockReset();
+    mockToast.mockReset();
+    mockToastError.mockReset();
+    mockToastSuccess.mockReset();
+    mockCheckExisting.mockResolvedValue(noMatches);
+    mockCreateApplicant.mockResolvedValue({ id: 'p-new' });
+    storeState.currentPipeline = pipeline;
+  });
+
+  const fillAndSubmit = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: /add applicant/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Add Applicant' });
+    await user.type(within(dialog).getByRole('textbox', { name: 'First Name *' }), 'Jordan');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Last Name *' }), 'Vale');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Email *' }), 'jordan@example.com');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Phone' }), '555-0100');
+    await user.click(within(dialog).getByRole('button', { name: 'Add to Pipeline' }));
+  };
+
+  // The officer was told "Applicant added to pipeline" while the server
+  // handed back the existing record and discarded what they typed.
+  it('names the existing applicant, pipeline and stage, and creates nothing', async () => {
+    mockCheckExisting.mockResolvedValue(applicantMatch);
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    await fillAndSubmit(user);
+
+    const warning = await screen.findByRole('dialog', { name: 'Already an applicant' });
+    expect(warning).toHaveTextContent('Jordan Vale');
+    expect(warning).toHaveTextContent('Career Pipeline');
+    expect(warning).toHaveTextContent('Interview');
+    expect(warning).toHaveTextContent("A second applicant can't be added with the same email.");
+    expect(within(warning).queryByRole('button', { name: 'Create anyway' })).not.toBeInTheDocument();
+
+    await user.click(within(warning).getByRole('button', { name: 'Go back' }));
+
+    expect(mockCreateApplicant).not.toHaveBeenCalled();
+    expect(mockFetchApplicant).not.toHaveBeenCalled();
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+    const form = screen.getByRole('dialog', { name: 'Add Applicant' });
+    expect(within(form).getByRole('textbox', { name: 'Phone' })).toHaveValue('555-0100');
+  });
+
+  it('opens the existing applicant on request', async () => {
+    mockCheckExisting.mockResolvedValue(applicantMatch);
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    await fillAndSubmit(user);
+    const warning = await screen.findByRole('dialog', { name: 'Already an applicant' });
+    await user.click(within(warning).getByRole('button', { name: 'Open existing applicant' }));
+
+    await waitFor(() => expect(mockFetchApplicant).toHaveBeenCalledWith('p-existing'));
+    expect(mockCreateApplicant).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: 'Add Applicant' })).not.toBeInTheDocument();
+  });
+
+  // The server-side net, for when the pre-check failed or lost a race.
+  it('shows a 409 from create as a warning and keeps the form and its input', async () => {
+    mockCheckExisting.mockRejectedValue(new Error('Network down'));
+    const detail =
+      "Jordan Vale is already an active applicant in the Career Pipeline pipeline (stage: Interview). A second applicant can't be added with the same email.";
+    mockCreateApplicant.mockRejectedValue({ response: { status: 409, data: { detail } } });
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    await fillAndSubmit(user);
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith(detail, { icon: '⚠️', duration: 8000 }));
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
+    const form = screen.getByRole('dialog', { name: 'Add Applicant' });
+    expect(within(form).getByRole('textbox', { name: 'Email *' })).toHaveValue('jordan@example.com');
+    expect(within(form).getByRole('textbox', { name: 'Phone' })).toHaveValue('555-0100');
+  });
+
+  it('still offers "Create anyway" for a match on an existing member only', async () => {
+    mockCheckExisting.mockResolvedValue({
+      ...noMatches,
+      has_matches: true,
+      match_count: 1,
+      matches: [{ status: 'active', match_type: 'name' }],
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<ProspectiveMembersPage />);
+
+    await fillAndSubmit(user);
+    const warning = await screen.findByRole('dialog', { name: 'This may be a duplicate' });
+    await user.click(within(warning).getByRole('button', { name: 'Create anyway' }));
+
+    await waitFor(() =>
+      expect(mockCreateApplicant).toHaveBeenCalledWith(
+        expect.objectContaining({ pipeline_id: 'pipe-1', email: 'jordan@example.com', phone: '555-0100' })
+      )
+    );
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Applicant added to pipeline'));
   });
 });
