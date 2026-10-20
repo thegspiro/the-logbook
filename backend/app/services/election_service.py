@@ -6145,10 +6145,10 @@ class ElectionService:
         safe_title = re.sub(r"[^A-Za-z0-9_-]+", "_", election.title)[:60]
         return buf, None, f"certified_results_{safe_title}.pdf"
 
-    async def _send_ballots_after_auto_open(
+    async def _queue_ballots_after_auto_open(
         self, election: Election, organization_id: UUID
     ) -> None:
-        """Mail the ballots an automatic open used to leave unsent (W50-72).
+        """Queue the ballots an automatic open used to leave unsent (W50-72).
 
         Owner decision (2026-10-08): the scheduled open sends ballots as the
         election's creator — the ballot mail's reply-to and contact are
@@ -6158,27 +6158,70 @@ class ElectionService:
         fails, or reaches nobody, leaves the election open (voting has
         started and the open is not rolled back) and alerts the members who
         can manage elections to send the ballots themselves.
+
+        The send is queued as a background job rather than run here. Inline,
+        a department-sized send held up every other election's scheduled
+        open and close behind it, and could outlast the scheduler's claim so
+        that a second worker took over mid-send. As a job it also falls under
+        the one-send-at-a-time guard the buttons use.
         """
-        base_ballot_url = f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
-        # Read before the send: a failed send rolls the session back, which
-        # expires the loaded election.
+        from app.services.ballot_send_jobs import (
+            AutoOpenBallotSend,
+            queue_automatic_send,
+        )
+
         election_id = str(election.id)
         title = election.title
         creator = str(election.created_by) if election.created_by else None
-        sent = failed = skipped = 0
-        raised = False
         try:
-            sent, failed, skipped, _details, _ids = await self.send_ballot_emails(
-                UUID(election_id),
-                organization_id,
-                base_ballot_url=base_ballot_url,
+            job = await queue_automatic_send(
+                self.db,
+                election_id,
+                str(organization_id),
+                requested_by=creator,
+                send=AutoOpenBallotSend(
+                    base_ballot_url=f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
+                ),
             )
         except Exception as e:
             await self.db.rollback()
-            raised = True
             logger.error(
-                f"Auto-open ballot send failed | election={election_id} error={e}"
+                f"Auto-open ballot send could not be queued | "
+                f"election={election_id} error={e}"
             )
+            await self.record_auto_open_send_outcome(
+                election_id,
+                title,
+                creator,
+                organization_id,
+                sent=0,
+                failed=0,
+                skipped=0,
+                raised=True,
+            )
+            return
+        if job is None:
+            # A secretary's own ballot send is already going out; it covers
+            # what this one would have sent.
+            logger.info(
+                f"Auto-open ballot send skipped: a send is already in progress "
+                f"| election={election_id}"
+            )
+
+    async def record_auto_open_send_outcome(
+        self,
+        election_id: str,
+        title: str,
+        creator: Optional[str],
+        organization_id: UUID | str,
+        *,
+        sent: int,
+        failed: int,
+        skipped: int,
+        raised: bool,
+    ) -> None:
+        """Audit an automatic open's ballot send, and alert the managers when
+        it failed for anyone or reached nobody."""
         if not raised and sent > 0 and failed == 0:
             await self._audit(
                 "ballots_auto_sent",
@@ -6208,11 +6251,65 @@ class ElectionService:
             election_id, title, organization_id, sent=sent, failed=failed, raised=raised
         )
 
+    async def record_auto_reminder_failure(
+        self,
+        election_id: str,
+        title: str,
+        organization_id: UUID | str,
+        *,
+        sent: int,
+        failed: int,
+        raised: bool,
+        alert: bool,
+    ) -> None:
+        """Audit an automatic reminder that did not reach everyone, and when
+        ``alert`` is set, email the managers.
+
+        The caller decides ``alert``: a reminder that delivered nothing is
+        retried by every lifecycle tick until one gets through, and an alert
+        per tick would mail the managers every fifteen minutes through an
+        outage.
+        """
+        await self._audit(
+            "election_auto_reminder_failed",
+            {
+                "election_id": election_id,
+                "title": title,
+                "sent": sent,
+                "failed": failed,
+                "raised": raised,
+            },
+            severity="warning",
+        )
+        if not alert:
+            return
+        if raised:
+            what = "the reminder emails could not be sent"
+        elif sent == 0:
+            what = f"all {failed} reminder email(s) failed to send"
+        else:
+            what = f"{failed} of {sent + failed} reminder email(s) failed to send"
+        import html as html_mod
+
+        safe_title = html_mod.escape(title)
+        await self._email_election_managers(
+            election_id,
+            organization_id,
+            subject=f"Action needed: reminders for {title} were not all sent",
+            page_title=f"Reminders not sent: {safe_title}",
+            body_html=(
+                f"<p>The automatic reminder for <strong>{safe_title}</strong> "
+                f"went out before voting closes, but {html_mod.escape(what)}.</p>"
+                "<p>Open the election and use <strong>Remind Non-Voters</strong> "
+                "so the members who have not voted get their reminder.</p>"
+            ),
+        )
+
     async def _alert_managers_ballots_not_sent(
         self,
         election_id: str,
         election_title: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         *,
         sent: int,
         failed: int,
@@ -6221,9 +6318,43 @@ class ElectionService:
         """Email every active member who can manage elections that an
         automatic open did not get the ballots out (W50-72). Best-effort;
         returns the number of managers emailed."""
-        try:
-            import html as html_mod
+        import html as html_mod
 
+        if raised:
+            what = "the ballot emails could not be sent"
+        elif sent == 0 and failed == 0:
+            what = "no ballot emails were sent — no eligible recipient was found"
+        elif sent == 0:
+            what = f"all {failed} ballot email(s) failed to send"
+        else:
+            what = f"{failed} of {sent + failed} ballot email(s) failed to send"
+        title = html_mod.escape(election_title)
+        return await self._email_election_managers(
+            election_id,
+            organization_id,
+            subject=f"Action needed: ballots for {election_title} were not sent",
+            page_title=f"Ballots not sent: {title}",
+            body_html=(
+                f"<p><strong>{title}</strong> opened automatically at its start "
+                f"time, but {html_mod.escape(what)}.</p>"
+                "<p>The election is open and voting has started. Open the "
+                "election and use <strong>Send Ballot Emails</strong> so members "
+                "receive their ballots.</p>"
+            ),
+        )
+
+    async def _email_election_managers(
+        self,
+        election_id: str,
+        organization_id: UUID | str,
+        *,
+        subject: str,
+        page_title: str,
+        body_html: str,
+    ) -> int:
+        """Email every active member who can manage elections and takes
+        election-admin mail. Best-effort; returns the number emailed."""
+        try:
             from app.api.dependencies import user_has_permission
             from app.services.email_service import wrap_email_body
 
@@ -6257,34 +6388,16 @@ class ElectionService:
             ]
             if not managers:
                 logger.warning(
-                    f"Auto-open ballot send failed and no manager can be "
-                    f"emailed | election={election_id}"
+                    f"No election manager can be emailed: {subject} | "
+                    f"election={election_id}"
                 )
                 return 0
-            if raised:
-                what = "the ballot emails could not be sent"
-            elif sent == 0 and failed == 0:
-                what = "no ballot emails were sent — no eligible recipient was found"
-            elif sent == 0:
-                what = f"all {failed} ballot email(s) failed to send"
-            else:
-                what = f"{failed} of {sent + failed} ballot email(s) failed to send"
-            title = html_mod.escape(election_title)
-            body_html = (
-                f"<p><strong>{title}</strong> opened automatically at its start "
-                f"time, but {html_mod.escape(what)}.</p>"
-                "<p>The election is open and voting has started. Open the "
-                "election and use <strong>Send Ballot Emails</strong> so members "
-                "receive their ballots.</p>"
-            )
             html_body = wrap_email_body(
-                organization,
-                title=f"Ballots not sent: {title}",
-                body_html=body_html,
+                organization, title=page_title, body_html=body_html
             )
             await EmailService(organization).send_email(
                 to_emails=[m.email for m in managers],
-                subject=f"Action needed: ballots for {election_title} were not sent",
+                subject=subject,
                 html_body=html_body,
                 db=self.db,
                 template_type="custom",
@@ -6292,8 +6405,8 @@ class ElectionService:
             return len(managers)
         except Exception as e:
             logger.error(
-                f"Manager alert for unsent ballots failed | "
-                f"election={election_id} error={e}"
+                f"Election manager alert failed | election={election_id} "
+                f"subject={subject!r} error={e}"
             )
             return 0
 
@@ -6388,7 +6501,7 @@ class ElectionService:
                         "election_auto_opened",
                         {"election_id": str(election.id), "title": election.title},
                     )
-                    await self._send_ballots_after_auto_open(opened, organization_id)
+                    await self._queue_ballots_after_auto_open(opened, organization_id)
                 continue
 
             if election.status != ElectionStatus.OPEN:
@@ -6417,25 +6530,34 @@ class ElectionService:
                 and end
                 and now >= end - timedelta(hours=election.reminder_hours_before_close)
             ):
+                # Queued, not sent here, for the reasons on
+                # _queue_ballots_after_auto_open. reminder_sent_at is stamped
+                # when the job delivers, so until then each tick reaches this
+                # branch again and the in-progress guard turns it away.
+                from app.services.ballot_send_jobs import (
+                    AutoReminderSend,
+                    queue_automatic_send,
+                )
+
                 try:
-                    reminded, _failed, _skipped, _details = (
-                        await self.remind_non_voters(
-                            UUID(str(election.id)),
-                            organization_id,
-                            base_ballot_url=(
-                                f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
-                            ),
-                        )
-                    )
-                    actions += 1
-                    logger.info(
-                        f"Auto-reminder sent | election={election.id} "
-                        f"reminded={reminded}"
-                    )
+                    await self.ensure_reminder_allowed(election, organization_id)
                 except ValueError as e:
                     logger.warning(
                         f"Auto-reminder skipped | election={election.id} reason={e}"
                     )
+                    continue
+                job = await queue_automatic_send(
+                    self.db,
+                    str(election.id),
+                    str(organization_id),
+                    requested_by=None,
+                    send=AutoReminderSend(
+                        base_ballot_url=f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
+                    ),
+                )
+                if job is not None:
+                    actions += 1
+                    logger.info(f"Auto-reminder queued | election={election.id}")
 
         return actions
 

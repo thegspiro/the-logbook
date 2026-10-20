@@ -39,10 +39,8 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
-from app.core.utils import generate_uuid, safe_error_detail
+from app.core.utils import safe_error_detail
 from app.models.election import (
-    BallotSendJob,
-    BallotSendJobStatus,
     Candidate,
     Election,
     ElectionStatus,
@@ -133,13 +131,13 @@ from app.services.ballot_send_jobs import (
     QueuedSend,
     ReminderSend,
     announce_nominations_open,
+    enqueue_send,
     ensure_election_open,
     find_active_job,
     get_job,
     job_response,
     perform_ballot_send,
     perform_reminder_send,
-    start_ballot_send_job,
 )
 from app.services.election_service import (
     ElectionService,
@@ -3164,35 +3162,12 @@ async def _queue_send(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
-    active = await find_active_job(
-        db, election.id, organization_id, kinds=send.guard_kinds
-    )
-    if active is not None:
-        # The abandoned jobs find_active_job just failed are kept either way.
-        await db.commit()
+    job = await enqueue_send(db, election, organization_id, str(current_user.id), send)
+    if job is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=send.in_progress_detail,
         )
-
-    job = BallotSendJob(
-        id=generate_uuid(),
-        organization_id=organization_id,
-        election_id=election.id,
-        requested_by=str(current_user.id),
-        kind=send.kind.value,
-        status=BallotSendJobStatus.QUEUED.value,
-        created_at=datetime.now(timezone.utc),
-    )
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-
-    logger.info(
-        f"Ballot send job queued | job={job.id} kind={job.kind} "
-        f"election={election.id} user={current_user.id}"
-    )
-    start_ballot_send_job(job.id, organization_id, send)
     return job_response(job)
 
 

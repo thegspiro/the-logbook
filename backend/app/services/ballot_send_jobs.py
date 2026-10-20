@@ -44,11 +44,11 @@ from typing import Callable, List, Optional, Sequence, Set, Union
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session_factory
-from app.core.utils import safe_error_detail
+from app.core.utils import generate_uuid, safe_error_detail
 from app.models.election import (
     BallotSendJob,
     BallotSendJobKind,
@@ -393,7 +393,180 @@ class PackageSend:
         )
 
 
-QueuedSend = Union[BallotSend, ReminderSend, PackageSend]
+@dataclass(frozen=True)
+class AutoOpenBallotSend:
+    """The ballot send an automatic open queues (W50-72).
+
+    Records the outcome the way the inline send did: an audit row attributed
+    to the creator, and an alert to the managers when the send failed for
+    anyone or reached nobody.
+    """
+
+    base_ballot_url: str
+
+    kind = BallotSendJobKind.BALLOTS
+    guard_kinds = BALLOT_GUARD_KINDS
+    in_progress_detail = SEND_IN_PROGRESS_DETAIL
+
+    async def __call__(
+        self, service: ElectionService, election: Election, organization_id: str
+    ) -> EmailBallotResponse:
+        # Read before the send: a failed send rolls the session back, which
+        # expires the loaded election.
+        election_id = str(election.id)
+        title = election.title
+        creator = str(election.created_by) if election.created_by else None
+        try:
+            ensure_election_open(election)
+            outcome = await perform_ballot_send(
+                service,
+                election,
+                organization_id,
+                recipient_user_ids=None,
+                subject=None,
+                message=None,
+                base_ballot_url=self.base_ballot_url,
+                send_eligibility_summary=False,
+            )
+        except Exception as e:
+            await service.db.rollback()
+            logger.error(
+                f"Auto-open ballot send failed | election={election_id} error={e}"
+            )
+            await service.record_auto_open_send_outcome(
+                election_id,
+                title,
+                creator,
+                organization_id,
+                sent=0,
+                failed=0,
+                skipped=0,
+                raised=True,
+            )
+            raise
+        await service.record_auto_open_send_outcome(
+            election_id,
+            title,
+            creator,
+            organization_id,
+            sent=outcome.recipients_count,
+            failed=outcome.failed_count,
+            skipped=outcome.skipped_count,
+            raised=False,
+        )
+        return outcome
+
+
+@dataclass(frozen=True)
+class AutoReminderSend:
+    """The pre-close reminder the election lifecycle task queues.
+
+    A reminder that does not reach everyone is audited, and the managers are
+    emailed the first time it happens for an election. A reminder that
+    delivered nothing leaves ``reminder_sent_at`` unset, so every lifecycle
+    tick retries it; alerting on each retry would mail the managers every
+    fifteen minutes through an outage. A refusal (closed, cooldown, reminders
+    switched off since the job was queued) is not a delivery failure and
+    alerts nobody.
+    """
+
+    base_ballot_url: str
+
+    kind = BallotSendJobKind.REMINDER
+    guard_kinds = BALLOT_GUARD_KINDS
+    in_progress_detail = SEND_IN_PROGRESS_DETAIL
+
+    async def __call__(
+        self, service: ElectionService, election: Election, organization_id: str
+    ) -> EmailBallotResponse:
+        election_id = str(election.id)
+        title = election.title
+        try:
+            outcome = await perform_reminder_send(
+                service,
+                UUID(election_id),
+                organization_id,
+                requested_by=None,
+                subject=None,
+                message=None,
+                base_ballot_url=self.base_ballot_url,
+            )
+        except ValueError:
+            raise
+        except Exception as e:
+            await service.db.rollback()
+            logger.error(
+                f"Auto-reminder send failed | election={election_id} error={e}"
+            )
+            await self._record_failure(
+                service, election_id, title, organization_id, 0, 0, raised=True
+            )
+            raise
+        if outcome.failed_count > 0:
+            await self._record_failure(
+                service,
+                election_id,
+                title,
+                organization_id,
+                outcome.recipients_count,
+                outcome.failed_count,
+                raised=False,
+            )
+        return outcome
+
+    @staticmethod
+    async def _record_failure(
+        service: ElectionService,
+        election_id: str,
+        title: str,
+        organization_id: str,
+        sent: int,
+        failed: int,
+        *,
+        raised: bool,
+    ) -> None:
+        await service.record_auto_reminder_failure(
+            election_id,
+            title,
+            organization_id,
+            sent=sent,
+            failed=failed,
+            raised=raised,
+            alert=not await _earlier_auto_reminder_failed(
+                service.db, election_id, organization_id
+            ),
+        )
+
+
+async def _earlier_auto_reminder_failed(
+    db: AsyncSession, election_id: str, organization_id: str
+) -> bool:
+    """Whether an earlier automatic reminder for this election already
+    failed for someone — and so already alerted the managers.
+
+    Automatic reminders are the reminder jobs nobody requested. The job
+    running now is still ``running``, so it is not among them.
+    """
+    result = await db.execute(
+        select(BallotSendJob.id)
+        .where(BallotSendJob.election_id == str(election_id))
+        .where(BallotSendJob.organization_id == str(organization_id))
+        .where(BallotSendJob.kind == BallotSendJobKind.REMINDER.value)
+        .where(BallotSendJob.requested_by.is_(None))
+        .where(
+            or_(
+                BallotSendJob.status == BallotSendJobStatus.FAILED.value,
+                BallotSendJob.failed_count > 0,
+            )
+        )
+        .limit(1)
+    )
+    return result.first() is not None
+
+
+QueuedSend = Union[
+    BallotSend, ReminderSend, PackageSend, AutoOpenBallotSend, AutoReminderSend
+]
 
 
 async def perform_package_send(
@@ -657,6 +830,76 @@ async def _load_job(
         .where(BallotSendJob.organization_id == str(organization_id))
     )
     return result.scalar_one_or_none()
+
+
+async def enqueue_send(
+    db: AsyncSession,
+    election: Election,
+    organization_id: str,
+    requested_by: Optional[str],
+    send: QueuedSend,
+) -> Optional[BallotSendJob]:
+    """Record a queued job for ``send`` and start it, or return None when a
+    send that ``send`` excludes is already in progress.
+
+    The caller must hold the election row lock (``SELECT ... FOR UPDATE``),
+    so two callers cannot both find nothing in progress and both queue.
+    Commits either way: the abandoned jobs ``find_active_job`` marked failed
+    are kept.
+    """
+    active = await find_active_job(
+        db, election.id, organization_id, kinds=send.guard_kinds
+    )
+    if active is not None:
+        await db.commit()
+        return None
+
+    job = BallotSendJob(
+        id=generate_uuid(),
+        organization_id=organization_id,
+        election_id=election.id,
+        requested_by=requested_by,
+        kind=send.kind.value,
+        status=BallotSendJobStatus.QUEUED.value,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    logger.info(
+        f"Ballot send job queued | job={job.id} kind={job.kind} "
+        f"election={election.id} requested_by={requested_by or 'automatic'}"
+    )
+    start_ballot_send_job(job.id, organization_id, send)
+    return job
+
+
+async def queue_automatic_send(
+    db: AsyncSession,
+    election_id: str,
+    organization_id: str,
+    *,
+    requested_by: Optional[str],
+    send: QueuedSend,
+) -> Optional[BallotSendJob]:
+    """Queue a send the election lifecycle task starts on its own.
+
+    None when the election is gone or a send it would overlap is already in
+    progress — including the same automatic send queued by an earlier tick,
+    or by another worker that took over the scheduler.
+    """
+    election = (
+        await db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if election is None:
+        return None
+    return await enqueue_send(db, election, organization_id, requested_by, send)
 
 
 def start_ballot_send_job(

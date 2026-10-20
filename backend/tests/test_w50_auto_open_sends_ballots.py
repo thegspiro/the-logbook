@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.models.audit import AuditLog
 from app.models.election import Election, ElectionStatus
 from app.services.election_service import ElectionService
+from tests.queued_send_runner import capture_queued_sends
 from tests.test_election_voting_flow import TestElectionSetup
 
 
@@ -69,13 +70,17 @@ class TestAutoOpenSendsBallots(TestElectionSetup):
             built.extend(batch)
             return [True] * len(batch)
 
-        with patch(
-            "app.services.email_service.EmailService.send_batch",
-            new=AsyncMock(side_effect=_accept),
-        ):
-            actions = await ElectionService(db_session).process_election_lifecycle(
-                uuid.UUID(data["org_id"])
-            )
+        async with capture_queued_sends(db_session) as sends:
+            with patch(
+                "app.services.email_service.EmailService.send_batch",
+                new=AsyncMock(side_effect=_accept),
+            ):
+                actions = await ElectionService(db_session).process_election_lifecycle(
+                    uuid.UUID(data["org_id"])
+                )
+                # The open queues the send; nothing is mailed inside the tick.
+                assert built == []
+                assert await sends.drain() == 1
 
         assert actions >= 1
         election = await _election(db_session, data)
@@ -119,9 +124,11 @@ class TestAutoOpenSendsBallots(TestElectionSetup):
             ) as alert,
             patch("app.api.dependencies.user_has_permission", side_effect=_is_manager),
         ):
-            await ElectionService(db_session).process_election_lifecycle(
-                uuid.UUID(data["org_id"])
-            )
+            async with capture_queued_sends(db_session) as sends:
+                await ElectionService(db_session).process_election_lifecycle(
+                    uuid.UUID(data["org_id"])
+                )
+                await sends.drain()
 
         election = await _election(db_session, data)
         assert election.status == ElectionStatus.OPEN
@@ -157,9 +164,11 @@ class TestAutoOpenSendsBallots(TestElectionSetup):
             ) as alert,
             patch("app.api.dependencies.user_has_permission", return_value=True),
         ):
-            await ElectionService(db_session).process_election_lifecycle(
-                uuid.UUID(data["org_id"])
-            )
+            async with capture_queued_sends(db_session) as sends:
+                await ElectionService(db_session).process_election_lifecycle(
+                    uuid.UUID(data["org_id"])
+                )
+                await sends.drain()
 
         election = await _election(db_session, data)
         assert election.status == ElectionStatus.OPEN
