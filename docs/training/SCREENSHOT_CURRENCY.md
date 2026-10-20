@@ -22,13 +22,14 @@ for the new screens are in [04](./04-events-meetings.md) as `_[Screenshot to cre
 | 04 | A **prepared Approval of Previous Minutes** motion on a draft, with **As submitted / As revised** | Needs earlier circulated minutes of the same meeting type |
 | 04 | Circulated minutes with the note that a later meeting accepted them, and **Adopt these minutes** opened already filled in | Seed a passed acceptance motion |
 
-**Pipeline status.** Six of the eight are now in `scripts/screenshots/manifest.mjs`
-(`04-70` to `04-75`) with placeholders in the comment form the applier reads. The
-two accepted-previous-minutes shots are not: they need a seeded later meeting with
-a passed acceptance motion, which `seed_demo_data.py` does not create yet. Their
-placeholders stay as `_[Screenshot to create: …]_`, a form `apply_placeholders.py`
-and `status_report.py` do not see (nine in the guides today), so they are not in
-the remaining count.
+**Pipeline status.** Every row above is in `scripts/screenshots/manifest.mjs`
+(`04-70` to `04-78`; the last row is two shots) with placeholders in the comment form the applier reads. The
+accepted-previous-minutes shots (`04-76` to `04-78`) are seeded by
+`_guide04_accepted_minutes` in `seed_demo_data.py`: three business meetings dated
+90, 62 and 48 days back, so the Spring minutes are circulated and accepted by the
+Late Spring meeting, and the Early Summer minutes carry a prepared motion waiting
+for a result. Re-run the seeder before capturing. Nothing here has been captured,
+and the seeder change has not been run end to end.
 
 ### Existing images to replace or confirm
 

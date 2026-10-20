@@ -8390,6 +8390,89 @@ export const SHOTS = [
     expect: "Email reminders to assignees",
   },
   {
+    // The Early Summer meeting's minutes are the pending one: its Approval of
+    // Previous Minutes motion is prepared and linked to the circulated Spring
+    // minutes, with nothing recorded. The form is filled in but never saved.
+    id: "04-76-minutes-prepared-acceptance-motion",
+    doc: "04-events-meetings.md",
+    line: 1527,
+    anchor:
+      "Draft minutes with the prepared Approval of Previous Minutes motion open",
+    alt: "Draft minutes with the Approval of Previous Minutes motion prepared: the line naming the minutes being accepted, Result set to Passed and the As submitted / As revised choice",
+    route: "/minutes",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Early Summer Business Meeting",
+      )(page);
+      const group = page.getByRole("group", {
+        name: "Motion for Approval of Previous Minutes",
+      });
+      await group.waitFor({ timeout: 20_000 });
+      await group.getByLabel("Result", { exact: true }).selectOption("passed");
+      await group.getByLabel("As submitted").check();
+      await group.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+    selector:
+      "[role='group'][aria-label='Motion for Approval of Previous Minutes']",
+    expect: "The minutes were accepted",
+  },
+  {
+    // As the administrator, who circulated the Spring minutes: the note names
+    // the meeting that accepted them. Adopting is left to a second officer.
+    id: "04-77-minutes-accepted-by-later-meeting",
+    doc: "04-events-meetings.md",
+    line: 1726,
+    anchor:
+      "Circulated minutes as an officer, with the note saying a later meeting accepted",
+    alt: "Circulated minutes with the note that the Late Spring Business Meeting accepted them as submitted, moved and seconded by named members, and that Adopt Minutes opens already filled in",
+    route: "/minutes",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Spring Business Meeting",
+      )(page);
+      await page
+        .getByText("accepted these minutes as submitted")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    expect: "accepted these minutes",
+  },
+  {
+    // As the Secretary: the administrator circulated these minutes, and the
+    // one who circulates them cannot adopt them. Closed without adopting.
+    id: "04-78-minutes-adopt-dialog-prefilled",
+    doc: "04-events-meetings.md",
+    line: 1732,
+    anchor:
+      "The Adopt these minutes dialog opened by a second officer on those minutes",
+    alt: "The Adopt these minutes dialog filled in from the motion recorded at the Late Spring Business Meeting: the date the body voted, the meeting that accepted them, and the note saying where it came from",
+    route: "/minutes",
+    auth: "secretary",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Spring Business Meeting",
+      )(page);
+      await page
+        .getByRole("button", { name: "Adopt Minutes" })
+        .click({ timeout: 20_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(600);
+    },
+    selector: "[role='dialog']",
+    expect: "Filled in from the motion recorded at",
+  },
+  {
     id: "04-15-action-items",
     doc: "04-events-meetings.md",
     line: 454,

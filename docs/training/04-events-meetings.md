@@ -1524,9 +1524,11 @@ the earlier minutes show a note that this meeting accepted them, and **Adopt
 Minutes** then opens already filled in from the motion (see
 [Circulating and adopting minutes](#circulating-and-adopting-minutes)).
 
-_[Screenshot to create: a prepared Approval of Previous Minutes motion on a draft
-with the As submitted / As revised choice; circulated minutes showing the note
-that a later meeting accepted them.]_
+<!-- Screenshot needed:
+Draft minutes with the prepared Approval of Previous Minutes motion open: the
+line naming the earlier minutes being accepted, Result set to Passed, and the
+As submitted / As revised choice, nothing recorded yet.
+-->
 
 ### Creating Minutes from a Meeting or an Event
 
@@ -1720,6 +1722,18 @@ and adopt them at the next meeting. The screen now follows that order:
   its **Approval of Previous Minutes** motion for these minutes, the dialog opens
   filled in from it (the meeting, the date, as submitted or as amended, mover and
   seconder) under a note saying so; check it, then adopt.
+
+<!-- Screenshot needed:
+Circulated minutes as an officer, with the note saying a later meeting accepted
+them as submitted, moved and seconded by named members, and that Adopt Minutes
+opens already filled in.
+-->
+
+<!-- Screenshot needed:
+The Adopt these minutes dialog opened by a second officer on those minutes, with
+the note "Filled in from the motion recorded at …" above the date, the meeting
+and the mover and seconder already filled in.
+-->
 - **Adopted minutes are locked.** **Reopen for Correction** works as described
   above; it clears the adoption details but keeps the earlier version.
 
