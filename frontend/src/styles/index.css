@@ -290,6 +290,23 @@
   input[type='checkbox'] {
     flex-shrink: 0;
   }
+
+  /* WebKit (iPad/iPhone, every iOS browser) sizes a native date/time control
+     from its own intrinsic box and can ignore `w-full` + border-box, so it
+     spills past its grid column by the padding and border and paints over the
+     neighbouring field. The mobile-only min-width reset further down does not
+     reach a tablet, which is wider than 767px. An element rule rather than a
+     `form-input` modifier because about a tenth of the app's date inputs are
+     styled by hand (dynamic forms, the range picker, compact toolbars); in
+     `base`, so a call site's own `min-w-*` or `max-w-*` still wins. */
+  input[type='date'],
+  input[type='time'],
+  input[type='datetime-local'],
+  input[type='month'] {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 
 /*
@@ -437,20 +454,6 @@
      everywhere would loosen desktop form density. */
   @media (max-width: 767px), (pointer: coarse) {
     min-height: 44px;
-  }
-
-  /* WebKit (iPad/iPhone, every iOS browser) sizes a native date/time control
-     from its own intrinsic box and can ignore `w-full` + border-box, so it
-     spills past its grid column by the padding and border and paints over the
-     neighbouring field. The mobile-only min-width reset further down does not
-     reach a tablet, which is wider than 767px. */
-  &[type='date'],
-  &[type='time'],
-  &[type='datetime-local'],
-  &[type='month'] {
-    box-sizing: border-box;
-    min-width: 0;
-    max-width: 100%;
   }
 }
 
