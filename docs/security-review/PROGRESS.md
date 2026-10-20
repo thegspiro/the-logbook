@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this branch, `claude/security-review-grants-fundraising`), not yet
+numbered at commit time.** PR #3451 (Feature 21, Admin hours, pass 9) merged
+to `main` with no open PR whose head branch starts with
+`claude/security-review-` (`list_pull_requests`/`search_pull_requests`, both
+0 results) and nothing started for Feature 22 since, so this iteration
+reviewed Feature 22 (Grants & fundraising), pass 9. **0 fixed by this pass
+itself, 0 new findings** — a real (not zero-) delta since pass 8's baseline
+`5b2270fa`: four non-rotation commits (app-review B14's `reload_updated_at`
+fix across 8 update methods; a budget-summary/key-contacts schema tightening
+from `Dict[str, Any]` to typed `GrantBudgetSummary`/`GrantKeyContact`; the
+four child-create schemas dropping a dead, URL-shadowed `application_id`;
+`assigned_to` now accepted and in-org-validated on create) were each
+re-verified by direct code read, not taken from their own commit messages.
+GF-9's open two-thirds (unbounded money fields, donor-PII gate breadth)
+re-confirmed open; the new `GrantBudgetSummary` fields are minted in GF-9's
+exact unbounded-amount shape, so the open item now covers them too (mirrored
+to `KNOWN_LIMITATIONS.md`). Route surface re-enumerated (45/45, unchanged).
+See `GF-22-grants-fundraising.md`'s **Pass 9** section. Rotation row 22 → ✅
+(pending this PR's merge); next is Feature 23 (Medical supplies).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21 Admin hours pass 9, PR #3451, merged), preserved for history</summary>
+
 **PR [#3451](https://github.com/thegspiro/the-logbook/pull/3451)** (branch `claude/security-review-admin-hours-p9`). PR #3449
 (Feature 20, Compliance, pass 9) merged 2026-10-19, docs-only, so there was
 nothing to record. `list_pull_requests` (state open) returned 0 PRs, so this
@@ -26,6 +49,8 @@ with no lock). One non-rotation commit, `1ae0d0ac` (W70), touched
 `f698cdc2` and was reviewed in full; no other scope file moved. Rotation row
 21 is now ✅ (pending this PR's merge); next is Feature 22 (Grants &
 fundraising).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20 Compliance pass 9, PR #3449, before it merged), preserved for history</summary>
@@ -20333,7 +20358,7 @@ iteration's commit" rule.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
@@ -20353,6 +20378,62 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-20 — Feature 22 (Grants & fundraising, pass 9) — watchdog pickup, real delta, 0 fixed, 0 new findings; GF-9 extended to the new budget-summary fields
+
+`list_pull_requests`/`search_pull_requests` (state open, head
+`claude/security-review-`) returned 0 PRs; PR #3451 (Feature 21, Admin
+hours, pass 9) had merged with nothing started for the next feature since.
+Row 22 was the first `⬜`.
+
+**Delta.** Baseline `5b2270fa` (pass 8's merge, PR #3339). Unlike passes
+6-8, this was not a near-zero-delta pass: four non-rotation commits since,
+all from 2026-10-16/17 feature-dev sessions —`5ead6074` (app-review B14,
+GF2-1: 8 `PUT` endpoints 500'd and rolled back because `updated_at`'s
+`onupdate` expression can't be returned from a MySQL/MariaDB `UPDATE`,
+fixed with a shared `reload_updated_at` helper), `ad2c7ff5` (a pure mypy
+override fix, no behavior change), `7468e9f9`/`0913cf9b` (W69 fundraising:
+`CampaignCreate.status` was missing; `budget_summary`/`key_contacts`
+tightened from permissive `Dict[str, Any]` to typed
+`GrantBudgetSummary`/`GrantKeyContact`), and `7d5be0bb`/`3b12bd71` (W68
+grants: the four child-create schemas dropped a dead `application_id` the
+endpoint already discarded in favor of the URL; `assigned_to` is now
+accepted and in-org-validated on create via the existing
+`_validate_application_fks`). Each re-verified by direct code read: every
+`reload_updated_at` call site sits after its row-not-found guard and after
+any FK validation/recompute work; the new typed budget/contact schemas
+tighten validation (they `extra="forbid"`, length- and list-cap) without
+loosening the defensive, permissive read-back shape on the response model;
+the dropped `application_id` fields were already dead weight, since the
+endpoints discarded the body value in favor of the org-scoped URL path
+before this pass's baseline.
+
+**GF-9 (re-confirmed OPEN, scope widened without a new id).** Money-field
+upper-bound and donor-PII-gate-breadth stay open, unchanged. The new
+`GrantBudgetSummary` fields (`equipment`, `personnel`, … ,
+`app/schemas/grant.py:301-309`) are minted in gap (1)'s exact shape
+(`Field(None, ge=0)`, no cap), so this pass's own diff lands inside GF-9's
+existing scope rather than opening a new finding. `KNOWN_LIMITATIONS.md`'s
+GF-9 row updated to say so.
+
+**Re-verified.** Route surface unchanged (45/45, 27 `.manage` + 18
+`.view`, `check_route_permissions.py --strict`: 273 routes, 0 errors/0
+warnings). GF-1 through GF-8, GF-24a, GF-27a, GF-33, GF-35, and the
+capacity-locking/LIKE-escaping/CSV-export checklist items all unchanged
+from pass 8 — no new by-id query, FK, search, cap, or export surface was
+introduced this pass. Findings file: `GF-22-grants-fundraising.md`'s
+**Pass 9** section.
+
+**Out of scope, noted only.** `7468e9f9` also touched `elections.py`,
+`inventory_service.py`/`inventory.py`, and `equipment_check_service.py` for
+unrelated fixes owned by other rotation features; not reviewed here beyond
+the repo-wide lint gate, which is clean.
+
+**Gate.** `flake8`/`black`/`isort` over `app/ tests/ alembic/`: clean.
+`validate_migrations.py --strict`: 631 revisions, single head. `pytest -k
+"grant or fundraising"`: 1033 passed, 1 pre-existing skip. Frontend
+`typecheck`/`lint`: clean. `vitest run src/modules/grants-fundraising`:
+109/109 passed.
 
 ### 2026-10-20 — Feature 21 (Admin hours, pass 9) — 0 fixed, 1 new LOW flagged (AH-18); W70 commit `1ae0d0ac` reviewed in full
 
