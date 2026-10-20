@@ -16,6 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3458](https://github.com/thegspiro/the-logbook/pull/3458)** (branch
+`claude/security-review-forms-p8`). This row was last updated for PR #3455
+(Feature 23, Medical supplies, pass 15); PR #3456 (Feature 24, Meetings &
+minutes, pass 8) and PR #3457 (Feature 25, Messaging & notifications, pass 8) both merged to `main` since, each recording itself in the Log below —
+see those entries rather than a superseded note here for either. With both
+merged, `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results, checked once before starting and again immediately
+before branching, so this iteration reviewed Feature 26 (Forms), pass 8.
+**0 fixed, 0 new findings** — a true zero-delta pass on the five backend
+scope files (`git log`/`git diff` against pass 7's merge `8372581e` both
+empty); route inventory and auth-dependency distribution re-enumerated
+programmatically and confirmed unchanged (22 routes). One frontend commit
+in the window (`4327cb29`) adds client-side fractional-value rejection on
+numeric fields plus accessibility wiring — correctness/accessibility only,
+no finding. See `FORM-26-forms.md`'s **Pass 8** section. Rotation row 26 →
+✅ (pending this PR's merge); next is Feature 27 (Integrations).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23 Medical supplies pass 15, PR #3455, merged), preserved for history</summary>
+
 **PR [#3455](https://github.com/thegspiro/the-logbook/pull/3455)** (branch
 `claude/security-review-medical-supplies-p15`). PR #3454 (Feature 22, Grants & fundraising, pass 9)
 merged to `main` with no open PR whose head branch starts with
@@ -30,6 +50,8 @@ pinning intact throughout. MSUP-4/MSUP-11 (no row cap on
 `get_expiring_lots`/`list_lots`) re-confirmed open, owner-accepted, unchanged.
 See `MSUP-23-medical-supplies.md`'s **Pass 15** section. Rotation row 23 → ✅
 (pending this PR's merge); next is Feature 24 (Meetings & minutes).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22 Grants & fundraising pass 9, PR #3454, merged), preserved for history</summary>
