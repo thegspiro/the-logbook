@@ -647,6 +647,15 @@ export const IPExceptionApprovalStatus = {
 } as const;
 export type IPExceptionApprovalStatus = (typeof IPExceptionApprovalStatus)[keyof typeof IPExceptionApprovalStatus];
 
+// W74: the tables printed the raw code ("pending").
+export const IP_EXCEPTION_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  expired: 'Expired',
+  revoked: 'Revoked',
+};
+
 export const IP_EXCEPTION_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
   approved: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',

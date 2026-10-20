@@ -5842,6 +5842,21 @@ Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
   The catalog row is seeded per organization, so the last two also need a
   data change for existing installations.
 
+## IP Security — An Admin Can Approve Their Own IP Exception (2026-10-20)
+
+Found driving W74 (`docs/workflow-review/W74-ip-security.md`, W74-5).
+
+- **What happens:** `POST /ip-security/exceptions/{id}/approve` accepts an
+  approval from the member the exception is for. An admin who files a request
+  can approve it at once.
+- **Why it is not simply fixed:** the same admin can already add and remove
+  blocked countries, so self-approval widens little. A department with one
+  IT administrator would also be left unable to approve their own travel
+  exception.
+- **Decision:** whether approval needs a second person
+  (`assert_different_person`, as money approvals use), and if so what a
+  single-admin department does.
+
 ## Process
 
 ## OPS-7 — Audit Shipping Can Deliver A Batch Twice (2026-10-04)

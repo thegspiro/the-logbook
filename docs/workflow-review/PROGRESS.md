@@ -137,7 +137,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W71 | Medical screening                                                         | admin            | `/medical-screening`                       | ✅     |
 | W72 | Reports                                                                   | admin, chief     | `/reports`                                 | ✅     |
 | W73 | Integrations                                                              | admin            | `/integrations`                            | ✅     |
-| W74 | IP security, and a member's access request                                | member → admin   | `/ip-security/my-requests`, `/ip-security` | ⬜     |
+| W74 | IP security, and a member's access request                                | member → admin   | `/ip-security/my-requests`, `/ip-security` | ✅     |
 | W75 | Audit log, error monitoring and analytics                                 | admin            | `/admin/audit-log`, `/admin/errors`        | ⬜     |
 | W76 | Public portal and the public pages                                        | admin, anonymous | `/admin/public-portal`, `/`, `/privacy`    | ⬜     |
 | W77 | The testing module and its printed report                                 | admin            | `/testing`                                 | ⬜     |
@@ -223,6 +223,38 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   (W72-4).
 
 ## Log
+
+### W74 — IP security, and a member's access request — 2026-10-20
+
+Driven as:
+
+- `member` filing requests, with bad input, a bad address and a good one, and
+  reading the outcome at 390×844;
+- `admin` approving and rejecting from the queue, and approving their own
+  request.
+
+Held:
+
+- Submit waits for the required fields;
+- double-clicks file and approve once;
+- members are refused the admin page and endpoints;
+- rejection needs a reason.
+
+Fixed:
+
+- W74-1 (MED — any string was queued as an address, and none but an exact
+  canonical address could ever match).
+- W74-2 (MED — a refused request wiped the member's justification).
+- W74-3 (MED — the admin approved without seeing the member, the reason or
+  even the address).
+- W74-4 (LOW — raw status codes; no rejection reason for the member).
+
+Flagged: W74-5 (LOW — an admin can approve their own exception).
+
+Gate: typecheck and lint are clean; 47 IP-security frontend tests and 64
+related backend tests pass.
+
+Next: W75.
 
 ### W73 — Integrations — 2026-10-17
 

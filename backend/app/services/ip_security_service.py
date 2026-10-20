@@ -10,6 +10,7 @@ Zero-Trust Model:
 - All actions are logged for audit
 """
 
+import ipaddress
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
@@ -78,6 +79,18 @@ class IPSecurityService:
         Raises:
             ValueError: If validation fails
         """
+        # W74: any string was accepted ("999.1.1.1", "not-an-ip"), and an
+        # approved one could never match: exceptions are found by exact
+        # comparison with the request's client address
+        # (ip_has_active_allowlist_exception), so only a single address, in
+        # its canonical spelling, can work.
+        try:
+            ip_address = str(ipaddress.ip_address(ip_address.strip()))
+        except ValueError:
+            raise ValueError(
+                "Enter a single IPv4 or IPv6 address, such as 203.0.113.50"
+            ) from None
+
         # Validate duration
         if requested_duration_days <= 0:
             raise ValueError("Duration must be at least 1 day")

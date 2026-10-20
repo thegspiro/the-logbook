@@ -30,13 +30,15 @@ const MyIPExceptionsPage: React.FC = () => {
     }
   }, [error, clearError]);
 
-  const handleRequestSubmit = async (data: IPExceptionRequestCreate) => {
+  const handleRequestSubmit = async (data: IPExceptionRequestCreate): Promise<boolean> => {
     try {
       await requestException(data);
       toast.success('IP exception request submitted');
       setShowForm(false);
+      return true;
     } catch {
-      // Error already handled in store
+      // The store has set `error`, which the effect above shows as a toast.
+      return false;
     }
   };
 
