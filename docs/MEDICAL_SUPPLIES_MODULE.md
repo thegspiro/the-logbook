@@ -365,6 +365,17 @@ takes Low from the server (`is_low_stock`).
   `expiring_soon_on_apparatus` and `expired_on_apparatus` and keeps its existing
   fields. Next expiry takes the soonest of the shelf and the trucks and reports
   `next_expiration_location` and `next_expiration_where`; a tie goes to the shelf.
+- **Lot recall lookup**: `GET /medical-supplies/lots/search?lot_number=` (view
+  permission; at least 2 characters) returns every unit whose lot number
+  contains the text, case-insensitive, on the shelves and aboard the apparatus,
+  dated or not and expired or not, in the `/expiring-stock` row shape; empty
+  lots and positions holding nothing are left out. The Expiring tab's "Find a
+  lot" box calls it, past the GET cache.
+- **Weekly "Supplies to Replace" email**: already listed truck stock expiring or
+  short. Its place now reads as the checklist names it ("Medic 1 › Main
+  Compartment › Jump Bag", from the overview's new `compartment_path`), and an
+  apparatus-only supply never counts as having replacement stock ready
+  (`get_lots_for_items` applies `_shelf_lots_count`).
 - **Apparatus only** (`inventory_items.apparatus_only`, default false; migration
   `0bbf263a5ff0`, guarded, downgrade drops the column): the shelf counts as 0,
   the list shows "N on M apparatus", the lots dialog has no stock-lot controls,

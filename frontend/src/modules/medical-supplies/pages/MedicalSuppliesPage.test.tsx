@@ -238,6 +238,13 @@ describe('MedicalSuppliesPage', () => {
       expect(screen.getByRole('row', { name: /Shears/ })).toHaveTextContent('—');
     });
 
+    it('offers the lot lookup on the Expiring tab', async () => {
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      expect(await screen.findByRole('region', { name: 'Lot lookup' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Find a lot')).toBeInTheDocument();
+    });
+
     it('says where the soonest-expiring units are, on a truck or on the shelf', async () => {
       mockGetItems.mockResolvedValue({
         items: [

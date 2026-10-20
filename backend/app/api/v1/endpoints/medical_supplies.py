@@ -24,7 +24,7 @@ import csv
 import io
 from collections.abc import AsyncGenerator
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -2056,30 +2056,13 @@ async def list_expiring_medical_lots(
     return result
 
 
-@router.get("/expiring-stock", response_model=list[MedicalExpiringStockRow])
-async def list_expiring_medical_stock(
-    days_ahead: int = Query(30, ge=1, le=365),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("inventory.view_medical", "inventory.view")
-    ),
-):
-    """
-    Medical stock expiring within N days, on the shelves and on the apparatus
-
-    One list for everything to pull: shelf lots (with their storage path) and
-    units aboard the trucks (with the apparatus and compartment), soonest
-    first. ``/expiring-lots`` remains the shelf-only list.
-
-    **Authentication required**
-    **Requires permission: inventory.view_medical or inventory.view**
-    """
-    service = InventoryService(db)
-    org_id = str(current_user.organization_id)
-    today = await resolve_org_today(db, org_id)
-    shelf = await service.get_expiring_lots(
-        org_id, days_ahead, item_types=MEDICAL_ITEM_TYPES, today=today
-    )
+async def _shelf_stock_rows(
+    service: InventoryService,
+    org_id: str,
+    shelf: Sequence[Tuple[Any, Optional[str]]],
+    today: date,
+) -> List[MedicalExpiringStockRow]:
+    """Shelf lots in the row shape the expiring list and the lot search share."""
     item_ids = {str(lot.inventory_item_id) for lot, _ in shelf}
     sizes = await service.item_sizes(org_id, item_ids)
     paths = await service.storage_paths_for(org_id, item_ids)
@@ -2104,6 +2087,85 @@ async def list_expiring_medical_stock(
                 where=lot.storage_location or paths.get(item_id),
             )
         )
+    return rows
+
+
+@router.get("/lots/search", response_model=list[MedicalExpiringStockRow])
+async def search_medical_lots(
+    lot_number: str = Query(..., min_length=2, max_length=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.view_medical", "inventory.view")
+    ),
+):
+    """
+    Find every unit of a lot, on the shelves and on the apparatus
+
+    The recall lookup: medical stock whose lot number contains
+    ``lot_number`` (case-insensitive), wherever it is held, with how many
+    units and where. Dated or not, expired or not; units that are gone
+    (empty lots, positions holding nothing) are left out. Same row shape as
+    ``/expiring-stock``, soonest expiry first and undated last.
+
+    **Authentication required**
+    **Requires permission: inventory.view_medical or inventory.view**
+    """
+    needle = lot_number.strip()
+    if len(needle) < 2:
+        raise HTTPException(
+            status_code=400, detail="Enter at least 2 characters of the lot number"
+        )
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    today = await resolve_org_today(db, org_id)
+    shelf = await service.find_lots_by_number(
+        org_id, needle, item_types=MEDICAL_ITEM_TYPES
+    )
+    rows = await _shelf_stock_rows(service, org_id, shelf, today)
+    aboard = await EquipmentCheckService(db).apparatus_expiring_stock(
+        org_id,
+        list(MEDICAL_ITEM_TYPES),
+        days_ahead=None,
+        today=today,
+        lot_number=needle,
+    )
+    rows.extend(MedicalExpiringStockRow(**row) for row in aboard)
+    rows.sort(
+        key=lambda r: (
+            r.expiration_date is None,
+            r.expiration_date or date.max,
+            r.item_name or "",
+            r.where or "",
+        )
+    )
+    return rows
+
+
+@router.get("/expiring-stock", response_model=list[MedicalExpiringStockRow])
+async def list_expiring_medical_stock(
+    days_ahead: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.view_medical", "inventory.view")
+    ),
+):
+    """
+    Medical stock expiring within N days, on the shelves and on the apparatus
+
+    One list for everything to pull: shelf lots (with their storage path) and
+    units aboard the trucks (with the apparatus and compartment), soonest
+    first. ``/expiring-lots`` remains the shelf-only list.
+
+    **Authentication required**
+    **Requires permission: inventory.view_medical or inventory.view**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    today = await resolve_org_today(db, org_id)
+    shelf = await service.get_expiring_lots(
+        org_id, days_ahead, item_types=MEDICAL_ITEM_TYPES, today=today
+    )
+    rows = await _shelf_stock_rows(service, org_id, shelf, today)
     aboard = await EquipmentCheckService(db).apparatus_expiring_stock(
         org_id, list(MEDICAL_ITEM_TYPES), days_ahead=days_ahead, today=today
     )

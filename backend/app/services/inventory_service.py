@@ -9521,15 +9521,23 @@ class InventoryService:
     async def get_lots_for_items(
         self, organization_id: str, item_ids: List[str]
     ) -> Dict[str, List[InventoryLot]]:
-        """Map each item id to its in-stock lots (quantity > 0)."""
+        """Map each item id to its in-stock lots (quantity > 0).
+
+        Read as the replacement stock behind a checklist position, so a
+        medical supply kept on the apparatus only has none
+        (``_shelf_lots_count``): lots left on it from before it was marked
+        would otherwise tell the weekly email a swap is ready.
+        """
         if not item_ids:
             return {}
         result = await self.db.execute(
             select(InventoryLot)
+            .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
             .where(
                 InventoryLot.organization_id == organization_id,
                 InventoryLot.inventory_item_id.in_(item_ids),
                 InventoryLot.quantity > 0,
+                self._shelf_lots_count(organization_id),
             )
             .order_by(
                 InventoryLot.expiration_date.is_(None),
@@ -9540,6 +9548,51 @@ class InventoryService:
         for lot in result.scalars().all():
             by_item.setdefault(lot.inventory_item_id, []).append(lot)
         return by_item
+
+    async def find_lots_by_number(
+        self,
+        organization_id: str,
+        lot_number: str,
+        item_types: Optional[Iterable[ItemType]] = None,
+    ) -> List[Tuple[InventoryLot, str]]:
+        """Stock-room lots whose number contains ``lot_number``, with the item
+        name: the shelf half of the recall lookup.
+
+        Case-insensitive and a substring, because a recall notice and a label
+        rarely agree on case or on a leading prefix. Lots still holding stock,
+        of active items, dated or not; a medical supply kept on the apparatus
+        only contributes none (``_shelf_lots_count``), as everywhere else.
+        """
+        needle = lot_number.strip()
+        if not needle:
+            return []
+        query = (
+            select(InventoryLot, InventoryItem.name)
+            .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
+            .where(
+                InventoryLot.organization_id == organization_id,
+                InventoryItem.active.is_(True),
+                InventoryLot.quantity > 0,
+                InventoryLot.lot_number.ilike(
+                    like_pattern(needle), escape=LIKE_ESCAPE_CHAR
+                ),
+                self._shelf_lots_count(organization_id),
+            )
+        )
+        if item_types:
+            query = query.where(
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                )
+            )
+        result = await self.db.execute(
+            query.order_by(
+                InventoryLot.expiration_date.is_(None),
+                InventoryLot.expiration_date.asc(),
+                InventoryItem.name.asc(),
+            )
+        )
+        return [(row[0], row[1]) for row in result.all()]
 
     async def get_expiring_lots(
         self,

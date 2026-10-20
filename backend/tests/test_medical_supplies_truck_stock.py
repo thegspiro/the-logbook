@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.api.v1.endpoints import medical_supplies as ms
@@ -668,3 +669,140 @@ class TestOldLotsOfAnApparatusOnlySupply:
         )
 
         assert dept.rope in {str(lot.inventory_item_id) for lot, _ in rows}
+
+
+class TestLotRecallSearch:
+    """Every unit of a lot, wherever it is: the fixture's shelf lot is
+    undated-numbered by default, so each test names the lots it looks for."""
+
+    async def _number_shelf_lot(self, db_session, dept, number):
+        await db_session.execute(
+            InventoryLot.__table__.update()
+            .where(InventoryLot.inventory_item_id == dept.gauze)
+            .values(lot_number=number)
+        )
+        await db_session.commit()
+
+    async def _search(self, db_session, dept, text):
+        return await ms.search_medical_lots(
+            lot_number=text,
+            db=db_session,
+            current_user=SimpleNamespace(id=dept.user_id, organization_id=dept.org_id),
+        )
+
+    async def test_finds_the_lot_on_the_shelf_and_aboard(self, db_session, dept):
+        await self._number_shelf_lot(db_session, dept, "L3-RECALL")
+
+        # Medic 1 carries lot "L3"; the shelf lot is "L3-RECALL". Lower case
+        # matches both, as a recall notice and a label rarely agree on case.
+        rows = await self._search(db_session, dept, "l3")
+
+        assert [(r.location, r.lot_number, r.quantity) for r in rows] == [
+            ("shelf", "L3-RECALL", 2),
+            ("apparatus", "L3", 3),
+        ]
+        assert rows[1].where == "Medic 1 › Main Compartment › Jump Bag"
+
+    async def test_an_expired_unit_is_still_found(self, db_session, dept):
+        rows = await self._search(db_session, dept, "L4")
+
+        # Medic 1's lot L4 expired two days ago; a recall still has to find it.
+        assert [(r.lot_number, r.days_until_expiration) for r in rows] == [("L4", -2)]
+
+    async def test_an_undated_lot_is_found_and_sorts_last(self, db_session, dept):
+        await db_session.execute(
+            CheckItemDeployedLot.__table__.update()
+            .where(CheckItemDeployedLot.lot_number == "L3")
+            .values(expiration_date=None)
+        )
+        await self._number_shelf_lot(db_session, dept, "L3-B")
+
+        rows = await self._search(db_session, dept, "L3")
+
+        assert [r.lot_number for r in rows] == ["L3-B", "L3"]
+        assert rows[1].expiration_date is None
+
+    async def test_a_lot_recorded_on_the_position_itself_is_found(
+        self, db_session, dept
+    ):
+        # Medic 2's position has no deployed lots; its lot is on the position.
+        await db_session.execute(
+            CheckTemplateItem.__table__.update()
+            .where(CheckTemplateItem.id == dept.medic2)
+            .values(lot_number="POS-55")
+        )
+        await db_session.commit()
+
+        rows = await self._search(db_session, dept, "pos-5")
+
+        assert [(r.location, r.quantity) for r in rows] == [("apparatus", 5)]
+
+    async def test_units_that_are_gone_are_left_out(self, db_session, dept):
+        await db_session.execute(
+            CheckItemDeployedLot.__table__.update()
+            .where(CheckItemDeployedLot.lot_number == "L3")
+            .values(quantity=0)
+        )
+        await db_session.commit()
+
+        assert await self._search(db_session, dept, "L3") == []
+
+    async def test_wildcards_are_matched_literally(self, db_session, dept):
+        assert await self._search(db_session, dept, "%%") == []
+
+    async def test_gear_lots_are_not_searched(self, db_session, dept):
+        await db_session.execute(
+            InventoryLot.__table__.update()
+            .where(InventoryLot.inventory_item_id == dept.rope)
+            .values(lot_number="ROPE-1")
+        )
+        await db_session.commit()
+
+        assert await self._search(db_session, dept, "ROPE") == []
+
+    async def test_ignores_another_departments_stock(self, db_session, dept):
+        await self._number_shelf_lot(db_session, dept, "L3-RECALL")
+
+        rows = await ms.search_medical_lots(
+            lot_number="L3",
+            db=db_session,
+            current_user=SimpleNamespace(id=dept.user_id, organization_id=_uid()),
+        )
+
+        assert rows == []
+
+    async def test_a_blank_search_is_refused(self, db_session, dept):
+        with pytest.raises(HTTPException) as err:
+            await self._search(db_session, dept, "  ")
+
+        assert err.value.status_code == 400
+
+
+class TestTheWeeklyEmailsReplacementStock:
+    async def test_an_apparatus_only_supply_has_none_to_swap_in(self, db_session, dept):
+        await db_session.execute(
+            InventoryItem.__table__.update()
+            .where(InventoryItem.id == dept.gauze)
+            .values(apparatus_only=True)
+        )
+        await db_session.commit()
+
+        lots = await InventoryService(db_session).get_lots_for_items(
+            dept.org_id, [dept.gauze, dept.rope]
+        )
+
+        # The gauze's leftover shelf lot is not replacement stock; gear keeps its.
+        assert set(lots) == {dept.rope}
+
+    async def test_the_overview_carries_the_compartment_path(self, db_session, dept):
+        overview = await EquipmentCheckService(db_session).get_supply_overview(
+            dept.org_id, 30, today=dept.today
+        )
+
+        medic1 = [
+            i
+            for i in overview["items"]
+            if i["compartment_name"] == "Jump Bag" and i["apparatus_name"] == "Medic 1"
+        ]
+        assert medic1
+        assert medic1[0]["compartment_path"] == ["Main Compartment", "Jump Bag"]

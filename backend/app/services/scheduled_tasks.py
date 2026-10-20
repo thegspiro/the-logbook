@@ -5517,12 +5517,15 @@ async def run_supply_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
                 return ""
             body = ""
             for item in rows:
-                location = " &middot; ".join(
+                # Named as the checklist and the Medical Supplies page name it
+                # ("Medic 1 › Main Compartment › Jump Bag"), so the place in
+                # the email is the place the officer finds on screen.
+                compartments = item.get("compartment_path") or [
+                    item.get("compartment_name")
+                ]
+                location = " &rsaquo; ".join(
                     _html.escape(str(part))
-                    for part in (
-                        item.get("apparatus_name"),
-                        item.get("compartment_name"),
-                    )
+                    for part in (item.get("apparatus_name"), *compartments)
                     if part
                 )
                 body += (
