@@ -16,12 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None yet. PR #3451 (Feature 21, Admin hours, pass 9) merged 2026-10-20,
-docs-only — not independently recordable here beyond what follows. This
-iteration (watchdog pickup — `list_pull_requests`/`search_pull_requests`
-(state open) returned 0 PRs, and the dedicated `/loop 30m /security-review`
-session was not reachable via `ListAgents`) is reviewing Feature 22 (Grants
-& fundraising), pass 9 — 0 fixed, 0 new findings. Not a zero-delta pass:
+**PR [#3453](https://github.com/thegspiro/the-logbook/pull/3453)** (branch
+`claude/security-review-grants-fundraising`). PR #3451 (Feature 21, Admin
+hours, pass 9) merged 2026-10-20, docs-only — not independently recordable
+here beyond what follows. This iteration (watchdog pickup —
+`list_pull_requests`/`search_pull_requests` (state open) returned 0 PRs,
+and the dedicated `/loop 30m /security-review` session was not reachable
+via `ListAgents`) reviewed Feature 22 (Grants & fundraising), pass 9 — 0
+fixed, 0 new findings. Not a zero-delta pass:
 four non-rotation commits (PR #3405 "app-review B14 grants", PR #3429
 "Workflow review W55–W73", and two commits merged via PR #3357) touched the
 declared backend scope files since pass 8's baseline `1199d849b`, all
