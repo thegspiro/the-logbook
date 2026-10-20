@@ -16,24 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3475](https://github.com/thegspiro/the-logbook/pull/3475)** (branch
-`claude/security-review-security-audit-ip-p8`). This row was last updated
+**PR [#3479](https://github.com/thegspiro/the-logbook/pull/3479)** (branch
+`claude/security-review-reports-analytics-p10`). This row was last updated
 for PR #3455 (Feature 23, Medical supplies, pass 15); PRs #3456 (Feature
 24, Meetings & minutes, pass 8), #3457 (Feature 25, Messaging &
-notifications, pass 8), #3458 (Feature 26, Forms, pass 8) and #3467
-(Feature 27, Integrations, pass 8) all merged to `main` since, each
-recording itself in the Log below — see those entries rather than a
-superseded note here for any of them. With all four merged,
-`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
-returned 0 results, checked once before starting and again immediately
-before branching, so this iteration reviewed Feature 28 (Security, audit &
-IP), pass 8. **0 fixed, 0 new findings** — the one real delta since pass 7
-(the new weekly security/audit report's `GET`/`PUT /security/weekly-report`
-endpoints) was read in full from this feature's own angle — org scoping,
-permission gating, audit logging, deep-copy-safe JSON mutation — and found
-clean. See `SEC2-28-security-audit-ip.md`'s **Pass 8** section. Rotation
-row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
-analytics).
+notifications, pass 8), #3458 (Feature 26, Forms, pass 8), #3467 (Feature
+27, Integrations, pass 8) and #3475 (Feature 28, Security, audit & IP,
+pass 8) all merged to `main` since, each recording itself in the Log below
+— see those entries rather than a superseded note here for any of them.
+With all five merged, `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 results, checked
+once before starting and again immediately before branching, so this
+iteration reviewed Feature 29 (Reports & analytics), pass 10. **0 fixed, 0
+new findings** — the two real commits since pass 9 (a dashboard
+overdue-dues correctness fix, and workflow-review W72's `admin_hours`
+catalog entry plus a local-date fix) were both read in full and found
+clean; every standing finding re-confirmed unchanged. See
+`RPT6-29-reports-analytics.md`'s **Pass 10** section. Rotation row 29 → ✅
+(pending this PR's merge); next is Feature 30 (Onboarding).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23 Medical supplies pass 15, PR #3455, merged), preserved for history</summary>
