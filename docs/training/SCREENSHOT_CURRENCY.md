@@ -20,16 +20,16 @@ for the new screens are in [04](./04-events-meetings.md) as `_[Screenshot to cre
 | 04 | Minutes Settings → **Publishing**, including the executive-session confirmation | Replaces the "Publishing settings dialog" row below |
 | 04 | **Found in the minutes** card under the Minutes search box, two results, words highlighted | Search a word the seeded minutes share |
 | 04 | A **prepared Approval of Previous Minutes** motion on a draft, with **As submitted / As revised** | Needs earlier circulated minutes of the same meeting type |
-| 04 | Circulated minutes with the note that a later meeting accepted them, and **Adopt these minutes** opened already filled in | Seed a passed acceptance motion |
+| 04 | Circulated minutes with the note that a later meeting accepted them, and **Adopt these minutes** opened already filled in | Seed a passed acceptance motion (done) |
 
-**Pipeline status.** Every row above is in `scripts/screenshots/manifest.mjs`
-(`04-70` to `04-78`; the last row is two shots) with placeholders in the comment form the applier reads. The
-accepted-previous-minutes shots (`04-76` to `04-78`) are seeded by
-`_guide04_accepted_minutes` in `seed_demo_data.py`: three business meetings dated
-90, 62 and 48 days back, so the Spring minutes are circulated and accepted by the
-Late Spring meeting, and the Early Summer minutes carry a prepared motion waiting
-for a result. Re-run the seeder before capturing. Nothing here has been captured,
-and the seeder change has not been run end to end.
+**Captured 2026-10-20.** All nine are in the guide (`04-70` to `04-78`), taken
+from a demo department seeded by `_guide04_accepted_minutes` (three business
+meetings, the Apparatus minutes circulated and accepted by the Membership
+meeting, the Facilities minutes with the acceptance motion prepared). The
+administrator settings shots and `04-77` are clipped to their subject because the
+stack had malware scanning off (ClamAV signatures were not reachable), which
+puts a notice at the top of every full administrator page; recapture them
+full-page on a stack with scanning on if the app shell is wanted around them.
 
 ### Existing images to replace or confirm
 

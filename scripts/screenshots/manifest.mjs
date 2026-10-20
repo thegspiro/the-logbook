@@ -8341,7 +8341,7 @@ export const SHOTS = [
     line: 1468,
     anchor:
       "Minutes Settings as a settings administrator: the section list (Attendance,",
-    alt: "Minutes Settings: the section list (Attendance, Signatures, Reminders, Publishing) beside the Attendance section and its Save row",
+    alt: "Minutes Settings: the section tabs (Attendance, Signatures, Reminders, Publishing) above the Attendance section and its Save row",
     route: "/minutes/settings",
     // The settings column only: the page opens under the administrator's
     // malware-scanning notice on a stack with scanning off, which is not a
@@ -8458,7 +8458,7 @@ export const SHOTS = [
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
-    selector: "div.card:has-text('accepted these minutes')",
+    selector: "div:has(> p.alert-info:has-text('accepted these minutes'))",
     expect: "accepted these minutes",
     // "No suggestions yet" is the Suggestions panel further down the page, not
     // an empty subject: the shot is the note at the top.
