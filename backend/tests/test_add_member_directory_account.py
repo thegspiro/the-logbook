@@ -7,6 +7,7 @@ the passwords. Every other create -- each roster-import row included -- links
 the member to an account already at their address, so leaving suspends it.
 """
 
+import html
 import uuid
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -174,7 +175,10 @@ class TestCreatingAnAccount:
 
         kwargs = welcome.await_args.kwargs
         assert kwargs["to_email"] == member.personal_email
-        assert fake.created[0][3] in kwargs["appended_html"]
+        # The HTML body escapes what it prints, and the generated password draws
+        # from "!@#$%^&*", so about one in four contains an "&" that arrives as
+        # "&amp;". Compare what a reader sees, not the markup.
+        assert fake.created[0][3] in html.unescape(kwargs["appended_html"])
         assert member.email in kwargs["appended_text"]
         row = await _record(db_session, member.id)
         await db_session.refresh(row)
