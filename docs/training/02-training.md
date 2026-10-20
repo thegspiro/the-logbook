@@ -119,7 +119,7 @@ The **My Training** tab shows:
 
 - **Summary tiles.** **Completed Courses** and **Completed Hours** count the
   calendar year so far; each tile is labelled with the year. **Required
-  Training** is the share of your requirements that you meet. Your lifetime
+  Training** is your average progress across your requirements (one that is half done counts as 50%). Your lifetime
   totals are on the History tab. The tiles use the calendar year because there
   is no department-wide "training year". Each requirement keeps its own
   counting window.
@@ -140,8 +140,9 @@ The **My Training** tab shows:
 
 ![My Training as a member: this year's course and hour tiles, Required Training with its "3 of 4 requirements met" line, upcoming expirations, the requirements and the sections below them](./images/02-01-my-training.png)
 
-**Required Training** shows the percentage of your requirements that you
-currently meet, with "X of Y requirements met" beneath it. When no requirement
+**Required Training** shows your average progress across your requirements (one
+that is half done counts as 50%), with "X of Y requirements met" beneath it for
+the ones you have fully met. When no requirement
 applies to you, it reads **None assigned** — "Your department has not assigned
 you any required training yet." This means nothing is asked of you yet. It is
 not a fault.
@@ -293,7 +294,9 @@ with a red asterisk.
 
 - Your record waits for an officer's review.
 - A training officer approves it, rejects it, or sends it back to you.
-- You are notified when they decide.
+- You are told in the app if the officer rejects it, sends it back, or approves
+  it with changes. A plain approval sends no notice: the hours appear on My
+  Training.
 - Approved records join your training history and count toward requirements.
 
 > **What if an officer sends it back?** A notice appears at the top of Submit
@@ -346,10 +349,12 @@ time shows the start time as blank.
 ## Course Library
 
 Select **Training > Course Library** to browse your department's courses.
-Officers also reach it from **Training Admin → Curriculum → Course Library**.
+For training officers this opens the same list inside **Training Admin →
+Curriculum → Course Library**, with the management controls.
 
-The library shows every active course your department has created, grouped by
-category. Each course shows:
+The library shows every active course your department has created, as a grid of
+cards you can narrow with the search box and **Filters** (type and category).
+Each course shows:
 
 - its name and description;
 - its category;
@@ -474,8 +479,10 @@ later"** — the way most officers describe a schedule out loud.
    - tick any suggested holidays to skip them, then select **Recalculate**.
 6. **Roster** — select the members taking the course. They are enrolled in
    the pipeline and added to every class on their calendar.
-7. **Generate** — tick **Build a matching pipeline** if the course does not
-   have one yet, then confirm.
+7. **Generate** — review the summary. If the course has no pipeline yet,
+   **Build a matching pipeline** is ticked for you (untick it if you do not want
+   one); if it already has one, members are enrolled in that pipeline instead.
+   Then select **Generate N classes**.
 
 Generating creates **one training event per class**, each with a linked
 training session. Students see the classes on their calendar, sign in and out
@@ -495,7 +502,6 @@ time, status, credit hours, instructor, how many members signed up, and an
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | **Reschedule**                | Moves the class and its calendar event together. Everyone who signed up stays signed up.                                       |
 | **Cancel class**              | Cancels the event instead of deleting it, so anyone signed up sees the cancellation. The class stays listed for the record.    |
-| **Add class**                 | Adds a make-up session or an extra class that was never on the syllabus. The roster is invited automatically.                  |
 | **Shift remaining**           | Moves every class that has not happened yet later (or earlier) by a number of days. Classes that already ran keep their dates. |
 | **Create _N_ missing events** | Appears only when a class has no event — because scheduling it failed, or someone deleted the event. It only fills gaps.       |
 
@@ -659,8 +665,9 @@ step**. Its steps are:
 
 ![Training pipeline wizard with program details and phase list](./images/02-11-pipeline-wizard.png)
 
-> **Hint:** The **Program Code** must be unique in your department. Use a
-> short, memorable code. It appears on printed program pages and travels with
+> **Hint:** The **Program Code** is optional, and nothing stops two programs
+> sharing one, so pick a code that is distinct. It is shown in upper case, up to
+> 50 characters. It appears on printed program pages and travels with
 > the program when it is exported and shared with other departments.
 
 **Deleting a pipeline** — **Delete pipeline** on its page — permanently removes
@@ -887,7 +894,7 @@ depends on the phase's approval setting:
 - **Require officer approval to advance** — the phase stays complete until an
   officer opens the member's progress and selects **Advance to next phase**.
 
-When a member advances, the **member** and their **mentors** are notified.
+When a member advances, the **member** gets an in-app notification.
 
 **Advance to next phase** sits at the top of every phased member's progress,
 beside **Start new cycle**, for any training officer. It is there whatever the
@@ -1086,16 +1093,16 @@ training requirements.
 
 ### Requirement Types
 
-| Type                  | What the member must do                 | What you enter                           |
-| --------------------- | --------------------------------------- | ---------------------------------------- |
-| **Hours**             | Build up a number of training hours     | Required hours                           |
-| **Courses**           | Complete a specific list of courses     | Courses picked from the course library   |
-| **Certification**     | Get or keep a specific certification    | —                                        |
-| **Shifts**            | Complete a number of qualifying shifts  | Required shifts                          |
-| **Calls**             | Respond to a number of qualifying calls | Required calls                           |
-| **Skills Evaluation** | Pass a hands-on skills evaluation       | —                                        |
-| **Checklist**         | Complete a set of check-off items       | Checklist items                          |
-| **Knowledge Test**    | Pass a written test                     | Passing score (%), optional max attempts |
+| Type                  | What the member must do                 | What you enter                                                              |
+| --------------------- | --------------------------------------- | --------------------------------------------------------------------------- |
+| **Hours**             | Build up a number of training hours     | Required hours                                                              |
+| **Courses**           | Complete a specific list of courses     | Courses picked from the course library                                      |
+| **Certification**     | Get or keep a specific certification    | Courses that earn it, from the course library (**Certification earned by**) |
+| **Shifts**            | Complete a number of qualifying shifts  | Required shifts                                                             |
+| **Calls**             | Respond to a number of qualifying calls | Required calls                                                              |
+| **Skills Evaluation** | Pass a hands-on skills evaluation       | —                                                                           |
+| **Checklist**         | Complete a set of check-off items       | Checklist items                                                             |
+| **Knowledge Test**    | Pass a written test                     | Passing score (%), optional max attempts                                    |
 
 The form shows the right value box for the type you choose, and checks it
 before saving.
@@ -1589,7 +1596,7 @@ members submitted and that is waiting for review.
 ### Who Is Told, In-App
 
 Both officers and members get in-app notifications (the bell and the dashboard
-inbox) about submissions. Email notices are sent as well.
+inbox) about submissions. Submissions do not send email.
 
 **Officers.** Every active member holding the **Training Officer** position
 gets one notification per submission: "Training submission awaiting approval
