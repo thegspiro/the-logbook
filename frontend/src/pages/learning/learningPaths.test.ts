@@ -118,6 +118,20 @@ describe('learning path content', () => {
     }
   });
 
+  // The image is an enhancement served outside the precache, so a missing file
+  // is a broken picture on a phone with signal and nothing at all offline.
+  it('points every screenshot at a file that exists and describes it', () => {
+    const imageDir = path.resolve(SRC, '../public/lesson-images');
+    for (const learningPath of learningPaths) {
+      for (const step of learningPath.steps) {
+        if (!step.screenshot) continue;
+        const key = `${learningPath.id}.${step.id}`;
+        expect(fs.existsSync(path.join(imageDir, step.screenshot.file)), `${key} image exists`).toBe(true);
+        expect(step.screenshot.alt.trim().length, `${key} alt text`).toBeGreaterThan(20);
+      }
+    }
+  });
+
   it('always offers at least one path, whatever modules are off', () => {
     // Getting Started and the phone lesson carry no module key. If that ever
     // changes, an org with every optional module disabled gets an empty
