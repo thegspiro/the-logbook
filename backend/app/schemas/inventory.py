@@ -31,6 +31,32 @@ _response_config = ConfigDict(from_attributes=True)
 # Applied to request schemas only; response schemas mirror stored data unchanged.
 FreeText = Annotated[str, StringConstraints(max_length=2000)]
 
+# A name that is only spaces is not a name: it stores, lists as a blank row, and
+# cannot be found or told apart. Trimmed before the length check so "   " is
+# refused the same way "" is.
+EntityName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
+]
+
+# Upper bounds mirror the column types they land in. Without them a value the
+# type cannot hold passes validation and fails at flush as MySQL error 1264,
+# which the endpoint can only report as "An unexpected error occurred".
+INT32_MAX = 2**31 - 1  # Integer
+MONEY_MAX = Decimal("99999999.99")  # Numeric(10, 2)
+FLOAT32_MAX = 3.4e38  # MySQL FLOAT is single precision
+
+
+def _blank_identifier_to_none(value: Optional[str]) -> Optional[str]:
+    """Trim an item identifier; a blank one means "none".
+
+    serial_number, asset_tag and barcode are unique per organization, and two
+    items each carrying "" collide on that constraint exactly as two carrying
+    the same real tag would.
+    """
+    if value is None:
+        return None
+    return value.strip() or None
+
 
 def _validate_external_website(value: Optional[str]) -> Optional[str]:
     """Allow only absolute HTTP(S) URLs in user-controlled link targets."""
@@ -424,14 +450,14 @@ class VendorMergeResult(UTCResponseBase):
 class InventoryCategoryBase(BaseModel):
     """Base inventory category schema"""
 
-    name: str = Field(..., min_length=1, max_length=255)
+    name: EntityName
     description: Optional[FreeText] = None
     item_type: ItemTypeLiteral
     parent_category_id: Optional[UUID] = None
     requires_assignment: bool = False
     requires_serial_number: bool = False
     requires_maintenance: bool = False
-    low_stock_threshold: Optional[int] = Field(None, ge=0)
+    low_stock_threshold: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     nfpa_tracking_enabled: bool = False
     allow_self_checkout: bool = False
     self_checkout_loan_days: Optional[int] = Field(None, ge=1, le=365)
@@ -445,14 +471,14 @@ class InventoryCategoryCreate(InventoryCategoryBase):
 class InventoryCategoryUpdate(BaseModel):
     """Schema for updating an inventory category"""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    name: Optional[EntityName] = None
     description: Optional[FreeText] = None
     item_type: Optional[ItemTypeLiteral] = None
     parent_category_id: Optional[UUID] = None
     requires_assignment: Optional[bool] = None
     requires_serial_number: Optional[bool] = None
     requires_maintenance: Optional[bool] = None
-    low_stock_threshold: Optional[int] = Field(None, ge=0)
+    low_stock_threshold: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     nfpa_tracking_enabled: Optional[bool] = None
     allow_self_checkout: Optional[bool] = None
     self_checkout_loan_days: Optional[int] = Field(None, ge=1, le=365)
@@ -592,7 +618,7 @@ class InventoryItemBase(BaseModel):
     """Base inventory item schema"""
 
     category_id: Optional[UUID] = None
-    name: str = Field(..., min_length=1, max_length=255)
+    name: EntityName
     description: Optional[FreeText] = None
     manufacturer: Optional[str] = Field(None, max_length=255)
     model_number: Optional[str] = Field(None, max_length=255)
@@ -601,21 +627,21 @@ class InventoryItemBase(BaseModel):
     asset_tag: Optional[str] = Field(None, max_length=255)
     barcode: Optional[str] = Field(None, max_length=255)
     purchase_date: Optional[date] = None
-    purchase_price: Optional[Decimal] = Field(None, ge=0)
+    purchase_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     purchase_order: Optional[str] = Field(None, max_length=255)
     # Legacy free-text name; `vendor_id` is the tracked link and takes priority
     # in the UI wherever both are set.
     vendor: Optional[str] = Field(None, max_length=255)
     vendor_id: Optional[UUID] = None
     warranty_expiration: Optional[date] = None
-    expected_lifetime_years: Optional[int] = Field(None, ge=0)
-    current_value: Optional[Decimal] = Field(None, ge=0)
+    expected_lifetime_years: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    current_value: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     replacement_cost: Optional[Decimal] = Field(
-        None, ge=0, description="Cost to charge for lost/damaged item"
+        None, ge=0, le=MONEY_MAX, description="Cost to charge for lost/damaged item"
     )
     size: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=50)
-    weight: Optional[float] = Field(None, ge=0)
+    weight: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     location_id: Optional[UUID] = None
     storage_location: Optional[str] = Field(None, max_length=255)
     storage_area_id: Optional[UUID] = None
@@ -624,12 +650,12 @@ class InventoryItemBase(BaseModel):
     status: ItemStatusLiteral = "available"
     status_notes: Optional[FreeText] = None
     tracking_type: TrackingTypeLiteral = "individual"
-    quantity: int = Field(default=1, ge=0)
+    quantity: int = Field(default=1, ge=0, le=INT32_MAX)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
-    reorder_point: Optional[int] = Field(None, ge=0)
+    reorder_point: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     # Kept on the apparatus only; see InventoryItem.apparatus_only.
     apparatus_only: bool = False
-    inspection_interval_days: Optional[int] = Field(None, ge=0)
+    inspection_interval_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     min_rank_order: Optional[int] = None
     restricted_to_positions: Optional[List[str]] = None
     notes: Optional[FreeText] = None
@@ -642,6 +668,11 @@ class InventoryItemBase(BaseModel):
     # `style` above is the derived primary, kept for readers that predate this.
     style_attributes: Optional[List[GarmentStyleLiteral]] = None
     variant_group_id: Optional[UUID] = None
+
+    @field_validator("serial_number", "asset_tag", "barcode")
+    @classmethod
+    def _settle_identifier(cls, value: Optional[str]) -> Optional[str]:
+        return _blank_identifier_to_none(value)
 
     @field_validator("style_attributes")
     @classmethod
@@ -678,7 +709,7 @@ class InventoryItemBulkEntry(BaseModel):
     edited afterwards, on the item, where there is room for it.
     """
 
-    name: str = Field(..., min_length=1, max_length=255)
+    name: EntityName
     description: Optional[FreeText] = None
     category_id: Optional[UUID] = None
     unit_of_measure: Optional[str] = Field(None, max_length=50)
@@ -707,7 +738,7 @@ class InventoryItemUpdate(BaseModel):
     """Schema for updating an inventory item"""
 
     category_id: Optional[UUID] = None
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    name: Optional[EntityName] = None
     description: Optional[FreeText] = None
     manufacturer: Optional[str] = Field(None, max_length=255)
     model_number: Optional[str] = Field(None, max_length=255)
@@ -716,17 +747,17 @@ class InventoryItemUpdate(BaseModel):
     asset_tag: Optional[str] = Field(None, max_length=255)
     barcode: Optional[str] = Field(None, max_length=255)
     purchase_date: Optional[date] = None
-    purchase_price: Optional[Decimal] = Field(None, ge=0)
+    purchase_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     purchase_order: Optional[str] = Field(None, max_length=255)
     vendor: Optional[str] = Field(None, max_length=255)
     vendor_id: Optional[UUID] = None
     warranty_expiration: Optional[date] = None
-    expected_lifetime_years: Optional[int] = Field(None, ge=0)
-    current_value: Optional[Decimal] = Field(None, ge=0)
-    replacement_cost: Optional[Decimal] = Field(None, ge=0)
+    expected_lifetime_years: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    current_value: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    replacement_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     size: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=50)
-    weight: Optional[float] = Field(None, ge=0)
+    weight: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     location_id: Optional[UUID] = None
     storage_location: Optional[str] = Field(None, max_length=255)
     storage_area_id: Optional[UUID] = None
@@ -735,13 +766,13 @@ class InventoryItemUpdate(BaseModel):
     status: Optional[ItemStatusLiteral] = None
     status_notes: Optional[FreeText] = None
     tracking_type: Optional[TrackingTypeLiteral] = None
-    quantity: Optional[int] = Field(None, ge=0)
+    quantity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
-    reorder_point: Optional[int] = Field(None, ge=0)
+    reorder_point: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     apparatus_only: Optional[bool] = None
     last_inspection_date: Optional[date] = None
     next_inspection_due: Optional[date] = None
-    inspection_interval_days: Optional[int] = Field(None, ge=0)
+    inspection_interval_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     min_rank_order: Optional[int] = None
     restricted_to_positions: Optional[List[str]] = None
     notes: Optional[FreeText] = None
@@ -752,6 +783,11 @@ class InventoryItemUpdate(BaseModel):
     style_attributes: Optional[List[GarmentStyleLiteral]] = None
     variant_group_id: Optional[UUID] = None
     active: Optional[bool] = None
+
+    @field_validator("serial_number", "asset_tag", "barcode")
+    @classmethod
+    def _settle_identifier(cls, value: Optional[str]) -> Optional[str]:
+        return _blank_identifier_to_none(value)
 
     @field_validator("style_attributes")
     @classmethod
