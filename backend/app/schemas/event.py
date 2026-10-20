@@ -1314,6 +1314,15 @@ class RecurringEventCreate(BaseModel):
     # Training details attached to every occurrence; see EventCreate.
     training_details: Optional[TrainingSessionAttach] = None
 
+    @field_validator(
+        "start_datetime", "end_datetime", "recurrence_end_date", "rsvp_deadline"
+    )
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Not an EventBase subclass, so it needs its own; see as_utc. The
+        # service steps the series in the department's zone from these.
+        return as_utc(v)
+
     @model_validator(mode="after")
     def validate_recurrence_fields(self):
         if not self.rolling_recurrence and not self.recurrence_end_date:
@@ -1552,6 +1561,12 @@ class AttendancePetitionCreate(BaseModel):
     requested_check_out_at: Optional[datetime] = None
 
     _strip_reason = field_validator("reason")(_strip_required_text)
+
+    @field_validator("requested_check_in_at", "requested_check_out_at")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns and compared below; see as_utc.
+        return as_utc(v)
 
     @model_validator(mode="after")
     def _times_in_order(self) -> "AttendancePetitionCreate":

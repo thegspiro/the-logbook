@@ -14,10 +14,13 @@ import pymysql.converters
 import pytest
 from pydantic import ValidationError
 
+from app.schemas.election import CloneElectionRequest, ElectionCreate, ElectionUpdate
 from app.schemas.event import (
+    AttendancePetitionCreate,
     EventCreate,
     EventUpdate,
     RecordActualTimes,
+    RecurringEventCreate,
     RSVPOverride,
 )
 
@@ -157,3 +160,87 @@ class TestRecordActualTimes:
         assert data.actual_start_time is not None
         assert data.actual_end_time is not None
         assert data.actual_end_time <= data.actual_start_time
+
+
+class TestRecurringEventCreate:
+    SERIES = {**EVENT, "recurrence_pattern": "weekly"}
+
+    def test_offset_times_are_stored_as_the_utc_instant(self):
+        data = RecurringEventCreate(
+            **self.SERIES,
+            start_datetime="2026-10-17T18:00:00-04:00",
+            end_datetime="2026-10-17T20:00:00-04:00",
+            recurrence_end_date="2026-12-31T23:59:00-05:00",
+            rsvp_deadline="2026-10-16T18:00:00-04:00",
+        )
+
+        assert _stored(data.start_datetime) == "'2026-10-17 22:00:00'"
+        assert _stored(data.end_datetime) == "'2026-10-18 00:00:00'"
+        assert _stored(data.recurrence_end_date) == "'2027-01-01 04:59:00'"
+        assert _stored(data.rsvp_deadline) == "'2026-10-16 22:00:00'"
+
+    def test_mixed_pair_is_comparable(self):
+        # The service steps the series from start to recurrence_end_date and
+        # compares them; a naive/aware mix raised TypeError there.
+        data = RecurringEventCreate(
+            **self.SERIES,
+            start_datetime="2026-10-17T22:00:00",
+            end_datetime="2026-10-18T00:00:00Z",
+            recurrence_end_date="2026-12-31T23:59:00-05:00",
+        )
+
+        assert data.recurrence_end_date is not None
+        assert data.start_datetime < data.end_datetime < data.recurrence_end_date
+
+
+class TestAttendancePetitionCreate:
+    def test_offset_times_are_stored_as_the_utc_instant(self):
+        data = AttendancePetitionCreate(
+            reason="I was there",
+            requested_check_in_at="2026-10-17T18:00:00-04:00",
+            requested_check_out_at="2026-10-17T20:00:00-04:00",
+        )
+
+        assert _stored(data.requested_check_in_at) == "'2026-10-17 22:00:00'"
+        assert _stored(data.requested_check_out_at) == "'2026-10-18 00:00:00'"
+
+    def test_mixed_pair_out_of_order_is_a_validation_error(self):
+        with pytest.raises(ValidationError, match="Departure time must be after"):
+            AttendancePetitionCreate(
+                reason="I was there",
+                requested_check_in_at="2026-10-17T22:00:00",
+                requested_check_out_at="2026-10-17T17:00:00-04:00",
+            )
+
+
+class TestElectionSchemas:
+    # Naive values were already read as UTC there; an offset was passed
+    # through and stored by its wall clock.
+    def test_create_offset_times_are_stored_as_the_utc_instant(self):
+        data = ElectionCreate(
+            title="Officers",
+            start_date="2026-10-17T18:00:00-04:00",
+            end_date="2026-10-18T18:00:00-04:00",
+            meeting_date="2026-10-17T19:00:00-04:00",
+            nomination_deadline="2026-10-16T18:00:00-04:00",
+        )
+
+        assert _stored(data.start_date) == "'2026-10-17 22:00:00'"
+        assert _stored(data.end_date) == "'2026-10-18 22:00:00'"
+        assert _stored(data.meeting_date) == "'2026-10-17 23:00:00'"
+        assert _stored(data.nomination_deadline) == "'2026-10-16 22:00:00'"
+
+    def test_update_offset_times_are_stored_as_the_utc_instant(self):
+        data = ElectionUpdate(end_date="2026-10-18T18:00:00-04:00")
+
+        assert _stored(data.end_date) == "'2026-10-18 22:00:00'"
+
+    def test_clone_offset_times_are_stored_as_the_utc_instant(self):
+        data = CloneElectionRequest(
+            title="Clone",
+            start_date="2026-10-17T18:00:00-04:00",
+            end_date="2026-10-18T18:00:00-04:00",
+        )
+
+        assert _stored(data.start_date) == "'2026-10-17 22:00:00'"
+        assert _stored(data.end_date) == "'2026-10-18 22:00:00'"
