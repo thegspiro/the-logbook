@@ -314,3 +314,34 @@ def page_footer(label: str) -> Callable[[Any, Any], None]:
         canvas.restoreState()
 
     return draw
+
+
+def page_of_footer(
+    label: str, total_pages: int, continued_note: str
+) -> Callable[[Any, Any], None]:
+    """A page callback printing "*label* · Page X of Y".
+
+    The caller lays the document out once to learn *total_pages*, then again
+    with this footer. On every page but the last it also prints
+    *continued_note*: a voter handed a two-page ballot must not fold it after
+    the first page and leave the second unmarked.
+    """
+
+    def draw(canvas: Any, document: Any) -> None:
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(MUTED)
+        canvas.drawCentredString(
+            letter[0] / 2,
+            VERTICAL_MARGIN / 2,
+            f"{label} · Page {document.page} of {total_pages}",
+        )
+        if document.page < total_pages:
+            canvas.setFont("Helvetica-Bold", 9)
+            canvas.setFillColor(INK)
+            canvas.drawCentredString(
+                letter[0] / 2, VERTICAL_MARGIN / 2 + 12, continued_note
+            )
+        canvas.restoreState()
+
+    return draw

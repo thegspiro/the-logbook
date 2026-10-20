@@ -365,8 +365,8 @@ describe('CheckInStationPage', () => {
     // every day after. One request per day, not one widened range — the
     // endpoint pages at 100 and orders by shift_date ascending, so a busy
     // yesterday would otherwise fill the single page and hide today entirely.
-    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: YESTERDAY, end_date: YESTERDAY });
-    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: TODAY, end_date: TODAY });
+    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: YESTERDAY, end_date: YESTERDAY }, undefined);
+    expect(mockGetShifts).toHaveBeenCalledWith({ start_date: TODAY, end_date: TODAY }, undefined);
   });
 
   it('drops a shift an officer has already finalized', async () => {
