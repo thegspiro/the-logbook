@@ -6,36 +6,12 @@ Supports flexible date preferences, configurable pipeline tasks, comments,
 assignment, scheduling with room booking, and postponement.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
-from app.schemas.base import UTCResponseBase
-
-
-def _as_utc(value: datetime) -> datetime:
-    """Read a datetime as UTC when it carries no offset of its own.
-
-    A JSON body can mix the two — ``"2026-10-01T10:00:00"`` parses naive,
-    ``"2026-10-02T10:00:00Z"`` parses aware — and comparing them raises
-    ``TypeError``. Pydantic v2 converts only ``ValueError`` and
-    ``AssertionError`` into validation errors, so a ``TypeError`` raised inside
-    a validator escapes as a 500 rather than the 422 the caller should get.
-    Every datetime in this system is UTC (see CLAUDE.md), so a value that
-    omitted its offset is read as the UTC it was always meant to be.
-
-    An **aware** value is converted rather than passed through. The driver
-    formats a datetime by its wall clock and drops the offset — pymysql renders
-    ``12:00:00-04:00`` as ``'2026-10-01 12:00:00'`` — so returning it unchanged
-    stores 12:00 where 16:00 was meant, and every surface reading it back (the
-    calendar entry, the signup sheet, the reminder emails, the status page)
-    inherits the error. Comparisons inside these validators are correct either
-    way; storage is not.
-    """
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+from app.schemas.base import UTCResponseBase, as_utc
 
 
 class EventRequestCreate(BaseModel):
@@ -106,9 +82,9 @@ class EventRequestCreate(BaseModel):
         validator was added to stop.
         """
         if self.preferred_date_start:
-            self.preferred_date_start = _as_utc(self.preferred_date_start)
+            self.preferred_date_start = as_utc(self.preferred_date_start)
         if self.preferred_date_end:
-            self.preferred_date_end = _as_utc(self.preferred_date_end)
+            self.preferred_date_end = as_utc(self.preferred_date_end)
         if (
             self.preferred_date_start
             and self.preferred_date_end
@@ -168,9 +144,9 @@ class EventRequestSchedule(BaseModel):
         the `TypeError` one layer down — still an uncaught 500, just from a
         different validator.
         """
-        self.event_date = _as_utc(self.event_date)
+        self.event_date = as_utc(self.event_date)
         if self.event_end_date:
-            self.event_end_date = _as_utc(self.event_end_date)
+            self.event_end_date = as_utc(self.event_end_date)
             # `<=`, not `<`: an end *equal* to the start is a zero-length
             # booking, which `EventCreate` and `EventUpdate` both refuse. The
             # create branch in `schedule_request` builds `EventCreate` outside
@@ -295,9 +271,9 @@ class EventRequestPostpone(BaseModel):
         if self.new_event_end_date and not self.new_event_date:
             raise ValueError("new_event_end_date requires new_event_date")
         if self.new_event_date:
-            self.new_event_date = _as_utc(self.new_event_date)
+            self.new_event_date = as_utc(self.new_event_date)
         if self.new_event_end_date:
-            self.new_event_end_date = _as_utc(self.new_event_end_date)
+            self.new_event_end_date = as_utc(self.new_event_end_date)
             # new_event_date is set here — the first check refuses an end
             # without a start — but the narrowing does not reach this line.
             if self.new_event_date and self.new_event_end_date <= self.new_event_date:

@@ -25,7 +25,7 @@ from app.models.event import (
     RecurrencePattern,
     RSVPStatus,
 )
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCResponseBase, as_utc
 from app.schemas.training_session import TrainingSessionAttach
 
 _response_config = ConfigDict(from_attributes=True)
@@ -315,6 +315,12 @@ class EventBase(BaseModel):
     attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: bool = False
 
+    @field_validator("start_datetime", "end_datetime", "rsvp_deadline")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns, which keep no offset; see as_utc.
+        return as_utc(v)
+
 
 class EventCreate(EventBase):
     """Schema for creating a new event"""
@@ -419,6 +425,12 @@ class EventUpdate(BaseModel):
     # GET returned would 422 on the narrower type.
     attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: Optional[bool] = None
+
+    @field_validator("start_datetime", "end_datetime", "rsvp_deadline")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns, which keep no offset; see as_utc.
+        return as_utc(v)
 
     @model_validator(mode="after")
     def validate_dates(self) -> "EventUpdate":
@@ -764,6 +776,12 @@ class RSVPOverride(BaseModel):
         None, ge=0, description="Override total attendance duration in minutes"
     )
 
+    @field_validator("override_check_in_at", "override_check_out_at")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns and compared by the service; see as_utc.
+        return as_utc(v)
+
 
 class RecordActualTimes(BaseModel):
     """Schema for recording actual event start/end times"""
@@ -774,6 +792,12 @@ class RecordActualTimes(BaseModel):
     actual_end_time: Optional[datetime] = Field(
         None, description="When the event actually ended"
     )
+
+    @field_validator("actual_start_time", "actual_end_time")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns and compared by the service; see as_utc.
+        return as_utc(v)
 
 
 class QRCheckInData(BaseModel):
