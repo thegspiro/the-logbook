@@ -62,13 +62,17 @@ decision, and changing it moves reported compliance for every department. The
 options are all HOURS requirements, only ones marked as shift-credited, or none
 the training side grades. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 
-### W37-3 — NIT — The app footer prints on the check-in sheet and the shift report — OPEN
+### W37-3 — NIT — The app footer prints on the check-in sheet and the shift report — FIXED 2026-10-20
 
 Under print media both pages end with the app's footer: "© 2026 Review Valley
 Fire Department … Powered by The Logbook · End-to-end encrypted · Self-hosted ·
 HIPAA-aware". On a sticker meant for an apparatus, that's clutter. It comes
 from the app shell rather than either page, so it likely affects every print
 page. Left for a run that touches the app shell. Added to the PROGRESS leads.
+
+**Fixed:** the shell footer carries `no-print`, which the print sheet already
+hides. Scoped to that footer, not `footer`, because the printable documents
+have `<footer>`s of their own.
 
 ## Checklist
 
@@ -81,7 +85,7 @@ page. Left for a run that touches the app shell. Added to the PROGRESS leads.
 | 5. Coming back to it    | ✅ figures match the attendance W34 recorded                    |
 | 6. On a phone           | not driven (officer reports and print pages)                    |
 | 7. Everyone can use it  | ✅ report tabs carry `aria-selected`; date fields named         |
-| 8. What happens around  | Fixed W37-1; flagged W37-2; W37-3 open                          |
+| 8. What happens around  | Fixed W37-1; flagged W37-2; W37-3 fixed 2026-10-20              |
 
 ## Completion gate
 
