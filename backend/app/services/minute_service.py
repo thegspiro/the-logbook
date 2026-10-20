@@ -464,7 +464,7 @@ class MinuteService:
         minutes.sections = sections
         await self.ensure_section_motions(minutes, organization_id)
         await self.db.commit()
-        return await self.get_minutes(minutes_id, organization_id)
+        return await self.get_minutes(minutes_id, organization_id, refresh=True)
 
     @staticmethod
     def _pin_agenda_fields(sections: list, stored: list) -> list:
@@ -806,7 +806,7 @@ class MinuteService:
             minutes.footer_config = copy.deepcopy(outline.footer_config)
         await self.ensure_section_motions(minutes, organization_id)
         await self.db.commit()
-        return await self.get_minutes(minutes_id, organization_id)
+        return await self.get_minutes(minutes_id, organization_id, refresh=True)
 
     # ============================================
     # Meeting Minutes CRUD
@@ -1218,7 +1218,10 @@ class MinuteService:
         if "sections" in update_data:
             await self.ensure_section_motions(minutes, organization_id)
         await self.db.commit()
-        return await self.get_minutes(minutes_id, organization_id)
+        # A prepared motion removed above is gone from the database but not from
+        # the session's loaded collection (expire_on_commit is off), so without
+        # refresh the response would still list it.
+        return await self.get_minutes(minutes_id, organization_id, refresh=True)
 
     async def delete_minutes(
         self, minutes_id: str, organization_id: UUID | str
