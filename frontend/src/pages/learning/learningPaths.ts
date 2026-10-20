@@ -34,6 +34,21 @@ export interface LearningStep {
   how: string[];
   /** What proves the step is done, so marking it complete means something. */
   success: string;
+  /**
+   * A picture of the screen, served from `public/lesson-images/`.
+   *
+   * Deliberately outside the service worker's precache (it holds css, html and
+   * js only), so offline the picture is absent and `how` still teaches the task.
+   * Nothing in a step may depend on the image being visible.
+   */
+  screenshot?: LearningScreenshot;
+}
+
+export interface LearningScreenshot {
+  /** File name under `public/lesson-images/`. */
+  file: string;
+  /** Describes what the screen shows, for a member who cannot see it. */
+  alt: string;
 }
 
 export interface LearningPath {
