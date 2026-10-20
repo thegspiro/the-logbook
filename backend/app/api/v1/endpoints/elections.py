@@ -2638,10 +2638,43 @@ async def delete_candidate(
             status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found"
         )
 
-    if await _active_vote_count(db, candidate_id) > 0:
+    # The ballot is set once voting opens; removing a name afterwards would
+    # rewrite the ballot members already voted on.
+    if election.status not in (ElectionStatus.DRAFT, ElectionStatus.NOMINATIONS):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete candidate with existing votes",
+            detail=(
+                "Candidates can only be removed while the election is a draft "
+                "or taking nominations"
+            ),
+        )
+    # Same freeze the manager's Accept / un-Accept respects: Close
+    # Nominations made the slate final until nominations are reopened.
+    if service.slate_frozen(election):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Nominations have closed, so the slate is final: candidates "
+                "can no longer be removed. Reopen nominations to change it."
+            ),
+        )
+    # Every real vote row, voided ones included: the cascade from Candidate
+    # hard-deletes them, which would erase the record of a voided ballot
+    # along with the candidate. Test ballots are rehearsal data and are
+    # ignored here as they are when editing a candidate, so a rehearsal does
+    # not freeze the list.
+    any_votes = await db.execute(
+        select(func.count(Vote.id))
+        .where(Vote.candidate_id == str(candidate_id))
+        .where(Vote.is_test.is_(False))
+    )
+    if (any_votes.scalar() or 0) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cannot delete a candidate with recorded votes, including "
+                "voided ballots"
+            ),
         )
 
     candidate_name = candidate.name

@@ -4,6 +4,7 @@ Meeting Minutes Service
 Business logic for meeting minutes management.
 """
 
+import asyncio
 import copy
 from datetime import datetime, time, timezone
 from typing import List, Optional, Tuple
@@ -12,7 +13,7 @@ from uuid import UUID
 from loguru import logger
 from sqlalchemy import func
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
 from sqlalchemy.orm.base import NO_VALUE
@@ -34,6 +35,7 @@ from app.models.minute import (
     ActionItemPriority,
     MeetingMinutes,
     MinutesActionItemStatus,
+    MinutesAttachment,
     MinutesMeetingType,
     MinutesPublicCopy,
     MinutesStatus,
@@ -51,6 +53,8 @@ from app.schemas.minute import (
     MotionCreate,
     MotionUpdate,
 )
+from app.services import file_storage_service as file_storage
+from app.services.file_storage_service import StorageArea
 from app.services.separation_of_duties import assert_different_person
 from app.services.template_service import TemplateService
 from app.utils.agenda_items import (
@@ -1234,9 +1238,69 @@ class MinuteService:
         if minutes.status not in (MinutesStatus.DRAFT.value,):
             raise ValueError("Can only delete draft minutes")
 
+        await self._release_carried_sources(
+            ActionItem.minutes_id == minutes.id, organization_id
+        )
+        # Attachment rows go with the minutes by database cascade, which never
+        # touches the files they point at; read the paths while the rows exist.
+        stored = await self.db.execute(
+            select(MinutesAttachment.file_path).where(
+                MinutesAttachment.minutes_id == minutes.id,
+                MinutesAttachment.organization_id == str(organization_id),
+            )
+        )
+        paths = [
+            file_storage.resolve(
+                file_path, str(organization_id), StorageArea.MINUTES_ATTACHMENTS
+            )
+            for file_path in stored.scalars().all()
+        ]
+
         await self.db.delete(minutes)
         await self.db.commit()
+        # Only after the commit: a rolled-back delete must keep its files.
+        for path in paths:
+            if path:
+                await asyncio.to_thread(file_storage.remove_quietly, path)
         return True
+
+    async def _release_carried_sources(
+        self, copies_filter, organization_id: UUID | str
+    ) -> int:
+        """Reopen the originals of carried-forward copies about to be deleted.
+
+        Carrying an item forward stamps the original ``carried_forward_at`` so
+        it stops counting as open; the copy is where the work continues. When
+        the copy is deleted, nothing continues it, and an original still
+        stamped would be hidden from every open-items list and from the next
+        carry-forward for good. A copy that was itself carried on is left
+        alone: its own copy still continues the original's work.
+
+        Runs in the caller's transaction, before the delete.
+        """
+        result = await self.db.execute(
+            select(ActionItem.carried_from_id).where(
+                copies_filter,
+                ActionItem.carried_from_id.is_not(None),
+                ActionItem.carried_forward_at.is_(None),
+            )
+        )
+        source_ids = [sid for sid in result.scalars().all() if sid]
+        if not source_ids:
+            return 0
+        org_minutes = select(MeetingMinutes.id).where(
+            MeetingMinutes.organization_id == str(organization_id)
+        )
+        released = await self.db.execute(
+            update(ActionItem)
+            .where(
+                ActionItem.id.in_(source_ids),
+                ActionItem.minutes_id.in_(org_minutes),
+            )
+            .values(carried_forward_at=None)
+            .execution_options(synchronize_session="fetch")
+        )
+        return int(getattr(released, "rowcount", 0) or 0)
 
     # ============================================
     # Approval Workflow
@@ -1856,6 +1920,7 @@ class MinuteService:
         if not item:
             return False
 
+        await self._release_carried_sources(ActionItem.id == item.id, organization_id)
         await self.db.delete(item)
         await self.db.commit()
         return True

@@ -228,9 +228,23 @@ const FormsPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (formId: string) => {
+  const handleDelete = async (form: FormDef) => {
+    const count = form.submission_count ?? 0;
+    const confirmed = await confirm({
+      title: 'Delete this form?',
+      message: (
+        <>
+          <strong>{form.name}</strong> is deleted permanently, and every submission made to it is deleted with it
+          {count > 0 ? ` (${count} submission${count === 1 ? '' : 's'})` : ''}. This cannot be undone. To stop new
+          submissions but keep the ones already made, archive the form instead.
+        </>
+      ),
+      confirmLabel: 'Delete form and submissions',
+      cancelLabel: 'Keep form',
+    });
+    if (!confirmed) return;
     try {
-      await formsService.deleteForm(formId);
+      await formsService.deleteForm(form.id);
       await loadData();
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'Failed to delete form');
@@ -374,6 +388,14 @@ const FormsPage: React.FC = () => {
 
   const handleDeleteIntegration = async (integrationId: string) => {
     if (!selectedFormId) return;
+    const confirmed = await confirm({
+      title: 'Delete this integration?',
+      message:
+        'Automatic processing stops: new submissions to this form will no longer be sent to the connected module. Submissions already processed are not changed.',
+      confirmLabel: 'Delete integration',
+      cancelLabel: 'Keep integration',
+    });
+    if (!confirmed) return;
     try {
       await formsService.deleteIntegration(selectedFormId, integrationId);
       const detail = await formsService.getForm(selectedFormId);
@@ -811,7 +833,7 @@ const FormsPage: React.FC = () => {
                       {canManage && (
                         <button
                           onClick={() => {
-                            void handleDelete(form.id);
+                            void handleDelete(form);
                           }}
                           className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
                         >

@@ -99,10 +99,13 @@ class FundraisingService:
     async def get_campaign(
         self, campaign_id: str, organization_id: str
     ) -> Optional[FundraisingCampaign]:
+        # Deleting a campaign only clears ``active``, so every by-id read and
+        # mutation goes through here and treats a deleted one as not found.
         result = await self.db.execute(
             select(FundraisingCampaign).where(
                 FundraisingCampaign.id == campaign_id,
                 FundraisingCampaign.organization_id == organization_id,
+                FundraisingCampaign.active.is_(True),
             )
         )
         fundraising_campaign: Optional[FundraisingCampaign] = (
@@ -286,6 +289,25 @@ class FundraisingService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def _campaign_assignable(
+        self,
+        campaign_id: Any,
+        organization_id: str,
+        current_campaign_id: Optional[str] = None,
+    ) -> bool:
+        """Whether a record may be filed under ``campaign_id``.
+
+        Only a live campaign of this department takes new records; a deleted
+        one is gone from every list, so nothing should keep landing in it. A
+        record already under a campaign that was later deleted keeps it: an
+        unrelated edit must not be refused for a choice made before.
+        """
+        if current_campaign_id is not None and str(campaign_id) == str(
+            current_campaign_id
+        ):
+            return True
+        return await self.get_campaign(str(campaign_id), organization_id) is not None
+
     async def _entity_in_org(
         self, model: Any, entity_id: Any, organization_id: str
     ) -> bool:
@@ -310,8 +332,8 @@ class FundraisingService:
     ) -> Donation:
         campaign_id = data.get("campaign_id")
         donor_id = data.get("donor_id")
-        if campaign_id and not await self._entity_in_org(
-            FundraisingCampaign, campaign_id, organization_id
+        if campaign_id and not await self._campaign_assignable(
+            campaign_id, organization_id
         ):
             raise ValueError("Campaign not found")
         if donor_id and not await self._entity_in_org(Donor, donor_id, organization_id):
@@ -386,8 +408,8 @@ class FundraisingService:
 
         # Validate any reassigned FK is in-org before applying — the recompute
         # below fetches and writes the referenced campaign/donor.
-        if data.get("campaign_id") and not await self._entity_in_org(
-            FundraisingCampaign, data["campaign_id"], organization_id
+        if data.get("campaign_id") and not await self._campaign_assignable(
+            data["campaign_id"], organization_id, old_campaign_id
         ):
             raise ValueError("Campaign not found")
         if data.get("donor_id") and not await self._entity_in_org(
@@ -554,11 +576,14 @@ class FundraisingService:
         return list(result.scalars().all())
 
     async def _validate_pledge_fks(
-        self, data: Dict[str, Any], organization_id: str
+        self,
+        data: Dict[str, Any],
+        organization_id: str,
+        current_campaign_id: Optional[str] = None,
     ) -> None:
         """GF-6: campaign_id / donor_id on a pledge must be in the caller's org."""
-        if data.get("campaign_id") and not await self._entity_in_org(
-            FundraisingCampaign, data["campaign_id"], organization_id
+        if data.get("campaign_id") and not await self._campaign_assignable(
+            data["campaign_id"], organization_id, current_campaign_id
         ):
             raise ValueError("Campaign not found")
         if data.get("donor_id") and not await self._entity_in_org(
@@ -596,7 +621,7 @@ class FundraisingService:
         pledge: Optional[Pledge] = result.scalar_one_or_none()
         if not pledge:
             return None
-        await self._validate_pledge_fks(data, organization_id)
+        await self._validate_pledge_fks(data, organization_id, pledge.campaign_id)
         apply_updates(pledge, data, skip={"organization_id", "id"})
         await self.db.flush()
         await reload_updated_at(self.db, pledge)
@@ -632,7 +657,10 @@ class FundraisingService:
         return list(result.scalars().all())
 
     async def _validate_fundraising_event_fks(
-        self, data: Dict[str, Any], organization_id: str
+        self,
+        data: Dict[str, Any],
+        organization_id: str,
+        current_campaign_id: Optional[str] = None,
     ) -> None:
         """GF-6: campaign_id / event_id on a fundraising event must be in-org.
 
@@ -640,8 +668,8 @@ class FundraisingService:
         prevents attaching a fundraiser to another org's event (a mis-attributed
         FK, and a potential read of that event via the link).
         """
-        if data.get("campaign_id") and not await self._entity_in_org(
-            FundraisingCampaign, data["campaign_id"], organization_id
+        if data.get("campaign_id") and not await self._campaign_assignable(
+            data["campaign_id"], organization_id, current_campaign_id
         ):
             raise ValueError("Campaign not found")
         if data.get("event_id") and not await self._entity_in_org(
@@ -682,7 +710,9 @@ class FundraisingService:
         event: Optional[FundraisingEvent] = result.scalar_one_or_none()
         if not event:
             return None
-        await self._validate_fundraising_event_fks(data, organization_id)
+        await self._validate_fundraising_event_fks(
+            data, organization_id, event.campaign_id
+        )
         apply_updates(event, data, skip={"organization_id", "id"})
         await self.db.flush()
         await reload_updated_at(self.db, event)

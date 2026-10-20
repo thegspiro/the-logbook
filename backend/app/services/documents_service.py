@@ -18,7 +18,7 @@ from uuid import UUID
 from loguru import logger
 from sqlalchemy import and_, case
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import func, not_, or_, select
+from sqlalchemy import func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, defer, selectinload
 
@@ -43,6 +43,14 @@ from app.models.document import (
     system_folder_fields,
 )
 from app.models.facilities import FacilityDocument, FacilityPhoto
+from app.models.finance import (
+    ExpenseLineItem,
+    ExpenseReport,
+    ExpenseReportStatus,
+    PurchaseRequest,
+    PurchaseRequestStatus,
+)
+from app.models.minute import MeetingMinutes
 from app.models.user import Organization, Position, User
 from app.services import file_storage_service as file_storage
 from app.services.file_storage_service import StorageArea
@@ -1302,6 +1310,7 @@ class DocumentsService:
         # that up in the same transaction as the cascade delete, not after.
         # Runs after the FAC-34 DocumentFolder lock and the FAC-32 Document
         # lock above -- see those comments for why the order matters.
+        await self._release_document_references(document_ids, organization_id)
         await self._delete_facility_document_references(
             document_ids, organization_id, current_user
         )
@@ -1483,6 +1492,82 @@ class DocumentsService:
             await self.db.execute(
                 sa_delete(FacilityPhoto).where(FacilityPhoto.id.in_(photo_matches))
             )
+
+    async def _release_document_references(
+        self, document_ids: Set[str], organization_id: UUID | str
+    ) -> None:
+        """Refuse, or tidy, the records that point at documents being deleted.
+
+        A receipt on a purchase request or an expense line is the evidence the
+        finance office approved and paid against. Its foreign key is
+        ``SET NULL``, so the delete used to succeed and silently strip the
+        receipt from the record; once the request or report has left draft,
+        the delete is refused instead, naming the record. A draft may still
+        lose it: nobody has relied on it yet.
+
+        Minutes keep the library copy they were published as in
+        ``published_document_id``, a plain column with no foreign key. Left
+        set, the minutes kept linking to a document that no longer exists and
+        a republish tried to update it; cleared, the next publish files a new
+        copy. Runs in the caller's transaction, before the delete and before
+        anything else the delete writes, so a refusal leaves nothing behind.
+        """
+        if not document_ids:
+            return
+        org_id = str(organization_id)
+        ids = list(document_ids)
+
+        requests = await self.db.execute(
+            select(PurchaseRequest.request_number)
+            .where(
+                PurchaseRequest.organization_id == org_id,
+                PurchaseRequest.receipt_document_id.in_(ids),
+                PurchaseRequest.status != PurchaseRequestStatus.DRAFT,
+            )
+            .order_by(PurchaseRequest.request_number)
+        )
+        request_numbers = list(requests.scalars().all())
+        if request_numbers:
+            raise ValueError(
+                "This document is the receipt on purchase request "
+                f"{', '.join(request_numbers)}, which is past draft; "
+                "the request keeps it as its record, so it cannot be deleted"
+            )
+
+        reports = await self.db.execute(
+            select(ExpenseReport.report_number)
+            .join(
+                ExpenseLineItem, ExpenseLineItem.expense_report_id == ExpenseReport.id
+            )
+            .where(
+                ExpenseReport.organization_id == org_id,
+                ExpenseLineItem.receipt_document_id.in_(ids),
+                ExpenseReport.status != ExpenseReportStatus.DRAFT,
+            )
+            .distinct()
+            .order_by(ExpenseReport.report_number)
+        )
+        report_numbers = list(reports.scalars().all())
+        if report_numbers:
+            raise ValueError(
+                "This document is a receipt on expense report "
+                f"{', '.join(report_numbers)}, which is past draft; "
+                "the report keeps it as its record, so it cannot be deleted"
+            )
+
+        await self.db.execute(
+            update(MeetingMinutes)
+            .where(
+                MeetingMinutes.organization_id == org_id,
+                MeetingMinutes.published_document_id.in_(ids),
+            )
+            .values(
+                published_document_id=None,
+                published_revision_version=None,
+                published_at=None,
+            )
+            .execution_options(synchronize_session="fetch")
+        )
 
     async def _match_facility_document_references(
         self,
@@ -1793,6 +1878,8 @@ class DocumentsService:
         # A facility record can reference this document without a foreign
         # key (see _delete_facility_document_references) -- clean that up in
         # the same transaction as the delete, not after.
+        # Before the facility sweep: a refused delete must not have written.
+        await self._release_document_references({str(document_id)}, organization_id)
         await self._delete_facility_document_references(
             {str(document_id)}, organization_id, current_user
         )

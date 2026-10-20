@@ -3027,6 +3027,9 @@ class FinanceService:
         # it holds whether or not that migration has run.
         if await self._chain_is_denied(record, org_id):
             raise ValueError("This request has already been denied")
+        await self._lock_entity_awaiting_approval(
+            record.entity_type, record.entity_id, org_id
+        )
 
         current = await self.get_current_pending_step(
             record.entity_type, record.entity_id, org_id
@@ -3049,6 +3052,53 @@ class FinanceService:
         )
         return result.scalar_one_or_none() is not None
 
+    async def _lock_entity_awaiting_approval(
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
+    ) -> None:
+        """Lock the request a step belongs to and refuse unless it still waits.
+
+        A step record's own PENDING status is not enough: a request cancelled
+        before cancellation closed its chain still carries PENDING records, and
+        approving the last of them finalized a cancelled request as APPROVED
+        and encumbered budget against it. The entity row is locked because
+        ``cancel_purchase_request`` writes the same status under the same lock;
+        without it an approval read before the cancel commits would finalize
+        over it.
+        """
+        model, pending_status, label = self._unrouted_mapping(entity_type)
+        result = await self.db.execute(
+            select(model)
+            .where(model.id == entity_id, model.organization_id == org_id)
+            .with_for_update()
+        )
+        entity = result.scalar_one_or_none()
+        # A record whose entity row is gone has nothing left to approve or
+        # encumber; _finalize_approval already treats it as a no-op.
+        if entity is not None and entity.status != pending_status:
+            raise ValueError(f"This {label.lower()} is no longer awaiting approval")
+
+    async def _terminate_entity_pending_steps(
+        self,
+        entity_type: ApprovalEntityType,
+        entity_id: str,
+        org_id: str,
+        *,
+        keep_record_id: Optional[str] = None,
+    ) -> int:
+        """Skip every PENDING step on an entity and revoke its email tokens."""
+        records = await self.get_approval_records(entity_type, entity_id, org_id)
+        terminated = 0
+        for other in records:
+            if other.id == keep_record_id:
+                continue
+            if other.status != ApprovalStepStatus.PENDING:
+                continue
+            other.status = ApprovalStepStatus.SKIPPED
+            other.approval_token = None
+            other.token_expires_at = None
+            terminated += 1
+        return terminated
+
     async def _terminate_pending_steps(
         self, record: ApprovalStepRecord, org_id: str
     ) -> int:
@@ -3064,20 +3114,9 @@ class FinanceService:
         a later step must not be able to act on a request the department has
         already refused.
         """
-        records = await self.get_approval_records(
-            record.entity_type, record.entity_id, org_id
+        return await self._terminate_entity_pending_steps(
+            record.entity_type, record.entity_id, org_id, keep_record_id=record.id
         )
-        terminated = 0
-        for other in records:
-            if other.id == record.id:
-                continue
-            if other.status != ApprovalStepStatus.PENDING:
-                continue
-            other.status = ApprovalStepStatus.SKIPPED
-            other.approval_token = None
-            other.token_expires_at = None
-            terminated += 1
-        return terminated
 
     async def _authorize_step_actor(
         self,
@@ -3419,6 +3458,9 @@ class FinanceService:
         but only by giving a reason.
         """
         admin = is_approvals_admin(user)
+        # Each arm keeps only requests still awaiting approval: a request
+        # cancelled before cancellation closed its chain still has PENDING
+        # step records, and listing them invites an approval that is refused.
         entities = union_all(
             select(
                 PurchaseRequest.id.label("entity_id"),
@@ -3430,7 +3472,10 @@ class FinanceService:
                 # Whether it charges a restricted fund, so only those are
                 # loaded to work out a shortfall.
                 PurchaseRequest.fund_campaign_id.is_not(None).label("charges_fund"),
-            ).where(PurchaseRequest.organization_id == org_id),
+            ).where(
+                PurchaseRequest.organization_id == org_id,
+                PurchaseRequest.status == PurchaseRequestStatus.PENDING_APPROVAL,
+            ),
             select(
                 ExpenseReport.id,
                 literal(ApprovalEntityType.EXPENSE_REPORT.value),
@@ -3442,7 +3487,10 @@ class FinanceService:
                     ExpenseLineItem.expense_report_id == ExpenseReport.id,
                     ExpenseLineItem.fund_campaign_id.is_not(None),
                 ),
-            ).where(ExpenseReport.organization_id == org_id),
+            ).where(
+                ExpenseReport.organization_id == org_id,
+                ExpenseReport.status == ExpenseReportStatus.PENDING_APPROVAL,
+            ),
             select(
                 CheckRequest.id,
                 literal(ApprovalEntityType.CHECK_REQUEST.value),
@@ -3451,7 +3499,10 @@ class FinanceService:
                 CheckRequest.requested_by,
                 CheckRequest.created_at,
                 CheckRequest.fund_campaign_id.is_not(None),
-            ).where(CheckRequest.organization_id == org_id),
+            ).where(
+                CheckRequest.organization_id == org_id,
+                CheckRequest.status == CheckRequestStatus.PENDING_APPROVAL,
+            ),
         ).subquery("pending_entities")
 
         has_earlier_pending_step = self._has_earlier_pending_step()
@@ -4379,13 +4430,18 @@ class FinanceService:
         Returns False, changing only the first-approval record, when the
         dual-approval threshold holds the request for a second approver.
         """
-        model, _pending_status, _label = self._unrouted_mapping(entity_type)
+        model, pending_status, label = self._unrouted_mapping(entity_type)
         result = await self.db.execute(
             select(model).where(model.id == entity_id, model.organization_id == org_id)
         )
         entity = result.scalar_one_or_none()
         if entity is None:
             return False
+        # Every caller has already checked this under the entity lock; held
+        # here as well so no path can turn a cancelled or denied request into
+        # an approved one and encumber budget against it.
+        if entity.status != pending_status:
+            raise ValueError(f"This {label.lower()} is no longer awaiting approval")
         if await self._held_for_second_approver(
             entity_type, entity, approver_id, org_id
         ):
@@ -4929,6 +4985,12 @@ class FinanceService:
             await self._release_encumbrance(pr.budget_id, pr.estimated_amount, org_id)
 
         pr.status = PurchaseRequestStatus.CANCELLED
+        # Close the chain the way a denial does. Left PENDING, the steps kept
+        # the request in every approver's queue and their emailed links live,
+        # and approving the last one finalized it as APPROVED.
+        await self._terminate_entity_pending_steps(
+            ApprovalEntityType.PURCHASE_REQUEST, pr.id, org_id
+        )
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
         return pr
