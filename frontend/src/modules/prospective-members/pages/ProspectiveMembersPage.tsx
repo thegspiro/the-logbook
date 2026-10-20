@@ -827,7 +827,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         type="checkbox"
                         checked={selectedApplicants.size === applicants.length}
                         onChange={toggleAllApplicants}
-                        className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                        className="form-checkbox touch:h-6 touch:w-6 text-red-700 dark:text-red-500"
                       />
                       {selectedApplicants.size} selected
                     </label>
@@ -1017,7 +1017,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                               setSelectedInactive(new Set());
                             }
                           }}
-                          className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                          className="form-checkbox touch:h-6 touch:w-6 text-red-700 dark:text-red-500"
                         />
                       </th>
                       <th
@@ -1073,7 +1073,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                               }
                               setSelectedInactive(next);
                             }}
-                            className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                            className="form-checkbox touch:h-6 touch:w-6 text-red-700 dark:text-red-500"
                           />
                         </td>
                         <td className="p-3">

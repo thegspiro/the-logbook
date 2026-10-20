@@ -495,7 +495,7 @@ export const SchedulingReportsPage: React.FC = () => {
                   <p className="text-theme-text-muted">No data for this period</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Member hours">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
@@ -648,7 +648,7 @@ export const SchedulingReportsPage: React.FC = () => {
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Daily coverage">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
@@ -676,7 +676,7 @@ export const SchedulingReportsPage: React.FC = () => {
                         <td className="text-theme-text-primary px-4 py-3 text-right">{row.total_shifts}</td>
                         <td className="text-theme-text-secondary px-4 py-3 text-right">{row.total_assigned}</td>
                         <td className="px-4 py-3 text-right">
-                          <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                          <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                             {row.total_confirmed}
                           </span>
                         </td>
@@ -773,7 +773,7 @@ export const SchedulingReportsPage: React.FC = () => {
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Call volume">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
@@ -873,7 +873,7 @@ export const SchedulingReportsPage: React.FC = () => {
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Member availability">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
@@ -915,7 +915,7 @@ export const SchedulingReportsPage: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 text-right">
                           {(member.time_off_days || 0) > 0 ? (
-                            <span className="inline-flex items-center rounded-sm bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
+                            <span className="inline-flex items-center rounded-sm bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                               {member.time_off_days}
                             </span>
                           ) : (
@@ -923,7 +923,7 @@ export const SchedulingReportsPage: React.FC = () => {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                          <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                             {member.available_dates?.length || 0}
                           </span>
                         </td>
@@ -1142,7 +1142,12 @@ export const SchedulingReportsPage: React.FC = () => {
 
                       {/* Expanded member list */}
                       {isExpanded && (
-                        <div className="border-theme-surface-border overflow-x-auto border-t">
+                        <div
+                          className="border-theme-surface-border overflow-x-auto border-t"
+                          tabIndex={0}
+                          role="region"
+                          aria-label="Member shift compliance"
+                        >
                           {filteredMembers.length === 0 ? (
                             <div className="text-theme-text-muted p-4 text-center text-sm">
                               {complianceFilter === 'non-compliant' ? 'All members are compliant!' : 'No members found'}
@@ -1232,7 +1237,7 @@ export const SchedulingReportsPage: React.FC = () => {
                                     </td>
                                     <td className="px-4 py-2 text-center">
                                       {member.compliant ? (
-                                        <span className="inline-flex items-center gap-1 rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                                        <span className="inline-flex items-center gap-1 rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                                           <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
                                           Compliant
                                         </span>

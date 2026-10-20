@@ -164,7 +164,7 @@ const DonationsPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Donations">
             <table className="w-full">
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface border-b">

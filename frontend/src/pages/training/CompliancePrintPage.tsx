@@ -153,7 +153,12 @@ const CompliancePrintPage: React.FC = () => {
 
           {/* Member Matrix. Scrolls sideways on a screen narrower than the matrix;
               on paper it prints at full width. */}
-          <div className="overflow-x-auto print:overflow-visible">
+          <div
+            className="overflow-x-auto print:overflow-visible"
+            tabIndex={0}
+            role="region"
+            aria-label="Member compliance matrix"
+          >
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>

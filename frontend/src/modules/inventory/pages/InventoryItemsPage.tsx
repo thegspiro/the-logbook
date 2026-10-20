@@ -2281,8 +2281,11 @@ const InventoryItemsPage: React.FC = () => {
           when rows reflow into cards on mobile, so expose sorting here. */}
       {!loading && items.length > 0 && (
         <div className="mb-3 flex items-center gap-2 md:hidden">
-          <label className="text-theme-text-muted shrink-0 text-xs">Sort:</label>
+          <label htmlFor="inventory-mobile-sort" className="text-theme-text-muted shrink-0 text-xs">
+            Sort:
+          </label>
           <select
+            id="inventory-mobile-sort"
             className="form-input flex-1 py-1.5 text-xs"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortKey)}

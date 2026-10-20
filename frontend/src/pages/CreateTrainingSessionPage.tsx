@@ -604,11 +604,15 @@ const CreateTrainingSessionPage: React.FC = () => {
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                    <label
+                      htmlFor="session-location"
+                      className="text-theme-text-primary mb-2 block text-sm font-semibold"
+                    >
                       Location <Optional />
                     </label>
                     {locations.length > 0 ? (
                       <select
+                        id="session-location"
                         value={locationMode === 'other' ? '__other__' : formData.location_id || ''}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -640,6 +644,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       </select>
                     ) : (
                       <input
+                        id="session-location"
                         type="text"
                         value={formData.location || ''}
                         onChange={(e) => updateField('location', e.target.value)}
@@ -649,11 +654,15 @@ const CreateTrainingSessionPage: React.FC = () => {
                     )}
                   </div>
                   <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                    <label
+                      htmlFor="session-location-details"
+                      className="text-theme-text-primary mb-2 block text-sm font-semibold"
+                    >
                       {locationMode === 'other' ? 'Location Name / Address' : 'Location Details'} <Optional />
                     </label>
                     {locationMode === 'other' && locations.length > 0 ? (
                       <input
+                        id="session-location-details"
                         type="text"
                         value={formData.location || ''}
                         onChange={(e) => updateField('location', e.target.value)}
@@ -662,6 +671,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       />
                     ) : (
                       <input
+                        id="session-location-details"
                         type="text"
                         value={formData.location_details || ''}
                         onChange={(e) => updateField('location_details', e.target.value)}

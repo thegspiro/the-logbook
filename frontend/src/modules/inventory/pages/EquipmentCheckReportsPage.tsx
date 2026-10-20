@@ -277,7 +277,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
                     <span
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
                         a.lastStatus === 'pass'
-                          ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                          ? 'bg-green-500/10 text-green-800 dark:text-green-400'
                           : 'bg-red-500/10 text-red-700 dark:text-red-400'
                       }`}
                     >
@@ -298,7 +298,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
         {data.members.length === 0 ? (
           <p className="text-theme-text-muted py-4 text-sm">No member data available.</p>
         ) : (
-          <div className="card overflow-x-auto">
+          <div className="card overflow-x-auto" tabIndex={0} role="region" aria-label="Member completion">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface-hover/50 border-b">
@@ -452,7 +452,7 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
             {loading ? 'Loading failures...' : `${data.total} total failures`}
           </p>
 
-          <div className="card overflow-x-auto">
+          <div className="card overflow-x-auto" tabIndex={0} role="region" aria-label="Failed items">
             <table className="w-full text-sm aria-busy:opacity-60" aria-busy={loading}>
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface-hover/50 border-b">
@@ -742,7 +742,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
           {trendData.history.length > 0 && (
             <div>
               <h4 className="text-theme-text-secondary mb-2 text-xs font-semibold">Past results</h4>
-              <div className="card overflow-x-auto">
+              <div className="card overflow-x-auto" tabIndex={0} role="region" aria-label="Past results">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border bg-theme-surface-hover/50 border-b">
@@ -770,7 +770,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                           <span
                             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
                               h.status === 'pass'
-                                ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                                ? 'bg-green-500/10 text-green-800 dark:text-green-400'
                                 : h.status === 'fail' || h.status === 'out_of_service'
                                   ? 'bg-red-500/10 text-red-700 dark:text-red-400'
                                   : 'bg-theme-surface-hover text-theme-text-muted'

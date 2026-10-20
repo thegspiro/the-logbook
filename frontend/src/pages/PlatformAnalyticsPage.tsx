@@ -351,7 +351,7 @@ const BarChart: React.FC<BarChartProps> = ({ data, color }) => {
   const colors = barColors[color];
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Daily activity chart">
       <div className="flex h-32 min-w-full items-end justify-between gap-1">
         {data.map(({ date, count }) => {
           const heightPercent = (count / maxCount) * 100;

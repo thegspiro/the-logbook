@@ -905,7 +905,7 @@ const MyTrainingPage: React.FC = () => {
               the summary caps at the newest 100, lives on the History tab. */}
           {v?.show_training_history && recentRecords.length > 0 && (
             <Section title="Recent Training" icon={FileText}>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Training records">
                 <table className="w-full text-left text-sm">
                   <thead className="text-theme-text-muted bg-theme-surface-secondary text-xs uppercase">
                     <tr>
@@ -1161,7 +1161,7 @@ const MyTrainingPage: React.FC = () => {
                             (s, i) => (
                               <span
                                 key={i}
-                                className={`rounded-sm px-2 py-0.5 text-xs ${s.demonstrated ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}
+                                className={`rounded-sm px-2 py-0.5 text-xs ${s.demonstrated ? 'bg-green-500/20 text-green-800 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}
                               >
                                 {s.skill_name}
                               </span>
@@ -1178,7 +1178,7 @@ const MyTrainingPage: React.FC = () => {
           {/* Submission History */}
           {v?.show_submission_history && data.submissions && data.submissions.length > 0 && (
             <Section title="Self-Reported Training" icon={Send} defaultOpen={false}>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Training records">
                 <table className="w-full text-left text-sm">
                   <thead className="text-theme-text-muted bg-theme-surface-secondary text-xs uppercase">
                     <tr>
