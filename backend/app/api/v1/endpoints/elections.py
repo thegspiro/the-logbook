@@ -1917,7 +1917,9 @@ async def record_manual_ballots(
     Record an in-room paper-ballot tally for an open election.
 
     Creates one vote row per paper ballot, flagged is_manual and
-    attributed to the recording officer. Manual votes carry no voter
+    attributed to the recording officer; a ranked-choice ballot in
+    ``ranked_ballots`` becomes one row per ranked candidate, grouped by a
+    shared ``paper_ballot_id``. Manual votes carry no voter
     identity — the officer's attested count is the source of truth — and
     are signed and chained like electronic votes so integrity
     verification covers the full ballot box.
@@ -1933,6 +1935,10 @@ async def record_manual_ballots(
         entries=[
             {"candidate_id": str(e.candidate_id), "count": e.count}
             for e in payload.entries
+        ],
+        ranked_ballots=[
+            {"rankings": [str(cid) for cid in b.rankings], "count": b.count}
+            for b in payload.ranked_ballots
         ],
         notes=payload.notes,
         allow_over_count=payload.allow_over_count,
