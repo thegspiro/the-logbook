@@ -267,7 +267,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                         void onMoveRank(idx, 'up');
                       }}
                       disabled={idx === 0}
-                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone inline-flex min-h-6 min-w-6 items-center justify-center p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone inline-flex items-center justify-center p-0.5 disabled:cursor-not-allowed disabled:opacity-20 pointer-fine:min-h-6 pointer-fine:min-w-6"
                       aria-label="Move up"
                     >
                       <ChevronUp className="h-3.5 w-3.5" />
@@ -278,7 +278,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                         void onMoveRank(idx, 'down');
                       }}
                       disabled={idx === ranks.length - 1}
-                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone inline-flex min-h-6 min-w-6 items-center justify-center p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone inline-flex items-center justify-center p-0.5 disabled:cursor-not-allowed disabled:opacity-20 pointer-fine:min-h-6 pointer-fine:min-w-6"
                       aria-label="Move down"
                     >
                       <ChevronDown className="h-3.5 w-3.5" />

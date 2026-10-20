@@ -199,7 +199,7 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                         onClick={() => onMoveTier(index, 'up')}
                         disabled={index === 0}
                         aria-label={`Move ${tier.name} up`}
-                        className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone inline-flex min-h-6 min-w-6 items-center justify-center p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                        className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone inline-flex items-center justify-center p-0.5 disabled:cursor-not-allowed disabled:opacity-20 pointer-fine:min-h-6 pointer-fine:min-w-6"
                       >
                         <ChevronUp className="h-4 w-4" aria-hidden="true" />
                       </button>
@@ -208,7 +208,7 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                         onClick={() => onMoveTier(index, 'down')}
                         disabled={index === tiers.length - 1}
                         aria-label={`Move ${tier.name} down`}
-                        className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone inline-flex min-h-6 min-w-6 items-center justify-center p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                        className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone inline-flex items-center justify-center p-0.5 disabled:cursor-not-allowed disabled:opacity-20 pointer-fine:min-h-6 pointer-fine:min-w-6"
                       >
                         <ChevronDown className="h-4 w-4" aria-hidden="true" />
                       </button>
