@@ -52,7 +52,7 @@ class TestRollingRecurrenceExtendIsolation:
 
         def _latest_result():
             r = MagicMock()
-            r.first.return_value = (latest_start, latest_end)
+            r.first.return_value = (latest_start, latest_end, None)
             return r
 
         db = MagicMock()
@@ -128,7 +128,7 @@ class TestRollingRecurrenceExtendIsolation:
 
         def _latest_result():
             r = MagicMock()
-            r.first.return_value = (latest_start, latest_end)
+            r.first.return_value = (latest_start, latest_end, None)
             return r
 
         db = MagicMock()
@@ -171,6 +171,60 @@ class TestRollingRecurrenceExtendIsolation:
         # C, fetched in the same original batch as B, must be refreshed
         # before its own attributes are read again.
         db.refresh.assert_awaited_once_with(parents[2])
+
+
+class TestRollingRecurrenceExtendRsvpDeadline:
+    """Extended occurrences keep the latest occurrence's RSVP deadline lead,
+    the same rule create_recurring_event and the series edit apply."""
+
+    async def _extend(self, latest_deadline_lead):
+        latest_start = datetime.now(timezone.utc).replace(
+            tzinfo=None, second=0, microsecond=0
+        ) + timedelta(days=1)
+        latest_end = latest_start + timedelta(hours=2)
+        latest_deadline = (
+            None
+            if latest_deadline_lead is None
+            else latest_start - latest_deadline_lead
+        )
+
+        parents_result = MagicMock()
+        parents_result.scalars.return_value.all.return_value = [_parent("A")]
+        latest_result = MagicMock()
+        latest_result.first.return_value = (latest_start, latest_end, latest_deadline)
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[parents_result, latest_result])
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+        db.refresh = AsyncMock()
+
+        new_starts = [latest_start + timedelta(weeks=n) for n in (1, 2)]
+        service = SimpleNamespace(
+            _generate_recurrence_dates=lambda **kwargs: [
+                (s, s + timedelta(hours=2)) for s in new_starts
+            ]
+        )
+        with patch(
+            "app.services.event_service.EventService", return_value=service
+        ), patch(
+            "app.services.scheduled_tasks.resolve_scheduling_timezone",
+            AsyncMock(return_value=ZoneInfo("UTC")),
+        ):
+            await scheduled_tasks.run_rolling_recurrence_extend(db)
+
+        children = [call.args[0] for call in db.add.call_args_list]
+        assert [c.start_datetime for c in children] == new_starts
+        return new_starts, [c.rsvp_deadline for c in children]
+
+    async def test_new_occurrences_keep_the_deadline_lead(self):
+        new_starts, deadlines = await self._extend(timedelta(days=2))
+        assert deadlines == [start - timedelta(days=2) for start in new_starts]
+
+    async def test_no_deadline_stays_none(self):
+        _, deadlines = await self._extend(None)
+        assert deadlines == [None, None]
 
 
 if __name__ == "__main__":  # pragma: no cover

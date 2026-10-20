@@ -47,6 +47,18 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
+// Which integration types the department has connected.
+const mockConnected = new Set<string>();
+vi.mock('../hooks/useConnectedIntegrations', () => ({
+  useConnectedIntegrations: () => ({
+    connected: mockConnected,
+    loading: false,
+    isConnected: (type: string) => mockConnected.has(type),
+  }),
+}));
+
+import toast from 'react-hot-toast';
+
 import { renderWithRouter } from '../test/utils';
 import AddMember from './AddMember';
 
@@ -106,6 +118,7 @@ describe('AddMember', { timeout: 20_000 }, () => {
     mockCreateMember.mockResolvedValue({ id: 'u1' });
     mockGetWelcomeEmailAvailability.mockReset();
     mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+    mockConnected.clear();
   });
 
   it('offers a rank to an operational member', async () => {
@@ -472,6 +485,118 @@ describe('AddMember', { timeout: 20_000 }, () => {
 
       await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
       expect(mockCreateMember.mock.calls[0]?.[0]).not.toHaveProperty('preferred_name');
+    });
+  });
+
+  describe('a directory account', () => {
+    it('is not offered while no directory is connected', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      expect(screen.queryByRole('checkbox', { name: /create a .* account/i })).not.toBeInTheDocument();
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload.create_directory_account).toBeUndefined();
+    });
+
+    it('is offered unticked for the connected directory', async () => {
+      mockConnected.add('microsoft-365');
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      const box = screen.getByRole('checkbox', { name: /create a microsoft 365 account/i });
+      expect(box).not.toBeChecked();
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload.create_directory_account).toBeUndefined();
+    });
+
+    it('asks for the personal email and reports the account when ticked', async () => {
+      mockConnected.add('google-workspace');
+      mockCreateMember.mockResolvedValue({
+        id: 'u1',
+        directory_account: {
+          provider: 'google',
+          provider_name: 'Google Workspace',
+          status: 'created',
+          email: 'dana.reyes@dept.test',
+          credentials_sent: true,
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await user.click(screen.getByRole('checkbox', { name: /create a google workspace account/i }));
+      expect(screen.getByLabelText(/^personal email/i)).toBeInTheDocument();
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload.create_directory_account).toBe(true);
+      expect(payload.email).toBe('dreyes@dept.test');
+      await waitFor(() =>
+        expect(toast.success).toHaveBeenCalledWith(
+          'Member added with a Google Workspace account at dana.reyes@dept.test'
+        )
+      );
+    });
+
+    it('says plainly when the member was added but the account was not', async () => {
+      mockConnected.add('google-workspace');
+      mockCreateMember.mockResolvedValue({
+        id: 'u1',
+        directory_account: {
+          provider: 'google',
+          provider_name: 'Google Workspace',
+          status: 'failed',
+          email: 'dana.reyes@dept.test',
+          credentials_sent: false,
+          last_error: 'No licenses left.',
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await user.click(screen.getByRole('checkbox', { name: /create a google workspace account/i }));
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith(
+          'Member added, but the Google Workspace account was not created: No licenses left. Retry from their profile.'
+        )
+      );
+    });
+
+    it('reports a link to an account already at the address', async () => {
+      mockCreateMember.mockResolvedValue({
+        id: 'u1',
+        directory_account: {
+          provider: 'google',
+          provider_name: 'Google Workspace',
+          status: 'linked_existing',
+          email: 'dreyes@dept.test',
+          credentials_sent: false,
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+      await waitFor(() =>
+        expect(toast.success).toHaveBeenCalledWith('Member added and linked to their Google Workspace account')
+      );
     });
   });
 });

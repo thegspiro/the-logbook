@@ -319,7 +319,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                                   setSignupPosition('');
                                   setSignupShiftId(shift.id);
                                 }}
-                                className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-violet-700 sm:text-sm"
+                                className="flex items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-violet-800 sm:text-sm"
                                 aria-label={`Sign up for shift on ${when}`}
                               >
                                 <UserPlus className="h-4 w-4" /> <span className="hidden sm:inline">Sign Up</span>
@@ -461,7 +461,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                         (targetShift ? boardClosedReason(targetShift) !== null : false) ||
                         (isOutreachSignup ? !signupRole : !eligiblePositions.includes(signupPosition))
                       }
-                      className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white hover:bg-violet-800 disabled:opacity-50"
                     >
                       {signingUp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                       Confirm Sign Up

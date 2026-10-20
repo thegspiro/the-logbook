@@ -275,7 +275,7 @@ export const RequestsTab: React.FC = () => {
               setActiveView('swaps');
               void loadData();
             }}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'swaps' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'swaps' ? 'bg-violet-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
             <ArrowLeftRight className="h-4 w-4" /> <span className="hidden sm:inline">Swap Requests</span>
             <span className="sm:hidden">Swaps</span> ({swapTotal})
@@ -288,7 +288,7 @@ export const RequestsTab: React.FC = () => {
               setActiveView('timeoff');
               void loadData();
             }}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'timeoff' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'timeoff' ? 'bg-violet-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
             <CalendarOff className="h-4 w-4" /> Time Off ({timeOffTotal})
           </button>

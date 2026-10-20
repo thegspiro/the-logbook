@@ -473,7 +473,7 @@ export const PatternsTab: React.FC = () => {
           </button>
           <button
             onClick={() => setShowCreate(!showCreate)}
-            className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+            className="flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
           >
             <Plus className="h-4 w-4" /> New Pattern
           </button>
@@ -588,7 +588,7 @@ export const PatternsTab: React.FC = () => {
                           onClick={() => toggleWeekday(i)}
                           className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                             createForm.weekdays.includes(i)
-                              ? 'border-violet-600 bg-violet-600 text-white'
+                              ? 'border-violet-600 bg-violet-700 text-white'
                               : 'border-theme-surface-border text-theme-text-muted hover:border-violet-500'
                           }`}
                         >
@@ -642,7 +642,7 @@ export const PatternsTab: React.FC = () => {
                                     }
                                     className={`touch-target-phone flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                                       pressed
-                                        ? 'border-violet-600 bg-violet-600 text-white'
+                                        ? 'border-violet-600 bg-violet-700 text-white'
                                         : 'border-theme-surface-border text-theme-text-muted hover:border-violet-500'
                                     }`}
                                   >
@@ -957,7 +957,7 @@ export const PatternsTab: React.FC = () => {
                       void handleCreate();
                     }}
                     disabled={creating}
-                    className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
                   >
                     {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                     Create Pattern
@@ -981,7 +981,7 @@ export const PatternsTab: React.FC = () => {
           </p>
           <button
             onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm text-white hover:bg-violet-700"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm text-white hover:bg-violet-800"
           >
             <Plus className="h-4 w-4" /> Create First Pattern
           </button>

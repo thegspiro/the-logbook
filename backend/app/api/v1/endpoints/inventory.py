@@ -2200,6 +2200,14 @@ async def assign_item(
     **Authentication required**
     **Requires permission: inventory.manage**
     """
+    # The body repeats the item id the URL already names. Acting on the body's
+    # while ignoring the URL's let POST /items/A/assign hand item B to a member.
+    if assignment_data.item_id != item_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="item_id in the request body does not match the item in the URL",
+        )
+
     service = InventoryService(db)
 
     # Convert assignment_type string to enum

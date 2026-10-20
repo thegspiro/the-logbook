@@ -310,7 +310,12 @@ user with `audit.view`: `GET /api/v1/security/status` and
 `GET /api/v1/security/audit-log/integrity`. See
 [Security Audit Logging](Security-Audit-Logging).
 
-Error tracking: set `SENTRY_ENABLED=true` and `SENTRY_DSN`.
+Error tracking: the application keeps its own error log and emails the IT
+Manager a weekly count of errors and alerts, so nothing is needed here. Sentry
+(`SENTRY_ENABLED` and `SENTRY_DSN`) is optional and **off by default**. It sends
+error reports to a third party, and a report can carry member or health
+information. If the department handles PHI, **do not enable it without a signed
+Business Associate Agreement (BAA) with Sentry**.
 
 ---
 

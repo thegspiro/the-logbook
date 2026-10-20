@@ -16,6 +16,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import Organization, User
@@ -171,3 +172,35 @@ class TestCampaignCreateStatus:
             }
         )
         assert data.status == "draft"
+
+    async def test_a_pre_planned_status_is_persisted(self, setup, db_session):
+        data = CampaignCreate.model_validate(
+            {
+                "name": "Spring Gear Drive",
+                "campaignType": "equipment",
+                "goalAmount": 8000,
+                "startDate": "2027-03-01",
+                "status": "paused",
+            }
+        )
+        campaign = await setup["service"].create_campaign(
+            setup["org_id"], data.model_dump(exclude_unset=True), setup["user_id"]
+        )
+        campaign_id = campaign.id
+        db_session.expire_all()
+
+        stored = await setup["service"].get_campaign(campaign_id, setup["org_id"])
+        assert stored is not None
+        assert CampaignResponse.model_validate(stored).status == "paused"
+
+    def test_an_unknown_status_is_refused(self):
+        with pytest.raises(ValidationError):
+            CampaignCreate.model_validate(
+                {
+                    "name": "Drive",
+                    "campaignType": "general",
+                    "goalAmount": 1,
+                    "startDate": "2026-11-01",
+                    "status": "planned",
+                }
+            )

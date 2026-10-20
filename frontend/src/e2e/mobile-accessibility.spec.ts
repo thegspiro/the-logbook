@@ -172,9 +172,9 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // pass. Every node is a shared status colour rather than a decision these
   // screens make: `text-*-700` on a matching `/10` tint (the required, optional
   // and apparatus-position badges), `text-theme-text-muted` on
-  // `bg-theme-surface-hover`, the `text-violet-600` action links, and white on
-  // `bg-violet-600`. All AA-clean — this file asserts that at zero — and short
-  // of 7:1. Platoons and Shift Reports are absent because they measure zero.
+  // `bg-theme-surface-hover` and the `text-violet-600` action links. All
+  // AA-clean — this file asserts that at zero — and short of 7:1. White on a
+  // violet fill is not among them: the fills moved to violet-700 (7.29:1). Platoons and Shift Reports are absent because they measure zero.
   //
   // Apparatus is 123 for one reason: it lists every apparatus and resource type
   // the department has and each row carries three or four of those badges. It is

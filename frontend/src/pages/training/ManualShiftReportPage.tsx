@@ -623,7 +623,7 @@ export const ManualShiftReportPage: React.FC = () => {
               void handleSubmit(false);
             }}
             disabled={submitting || savingDraft}
-            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
           >
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             Submit Report{selectedIds.size > 1 ? `s (${selectedIds.size})` : ''}

@@ -45,6 +45,7 @@ import type {
   ElectionPackage,
   ElectionPackageCreate,
   ElectionPackageUpdate,
+  ExistingRecordCheck,
   StageHistoryEntry,
   BackendStepResponse,
   BackendPipelineResponse,
@@ -792,19 +793,13 @@ export const applicantService = {
     await api.delete(`/prospective-members/prospects/${applicantId}`);
   },
 
-  async checkExisting(
-    email: string,
-    firstName?: string,
-    lastName?: string
-  ): Promise<{ has_matches: boolean; match_count: number; matches: Array<{ status: string; match_type: string }> }> {
+  async checkExisting(email: string, firstName?: string, lastName?: string): Promise<ExistingRecordCheck> {
     const params: Record<string, string> = { email };
     if (firstName) params.first_name = firstName;
     if (lastName) params.last_name = lastName;
-    const response = await api.post<{
-      has_matches: boolean;
-      match_count: number;
-      matches: Array<{ status: string; match_type: string }>;
-    }>('/prospective-members/prospects/check-existing', null, { params });
+    const response = await api.post<ExistingRecordCheck>('/prospective-members/prospects/check-existing', null, {
+      params,
+    });
     return response.data;
   },
 

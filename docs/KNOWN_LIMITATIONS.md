@@ -211,14 +211,17 @@ choice an owner may want to revisit:
   member, so a Google failure while suspending is recorded only in the audit
   log; an administrator suspends the account by hand.
 - **No rename.** A member's name change in The Logbook does not reach Google.
-- **Members added any other way get no account.** Only conversion from the
-  prospective-members pipeline creates one; Add Member and roster import do
-  not.
-- **Linking existing members is by exact address, and on demand.** **Link
-  existing members** matches a member's Logbook email to an account's primary
+- **Add Member creates an account only when asked; import never does.** Add
+  Member's **Create a … account** box starts unticked (owner decision,
+  2026-10-20), and a roster import only links members to accounts already at
+  their addresses, so an import cannot consume a batch of licenses. A member
+  added without an account and without one to link to is not covered until
+  one is created in the directory and **Link existing members** is run.
+- **Linking is by exact address.** Linking — on demand, or automatically as a
+  member is added — matches a member's Logbook email to an account's own
   address only — not an alias, not a personal address — and skips members who
-  have already left. A member added later by Add Member or import is not linked
-  until it is run again.
+  have already left. A failed lookup while adding a member is logged, not
+  retried.
 - **A delegated key is domain-wide.** The service account can manage every
   user in the domain, not only members The Logbook created. That is why
   changing the integration needs `admin.access`, and why the requested scopes
@@ -478,6 +481,20 @@ guides can point at one place and an owner can decide it.
   The card's contents — name and membership number — remain directory
   information that `members.view` reads; what is gated is the assembled,
   scannable badge.
+
+## Inventory — Input Rules Deliberately Left Open (2026-10-20)
+
+Found by driving the module end to end. The rest of that pass (blank names,
+numbers a column cannot hold, duplicate identifiers, a tracking-mode change
+under a live assignment, the assign URL/body mismatch, category loops) is fixed;
+these were left because each is a policy choice or needs a schema change.
+
+| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.               |
+| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                       |
+| Same overflow class on the other inventory schemas    | Open          | Bounds now match the column types on item create/update, category create/update and the bulk-entry name. Other request schemas with unbounded `int`/`Decimal` fields (stock lots, issuances, requests, kits) were not audited and will still report a 1264 overflow as a generic error. |
+| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                  |
 
 ## Medical Supplies — Automatic Reorders Land in a Queue the EMS Officer Cannot Open (2026-10-11)
 
