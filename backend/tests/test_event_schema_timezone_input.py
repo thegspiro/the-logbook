@@ -244,3 +244,27 @@ class TestElectionSchemas:
 
         assert _stored(data.start_date) == "'2026-10-17 22:00:00'"
         assert _stored(data.end_date) == "'2026-10-18 22:00:00'"
+
+
+class TestUTCDateTimeFieldType:
+    """``UTCDateTime`` applies ``as_utc`` to any schema field annotated with it."""
+
+    def test_required_and_optional_fields_are_normalised(self):
+        from typing import Optional
+
+        from pydantic import BaseModel
+
+        from app.schemas.base import UTCDateTime
+
+        class Sample(BaseModel):
+            at: UTCDateTime
+            maybe: Optional[UTCDateTime] = None
+
+        aware = Sample(at=datetime(2026, 10, 20, 18, 0, tzinfo=EDT))
+        assert aware.at == datetime(2026, 10, 20, 22, 0, tzinfo=timezone.utc)
+        assert aware.at.tzinfo == timezone.utc
+        assert aware.maybe is None
+
+        naive = Sample(at="2026-10-20T18:00:00", maybe="2026-10-20T19:00:00-04:00")
+        assert naive.at == datetime(2026, 10, 20, 18, 0, tzinfo=timezone.utc)
+        assert naive.maybe == datetime(2026, 10, 20, 23, 0, tzinfo=timezone.utc)

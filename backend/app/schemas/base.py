@@ -14,13 +14,14 @@ carries an explicit timezone marker (``"2024-01-15T14:00:00Z"``).  All
 API *response* schemas should inherit from ``UTCResponseBase`` instead
 of plain ``BaseModel``.
 
-``as_utc`` is the request-side counterpart, for datetimes a request writes.
+``as_utc`` (and the ``UTCDateTime`` field type built on it) is the
+request-side counterpart, for datetimes a request writes.
 """
 
 from datetime import datetime, timezone
-from typing import Optional, overload
+from typing import Annotated, Optional, overload
 
-from pydantic import BaseModel, model_validator
+from pydantic import AfterValidator, BaseModel, model_validator
 
 
 @overload
@@ -54,6 +55,12 @@ def as_utc(value: Optional[datetime]) -> Optional[datetime]:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+# A request datetime normalised by ``as_utc`` at validation time. Annotate a
+# field with it (``Optional[UTCDateTime]`` for an optional one) instead of
+# writing a per-field validator, so a new schema cannot forget the conversion.
+UTCDateTime = Annotated[datetime, AfterValidator(as_utc)]
 
 
 class UTCResponseBase(BaseModel):
