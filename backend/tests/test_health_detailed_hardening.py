@@ -1,5 +1,7 @@
 """``GET /health/detailed`` is unauthenticated, so it must be cheap and fenced.
 
+It is served only in development; see ``TestDetailedHealthIsDevelopmentOnly``.
+
 The route reports host load and configuration flags and carries no auth
 dependency. Two properties keep that tolerable outside production:
 
@@ -16,7 +18,9 @@ import asyncio
 import time
 from unittest.mock import patch
 
+import httpx
 import pytest
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import main
 from app.core.security_middleware import IPBlockingMiddleware
@@ -26,8 +30,9 @@ pytestmark = pytest.mark.unit
 
 class TestDetailedHealthDoesNotStallTheLoop:
     async def test_cpu_sample_does_not_sleep(self):
-        with patch("psutil.cpu_percent", return_value=1.0) as cpu, patch.object(
-            main.settings, "ENVIRONMENT", "development"
+        with (
+            patch("psutil.cpu_percent", return_value=1.0) as cpu,
+            patch.object(main.settings, "ENVIRONMENT", "development"),
         ):
             body = await main.health_check_detailed()
 
@@ -45,12 +50,6 @@ class TestDetailedHealthDoesNotStallTheLoop:
 
         assert elapsed < 1.5
 
-    async def test_production_returns_no_diagnostics(self):
-        with patch.object(main.settings, "ENVIRONMENT", "production"):
-            body = await main.health_check_detailed()
-
-        assert body == {"error": "Detailed health check not available in production"}
-
 
 class TestDetailedHealthIsNotExemptFromIpBlocking:
     def test_detailed_health_is_not_in_the_bypass_set(self):
@@ -58,3 +57,48 @@ class TestDetailedHealthIsNotExemptFromIpBlocking:
 
     def test_liveness_probes_still_bypass_blocking(self):
         assert {"/health", "/"} <= IPBlockingMiddleware.BYPASS_PATHS
+
+
+class TestDetailedHealthIsDevelopmentOnly:
+    """The route reports configuration and host load without authentication.
+
+    Staging is often reachable from the internet, so it is not exempt: only
+    ``ENVIRONMENT=development`` serves it, and every other value answers 404.
+    """
+
+    @pytest.mark.parametrize("environment", ["production", "staging", "testing", ""])
+    async def test_any_other_environment_answers_404_without_sampling(
+        self, environment
+    ):
+        with (
+            patch.object(main.settings, "ENVIRONMENT", environment),
+            patch("psutil.cpu_percent") as cpu,
+        ):
+            with pytest.raises(StarletteHTTPException) as raised:
+                await main.health_check_detailed()
+
+        assert raised.value.status_code == 404
+        cpu.assert_not_called()
+
+    async def test_development_serves_the_diagnostics(self):
+        with patch.object(main.settings, "ENVIRONMENT", "development"):
+            body = await main.health_check_detailed()
+
+        assert body["status"] == "healthy"
+        assert body["environment"] == "development"
+        assert set(body["system"]) == {"cpu_percent", "memory_percent", "disk_percent"}
+
+    @pytest.mark.parametrize("environment", ["production", "staging"])
+    async def test_the_response_is_indistinguishable_from_an_unknown_path(
+        self, environment
+    ):
+        transport = httpx.ASGITransport(app=main.app, client=("203.0.113.9", 5000))
+        with patch.object(main.settings, "ENVIRONMENT", environment):
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://localhost"
+            ) as client:
+                hidden = await client.get("/health/detailed")
+                missing = await client.get("/health/no-such-route")
+
+        assert hidden.status_code == missing.status_code == 404
+        assert hidden.json() == missing.json()
