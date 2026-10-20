@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3455](https://github.com/thegspiro/the-logbook/pull/3455)** (branch
+`claude/security-review-medical-supplies-p15`). PR #3454 (Feature 22, Grants & fundraising, pass 9)
+merged to `main` with no open PR whose head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results, checked twice —
+once before starting and again immediately before branching) and nothing
+started for Feature 23 since, so this iteration reviewed Feature 23 (Medical
+supplies), pass 15. **0 fixed, 0 new findings** — a real (not zero-) delta
+since pass 14's baseline `dfa2d748`: one commit (`dce89db1`, truck-stock Next
+expiry, apparatus-only CSV column, old-lot exclusion) re-verified by direct
+code read against all seven `CHECKLIST.md` dimensions, org scoping and domain
+pinning intact throughout. MSUP-4/MSUP-11 (no row cap on
+`get_expiring_lots`/`list_lots`) re-confirmed open, owner-accepted, unchanged.
+See `MSUP-23-medical-supplies.md`'s **Pass 15** section. Rotation row 23 → ✅
+(pending this PR's merge); next is Feature 24 (Meetings & minutes).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22 Grants & fundraising pass 9, PR #3454, merged), preserved for history</summary>
+
 **PR [#3454](https://github.com/thegspiro/the-logbook/pull/3454)** (branch
 `claude/security-review-grants-fundraising-p9` — a distinct name, not the
 reused `claude/security-review-grants-fundraising` every prior pass of this
@@ -37,6 +55,8 @@ exact unbounded-amount shape, so the open item now covers them too (mirrored
 to `KNOWN_LIMITATIONS.md`). Route surface re-enumerated (45/45, unchanged).
 See `GF-22-grants-fundraising.md`'s **Pass 9** section. Rotation row 22 → ✅
 (pending this PR's merge); next is Feature 23 (Medical supplies).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21 Admin hours pass 9, PR #3451, merged), preserved for history</summary>
@@ -20361,7 +20381,7 @@ iteration's commit" rule.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
@@ -35219,3 +35239,59 @@ Findings doc: [`RPT6-29-reports-analytics.md`](./RPT6-29-reports-analytics.md)'s
 entry already carries an accurate "✅ Resolved 2026-10-11" note, re-checked
 against current code rather than taken on its own say-so. Rotation row 29 →
 ✅. Next: Feature 30 (Onboarding).
+
+### 2026-10-20 — Feature 23 (Medical supplies, pass 15) — watchdog pickup, 0 fixed, 0 new findings
+
+**Step 0.** `search_pull_requests` (`is:open head:claude/security-review-`)
+returned 0 results before starting, and again immediately before branching —
+no open security-review PR either time. Row 23 (Medical supplies) was
+confirmed the first `⬜` in the rotation table.
+
+**Scope check.** Pass 14 landed as `dfa2d748` (merged via PR #3352,
+2026-10-17). `git log dfa2d748..origin/main` restricted to this feature's
+own files found one substantive commit since: `dce89db1` ("Medical
+Supplies: truck stock in Next expiry, apparatus-only in CSV, old lots left
+out", merged via PR #3356) — real new surface, not a zero-delta pickup.
+Read in full against all seven `CHECKLIST.md` dimensions: Next expiry now
+takes the soonest of the shelf and the apparatus
+(`EquipmentCheckService.apparatus_expiring_stock` gaining `item_ids` and an
+open `days_ahead=None` window, both additive to its existing
+`organization_id` filters); CSV import/export/template gained "Kept on
+Apparatus Only" (Yes/No only, refuses any other value, blocks lot columns
+on such a row in both directions); old shelf lots of a now-apparatus-only
+supply are excluded from the expiring list/tiles/Next expiry through a new
+`InventoryService._shelf_lots_count` filter whose own subquery
+(`_category_ids_of_type`) is independently org-scoped rather than relying
+on the outer query alone. No schema/migration change; two new `Optional`
+response fields, both transient/computed, no PHI/PII. Frontend side is
+additive JSX display of the two new fields (auto-escaped) plus copy
+changes — no new form field, so no `||`/`??` surface added. Re-read the
+full current file (2190 lines, all 25 routes) rather than spot-checking:
+every route still carries `Depends(require_permission(...))` domain-first;
+every by-id mutation still re-checks the medical domain under the row's own
+lock via `required_item_types=MEDICAL_ITEM_TYPES` (MSUP-25's pattern);
+`move_items_to` and the CSV import's category/vendor matches stay
+in-org/in-domain before any write; all three CSV export/template routes use
+`SafeCsvWriter`; the low-stock alert
+(`scheduled_tasks.py::run_inventory_low_stock_alerts`) remains email-only
+and splits recipients by domain so a medical-only officer's email never
+carries gear rows; expiration/received dates stay plain `date` columns
+compared through `resolve_org_today()`, including the new truck-stock
+comparisons. **0 new findings.**
+
+MSUP-4 (`get_expiring_lots`, no row cap) and MSUP-11 (`list_lots`, no row
+cap) re-checked at their current line numbers and remain open, owner-accepted
+(2026-10-05), unchanged. No stale-finding correction needed — MSUP-15's
+pass-14 correction still holds.
+
+**Gate**: `flake8`/`black --check`/`isort --check-only` clean over `app/
+tests/ alembic/`; `validate_migrations.py --strict` — single head
+`ca0c2111466f`, 631 revisions; `pytest tests/ -q -k "medical_supplies or
+medical_supply"` — 162 passed, 1 pre-existing skip; frontend `npm run
+typecheck` and `npm run lint` both clean.
+
+Findings doc: [`MSUP-23-medical-supplies.md`](./MSUP-23-medical-supplies.md)'s
+**Pass 15** section. No `KNOWN_LIMITATIONS.md` change needed — MSUP-4/MSUP-11's
+existing rows already carry the accurate owner-accepted status, re-checked
+against current code. Rotation row 23 → ✅ (pending this PR's merge). Next:
+Feature 24 (Meetings & minutes).
