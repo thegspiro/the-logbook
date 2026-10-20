@@ -20,6 +20,12 @@ from pydantic import (
 )
 
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import (
+    FLOAT32_MAX,
+    INT32_MAX,
+    INT32_MIN,
+    MONEY_MAX,
+)
 from app.utils.garment_styles import FIT_VALUES, first_conflicting_axis
 from app.utils.item_aliases import normalize_aliases
 from app.utils.label_renderer import SHEET_LABELS_PER_PAGE, SYMBOLOGY_CODE128
@@ -37,13 +43,6 @@ FreeText = Annotated[str, StringConstraints(max_length=2000)]
 EntityName = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
 ]
-
-# Upper bounds mirror the column types they land in. Without them a value the
-# type cannot hold passes validation and fails at flush as MySQL error 1264,
-# which the endpoint can only report as "An unexpected error occurred".
-INT32_MAX = 2**31 - 1  # Integer
-MONEY_MAX = Decimal("99999999.99")  # Numeric(10, 2)
-FLOAT32_MAX = 3.4e38  # MySQL FLOAT is single precision
 
 
 def _blank_identifier_to_none(value: Optional[str]) -> Optional[str]:
@@ -656,7 +655,7 @@ class InventoryItemBase(BaseModel):
     # Kept on the apparatus only; see InventoryItem.apparatus_only.
     apparatus_only: bool = False
     inspection_interval_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
-    min_rank_order: Optional[int] = None
+    min_rank_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     restricted_to_positions: Optional[List[str]] = None
     notes: Optional[FreeText] = None
     custom_fields: Optional[Dict[str, Any]] = None
@@ -713,8 +712,8 @@ class InventoryItemBulkEntry(BaseModel):
     description: Optional[FreeText] = None
     category_id: Optional[UUID] = None
     unit_of_measure: Optional[str] = Field(None, max_length=50)
-    quantity: Optional[int] = Field(None, ge=0)
-    reorder_point: Optional[int] = Field(None, ge=0)
+    quantity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    reorder_point: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     tracking_type: Optional[TrackingTypeLiteral] = None
 
 
@@ -773,7 +772,7 @@ class InventoryItemUpdate(BaseModel):
     last_inspection_date: Optional[date] = None
     next_inspection_due: Optional[date] = None
     inspection_interval_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
-    min_rank_order: Optional[int] = None
+    min_rank_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     restricted_to_positions: Optional[List[str]] = None
     notes: Optional[FreeText] = None
     custom_fields: Optional[Dict[str, Any]] = None
@@ -931,7 +930,7 @@ class InventoryLotBase(BaseModel):
 
     lot_number: Optional[str] = Field(None, max_length=100)
     expiration_date: Optional[date] = None
-    quantity: int = Field(0, ge=0)
+    quantity: int = Field(0, ge=0, le=INT32_MAX)
     received_date: Optional[date] = None
     notes: Optional[FreeText] = None
 
@@ -947,7 +946,7 @@ class InventoryLotBulkEntry(InventoryLotBase):
     # A received line with no units is a data-entry slip, not an empty lot: the
     # base schema's 0 default is right for "I am tracking this lot but have
     # none left", and wrong for goods coming through the door.
-    quantity: int = Field(..., ge=1)
+    quantity: int = Field(..., ge=1, le=INT32_MAX)
 
 
 class InventoryLotBulkCreate(BaseModel):
@@ -961,7 +960,7 @@ class InventoryLotUpdate(BaseModel):
 
     lot_number: Optional[str] = Field(None, max_length=100)
     expiration_date: Optional[date] = None
-    quantity: Optional[int] = Field(None, ge=0)
+    quantity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     received_date: Optional[date] = None
     notes: Optional[FreeText] = None
 
@@ -1068,7 +1067,9 @@ class ItemIssuanceCreate(BaseModel):
     """Schema for issuing units from a pool item to a member"""
 
     user_id: UUID
-    quantity: int = Field(default=1, ge=1, description="Number of units to issue")
+    quantity: int = Field(
+        default=1, ge=1, description="Number of units to issue", le=INT32_MAX
+    )
     issue_reason: Optional[FreeText] = None
     override_allowance: bool = Field(
         default=False,
@@ -1082,7 +1083,10 @@ class ItemIssuanceReturnRequest(BaseModel):
     return_condition: Optional[ReturnConditionLiteral] = None
     return_notes: Optional[FreeText] = None
     quantity_returned: Optional[int] = Field(
-        None, ge=1, description="Partial return; defaults to full issuance quantity"
+        None,
+        ge=1,
+        description="Partial return; defaults to full issuance quantity",
+        le=INT32_MAX,
     )
 
 
@@ -1201,7 +1205,7 @@ class NFPAInspectionDetailCreate(BaseModel):
     contamination_level: Optional[ContaminationLevelLiteral] = None
     facepiece_seal: Optional[bool] = None
     regulator_function: Optional[bool] = None
-    cylinder_pressure: Optional[float] = None
+    cylinder_pressure: Optional[float] = Field(None, ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     low_air_alarm: Optional[bool] = None
     recommendation: Optional[NFPARecommendationLiteral] = None
 
@@ -1215,13 +1219,13 @@ class MaintenanceRecordBase(BaseModel):
     next_due_date: Optional[date] = None
     performed_by: Optional[UUID] = None
     vendor_name: Optional[str] = Field(None, max_length=255)
-    cost: Optional[Decimal] = Field(None, ge=0)
+    cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     condition_before: Optional[ItemConditionLiteral] = None
     condition_after: Optional[ItemConditionLiteral] = None
     description: Optional[FreeText] = None
     parts_replaced: Optional[List[str]] = None
-    parts_cost: Optional[Decimal] = Field(None, ge=0)
-    labor_hours: Optional[float] = Field(None, ge=0)
+    parts_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    labor_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     passed: Optional[bool] = None
     notes: Optional[FreeText] = None
     issues_found: Optional[List[str]] = None
@@ -1275,13 +1279,13 @@ class MaintenanceRecordUpdate(BaseModel):
     next_due_date: Optional[date] = None
     performed_by: Optional[UUID] = None
     vendor_name: Optional[str] = Field(None, max_length=255)
-    cost: Optional[Decimal] = Field(None, ge=0)
+    cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     condition_before: Optional[ItemConditionLiteral] = None
     condition_after: Optional[ItemConditionLiteral] = None
     description: Optional[FreeText] = None
     parts_replaced: Optional[List[str]] = None
-    parts_cost: Optional[Decimal] = Field(None, ge=0)
-    labor_hours: Optional[float] = Field(None, ge=0)
+    parts_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    labor_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     passed: Optional[bool] = None
     notes: Optional[FreeText] = None
     issues_found: Optional[List[str]] = None
@@ -1624,7 +1628,9 @@ class BatchScanItem(BaseModel):
     item_id: Optional[UUID] = Field(
         default=None, description="Item ID for direct lookup (bypasses code search)"
     )
-    quantity: int = Field(default=1, ge=1, description="Quantity (for pool items)")
+    quantity: int = Field(
+        default=1, ge=1, description="Quantity (for pool items)", le=INT32_MAX
+    )
     operation: Literal[
         "permanent_assignment", "temporary_assignment", "temporary_loan"
     ] = Field(
@@ -1731,7 +1737,7 @@ class BatchReturnItem(BaseModel):
     )
     damage_notes: Optional[FreeText] = None
     quantity: int = Field(
-        default=1, ge=1, description="Quantity returned (for pool items)"
+        default=1, ge=1, description="Quantity returned (for pool items)", le=INT32_MAX
     )
 
 
@@ -1871,7 +1877,7 @@ class EquipmentRequestCreate(BaseModel):
     item_name: str = Field(..., min_length=1, max_length=255)
     item_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
-    quantity: int = Field(default=1, ge=1)
+    quantity: int = Field(default=1, ge=1, le=INT32_MAX)
     requested_duration: RequestedDurationLiteral
     priority: RequestPriorityLiteral = Field(default="normal")
     reason: Optional[FreeText] = None
@@ -1992,7 +1998,7 @@ class EquipmentRequestFulfill(BaseModel):
 
     fulfillment_type: FulfillmentTypeLiteral
     item_id: Optional[UUID] = None
-    quantity: Optional[int] = Field(default=None, ge=1)
+    quantity: Optional[int] = Field(default=None, ge=1, le=INT32_MAX)
     expected_return_at: Optional[datetime] = None
     override_allowance: bool = False
     substitution_override_reason: Optional[FreeText] = Field(
@@ -2016,7 +2022,7 @@ class StorageAreaCreate(BaseModel):
     parent_id: Optional[UUID] = None
     location_id: Optional[UUID] = None
     barcode: Optional[str] = Field(None, max_length=255)
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
 
 
 class StorageAreaUpdate(BaseModel):
@@ -2029,7 +2035,7 @@ class StorageAreaUpdate(BaseModel):
     parent_id: Optional[UUID] = None
     location_id: Optional[UUID] = None
     barcode: Optional[str] = Field(None, max_length=255)
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     is_active: Optional[bool] = None
 
 
@@ -2268,10 +2274,10 @@ class SizeVariantCreate(BaseModel):
     )
     category_id: Optional[UUID] = None
     quantity_per_variant: int = Field(
-        default=0, ge=0, description="Starting quantity for each variant"
+        default=0, ge=0, description="Starting quantity for each variant", le=INT32_MAX
     )
-    replacement_cost: Optional[Decimal] = Field(None, ge=0)
-    purchase_price: Optional[Decimal] = Field(None, ge=0)
+    replacement_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    purchase_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     tracking_type: TrackingTypeLiteral = "pool"
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     location_id: Optional[UUID] = None
@@ -2327,7 +2333,7 @@ class BulkIssuanceTarget(BaseModel):
     """A single member + quantity in a bulk issuance."""
 
     user_id: UUID
-    quantity: int = Field(default=1, ge=1)
+    quantity: int = Field(default=1, ge=1, le=INT32_MAX)
     issue_reason: Optional[FreeText] = None
 
 
@@ -2374,14 +2380,16 @@ class IssuanceAllowanceCreate(BaseModel):
     )
     # 0 is a deliberate setting: "none may be issued" for this role/category.
     # It is distinct from having no allowance row, which leaves issuance uncapped.
-    max_quantity: int = Field(..., ge=0, description="Max units per period")
+    max_quantity: int = Field(
+        ..., ge=0, description="Max units per period", le=INT32_MAX
+    )
     period_type: AllowancePeriodLiteral = "annual"
 
 
 class IssuanceAllowanceUpdate(BaseModel):
     """Update an issuance allowance."""
 
-    max_quantity: Optional[int] = Field(None, ge=0)
+    max_quantity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     period_type: Optional[AllowancePeriodLiteral] = None
     is_active: Optional[bool] = None
 
@@ -2429,7 +2437,10 @@ class IssuanceChargeRequest(BaseModel):
         ..., description="Set to 'charged' or 'waived'"
     )
     charge_amount: Optional[Decimal] = Field(
-        None, ge=0, description="Amount to charge (defaults to unit_cost_at_issuance)"
+        None,
+        ge=0,
+        description="Amount to charge (defaults to unit_cost_at_issuance)",
+        le=MONEY_MAX,
     )
 
 
@@ -2484,7 +2495,7 @@ class ReturnRequestCreate(BaseModel):
     assignment_id: Optional[UUID] = None
     issuance_id: Optional[UUID] = None
     checkout_id: Optional[UUID] = None
-    quantity_returning: int = Field(default=1, ge=1)
+    quantity_returning: int = Field(default=1, ge=1, le=INT32_MAX)
     reported_condition: ReturnConditionLiteral = "good"
     member_notes: Optional[FreeText] = None
 
@@ -2506,7 +2517,7 @@ class ReturnRequestReview(BaseModel):
         description="Condition independently observed during receipt or inspection",
     )
     verified_identifier: Optional[str] = Field(None, max_length=255)
-    received_quantity: Optional[int] = Field(None, ge=1)
+    received_quantity: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     follow_up: Literal["auto", "none", "maintenance", "charge_review", "write_off"] = (
         "auto"
     )
@@ -2560,11 +2571,11 @@ class ReorderRequestCreate(BaseModel):
     item_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     item_name: str = Field(..., min_length=1, max_length=255)
-    quantity_requested: int = Field(default=1, ge=1)
+    quantity_requested: int = Field(default=1, ge=1, le=INT32_MAX)
     vendor: Optional[str] = Field(None, max_length=255)
     vendor_contact: Optional[str] = Field(None, max_length=255)
     vendor_id: Optional[UUID] = None
-    estimated_unit_cost: Optional[Decimal] = Field(None, ge=0)
+    estimated_unit_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     expected_delivery_date: Optional[date] = None
     urgency: ReorderUrgencyLiteral = "normal"
     notes: Optional[FreeText] = None
@@ -2580,13 +2591,13 @@ class ReorderRequestUpdate(BaseModel):
     # (checked by the service, as on create).
     category_id: Optional[UUID] = None
     item_name: Optional[str] = Field(None, min_length=1, max_length=255)
-    quantity_requested: Optional[int] = Field(None, ge=1)
-    quantity_received: Optional[int] = Field(None, ge=0)
+    quantity_requested: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    quantity_received: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     vendor: Optional[str] = Field(None, max_length=255)
     vendor_contact: Optional[str] = Field(None, max_length=255)
     vendor_id: Optional[UUID] = None
-    estimated_unit_cost: Optional[Decimal] = Field(None, ge=0)
-    actual_unit_cost: Optional[Decimal] = Field(None, ge=0)
+    estimated_unit_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    actual_unit_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     purchase_order_number: Optional[str] = Field(None, max_length=255)
     expected_delivery_date: Optional[date] = None
     status: Optional[ReorderStatusLiteral] = None
@@ -2598,7 +2609,7 @@ class ReorderTransitionRequest(BaseModel):
     """A normal workflow transition. expected_version prevents stale writes."""
 
     action: Literal["approve", "mark_ordered", "cancel"]
-    expected_version: int = Field(..., ge=1)
+    expected_version: int = Field(..., ge=1, le=INT32_MAX)
     vendor_id: Optional[UUID] = None
     vendor: Optional[str] = Field(None, max_length=255)
     purchase_order_number: Optional[str] = Field(None, max_length=255)
@@ -2607,16 +2618,16 @@ class ReorderTransitionRequest(BaseModel):
 class ReorderCorrectionRequest(BaseModel):
     status: ReorderStatusLiteral
     reason: str = Field(..., min_length=3, max_length=2000)
-    expected_version: int = Field(..., ge=1)
+    expected_version: int = Field(..., ge=1, le=INT32_MAX)
 
 
 class ReorderReceiptCreate(BaseModel):
-    quantity: int = Field(..., gt=0)
-    expected_version: int = Field(..., ge=1)
+    quantity: int = Field(..., gt=0, le=INT32_MAX)
+    expected_version: int = Field(..., ge=1, le=INT32_MAX)
     idempotency_key: str = Field(..., min_length=1, max_length=100)
     lot_number: Optional[str] = Field(None, max_length=100)
     storage_location: str = Field(..., min_length=1, max_length=255)
-    unit_cost: Decimal = Field(..., ge=0)
+    unit_cost: Decimal = Field(..., ge=0, le=MONEY_MAX)
     expiration_date: Optional[date] = None
     confirm_over_receipt: bool = False
 
@@ -2670,8 +2681,8 @@ class ItemVariantGroupCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[FreeText] = None
     category_id: Optional[UUID] = None
-    base_price: Optional[Decimal] = Field(None, ge=0)
-    base_replacement_cost: Optional[Decimal] = Field(None, ge=0)
+    base_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    base_replacement_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
 
 
@@ -2681,8 +2692,8 @@ class ItemVariantGroupUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[FreeText] = None
     category_id: Optional[UUID] = None
-    base_price: Optional[Decimal] = Field(None, ge=0)
-    base_replacement_cost: Optional[Decimal] = Field(None, ge=0)
+    base_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    base_replacement_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
     active: Optional[bool] = None
 
@@ -2724,7 +2735,7 @@ class EquipmentKitItemCreate(BaseModel):
     item_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     item_name: str = Field(..., min_length=1, max_length=255)
-    quantity: int = Field(default=1, ge=1)
+    quantity: int = Field(default=1, ge=1, le=INT32_MAX)
     size_selectable: bool = False
     optional: bool = False
 
@@ -2735,7 +2746,7 @@ class EquipmentKitCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[FreeText] = None
     restricted_to_roles: Optional[List[str]] = None
-    min_rank_order: Optional[int] = None
+    min_rank_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     line_items: List[EquipmentKitItemCreate] = Field(
         ..., min_length=1, description="At least one item in the kit"
     )
@@ -2747,7 +2758,7 @@ class EquipmentKitUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[FreeText] = None
     restricted_to_roles: Optional[List[str]] = None
-    min_rank_order: Optional[int] = None
+    min_rank_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     active: Optional[bool] = None
     line_items: Optional[List[EquipmentKitItemCreate]] = Field(
         default=None, min_length=1
