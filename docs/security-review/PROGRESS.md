@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None yet. PR #3451 (Feature 21, Admin hours, pass 9) merged 2026-10-20,
+docs-only — not independently recordable here beyond what follows. This
+iteration (watchdog pickup — `list_pull_requests`/`search_pull_requests`
+(state open) returned 0 PRs, and the dedicated `/loop 30m /security-review`
+session was not reachable via `ListAgents`) is reviewing Feature 22 (Grants
+& fundraising), pass 9 — 0 fixed, 0 new findings. Not a zero-delta pass:
+four non-rotation commits (PR #3405 "app-review B14 grants", PR #3429
+"Workflow review W55–W73", and two commits merged via PR #3357) touched the
+declared backend scope files since pass 8's baseline `1199d849b`, all
+reviewed in full — a `reload_updated_at`/`db.refresh()` fix for eight
+update endpoints that 500ed, a new `assigned_to` field on application
+create (confirmed validated in-org, same as the existing update path), a
+campaign-creation `status` field (same `fundraising.manage` gate as every
+later status change), and new typed `GrantBudgetSummary`/`GrantKeyContact`
+request models replacing an untyped JSON shape (bounded, `extra="forbid"`,
+no Pitfall #12 shallow-copy concern). Both standing GF-9 items (unbounded
+money fields, donor-PII breadth) remain open, unchanged. Rotation row 22 →
+✅ (pending this PR's merge); next is Feature 23 (Medical supplies).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21 Admin hours pass 9, PR #3451, before it merged), preserved for history</summary>
+
 **PR [#3451](https://github.com/thegspiro/the-logbook/pull/3451)** (branch `claude/security-review-admin-hours-p9`). PR #3449
 (Feature 20, Compliance, pass 9) merged 2026-10-19, docs-only, so there was
 nothing to record. `list_pull_requests` (state open) returned 0 PRs, so this
@@ -26,6 +48,8 @@ with no lock). One non-rotation commit, `1ae0d0ac` (W70), touched
 `f698cdc2` and was reviewed in full; no other scope file moved. Rotation row
 21 is now ✅ (pending this PR's merge); next is Feature 22 (Grants &
 fundraising).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20 Compliance pass 9, PR #3449, before it merged), preserved for history</summary>
@@ -20333,7 +20357,7 @@ iteration's commit" rule.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
@@ -20353,6 +20377,36 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-20 — Feature 22 (Grants & fundraising, pass 9) — watchdog pickup, 0 fixed, 0 new findings, four non-rotation commits reviewed in full
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): `list_pull_requests`/`search_pull_requests`
+(`is:open head:claude/security-review-`) returned 0 results, and the
+dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`) was not
+reachable (`ListAgents`). PR #3451 (Feature 21, Admin hours, pass 9) had
+just merged, docs-only. Rotation row 22 (Grants & fundraising) was the next
+pending feature.
+
+**0 fixes applied, 0 new findings — not a zero-delta pass.** Baseline
+`1199d849b` (PR #3339's merge commit, pass 8). Four non-rotation commits
+touched the declared backend scope files: PR #3405 ("app-review B14
+grants") added `reload_updated_at`/`db.refresh()` calls fixing eight update
+endpoints that answered 500 after a successful write (MySQL's
+`onupdate=func.now()` expires `updated_at`, and a lazy read of it outside a
+greenlet context rolled the transaction back), and added a validated,
+in-org `assigned_to` field to grant-application create; PR #3429
+("Workflow review W55–W73", commits `3b12bd71c`/W68 and `0913cf9bb`/W69)
+and the two commits merged via PR #3357 together took `budget_summary`/
+`key_contacts` from an untyped JSON shape to new, strict, bounded
+`GrantBudgetSummary`/`GrantKeyContact` request models, and added a
+`fundraising.manage`-gated `status` field to campaign creation. All
+reviewed in full against the checklist; no finding in any of them. Both
+standing GF-9 items (unbounded money fields; donor-PII breadth for
+`fundraising.view`) remain open, re-verified unchanged.
+
+Full writeup: [`GF-22-grants-fundraising.md`](./GF-22-grants-fundraising.md)'s
+**Pass 9** section.
 
 ### 2026-10-20 — Feature 21 (Admin hours, pass 9) — 0 fixed, 1 new LOW flagged (AH-18); W70 commit `1ae0d0ac` reviewed in full
 
