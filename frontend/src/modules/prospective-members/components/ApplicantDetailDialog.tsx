@@ -31,7 +31,7 @@ import {
 import toast from 'react-hot-toast';
 import type { Applicant, ChecklistConfig, MultiApprovalConfig, StageHistoryEntry } from '../types';
 import { StepProgressStatus } from '../types';
-import { isSafeUrl, getInitials } from '../utils';
+import { approverRoleLabel, isSafeUrl, getInitials } from '../utils';
 import { STAGE_TYPE_ICONS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { blankToNull } from '../../../utils/formValues';
@@ -783,11 +783,15 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
                           {requiredApprovers.length > 0 ? (
                             <ul className="space-y-2" aria-label="Approval status">
                               {requiredApprovers.map((role) => {
-                                const approval = approvals.find((a) => a.role.toLowerCase() === role.toLowerCase());
+                                // Signers sign the trimmed role, so a padded stored key
+                                // must be trimmed to find its approval.
+                                const approval = approvals.find(
+                                  (a) => a.role.trim().toLowerCase() === role.trim().toLowerCase()
+                                );
                                 return (
                                   <li key={role} className="flex items-center justify-between text-xs">
-                                    <span className="text-theme-text-secondary capitalize">
-                                      {role.replace(/_/g, ' ')}
+                                    <span className="text-theme-text-secondary">
+                                      {approverRoleLabel(role, applicant.current_stage_approver_labels)}
                                     </span>
                                     {approval ? (
                                       <span className="flex items-center gap-1 text-emerald-500">
