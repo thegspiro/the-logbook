@@ -145,7 +145,7 @@ from app.models.event import (
     default_reminder_target,
 )
 from app.models.inventory import MEDICAL_ITEM_TYPES
-from app.models.user import Organization, User
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
 from app.services.call_tracking_service import CallTrackingService
 from app.services.email_policy import (
     DepartmentRequired,
@@ -7251,7 +7251,6 @@ async def run_notify_expired_passwords(db: AsyncSession) -> Dict[str, Any]:
     it once per expiry: it is cleared when the password changes.
     """
     from app.core.config import settings
-    from app.models.user import UserStatus
     from app.utils.password_expiry import password_change_deadline
     from app.utils.security_notifications import notify_security_event
 
@@ -7269,7 +7268,7 @@ async def run_notify_expired_passwords(db: AsyncSession) -> Dict[str, Any]:
             .join(Organization, Organization.id == User.organization_id)
             .where(
                 Organization.active.isnot(False),
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
                 User.password_hash.is_not(None),
                 User.password_changed_at <= expired_before,

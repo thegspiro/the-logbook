@@ -33,7 +33,7 @@ from app.core.constants import (
 )
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import TrainingRecord, TrainingStatus
-from app.models.user import Organization, User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
 from app.services.email_policy import (
     DepartmentRequired,
     EmailKind,
@@ -153,7 +153,7 @@ class CertAlertService:
         result = await self.db.execute(
             select(User)
             .where(User.organization_id == organization_id)
-            .where(User.status == UserStatus.ACTIVE)
+            .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
             .where(User.deleted_at.is_(None))
             .options(selectinload(User.roles))
         )

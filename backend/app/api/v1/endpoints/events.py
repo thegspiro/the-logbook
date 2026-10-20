@@ -46,7 +46,12 @@ from app.models.event import (
     RSVPStatus,
 )
 from app.models.notification import NotificationChannel
-from app.models.user import Organization, Position, User, UserStatus
+from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
+    Organization,
+    Position,
+    User,
+)
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
     AnalyticsSummary,
@@ -2095,7 +2100,7 @@ async def get_eligible_members(
     members_result = await db.execute(
         select(User)
         .where(User.organization_id == str(current_user.organization_id))
-        .where(User.status == UserStatus.ACTIVE)
+        .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
         .where(User.deleted_at.is_(None))
         .order_by(User.last_name, User.first_name)
     )

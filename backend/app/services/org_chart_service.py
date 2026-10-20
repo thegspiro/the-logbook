@@ -31,7 +31,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.operational_rank import OperationalRank
 from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
-from app.models.user import Position, User, UserStatus, user_positions
+from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
+    Position,
+    User,
+    user_positions,
+)
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -143,7 +148,7 @@ class OrgChartService:
             .where(
                 user_positions.c.position_id.in_(list(position_ids)),
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
         )
@@ -166,7 +171,7 @@ class OrgChartService:
             select(User).where(
                 User.rank.in_(list(rank_codes)),
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
         )
@@ -330,7 +335,7 @@ class OrgChartService:
         result = await self.db.execute(
             select(User).where(
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
         )

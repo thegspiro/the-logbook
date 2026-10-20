@@ -529,6 +529,35 @@ Three changes to how a session ends. None blocks a restart and none needs a migr
 A reverse proxy that strips unknown request headers needs nothing: the header only
 shortens the sender's own session.
 
+### A probationary account is a current member everywhere (2026-10-20)
+
+`probationary` is one of the account statuses an officer can set from a
+member's profile (**Change status**), and junior members derive to it. Sign-in
+and shift eligibility already treated it as current, but about forty other
+queries asked for the literal `active` status and left probationary accounts
+out: training compliance and the compliance officer views, certificate expiry
+alerts, the competency matrix, meeting quorum's denominator, the attendance
+dashboard, the org chart, the training and compliance reports and CSV exports,
+saved report recipients, the inventory assignee pickers and impact planner,
+the consent roster, the forms and skills-test member searches, event
+eligibility, pipeline sign-offs, and the administrator-continuity guard.
+
+All of them now count a probationary account as a current member. What you
+may notice after the upgrade, for any member whose status is probationary:
+
+- They appear in compliance, certification and training reports and alerts,
+  and can be picked as an assignee, candidate or recipient.
+- Percentage quorum divides by one more member each.
+- A probationary member holding an administrator position now counts as an
+  administrator, so removing the last active one is refused if a probationary
+  one remains, and vice versa.
+- "Active members" counts on the dashboards, the members page and the
+  reports include them. The admin hub keeps separate Active and Probationary
+  tiles, which still add up to the current roster.
+
+No data changes and no migration runs; the rule is enforced by
+`backend/tests/test_account_status_gates.py`.
+
 ### Ranked-choice paper ballots are counted, and entered ballot by ballot (2026-10-20)
 
 Paper votes in a **ranked-choice** race were miscounted. The instant-runoff

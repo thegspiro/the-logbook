@@ -23,7 +23,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.models.inventory import CheckOutRecord, ItemAssignment, PropertyReturnReminder
-from app.models.user import Organization, User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User, UserStatus
 from app.services.email_policy import (
     EmailKind,
     department_required_kinds,
@@ -426,7 +426,7 @@ class PropertyReturnReminderService:
             select(User)
             .where(
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
             .options(selectinload(User.roles))

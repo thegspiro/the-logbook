@@ -23,7 +23,7 @@ from app.core.audit import log_audit_event
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.core.database import database_manager, get_db
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
-from app.models.user import Organization, User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User, UserStatus
 from app.schemas.member_service import RejoinServiceOptions
 from app.schemas.organization import MembershipTierSettings
 from app.services.admin_continuity_service import (
@@ -548,7 +548,7 @@ async def change_member_status(
                     select(User)
                     .where(
                         User.organization_id == current_user.organization_id,
-                        User.status == UserStatus.ACTIVE,
+                        User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                         User.deleted_at.is_(None),
                     )
                     .options(selectinload(User.roles))
