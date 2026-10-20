@@ -583,7 +583,7 @@ export const PipelineSettingsPage: React.FC = () => {
                         <span
                           className={`rounded px-2 py-0.5 text-xs ${
                             currentPipeline.is_active
-                              ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                              ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
                               : 'bg-theme-surface-hover text-theme-text-muted'
                           }`}
                         >

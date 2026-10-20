@@ -84,6 +84,9 @@ const CompliancePrintPage: React.FC = () => {
   const headerCell: React.CSSProperties = {
     ...cellStyle,
     fontWeight: 600,
+    // The sheet is always paper-white; without this a <th> inherits the dark
+    // theme's white heading colour and disappears into #f5f5f5.
+    color: '#111',
     backgroundColor: '#f5f5f5',
     fontSize: '7.5pt',
     textTransform: 'uppercase',
@@ -237,7 +240,7 @@ const CompliancePrintPage: React.FC = () => {
                         Training Officer
                       </p>
                       <div style={{ borderBottom: '1px solid #999', marginBottom: '4pt' }} />
-                      <p style={{ margin: 0, fontSize: '8pt', color: '#999' }}>Signature / Date</p>
+                      <p style={{ margin: 0, fontSize: '8pt', color: '#555' }}>Signature / Date</p>
                     </td>
                     <td style={{ width: '50%', paddingLeft: '20pt', verticalAlign: 'bottom' }}>
                       <p
@@ -252,7 +255,7 @@ const CompliancePrintPage: React.FC = () => {
                         Chief / Department Head
                       </p>
                       <div style={{ borderBottom: '1px solid #999', marginBottom: '4pt' }} />
-                      <p style={{ margin: 0, fontSize: '8pt', color: '#999' }}>Signature / Date</p>
+                      <p style={{ margin: 0, fontSize: '8pt', color: '#555' }}>Signature / Date</p>
                     </td>
                   </tr>
                 </tbody>
@@ -269,7 +272,7 @@ const CompliancePrintPage: React.FC = () => {
               display: 'flex',
               justifyContent: 'space-between',
               fontSize: '7pt',
-              color: '#aaa',
+              color: '#666',
             }}
           >
             <span>The Logbook — Training Compliance Report</span>

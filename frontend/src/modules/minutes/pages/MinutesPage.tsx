@@ -64,7 +64,7 @@ const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   {
     value: 'trustee',
     label: 'Trustee Meeting',
-    color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+    color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
   },
   {
     value: 'executive',

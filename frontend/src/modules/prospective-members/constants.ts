@@ -97,7 +97,7 @@ export const STAGE_TYPE_LABELS: Record<StageType, string> = {
 };
 
 export const APPLICANT_STATUS_COLORS: Record<ApplicantStatus, string> = {
-  active: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400',
+  active: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300',
   on_hold: 'bg-amber-500/20 text-amber-700 dark:text-amber-400',
   withdrawn: 'bg-theme-surface-hover text-theme-text-muted',
   converted: 'bg-blue-500/20 text-blue-700 dark:text-blue-400',

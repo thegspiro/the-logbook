@@ -93,7 +93,7 @@ const STATUS_CONFIG: Record<EventRequestStatus, { label: string; color: string; 
   },
   completed: {
     label: 'Completed',
-    color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+    color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
     icon: CheckCircle,
   },
 };
