@@ -140,7 +140,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
             form-input's own mobile-only floor. */}
         <a
           href="/inventory/admin/checklists/templates/new"
-          className="touch:min-h-[44px] flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-700"
+          className="touch:min-h-[44px] flex items-center gap-1 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-800"
         >
           <Plus className="h-3.5 w-3.5" /> Create Template
         </a>
@@ -199,7 +199,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
           </p>
           <a
             href="/inventory/admin/checklists/templates/new"
-            className="touch:min-h-[44px] inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-700"
+            className="touch:min-h-[44px] inline-flex items-center gap-1 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-800"
           >
             <Plus className="h-3.5 w-3.5" /> Create First Template
           </a>

@@ -84,7 +84,10 @@ const AllowancesPage: React.FC = () => {
   };
 
   const handleSave = async () => {
-    const qty = Number(form.max_quantity);
+    const rawQty = form.max_quantity.trim();
+    // Number('') is 0, and 0 is a real setting ("none may be issued"), so an
+    // emptied box must be refused rather than silently saved as a zero cap.
+    const qty = rawQty === '' ? NaN : Number(rawQty);
     if (!form.category_id) {
       toast.error('Select a category');
       return;
@@ -201,7 +204,14 @@ const AllowancesPage: React.FC = () => {
                     )}
                   </div>
                   <p className="text-theme-text-muted mt-0.5 text-xs">
-                    {roleName(a.role_id)} — max <strong>{a.max_quantity}</strong>{' '}
+                    {roleName(a.role_id)} —{' '}
+                    {a.max_quantity === 0 ? (
+                      <strong>none may be issued</strong>
+                    ) : (
+                      <>
+                        max <strong>{a.max_quantity}</strong>
+                      </>
+                    )}{' '}
                     {periodLabel(a.period_type).toLowerCase()}
                   </p>
                 </div>

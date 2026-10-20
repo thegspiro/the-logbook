@@ -1572,3 +1572,105 @@ pass).
 
 Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
 `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
+
+## Pass 8 (2026-10-20)
+
+PR #3467 (Feature 27, Integrations, pass 8) merged with no next-feature PR
+open; this pass picked up Feature 28. `git log 20e31ed8..origin/main`
+(pass 7's merge commit) restricted to this feature's five backend scope
+files plus `core/audit.py`/`models/audit.py` found exactly one real
+commit: `c2aff901`, "Add weekly security and audit report emailed to the
+IT Manager."
+
+### Real delta since pass 7 — read in full
+
+`c2aff901` adds `GET`/`PUT /security/weekly-report` to
+`security_monitoring.py` and a new `security_weekly_report.py` service
+(541 L) plus its hourly `weekly_security_report` scheduled task. Read in
+full against this feature's own checklist dimensions (it was already
+reviewed from the notifications/messaging side under
+`MSG-25-messaging-notifications.md` pass 8, but that pass did not cover
+org-scoping/permission-gating on the new endpoints, which belong to this
+feature):
+
+- Both new routes resolve the organization from `current_user.organization_id`
+  via a new `_load_own_organization` helper — no client-supplied id, so
+  14a does not apply (there is nothing to scope against but the caller's
+  own org) and there is no 14b object-resolution gap either.
+- Both gated by `require_permission("security.manage", "settings.manage")`,
+  matching every other mutating endpoint in `security_monitoring.py`/
+  `ip_security.py`. The `PUT` audits the change via `log_audit_event`
+  (`security_weekly_report_updated`), consistent with this feature's own
+  established pattern.
+- `write_schedule`/`_record_sent` in the new service both `copy.deepcopy()`
+  `organization.settings` and reassign the whole dict before mutating a
+  nested key — the correct pattern per Pitfall #12, not the shallow-copy
+  bug.
+- `WeeklyReportSettings` (`schemas/security_alert.py`) bounds `weekday`
+  (0–6) and `hour` (0–23) and sets `extra="forbid"`.
+- `resolve_recipients` is org-scoped (`User.organization_id == org_id`,
+  joined through `Position.organization_id == org_id`), and
+  `gather_report_data`'s alert/error/audit-chain counts are each
+  correctly scoped: `SecurityAlertRecord`/`ErrorLog` by `organization_id`
+  (with a documented, deliberate `OR organization_id IS NULL` widening
+  for platform-level pre-auth alerts, gated on `_is_single_organization()`
+  so it only fires on a single-tenant install — same shape this feature's
+  own SEC2-28-7 resolution already established for the Security Alerts
+  screen); the audit-chain integrity check is explicitly installation-wide
+  by design ("the chain is installation-wide, not per department, so its
+  health is the same fact whichever department asks" — the chain has no
+  per-org partition anywhere else in this feature either, so this is
+  consistent, not a new leak). Only counts and a boolean leave the
+  function; no row content.
+- The email body (`build_subject`/report rendering, read in
+  `security_weekly_report.py`) is counts-only prose, every interpolated
+  value passed through `html.escape()` via the existing `_row()` helper —
+  no member name, username, IP or event description ever reaches the
+  message body, matching this feature's audit-log-export posture
+  (detail stays behind sign-in).
+- The hourly task (`scheduled_tasks.py`) uses the existing
+  `_for_each_org`/`TASK_RUNNERS`/`TASK_INTERVALS_SECONDS` registration
+  pattern every other per-org scheduled task in this codebase uses — a
+  bounded, DB-driven loop, not an unbounded in-memory tracking structure
+  (Pitfall #9 n/a).
+
+**Verified good, no new finding.**
+
+### Re-verified — every open finding re-checked against current code, not the doc
+
+- **SEC2-28-6** (LOW, flagged) — still open, unchanged. `c2aff901` does not
+  touch `request_ip_exception` or `ip_security_service.py`.
+- **Dead detector code** (pass 3, flagged) — re-grepped; still zero
+  production callers of `analyze_request`/`_check_rate_limit`/
+  `_check_injection_patterns`.
+- **All previously-FIXED/RESOLVED items** (SEC-1 through SEC-9, SEC2-28-1
+  through SEC2-28-11): no code touching their mechanisms changed this
+  pass; not independently re-exercised beyond the completion gate below.
+
+### Route inventory — re-enumerated, 37 routes (+2 from pass 7)
+
+Re-counted route decorators directly: 16 in `security_monitoring.py`
+(14 + the new weekly-report `GET`/`PUT`), 12 in `ip_security.py`, 3 in
+`audit_logs.py`, 6 in `error_logs.py` = 37. Every route carries an auth
+dependency (`require_permission` or `get_current_user`); none bare.
+
+### No new findings this pass
+
+**0 fixed, 0 new findings.** SEC2-28-6 and the dead-detector-code note
+remain open and still need their respective owner/product decision, not a
+drive-by fix. No `KNOWN_LIMITATIONS.md` change needed this pass.
+
+### Completion gate (Pass 8)
+
+| Check                                                                  | Result                                             |
+| ---------------------------------------------------------------------- | -------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                          | clean                                              |
+| `black --check app/ tests/ alembic/`                                   | clean                                              |
+| `isort --check-only app/ tests/ alembic/` (CI-pinned 9.0.1)            | clean                                              |
+| `python3 scripts/validate_migrations.py --strict`                      | PASSED — 631 revisions, single head `ca0c2111466f` |
+| backend tests, scope (as pass 7's list, plus `security_weekly_report`) | 552 passed, 1 pre-existing skip (`pywebpush`)      |
+| frontend `npm run typecheck` (`tsc-native.mjs --noEmit`)               | 0 errors                                           |
+| frontend `npm run lint` (`eslint --max-warnings 10`)                   | clean, exit 0                                      |
+
+Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
+`analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).

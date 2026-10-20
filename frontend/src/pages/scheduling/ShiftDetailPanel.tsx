@@ -1263,7 +1263,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 void handleSaveAssignmentNotes(assignment.id);
               }}
               disabled={pending.savingNotes}
-              className="rounded-sm bg-violet-600 px-2 py-1 text-xs text-white hover:bg-violet-700 disabled:opacity-50"
+              className="rounded-sm bg-violet-700 px-2 py-1 text-xs text-white hover:bg-violet-800 disabled:opacity-50"
             >
               {pending.savingNotes ? '...' : 'Save'}
             </button>
@@ -2163,7 +2163,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         void handleSaveEdit();
                       }}
                       disabled={pending.saving}
-                      className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-700 disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-1.5 text-sm text-white hover:bg-violet-800 disabled:opacity-50"
                     >
                       {pending.saving ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2541,7 +2541,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                             void handleAssign();
                           }}
                           disabled={pending.assigning || !assignForm.user_id}
-                          className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-700 disabled:opacity-50"
+                          className="rounded-lg bg-violet-700 px-3 py-1.5 text-sm text-white hover:bg-violet-800 disabled:opacity-50"
                         >
                           {pending.assigning ? 'Assigning...' : 'Assign'}
                         </button>
@@ -2597,7 +2597,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                             void handleBulkAssign();
                           }}
                           disabled={pending.bulkAssigning || Object.values(bulkAssignments).every((v) => !v)}
-                          className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-700 disabled:opacity-50"
+                          className="rounded-lg bg-violet-700 px-3 py-1.5 text-sm text-white hover:bg-violet-800 disabled:opacity-50"
                         >
                           {pending.bulkAssigning
                             ? 'Assigning...'
@@ -2719,7 +2719,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                           void handleSignup();
                         }}
                         disabled={pending.signingUp}
-                        className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white hover:bg-violet-800 disabled:opacity-50"
                       >
                         {pending.signingUp ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -2864,7 +2864,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                                   void handleAssignFromRoster(entry.user_id);
                                 }}
                                 disabled={pending.assigningRoster}
-                                className="rounded-md bg-violet-600 px-2 py-0.5 text-[11px] font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                                className="rounded-md bg-violet-700 px-2 py-0.5 text-[11px] font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
                               >
                                 Assign
                               </button>

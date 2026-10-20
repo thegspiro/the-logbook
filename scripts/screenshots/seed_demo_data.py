@@ -2705,6 +2705,7 @@ class Seeder:
         result["alternate"] = self._guide04_series_alternate(users, events)
         result["room pair"] = self._guide04_room_pair(by_title)
         result["meeting minutes"] = self._guide04_meeting_minutes()
+        result["accepted minutes"] = self._guide04_accepted_minutes()
         result["short outline"] = self._guide04_short_outline()
         return result
 
@@ -2871,6 +2872,122 @@ class Seeder:
                 minutes = self._guide04_circulate_with_closed_session(minutes)
             done.append(f"{title}: {pick(minutes, 'status')}")
         return "; ".join(done) or "no seeded meetings"
+
+    # Three business meetings, oldest first, so the guide can picture a later
+    # meeting accepting the minutes of an earlier one:
+    #   circulated -> its minutes were accepted by the next meeting (the Adopt
+    #                 dialog opens pre-filled, and the minutes carry a note)
+    #   accepted   -> the meeting whose Approval of Previous Minutes motion
+    #                 passed, recorded as submitted
+    #   pending    -> a meeting whose acceptance motion is prepared and waiting
+    #                 for a result
+    # Dated before the July Business Meeting so the Minutes page still opens on
+    # the records the other shots picture. Each meeting's minutes are made only
+    # after the one before is circulated, because the server links the prepared
+    # motion to the latest earlier minutes that are circulated or adopted.
+    GUIDE04_ACCEPTANCE_MEETINGS = (
+        ("Spring Business Meeting", 90),
+        ("Late Spring Business Meeting", 62),
+        ("Early Summer Business Meeting", 48),
+    )
+    GUIDE04_ACCEPTANCE_MOVER = "Rafael Duarte"
+    GUIDE04_ACCEPTANCE_SECONDER = "Esme Caldwell"
+    PREVIOUS_MINUTES_SECTION = "approval_of_previous"
+
+    def _guide04_accepted_minutes(self) -> str:
+        meetings = {
+            str(pick(m, "title")): m
+            for m in items(self.api.get("/meetings?limit=100"), "meetings")
+        }
+        for title, days_ago in self.GUIDE04_ACCEPTANCE_MEETINGS:
+            if title in meetings:
+                continue
+            meetings[title] = self.api.post(
+                "/meetings",
+                {
+                    "title": title,
+                    "meeting_type": "business",
+                    "meeting_date": str(TODAY - timedelta(days=days_ago)),
+                    "start_time": "19:00:00",
+                    "end_time": "20:15:00",
+                    "location": "Station 1 — Training Room",
+                    "called_by": "President",
+                    "agenda": "Reports; old business; new business.",
+                },
+            )
+        linked = {
+            str(pick(m, "meeting_id", "meetingId")): m
+            for m in items(self.api.get("/minutes-records?limit=100"), "minutes")
+            if pick(m, "meeting_id", "meetingId")
+        }
+        circulated_title, accepted_title, pending_title = (
+            title for title, _ in self.GUIDE04_ACCEPTANCE_MEETINGS
+        )
+
+        circulated = self._guide04_meeting_minutes_for(
+            meetings[circulated_title], linked
+        )
+        circulated = self._guide04_fill_required_sections(circulated)
+        if str(pick(circulated, "status") or "") == "draft":
+            circulated = self.api.post(
+                f"/minutes-records/{pick(circulated, 'id')}/submit"
+            )
+
+        accepted = self._guide04_meeting_minutes_for(meetings[accepted_title], linked)
+        self._guide04_record_acceptance(accepted, circulated)
+        self._guide04_meeting_minutes_for(meetings[pending_title], linked)
+        return (
+            f"{circulated_title}: {pick(circulated, 'status')}; "
+            f"{accepted_title}: acceptance recorded; "
+            f"{pending_title}: acceptance prepared"
+        )
+
+    def _guide04_meeting_minutes_for(self, meeting: dict, linked: dict) -> dict:
+        meeting_id = str(pick(meeting, "id"))
+        found = linked.get(meeting_id)
+        if found is not None:
+            return found
+        made = self.api.post(f"/minutes-records/from-meeting/{meeting_id}")
+        linked[meeting_id] = made
+        return made
+
+    def _guide04_record_acceptance(self, minutes: dict, previous: dict) -> None:
+        """Pass the prepared motion that accepts ``previous`` as submitted."""
+        minutes_id = pick(minutes, "id")
+        detail = self.api.get(f"/minutes-records/{minutes_id}")
+        prepared = [
+            m
+            for m in pick(detail, "motions") or []
+            if pick(m, "section_key", "sectionKey") == self.PREVIOUS_MINUTES_SECTION
+        ]
+        if not prepared:
+            self.blocked.append(
+                "accepted minutes: the business outline has no prepared "
+                "Approval of Previous Minutes motion"
+            )
+            return
+        motion = prepared[0]
+        if str(pick(motion, "status") or "") != "pending":
+            return
+        if str(pick(motion, "previous_minutes_id", "previousMinutesId") or "") != str(
+            pick(previous, "id")
+        ):
+            self.blocked.append(
+                "accepted minutes: the prepared motion is not linked to the "
+                "circulated minutes it should accept"
+            )
+            return
+        self.api.put(
+            f"/minutes-records/{minutes_id}/motions/{pick(motion, 'id')}",
+            {
+                "moved_by": self.GUIDE04_ACCEPTANCE_MOVER,
+                "seconded_by": self.GUIDE04_ACCEPTANCE_SECONDER,
+                "status": "passed",
+                "acceptance": "as_submitted",
+                "votes_for": 9,
+                "votes_against": 0,
+            },
+        )
 
     def _guide04_add_attendees(self, event_id: str, users: dict) -> None:
         """Put a few members on the roster as going, without checking them in.

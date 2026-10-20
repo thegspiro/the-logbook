@@ -39,7 +39,18 @@ import AllowancesPage from './AllowancesPage';
 
 describe('AllowancesPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    for (const mock of [
+      mockGetAllowances,
+      mockCreateAllowance,
+      mockUpdateAllowance,
+      mockDeleteAllowance,
+      mockGetCategories,
+      mockGetRoles,
+      mockToastSuccess,
+      mockToastError,
+    ]) {
+      mock.mockReset();
+    }
     mockGetCategories.mockResolvedValue([{ id: 'cat-1', name: 'Polos' }]);
     mockGetRoles.mockResolvedValue([{ id: 'role-1', name: 'Firefighter' }]);
     mockGetAllowances.mockResolvedValue([
@@ -89,6 +100,59 @@ describe('AllowancesPage', () => {
       });
     });
     expect(mockToastSuccess).toHaveBeenCalledWith('Allowance created');
+  });
+
+  // 0 is a real setting ("none may be issued"); an emptied box is not 0.
+  const openCreateForm = async (user: ReturnType<typeof userEvent.setup>) => {
+    mockGetAllowances.mockResolvedValueOnce([]);
+    mockCreateAllowance.mockResolvedValue({ id: 'a2' });
+    renderWithRouter(<AllowancesPage />);
+    await user.click(await screen.findByText('Create your first allowance'));
+    await user.selectOptions(await screen.findByLabelText('Category'), 'cat-1');
+    await user.clear(screen.getByLabelText('Max Quantity'));
+  };
+
+  it('accepts a maximum of 0', async () => {
+    const user = userEvent.setup();
+    await openCreateForm(user);
+    await user.type(screen.getByLabelText('Max Quantity'), '0');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => {
+      expect(mockCreateAllowance).toHaveBeenCalledWith({
+        category_id: 'cat-1',
+        role_id: undefined,
+        max_quantity: 0,
+        period_type: 'annual',
+      });
+    });
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('refuses a blank maximum with a message', async () => {
+    const user = userEvent.setup();
+    await openCreateForm(user);
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    expect(mockToastError).toHaveBeenCalledWith('Enter a whole number of 0 or more for max quantity');
+    expect(mockCreateAllowance).not.toHaveBeenCalled();
+  });
+
+  it('says a zero allowance permits none', async () => {
+    mockGetAllowances.mockResolvedValue([
+      {
+        id: 'a1',
+        organization_id: 'o1',
+        category_id: 'cat-1',
+        role_id: 'role-1',
+        max_quantity: 0,
+        period_type: 'annual',
+        is_active: true,
+      },
+    ]);
+    renderWithRouter(<AllowancesPage />);
+
+    expect(await screen.findByText('none may be issued')).toBeInTheDocument();
   });
 
   it('deletes an allowance after confirmation', async () => {

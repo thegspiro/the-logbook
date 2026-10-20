@@ -119,9 +119,12 @@ interface FieldProps {
   value: React.ReactNode;
 }
 const Field: React.FC<FieldProps> = ({ label, value }) => (
-  <div>
+  // min-w-0 lets the grid track shrink below an unbroken value's width; without
+  // it break-words has nothing to break against and the value bleeds into the
+  // neighbouring column.
+  <div className="min-w-0" data-testid="detail-field">
     <dt className="text-theme-text-muted text-xs">{label}</dt>
-    <dd className="text-theme-text-primary mt-0.5 text-sm">{value ?? '--'}</dd>
+    <dd className="text-theme-text-primary mt-0.5 text-sm break-words">{value ?? '--'}</dd>
   </div>
 );
 

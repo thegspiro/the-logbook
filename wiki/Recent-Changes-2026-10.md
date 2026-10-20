@@ -5,6 +5,23 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 19 – 20, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
+
+- **Minutes settings are one screen.** The Reminders, Roll listing, Publishing and
+  Signers buttons on the Minutes page are replaced by **Settings**, which has
+  Attendance, Signatures, Reminders and Publishing sections. Anyone who manages
+  minutes can read them; changing one needs the settings permission.
+- **Search inside the minutes.** The Minutes search box also finds words in the
+  minutes themselves, within what the person may already read.
+- **Accepting the previous minutes.** The Approval of Previous Minutes motion is
+  prepared with the minutes, records whether they were accepted as submitted or as
+  revised, and fills in the adoption form.
+- **Screenshots.** Nothing was re-captured. The gap report is in
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: October 18 – 19, 2026
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering

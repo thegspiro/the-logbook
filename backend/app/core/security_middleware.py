@@ -1376,7 +1376,9 @@ class IPBlockingMiddleware:
     # Paths that bypass IP blocking (health checks, onboarding, etc.)
     # Onboarding must be accessible from any location since it's the
     # first-time setup process before any configuration exists.
-    BYPASS_PATHS = {"/health", "/health/detailed", "/"}
+    # /health/detailed is deliberately absent: it reports configuration and
+    # host load, so a blocked IP or country must not be able to reach it.
+    BYPASS_PATHS = {"/health", "/"}
     BYPASS_PREFIXES = ("/api/v1/onboarding",)
 
     def __init__(

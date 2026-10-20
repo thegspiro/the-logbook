@@ -7,6 +7,8 @@ import { renderWithRouter } from '../test/utils';
 const getQualifications = vi.fn();
 const createQualification = vi.fn();
 const getUsers = vi.fn();
+const getExercises = vi.fn();
+const createExercise = vi.fn();
 
 vi.mock('../services/trainingServices', () => ({
   recertificationService: {},
@@ -16,7 +18,10 @@ vi.mock('../services/trainingServices', () => ({
     createQualification: (...args: unknown[]) => createQualification(...args) as unknown,
   },
   effectivenessService: {},
-  multiAgencyService: {},
+  multiAgencyService: {
+    getExercises: (...args: unknown[]) => getExercises(...args) as unknown,
+    createExercise: (...args: unknown[]) => createExercise(...args) as unknown,
+  },
   reportExportService: {},
 }));
 
@@ -110,5 +115,56 @@ describe('TrainingEnhancementsTab instructor qualifications', () => {
     const dialog = await openAddModal(user);
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Network Error');
+  });
+});
+
+describe('TrainingEnhancementsTab multi-agency exercises', () => {
+  beforeEach(() => {
+    getExercises.mockReset();
+    getExercises.mockResolvedValue([]);
+    createExercise.mockReset();
+    createExercise.mockResolvedValue({ id: 'ex-1' });
+    vi.mocked(toast.error).mockReset();
+    vi.mocked(toast.success).mockReset();
+  });
+
+  // The organization is optional: the form's hint says organizations can be
+  // added after the exercise is created, so a blank box sends an empty list.
+  it('creates an exercise with no participating organization', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingEnhancementsTab activeTab="multi-agency" />);
+    await user.click(await screen.findByRole('button', { name: 'Add Exercise' }));
+    const dialog = screen.getByRole('dialog');
+
+    expect(within(dialog).getByPlaceholderText('Agency name')).not.toBeRequired();
+    await user.type(within(dialog).getByPlaceholderText('e.g. Regional MCI Drill'), 'County Tabletop');
+    await user.click(within(dialog).getByRole('button', { name: 'Create Exercise' }));
+
+    await waitFor(() => expect(createExercise).toHaveBeenCalledTimes(1));
+    expect(createExercise.mock.calls[0]?.[0]).toMatchObject({
+      exercise_name: 'County Tabletop',
+      participating_organizations: [],
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith('Exercise created');
+  });
+
+  it('lists an exercise that has no organizations', async () => {
+    getExercises.mockResolvedValue([
+      {
+        id: 'ex-1',
+        organization_id: 'org-1',
+        exercise_name: 'County Tabletop',
+        exercise_type: 'tabletop',
+        exercise_date: '2026-11-12',
+        participating_organizations: [],
+        nims_compliant: false,
+        created_at: '2026-10-20T00:00:00Z',
+        updated_at: '2026-10-20T00:00:00Z',
+      },
+    ]);
+    renderWithRouter(<TrainingEnhancementsTab activeTab="multi-agency" />);
+
+    expect(await screen.findByRole('heading', { name: 'County Tabletop' })).toBeInTheDocument();
   });
 });

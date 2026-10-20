@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3475](https://github.com/thegspiro/the-logbook/pull/3475)** (branch
+`claude/security-review-security-audit-ip-p8`). This row was last updated
+for PR #3455 (Feature 23, Medical supplies, pass 15); PRs #3456 (Feature
+24, Meetings & minutes, pass 8), #3457 (Feature 25, Messaging &
+notifications, pass 8), #3458 (Feature 26, Forms, pass 8) and #3467
+(Feature 27, Integrations, pass 8) all merged to `main` since, each
+recording itself in the Log below — see those entries rather than a
+superseded note here for any of them. With all four merged,
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results, checked once before starting and again immediately
+before branching, so this iteration reviewed Feature 28 (Security, audit &
+IP), pass 8. **0 fixed, 0 new findings** — the one real delta since pass 7
+(the new weekly security/audit report's `GET`/`PUT /security/weekly-report`
+endpoints) was read in full from this feature's own angle — org scoping,
+permission gating, audit logging, deep-copy-safe JSON mutation — and found
+clean. See `SEC2-28-security-audit-ip.md`'s **Pass 8** section. Rotation
+row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23 Medical supplies pass 15, PR #3455, merged), preserved for history</summary>
+
 **PR [#3455](https://github.com/thegspiro/the-logbook/pull/3455)** (branch
 `claude/security-review-medical-supplies-p15`). PR #3454 (Feature 22, Grants & fundraising, pass 9)
 merged to `main` with no open PR whose head branch starts with
@@ -30,6 +52,8 @@ pinning intact throughout. MSUP-4/MSUP-11 (no row cap on
 `get_expiring_lots`/`list_lots`) re-confirmed open, owner-accepted, unchanged.
 See `MSUP-23-medical-supplies.md`'s **Pass 15** section. Rotation row 23 → ✅
 (pending this PR's merge); next is Feature 24 (Meetings & minutes).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22 Grants & fundraising pass 9, PR #3454, merged), preserved for history</summary>
@@ -20384,9 +20408,9 @@ iteration's commit" rule.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
@@ -20400,6 +20424,116 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-20 — Feature 27 (Integrations, pass 8) — directory-account engine generalized, Microsoft 365 added, Outlook calendar OAuth; 0 fixed, 0 new findings; INT-11 corrected to FIXED
+
+`search_pull_requests` (`repo:thegspiro/the-logbook is:pr is:open
+head:claude/security-review-`) returned 0 results immediately before
+starting, and again immediately before branching — no collision either
+time. PR #3458 (Feature 26, Forms, pass 8) had merged with nothing started
+for Feature 27 since; row 27 was the first `⬜`.
+
+**Delta.** Baseline `715c4b3f` (pass 7's merge, PR #3375). Four real
+commits since: `24061bc6` adds Outlook calendar OAuth connect, extracting
+the shared state/nonce/PKCE binding into a new `calendar_oauth_common.py`
+also used by the now-refactored Google Calendar OAuth; `b1ae3236`
+generalizes the Google-only provisioning engine into a provider-neutral
+`directory_account_service.py`; `d5c8f664` adds Microsoft 365 as the second
+directory provider; `86387e0e` (workflow-review W73) adds a required-field
+check to `integrations.py`'s connect endpoint. All four read in full and
+clean — see `INT-27-integrations.md`'s **Pass 8** section for the detail,
+including the OAuth state/nonce/PKCE binding, the Microsoft Graph client's
+OData escaping and next-link pinning, and the generalized engine's org
+scoping. Route surface re-enumerated: net +2 since pass 7 (the new Outlook
+OAuth pair), everything else unchanged.
+
+**One correction, not a new finding:** INT-11 ("Salesforce 'clear the
+refresh token' has no reachable UI control") was carried forward as OPEN
+through passes 6 and 7 although the control (`handleSwitchSalesforceToClientCredentials`)
+was already present and reachable at pass 7's own reviewed commit — a
+review error repeated across two passes, confirmed by reading that exact
+commit's file content directly rather than trusting the prior write-up.
+Marked ✅ FIXED this pass. Rotation row 27 → ✅ (pending this PR's merge);
+next is Feature 28 (Security, audit & IP).
+
+### 2026-10-20 — Feature 28 (Security, audit & IP, pass 8) — 0 fixed, 0 new findings
+
+`search_pull_requests` (`repo:thegspiro/the-logbook is:pr is:open
+head:claude/security-review-`) returned 0 results immediately before
+starting, and again immediately before branching. PR #3467 (Feature 27,
+Integrations, pass 8) had merged with nothing started for Feature 28
+since; row 28 was the first `⬜`.
+
+**Delta.** Baseline pass 7's merge (`20e31ed8`, PR #3376). One real commit
+since: `c2aff901` (weekly security/audit report emailed to the IT
+Manager) — read in full from this feature's own checklist angle (org
+scoping on the new `/security/weekly-report` GET/PUT, permission gating,
+audit logging on change, deep-copy-safe JSON mutation, org-scoped
+recipient/alert/error queries, deliberate installation-wide scope for the
+audit-chain integrity count, `html.escape`d counts-only email body). Found
+clean — see `SEC2-28-security-audit-ip.md`'s **Pass 8** section. Route
+surface: 35 → 37 (+2, the new weekly-report pair). Standing findings
+SEC2-28-6 (LOW, TOCTOU) and the dead-detector-code note re-confirmed open
+and unchanged. No `KNOWN_LIMITATIONS.md` change needed.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/
+tests/ alembic/` (CI-pinned 7.3.0/26.5.1/9.0.1); `validate_migrations.py
+--strict` — 631 revisions, single head `ca0c2111466f`; `pytest tests/ -q
+-k "audit or security_monitoring or ip_security or privilege_ceiling or
+suspicious_ip or w50_audit_username or signing_key_cutover or
+security_alert_workflow or ip_allowlist_middleware or
+ip_exception_lookup_db or task_error_reporting or integration_dns_pinning
+or audit_chain_sealing or security_weekly_report"` — 552 passed, 1
+pre-existing skip (`pywebpush`); frontend `npm run typecheck`/`npm run
+lint` both clean.
+
+Rotation row 28 → ✅ (pending this PR's merge). Next: Feature 29 (Reports
+& analytics).
+
+### 2026-10-20 — Feature 26 (Forms, pass 8) — true zero-delta on backend, 0 fixed, 0 new findings
+
+`search_pull_requests` (`repo:thegspiro/the-logbook is:pr is:open
+head:claude/security-review-`) returned 0 results immediately before
+starting, and again immediately before branching — no collision either
+time. PR #3457 (Feature 25, Messaging & notifications, pass 8) had merged
+with nothing started for Feature 26 since; row 26 was the first `⬜`.
+
+**Delta.** Baseline `8372581e` (pass 7's merge, PR #3374). `git log
+8372581e..HEAD` on all five backend scope files (`endpoints/forms.py`,
+`public/forms.py`, `forms_service.py`, `models/forms.py`, `schemas/forms.py`)
+returns **zero commits**, confirmed by an equally empty `git diff --stat` on
+the same five files — file sizes are byte-identical to pass 7 (813 L / 236 L
+/ 3,492 L / 397 L / 471 L). Re-verified rather than taken on faith: route
+inventory re-enumerated programmatically at 22 routes (20 in
+`endpoints/forms.py` + 2 in `public/forms.py`), matching pass 7's count and
+auth-dependency distribution exactly — 17 `require_permission("forms.manage")`,
+3 `require_permission("forms.view")`, 2 bare `get_current_user`
+(`submit_form`, `GET /member-lookup`, by design). Every standing item from
+pass 7 (FORM-1/2/3/5/6/7/8/9/11/12, BXC-1, tenant isolation, LIKE escaping,
+JSON-column mutation, CSV export n/a) holds unchanged — there is no code
+delta for any of them to have regressed against.
+
+One frontend commit touched the module since pass 7, `4327cb29` ("Fix create
+forms that sent impossible values or lost input on failure"), to
+`FieldEditor.tsx` (+18 lines, plus a new test file): client-side validation
+now rejects a fractional `min_value`/`max_value` on a numeric field, matching
+the backend's existing integer-only storage (which already 422s a fraction
+server-side), plus `step="1"` and `aria-invalid`/`aria-describedby`/
+`role="alert"` wiring for the new inline error. No new API call, no new
+client-supplied id, nothing new reaches the server — a correctness/
+accessibility tightening of a constraint the backend already enforced, not a
+security-relevant change.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
+alembic/` (isort reinstalled to CI's pinned 9.0.1); `validate_migrations.py
+--strict` — single head `ca0c2111466f`, 631 revisions, no migration this
+pass; `pytest tests/ -q -k form` — 821 passed, 1 pre-existing skip
+(`pywebpush`); frontend `npm run typecheck`/`npm run lint` both clean.
+
+Findings doc: [`FORM-26-forms.md`](./FORM-26-forms.md)'s **Pass 8** section.
+No `KNOWN_LIMITATIONS.md` change needed — nothing this pass found is an
+owner-decision item. Rotation row 26 → ✅ (pending this PR's merge). Next:
+Feature 27 (Integrations).
 
 ### 2026-10-20 — Feature 25 (Messaging & notifications, pass 8) — watchdog pickup, 0 fixed, 0 new findings
 

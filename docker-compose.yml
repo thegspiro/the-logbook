@@ -393,6 +393,10 @@ services:
       SECURITY_TXT_POLICY_URL: ${SECURITY_TXT_POLICY_URL:-https://github.com/thegspiro/the-logbook/blob/main/SECURITY.md}
 
       # Error tracking
+      # Sentry sends error reports to a third party. Leave it off unless a signed
+      # Business Associate Agreement (BAA) is in place with Sentry: a report can
+      # carry member or health information, and sending PHI to a vendor without a
+      # BAA is a HIPAA violation if the department handles PHI.
       SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
       SENTRY_DSN: ${SENTRY_DSN:-}
     ports:

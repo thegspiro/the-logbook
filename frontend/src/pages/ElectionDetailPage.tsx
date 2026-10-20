@@ -51,7 +51,9 @@ import {
 import SendBallotEmailsModal from '../components/election-detail/SendBallotEmailsModal';
 import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
 import NominationsPanel from '../components/election-detail/NominationsPanel';
-import RecordPaperBallotsModal from '../components/election-detail/RecordPaperBallotsModal';
+import RecordPaperBallotsModal, {
+  type RankedPaperBallotEntry,
+} from '../components/election-detail/RecordPaperBallotsModal';
 import PaperBallotBatchesPanel from '../components/election-detail/PaperBallotBatchesPanel';
 import LiveTurnoutPanel from '../components/election-detail/LiveTurnoutPanel';
 import CloneElectionModal from '../components/election-detail/CloneElectionModal';
@@ -536,16 +538,18 @@ export const ElectionDetailPage: React.FC = () => {
 
   const handleRecordPaperBallots = async (
     entries: Array<{ candidate_id: string; count: number }>,
+    rankedBallots: RankedPaperBallotEntry[],
     notes: string,
     allowOverCount: boolean,
     ballotsCast: number | undefined
   ) => {
-    if (!electionId || entries.length === 0) return;
+    if (!electionId || (entries.length === 0 && rankedBallots.length === 0)) return;
     try {
       setIsRecordingPaper(true);
       setPaperBallotsError(null);
       const result = await electionService.recordManualBallots(electionId, {
         entries,
+        ranked_ballots: rankedBallots.length > 0 ? rankedBallots : undefined,
         notes: notes.trim() || undefined,
         allow_over_count: allowOverCount || undefined,
         ballots_cast: ballotsCast,
@@ -2520,11 +2524,12 @@ export const ElectionDetailPage: React.FC = () => {
           <RecordPaperBallotsModal
             candidates={paperCandidates}
             ballotItems={election.ballot_items}
+            votingMethod={election.voting_method}
             recording={isRecordingPaper}
             error={paperBallotsError}
             attestationsRequired={featureFlags.paper_ballot_attestations_required}
-            onSubmit={(entries, notes, allowOverCount, ballotsCast) => {
-              void handleRecordPaperBallots(entries, notes, allowOverCount, ballotsCast);
+            onSubmit={(entries, rankedBallots, notes, allowOverCount, ballotsCast) => {
+              void handleRecordPaperBallots(entries, rankedBallots, notes, allowOverCount, ballotsCast);
             }}
             onClose={() => {
               setShowPaperBallotsModal(false);

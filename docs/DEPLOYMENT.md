@@ -775,7 +775,7 @@ For HIPAA, GDPR, and other compliance requirements, see [COMPLIANCE.md](./COMPLI
 
 - [ ] Complete [Security Checklist](#security-checklist)
 - [ ] Configure [Backups](./BACKUP.md)
-- [ ] Set up error monitoring (Sentry — `SENTRY_ENABLED` in `.env.example.full`) and an external uptime check
+- [ ] Set up an external uptime check. Sentry is optional and **off by default**; enable it (`SENTRY_ENABLED` in `.env.example.full`) only with a signed Business Associate Agreement (BAA) if the department handles PHI. The built-in Error Monitor page and the weekly security report cover errors without it
 - [ ] Review [Security Best Practices](../SECURITY.md) and [Compliance](./COMPLIANCE.md)
 - [ ] Train your team on platform usage
 

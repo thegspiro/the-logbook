@@ -7,7 +7,7 @@
  */
 
 import type { BallotItem, Candidate, Election } from '../types/election';
-import { ElectionStatus, VictoryCondition as VC } from '../constants/enums';
+import { ElectionStatus, VictoryCondition as VC, VoteType, VotingMethod } from '../constants/enums';
 import { getErrorMessage } from './errorHandling';
 
 /**
@@ -111,6 +111,28 @@ export const reminderCooldownRemainingMinutes = (reminderSentAt: string | null, 
  */
 export const ballotItemTitlesById = (ballotItems: BallotItem[] | undefined): Map<string, string> =>
   new Map((ballotItems ?? []).map((item) => [item.id, item.title]));
+
+/**
+ * Whether a contest's votes are counted by instant runoff, read the way the
+ * server reads it (`contest_is_ranked` in election_service): the ballot item
+ * that claims the position — by its explicit position, else its title or id
+ * — may override the election's method, and an Approve/Deny item never is.
+ * Paper entry asks for rankings exactly where the server will accept them.
+ */
+export const isRankedContest = (
+  position: string | undefined,
+  ballotItems: BallotItem[] | undefined,
+  electionVotingMethod: string | undefined
+): boolean => {
+  if (!position) return false;
+  const item = (ballotItems ?? []).find((candidateItem) =>
+    candidateItem.position
+      ? candidateItem.position === position
+      : [candidateItem.title, candidateItem.id].includes(position)
+  );
+  if (item?.vote_type === VoteType.APPROVAL) return false;
+  return (item?.voting_method ?? electionVotingMethod) === VotingMethod.RANKED_CHOICE;
+};
 
 /** The contest a candidate belongs to, as an officer would name it. */
 export const candidateContestLabel = (

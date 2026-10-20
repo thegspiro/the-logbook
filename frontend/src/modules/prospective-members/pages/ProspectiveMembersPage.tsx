@@ -41,9 +41,16 @@ import { ApplicantDetailDialog } from '../components/ApplicantDetailDialog';
 import { ConversionModal } from '../components/ConversionModal';
 import TargetRolePicker from '../components/TargetRolePicker';
 import { applicantService, eventLinkService } from '../services/api';
-import type { ApplicantListItem, Applicant, ApplicantStatus, BulkActionResult, ProspectSourceEvent } from '../types';
+import type {
+  ApplicantListItem,
+  Applicant,
+  ApplicantStatus,
+  BulkActionResult,
+  ExistingRecordCheck,
+  ProspectSourceEvent,
+} from '../types';
 import { isValidEmail, getInitials, isConvertStage } from '../utils';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
@@ -409,28 +416,50 @@ export const ProspectiveMembersPage: React.FC = () => {
     }
     setIsCreating(true);
     try {
-      // Check for duplicate/existing members before creating
+      // Check for an existing applicant or member before creating. The check
+      // is advisory: if it fails, the create endpoint still refuses an email an
+      // active applicant holds, and that 409 is handled below.
+      let check: ExistingRecordCheck | null = null;
       try {
-        const check = await applicantService.checkExisting(
+        check = await applicantService.checkExisting(
           newApplicant.email.trim(),
           newApplicant.first_name.trim(),
           newApplicant.last_name.trim()
         );
-        if (check.has_matches) {
-          const proceed = await confirm({
-            title: 'This may be a duplicate',
-            message: `The email or name matches ${String(check.match_count)} existing ${check.match_count === 1 ? 'member' : 'members'}. Create this applicant anyway?`,
-            confirmLabel: 'Create anyway',
-            cancelLabel: 'Go back',
-            variant: 'warning',
-          });
-          if (!proceed) {
-            setIsCreating(false);
-            return;
-          }
-        }
       } catch {
-        // If the check fails, continue with creation anyway
+        check = null;
+      }
+
+      // Unlike a member match this is not a judgement call: the server will
+      // not add a second applicant with the same email, so there is no
+      // "Create anyway" to offer.
+      const existing = check?.existing_applicant;
+      if (existing) {
+        const where = existing.pipeline_name ? ` in the ${existing.pipeline_name} pipeline` : '';
+        const stage = existing.stage_name ? `, at the ${existing.stage_name} stage` : '';
+        const openExisting = await confirm({
+          title: 'Already an applicant',
+          message: `${existing.name} is already an active applicant with this email${where}${stage}. A second applicant can't be added with the same email.`,
+          confirmLabel: 'Open existing applicant',
+          cancelLabel: 'Go back',
+          variant: 'warning',
+        });
+        if (openExisting) {
+          setShowAddModal(false);
+          void fetchApplicant(existing.prospect_id);
+        }
+        return;
+      }
+
+      if (check?.has_matches) {
+        const proceed = await confirm({
+          title: 'This may be a duplicate',
+          message: `The email or name matches ${String(check.match_count)} existing ${check.match_count === 1 ? 'member' : 'members'}. Create this applicant anyway?`,
+          confirmLabel: 'Create anyway',
+          cancelLabel: 'Go back',
+          variant: 'warning',
+        });
+        if (!proceed) return;
       }
 
       await applicantService.createApplicant({
@@ -453,7 +482,13 @@ export const ProspectiveMembersPage: React.FC = () => {
       void refreshPipelineView();
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to create applicant');
-      toast.error(msg);
+      // 409: the applicant or member already exists. A warning rather than an
+      // error, and the modal stays open with the typing intact.
+      if (toAppError(err).status === 409) {
+        toast(msg, { icon: '⚠️', duration: 8000 });
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setIsCreating(false);
     }

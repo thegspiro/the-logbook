@@ -63,7 +63,7 @@ test.describe('Shift Reports — deep links', () => {
     await mockReports(page);
     await page.goto('/scheduling?tab=shift-reports&view=pending-review');
 
-    await expect(page.getByRole('button', { name: 'Review Queue' })).toHaveClass(/bg-violet-600/);
+    await expect(page.getByRole('button', { name: 'Review Queue' })).toHaveClass(/bg-violet-700/);
     await expect(page.getByText('Jordan Park', { exact: false })).toBeVisible();
     await expect(page).toHaveURL(/view=pending-review/);
   });

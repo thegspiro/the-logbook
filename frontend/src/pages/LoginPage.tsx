@@ -361,7 +361,7 @@ export const LoginPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading || !mfaCode.trim()}
-              className="flex w-full justify-center rounded-lg bg-violet-600 px-4 py-2.5 font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+              className="flex w-full justify-center rounded-lg bg-violet-700 px-4 py-2.5 font-medium text-white hover:bg-violet-800 disabled:opacity-50"
             >
               {isLoading ? 'Verifying…' : 'Verify'}
             </button>

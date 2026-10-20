@@ -459,6 +459,11 @@ or JPEG of at most 5 MB.
 | `SENTRY_ENABLED` | Enable Sentry error tracking                    | `false` |
 | `SENTRY_DSN`     | Sentry Data Source Name URL                     | —       |
 
+> **Keep `SENTRY_ENABLED` off unless a signed Business Associate Agreement
+> (BAA) is in place with Sentry.** Error reports go to a third party and can
+> carry member or health information. If your department handles PHI,
+> enabling it without a BAA is a HIPAA violation.
+
 ---
 
 **See also:** [Installation Guide](Installation) | [Security Configuration](Configuration-Security) | [Module Configuration](Configuration-Modules)

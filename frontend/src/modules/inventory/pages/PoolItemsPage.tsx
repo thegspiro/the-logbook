@@ -580,7 +580,7 @@ const PoolItemsPage: React.FC = () => {
             </option>
           ))}
         </select>
-        <label className="text-theme-text-secondary mobile-touch-target flex cursor-pointer items-center justify-start gap-2 text-sm whitespace-nowrap">
+        <label className="text-theme-text-secondary mobile-touch-target flex shrink-0 cursor-pointer items-center justify-start gap-2 text-sm whitespace-nowrap">
           <input
             type="checkbox"
             checked={lowStockOnly}

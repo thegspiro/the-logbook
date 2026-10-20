@@ -157,7 +157,7 @@ from app.services.email_service import _redact_email
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.email_providers import stored_email_section
 from app.utils.hours import hours_from_minutes
-from app.utils.org_timezone import org_today, resolve_scheduling_timezone
+from app.utils.org_timezone import org_today, resolve_scheduling_timezone, to_local
 from app.utils.positions import position_label
 from app.utils.sql_results import rows_affected
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
@@ -6065,7 +6065,11 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
     from datetime import timezone as dt_timezone
 
     from app.models.event import Event, RecurrencePattern
-    from app.services.event_service import EventService
+    from app.services.event_service import (
+        EventService,
+        rsvp_deadline_at,
+        rsvp_deadline_lead,
+    )
 
     # Naive-but-UTC, not naive-local-time: `latest_start`/`latest_end` below
     # come from DateTime(timezone=True) columns, which aiomysql returns
@@ -6137,7 +6141,7 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             parent_id = getattr(parent, "id", "?")
             # Find the latest occurrence in this series
             latest_result = await db.execute(
-                select(Event.start_datetime, Event.end_datetime)
+                select(Event.start_datetime, Event.end_datetime, Event.rsvp_deadline)
                 .where(
                     (Event.id == parent.id) | (Event.recurrence_parent_id == parent.id),
                     Event.is_cancelled.is_(False),
@@ -6151,6 +6155,7 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
 
             latest_start = latest[0]
             latest_end = latest[1]
+            latest_deadline = latest[2]
 
             # If the latest occurrence is already 12+ months out, skip
             if latest_start >= twelve_months:
@@ -6233,6 +6238,20 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                     custom_fields.pop(lifecycle_key, None)
                 child_fields["custom_fields"] = custom_fields
 
+            # Each new occurrence keeps the RSVP deadline lead of the latest
+            # one, the occurrence a "this and all future" edit last reached,
+            # rather than having none at all.
+            tz = org_zones[org_key]
+            deadline_lead = (
+                None
+                if latest_deadline is None
+                else rsvp_deadline_lead(
+                    latest_deadline,
+                    to_local(latest_start, tz).replace(tzinfo=None),
+                    tz,
+                )
+            )
+
             for start, end in new_occurrences:
                 child = Event(
                     organization_id=parent.organization_id,
@@ -6242,6 +6261,11 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                     recurrence_pattern=RecurrencePattern(pattern),
                     start_datetime=start,
                     end_datetime=end,
+                    rsvp_deadline=(
+                        None
+                        if deadline_lead is None
+                        else rsvp_deadline_at(start, deadline_lead, tz)
+                    ),
                     **child_fields,
                 )
                 db.add(child)

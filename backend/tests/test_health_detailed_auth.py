@@ -3,13 +3,11 @@
 
 It reports the version, the environment name and the debug / docs switches. It
 used to take no dependency at all, so on ``staging`` or ``development`` anyone
-could read that, and its one-second ``cpu_percent`` sample stalled the event
-loop on every anonymous request. ``/health`` is the public probe and is not
-touched here.
+could read that. ``/health`` is the public probe and is not touched here. That
+the CPU sample does not stall the event loop is pinned separately in
+``test_health_detailed_hardening.py``.
 """
 
-import asyncio
-import time
 from unittest.mock import patch
 
 import pytest
@@ -47,8 +45,16 @@ def test_route_requires_settings_manage(app):
 
 
 def test_anonymous_request_is_refused(app):
-    with TestClient(app, raise_server_exceptions=False) as client:
+    from app.core.database import get_db
+
+    # No cookie means the dependency refuses before it touches the session; the
+    # stub only satisfies dependency resolution, as no database is connected.
+    app.dependency_overrides[get_db] = lambda: None
+    try:
+        client = TestClient(app, raise_server_exceptions=False)
         response = client.get("/health/detailed")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
     assert response.status_code in (401, 403)
     assert "environment" not in response.text
@@ -56,8 +62,8 @@ def test_anonymous_request_is_refused(app):
 
 
 def test_public_health_probe_stays_public(app):
-    with TestClient(app, raise_server_exceptions=False) as client:
-        response = client.get("/health")
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.get("/health")
 
     assert response.status_code in (200, 503)
     assert "environment" not in response.json()
@@ -67,8 +73,7 @@ def test_authorised_caller_gets_diagnostics(app):
     checker = _permission_checker(app)
     app.dependency_overrides[checker] = lambda: None
     try:
-        with TestClient(app) as client:
-            response = client.get("/health/detailed")
+        response = TestClient(app).get("/health/detailed")
     finally:
         app.dependency_overrides.pop(checker, None)
 
@@ -89,45 +94,14 @@ def test_production_refuses_even_an_authorised_caller(app):
     checker = _permission_checker(app)
     app.dependency_overrides[checker] = lambda: None
     try:
-        # Patched after startup: the lifespan refuses to boot as production
-        # with this test environment's defaults.
-        with TestClient(app) as client:
-            with patch.object(settings, "ENVIRONMENT", "production"):
-                response = client.get("/health/detailed")
+        # The client is not entered as a context manager, so the lifespan (which
+        # refuses to boot as production on this test environment's defaults)
+        # never runs.
+        with patch.object(settings, "ENVIRONMENT", "production"):
+            response = TestClient(app).get("/health/detailed")
     finally:
         app.dependency_overrides.pop(checker, None)
 
     assert response.json() == {
         "error": "Detailed health check not available in production"
     }
-
-
-async def test_cpu_sample_does_not_block_the_event_loop():
-    """Another coroutine must keep running during the one-second CPU sample."""
-    import main
-
-    checker = None
-    for route in main.app.routes:
-        if getattr(route, "path", None) == "/health/detailed":
-            checker = route
-    assert checker is not None
-
-    ticks = 0
-
-    async def ticker():
-        nonlocal ticks
-        while True:
-            await asyncio.sleep(0.05)
-            ticks += 1
-
-    task = asyncio.create_task(ticker())
-    started = time.monotonic()
-    try:
-        with patch.object(main.settings, "ENVIRONMENT", "development"):
-            await main.health_check_detailed()
-    finally:
-        task.cancel()
-
-    assert time.monotonic() - started >= 0.9
-    # A blocked loop would let the ticker run roughly once; a free one ~20 times.
-    assert ticks >= 10

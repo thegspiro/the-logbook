@@ -10,6 +10,7 @@
 
 import { test, expect } from '@playwright/test';
 import { mockApi, TEST_USER } from './helpers';
+import { ROUTES, signInForRoute } from './mobile-routes';
 
 const TABLETS = [
   { name: 'iPad portrait', width: 820, height: 1180 },
@@ -43,5 +44,42 @@ test.describe('Reports page on a tablet', () => {
       if (!box) throw new Error('The end-date input has no bounding box');
       expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
     });
+  }
+});
+
+// Each of these scrolled sideways on a tablet while the phone and desktop
+// passes were clean, because the sidebar leaves a tablet far less room than its
+// viewport width suggests and every `sm:` rule believes it has the whole
+// screen. The causes were a shared header whose title block refused to shrink,
+// a wizard step bar that showed its labels from `sm`, steps that could not wrap
+// their descriptions, and a `mobile-touch-target` label without `shrink-0`.
+const TABLET_ROUTES = [
+  '/medical-supplies',
+  '/inventory/my-equipment',
+  '/apparatus-basic',
+  '/facilities',
+  '/training/admin?page=setup&tab=pipelines',
+  '/inventory/admin/setup',
+  '/inventory/admin/pool',
+];
+
+test.describe('Pages do not scroll sideways on a tablet', () => {
+  for (const viewport of TABLETS) {
+    for (const path of TABLET_ROUTES) {
+      test(`${path} — ${viewport.name}`, async ({ page }) => {
+        const route = ROUTES.find((r) => r.path === path);
+        if (!route) throw new Error(`${path} is not in the mobile route list`);
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        await signInForRoute(page, route, null);
+        await page.goto(path);
+        await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
+        await page.waitForTimeout(400);
+
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+        );
+        expect(overflow, `${path} is ${overflow}px wider than the viewport`).toBeLessThanOrEqual(0);
+      });
+    }
   }
 });

@@ -1387,7 +1387,7 @@ export const ShiftReportsTab: React.FC = () => {
                     e.stopPropagation();
                     setReviewReportId(report.id);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
                 >
                   <ClipboardCheck className="h-4 w-4" /> Review Report
                 </button>
@@ -1414,7 +1414,7 @@ export const ShiftReportsTab: React.FC = () => {
                       e.stopPropagation();
                       setReviewReportId(report.id);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
                   >
                     <ClipboardCheck className="h-4 w-4" /> Re-Review Report
                   </button>
@@ -1430,7 +1430,7 @@ export const ShiftReportsTab: React.FC = () => {
                     e.stopPropagation();
                     setAckReportId(report.id);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
                 >
                   <Check className="h-4 w-4" /> Acknowledge Report
                 </button>
@@ -1448,7 +1448,7 @@ export const ShiftReportsTab: React.FC = () => {
                       e.stopPropagation();
                       handleEditDraft(report);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
                   >
                     <Pencil className="h-4 w-4" /> Complete Draft
                   </button>
@@ -1658,7 +1658,7 @@ export const ShiftReportsTab: React.FC = () => {
               onClick={() => setViewMode(mode)}
               className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 viewMode === mode
-                  ? 'bg-violet-600 text-white'
+                  ? 'bg-violet-700 text-white'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
             >
@@ -1681,7 +1681,7 @@ export const ShiftReportsTab: React.FC = () => {
               onClick={() => setViewMode('my-reports')}
               className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 viewMode === 'my-reports'
-                  ? 'bg-violet-600 text-white'
+                  ? 'bg-violet-700 text-white'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
               title="Reports other people wrote about your shifts"
@@ -1695,7 +1695,7 @@ export const ShiftReportsTab: React.FC = () => {
               onClick={() => setViewMode('filed-by-me')}
               className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 viewMode === 'filed-by-me'
-                  ? 'bg-violet-600 text-white'
+                  ? 'bg-violet-700 text-white'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
               title="Reports you wrote about your crew"
@@ -1707,7 +1707,7 @@ export const ShiftReportsTab: React.FC = () => {
                 onClick={() => setViewMode('department')}
                 className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                   viewMode === 'department'
-                    ? 'bg-violet-600 text-white'
+                    ? 'bg-violet-700 text-white'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
                 title="Every officer's reports, summed across the department"
@@ -1720,7 +1720,7 @@ export const ShiftReportsTab: React.FC = () => {
                 onClick={() => setViewMode('pending-review')}
                 className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                   viewMode === 'pending-review'
-                    ? 'bg-violet-600 text-white'
+                    ? 'bg-violet-700 text-white'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
               >
@@ -1732,7 +1732,7 @@ export const ShiftReportsTab: React.FC = () => {
                 onClick={() => setViewMode('flagged')}
                 className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                   viewMode === 'flagged'
-                    ? 'bg-violet-600 text-white'
+                    ? 'bg-violet-700 text-white'
                     : 'text-theme-text-secondary hover:text-theme-text-primary'
                 }`}
               >
@@ -1743,7 +1743,7 @@ export const ShiftReportsTab: React.FC = () => {
               onClick={() => setViewMode('drafts')}
               className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 viewMode === 'drafts'
-                  ? 'bg-violet-600 text-white'
+                  ? 'bg-violet-700 text-white'
                   : 'text-theme-text-secondary hover:text-theme-text-primary'
               }`}
             >
@@ -2274,7 +2274,7 @@ export const ShiftReportsTab: React.FC = () => {
                                                     }}
                                                     className={`h-5 w-5 rounded border text-xs font-medium transition-colors ${
                                                       selected.score === n
-                                                        ? 'border-violet-600 bg-violet-600 text-white'
+                                                        ? 'border-violet-600 bg-violet-700 text-white'
                                                         : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
                                                     }`}
                                                   >
@@ -2376,7 +2376,7 @@ export const ShiftReportsTab: React.FC = () => {
                     void handleBatchSubmit(false);
                   }}
                   disabled={submitting || savingDraft}
-                  className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                   Submit Report{selectedCrewIds.size > 1 ? `s (${selectedCrewIds.size})` : ''}
@@ -2414,7 +2414,7 @@ export const ShiftReportsTab: React.FC = () => {
                     }
                   })();
                 }}
-                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+                className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
               >
                 <Check className="h-4 w-4" />
                 Submit All Drafts
@@ -2683,7 +2683,7 @@ export const ShiftReportsTab: React.FC = () => {
                   void handleAcknowledge();
                 }}
                 disabled={acknowledging}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
               >
                 {acknowledging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                 Acknowledge

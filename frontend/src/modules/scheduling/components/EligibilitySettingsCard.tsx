@@ -184,7 +184,7 @@ export const EligibilitySettingsCard: React.FC = () => {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="mobile-touch-target gap-2 rounded-lg bg-violet-600 px-5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+          className="mobile-touch-target gap-2 rounded-lg bg-violet-700 px-5 text-sm font-medium text-white transition-colors hover:bg-violet-800 disabled:opacity-50"
         >
           {saving && <Loader2 className="h-4 w-4 animate-spin" />}
           Save Eligibility Settings
