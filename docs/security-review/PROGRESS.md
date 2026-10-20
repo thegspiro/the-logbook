@@ -20383,7 +20383,7 @@ iteration's commit" rule.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
@@ -20400,6 +20400,70 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-20 — Feature 25 (Messaging & notifications, pass 8) — watchdog pickup, 0 fixed, 0 new findings
+
+`search_pull_requests` (`repo:thegspiro/the-logbook is:pr is:open
+head:claude/security-review-`) returned 0 results immediately before
+starting, and again immediately before branching — no collision either
+time. PR #3456 (Feature 24, Meetings & minutes, pass 8) had merged with
+nothing started for Feature 25 since; row 25 was the first `⬜`.
+
+**Delta.** Baseline `5a12a331` (pass 7's merge, PR #3373). Diffed all four
+endpoint files, both models, both schemas, and the nine service/util files
+pass 7 enumerated against that commit. Five real (non-merge) commits in
+range, all already individually reviewed and found clean: `51e2e9d7`
+(message audience targeting now also matches the membership-ladder status
+for `probationary`/`retired`, still org-scoped at the query that loads
+candidates); `c2aff901` (a new `EmailKind.SECURITY_REPORT`, wired to a real,
+org-scoped reader in the new `security_weekly_report.py` — Pitfall #19
+checked directly, not assumed); `d918810e` (workflow-review: test-send with
+email off now answers 400 with the reason instead of a misleading 500, no
+access-control change); `14c8fd32` (workflow-review: two `ValueError`
+message strings reworded, no behavior change); `3e4deb06` (security-review
+AUTH pass 10's own AUTH-22 fix to this feature's `security_notifications.py`
+— re-verified both call sites now `html.escape()` the member-facing
+message, not re-litigated as a new finding here). Frontend delta since pass
+7 is four workflow-review accessibility/copy passes (W55/W56/W57/W59);
+re-ran the standing pattern sweep (`window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, banned date-formatting methods, direct `fetch(`,
+bare `??` on a form value) across all six watched frontend paths — zero
+matches, and the one new confirmation dialog added
+(`EmailTemplatesPage.tsx`'s unsaved-changes guard) correctly uses
+`useConfirm()`.
+
+Also specifically re-verified per this pass's own task brief: SMS stays
+behind `resolve_sms_recipients`/`resolve_sms_targets` with `SmsAlert` still
+a single member (`SMSService()` has exactly two direct callers in
+`backend/app`, both already past that gate); every `.ilike()`/`.like()` in
+scope still carries `escape=LIKE_ESCAPE_CHAR`; no CSV export exists in this
+feature's scope; the one new nested-JSON writer found
+(`security_weekly_report.py`'s schedule/toggle) uses `copy.deepcopy()`, not
+a shallow `dict()` copy; no module-level unbounded tracking dict was added
+(`NotificationRuleResolver._cache` is per-instance, scoped to one resolver's
+lifetime); and `email_template_service.py`'s variable substitution remains a
+bounded `\{\{\w+\}\}` regex against a fixed context dict with no Jinja2
+`Environment` anywhere in `backend/app` — no SSTI surface. Route inventory
+re-enumerated: 51/51 unchanged, every route's own definition carries
+`get_current_user`/`require_permission`/`require_all_permissions`, checked
+programmatically rather than merely counted.
+
+MSG-3, MAIL-4, `email_service.py`'s F4, and the
+`NotificationRuleCreate`/`Update.config` unbounded-JSON note are all
+re-confirmed still open, unchanged, by design or informational — none is an
+owner-decision item, so no `KNOWN_LIMITATIONS.md` change was needed.
+
+Gate: `flake8`/`black --check`/`isort --check-only` clean over `app/ tests/
+alembic/` (isort reinstalled to CI's pinned 9.0.1); `validate_migrations.py
+--strict` — single head `ca0c2111466f`, 631 revisions, no migration this
+pass; `pytest tests/ -q -k "message or notification or email_template"` —
+1064 passed, 1 pre-existing skip (`pywebpush`); frontend `npm run
+typecheck`/`npm run lint` both clean.
+
+Findings doc:
+[`MSG-25-messaging-notifications.md`](./MSG-25-messaging-notifications.md)'s
+**Pass 8** section. Rotation row 25 → ✅ (pending this PR's merge). Next:
+Feature 26 (Forms).
 
 ### 2026-10-20 — Feature 24 (Meetings & minutes, pass 8) — watchdog pickup, flaky-test lead confirmed as a real bug and fixed, 2 pre-existing races flagged
 
