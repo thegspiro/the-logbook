@@ -3306,6 +3306,13 @@ class TestSendBatchOnSmtp:
         assert built.reply_to == "chief@dept.example"
 
 
+def _setup_in_progress():
+    """Onboarding is still open, so the completion guard lets the call through."""
+    service = MagicMock()
+    service.needs_onboarding = AsyncMock(return_value=True)
+    return patch("app.api.v1.onboarding.OnboardingService", return_value=service)
+
+
 class TestOnboardingSelfHostedLogin:
     """Onboarding matches the backend's rule on self-hosted credentials.
 
@@ -3330,6 +3337,7 @@ class TestOnboardingSelfHostedLogin:
 
         with (
             patch("app.api.v1.onboarding.validate_session", AsyncMock()),
+            _setup_in_progress(),
             patch.object(email_test_helper, "test_smtp_connection") as smtp_test,
         ):
             response = await verify_email_configuration(
@@ -3353,6 +3361,7 @@ class TestOnboardingSelfHostedLogin:
 
         with (
             patch("app.api.v1.onboarding.validate_session", AsyncMock()),
+            _setup_in_progress(),
             patch(
                 "app.api.v1.onboarding.test_smtp_connection_uniform",
                 return_value=(True, "SMTP connection successful", {}),
