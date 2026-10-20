@@ -38,6 +38,7 @@ const server: MinutesReminderSettings = {
   executive_effective_library: false,
   executive_effective_public: false,
   attendance_listing: 'all',
+  auto_file_election_results: true,
 };
 
 const Where: React.FC = () => <span data-testid="where">{useLocation().pathname + useLocation().search}</span>;
@@ -102,6 +103,12 @@ describe('MinutesSettingsPage', () => {
     show('/minutes/settings?tab=signatures');
 
     expect(await screen.findByDisplayValue('Recording Secretary')).toBeInTheDocument();
+  });
+
+  it('offers the election filing section', async () => {
+    show('/minutes/settings?tab=elections');
+
+    expect(await screen.findByRole('checkbox', { name: /File election results/ })).toBeChecked();
   });
 
   it('re-reads what the server holds after a save', async () => {

@@ -844,6 +844,7 @@ class MinutesReminderSettingsResponse(BaseModel):
     executive_effective_library: bool = False
     executive_effective_public: bool = False
     attendance_listing: Literal["all", "present_excused", "present"] = "all"
+    auto_file_election_results: bool = True
 
 
 class PublishingStatusResponse(BaseModel):

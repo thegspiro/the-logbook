@@ -1268,6 +1268,12 @@ unreleased result, whatever the release setting. Releasing twice does nothing,
 and a result the member may never see is refused, so you do not need to check
 the setting first.
 
+![A Skills Test Records row for an accepted result, with the release icon, a paper plane, beside the void icon at the right of the row](./images/09-27-release-icon-test-records.png)
+
+In the row above the result is already accepted, so there is no validate icon.
+The paper plane is the release icon, and the circle with a line through it is
+the void icon.
+
 On the result itself, **Release to candidate** appears under **Officer
 actions** only where it is a real step: the result is held for release, and the
 member is allowed to see it. Until the result is accepted, the button is

@@ -146,16 +146,25 @@ class TestCreatingAnAccount:
         org, officer = await _department(db_session)
         fake = FakeDirectory()
         tasks = BackgroundTasks()
-        created, member = await _add(
-            db_session,
-            org,
-            officer,
-            fake,
-            tasks=tasks,
-            create_directory_account=True,
-            send_welcome_email=True,
-            password=None,
-        )
+        # The generator draws one of its characters from "!@#$%^&*", and the
+        # email's HTML escapes "&" to "&amp;". A fixed password containing it
+        # makes the escaped path run every time instead of one run in a few.
+        password = "Tr0ub&dor-Zq9!xk"
+        with patch(
+            "app.services.directory_account_service.generate_temporary_password",
+            return_value=password,
+        ):
+            created, member = await _add(
+                db_session,
+                org,
+                officer,
+                fake,
+                tasks=tasks,
+                create_directory_account=True,
+                send_welcome_email=True,
+                password=None,
+            )
+        assert fake.created[0][3] == password
 
         @asynccontextmanager
         async def _same_session():
@@ -175,8 +184,7 @@ class TestCreatingAnAccount:
 
         kwargs = welcome.await_args.kwargs
         assert kwargs["to_email"] == member.personal_email
-        # The card escapes the password for HTML, and a generated one can hold & < > or a quote.
-        assert html.escape(fake.created[0][3]) in kwargs["appended_html"]
+        assert html.escape(password) in kwargs["appended_html"]
         assert member.email in kwargs["appended_text"]
         row = await _record(db_session, member.id)
         await db_session.refresh(row)

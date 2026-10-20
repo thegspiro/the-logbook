@@ -15,23 +15,25 @@
 
 import React from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Globe, PenLine, Bell, Users } from 'lucide-react';
+import { Globe, PenLine, Bell, Users, Vote } from 'lucide-react';
 import { SettingsLayout, type SettingsSection } from '../../../components/settings/SettingsLayout';
 import SettingsPanelHead from '../../../components/settings/SettingsPanelHead';
 import { useAuthStore } from '../../../stores/authStore';
 import { AttendanceListingPanel } from '../components/AttendanceListingPanel';
+import { ElectionFilingPanel } from '../components/ElectionFilingPanel';
 import { PublishingSettingsPanel } from '../components/PublishingSettingsPanel';
 import { ReminderSettingsPanel } from '../components/ReminderSettingsPanel';
 import { SignerSettingsPanel } from '../components/SignerSettingsPanel';
 import { useMinutesSettings } from '../hooks/useMinutesSettings';
 
-type SectionKey = 'attendance' | 'signatures' | 'reminders' | 'publishing';
+type SectionKey = 'attendance' | 'signatures' | 'reminders' | 'publishing' | 'elections';
 
 const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'attendance', label: 'Attendance', icon: Users, description: 'Who the minutes name' },
   { key: 'signatures', label: 'Signatures', icon: PenLine, description: 'Who signs adopted minutes' },
   { key: 'reminders', label: 'Reminders', icon: Bell, description: 'Following up action items' },
   { key: 'publishing', label: 'Publishing', icon: Globe, description: 'The library and the public page' },
+  { key: 'elections', label: 'Elections', icon: Vote, description: 'Filing results with the minutes' },
 ];
 
 const HEADINGS: Record<SectionKey, { title: string; description: string }> = {
@@ -50,6 +52,10 @@ const HEADINGS: Record<SectionKey, { title: string; description: string }> = {
   publishing: {
     title: 'Publishing minutes',
     description: 'Where adopted minutes are filed and whether a public copy is posted.',
+  },
+  elections: {
+    title: 'Election results',
+    description: 'Whether a closed election files its result with the minutes of its meeting.',
   },
 };
 
@@ -79,6 +85,8 @@ export const MinutesSettingsPage: React.FC = () => {
         return <ReminderSettingsPanel {...props} />;
       case 'publishing':
         return <PublishingSettingsPanel {...props} />;
+      case 'elections':
+        return <ElectionFilingPanel {...props} />;
     }
   };
 
