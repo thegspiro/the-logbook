@@ -16,8 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (this branch, `claude/security-review-medical-supplies-p15`), not yet
-numbered at commit time.** PR #3454 (Feature 22, Grants & fundraising, pass 9)
+**PR [#3455](https://github.com/thegspiro/the-logbook/pull/3455)** (branch
+`claude/security-review-medical-supplies-p15`). PR #3454 (Feature 22, Grants & fundraising, pass 9)
 merged to `main` with no open PR whose head branch starts with
 `claude/security-review-` (`search_pull_requests`, 0 results, checked twice —
 once before starting and again immediately before branching) and nothing
