@@ -2503,7 +2503,7 @@ async def health_check():
 
     SEC: Returns only status and ready flag — no version, environment, or
     internal service state that could help attackers fingerprint the system.
-    Use /health/detailed (authenticated, non-production) for diagnostics.
+    Use /health/detailed (unauthenticated, non-production only) for diagnostics.
     """
     from fastapi.responses import JSONResponse
 
@@ -2595,7 +2595,10 @@ async def health_check_detailed():
         "environment": settings.ENVIRONMENT,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "system": {
-            "cpu_percent": psutil.cpu_percent(interval=1),
+            # interval=1 sleeps inside the event loop, so each unauthenticated
+            # request stalled every other request for a second. interval=None
+            # reads usage since the previous call instead (0.0 on the first).
+            "cpu_percent": psutil.cpu_percent(interval=None),
             "memory_percent": psutil.virtual_memory().percent,
             "disk_percent": psutil.disk_usage("/").percent,
         },
