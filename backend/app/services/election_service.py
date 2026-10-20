@@ -6809,6 +6809,16 @@ class ElectionService:
             user_id=str(closed_by) if closed_by else None,
         )
 
+        # The certified result goes into the minutes of the meeting it was held
+        # at. After the close has committed, and never allowed to fail it.
+        from app.services.minutes_election_filing import file_closed_election
+
+        await file_closed_election(
+            self.db, election, str(closed_by) if closed_by else None
+        )
+        # A failed filing rolls the session back, which expires the row.
+        await self.db.refresh(election)
+
         # Paper-ballot batches that never received their required officer
         # attestations stay excluded from the certified results — flag them
         # so the discrepancy is visible in the audit trail.

@@ -494,6 +494,27 @@ body adopted), and labelled as an addendum on the screen, the PDF and the
 published copy. `importable-elections` lists the elections held at this meeting
 (through a motion's ballot link) first, flagged `linked_to_meeting`.
 
+**Filing happens by itself** _(2026-10-20)_. An election tied to a meeting — its
+calendar event (`event_id`) or its meeting record (`meeting_id`), the same link
+`importable-elections` uses — files its result without anyone importing it, at
+the two moments it becomes possible:
+
+- **The election closes** and minutes for that meeting already exist: the result
+  is filed with them (the newest set, if a meeting has more than one), recorded
+  as filed by the officer who closed it (nobody, for an automatic close).
+- **Minutes are made** (created, or drafted from a meeting) after an election
+  held at that meeting has closed: every such closed election is filed into
+  them, recorded as filed by whoever made the minutes.
+
+Circulated or adopted minutes take it as an addendum, exactly as a manual late
+filing does. It goes through the same method as the manual import, so a result
+is never filed twice with the same minutes. An election held at no meeting files
+nothing, and neither does one in another department. The filing runs after the
+close or the creation has committed and can never fail it: a problem is logged
+and the result is left to import by hand. **Minutes → Settings → Elections**
+switches it off per department (on unless set to a literal `false`); the manual
+import works either way. Code: `app/services/minutes_election_filing.py`.
+
 ### Attachments
 
 `POST /{id}/attachments` (multipart: `file`, `title`, `category`) stores a
@@ -623,22 +644,25 @@ without `minutes.manage`, drafts and executive-session minutes answer 404.
 
 ### Not built
 
-Recorded in [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#meeting-minutes--what-record-keeping-does-not-do-2026-10-14):
-automatic filing of results at certification.
+What record keeping still does not do is recorded in
+[KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md#meeting-minutes--what-record-keeping-does-not-do-2026-10-14).
+Filing election results is no longer on that list: it happens automatically
+(see Election results above).
 
 ---
 
 ### Minutes settings page _(2026-10-19)_
 
 Every department-wide choice about minutes is on one screen, **Minutes →
-Settings** (`/minutes/settings`, `minutes.manage`), in four sections addressed by
+Settings** (`/minutes/settings`, `minutes.manage`), in five sections addressed by
 `?tab=`: **Attendance** (who the minutes name), **Signatures** (who signs adopted
-minutes), **Reminders** (action item follow-up) and **Publishing** (the library
-and the public page). They replace four buttons on the Minutes page that each
+minutes), **Reminders** (action item follow-up), **Publishing** (the library
+and the public page) and **Elections** (whether a closed election files its result
+with the minutes). They replace four buttons on the Minutes page that each
 opened a dialog.
 
 - One read, `GET /minutes-records/settings` (what the server applies), serves all
-  four sections; a save writes through the organization settings
+  all five sections; a save writes through the organization settings
   (`settings.manage`) and the page re-reads, so a section shows what the server
   now holds rather than what was sent.
 - Anyone who manages minutes can read every section; without `settings.manage`
