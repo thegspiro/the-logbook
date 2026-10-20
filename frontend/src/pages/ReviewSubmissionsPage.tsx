@@ -62,7 +62,7 @@ const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; ic
   },
   revision_requested: {
     label: 'Revision Requested',
-    color: 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+    color: 'bg-orange-500/10 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
     icon: RotateCcw,
   },
 };

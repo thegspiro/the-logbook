@@ -6327,7 +6327,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPresetPicker(!showPresetPicker)}
-                  className="flex min-h-8 items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-2.5 text-xs font-medium text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                  className="flex min-h-8 items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-2.5 text-xs font-medium text-orange-800 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
                 >
                   <Truck className="h-3.5 w-3.5" />
                   Vehicle preset

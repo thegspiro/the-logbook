@@ -84,7 +84,7 @@ const TONE_CLASSES: Record<CellTone, { pill: string; bar: string; pip: string }>
     pip: 'bg-amber-500 dark:bg-amber-400',
   },
   [CellTone.SOON]: {
-    pill: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
+    pill: 'border-orange-500/30 bg-orange-500/10 text-orange-800 dark:text-orange-300',
     bar: 'bg-orange-500 dark:bg-orange-400',
     pip: 'bg-orange-500 dark:bg-orange-400',
   },
@@ -122,9 +122,9 @@ const STANDING_CLASSES: Record<Standing, { pill: string; dot: string; head: stri
     head: 'bg-red-500/10 text-red-700 dark:text-red-300',
   },
   [Standing.AT_RISK]: {
-    pill: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
+    pill: 'border-orange-500/30 bg-orange-500/10 text-orange-800 dark:text-orange-300',
     dot: 'bg-orange-500 dark:bg-orange-400',
-    head: 'bg-orange-500/10 text-orange-700 dark:text-orange-300',
+    head: 'bg-orange-500/10 text-orange-800 dark:text-orange-300',
   },
   [Standing.COMPLIANT]: {
     pill: 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300',

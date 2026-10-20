@@ -658,7 +658,7 @@ const TrainingProgramsPage: React.FC = () => {
                                     {req.registry_name}
                                   </span>
                                 )}
-                                <span className="rounded-sm bg-orange-500/20 px-2 py-1 text-xs text-orange-700 dark:text-orange-400">
+                                <span className="rounded-sm bg-orange-500/20 px-2 py-1 text-xs text-orange-800 dark:text-orange-400">
                                   {req.requirement_type}
                                 </span>
                               </div>

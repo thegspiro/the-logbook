@@ -142,7 +142,7 @@ export const STATUS_OPTIONS = [
   {
     value: 'in_maintenance',
     label: 'In Maintenance',
-    color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30',
+    color: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/30',
   },
   { value: 'lost', label: 'Lost', color: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30' },
   { value: 'stolen', label: 'Stolen', color: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30' },

@@ -892,7 +892,7 @@ export const ShiftReportsTab: React.FC = () => {
     const label = ratingScaleLabels[String(rating)] || `Level ${rating}`;
     const colorMap: Record<number, string> = {
       1: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-      2: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+      2: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/20',
       3: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
       4: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
       5: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',

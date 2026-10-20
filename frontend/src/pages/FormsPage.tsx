@@ -791,7 +791,7 @@ const FormsPage: React.FC = () => {
                           onClick={() => {
                             void handleOpenIntegrationModal(form.id);
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500/10 px-3 py-1.5 text-xs font-medium text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500/10 px-3 py-1.5 text-xs font-medium text-orange-800 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
                         >
                           <Plug className="h-3.5 w-3.5" aria-hidden="true" />
                           Integrations

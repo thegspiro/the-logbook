@@ -57,7 +57,7 @@ export const STAGE_TYPE_COLORS: Record<StageType, string> = {
   meeting: 'text-teal-700 dark:text-teal-400 bg-teal-500/10',
   status_page_toggle: 'text-sky-700 dark:text-sky-400 bg-sky-500/10',
   automated_email: 'text-rose-700 dark:text-rose-400 bg-rose-500/10',
-  reference_check: 'text-orange-700 dark:text-orange-400 bg-orange-500/10',
+  reference_check: 'text-orange-800 dark:text-orange-400 bg-orange-500/10',
   checklist: 'text-cyan-700 dark:text-cyan-400 bg-cyan-500/10',
   interview_requirement: 'text-indigo-700 dark:text-indigo-400 bg-indigo-500/10',
   multi_approval: 'text-lime-700 dark:text-lime-400 bg-lime-500/10',

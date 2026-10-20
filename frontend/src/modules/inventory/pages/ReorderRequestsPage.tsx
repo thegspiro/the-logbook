@@ -62,7 +62,7 @@ const STATUS_COLORS: Record<string, string> = {
 const URGENCY_COLORS: Record<string, string> = {
   low: 'bg-theme-surface-secondary text-theme-text-muted',
   normal: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
-  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  high: 'bg-orange-500/10 text-orange-800 dark:text-orange-400',
   critical: 'bg-red-500/10 text-red-700 dark:text-red-400',
 };
 

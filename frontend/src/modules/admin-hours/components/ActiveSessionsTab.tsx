@@ -135,7 +135,7 @@ const ActiveSessionsTab: React.FC = () => {
                           </span>
                         )}
                         {isNearLimit && (
-                          <span className="rounded-full bg-orange-500/20 px-2 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-400">
+                          <span className="rounded-full bg-orange-500/20 px-2 py-0.5 text-xs font-medium text-orange-800 dark:text-orange-400">
                             Near limit
                           </span>
                         )}

@@ -983,7 +983,7 @@ const EventRequestsTab: React.FC = () => {
                                   <button
                                     onClick={() => setShowPostponeForm(!showPostponeForm)}
                                     disabled={actionLoading}
-                                    className="flex items-center gap-1 rounded-lg bg-orange-100 px-4 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-200 disabled:opacity-50 dark:bg-orange-500/20 dark:text-orange-300 dark:hover:bg-orange-500/30"
+                                    className="flex items-center gap-1 rounded-lg bg-orange-100 px-4 py-2 text-sm font-medium text-orange-800 transition-colors hover:bg-orange-200 disabled:opacity-50 dark:bg-orange-500/20 dark:text-orange-300 dark:hover:bg-orange-500/30"
                                   >
                                     <Pause className="h-4 w-4" />
                                     Postpone

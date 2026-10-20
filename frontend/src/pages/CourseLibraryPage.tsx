@@ -451,7 +451,7 @@ const TypeBadge: React.FC<{ type: TrainingType }> = ({ type }) => {
     continuing_education: 'bg-green-500/20 text-green-700 dark:text-green-400',
     skills_practice: 'bg-purple-500/20 text-purple-700 dark:text-purple-400',
     orientation: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
-    refresher: 'bg-orange-500/20 text-orange-700 dark:text-orange-400',
+    refresher: 'bg-orange-500/20 text-orange-800 dark:text-orange-400',
     specialty: 'bg-pink-500/20 text-pink-700 dark:text-pink-400',
     policy_acknowledgment: 'bg-slate-500/20 text-slate-700 dark:text-slate-300',
   };

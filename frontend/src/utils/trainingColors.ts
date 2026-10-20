@@ -23,7 +23,7 @@ export const getTrainingStatusColor = (status: string) => {
     case SubmissionStatus.REJECTED:
       return 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400';
     case SubmissionStatus.REVISION_REQUESTED:
-      return 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400';
+      return 'bg-orange-500/10 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400';
     default:
       return 'bg-theme-surface-secondary text-theme-text-secondary';
   }

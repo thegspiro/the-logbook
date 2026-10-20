@@ -139,7 +139,7 @@ const ReqTypeBadge: React.FC<{ type: string }> = ({ type }) => {
     knowledge_test: 'bg-indigo-500/10 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400',
     checklist: 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
     certification: 'bg-pink-500/10 text-pink-700 dark:bg-pink-500/20 dark:text-pink-400',
-    shifts: 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+    shifts: 'bg-orange-500/10 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
     calls: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
   };
 
