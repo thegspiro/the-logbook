@@ -89,7 +89,7 @@ guides as `_[Screenshot to create: …]_`.
 
 | Image | Disposition | Why |
 | ----- | ----------- | --- |
-| `01-41` (My Account → Privacy) | **REPLACE** | Label now reads "Shared once the department allows it" beside an on switch |
+| `01-41` (My Account → Privacy) | **CURRENT** 2026-10-20 (re-shot) | Label now reads "Shared once the department allows it" beside an on switch — re-shot from the seeded mix; work email and mobile carry the note, phone reads "Only you and leadership" |
 | `03-*` of My Shifts / Open Shifts after sign-up | **CHECK** | Own sign-up is saved confirmed |
 | `11-*` purchase request form and budget picker | **REPLACE** | Draft line, Save Draft, and the picker shows names only to members |
 | `11-*` approval-chain form | **CHECK** | Min/Max help text now says both are included |
@@ -1186,7 +1186,7 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | `01-26-print-applicant-badges` | **CURRENT** 2026-10-17 (checked) | Bulk bar labels are now Advance Selected / Hold Selected / Reject Selected; manifest alt (manifest.mjs ~5838) still says 'Advance All' — the guide's alt was updated to 'Advance Selected' | #2783, #2653 |
 | `01-33-import-review-rejected-rows` | **CURRENT** 2026-10-17 (checked) | Welcome-email option now 'Send welcome emails now' with temporary-password wording (and an Unavailable note when email is off); button pluralisation | #2751, #2759 |
 | `01-40-member-directory-member` | **CURRENT** 2026-10-17 (checked) | As an ordinary member with emails hidden the search placeholder now reads 'Search by name or membership number...' | #2759 |
-| `01-41-profile-visibility` | **REPLACE** | A switch that is on beside a row the department has off for everyone reads "Shared once the department allows it", not "Off for everyone (department setting)"; a switch that is off there reads "Only you and leadership". Re-shoot the same seeded mix so work email and mobile show the new note | |
+| `01-41-profile-visibility` | **CURRENT** 2026-10-20 (re-shot) | A switch that is on beside a row the department has off for everyone reads "Shared once the department allows it", not "Off for everyone (department setting)"; a switch that is off there reads "Only you and leadership". Re-shoot the same seeded mix so work email and mobile show the new note | |
 | `02-01-my-training` | **CURRENT** 2026-10-17, re-shot as the demo member | The subtitle was rewritten and the 'Requirements' stat is now 'Required Training' with an 'X of Y requirements met' hint. The Pipeline Progress card now carries the program name. | #2827, #2788 |
 | `02-100-checklist-steps-editor` | **CURRENT** 2026-10-17, re-shot | The manifest prepare clicks the button named 'Edit requirement', which is now 'Edit <requirement name>', so re-capture times out until the selector is updated. The pictured UI is unchanged. | #2788 |
 | `02-17-officer-dashboard` | **CURRENT** 2026-10-17, re-shot | Subtitle changed to 'Compliance, expiring certifications, hours, and what needs your attention'. | #2777 |

@@ -18637,7 +18637,7 @@ export const SHOTS = [
     doc: "01-membership.md",
     line: 1703,
     anchor: "The profile-visibility controls on a member's own profile",
-    alt: "My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email, phone and mobile the note that the department's own setting has them off for everyone",
+    alt: 'My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email and mobile, which the department\'s own setting has off for everyone, the note "Shared once the department allows it"',
     route: "/account",
     auth: "member",
     expect: "Only you and leadership",
