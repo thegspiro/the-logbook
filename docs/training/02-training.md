@@ -3444,8 +3444,10 @@ Import them the same way as NFPA and Pro Board: on **Training > Programs**,
 open the **Requirements** tab and use the **Import from Registry** panel. Each
 registry is its own button; then tick the requirements you want. Each registry
 names its NCCR topic areas (Airway, Cardiology, Trauma, Medical, Operations)
-and splits its hours into the national, local and individual parts the model
-defines.
+sets a total hours target for the level, and sets a minimum number of hours in
+each topic area. Importing also creates a training category for each topic area
+in your department, so courses and sessions can be tagged to them, and brings in
+the level's certification requirements (for example CPR/BLS).
 
 The registries are national ones; there is no Virginia-specific version. There
 is no separate NCCR progress card. Track category minimums the usual way — as
@@ -3460,17 +3462,19 @@ member's profile or in this module. Set them under **Operations > Apparatus >
 _(a rig)_ > Operators**. Each department sets up its own levels.
 
 Each apparatus can name a required EVOC level. The Scheduling module checks
-driver/operator assignments against it and warns rather than blocks.
+driver/operator assignments against it and, by default, blocks a member who
+does not hold it. A chief can approve a time-limited driving exception, and a
+department can turn off **Enforce EVOC for drivers** so the check only warns.
 
 For how the check picks a member's level and what happens when it has expired,
 see [Membership > EVOC Certification](./01-membership.md#evoc-certification).
 
 ### Edge Cases
 
-| What happened                        | What it means                                                   |
-| ------------------------------------ | --------------------------------------------------------------- |
-| A training record has no category    | It is not counted toward requirements limited to a category.    |
-| A member has no EVOC level for a rig | They can still be assigned to drive it, but a warning is shown. |
+| What happened                        | What it means                                                                                                                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A training record has no category    | It is not counted toward requirements limited to a category.                                                                                                                                                              |
+| A member has no EVOC level for a rig | By default they are blocked from the driver seat of that rig unless a chief has approved a driving exception. If the department has turned off **Enforce EVOC for drivers**, they can be assigned and a warning is shown. |
 
 ---
 
@@ -3487,11 +3491,14 @@ regulatory filings, yearly reviews and member files.
 
 The printed record includes:
 
-- the member's name, rank, station and membership dates;
-- a training hours summary (current period and all time);
-- certification status and expiry dates;
-- compliance colors (green / yellow / red) for every active requirement;
-- every training record, with course name, date, hours, category and status.
+- the member's name and the date printed, with their overall compliance status;
+- a summary of Total Hours, Hours This Year, Active Certifications and Completed
+  Courses;
+- how many requirements are met, and how many certifications are expiring soon
+  or expired;
+- the member's program enrollments with status and progress;
+- a table of certifications with number, issuing agency and expiry;
+- every training record, with course, type, date, hours, instructor and status.
 
 ![Print layout for a member training history](./images/02-62-print-member-history.png)
 
@@ -3503,10 +3510,14 @@ The printed record includes:
 
 The printed program includes:
 
-- the program's name, description, type (phases or one list) and status;
-- each phase with all its requirements;
-- milestones and what completes them;
-- the enrollment roster with each member's progress percentage.
+- the program's name, description, code and version;
+- its structure, target position, time limit and the number enrolled;
+- a table of phases, and a table of every requirement with its phase and whether
+  it is required;
+- the enrolled members with status, progress percentage, enrollment and target
+  dates and current phase.
+
+Milestones are not printed.
 
 ![Print layout for a training program with phases and requirements](./images/02-63-print-program.png)
 
@@ -3598,7 +3609,7 @@ full progress** shows every phase at once.
 **Edge case — enrolling twice:** Later that week, Lt. Park tries to enroll Alex
 in the same program. The picker shows her as already **Enrolled** and does not
 let him select her. If a second enrollment reaches The Logbook another way, it
-is refused: "Member is already enrolled in this program". A member can have only
+is refused with an error saying the member is already enrolled in this program. A member can have only
 one active enrollment per program.
 
 ### Part 2: Phase 1 — Orientation (March 25 – April 5)
@@ -3617,13 +3628,17 @@ Phase 1 asks Alex to complete 4 orientation tasks, each done a different way:
 Alex opens **Training > Submit Training**, types "Department History", sets
 2 hours, and selects **Submit Training**. The record waits for review. Capt.
 Davis sees it in **Training Admin → Records → Submissions to Review**, checks
-the details and selects **Approve**. Alex's hours count from then on.
+the details, ticks **Apply this training toward a pipeline requirement**, picks
+the program and "Department History Course", and selects **Approve**. Alex's
+hours count from then on. Approval alone would file the record but would not move
+the program requirement.
 
 For the SOPs Review, Alex submits but forgets to attach the signed
 acknowledgment form. Capt. Davis notices and selects **Request Revision** with
 the note "Please upload your signed acknowledgment form." Alex sees the note at
 the top of Submit Training, selects **Fix and Resubmit**, attaches the PDF and
-submits again. Capt. Davis approves it.
+submits again. Capt. Davis approves it, applying it to "SOPs Review" the same
+way.
 
 **Requirements an officer marks complete (3 and 4):**
 
@@ -3648,25 +3663,28 @@ Phase 1 is complete. No officer action is needed unless the phase is set to
 
 Phase 2 covers fireground skills seen during regular shifts. Over 12 shifts,
 shift officers file completion reports recording the skills Alex showed. Each
-skill needs 3 sign-offs before the requirement is complete.
+approved report that shows a skill is recorded as a sign-off and raises Alex's
+competency level for it. A skills requirement is not completed by the count:
+Capt. Davis reviews the sign-offs and selects **Mark complete** on it.
 
 **How shift reports credit requirements:**
 
 After each shift, the shift officer closes out the shift, which creates a draft
 report for each trainee. The officer then finishes Alex's report, scoring the
 skills she showed from 1 to 5. When the report is submitted and approved, The
-Logbook credits the matching Phase 2 requirements.
+Logbook records a sign-off for each skill ticked as demonstrated and moves the
+matching Phase 2 requirements to In Progress.
 
 **Progress after 12 shifts** (a summary of the example, not a screen):
 
-| Requirement       | Sign-offs needed | Sign-offs done | Scores    | Status            |
-| ----------------- | ---------------- | -------------- | --------- | ----------------- |
-| Hose Operations   | 3                | 3              | 2 → 3 → 4 | Complete          |
-| Ladder Operations | 3                | 3              | 2 → 3 → 3 | Complete          |
-| SCBA              | 3                | 3              | 3 → 4 → 4 | Complete          |
-| Forcible Entry    | 3                | 2              | 3 → 3     | In Progress (67%) |
-| Search & Rescue   | 3                | 3              | 3 → 3 → 4 | Complete          |
-| Ventilation       | 3                | 3              | 2 → 3 → 4 | Complete          |
+| Requirement       | Sign-offs done | Scores    | Status                                  |
+| ----------------- | -------------- | --------- | --------------------------------------- |
+| Hose Operations   | 3              | 2 → 3 → 4 | Marked complete by Capt. Davis          |
+| Ladder Operations | 3              | 2 → 3 → 3 | Marked complete by Capt. Davis          |
+| SCBA              | 3              | 3 → 4 → 4 | Marked complete by Capt. Davis          |
+| Forcible Entry    | 2              | 3 → 3     | In Progress, waiting for a third report |
+| Search & Rescue   | 3              | 3 → 3 → 4 | Marked complete by Capt. Davis          |
+| Ventilation       | 3              | 2 → 3 → 4 | Marked complete by Capt. Davis          |
 
 There is no separate phase page and no chart of scores. A member's phases
 appear together on their progress page, each requirement with a percentage
@@ -3685,31 +3703,33 @@ The skill is not credited. Only skills ticked as demonstrated count.
 
 Phase 3 has 3 requirements:
 
-| #   | Requirement            | How it is completed               |
-| --- | ---------------------- | --------------------------------- |
-| 1   | CPR/AED Certification  | Outside certificate, submitted    |
-| 2   | First Responder Course | Submitted by the member (40 hrs)  |
-| 3   | Patient Assessment     | Shift report sign-offs (2 needed) |
+| #   | Requirement            | How it is completed                                        |
+| --- | ---------------------- | ---------------------------------------------------------- |
+| 1   | CPR/AED Certification  | Outside certificate, submitted                             |
+| 2   | First Responder Course | Submitted by the member (40 hrs)                           |
+| 3   | Patient Assessment     | Shift report sign-offs, then marked complete by an officer |
 
 **Outside certification (requirement 1):** Alex already holds CPR/AED from a
 previous employer. She opens **Training > Submit Training**, enters the
 course, ticks **This training earned a certification**, adds the dates, and
-attaches the certificate PDF. Capt. Davis approves it, and the Phase 3
-requirement is credited.
+attaches the certificate PDF. Capt. Davis approves it and applies it to the
+Phase 3 CPR/AED requirement.
 
 **Course (requirement 2):** Alex finishes a 40-hour First Responder course at
 the community college. She submits it with 40 hours and the completion
-certificate. Capt. Davis approves it.
+certificate. Capt. Davis approves it and applies it to the First Responder
+requirement.
 
 **Shift report sign-offs (requirement 3):** On two medical calls in June, shift
-officers record Alex's patient assessment in their reports. After the second
-approved report, the requirement is complete.
+officers record Alex's patient assessment in their reports. Each approved report
+adds a sign-off and raises her competency level; once Capt. Davis is satisfied he
+selects **Mark complete** on the requirement.
 
 Phase 3 is now 100% complete, and Alex moves on to Phase 4.
 
 **Edge case — certification expiring soon:** Alex's CPR/AED card expires in
 September. It appears on **Expiring Certs**, and on her list of upcoming
-expirations. At 90 days before expiry, Alex gets an in-app and email alert. Her
+expirations. If your department has certification alerts turned on, Alex gets an in-app and email alert at 90 days before expiry. Her
 compliance card shows yellow.
 
 ### Part 5: Phase 4 — Live Fire & Graduation (August – September)
@@ -3781,7 +3801,7 @@ Lt. Santos opens **Events > Create Event** and fills in the drill:
 | Event Type           | Training                                              |
 | Recurring            | No                                                    |
 | Date                 | Saturday, June 13, 2026                               |
-| Time                 | 08:00 – 12:00                                         |
+| Time                 | 08:30 – 12:30                                         |
 | Location             | 415 Industrial Pkwy (acquired structure)              |
 | RSVP Required        | Yes                                                   |
 | RSVP Fields          | Dietary restrictions, accessibility needs (for lunch) |
@@ -3846,7 +3866,7 @@ By 08:15, 24 of the 28 have checked in. Two more arrive by 08:20 and scan in.
 phone camera. Lt. Santos opens the event's check-in list on his tablet, finds
 Thompson, and checks him in.
 
-Final attendance at 08:30: 27 present out of 28. FF Garcia called in sick.
+Final attendance at 08:30: 26 present out of 28. FF Garcia called in sick and one other member did not come.
 
 ### Part 4: Drill Execution & Documentation
 
@@ -3865,8 +3885,9 @@ shift reports afterwards.
 
 ### Part 5: Post-Drill Reports (Same Evening)
 
-After the drill, Lt. Santos finalizes the event's attendance, which credits
-everyone the 4 hours of "Structural Firefighting Operations". The three
+After the drill, Lt. Santos selects **End Event** at 12:30 and then finalizes the
+event's attendance. Each member is credited the time they were there, so everyone
+who stayed to the end gets the 4 hours of "Structural Firefighting Operations". The three
 apparatus officers then file shift completion reports for their crews.
 
 Each officer starts from the drill shift. The form fills in the date, hours and
@@ -3892,8 +3913,8 @@ roof ventilation. All 10 get 4 hours.
 | Measure            | Value                              |
 | ------------------ | ---------------------------------- |
 | Reports filed      | 26 (one per trainee present)       |
-| Credit hours each  | 4                                  |
-| Total hours logged | 104                                |
+| Credit hours each  | 4 (2 for FF Patel)                 |
+| Total hours logged | 102                                |
 | Linked course      | Structural Firefighting Operations |
 
 ![The Crew summary table on Scheduling > Shift Reports — one row per crew member with report count, hours, calls and average rating](./images/02-90-crew-summary-table.png)
@@ -3983,7 +4004,7 @@ have moved, been renamed or work differently.
 - **Training Admin → Records → Shift Reports** has **New Report**, **Filed**
   and **My Reports** tabs. Reports are filed from Shift Scheduling's **Shift
   Reports** tab.
-- **The two-year frequency** reads **Every 2 Years** (it was "Biannual"). It
+- **The two-year frequency** reads **Every 2 Years** in the requirement form's Frequency list (it was "Biannual", and still shows as "biannual" on requirement cards and in the Compliance Matrix). It
   means once every two years, not twice a year.
 - **The member export period** "Lifetime" reads **All Time**.
 - **The Compliance Matrix** is a list grouped by standing that you step

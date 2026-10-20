@@ -47,6 +47,14 @@ the remaining count.
 | October 16 – 18: **Minutes > Signers** | Capture Minutes Settings → Signatures (above); the Sign dialog and Signatures panel are unchanged |
 | October 18 – 19: `04-*` roll panel on minutes | Still **REPLACE** (the per-minutes selector); unaffected by the move |
 
+### Images whose captions describe text corrected by the Training guide audit
+
+| Image | Disposition | Why |
+| ----- | ----------- | --- |
+| `02-71-multi-agency-training` | **CHECK** | Alt text says "headcounts"; the form takes one organization and a single Total Participants number |
+| `02-74-annual-compliance-report` | **CHECK** | The report has no waiver summary or year-over-year comparison |
+| `02-62-print-member-history`, `02-63-print-program` | **CHECK** | Printed contents are narrower than the guide described; confirm the captions say only what the page shows |
+
 ### Medical screening and dashboard changes merged after the last pass
 
 | Image | Disposition | Why |
