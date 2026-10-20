@@ -65,7 +65,7 @@ export const ApprovalStepActions: React.FC<ApprovalStepActionsProps> = ({
 
   return (
     <div
-      className={`mb-6 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${boxClass}`}
+      className={`mb-6 flex flex-col gap-3 rounded-lg border p-4 lg:flex-row lg:items-center lg:justify-between ${boxClass}`}
     >
       <div className="text-theme-text-primary space-y-1 text-sm">
         {assigneeLabel && (
@@ -84,7 +84,7 @@ export const ApprovalStepActions: React.FC<ApprovalStepActionsProps> = ({
         )}
       </div>
       {canAct && (
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 lg:shrink-0">
           <button
             type="button"
             onClick={() => open('approve')}
@@ -104,7 +104,7 @@ export const ApprovalStepActions: React.FC<ApprovalStepActionsProps> = ({
         </div>
       )}
       {requiresOverride && (
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 lg:shrink-0">
           <button
             type="button"
             onClick={() => open('approve')}

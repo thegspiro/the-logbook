@@ -1209,7 +1209,7 @@ export const ElectionDetailPage: React.FC = () => {
                         >
                           {step.label}
                         </div>
-                        <div className="text-theme-text-muted text-xs">{step.description}</div>
+                        <div className="text-theme-text-muted sr-only text-xs lg:not-sr-only">{step.description}</div>
                       </div>
                     </div>
                   </React.Fragment>
