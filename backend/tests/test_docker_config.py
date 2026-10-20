@@ -884,14 +884,14 @@ class TestHealthEndpointContract:
                 f'"{status}"' in self.main_py
             ), f"Health endpoint must support '{status}' status level"
 
-    def test_detailed_health_blocked_in_production(self):
-        """The detailed endpoint must be restricted in production."""
+    def test_detailed_health_is_development_only(self):
+        """The detailed endpoint must be served only in development."""
         # Find the detailed health function
-        detailed_idx = self.main_py.index("health_check_detailed")
-        nearby = self.main_py[detailed_idx : detailed_idx + 500]
+        detailed_idx = self.main_py.index("async def health_check_detailed")
+        nearby = self.main_py[detailed_idx : detailed_idx + 800]
         assert (
-            "production" in nearby
-        ), "/health/detailed must check for production environment"
+            'settings.ENVIRONMENT != "development"' in nearby
+        ), "/health/detailed must be restricted to the development environment"
 
 
 # ===========================================================================

@@ -1,7 +1,8 @@
 # Application Review — Admin Hours (Tier B)
 
 **Prefix:** `AH2` · **Iteration:** B15 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-20 (pass 5)
 
 **Backend:** `endpoints/admin_hours.py` (1,042 L, 27 endpoints),
 `services/admin_hours_service.py` (1,545 L), model `models/admin_hours.py`
@@ -9,6 +10,94 @@
 **Prior audit:** `docs/module-audit/admin-hours.md` (iteration 15) — AH-1 (HIGH
 self-credit), AH-2 (cross-tenant stale-session mutation), AH-3, AH-4 (SoD) fixed;
 AH-5 (minor scoping omissions, flagged not-exploitable) left open.
+
+---
+
+## Pass 5 (2026-10-20) — a mapping update acknowledged a null and changed nothing (1 fixed, 1 observation)
+
+Lens for this pass: the update-payload discipline of B4–B14 driven through the real
+handlers, plus the flush-and-return `updated_at` shape B14 found (GF2-1). This module
+is in better shape than most of the rotation: every create and update service already
+reloads `created_at` / `updated_at` after its flush (`refresh(x, ["created_at",
+"updated_at"])` at eleven sites), the category update writes through `apply_updates`,
+and the entry edits are deliberately explicit about null (`_apply_entry_edits`:
+_"None leaves the description alone; a blank string clears it"_). All 27 routes were
+inventoried: `admin_hours.manage` on every officer route, `get_current_user` on the
+member's own clock-in / out / entries / edit / withdraw routes, which filter on the
+caller's own `user_id`.
+
+Driven over HTTP against the real schema with a `get_db` that commits on success and
+rolls back on an exception, as `get_session` does: a real change through the category,
+event-mapping and officer entry-edit `PATCH`es (all three save and answer 200, so the
+GF2-1 shape is **not** present here), and `null` for every field of the two column-backed
+update schemas.
+
+### AH2-1 — LOW — `PATCH /event-mappings/{id}` with `percentage: null` or `is_active: null` answered 200 and changed nothing — ✅ FIXED
+
+`update_event_hour_mapping(percentage=None, is_active=None)` reads `None` as "not
+provided", and the handler passes `**data.model_dump(exclude_unset=True)`, so an
+**explicit** null arrives as the same `None` an omitted key would. Both columns are NOT
+NULL. Every other update path in the rotation answers that with a 400 ("cannot be
+cleared"); this one acknowledged the write with a 200 and left the old value, the
+mirror image of the bug CLAUDE.md #1 describes for the backend. Reproduced: 2 of 13 cases
+failed on the unmodified schema — the other eleven passed, including the category's four
+NOT NULL columns, which already answer 400.
+
+**Fixed** in the request schema, not the service: a `field_validator` on
+`EventHourMappingUpdate` answers 422 for an explicit null on either field and does nothing
+when the key is omitted (a validator does not run for a key that was not sent). The
+service's own "None means skip" contract is untouched, so the internal callers that pass
+`None` on purpose keep working. The frontend type
+(`EventHourMappingUpdate`) never allows null for either field, so no screen changes.
+
+Tests: `tests/test_admin_hours_update_endpoints_integration.py` (13). Three real-change
+tests (category description, mapping percentage, officer entry edit) each assert **200 and
+that the value is in the table afterwards**; the null cases are derived from update schema
+and model: a NOT NULL column must answer exactly 400 or 422 and keep its value, and a
+nullable one must accept the null and clear. 2 fail with the schema change stashed, 11 pass
+either way, and 0 are selected under the unit job's marker expression.
+
+### Observation, not changed — the event-mapping `PATCH` has no caller in the app
+
+`eventHourMappingService.update` (`modules/admin-hours/services/api.ts`) is defined, typed
+and tested, and nothing in the frontend calls it: `HourTrackingSection` lists, creates and
+deletes mappings, so a mapping can be added or removed but its percentage cannot be edited
+or switched off from the screen. The endpoint is live and gated, so the wrapper is left in
+place; whether the settings screen should gain an edit control is a product call, the same
+shape as NOTIF2-6, and this one is small enough to record here rather than as an owner
+decision of its own.
+
+### Verified good ✅ (this pass)
+
+- **Nothing unreferenced.** The AST scan (counting `tests/`, `scripts/`, `alembic/`) over
+  the endpoint, service, model and schema found no unused module-level name or class
+  method, and no `noqa` / `TODO`.
+- **The AH-1 / AH-4 / AH-6 invariants** (manual entries start `PENDING`; approver cannot
+  approve their own entry on either approval path) are covered by the existing service and
+  scope suites, which pass.
+- **Org scoping.** Every by-id read in the endpoint filters `organization_id`
+  (`get_category`, the locked entry fetches, the mapping fetch), and the org-scoping ratchet
+  passes.
+
+### Not read (scope, stated plainly)
+
+The 2,449-line service was read at its update, edit and mapping paths and scanned for dead
+names; clock-in / out, auto-close, event-attendance crediting, the summary and report
+builders and the export were left to their dedicated suites, which pass. The frontend module
+was read at its category form, the update calls and the mapping wrapper.
+
+### Completion gate (pass 5)
+
+| Check                                                           | Result                                                             |
+| --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `flake8 app/ tests/`                                            | ✅ exit 0, no output                                               |
+| `black --check app/ tests/`                                     | ✅ 1845 files unchanged                                            |
+| `isort --check` (changed files)                                 | ✅                                                                 |
+| `mypy app/schemas/admin_hours.py`                               | ✅ no issues                                                       |
+| Related backend suites (14 files incl. the org-scoping ratchet) | ✅ 191 passed                                                      |
+| New file                                                        | ✅ 13 pass; 2 fail without the fix; 0 under the unit job's markers |
+| `check_route_permissions.py --strict`                           | ✅ 0 errors, 0 warnings                                            |
+| Frontend                                                        | n/a — no frontend change                                           |
 
 ---
 
