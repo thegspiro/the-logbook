@@ -75,6 +75,8 @@ sign-in page reports "clean".
 | Training session form, inventory mobile sort       | Location and Location Details fields, and the mobile Sort select, had a visible label that was not associated with the control                                                                                                          | `htmlFor` / `id`                                                                                                                                                                       |
 | Prospective members, pipeline detail               | Hand-styled 13px bulk-select checkboxes; Required / Do-this-first pills 20px tall in a row that could not wrap (they overlapped the requirement name on a phone)                                                                        | `form-checkbox`, 24px on touch; wrapping row, `min-h-6` pills                                                                                                                          |
 | Status badges (297 class strings)                  | `text-X-700` on a `bg-X-500/10–20` tint measured 4.1–4.4:1 for green, emerald, yellow, amber, red, cyan, pink, lime, teal                                                                                                               | All 700/tint pairings were measured against Tailwind's palette; the 23 that miss 4.5:1 move to the 800 shade (light mode only)                                                         |
+| `/onboarding/*` on a configured installation       | A visitor who deep-linked to `/onboarding/start` saw the whole Organization Setup form and learned setup was closed only when the submit returned `LB-ONBD-001`; nothing was exposed                                                    | `OnboardingGate` asks the status endpoint once and redirects to `/login` when setup is finished; fails open; `/onboarding/complete` stays reachable (approved)                         |
+| Unknown URL                                        | The catch-all redirected silently to the dashboard, so a bookmark to a removed page looked like the app ignoring the click                                                                                                              | A "Page not found" screen inside the signed-in layout; names the path, never the query string (approved)                                                                               |
 | Dead code                                          | `DashboardCardHeader`, `scheduling/ShiftCard` — no importers                                                                                                                                                                            | Removed                                                                                                                                                                                |
 
 ## Verified good (no change)
@@ -100,25 +102,6 @@ sign-in page reports "clean".
 - **Source scan:** no `console.log`, no `TODO` / `FIXME`, no
   `window.confirm/alert/prompt`; every `dangerouslySetInnerHTML` is fed by
   DOMPurify.
-
-## Open — needs an owner decision
-
-These are recorded in [`KNOWN_LIMITATIONS.md`](../KNOWN_LIMITATIONS.md) under
-"Final page sweep (2026-10-20)". Neither was changed, because each alters an
-auth-adjacent flow or what a stale link does.
-
-1. **`/onboarding/*` is reachable on a configured installation.** A visitor who
-   deep-links to `/onboarding/start` sees the whole Organization Setup form and
-   only learns setup is closed when the submit returns `LB-ONBD-001` (400). The
-   backend refuses correctly, so this is a confusing screen, not an exposure.
-   **Proposed:** a guard that reads `GET /onboarding/status` and redirects to
-   `/login` once `is_completed`, leaving `/onboarding/complete` reachable for the
-   final step.
-2. **An unknown URL silently redirects to the dashboard.**
-   `<Route path="*" element={<Navigate to="/" replace />}>`. A bookmark to a page
-   that was removed (`/scheduling/templates`, `/nfc-tags`) lands on the home
-   screen with no explanation. **Proposed:** a "Page not found" screen. It needs
-   no new registry entry (it is a catch-all), but it changes what a stale link does.
 
 ## Observations, not defects
 

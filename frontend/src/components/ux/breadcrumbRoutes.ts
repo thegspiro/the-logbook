@@ -8,9 +8,8 @@
  * 1. **The prefix is not a route.** `/inventory/admin/checklists/templates/new`
  *    yields `/inventory/admin/checklists/templates`, which no `<Route>`
  *    declares — only `/new` and `/:templateId` beneath it. App.tsx's catch-all
- *    swallows the miss and drops the user on the dashboard, which is
- *    indistinguishable from a crumb that simply does not work. This is the same
- *    failure `routeIntegrity.test.ts` exists to catch, except a computed path
+ *    answers the miss with "Page not found", so the crumb is a dead end. This
+ *    is the same failure `routeIntegrity.test.ts` exists to catch, except a computed path
  *    has no `to="…"` literal for that scan to read.
  *
  * 2. **The prefix is a route the viewer cannot open.** Ancestry is not

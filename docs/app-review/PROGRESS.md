@@ -3288,9 +3288,10 @@ malformed definition list), contrast failures in the orange, emerald and
 warning-text palettes and on the compliance print sheet, and two unused
 components. `GET /health/detailed` now requires `settings.manage` (it
 was unauthenticated; the owner approved the change) and its CPU sample no longer
-blocks the event loop. **Open (owner decision):** `/onboarding/*` renders on a
-configured installation, and an unknown URL redirects silently to the
-dashboard — mirrored to KNOWN_LIMITATIONS. **Verified good:** every protected route redirects signed
+blocks the event loop. `/onboarding/*` now redirects to sign-in once setup is
+finished and an unknown URL shows "Page not found" instead of redirecting
+silently (both approved by the owner). No owner decision from the sweep is left open.
+**Verified good:** every protected route redirects signed
 out, a member is denied every administrative page, no token in a response body,
 secrets redacted for non-admins. See
 [final-sweep-2026-10.md](./final-sweep-2026-10.md).
