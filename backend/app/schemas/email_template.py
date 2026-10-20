@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
-from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.base import UTCResponseBase
 
 
 class TemplateVariable(BaseModel):
@@ -378,7 +378,7 @@ class ScheduledEmailCreate(BaseModel):
     cc_emails: Optional[List[EmailStr]] = None
     bcc_emails: Optional[List[EmailStr]] = None
     context: Dict[str, Any] = Field(default_factory=dict)
-    scheduled_at: UTCDateTime = Field(
+    scheduled_at: datetime = Field(
         ..., description="When to send the email (UTC datetime)"
     )
 
@@ -386,7 +386,7 @@ class ScheduledEmailCreate(BaseModel):
 class ScheduledEmailUpdate(BaseModel):
     """Request schema for updating a scheduled email"""
 
-    scheduled_at: Optional[UTCDateTime] = None
+    scheduled_at: Optional[datetime] = None
     status: Optional[str] = Field(None, description="Set to 'cancelled' to cancel")
 
 

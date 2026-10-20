@@ -1,12 +1,14 @@
 """Finance and fundraising request times reach the model in UTC.
 
-Scheduled-email send times, check dates, dues due dates, advance returns,
+Scheduled-email send times (converted by the endpoint, which refuses a naive
+value), check dates, dues due dates, advance returns,
 donation dates and fundraising-event dates live in MySQL DATETIME columns, and
 the driver formats an aware datetime by its wall clock, dropping the offset: a
 value sent as ``18:00-04:00`` was written as 18:00 and read back as 18:00 UTC.
 A naive value reached services that compare it with an aware "now" or an aware
 stored instant, where the two forms raise ``TypeError``. The schemas convert
-on the way in, through ``app.schemas.base.UTCDateTime``.
+on the way in, through ``app.schemas.base.UTCDateTime``; the scheduled-email
+endpoint applies ``as_utc`` to the aware value it accepts.
 
 Fiscal-year boundaries and ``date_incurred`` are deliberately not converted:
 they are calendar days stored at midnight and read back with ``.date()``, so
@@ -14,10 +16,15 @@ converting an offset would move them to another day.
 """
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pymysql.converters
 import pytest
+from fastapi import HTTPException
 
+from app.api.v1.endpoints.email_templates import schedule_email, update_scheduled_email
+from app.models.email_template import ScheduledEmailStatus
 from app.schemas.email_template import ScheduledEmailCreate, ScheduledEmailUpdate
 from app.schemas.finance import (
     AdvanceReturnCreate,
@@ -54,25 +61,77 @@ def _aware_and_comparable(value: datetime | None) -> None:
     assert _stored(value) == STORED
 
 
+def _future(hour_offset: str = "-04:00") -> str:
+    """18:00 local, a year ahead, so the endpoint's "in the future" check passes."""
+    return f"{datetime.now(timezone.utc).year + 1}-10-17T18:00:00{hour_offset}"
+
+
+def _db(existing=None):
+    db = MagicMock()
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    db.execute = AsyncMock(
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=existing))
+    )
+    return db
+
+
+USER = SimpleNamespace(id="u-1", organization_id="org-1")
+
+
 class TestScheduledEmail:
+    """The schema keeps a naive value naive so the endpoint can refuse it: a
+    stale client sending local wall time is told so rather than scheduled
+    hours off. An aware value is converted by the endpoint before storing."""
+
     BODY = {"template_type": "welcome", "to_emails": ["a@example.com"]}
 
-    def test_create_offset_is_stored_as_the_utc_instant(self):
-        data = ScheduledEmailCreate(**self.BODY, scheduled_at=OFFSET)
+    async def test_schedule_offset_is_stored_as_the_utc_instant(self):
+        db = _db()
+        body = ScheduledEmailCreate(**self.BODY, scheduled_at=_future())
 
-        assert _stored(data.scheduled_at) == STORED
+        await schedule_email(body=body, db=db, current_user=USER)
 
-    def test_create_naive_is_read_as_utc(self):
-        # The endpoint compares scheduled_at with an aware now().
-        _aware_and_comparable(
-            ScheduledEmailCreate(**self.BODY, scheduled_at=NAIVE).scheduled_at
+        stored = db.add.call_args.args[0].scheduled_at
+        year = datetime.now(timezone.utc).year + 1
+        assert _stored(stored) == f"'{year}-10-17 22:00:00'"
+
+    async def test_schedule_naive_is_refused(self):
+        body = ScheduledEmailCreate(**self.BODY, scheduled_at=_future(""))
+
+        with pytest.raises(HTTPException) as exc:
+            await schedule_email(body=body, db=_db(), current_user=USER)
+
+        assert exc.value.status_code == 400
+        assert "timezone" in exc.value.detail
+
+    async def test_reschedule_offset_is_stored_as_the_utc_instant(self):
+        existing = SimpleNamespace(
+            status=ScheduledEmailStatus.PENDING, scheduled_at=None
+        )
+        body = ScheduledEmailUpdate(scheduled_at=_future())
+
+        await update_scheduled_email(
+            scheduled_id="s-1", body=body, db=_db(existing), current_user=USER
         )
 
-    def test_update_offset_is_stored_as_the_utc_instant(self):
-        assert _stored(ScheduledEmailUpdate(scheduled_at=OFFSET).scheduled_at) == STORED
+        year = datetime.now(timezone.utc).year + 1
+        assert _stored(existing.scheduled_at) == f"'{year}-10-17 22:00:00'"
 
-    def test_update_naive_is_read_as_utc(self):
-        _aware_and_comparable(ScheduledEmailUpdate(scheduled_at=NAIVE).scheduled_at)
+    async def test_reschedule_naive_is_refused(self):
+        existing = SimpleNamespace(
+            status=ScheduledEmailStatus.PENDING, scheduled_at=None
+        )
+        body = ScheduledEmailUpdate(scheduled_at=_future(""))
+
+        with pytest.raises(HTTPException) as exc:
+            await update_scheduled_email(
+                scheduled_id="s-1", body=body, db=_db(existing), current_user=USER
+            )
+
+        assert exc.value.status_code == 400
+        assert existing.scheduled_at is None
 
 
 class TestCheckRequestUpdate:
