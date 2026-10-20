@@ -16,6 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None yet. PR #3449 (Feature 20, Compliance, pass 9) merged 2026-10-20,
+docs-only — not independently recordable here beyond what follows. This
+iteration (watchdog pickup — no open PR's head branch starts with
+`claude/security-review-` (`list_pull_requests`/`search_pull_requests`), and
+the dedicated `/loop 30m /security-review` session was not reachable via
+`ListAgents`) is reviewing Feature 21 (Admin hours), pass 9 — 0 fixes, 0 new
+findings; the only real delta since pass 8's merge (`f698cdc2f`) is a
+non-rotation `docs/workflow-review` commit (`1ae0d0ac8`, W70) that added an
+active-category name-uniqueness check to `admin_hours_service.py`, reviewed
+in full and found correctly org-scoped, gated and bounded. Rotation row 21 →
+✅ (pending this PR's merge); next is Feature 22 (Grants & fundraising).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20 Compliance pass 9, PR #3449, before it merged), preserved for history</summary>
+
 **PR [#3449](https://github.com/thegspiro/the-logbook/pull/3449)** (branch
 `claude/security-review-compliance`). PR #3448
 (Feature 19, Skills testing, pass 9) merged 2026-10-19, docs-only — not
@@ -31,6 +46,8 @@ set touched only `training.ts` fields outside this feature's own type
 (CMP2-1, CS-8, CS-9 residual, `grace_period_days` unwired) all re-verified
 unchanged. Rotation row 20 → ✅ (pending this PR's merge); next is Feature 21
 (Admin hours).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19 Skills testing pass 9, PR #3448, before it merged), preserved for history</summary>
@@ -20316,7 +20333,7 @@ iteration's commit" rule.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
@@ -20337,6 +20354,40 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-20 — Feature 21 (Admin hours, pass 9) — watchdog pickup, one non-rotation delta reviewed, 0 fixed, 0 new findings
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`list_pull_requests`/`search_pull_requests`, 0
+results among open PRs), and the dedicated loop session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was not reachable (`ListAgents`). PR
+#3449 (Feature 20, Compliance, pass 9) had just merged, docs-only.
+Rotation row 21 (Admin hours) was the next pending feature.
+
+**0 fixes applied, 0 new findings.** Baseline `f698cdc2f` (PR #3336's merge
+commit, pass 8). The only commit in the window touching the four declared
+backend scope files is `1ae0d0ac8`, a `docs/workflow-review` pass (W70) —
+not this rotation's own work — which added an active-category
+name-uniqueness check to `admin_hours_service.py`. Reviewed in full against
+all seven checklist dimensions: org-scoped (`organization_id` filter on the
+uniqueness query, same caller-threaded parameter as every other query in
+the service), gated by the existing `admin_hours.manage`-protected routes
+(no new route), bounded (one `SELECT ... LIMIT 1`), no new exposure. Of the
+other 14 named external backend callers, only `reports_service.py` had a
+non-empty, admin-hours-relevant diff (a UTC→local-date fix for the report's
+per-row date, and the `admin_hours` report type's addition to the
+`/available` catalog — generation was already gated by
+`admin_hours.manage` via `PII_REPORT_PERMISSIONS` regardless of catalog
+membership, so this only fixes `/available`'s listing to match
+`/generate`'s existing gate, not an auth bypass). Both previously-open,
+owner-decided items (per-org self-approval + resync re-queue threshold;
+AH-16's unbounded export) remain resolved, re-verified directly. Route
+count unchanged at 30/30, both `ondelete="SET NULL"` columns still
+`nullable=True`.
+
+Full writeup: [`AH-21-admin-hours.md`](./AH-21-admin-hours.md)'s **Pass 9**
+section.
 
 ### 2026-10-19 — Feature 20 (Compliance, pass 9) — watchdog pickup, true zero delta on backend code, 0 fixed, 0 new findings
 
