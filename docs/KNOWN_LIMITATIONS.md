@@ -4527,6 +4527,45 @@ First surfaced as an unfiled observation in
 disposition in pass 4, when a related fix (MM-15) touched the same
 validation block.
 
+## MM-19 — A Prepared Motion's Find-or-Create Has No Lock (2026-10-20)
+
+**Open — low severity, left for a future pass with a reason to touch this
+method.** `MinuteService.ensure_section_motions` checks whether a section
+already has a motion and, if not, inserts one, with no `.with_for_update()`
+on the parent `MeetingMinutes` row and no unique constraint on
+`(minutes_id, section_key)`. Two `minutes.manage` holders racing a save on
+the same draft (one toggling a section's "needs a motion" flag while another
+applies an agenda sync, say) within the same instant could each see no
+existing motion and both insert one, leaving a duplicate pending motion for
+that section — a secretary would notice and could delete it, not a
+tenant-isolation or privilege gap. Same shape, and the same "not fixed"
+disposition, as the already-documented unlocked find-or-create in
+`AttendanceDashboardService.grant_waiver` (pass 5 of this same review).
+Closing it means adding a locking read to a method four other call sites
+share (`update_minutes`, `recall_minutes`, `apply_outline`, the agenda-sync
+apply path, and `create_minutes` itself), which is a reasonable thing to do
+but wasn't the reason this pass was in the file.
+
+Found by `docs/security-review/MM-24-meetings-minutes.md` (feature 24, pass
+8, finding MM-19).
+
+## MM-20 — Publishing a Public Minutes Copy Has No Lock Either (2026-10-20)
+
+**Open — low severity.** `MinutesPublishingService._post_public`'s
+find-or-create for the `MinutesPublicCopy` row has no locking read, but
+unlike MM-19 the column it keys on (`minutes_id`) carries a database-level
+`unique=True` constraint, so a genuine race cannot silently duplicate the
+row — the loser's `commit()` raises `IntegrityError` instead, which the app's
+generic exception handler turns into a sanitized 500 rather than a clean
+"already published, try again." Two `minutes.manage` holders would have to
+click "Publish" on the same minutes within the same instant to hit it. The
+database already prevents the corrupted state a lock would prevent; what's
+missing is a graceful retry or message, which is a UX polish rather than a
+data-integrity gap.
+
+Found by `docs/security-review/MM-24-meetings-minutes.md` (feature 24, pass
+8, finding MM-20).
+
 ## MSG-12 — A Failed or Throttled Department-Message Delivery Is Never Retried (2026-08-31, stranded-pending sub-case fixed 2026-09-06)
 
 > ✅ **Resolved (2026-10-11), as the owner chose: record throttled sends as

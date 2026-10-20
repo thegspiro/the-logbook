@@ -160,6 +160,37 @@ class TestPreparedMotions:
         assert set(after) == {"adjournment"}
         assert after["adjournment"]["status"] == "passed"
 
+    async def test_the_update_response_itself_drops_the_removed_motion(self, world):
+        """The PUT's own body, not just a later GET, must not list it.
+
+        ``ensure_section_motions`` deletes a stale motion by a raw query, not
+        through the ``MeetingMinutes.motions`` collection. If that collection
+        was already loaded earlier in this same request (the GET this test
+        makes before the PUT loads it), the delete does not by itself update
+        the loaded list, and the response this endpoint builds from
+        ``minutes.motions`` would still name the just-deleted motion — in the
+        same response, not merely until a later unrelated query happens to
+        reload it. This must hold deterministically, not only on a lucky
+        read, so it is asserted directly on the PUT body.
+        """
+        minutes = await _create(world)
+        decided = _by_section(minutes)["adjournment"]
+        await _record(world, minutes["id"], decided["id"], status="passed")
+        # Loads minutes.motions for this request's session before the PUT,
+        # the same way the test's own "sections" GET always does.
+        await _get(world, minutes["id"])
+        sections = [
+            {**s, "needs_motion": False}
+            for s in (await _get(world, minutes["id"]))["sections"]
+        ]
+
+        async with _client(world.db, world.secretary) as c:
+            resp = await c.put(f"/minutes/{minutes['id']}", json={"sections": sections})
+
+        assert resp.status_code == 200, resp.text
+        in_response = _by_section(resp.json())
+        assert set(in_response) == {"adjournment"}
+
     async def test_a_section_flagged_later_gets_its_motion(self, world):
         minutes = await _create(world)
         sections = [

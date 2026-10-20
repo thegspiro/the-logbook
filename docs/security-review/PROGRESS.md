@@ -20382,7 +20382,7 @@ iteration's commit" rule.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
@@ -20400,6 +20400,54 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-20 — Feature 24 (Meetings & minutes, pass 8) — watchdog pickup, flaky-test lead confirmed as a real bug and fixed, 2 pre-existing races flagged
+
+`search_pull_requests` (state open, head `claude/security-review-`) returned
+0 PRs both before starting and again immediately before pushing — no
+collision. PR #3455 (Feature 23, Medical supplies) had merged with nothing
+started for Feature 24 since. Row 24 was the first `⬜`.
+
+**Delta.** Baseline `97aa9834` (pass 7's merge). 12 non-merge commits since,
+landing public posting of adopted minutes to a new unauthenticated page,
+agenda-driven minutes outlining, department-wide prepared/previous-minutes
+motions, a department attendance-listing default, full-text archive search,
+and two small fixes — see the feature's own doc for the full list.
+
+**The flaky-test lead (explicitly asked for in this pass's task brief) was a
+real, reproducible bug, not a genuine flake.**
+`test_minutes_prepared_motions_integration.py::TestPreparedMotions::
+test_removing_the_flag_removes_only_the_unacted_motion` was reproduced
+locally: isolated runs always passed, but the full file under
+`pytest-randomly`'s default ordering failed roughly 1 run in 3. Root cause:
+`MinuteService.ensure_section_motions` deletes a stale `Motion` via a raw
+query that bypasses the `MeetingMinutes.motions` ORM relationship, so a
+collection already eager-loaded earlier in the same request (which happens on
+every `PUT /minutes/{id}`, since the endpoint's own leading `get_minutes()`
+fetch loads it) never learns the row is gone. This is deterministically wrong
+within the same request — `PUT /minutes/{id}`'s own response body lists a
+motion it just deleted, every time — and only _looked_ flaky because the
+test's actual assertion ran a second, separate GET afterward, whose outcome
+depended on whether CPython's garbage collector had already reclaimed the
+first, now-stale object. **Fixed** by removing the deleted motion from the
+already-loaded collection (when loaded) alongside the database delete,
+verified against 25 consecutive full-file runs (0 failures, up from ~1-in-3).
+A new guard test asserts the deterministic half directly on the PUT response,
+so the fix does not depend on the flake staying reproducible to stay caught.
+
+**Findings:** MM-18 (MED, ✅ FIXED — the bug above), MM-19 (LOW, FLAGGED — a
+pre-existing, lock-free find-or-create in the same method that could
+duplicate a pending motion under a two-admin race, same disposition as this
+project's established precedent for this shape), MM-20 (LOW, FLAGGED — the
+new public-copy publish path's find-or-create has no lock either, though a DB
+unique constraint already prevents corruption; a race would surface as an
+unhandled 500 rather than a clean message). The new public, unauthenticated
+minutes page (`app/api/public/minutes.py`) was reviewed in full as the first
+pass to cover it and found properly rate-limited, settings-gated on every
+read (not only at publish time), and built from an allowlist narrower than
+the existing PDF export — no finding.
+
+Full write-up: `docs/security-review/MM-24-meetings-minutes.md` (pass 8).
 
 ### 2026-10-20 — Feature 22 (Grants & fundraising, pass 9) — watchdog pickup, real delta, 0 fixed, 0 new findings; GF-9 extended to the new budget-summary fields
 
