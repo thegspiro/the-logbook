@@ -2605,6 +2605,10 @@ not make that call.
 analytics dashboard and the per-event QR check-in analytics cover the need, and
 no per-event analytics panel is built.
 
+**Correction (2026-10-20, app-review B16):** the per-event QR check-in analytics
+cover the need only if something feeds them, and nothing does — see RPT2-3 below.
+The acceptance above stands for the department-wide dashboard.
+
 ## Events — Series RSVP Never Shows the Training Phase-Gate Warning (2026-09-04, security review EV-23)
 
 > ✅ **Resolved (2026-10-11), as the owner chose: list every ahead-of-phase
@@ -6299,6 +6303,30 @@ Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
 
   The catalog row is seeded per organization, so the last two also need a
   data change for existing installations.
+
+## RPT2-3 — The QR Check-In Analytics Dashboard Has A Reader And No Writer (2026-10-20)
+
+`/events/:id/analytics` (and the admin route) render `GET /analytics/metrics`, which counts
+`qr_scan`, `check_in_success` and `check_in_failure` rows in `analytics_events`. Nothing
+writes them. `POST /analytics/track` is the only writer in the repository; its only client
+method, `analyticsService.trackEvent`, is reached through `trackQRScan`, `trackCheckInSuccess`,
+`trackCheckInFailure`, `trackQRView` and `trackQRPrint`, and no page or component calls any of
+the five. `self_check_in` and `check_in_attendee` do not write an event either. The screen
+therefore reads zero scans, zero check-ins and an empty error breakdown, which looks like a
+department that has not used QR check-in rather than a feed that was never connected.
+
+**Why not fixed.** Which moments count as a "scan", a "success" and a "failure", and whether
+they are recorded by the browser or by the server, is a metric definition. **Owner decision:**
+
+1. **Record server-side** — `self_check_in` / `check_in_attendee` write the success and
+   failure events (with a bounded reason) and the QR page's load writes the scan. Reliable
+   and not forgeable by a member, at the cost of a write on the check-in path.
+2. **Wire the client calls** — call the five existing methods from the QR and check-in pages.
+   Smallest change, but a member's browser decides what is counted.
+3. **Retire the page** — remove the dashboard and the three analytics routes.
+
+Related: the accepted entry _"Events — There Is No Per-Event Analytics Panel"_ above rests on
+this dashboard covering the need. See `docs/app-review/reports-analytics.md` → Pass 5.
 
 ## Process
 
