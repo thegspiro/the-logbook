@@ -7,6 +7,7 @@ the passwords. Every other create -- each roster-import row included -- links
 the member to an account already at their address, so leaving suspends it.
 """
 
+import html
 import uuid
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -174,7 +175,9 @@ class TestCreatingAnAccount:
 
         kwargs = welcome.await_args.kwargs
         assert kwargs["to_email"] == member.personal_email
-        assert fake.created[0][3] in kwargs["appended_html"]
+        # The card escapes the password, so a generated one containing & < > or
+        # a quote appears in its escaped form.
+        assert html.escape(fake.created[0][3]) in kwargs["appended_html"]
         assert member.email in kwargs["appended_text"]
         row = await _record(db_session, member.id)
         await db_session.refresh(row)
