@@ -39,7 +39,14 @@ def extract_validated(archive: tarfile.TarFile, destination: Path) -> None:
     members = archive.getmembers()
     for member in members:
         validate_member(member)
-    archive.extractall(destination, members=members)
+    if hasattr(tarfile, "fully_trusted_filter"):
+        # Every member was validated above. Saying so explicitly is what
+        # Python 3.12+ asks for: an unfiltered call is deprecated there.
+        archive.extractall(
+            destination, members=members, filter="fully_trusted"
+        )
+    else:
+        archive.extractall(destination, members=members)
 
 
 def extract(archive_path: Path, destination: Path) -> None:

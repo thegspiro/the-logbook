@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -893,6 +893,96 @@ class DirectoryAccountService:
                 "A member was given an account while this ran. Run it again."
             )
         return counts
+
+    async def link_new_member(
+        self, user_id: str, organization_id: str, *, actor_id: Optional[str]
+    ) -> Optional[DirectoryAccountProvision]:
+        """Link a member just added to the account already at their address.
+
+        ``link_existing_members`` for one member and one lookup, under the
+        same rules: the Logbook email must be one of the account's own
+        addresses in the directory's domain, the member must not have left or
+        have a record already, and no other record or member may lay claim to
+        the account -- one account, one member. Nothing in the directory is
+        changed. Never raises: the member was created whatever happens here,
+        and one left unlinked is picked up by Link existing members.
+        """
+        try:
+            return await self._link_new_member(user_id, organization_id, actor_id)
+        except Exception:
+            logger.exception(f"Linking new member {user_id} to a directory failed")
+            await self.db.rollback()
+            return None
+
+    async def _link_new_member(
+        self, user_id: str, organization_id: str, actor_id: Optional[str]
+    ) -> Optional[DirectoryAccountProvision]:
+        info = await self.connected_provider(organization_id)
+        if info is None:
+            return None
+        integration = await self._active_integration(organization_id, info)
+        member = await self._load_member(user_id, organization_id)
+        if integration is None or member is None or member_has_departed(member):
+            return None
+        if await self._load(organization_id, user_id=user_id) is not None:
+            return None
+        domain = str((integration.config or {}).get("domain", "")).lower()
+        address = (member.email or "").strip().lower()
+        if not address or _domain_of(address) != domain:
+            return None
+        try:
+            account = await directory_for(integration).get_user(address)
+        except DirectoryAccountNotFoundError:
+            return None
+        except DirectoryError as exc:
+            logger.warning(
+                f"{info.product} lookup for new member {user_id} failed: "
+                f"{type(exc).__name__}"
+            )
+            return None
+        # A lookup by alias answers with the account that owns the alias:
+        # only the account's own addresses make it this member's.
+        own = {a.strip().lower() for a in account.addresses if a}
+        if not account.id or address not in own:
+            return None
+        claimed = await self.db.execute(
+            select(DirectoryAccountProvision.id).where(
+                DirectoryAccountProvision.organization_id == str(organization_id),
+                DirectoryAccountProvision.provider == info.provider,
+                DirectoryAccountProvision.external_user_id == account.id,
+            )
+        )
+        if claimed.first() is not None:
+            return None
+        other_member = await self.db.execute(
+            select(User.id).where(
+                User.organization_id == str(organization_id),
+                User.id != str(user_id),
+                func.lower(User.email).in_(own),
+            )
+        )
+        if other_member.first() is not None:
+            return None
+        row = DirectoryAccountProvision(
+            organization_id=str(organization_id),
+            user_id=str(user_id),
+            provider=info.provider,
+            primary_email=address,
+            status=DirectoryAccountStatus.LINKED_EXISTING.value,
+            external_user_id=account.id,
+            managed_on_premises=account.managed_elsewhere,
+            created_by=actor_id,
+        )
+        self.db.add(row)
+        try:
+            await self.db.commit()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            if not _is_duplicate_key(exc):
+                raise
+            return None  # a record was written for this member meanwhile
+        logger.info(f"Linked new member {user_id} to their {info.product} account")
+        return row
 
     async def attention_items(
         self, organization_id: str, now: Optional[datetime] = None

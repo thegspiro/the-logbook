@@ -211,14 +211,17 @@ choice an owner may want to revisit:
   member, so a Google failure while suspending is recorded only in the audit
   log; an administrator suspends the account by hand.
 - **No rename.** A member's name change in The Logbook does not reach Google.
-- **Members added any other way get no account.** Only conversion from the
-  prospective-members pipeline creates one; Add Member and roster import do
-  not.
-- **Linking existing members is by exact address, and on demand.** **Link
-  existing members** matches a member's Logbook email to an account's primary
+- **Add Member creates an account only when asked; import never does.** Add
+  Member's **Create a … account** box starts unticked (owner decision,
+  2026-10-20), and a roster import only links members to accounts already at
+  their addresses, so an import cannot consume a batch of licenses. A member
+  added without an account and without one to link to is not covered until
+  one is created in the directory and **Link existing members** is run.
+- **Linking is by exact address.** Linking — on demand, or automatically as a
+  member is added — matches a member's Logbook email to an account's own
   address only — not an alias, not a personal address — and skips members who
-  have already left. A member added later by Add Member or import is not linked
-  until it is run again.
+  have already left. A failed lookup while adding a member is logged, not
+  retried.
 - **A delegated key is domain-wide.** The service account can manage every
   user in the domain, not only members The Logbook created. That is why
   changing the integration needs `admin.access`, and why the requested scopes

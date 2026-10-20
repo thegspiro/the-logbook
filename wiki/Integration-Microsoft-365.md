@@ -106,6 +106,17 @@ looks again.
 
 ---
 
+## Members Added Outside the Pipeline
+
+**Add Member** offers **Create a Microsoft 365 account**, and every member it
+or a roster import adds is linked to an account already at their address, as
+for Google Workspace — see
+[Members Added Outside the Pipeline](Integration-Google-Workspace#members-added-outside-the-pipeline).
+Linking matches the sign-in name or the primary email address, under the
+rules below.
+
+---
+
 ## Members Who Joined Before the Integration
 
 **Integrations → Microsoft 365 → Link existing members** links current members
