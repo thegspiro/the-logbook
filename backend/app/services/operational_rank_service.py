@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import is_seeded_for, label_for
 from app.models.operational_rank import OperationalRank
+from app.models.org_chart import OrgChartNode
 from app.models.user import Organization, User, UserStatus
 from app.schemas.operational_rank import RankCreate, RankUpdate
 from app.utils.member_names import format_display_name
@@ -365,6 +366,30 @@ class OperationalRankService:
             raise ValueError(
                 f"Cannot delete rank '{rank.display_name}' while it is assigned "
                 f"to {member_count} {noun}. Reassign those members first."
+            )
+
+        # A seat names its rank by code, with no foreign key, so a deleted rank
+        # would leave the seat pointing at nothing and showing no holders.
+        seats = (
+            (
+                await self.db.execute(
+                    select(OrgChartNode.title)
+                    .where(
+                        OrgChartNode.organization_id == organization_id,
+                        OrgChartNode.rank_code == rank.rank_code,
+                    )
+                    .order_by(OrgChartNode.title)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if seats:
+            named = ", ".join(f"'{title}'" for title in seats)
+            raise ValueError(
+                f"Cannot delete rank '{rank.display_name}' while org chart seats "
+                f"use it: {named}. Link those seats to another rank or position "
+                "first."
             )
 
         try:

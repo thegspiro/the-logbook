@@ -47,7 +47,7 @@ from loguru import logger
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from app.core.config import settings
 from app.models.suggestion import (
@@ -209,6 +209,52 @@ def _remove_quietly(path: str) -> None:
         os.remove(path)
     except OSError:
         pass
+
+
+async def assert_position_not_sole_box_reviewer(
+    db: AsyncSession, organization_id: str, position_id: str
+) -> None:
+    """Refuse to delete a position that alone reviews an open suggestion box.
+
+    Called by RoleService.delete_role before it deletes anything. The reviewer
+    grant cascades with the position, so the box would keep accepting
+    submissions that nobody can read — the state the box form already refuses
+    to save. A closed box is not held back: reopening it goes through that
+    form, which asks for a reviewer.
+    """
+    other = aliased(SuggestionBoxReviewer)
+    names = (
+        (
+            await db.execute(
+                select(SuggestionBox.name)
+                .join(
+                    SuggestionBoxReviewer,
+                    SuggestionBoxReviewer.box_id == SuggestionBox.id,
+                )
+                .where(
+                    SuggestionBox.organization_id == str(organization_id),
+                    SuggestionBox.is_active.is_(True),
+                    SuggestionBoxReviewer.position_id == str(position_id),
+                    ~exists().where(
+                        other.box_id == SuggestionBox.id,
+                        other.id != SuggestionBoxReviewer.id,
+                    ),
+                )
+                .order_by(SuggestionBox.name)
+                # Locked so a concurrent edit to the box's reviewers cannot
+                # slip between this check and the delete.
+                .with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if names:
+        raise ValueError(
+            "This is the only reviewer of these open suggestion boxes: "
+            f"{', '.join(names)}. Add another reviewer or close the box "
+            "before deleting it"
+        )
 
 
 class SuggestionService:

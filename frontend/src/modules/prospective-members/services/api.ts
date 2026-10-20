@@ -788,11 +788,6 @@ export const applicantService = {
     return mapProspectToApplicant(response.data);
   },
 
-  async deleteApplicant(applicantId: string): Promise<void> {
-    // Backend doesn't have a delete prospect endpoint; this may 404
-    await api.delete(`/prospective-members/prospects/${applicantId}`);
-  },
-
   async checkExisting(email: string, firstName?: string, lastName?: string): Promise<ExistingRecordCheck> {
     const params: Record<string, string> = { email };
     if (firstName) params.first_name = firstName;

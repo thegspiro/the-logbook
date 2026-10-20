@@ -1033,6 +1033,9 @@ async def update_scheduled_email(
             ScheduledEmail.id == scheduled_id,
             ScheduledEmail.organization_id == current_user.organization_id,
         )
+        # The sender re-reads a row under this lock before sending it, so a
+        # cancel made here cannot cross a send in flight.
+        .with_for_update()
     )
     scheduled = result.scalar_one_or_none()
     if not scheduled:
@@ -1067,6 +1070,9 @@ async def update_scheduled_email(
     if body.status == "cancelled":
         scheduled.status = ScheduledEmailStatus.CANCELLED
         changes.append("cancelled")
+        await _audit_scheduled_email_cancelled(
+            db, scheduled, ScheduledEmailStatus.PENDING.value, current_user
+        )
 
     await db.commit()
     await db.refresh(scheduled)
@@ -1081,6 +1087,30 @@ async def update_scheduled_email(
     return scheduled
 
 
+async def _audit_scheduled_email_cancelled(
+    db: AsyncSession,
+    scheduled: ScheduledEmail,
+    previous_status: str,
+    current_user: User,
+) -> None:
+    await log_audit_event(
+        db=db,
+        event_type="scheduled_email_cancelled",
+        event_category="communications",
+        severity="info",
+        event_data={
+            "scheduled_email_id": str(scheduled.id),
+            "template_type": scheduled.template_type.value,
+            "scheduled_at": scheduled.scheduled_at.isoformat(),
+            "previous_status": previous_status,
+            "recipient_count": len(scheduled.to_emails or []),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+        organization_id=str(current_user.organization_id),
+    )
+
+
 @router.delete("/scheduled/{scheduled_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_scheduled_email(
     scheduled_id: str,
@@ -1089,7 +1119,13 @@ async def cancel_scheduled_email(
         require_permission("settings.manage", "organization.update_settings")
     ),
 ):
-    """Cancel (delete) a pending scheduled email."""
+    """Cancel a scheduled email that has not been sent.
+
+    The row is kept and marked CANCELLED rather than deleted, so the list
+    still shows what was called off and the audit trail records who did it.
+    The sender only sends a row it finds PENDING under the same row lock taken
+    here, so a cancelled one is never sent.
+    """
     from sqlalchemy import select
 
     result = await db.execute(
@@ -1097,6 +1133,9 @@ async def cancel_scheduled_email(
             ScheduledEmail.id == scheduled_id,
             ScheduledEmail.organization_id == current_user.organization_id,
         )
+        # Locked so the sender cannot claim the row between this check and
+        # the status change.
+        .with_for_update()
     )
     scheduled = result.scalar_one_or_none()
     if not scheduled:
@@ -1108,14 +1147,18 @@ async def cancel_scheduled_email(
     if scheduled.status == ScheduledEmailStatus.SENT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete an already-sent email",
+            detail="This email has already been sent and cannot be cancelled",
         )
+    if scheduled.status == ScheduledEmailStatus.CANCELLED:
+        return
 
+    previous_status = scheduled.status.value
+    scheduled.status = ScheduledEmailStatus.CANCELLED
+    await _audit_scheduled_email_cancelled(db, scheduled, previous_status, current_user)
+    await db.commit()
     logger.info(
         "Scheduled email cancelled id={} org={} by={}",
         scheduled_id,
         current_user.organization_id,
         current_user.id,
     )
-    await db.delete(scheduled)
-    await db.commit()

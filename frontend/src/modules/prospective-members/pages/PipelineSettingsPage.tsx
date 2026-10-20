@@ -1078,7 +1078,7 @@ export const PipelineSettingsPage: React.FC = () => {
         title="Delete Pipeline"
         message={
           currentPipeline && (currentPipeline.applicant_count ?? 0) > 0
-            ? `This pipeline has ${currentPipeline.applicant_count} applicant${currentPipeline.applicant_count === 1 ? '' : 's'}. Deleting it permanently deletes their application records and can’t be undone. A pipeline with active or on-hold applicants can’t be deleted.`
+            ? `This pipeline has ${currentPipeline.applicant_count} applicant${currentPipeline.applicant_count === 1 ? '' : 's'}. Deleting it deletes its stages and every applicant’s stage-by-stage progress. The applicant records themselves are kept, but no longer belong to any pipeline. This can’t be undone. A pipeline with active or on-hold applicants can’t be deleted.`
             : 'Delete this pipeline and its stages? This can’t be undone.'
         }
         confirmLabel="Delete Pipeline"

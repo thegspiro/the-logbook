@@ -68,6 +68,7 @@ const getStatusChange = vi.fn<typeof memberStatusService.getStatusChange>(() =>
 const getMemberLeaves = vi.fn<typeof memberStatusService.getMemberLeaves>(() => Promise.resolve([]));
 const updateContactInfo = vi.fn();
 const updateUserProfile = vi.fn();
+const deletePhoto = vi.fn();
 let nfcIdCardsConnected = false;
 
 vi.mock('../hooks/useConnectedIntegrations', () => ({
@@ -98,6 +99,7 @@ vi.mock('../services/api', () => ({
     setMyProfileVisibility: (...args: unknown[]) => setMyProfileVisibility(...args) as unknown,
     updateContactInfo: (...args: unknown[]) => updateContactInfo(...args) as unknown,
     updateUserProfile: (...args: unknown[]) => updateUserProfile(...args) as unknown,
+    deletePhoto: (...args: unknown[]) => deletePhoto(...args) as unknown,
   },
   organizationService: {
     getEnabledModules: () => getEnabledModules() as unknown,
@@ -940,5 +942,47 @@ describe('MemberProfilePage preferred name', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Jane Doe' })).toBeInTheDocument();
     expect(screen.queryByText(/Legal name:/)).not.toBeInTheDocument();
+  });
+});
+
+// Removing a profile photo was a single unconfirmed tap.
+describe('MemberProfilePage removing a profile photo', () => {
+  beforeEach(() => {
+    routeUserId = VIEWER_ID;
+    grantedPermissions = [];
+    getUserWithRoles.mockReset();
+    getUserWithRoles.mockResolvedValue({ ...targetUser, id: VIEWER_ID, photo_url: 'https://example.test/me.jpg' });
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockReset();
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    deletePhoto.mockReset();
+    deletePhoto.mockResolvedValue(undefined);
+  });
+
+  it('asks first, and removes the photo only once confirmed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove photo' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Your photo is removed from your profile and the roster.');
+    expect(deletePhoto).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Remove photo' }));
+
+    await waitFor(() => expect(deletePhoto).toHaveBeenCalledWith(VIEWER_ID));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove photo' })).not.toBeInTheDocument());
+  });
+
+  it('does nothing when the member keeps it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MemberProfilePage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Remove photo' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Keep it' }));
+
+    expect(deletePhoto).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Remove photo' })).toBeInTheDocument();
   });
 });

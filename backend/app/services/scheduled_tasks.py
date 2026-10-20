@@ -4095,6 +4095,20 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 )
             else:
                 org = item.organization
+            # Re-read the status under a row lock before sending. The batch
+            # above was read without one, so an email cancelled since then
+            # would otherwise still go out; the cancel endpoint takes the same
+            # lock, so a cancel and a send of one row serialize.
+            current_status = (
+                await db.execute(
+                    select(ScheduledEmail.status)
+                    .where(ScheduledEmail.id == item.id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if current_status != ScheduledEmailStatus.PENDING:
+                await db.commit()
+                continue
             if not org:
                 logger.warning(
                     "Scheduled email {} skipped: org {} not found",

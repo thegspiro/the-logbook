@@ -72,6 +72,25 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
         const [roleList, memberList] = await Promise.all([messagesService.getAvailableRoles(), userService.getUsers()]);
         setRoles(roleList);
         setMembers(memberList);
+        // A message keeps the ids it was written with, so a role deleted or a
+        // member removed since then is still in its stored audience. Nothing
+        // here can show or untick it, so drop it rather than send it back on
+        // save. A legacy entry stored as a role *name* becomes that role's id,
+        // which is what the checkboxes compare against.
+        const roleIdByKey = new Map<string, string>();
+        for (const role of roleList) {
+          roleIdByKey.set(role.id, role.id);
+          roleIdByKey.set(role.name, role.id);
+        }
+        const memberIds = new Set(memberList.map((m) => m.id));
+        setTargetRoles((prev) => {
+          const kept = prev.flatMap((entry) => {
+            const roleId = roleIdByKey.get(entry);
+            return roleId ? [roleId] : [];
+          });
+          return [...new Set(kept)];
+        });
+        setTargetMembers((prev) => prev.filter((id) => memberIds.has(id)));
       } catch {
         // Targeting dropdowns are optional; the form still works for "all".
       }
