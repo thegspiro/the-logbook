@@ -1836,9 +1836,7 @@ accurately reflect the resolved state, re-confirmed rather than rewritten).
 
 ---
 
-## Pass 8 (2026-10-20) — a real, reproducible data-integrity bug found and
-
-fixed via the flaky-test lead; two pre-existing lock-free races flagged
+## Pass 8 (2026-10-20) — the flaky-test lead was a real bug, found and fixed; two pre-existing races flagged
 
 **Backend:** `app/api/v1/endpoints/meetings.py` (675 L, was 623),
 `app/api/v1/endpoints/minutes.py` (1,570 L, was 1,379),
