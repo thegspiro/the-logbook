@@ -688,28 +688,28 @@ as **prospects**. "view" means `prospective_members.view` **or**
 
 ### Prospect Endpoints
 
-| Method | Path                                     | Permission                                       | Description                                                     |
-| ------ | ---------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------- |
-| `GET`  | `/prospects`                             | view                                             | List — see [Query Parameters](#query-parameters-prospect-list)  |
-| `POST` | `/prospects`                             | `members.create` \| `prospective_members.manage` | Create prospect                                                 |
-| `POST` | `/prospects/check-existing`              | `members.create` \| `prospective_members.manage` | Look for an existing member matching the applicant              |
-| `GET`  | `/prospects/{prospect_id}`               | view                                             | Get prospect details                                            |
-| `PUT`  | `/prospects/{prospect_id}`               | `members.manage` \| `prospective_members.manage` | Update prospect                                                 |
-| `GET`  | `/prospects/{prospect_id}/activity`      | view                                             | Activity log                                                    |
-| `POST` | `/prospects/{prospect_id}/advance`       | `members.manage` \| `prospective_members.manage` | Advance to the next stage                                       |
-| `POST` | `/prospects/{prospect_id}/regress`       | `members.manage` \| `prospective_members.manage` | Move back to the previous stage                                 |
-| `POST` | `/prospects/{prospect_id}/assign-stage`  | `members.manage` \| `prospective_members.manage` | Place the prospect on a chosen stage                            |
-| `POST` | `/prospects/{prospect_id}/complete-step` | `members.manage` \| `prospective_members.manage` | Complete a step                                                 |
-| `POST` | `/prospects/{prospect_id}/skip-step`     | `prospective_members.manage`                     | Skip the current step                                           |
-| `POST` | `/prospects/{prospect_id}/approve-step`  | any signed-in member                             | Multi-signer sign-off — see [Permissions](#permissions)         |
-| `POST` | `/prospects/{prospect_id}/status`        | `members.manage` \| `prospective_members.manage` | Hold, reject, withdraw or reactivate — body `{status, reason?}` |
-| `POST` | `/prospects/{prospect_id}/transfer`      | `members.manage` \| `prospective_members.manage` | Convert to member — see [Conversion](#conversion)               |
-| `POST` | `/prospects/bulk-advance`                | `members.manage` \| `prospective_members.manage` | See [Bulk Actions](#bulk-actions)                               |
-| `POST` | `/prospects/bulk-status`                 | `members.manage` \| `prospective_members.manage` | See [Bulk Actions](#bulk-actions)                               |
-| `POST` | `/prospects/process-inactivity`          | `members.manage` \| `prospective_members.manage` | Run the inactivity check                                        |
-| `GET`  | `/my-sign-offs`                          | any signed-in member                             | Stages awaiting the caller's signature                          |
-| `GET`  | `/source-events`                         | view                                             | Events that produced applicants                                 |
-| `GET`  | `/widget-summary`                        | view                                             | Dashboard widget counts                                         |
+| Method | Path                                     | Permission                                       | Description                                                                                 |
+| ------ | ---------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `GET`  | `/prospects`                             | view                                             | List — see [Query Parameters](#query-parameters-prospect-list)                              |
+| `POST` | `/prospects`                             | `members.create` \| `prospective_members.manage` | Create prospect; 409 naming the applicant if an active one already has the email            |
+| `POST` | `/prospects/check-existing`              | `members.create` \| `prospective_members.manage` | Look for an existing member, and an active applicant with the email (name, pipeline, stage) |
+| `GET`  | `/prospects/{prospect_id}`               | view                                             | Get prospect details                                                                        |
+| `PUT`  | `/prospects/{prospect_id}`               | `members.manage` \| `prospective_members.manage` | Update prospect                                                                             |
+| `GET`  | `/prospects/{prospect_id}/activity`      | view                                             | Activity log                                                                                |
+| `POST` | `/prospects/{prospect_id}/advance`       | `members.manage` \| `prospective_members.manage` | Advance to the next stage                                                                   |
+| `POST` | `/prospects/{prospect_id}/regress`       | `members.manage` \| `prospective_members.manage` | Move back to the previous stage                                                             |
+| `POST` | `/prospects/{prospect_id}/assign-stage`  | `members.manage` \| `prospective_members.manage` | Place the prospect on a chosen stage                                                        |
+| `POST` | `/prospects/{prospect_id}/complete-step` | `members.manage` \| `prospective_members.manage` | Complete a step                                                                             |
+| `POST` | `/prospects/{prospect_id}/skip-step`     | `prospective_members.manage`                     | Skip the current step                                                                       |
+| `POST` | `/prospects/{prospect_id}/approve-step`  | any signed-in member                             | Multi-signer sign-off — see [Permissions](#permissions)                                     |
+| `POST` | `/prospects/{prospect_id}/status`        | `members.manage` \| `prospective_members.manage` | Hold, reject, withdraw or reactivate — body `{status, reason?}`                             |
+| `POST` | `/prospects/{prospect_id}/transfer`      | `members.manage` \| `prospective_members.manage` | Convert to member — see [Conversion](#conversion)                                           |
+| `POST` | `/prospects/bulk-advance`                | `members.manage` \| `prospective_members.manage` | See [Bulk Actions](#bulk-actions)                                                           |
+| `POST` | `/prospects/bulk-status`                 | `members.manage` \| `prospective_members.manage` | See [Bulk Actions](#bulk-actions)                                                           |
+| `POST` | `/prospects/process-inactivity`          | `members.manage` \| `prospective_members.manage` | Run the inactivity check                                                                    |
+| `GET`  | `/my-sign-offs`                          | any signed-in member                             | Stages awaiting the caller's signature                                                      |
+| `GET`  | `/source-events`                         | view                                             | Events that produced applicants                                                             |
+| `GET`  | `/widget-summary`                        | view                                             | Dashboard widget counts                                                                     |
 
 `POST /prospects/{prospect_id}/status` accepts `active`, `on_hold`, `approved`,
 `rejected`, `withdrawn` or `inactive`; `transferred` is refused, because only
