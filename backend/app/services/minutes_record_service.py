@@ -393,7 +393,7 @@ class MinutesRecordService:
         minutes_id: str,
         organization_id: UUID | str,
         election_id: str,
-        captured_by: UUID | str,
+        captured_by: UUID | str | None,
     ) -> Optional[MinutesElectionResult]:
         """Freeze a closed election's result into the minutes."""
         from app.services.election_service import ElectionService
@@ -456,7 +456,7 @@ class MinutesRecordService:
             election_closed_at=election.closed_at,
             snapshot=results.model_dump(mode="json"),
             is_addendum=is_addendum,
-            captured_by=str(captured_by),
+            captured_by=str(captured_by) if captured_by else None,
         )
         self.db.add(row)
         await self.db.commit()

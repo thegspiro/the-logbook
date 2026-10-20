@@ -60,6 +60,14 @@ these defaults.
     full, because quorum and the attendance reports read it. A set of minutes
     can carry its own choice (``meeting_minutes.attendance_listing``).
 
+``auto_file_election_results``
+    Whether a closed election's certified result is filed with the minutes of
+    the meeting it was held at without anyone importing it: when the election
+    closes if those minutes exist, otherwise when they are created, and as a
+    permanent addendum when the minutes have already been circulated or
+    adopted. On unless set to a literal ``False``. Switching it off leaves the
+    manual import on the minutes page exactly as it was.
+
 Every value is read defensively. The JSON is unvalidated and an exception here
 would take out the daily task for the whole organization over one mistyped
 setting, so anything malformed reads as its default.
@@ -262,3 +270,23 @@ async def load_attendance_listing(db: AsyncSession, organization_id: str) -> str
         select(Organization.settings).where(Organization.id == str(organization_id))
     )
     return attendance_listing_in(result.scalar_one_or_none())
+
+
+AUTO_FILE_ELECTIONS_FLAG = "auto_file_election_results"
+
+
+def auto_file_election_results_in(settings: Any) -> bool:
+    """On unless the department set it to a literal ``False``."""
+    section = settings.get(MINUTES_SETTINGS_KEY) if isinstance(settings, dict) else None
+    if not isinstance(section, dict):
+        return True
+    return section.get(AUTO_FILE_ELECTIONS_FLAG) is not False
+
+
+async def load_auto_file_election_results(
+    db: AsyncSession, organization_id: str
+) -> bool:
+    result = await db.execute(
+        select(Organization.settings).where(Organization.id == str(organization_id))
+    )
+    return auto_file_election_results_in(result.scalar_one_or_none())
