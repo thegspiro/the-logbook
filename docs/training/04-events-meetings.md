@@ -1434,6 +1434,38 @@ approval** and **Approved**; see
 Who sees which minutes is decided for you: members see circulated and adopted minutes, never drafts or executive sessions.
 The **Pending Approval** tile counts minutes awaiting approval.
 
+**Search the minutes themselves.** _(2026-10-19)_ The search box above the list
+finds meetings by title and also searches the **words inside the minutes**. Type
+two or more characters and a **Found in the minutes** card appears under the box:
+one entry per set of minutes, newest meeting first, each showing where it matched
+(a section, a motion and its discussion, an action item and its notes or
+assignee) with the found words highlighted. Every word you type must appear
+somewhere in the minutes, not necessarily in the same section, and a word matches
+where a word starts (`hose` finds `hoses`, not `purchase`). Put a phrase in
+double quotes to find it exactly as typed. The meeting-type filter beside the box
+narrows the search. Members search only circulated and adopted minutes, never a
+draft or an executive session; people who manage minutes search everything, and
+each result shows its status.
+
+_[Screenshot to create: the Found in the minutes card with two results and the
+highlighted words.]_
+
+**Minutes Settings.** _(2026-10-19)_ The department-wide choices about minutes
+are on one screen, opened with the **Settings** button beside **Outlines** at the
+top of the Minutes page (`minutes.manage`). It has four sections: **Attendance**
+(who the minutes name), **Signatures** (who signs adopted minutes), **Reminders**
+(following up action items) and **Publishing** (the library and the public page).
+Anyone who manages minutes can read every section. Changing one needs the
+settings permission; without it the controls are greyed out, the section says a
+settings administrator changes it, and there is no Save. **Save** stays disabled
+until something changes. Before 2026-10-19 these were four separate buttons on the
+Minutes page (**Reminders**, **Roll listing**, **Publishing**, **Signers**), each
+opening its own dialog.
+
+_[Screenshot to create: Minutes Settings with the section list and the Attendance
+section; the same screen as a member without the settings permission, with the
+controls disabled.]_
+
 ![The Meeting Minutes page: the Outlines button, the summary tiles, and each meeting card listing its minutes with their state, one Circulated for review and one Adopted](./images/04-14-meeting-minutes.png)
 
 ### Creating Minutes
@@ -1461,6 +1493,30 @@ Record each formal motion with:
 - the mover;
 - the seconder;
 - the result (Passed, Failed, Tabled).
+
+**Prepared motions, and accepting the previous minutes.** _(2026-10-18)_ A
+section marked **Needs a motion and a second** has its motion from the moment the
+minutes are made, so you record who moved and the vote instead of building the
+motion. Out of the box those are **Approval of Previous Minutes** and
+**Adjournment**; a department marks others on the Outlines screen (an outline
+saved earlier is not changed until you tick the box). A prepared motion is wording
+only until the meeting acts on it: it is not printed, published or counted among
+the motions until you record a result, and it disappears again if its section
+stops needing one.
+
+The **Approval of Previous Minutes** motion names the most recent earlier minutes
+of the same kind of meeting that have been circulated or adopted ("Accepting the
+minutes of the September 3, 2026 business meeting", linked). When you record it
+as **Passed**, say whether the minutes were accepted **As submitted** or **As
+revised**. Recording it fills in the adoption of those minutes; it does not adopt
+them. An officer other than the one who circulated them still confirms it, and
+the earlier minutes show a note that this meeting accepted them, and **Adopt
+Minutes** then opens already filled in from the motion (see
+[Circulating and adopting minutes](#circulating-and-adopting-minutes)).
+
+_[Screenshot to create: a prepared Approval of Previous Minutes motion on a draft
+with the As submitted / As revised choice; circulated minutes showing the note
+that a later meeting accepted them.]_
 
 ### Creating Minutes from a Meeting or an Event
 
@@ -1579,23 +1635,27 @@ action items — is recorded in the audit log.
 _(2026-10-18)_ The roll is always recorded in full; quorum and the attendance
 reports read all of it. A new setting chooses which statuses a **reader** of the
 minutes sees: **everyone**, **present and excused**, or **present only**. Guests
-are named under every choice. Open **Minutes** and select **Roll listing** to set
-the department default. On draft or rejected minutes the roll panel has its own
+are named under every choice. Open **Minutes → Settings → Attendance** to set
+the department default (a settings administrator changes it; other minutes
+managers can read it). On draft or rejected minutes the roll panel has its own
 selector that overrides the default for that one set of minutes (leave it on
 "follow the department" to inherit). The choice applies to the minutes page, the
 PDF, the library copy and the public copy; the public copy leaves out counts that
 are not listed rather than showing zero. Nothing changes until someone sets it.
 
-_[Screenshot to create: the Roll listing dialog, and the roll panel's per-minutes
-selector on a draft.]_
+_[Screenshot to create: Minutes Settings → Attendance, and the roll panel's
+per-minutes selector on a draft.]_
 
 ### Publishing adopted minutes (library and public page)
 
 _(2026-10-18)_ Publishing adopted minutes files the library copy in Documents.
 When the department allows it, it also posts a **public copy** on a hosted
 `/public/minutes` page. Three settings, all **off** by default, are in the
-**Publishing settings** dialog on the Minutes page: public posting, and two
-switches for executive-session minutes (library, public).
+**Minutes → Settings → Publishing**: **Also post a public copy on the public
+minutes page**, and under **Executive-session minutes** two switches, **Allow
+publishing to the library** and **Allow posting them on the public minutes page**
+(the second needs the first and public posting). Turning on the last one asks
+for confirmation.
 
 - **Republishing** replaces the library document and the public copy in place and
   notes which version it replaced. Reopening adopted minutes marks the public copy
@@ -1608,7 +1668,7 @@ switches for executive-session minutes (library, public).
   publishing refuses if that folder's access was loosened.
 - The Minutes page shows a publishing status line for each set of minutes.
 
-_[Screenshot to create: the Publishing settings dialog; the publishing status
+_[Screenshot to create: Minutes Settings → Publishing; the publishing status
 note on adopted minutes; the public minutes page at phone and desktop widths.]_
 
 ### Circulating and adopting minutes
@@ -1642,7 +1702,10 @@ and adopt them at the next meeting. The screen now follows that order:
   body voted (**When the body voted**), the minutes of the meeting at which it
   voted, and whether they were adopted **as amended** (ticked for you when any
   suggestion was accepted). The same rule as before applies: you cannot adopt
-  minutes you circulated yourself.
+  minutes you circulated yourself. When a later meeting has already recorded
+  its **Approval of Previous Minutes** motion for these minutes, the dialog opens
+  filled in from it (the meeting, the date, as submitted or as amended, mover and
+  seconder) under a note saying so; check it, then adopt.
 - **Adopted minutes are locked.** **Reopen for Correction** works as described
   above; it clears the adoption details but keeps the earlier version.
 
@@ -1684,7 +1747,7 @@ fingerprint.
 department's signature slots sign them in the app. The slots default to a
 **Recording Secretary** and a **Presiding Officer**, both open to anyone who
 manages minutes; a settings administrator can rename them or name positions
-instead (up to six) under **Minutes → Signers**. To sign, type your name as it
+instead (up to six) under **Minutes → Settings → Signatures**. To sign, type your name as it
 stands on your account and confirm your password, so the signature belongs to a
 person at the keyboard. An account that signs in only through single sign-on
 cannot sign. A slot is signed once, a person may sign more than one slot, and
@@ -1694,7 +1757,7 @@ and corrected, the new version starts unsigned and the earlier signatures stay
 on file against the text they were given for. Signing is rate-limited, since it
 is a place a password could be guessed from a signed-in session.
 
-_[Screenshots to create: Minutes → Signers with the two default slots; the Sign
+_[Screenshots to create: Minutes → Settings → Signatures with the two default slots; the Sign
 dialog (name and password); the Signatures panel on adopted minutes with one slot
 signed and one open.]_
 
@@ -1745,8 +1808,21 @@ it came from. Set it to Pending, In Progress, Completed or Cancelled, and add
 priority or assignee — is changed by whoever keeps the minutes.
 
 **Reminders.** An open or in-progress item with a due date reminds its
-assignee three days before it is due, one day before, on the due date, and on
-the day after. The check runs once a day.
+assignee in the app three days before it is due, one day before, on the due date,
+and on the day after. The check runs once a day.
+
+**Reminder emails.** _(2026-10-15)_ Assignees also get an email, one per member
+per day, listing their items that are due soon or overdue. It covers items on
+**adopted** minutes with a due date; an item more than 90 days overdue is no
+longer chased by email. People who manage minutes also get a weekly list of every
+open item, overdue first. A member can turn either email off in their
+notification settings. The department sets the timing under **Minutes → Settings
+→ Reminders**: **Email reminders to assignees** (on or off), **First reminder,
+days before the due date** (default 3; 0 is the due date itself), **Repeat while
+overdue, every this many days** (default 7; 0 is one overdue reminder only) and
+the weekly open-items list. Changing them needs the settings permission.
+
+_[Screenshot to create: Minutes Settings → Reminders.]_
 
 ### Attendance Dashboard (Secretary)
 

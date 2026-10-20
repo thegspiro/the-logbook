@@ -175,28 +175,28 @@ counts (Min to Pass versus par). Screenshots to create or replace are in
 16 – 18 documentation pass_. Most guides were also re-shot on 2026-10-17; those
 rows are marked **CURRENT** in place.
 
-| Topic                                                                                                        | Now in                                                      |
-| ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
-| Meeting agenda items become the minutes outline; Sync from agenda; Not taken up                              | [04 — Events & Meetings](./04-events-meetings.md)           |
-| Ballot and reminder emails send in the background; tokens saved first; per-contest printed ballots           | [14 — Elections](./14-elections.md)                         |
-| Nominee bell notice; meeting-aligned voting window; officer positions suggested; no write-in on Approve/Deny | [14 — Elections](./14-elections.md)                         |
-| Weekly security report to the IT Manager; one department's task failure no longer stops the rest             | [08 — Admin & Reports](./08-admin-reports.md)               |
-| Google Calendar and Outlook connect with a sign-in; department events ICS feed; calendar sync                | [16 — Integrations](./16-integrations.md)                   |
-| Microsoft 365 accounts for converted members; Google attention list                                          | [16 — Integrations](./16-integrations.md)                   |
-| Sync History tab; **Import Past Training** (was Import History)                                              | [02 — Training](./02-training.md)                           |
-| Medical supplies on the apparatus: counted, expire, apparatus-only, CSV                                      | [05 — Inventory](./05-inventory.md)                         |
-| Equipment-check counts: Min to Pass fails a count, par sets the restock                                      | [03 — Scheduling](./03-scheduling.md)                       |
-| One Operations header and section strip; phone layouts for one apparatus and the supply worklist             | [05 — Inventory](./05-inventory.md)                         |
-| Dashboard Standby shows your own hours; Take a Shift hidden from members who cannot hold a seat              | [00 — Getting Started](./00-getting-started.md)             |
-| Adopted minutes are signed in the app (Minutes → Signers); name and password confirm each signature          | [04 — Events & Meetings](./04-events-meetings.md)           |
-| Event cancellations, changes and organizer notices are emailed; post-event validation goes to organizers     | [04 — Events & Meetings](./04-events-meetings.md)           |
-| Daily email reminders for grant compliance tasks and pledges; Amount Awarded on the application              | [12 — Grants & Fundraising](./12-grants-fundraising.md)     |
-| A used approval chain or step cannot be deleted (turn it off); chain edits are audited                       | [11 — Finance](./11-finance.md)                             |
-| Password changes are audited and the member is told                                                          | [00 — Getting Started](./00-getting-started.md)             |
-| NFPA Remove and the Operators buttons need apparatus.manage; Check-In Station shown to a check-in holder     | Behaviour only; no screen changed                           |
-| Store: offline notice, drafts explained, one countdown                                                       | [18 — Storefront](./18-storefront.md)                       |
-| Facility photos and documents upload in one step                                                             | [06 — Apparatus & Facilities](./06-apparatus-facilities.md) |
-| Cleared fields now save; create forms keep input on failure (API keys, saved reports, grants, events)        | Behaviour only; no screen changed                           |
+| Topic                                                                                                             | Now in                                                      |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Meeting agenda items become the minutes outline; Sync from agenda; Not taken up                                   | [04 — Events & Meetings](./04-events-meetings.md)           |
+| Ballot and reminder emails send in the background; tokens saved first; per-contest printed ballots                | [14 — Elections](./14-elections.md)                         |
+| Nominee bell notice; meeting-aligned voting window; officer positions suggested; no write-in on Approve/Deny      | [14 — Elections](./14-elections.md)                         |
+| Weekly security report to the IT Manager; one department's task failure no longer stops the rest                  | [08 — Admin & Reports](./08-admin-reports.md)               |
+| Google Calendar and Outlook connect with a sign-in; department events ICS feed; calendar sync                     | [16 — Integrations](./16-integrations.md)                   |
+| Microsoft 365 accounts for converted members; Google attention list                                               | [16 — Integrations](./16-integrations.md)                   |
+| Sync History tab; **Import Past Training** (was Import History)                                                   | [02 — Training](./02-training.md)                           |
+| Medical supplies on the apparatus: counted, expire, apparatus-only, CSV                                           | [05 — Inventory](./05-inventory.md)                         |
+| Equipment-check counts: Min to Pass fails a count, par sets the restock                                           | [03 — Scheduling](./03-scheduling.md)                       |
+| One Operations header and section strip; phone layouts for one apparatus and the supply worklist                  | [05 — Inventory](./05-inventory.md)                         |
+| Dashboard Standby shows your own hours; Take a Shift hidden from members who cannot hold a seat                   | [00 — Getting Started](./00-getting-started.md)             |
+| Adopted minutes are signed in the app (Minutes → Settings → Signatures); name and password confirm each signature | [04 — Events & Meetings](./04-events-meetings.md)           |
+| Event cancellations, changes and organizer notices are emailed; post-event validation goes to organizers          | [04 — Events & Meetings](./04-events-meetings.md)           |
+| Daily email reminders for grant compliance tasks and pledges; Amount Awarded on the application                   | [12 — Grants & Fundraising](./12-grants-fundraising.md)     |
+| A used approval chain or step cannot be deleted (turn it off); chain edits are audited                            | [11 — Finance](./11-finance.md)                             |
+| Password changes are audited and the member is told                                                               | [00 — Getting Started](./00-getting-started.md)             |
+| NFPA Remove and the Operators buttons need apparatus.manage; Check-In Station shown to a check-in holder          | Behaviour only; no screen changed                           |
+| Store: offline notice, drafts explained, one countdown                                                            | [18 — Storefront](./18-storefront.md)                       |
+| Facility photos and documents upload in one step                                                                  | [06 — Apparatus & Facilities](./06-apparatus-facilities.md) |
+| Cleared fields now save; create forms keep input on failure (API keys, saved reports, grants, events)             | Behaviour only; no screen changed                           |
 
 ---
 
