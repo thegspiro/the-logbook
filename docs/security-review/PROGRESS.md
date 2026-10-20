@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3449](https://github.com/thegspiro/the-logbook/pull/3449)** (branch
+`claude/security-review-compliance`). PR #3448
+(Feature 19, Skills testing, pass 9) merged 2026-10-19, docs-only — not
+independently recordable here beyond what follows. This iteration (watchdog
+pickup — no open PR's head branch starts with `claude/security-review-`
+(`search_pull_requests`), and the dedicated `/loop 30m /security-review`
+session was not reachable via `ListAgents`) reviewed Feature 20
+(Compliance), pass 9 — 0 fixes, 0 new findings; a true zero-delta pass on
+backend code (zero commits touched any of the seven declared backend scope
+files since pass 8's merge, `5fabde43`); the one in-window frontend commit
+set touched only `training.ts` fields outside this feature's own type
+(`AnnualReportRequirement`, confirmed byte-identical). Four standing items
+(CMP2-1, CS-8, CS-9 residual, `grace_period_days` unwired) all re-verified
+unchanged. Rotation row 20 → ✅ (pending this PR's merge); next is Feature 21
+(Admin hours).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19 Skills testing pass 9, PR #3448, before it merged), preserved for history</summary>
+
 **PR [#3448](https://github.com/thegspiro/the-logbook/pull/3448)** (branch
 `claude/security-review-skills-testing-p9`). PR #3444 (Feature 18, Training
 extended, pass 9) merged 2026-10-19, docs-only — not independently
@@ -27,6 +46,8 @@ findings; a true zero delta (0 of 504 commits in the window touch any of
 the four declared scope files or the feature's one external caller).
 Rotation row 19 → ✅ (pending this PR's merge); next is Feature 20
 (Compliance).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #3444's merge, Feature 18 Training extended pass 9), preserved for history</summary>
@@ -20294,7 +20315,7 @@ iteration's commit" rule.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
@@ -20316,6 +20337,55 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-19 — Feature 20 (Compliance, pass 9) — watchdog pickup, true zero delta on backend code, 0 fixed, 0 new findings
+
+Watchdog pickup for the security-review rotation (`/loop 30m
+/security-review`): no open PR's head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results among open
+PRs), and the dedicated loop session (`session_011T1ZyyLrD5HagusgK9uDw2`)
+was not reachable (`ListAgents`). PR #3448 (Feature 19, Skills testing,
+pass 9) had just merged, docs-only. Rotation row 20 (Compliance) was the
+next pending feature.
+
+**0 fixes applied, 0 new findings — a true zero-delta pass on backend
+code.** Baseline `5fabde43` (PR #3330's merge commit, pass 8). `git diff
+--stat` across all seven declared backend scope files
+(`compliance_config.py`, `compliance_officer.py`,
+`compliance_config_service.py`, `compliance_officer_service.py`,
+`compliance_member_notices.py`, `models/compliance_config.py`,
+`schemas/compliance_config.py`) plus the shared `training_compliance.py`
+helper is empty between that commit and current `main` — zero commits
+touched any of them. One frontend file in the pass-8 scope list
+(`frontend/src/types/training.ts`) did change (+4/-1, three commits), but
+all three are Feature 17/18's own training-session/external-sync work; the
+one type this feature's own screens read (`AnnualReportRequirement`) is
+confirmed byte-identical in that diff.
+
+Four standing items re-verified against current code rather than re-cited:
+CMP2-1 (the pass-8 email sender) still the only reader of the two
+previously-write-only settings; CS-8 (attestation dual control) still open
+by design — route enumeration confirms only `POST`/`GET /attestations`
+exist; CS-9 residual (monthly windowing, recipient allow-list, the
+`records_with_certification` mislabel) unchanged; `grace_period_days` still
+correctly unwired and labeled. Route re-enumeration: 20/20
+(`compliance_config.py` 12 + `compliance_officer.py` 8), byte-for-byte
+unchanged from pass 8, every route still gated by
+`Depends(require_permission(...))`, no broadened grant; every by-id write
+still passes `organization_id` into the service layer alongside the
+client-supplied id.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` against
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 631
+revisions, single head `ca0c2111466f`; `check_route_permissions.py
+--strict` — 273 routes, 0 errors/warnings; `pytest tests/ -q -k "compliance
+or attestation"` — 578 passed, 1 pre-existing skip (up from 546 in pass 8);
+the four targeted compliance test files — 146 passed; frontend
+`typecheck`/`lint` clean; 8 compliance-scoped frontend test files — 131
+passed.
+
+Full writeup: [`CMP-20-compliance.md`](./CMP-20-compliance.md)'s **Pass 9**
+section.
 
 ### 2026-10-19 — Feature 19 (Skills testing, pass 9) — watchdog pickup, true zero delta (0 commits touch any of the four declared scope files), 0 fixed, 0 new findings
 
