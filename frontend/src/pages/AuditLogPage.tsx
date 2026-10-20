@@ -348,10 +348,12 @@ const AuditLogPage: React.FC = () => {
                   const expanded = expandedId === entry.id;
                   return (
                     <React.Fragment key={entry.id}>
+                      {/* The row stays clickable for a mouse; the button in the Event
+                          cell is what a keyboard reaches and what announces the
+                          expanded state (W75: a bare <tr onClick> had no tab stop). */}
                       <tr
                         className="hover:bg-theme-surface-hover cursor-pointer"
                         onClick={() => setExpandedId(expanded ? null : entry.id)}
-                        aria-expanded={expanded}
                       >
                         <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                           {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
@@ -366,7 +368,20 @@ const AuditLogPage: React.FC = () => {
                             </span>
                           )}
                         </td>
-                        <td className="text-theme-text-primary px-4 py-3 font-mono text-sm">{entry.event_type}</td>
+                        <td className="text-theme-text-primary px-4 py-3 font-mono text-sm">
+                          <button
+                            type="button"
+                            aria-expanded={expanded}
+                            aria-controls={`audit-entry-${entry.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedId(expanded ? null : entry.id);
+                            }}
+                            className="text-left hover:underline"
+                          >
+                            {entry.event_type}
+                          </button>
+                        </td>
                         <td className="text-theme-text-secondary hidden px-4 py-3 text-sm md:table-cell">
                           {entry.event_category}
                         </td>
@@ -378,7 +393,7 @@ const AuditLogPage: React.FC = () => {
                         </td>
                       </tr>
                       {expanded && (
-                        <tr className="bg-theme-surface-secondary">
+                        <tr id={`audit-entry-${entry.id}`} className="bg-theme-surface-secondary">
                           <td colSpan={6} className="px-4 py-3">
                             <pre className="text-theme-text-secondary font-mono text-xs whitespace-pre-wrap">
                               {JSON.stringify(entry.event_data, null, 2)}

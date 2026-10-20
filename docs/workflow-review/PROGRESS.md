@@ -138,7 +138,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W72 | Reports                                                                   | admin, chief     | `/reports`                                 | ✅     |
 | W73 | Integrations                                                              | admin            | `/integrations`                            | ✅     |
 | W74 | IP security, and a member's access request                                | member → admin   | `/ip-security/my-requests`, `/ip-security` | ✅     |
-| W75 | Audit log, error monitoring and analytics                                 | admin            | `/admin/audit-log`, `/admin/errors`        | ⬜     |
+| W75 | Audit log, error monitoring and analytics                                 | admin            | `/admin/audit-log`, `/admin/errors`        | ✅     |
 | W76 | Public portal and the public pages                                        | admin, anonymous | `/admin/public-portal`, `/`, `/privacy`    | ⬜     |
 | W77 | The testing module and its printed report                                 | admin            | `/testing`                                 | ⬜     |
 | W78 | Platform administration                                                   | admin            | `/admin/platform-analytics`                | ⬜     |
@@ -191,13 +191,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **W33 / W34** — the shift-assignment notice names the equipment checklists
   but opens the schedule rather than My Checklists, and prints the shift date
   as `2026-09-30` (W46-16).
-- **W75** — password sign-in, failure, lockout and sign-out never reach the
-  audit log, so the audit screen cannot show them (W02-3).
-- **W75** — since W50-45, `/audit-logs` resolves the actor's `username`
-  server-side and the page should read "system" only for rows with no
-  `user_id`; confirm on the audit page. Also `GET /audit-logs?event_type=runoff_election_created`
-  returned 0 for a row visibly present in the table (W50, A10) — check the
-  event-type filter.
 - **W50 follow-up** — the election meeting-link → Import Attendees → unlink
   round trip could not be driven in W50. W51 left a business-meeting event for
   it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
@@ -222,7 +215,35 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   as ISO strings (`2026-01-01 — 2026-12-31`), unlike the rest of the app
   (W72-4).
 
+- **Integrations, a later pass** — the `integration.connected` and
+  `integration.disconnected` audit rows carry no IP address (W75).
+
 ## Log
+
+### W75 — Audit log, error monitoring and analytics — 2026-10-20
+
+Driven as: `admin` at 1280×900 and 390×844, with one deliberate failed
+sign-in for `member2`.
+
+Held:
+
+- search, the event-type filter and the totals agree;
+- sign-in, failure and sign-out now reach the audit log (W02-3 resolved);
+- "system" appears only for a row with no actor (W50-45 resolved);
+- Clear All asks first.
+
+Fixed:
+
+- W75-1 (MED — the category filter offered only the ten busiest categories).
+- W75-2 (LOW — "Activity by Hour" charted the UTC hour).
+- W75-3 (LOW — a desktop audit row could not be opened from the keyboard).
+- W75-4 (LOW — Error Monitoring's filter label and detail buttons).
+
+Flagged: none.
+
+Gate: typecheck and lint are clean; 19 frontend and 396 backend tests pass.
+
+Next: W76.
 
 ### W74 — IP security, and a member's access request — 2026-10-20
 

@@ -197,8 +197,15 @@ const ErrorMonitoringPage: React.FC = () => {
       {/* Actions Bar */}
       <div className="bg-theme-surface mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg p-4 shadow-md backdrop-blur-xs">
         <div className="flex items-center gap-2">
-          <label className="text-theme-text-secondary text-sm font-medium">Filter:</label>
-          <select value={filter} onChange={(e) => setFilter(e.target.value)} className="form-input">
+          <label htmlFor="error-type-filter" className="text-theme-text-secondary text-sm font-medium">
+            Filter:
+          </label>
+          <select
+            id="error-type-filter"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="form-input"
+          >
             <option value="all">All Errors</option>
             {stats &&
               Object.keys(stats.byType).map((type) => (
@@ -357,7 +364,9 @@ const ErrorMonitoringPage: React.FC = () => {
                       <td className="px-6 py-4 text-right whitespace-nowrap">
                         <button
                           type="button"
-                          className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+                          className="touch:min-h-11 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+                          // Every row's button read "View details" alone (W75).
+                          aria-label={`${expandedErrors.has(error.id) ? 'Hide' : 'View'} details of ${error.errorType ?? 'error'} ${error.id?.split('-')[0] ?? ''}`.trim()}
                           aria-expanded={expandedErrors.has(error.id)}
                           aria-controls={`error-details-${error.id}`}
                           onClick={() => toggleDetails(error.id)}
