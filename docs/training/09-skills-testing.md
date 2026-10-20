@@ -244,9 +244,9 @@ When a template is ready:
    one step.
 4. Once published, examiners can start tests from it.
 
-**Editing a published template.** You can still edit it. If you change the
-sections, steps, passing mark, critical rule, Pass/Fail scoring or time limit,
-the version number goes up by one. Every test keeps a copy of the sheet it was
+**Editing a published template.** You can still edit it. Every save of a
+published template raises the version number by one, whether or not the
+sections, steps or scoring changed. Every test keeps a copy of the sheet it was
 taken against, so editing never changes a test already run (see
 [A completed scorecard is frozen](#a-completed-scorecard-is-frozen)).
 
@@ -423,8 +423,8 @@ in between.
 
 Reopening a test in progress **opens at the first section with blank steps**.
 
-In **Skills Test Records**, an unfinished test says **Tap to resume** (or
-**Tap to start** if scoring has not begun) and opens on the scoring screen. A
+In **Skills Test Records**, an unfinished test says **Resume** (or
+**Start** if scoring has not begun) and opens on the scoring screen. A
 finished test opens on its scorecard. A cancelled test says neither. It is
 closed, and opening it shows its scorecard.
 
@@ -673,6 +673,12 @@ A candidate **fails** if either is true:
 1. Their percentage is below the passing mark.
 2. A critical step was not passed (when **Require all critical criteria to
    pass** is ticked).
+
+If nothing on the sheet carries points (for example every step is Pass / Fail
+and **Count Pass/Fail steps toward the overall percentage** is off, which is how
+a new template starts), the test has no percentage. The scorecard says so, the
+passing mark cannot fail the test, and the result rests on the critical steps
+alone.
 
 The result screen leads with the outcome and the percentage. It then shows the
 candidate, the examiner, the time and the arithmetic — for example **"24 of 50
@@ -1308,13 +1314,15 @@ so nobody goes looking for notes that were held back on purpose.
 ## Withdrawing a Result — Void, Cancel, Delete
 
 Three different things can go wrong with a test, and each has its own action.
-**Skills Test Records** offers the one that fits on each row. **Void result**
-is also under **Officer actions** on the result page, which is usually where
-you find that a result should not stand.
+**Skills Test Records** offers the one that fits on each official test's row. It
+does not list practice runs: a practice run is deleted from the candidate's own
+**My Training > Skills Tests** page, or with **Discard** on the examiner's
+screen. **Void result** is also under **Officer actions** on the result page,
+which is usually where you find that a result should not stand.
 
 | Action     | Use it for                                          | What happens                                                                                                                                                                                          |
 | ---------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Delete** | A **practice** run                                  | The record is removed                                                                                                                                                                                 |
+| **Delete** | A **practice** run                                  | The record is removed. Done from the candidate's result page, or as **Discard** on the examiner's screen, not from the Records list                                                                  |
 | **Void**   | A completed **official** result that should not stand | The record is **kept**, with your reason (at least 10 characters) and your name. It drops out of the totals, pass rate and average score, and **any requirement the pass completed is given back**. The member sees the reason |
 | **Cancel** | A test **abandoned part-way**, never scored         | Any partial marks are kept and the test is closed out. No reason is required                                                                                                                         |
 
@@ -1439,7 +1447,7 @@ records** permission.
 | **Validate**, send back, **void** or **release** a result | Officers                                                |
 | Delete a **practice** run                     | The candidate, the examiner, or an officer                          |
 | Delete an **official** result                 | Nobody — use **Void**                                               |
-| **Cancel** an unscored test                   | Officers                                                            |
+| **Cancel** an unscored test                   | Officers, from Skill Test Records. The examiner can also cancel it until an officer has validated it |
 | Add or remove a **named viewer**              | Officers                                                            |
 | Set the department disclosure defaults        | Officers                                                            |
 | Export test records                           | Officers                                                            |
@@ -1520,7 +1528,7 @@ The competency view shows the new scores
 | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | "Template must be published before it can be used for testing"   | Only published templates can be used. Open the template and select **Publish**                                                                                                                                                                                                                                                                           |
 | Cannot publish a template                                        | It needs at least one section with at least one step. Add them and try again                                                                                                                                                                                                                                                                             |
-| Can I edit a published template?                                 | Yes. If you change the sections, steps or scoring rules, the version number goes up. Archived templates cannot be edited                                                                                                                                                                                                                                 |
+| Can I edit a published template?                                 | Yes. Each save of a published template raises the version number. Archived templates cannot be edited                                                                                                                                                                                                                                 |
 | Cannot change a completed test                                   | Completed and cancelled tests are locked. An officer can **Send back to examiner** a member-run result still awaiting validation                                                                                                                                                                                                                         |
 | Test shows FAIL but the score is above the passing mark          | Check whether **Require all critical criteria to pass** is ticked. If a critical step was not passed, the result is FAIL whatever the score                                                                                                                                                                                                                |
 | Candidate doesn't appear in the search                           | Type at least **two characters** of their name — nothing shows before that, and there is no way to browse everyone. Only the first 15 matches appear, so type more of the name. The candidate must also be an **active** member; check their account status                                                                                              |
@@ -1529,9 +1537,9 @@ The competency view shows the new scores
 | "You cannot validate your own skills test"                       | Separation of duties. You cannot sign off your own evaluation, even when someone else examined you. Another officer has to validate it                                                                                                                                                                                                                   |
 | Validation is refused                                            | Practice runs are never recorded, so there is nothing to sign off. Voided results and tests still in progress are refused too: only a completed, official, unvoided test has a result to validate                                                                                                                                                        |
 | Template is archived — can I still see old tests?                | Yes. Each test keeps a copy of the sheet it was taken against. Archived templates just can't be used for new tests                                                                                                                                                                                                                                      |
-| The score looks wrong                                            | The score is points earned ÷ points available × 100. Check each step's **Max Points**, its **If this step is failed** setting, and whether **Count Pass/Fail steps toward the overall percentage** is ticked. The breakdown panel on the scorecard shows the working                                                                                     |
+| The score looks wrong                                            | When the sheet has steps that carry points, the score is points earned ÷ points available × 100. Check each step's **Max Points**, its **If this step is failed** setting, and whether **Count Pass/Fail steps toward the overall percentage** is ticked. The breakdown panel on the scorecard shows the working                                                                                     |
 | Pass Rate or Avg Score shows —                                   | No official test has been validated yet. These figures count validated, completed tests only, so a queue of results awaiting sign-off leaves them at — until an officer validates one                                                                                                                                                                     |
-| Practice results showing in compliance                           | Practice runs never count toward compliance, requirements or statistics. Check the row's **Practice** badge — a test without it is official. A practice run can be deleted by the candidate, the examiner or an officer                                                                                                                                   |
+| Practice results showing in compliance                           | Practice runs never count toward compliance, requirements or statistics. They do not appear in **Skills Test Records**, so a test listed there is official. A practice run is deleted by the candidate (from their result page) or the examiner (**Discard**)                                                                                                                                   |
 | Cannot delete a test record                                      | **Official results cannot be deleted.** Use **Void**, which keeps the record with your reason and gives back any requirement the pass completed. Delete is only for practice runs                                                                                                                                                                          |
 | "Maximum attempts (N) reached for this requirement"              | The linked requirement limits attempts and the candidate has used them. Validated official tests count, pass or fail; voided results and practice runs do not. If an attempt should not count, void it. A requirement already completed, verified or waived has no limit, so recertification testing is unaffected                                      |
 | "Someone else changed this test" / autosave has stopped          | Someone else saved the same test after you opened it. Select **Reload current results**, then re-enter anything you scored since. Autosave stops rather than retrying a save that cannot succeed                                                                                                                                                         |

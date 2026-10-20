@@ -8315,6 +8315,164 @@ export const SHOTS = [
     route: "/minutes",
   },
   {
+    // "budget" is in the seeded Officer Meeting minutes, so the card has a hit.
+    id: "04-70-minutes-archive-search",
+    doc: "04-events-meetings.md",
+    line: 1450,
+    anchor:
+      "The Minutes page with a word typed in the search box and the Found in the minutes",
+    alt: "The Minutes page with the word budget typed in the search box and the Found in the minutes card listing the matching minutes with the word highlighted",
+    route: "/minutes",
+    prepare: async (page) => {
+      await page
+        .getByPlaceholder("Search meetings, or any words in the minutes...")
+        .fill("budget");
+      await page
+        .getByRole("heading", { name: "Found in the minutes" })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    selector: "section[aria-labelledby='archive-search-heading']",
+    expect: "Found in the minutes",
+  },
+  {
+    id: "04-71-minutes-settings-attendance",
+    doc: "04-events-meetings.md",
+    line: 1468,
+    anchor:
+      "Minutes Settings as a settings administrator: the section list (Attendance,",
+    alt: "Minutes Settings: the section list (Attendance, Signatures, Reminders, Publishing) beside the Attendance section and its Save row",
+    route: "/minutes/settings",
+    expect: "How attendance is listed",
+  },
+  {
+    // The Secretary manages minutes; the page tells a reader without the
+    // settings permission who changes it. `expect` makes the shot fail, rather
+    // than picture an editable form, if the demo Secretary ever gains it.
+    id: "04-72-minutes-settings-read-only",
+    doc: "04-events-meetings.md",
+    line: 1473,
+    anchor:
+      "Minutes Settings as a minutes manager who cannot change settings: the Attendance",
+    alt: "Minutes Settings as a minutes manager without the settings permission: the Attendance section with disabled controls, a note that a settings administrator changes it, and no Save row",
+    route: "/minutes/settings",
+    auth: "secretary",
+    expect: "settings administrator",
+  },
+  {
+    id: "04-73-minutes-settings-publishing",
+    doc: "04-events-meetings.md",
+    line: 1680,
+    anchor:
+      "Minutes Settings, Publishing section: the public-copy switch and the",
+    alt: "Minutes Settings, Publishing: the public-copy switch and the Executive-session minutes group with its two switches",
+    route: "/minutes/settings?tab=publishing",
+    expect: "Executive-session minutes",
+  },
+  {
+    id: "04-74-minutes-settings-signatures",
+    doc: "04-events-meetings.md",
+    line: 1774,
+    anchor:
+      "Minutes Settings, Signatures section with the two default slots, Recording",
+    alt: "Minutes Settings, Signatures: the Recording Secretary and Presiding Officer slots, each open to anyone who manages minutes",
+    route: "/minutes/settings?tab=signatures",
+    expect: "Anyone who manages minutes",
+  },
+  {
+    id: "04-75-minutes-settings-reminders",
+    doc: "04-events-meetings.md",
+    line: 1843,
+    anchor:
+      "Minutes Settings, Reminders section: the email switch, the first-reminder and",
+    alt: "Minutes Settings, Reminders: the email switch, the first-reminder and repeat-while-overdue day fields, and the weekly open-items list switch",
+    route: "/minutes/settings?tab=reminders",
+    expect: "Email reminders to assignees",
+  },
+  {
+    // The Early Summer meeting's minutes are the pending one: its Approval of
+    // Previous Minutes motion is prepared and linked to the circulated Spring
+    // minutes, with nothing recorded. The form is filled in but never saved.
+    id: "04-76-minutes-prepared-acceptance-motion",
+    doc: "04-events-meetings.md",
+    line: 1527,
+    anchor:
+      "Draft minutes with the prepared Approval of Previous Minutes motion open",
+    alt: "Draft minutes with the Approval of Previous Minutes motion prepared: the line naming the minutes being accepted, Result set to Passed and the As submitted / As revised choice",
+    route: "/minutes",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Early Summer Business Meeting",
+      )(page);
+      const group = page.getByRole("group", {
+        name: "Motion for Approval of Previous Minutes",
+      });
+      await group.waitFor({ timeout: 20_000 });
+      await group.getByLabel("Result", { exact: true }).selectOption("passed");
+      await group.getByLabel("As submitted").check();
+      await group.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    },
+    selector:
+      "[role='group'][aria-label='Motion for Approval of Previous Minutes']",
+    expect: "The minutes were accepted",
+  },
+  {
+    // As the administrator, who circulated the Spring minutes: the note names
+    // the meeting that accepted them. Adopting is left to a second officer.
+    id: "04-77-minutes-accepted-by-later-meeting",
+    doc: "04-events-meetings.md",
+    line: 1726,
+    anchor:
+      "Circulated minutes as an officer, with the note saying a later meeting accepted",
+    alt: "Circulated minutes with the note that the Late Spring Business Meeting accepted them as submitted, moved and seconded by named members, and that Adopt Minutes opens already filled in",
+    route: "/minutes",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Spring Business Meeting",
+      )(page);
+      await page
+        .getByText("accepted these minutes as submitted")
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(500);
+    },
+    expect: "accepted these minutes",
+  },
+  {
+    // As the Secretary: the administrator circulated these minutes, and the
+    // one who circulates them cannot adopt them. Closed without adopting.
+    id: "04-78-minutes-adopt-dialog-prefilled",
+    doc: "04-events-meetings.md",
+    line: 1732,
+    anchor:
+      "The Adopt these minutes dialog opened by a second officer on those minutes",
+    alt: "The Adopt these minutes dialog filled in from the motion recorded at the Late Spring Business Meeting: the date the body voted, the meeting that accepted them, and the note saying where it came from",
+    route: "/minutes",
+    auth: "secretary",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/minutes-records?limit=100",
+        (id) => `/minutes/${id}`,
+        "minutes",
+        (m) => m.title === "Minutes: Spring Business Meeting",
+      )(page);
+      await page
+        .getByRole("button", { name: "Adopt Minutes" })
+        .click({ timeout: 20_000 });
+      await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.waitForTimeout(600);
+    },
+    selector: "[role='dialog']",
+    expect: "Filled in from the motion recorded at",
+  },
+  {
     id: "04-15-action-items",
     doc: "04-events-meetings.md",
     line: 454,

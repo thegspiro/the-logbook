@@ -5,6 +5,47 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 19 – 20, 2026
+
+A check of the training guides (`docs/training/`) against the application as of
+`4f346dab`. The guides were audited through the
+[October 18 – 19 pass](#change-audit-october-18--19-2026); six non-merge commits
+changed the application after it, and one of them left a guide describing a
+screen that no longer exists. Cross-checks over all 19 module guides: 0 broken
+links across 452 Markdown files, every route written in a guide exists in the
+frontend, and the image audit flags nothing.
+
+| Change                                                                                                                                   | Guide  | Disposition                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------- |
+| Minutes: Reminders, Roll listing, Publishing and Signers dialogs replaced by **Minutes → Settings** (`/minutes/settings`, four sections) | 04, 21 | Rewritten: the roll, publishing, signing and reminder text now names the Settings sections and their real labels |
+| Minutes: archive search over the words inside minutes                                                                                    | 04     | Added                                                                                                            |
+| Minutes: prepared motions, accepting the previous minutes (as submitted / as revised), pre-filled adoption                               | 04     | Added; the module spec already had it                                                                            |
+| Minutes: reminder email timing settings                                                                                                  | 04     | Added next to the in-app reminder text                                                                           |
+| Medical screening: **Applies to Positions** enforced                                                                                     | 13     | Already updated in the commit; `13-05-add-requirement` is stale (see the currency file)                          |
+| Dashboard overdue-dues count follows the dues screen                                                                                     | 11     | No guide text quotes it; nothing to change                                                                       |
+| QuickBooks chart-of-accounts upload                                                                                                      | 11     | Already covered                                                                                                  |
+
+**Follow-up audit of the Training guides.** The Training & Certification guide
+(02) and the Skills Testing guide (09) were then read against the code in full
+by four parallel read-only reviews, and every finding was checked and applied.
+About 40 corrections, the larger ones being: the My Training "Required Training"
+tile is an average of progress; submissions send in-app notices only and a plain
+approval sends none; the cohort wizard and course library behave differently from
+the text; historical import falls back to the default training type instead of
+failing a row; the compliance forecast models expiries only; the annual report has
+no waiver summary or year-over-year comparison and exports CSV only; the printed
+member and program records list different content; EVOC mismatches block by
+default; a skills requirement is completed by an officer's Mark complete, not by a
+sign-off count; and approving a submission credits a program requirement only when
+the reviewer applies it. In 09: a published template's version rises on every
+save, practice runs are not listed in Skills Test Records, and a sheet with no
+point-carrying steps has no percentage. Certification alert delivery is worded as
+"if your department has alerts turned on" because no screen that sets that option
+was found; confirm it.
+
+Screenshots: nothing captured. The gap report is the top section of
+[`SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md#queued-by-the-october-19--20-documentation-pass).
+
 ## Change audit: October 18 – 19, 2026
 
 Net changes merged to `main` from the close of the
