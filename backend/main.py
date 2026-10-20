@@ -2526,7 +2526,8 @@ async def health_check():
 
     SEC: Returns only status and ready flag — no version, environment, or
     internal service state that could help attackers fingerprint the system.
-    Use /health/detailed (unauthenticated, non-production only) for diagnostics.
+    Use /health/detailed (unauthenticated, ENVIRONMENT=development only) for
+    diagnostics.
     """
     from fastapi.responses import JSONResponse
 
@@ -2606,11 +2607,15 @@ async def health_check():
 @app.get("/health/detailed")
 async def health_check_detailed():
     """
-    Detailed health check with system information
-    Only available in non-production environments for security
+    Detailed health check with system information.
+
+    Served only when ENVIRONMENT is "development". It has no auth dependency and
+    reports configuration flags and host load, so staging, which is often
+    reachable from the internet, must not serve it either. Any other value
+    answers 404, the same response as a path that does not exist.
     """
-    if settings.ENVIRONMENT == "production":
-        return {"error": "Detailed health check not available in production"}
+    if settings.ENVIRONMENT != "development":
+        raise StarletteHTTPException(status_code=404)
 
     import psutil
 

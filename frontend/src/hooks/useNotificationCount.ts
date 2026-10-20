@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { create } from 'zustand';
 import { notificationsService } from '../services/api';
 import { useEnabledModules } from './useEnabledModules';
+import { BACKGROUND_REQUEST_CONFIG } from '../utils/backgroundRequest';
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -42,7 +43,7 @@ export function useNotificationPoller() {
 
   const fetchCount = useCallback(async () => {
     try {
-      const data = await notificationsService.getMyUnreadCount();
+      const data = await notificationsService.getMyUnreadCount(BACKGROUND_REQUEST_CONFIG);
       setUnreadCount(data.unread_count);
     } catch {
       // Silently ignore — user may be logged out or network unavailable

@@ -446,7 +446,8 @@ ENABLE_DOCS=false
 # Basic health (used by Docker and load balancers)
 curl http://localhost:3001/health
 
-# Detailed diagnostics (returns an error object when ENVIRONMENT=production)
+# Detailed diagnostics (served only when ENVIRONMENT=development; any other
+# value answers 404, the same as an unknown path)
 curl http://localhost:3001/health/detailed
 ```
 
