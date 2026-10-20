@@ -20411,7 +20411,7 @@ iteration's commit" rule.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
@@ -20424,6 +20424,37 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-20 — Feature 29 (Reports & analytics, pass 10) — 0 fixed, 0 new findings
+
+`search_pull_requests` (`repo:thegspiro/the-logbook is:pr is:open
+head:claude/security-review-`) returned 0 results immediately before
+starting, and again immediately before branching — no collision either
+time. PR #3475 (Feature 28, Security, audit & IP, pass 8) had merged with
+nothing started for Feature 29 since; row 29 was the first `⬜`.
+
+**Delta.** Baseline `11807edf` (pass 9's merge, PR #3379). Two real
+commits since, both read in full: `86882208` fixes the dashboard finance
+tile's overdue-dues count to use the same `dues_overdue_clause(now)`
+predicate the Dues screen already uses (a part-paid record is no longer
+double-counted as overdue), still filtered to the caller's organization —
+correctness only; `5ef9c11e` (workflow-review W72) adds an `admin_hours`
+catalog entry to `/reports/available` and fixes its per-row date to the
+org's local day instead of UTC. Re-verified rather than taken on the
+commit message's word: `admin_hours` was already in
+`PII_REPORT_PERMISSIONS` and already enforced by `generate_report`, so
+listing the catalog entry does not open a new report type — it only lets
+`/available` and the frontend correctly show/hide what was already gated
+server-side. See `RPT6-29-reports-analytics.md`'s **Pass 10** section for
+the detail.
+
+Every standing finding from pass 9 (`LBL-29-2`, `LBL-29-4`,
+`RPT-5c`/`RPT-6`/`RPT-7`, `DASH-2`, `RPT5-29-1`/`RPT5-29-5`) re-confirmed
+unchanged by direct read — neither of this pass's two commits touches the
+files those findings cite. Route surface re-enumerated: unchanged at 35
+routes across the five endpoint files; every route carries a recognized
+auth dependency. Rotation row 29 → ✅ (pending this PR's merge); next is
+Feature 30 (Onboarding).
 
 ### 2026-10-20 — Feature 27 (Integrations, pass 8) — directory-account engine generalized, Microsoft 365 added, Outlook calendar OAuth; 0 fixed, 0 new findings; INT-11 corrected to FIXED
 
