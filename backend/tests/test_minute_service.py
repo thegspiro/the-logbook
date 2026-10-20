@@ -103,6 +103,11 @@ def records(monkeypatch):
         "app.services.minutes_notifications.notify_minutes_circulated",
         AsyncMock(return_value=0),
     )
+    # Filing a closed election's result with new minutes queries elections and
+    # has its own tests against a real database.
+    monkeypatch.setattr(
+        "app.services.minute_service.file_waiting_elections", AsyncMock()
+    )
     # No outline of the department's own: the built-in order of business.
     outlines = MagicMock()
     outlines.resolve_outline = AsyncMock(return_value=None)

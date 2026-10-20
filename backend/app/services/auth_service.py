@@ -141,6 +141,43 @@ async def _has_password_history(db: AsyncSession, user_id: str) -> bool:
     return result.first() is not None
 
 
+def _as_utc(value: object) -> Optional[datetime]:
+    """A timestamp read from a session row, as an aware UTC datetime.
+
+    ``None`` for anything that is not a datetime, so a check that cannot read a
+    column declines to end the session instead of raising.
+    """
+    if not isinstance(value, datetime):
+        return None
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+def session_end_reason(session: UserSession, now: datetime) -> Optional[str]:
+    """Why a session must end now: ``"idle"``, ``"absolute"`` or ``None``.
+
+    Both limits are measured server-side from stamps the server wrote, so a
+    client cannot lengthen either by what it sends. A limit set to 0 is off.
+    """
+    idle_limit = settings.HIPAA_SESSION_TIMEOUT_MINUTES
+    last_active = _as_utc(session.last_activity)
+    if (
+        idle_limit > 0
+        and last_active is not None
+        and (now - last_active).total_seconds() / 60 > idle_limit
+    ):
+        return "idle"
+
+    absolute_limit = settings.SESSION_ABSOLUTE_MAX_HOURS
+    started = _as_utc(session.created_at)
+    if (
+        absolute_limit > 0
+        and started is not None
+        and (now - started).total_seconds() / 3600 > absolute_limit
+    ):
+        return "absolute"
+    return None
+
+
 class AuthService:
     """Service for authentication operations"""
 
@@ -426,6 +463,10 @@ class AuthService:
             # timezone and may differ from UTC — causing the idle timeout
             # check to see a phantom offset (e.g. 300m for UTC-5).
             last_activity=datetime.now(timezone.utc),
+            # Python-side UTC for the same reason as last_activity: the absolute
+            # lifetime is measured from this instant, and MySQL's now() follows
+            # the DB session timezone.
+            created_at=datetime.now(timezone.utc),
         )
 
         self.db.add(session)
@@ -489,6 +530,19 @@ class AuthService:
                 # stolen/rotated tokens would keep working. Only SELECTs have
                 # run on this session before this point, so the commit cannot
                 # persist unrelated pending work.
+                await self.db.commit()
+                return None, None
+
+            # A session past its idle or absolute limit cannot be renewed. This
+            # is an ordinary "sign in again", not a replay: the row is found and
+            # removed here, so the 401 it becomes never reaches the branch above
+            # that revokes every session the member has.
+            ended = session_end_reason(session, datetime.now(timezone.utc))
+            if ended:
+                logger.info(
+                    f"Refresh refused for user {user_id}: session {ended} limit reached"
+                )
+                await self.db.delete(session)
                 await self.db.commit()
                 return None, None
 
@@ -717,6 +771,10 @@ class AuthService:
 
         Args:
             token: Access token
+            touch_activity: Record this request as user activity for the idle
+                timer. A background poll passes False: it is not evidence a
+                person is present, and counting it kept every open tab alive
+                forever.
 
         Returns:
             True if successful, False otherwise
@@ -852,7 +910,9 @@ class AuthService:
 
         return True, None
 
-    async def get_user_from_token(self, token: str) -> Optional[User]:
+    async def get_user_from_token(
+        self, token: str, touch_activity: bool = True
+    ) -> Optional[User]:
         """
         Get user from access token with server-side session validation.
 
@@ -907,36 +967,20 @@ class AuthService:
                 logger.debug("Token rejected: session expired")
                 return None
 
-            # HIPAA §164.312(a)(2)(iii): Server-side idle timeout.
-            # If the session has not been active within the configured
-            # timeout window, reject it to enforce automatic logoff.
-            idle_timeout = settings.HIPAA_SESSION_TIMEOUT_MINUTES
-            if idle_timeout > 0 and session.last_activity:
-                last_active = (
-                    session.last_activity.replace(tzinfo=timezone.utc)
-                    if session.last_activity.tzinfo is None
-                    else session.last_activity
-                )
-                idle_minutes = (
-                    datetime.now(timezone.utc) - last_active
-                ).total_seconds() / 60
-                if idle_minutes > idle_timeout:
-                    logger.info(
-                        f"Session idle timeout: {idle_minutes:.0f}m > "
-                        f"{idle_timeout}m limit"
-                    )
-                    await self.db.delete(session)
-                    # Use commit() instead of flush() so the deletion persists.
-                    # Returning None causes get_current_user to raise HTTPException,
-                    # which triggers a rollback in get_session() — undoing any
-                    # flush()'d changes. Without commit(), the zombie session
-                    # would survive and keep blocking authentication.
-                    await self.db.commit()
-                    return None
+            # HIPAA §164.312(a)(2)(iii): server-side automatic logoff, plus an
+            # absolute lifetime. The row is rejected but NOT deleted here: the
+            # browser's next move is a refresh with this session's refresh
+            # token, and refresh needs to find the row to answer "sign in
+            # again". Deleting it made that refresh look like a replayed token
+            # and revoked every other session the member had.
+            ended = session_end_reason(session, datetime.now(timezone.utc))
+            if ended:
+                logger.info(f"Session {ended} limit reached; token rejected")
+                return None
 
-            # Touch session activity timestamp for idle tracking
-            session.last_activity = datetime.now(timezone.utc)
-            await self.db.flush()
+            if touch_activity:
+                session.last_activity = datetime.now(timezone.utc)
+                await self.db.flush()
 
             result = await self.db.execute(
                 select(User)

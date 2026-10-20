@@ -4224,16 +4224,24 @@ class ElectionService:
         first, last = row
         return f"{first or ''} {last or ''}".strip() or None
 
+    @staticmethod
+    def _org_zone(organization) -> ZoneInfo:
+        """The organization's timezone, UTC when unset or unknown."""
+        try:
+            return ZoneInfo((organization.timezone if organization else None) or "UTC")
+        except Exception:
+            return ZoneInfo("UTC")
+
     async def _org_local_time(self, organization, dt) -> str:
         """Format an aware datetime in the organization's timezone."""
-        from zoneinfo import ZoneInfo
-
-        try:
-            tz = ZoneInfo((organization.timezone if organization else None) or "UTC")
-        except Exception:
-            tz = ZoneInfo("UTC")
-        local = self._ensure_utc(dt).astimezone(tz)
+        local = self._ensure_utc(dt).astimezone(self._org_zone(organization))
         return f"{local:%Y-%m-%d %H:%M %Z}"
+
+    def _org_local_date(self, organization, dt) -> str:
+        """The calendar date of *dt* in the organization's timezone, written
+        out ("October 21, 2026") for a printed page."""
+        local = self._ensure_utc(dt).astimezone(self._org_zone(organization))
+        return f"{local:%B} {local.day}, {local.year}"
 
     async def announce_nominations_open(
         self,
@@ -6008,12 +6016,20 @@ class ElectionService:
                 }
             )
 
+        # The day the ballot is cast on: the meeting's, when the vote is held
+        # at one, else the day voting opens.
+        ballot_day = election.meeting_date or election.start_date
         data = {
             "election": {
                 "title": election.title,
                 "voting_method": election.voting_method,
                 "max_votes_per_position": election.max_votes_per_position or 1,
                 "allow_write_ins": bool(election.allow_write_ins),
+                "date_display": (
+                    self._org_local_date(organization, ballot_day)
+                    if ballot_day
+                    else None
+                ),
             },
             "positions": positions,
             "approval_items": [
@@ -6800,6 +6816,16 @@ class ElectionService:
             },
             user_id=str(closed_by) if closed_by else None,
         )
+
+        # The certified result goes into the minutes of the meeting it was held
+        # at. After the close has committed, and never allowed to fail it.
+        from app.services.minutes_election_filing import file_closed_election
+
+        await file_closed_election(
+            self.db, election, str(closed_by) if closed_by else None
+        )
+        # A failed filing rolls the session back, which expires the row.
+        await self.db.refresh(election)
 
         # Paper-ballot batches that never received their required officer
         # attestations stay excluded from the certified results — flag them

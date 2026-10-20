@@ -1708,6 +1708,37 @@ class SchedulingService:
             )
         return result
 
+    async def open_shift_candidate_criteria(
+        self,
+        organization_id: UUID | str,
+        start_date: date,
+        end_date: date,
+        now: Optional[datetime] = None,
+    ) -> list:
+        """The WHERE clauses that make a shift a candidate for an open-shift list.
+
+        The one definition of the population. ``_open_shift_candidates`` and the
+        MCP ``list_open_shifts`` tool both select through it; the tool pages
+        with a keyset cursor and its own cap, so it cannot share the query
+        itself, and when it kept a copy of these clauses the copy missed the
+        has-the-shift-ended filter and kept offering shifts that were over.
+        """
+        now = now or datetime.now(timezone.utc)
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        settings = (org.settings or {}) if org else {}
+        return [
+            Shift.organization_id == str(organization_id),
+            Shift.shift_date >= start_date,
+            Shift.shift_date <= end_date,
+            Shift.is_finalized.is_(False),
+            Shift.status != ShiftStatus.CANCELLED,
+            shift_not_over_criteria(settings, now),
+        ]
+
     async def _open_shift_candidates(
         self,
         organization_id: UUID | str,
@@ -1729,22 +1760,10 @@ class SchedulingService:
         every shift dated today however long ago it ended. A shift that is over
         has no gap left to fill, for a member or for the department.
         """
-        now = now or datetime.now(timezone.utc)
-        org = (
-            await self.db.execute(
-                select(Organization).where(Organization.id == str(organization_id))
-            )
-        ).scalar_one_or_none()
-        settings = (org.settings or {}) if org else {}
-        query = (
-            select(Shift)
-            .where(Shift.organization_id == str(organization_id))
-            .where(Shift.shift_date >= start_date)
-            .where(Shift.shift_date <= end_date)
-            .where(Shift.is_finalized.is_(False))
-            .where(Shift.status != ShiftStatus.CANCELLED)
-            .where(shift_not_over_criteria(settings, now))
+        criteria = await self.open_shift_candidate_criteria(
+            organization_id, start_date, end_date, now=now
         )
+        query = select(Shift).where(*criteria)
         if apparatus_id:
             query = query.where(Shift.apparatus_id == apparatus_id)
         query = query.order_by(Shift.shift_date.asc(), Shift.start_time.asc()).limit(

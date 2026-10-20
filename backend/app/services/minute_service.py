@@ -55,6 +55,7 @@ from app.schemas.minute import (
 )
 from app.services import file_storage_service as file_storage
 from app.services.file_storage_service import StorageArea
+from app.services.minutes_election_filing import file_waiting_elections
 from app.services.separation_of_duties import assert_different_person
 from app.services.template_service import TemplateService
 from app.utils.agenda_items import (
@@ -968,6 +969,7 @@ class MinuteService:
         await self.ensure_section_motions(minutes, organization_id)
         await self.db.commit()
         await self.db.refresh(minutes)
+        await file_waiting_elections(self.db, minutes, str(created_by))
 
         # Reload with relationships
         reloaded = await self.get_minutes(minutes.id, organization_id)
@@ -2283,4 +2285,5 @@ class MinuteService:
         await self.ensure_section_motions(minutes, organization_id)
         await self.db.commit()
         await self.db.refresh(minutes)
+        await file_waiting_elections(self.db, minutes, str(created_by))
         return minutes
