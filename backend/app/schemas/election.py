@@ -888,10 +888,37 @@ class ManualBallotEntry(BaseModel):
     count: int = Field(..., ge=1, le=500)
 
 
-class ManualBallotsRequest(BaseModel):
-    """Record an in-room paper-ballot tally."""
+class RankedPaperBallot(BaseModel):
+    """One ranked paper ballot (or ``count`` identical ones): candidate ids
+    in preference order, first choice first.
 
-    entries: List[ManualBallotEntry] = Field(..., min_length=1, max_length=50)
+    A ranked-choice race cannot be entered as per-candidate totals — the
+    count needs each ballot's order — so its paper ballots arrive this way.
+    """
+
+    rankings: List[UUID] = Field(..., min_length=1, max_length=50)
+    count: int = Field(default=1, ge=1, le=500)
+
+    @field_validator("rankings")
+    @classmethod
+    def no_repeated_candidate(cls, value: List[UUID]) -> List[UUID]:
+        if len(set(value)) != len(value):
+            raise ValueError("A candidate can be ranked only once on a ballot")
+        return value
+
+
+class ManualBallotsRequest(BaseModel):
+    """Record an in-room paper-ballot tally.
+
+    ``entries`` carries per-candidate totals for single-choice and approval
+    races; ``ranked_ballots`` carries ballot-by-ballot rankings for
+    ranked-choice races. At least one must be present.
+    """
+
+    entries: List[ManualBallotEntry] = Field(default_factory=list, max_length=50)
+    ranked_ballots: List[RankedPaperBallot] = Field(
+        default_factory=list, max_length=500
+    )
     notes: Optional[str] = Field(None, max_length=1000)
     ballots_cast: Optional[int] = Field(
         None,
@@ -912,6 +939,12 @@ class ManualBallotsRequest(BaseModel):
             "The override is recorded in the audit log."
         ),
     )
+
+    @model_validator(mode="after")
+    def has_something_to_record(self) -> "ManualBallotsRequest":
+        if not self.entries and not self.ranked_ballots:
+            raise ValueError("No ballot entries provided")
+        return self
 
 
 class ManualBallotsResponse(BaseModel):

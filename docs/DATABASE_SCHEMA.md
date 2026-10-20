@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**317 tables · 5240 columns · 1070 foreign keys**
+**317 tables · 5241 columns · 1070 foreign keys**
 
 ---
 
@@ -171,7 +171,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
-| [`votes`](#votes) | `Vote` | 26 | Vote model for recording votes |
+| [`votes`](#votes) | `Vote` | 27 | Vote model for recording votes |
 | [`voting_tokens`](#voting_tokens) | `VotingToken` | 17 | Voting token model for secure anonymous ballot access |
 
 ### Email Templates
@@ -2452,6 +2452,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_manual` | BOOL | no |  | `0` |  |
 | `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `manual_batch_id` | VARCHAR(36) | yes | IDX |  |  |
+| `paper_ballot_id` | VARCHAR(36) | yes |  |  |  |
 | `is_proxy_vote` | BOOL | no | IDX | `0` |  |
 | `proxy_voter_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `proxy_authorization_id` | VARCHAR(36) | yes |  |  |  |
