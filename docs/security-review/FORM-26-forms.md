@@ -1,6 +1,59 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+
+---
+
+## Pass 8 (2026-10-20) — true zero-delta on backend scope, one out-of-scope frontend correctness fix re-verified, 0 fixed, 0 new findings
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes
+1-7) before touching code. Baseline: pass 7's merge (`8372581e`, PR #3374).
+`git log 8372581e..HEAD` on all five backend scope files
+(`endpoints/forms.py`, `public/forms.py`, `forms_service.py`,
+`models/forms.py`, `schemas/forms.py`) returns **zero commits** — confirmed
+by `git diff --stat` on the same five files, which is also empty. File sizes
+are therefore byte-identical to pass 7: 813 L / 236 L / 3,492 L / 397 L /
+471 L.
+
+Re-verified rather than assumed from the zero diff:
+
+- **Route inventory** — re-enumerated programmatically: 22 routes total (20 in
+  `endpoints/forms.py` + 2 in `public/forms.py`), matching pass 7's count
+  exactly. Auth dependency distribution: 17 × `require_permission("forms.manage")`,
+  3 × `require_permission("forms.view")`, 2 × bare `get_current_user`
+  (`submit_form` and `GET /member-lookup`, by design, unchanged) — the two
+  public routes remain unauthenticated behind the slug regex / rate-limit /
+  honeypot / CAPTCHA stack pass 5-7 already documented.
+- All of pass 7's "Verified good" and "Re-verified this pass" items
+  (FORM-1/2/3/5/6/7/8/9/11/12, BXC-1, tenant isolation, LIKE escaping, JSON
+  column mutation, CSV export n/a) hold unchanged — there is no code delta
+  for any of them to have regressed against.
+
+**Frontend delta:** one commit touched the Forms frontend module since pass 7,
+`4327cb29` ("Fix create forms that sent impossible values or lost input on
+failure"), to `frontend/src/components/forms/FieldEditor.tsx` (+18 lines,
+plus a new `FieldEditor.test.tsx`). It adds client-side validation rejecting
+a fractional `min_value`/`max_value` on a numeric field — matching the
+backend's existing integer-only storage, which already 422s a fraction
+server-side — plus `step="1"` on the two number inputs and
+`aria-invalid`/`aria-describedby`/`role="alert"` wiring for the new error
+message. No new API call, no new client-supplied id, no change to what
+reaches the server: this tightens client-side UX/accessibility around a
+constraint the backend already enforced. Correctness/accessibility fix, not
+security-relevant — no finding.
+
+### Completion gate (pass 8)
+
+| Check                                             | Result                                                 |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                        |
+| `black --check app/ tests/ alembic/`              | ✅ clean                                               |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (reinstalled to CI's pinned 9.0.1)            |
+| `python3 scripts/validate_migrations.py --strict` | ✅ PASSED — single head, no migration this pass        |
+| `pytest tests/ -q -k form`                        | ✅ 821 passed, 1 skipped (pywebpush, environment-only) |
+| `npm run typecheck`                               | ✅ 0 errors                                            |
+| `npm run lint`                                    | ✅ exit 0                                              |
 
 ---
 
