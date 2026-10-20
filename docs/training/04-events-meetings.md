@@ -1447,8 +1447,11 @@ narrows the search. Members search only circulated and adopted minutes, never a
 draft or an executive session; people who manage minutes search everything, and
 each result shows its status.
 
-_[Screenshot to create: the Found in the minutes card with two results and the
-highlighted words.]_
+<!-- Screenshot needed:
+The Minutes page with a word typed in the search box and the Found in the minutes
+card under it showing two results, each with its matching places and the found
+words highlighted.
+-->
 
 **Minutes Settings.** _(2026-10-19)_ The department-wide choices about minutes
 are on one screen, opened with the **Settings** button beside **Outlines** at the
@@ -1462,9 +1465,16 @@ until something changes. Before 2026-10-19 these were four separate buttons on t
 Minutes page (**Reminders**, **Roll listing**, **Publishing**, **Signers**), each
 opening its own dialog.
 
-_[Screenshot to create: Minutes Settings with the section list and the Attendance
-section; the same screen as a member without the settings permission, with the
-controls disabled.]_
+<!-- Screenshot needed:
+Minutes Settings as a settings administrator: the section list (Attendance,
+Signatures, Reminders, Publishing) beside the Attendance section, with its Save row.
+-->
+
+<!-- Screenshot needed:
+Minutes Settings as a minutes manager who cannot change settings: the Attendance
+section with the controls disabled, the line saying a settings administrator
+changes it, and no Save row.
+-->
 
 ![The Meeting Minutes page: the Outlines button, the summary tiles, and each meeting card listing its minutes with their state, one Circulated for review and one Adopted](./images/04-14-meeting-minutes.png)
 
@@ -1643,8 +1653,7 @@ selector that overrides the default for that one set of minutes (leave it on
 PDF, the library copy and the public copy; the public copy leaves out counts that
 are not listed rather than showing zero. Nothing changes until someone sets it.
 
-_[Screenshot to create: Minutes Settings → Attendance, and the roll panel's
-per-minutes selector on a draft.]_
+_[Screenshot to create: the roll panel's per-minutes selector on a draft.]_
 
 ### Publishing adopted minutes (library and public page)
 
@@ -1668,8 +1677,13 @@ for confirmation.
   publishing refuses if that folder's access was loosened.
 - The Minutes page shows a publishing status line for each set of minutes.
 
-_[Screenshot to create: Minutes Settings → Publishing; the publishing status
-note on adopted minutes; the public minutes page at phone and desktop widths.]_
+<!-- Screenshot needed:
+Minutes Settings, Publishing section: the public-copy switch and the
+Executive-session minutes group with its two switches.
+-->
+
+_[Screenshot to create: the publishing status note on adopted minutes; the public
+minutes page at phone and desktop widths.]_
 
 ### Circulating and adopting minutes
 
@@ -1757,9 +1771,13 @@ and corrected, the new version starts unsigned and the earlier signatures stay
 on file against the text they were given for. Signing is rate-limited, since it
 is a place a password could be guessed from a signed-in session.
 
-_[Screenshots to create: Minutes → Settings → Signatures with the two default slots; the Sign
-dialog (name and password); the Signatures panel on adopted minutes with one slot
-signed and one open.]_
+<!-- Screenshot needed:
+Minutes Settings, Signatures section with the two default slots, Recording
+Secretary and Presiding Officer, each open to anyone who manages minutes.
+-->
+
+_[Screenshots to create: the Sign dialog (name and password); the Signatures
+panel on adopted minutes with one slot signed and one open.]_
 
 **Outlines (the standard order of business).** **Minutes > Outlines**
 (`minutes.manage`) edits the department's standard sections for each meeting
@@ -1822,7 +1840,10 @@ days before the due date** (default 3; 0 is the due date itself), **Repeat while
 overdue, every this many days** (default 7; 0 is one overdue reminder only) and
 the weekly open-items list. Changing them needs the settings permission.
 
-_[Screenshot to create: Minutes Settings → Reminders.]_
+<!-- Screenshot needed:
+Minutes Settings, Reminders section: the email switch, the first-reminder and
+repeat-while-overdue day fields, and the weekly open-items list switch.
+-->
 
 ### Attendance Dashboard (Secretary)
 

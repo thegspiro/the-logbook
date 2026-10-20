@@ -8315,6 +8315,81 @@ export const SHOTS = [
     route: "/minutes",
   },
   {
+    // "budget" is in the seeded Officer Meeting minutes, so the card has a hit.
+    id: "04-70-minutes-archive-search",
+    doc: "04-events-meetings.md",
+    line: 1450,
+    anchor:
+      "The Minutes page with a word typed in the search box and the Found in the minutes",
+    alt: "The Minutes page with the word budget typed in the search box and the Found in the minutes card listing the matching minutes with the word highlighted",
+    route: "/minutes",
+    prepare: async (page) => {
+      await page
+        .getByPlaceholder("Search meetings, or any words in the minutes...")
+        .fill("budget");
+      await page
+        .getByRole("heading", { name: "Found in the minutes" })
+        .waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    selector: "section[aria-labelledby='archive-search-heading']",
+    expect: "Found in the minutes",
+  },
+  {
+    id: "04-71-minutes-settings-attendance",
+    doc: "04-events-meetings.md",
+    line: 1468,
+    anchor:
+      "Minutes Settings as a settings administrator: the section list (Attendance,",
+    alt: "Minutes Settings: the section list (Attendance, Signatures, Reminders, Publishing) beside the Attendance section and its Save row",
+    route: "/minutes/settings",
+    expect: "How attendance is listed",
+  },
+  {
+    // The Secretary manages minutes; the page tells a reader without the
+    // settings permission who changes it. `expect` makes the shot fail, rather
+    // than picture an editable form, if the demo Secretary ever gains it.
+    id: "04-72-minutes-settings-read-only",
+    doc: "04-events-meetings.md",
+    line: 1473,
+    anchor:
+      "Minutes Settings as a minutes manager who cannot change settings: the Attendance",
+    alt: "Minutes Settings as a minutes manager without the settings permission: the Attendance section with disabled controls, a note that a settings administrator changes it, and no Save row",
+    route: "/minutes/settings",
+    auth: "secretary",
+    expect: "settings administrator",
+  },
+  {
+    id: "04-73-minutes-settings-publishing",
+    doc: "04-events-meetings.md",
+    line: 1680,
+    anchor:
+      "Minutes Settings, Publishing section: the public-copy switch and the",
+    alt: "Minutes Settings, Publishing: the public-copy switch and the Executive-session minutes group with its two switches",
+    route: "/minutes/settings?tab=publishing",
+    expect: "Executive-session minutes",
+  },
+  {
+    id: "04-74-minutes-settings-signatures",
+    doc: "04-events-meetings.md",
+    line: 1774,
+    anchor:
+      "Minutes Settings, Signatures section with the two default slots, Recording",
+    alt: "Minutes Settings, Signatures: the Recording Secretary and Presiding Officer slots, each open to anyone who manages minutes",
+    route: "/minutes/settings?tab=signatures",
+    expect: "Anyone who manages minutes",
+  },
+  {
+    id: "04-75-minutes-settings-reminders",
+    doc: "04-events-meetings.md",
+    line: 1843,
+    anchor:
+      "Minutes Settings, Reminders section: the email switch, the first-reminder and",
+    alt: "Minutes Settings, Reminders: the email switch, the first-reminder and repeat-while-overdue day fields, and the weekly open-items list switch",
+    route: "/minutes/settings?tab=reminders",
+    expect: "Email reminders to assignees",
+  },
+  {
     id: "04-15-action-items",
     doc: "04-events-meetings.md",
     line: 454,
