@@ -2956,6 +2956,16 @@ Drag a saved row by its handle to reorder it among the rows beside it. Tick
 **Sealed** on a location that is a tamper-sealed bag or kit (see
 [Sealed Containers](#sealed-containers)).
 
+**Items directly on the checklist.** When you delete or move out the last item
+in a group of items that sit directly on the checklist, the group goes too.
+It has no heading, so there would be nothing left to find it by.
+
+**Older "in place" checks.** Lines that asked the crew to "Confirm the item is
+in place." were Works checks before the **Present** type existed. When a
+checklist still has any, **Tools** offers **Switch "in place" checks to
+Present** with the number found. It lists the lines first, and switches all of
+them in one step. Other Works lines are never changed.
+
 #### Starting from a vehicle layout
 
 On an empty checklist, a **How would you like to start?** card offers **Use a
