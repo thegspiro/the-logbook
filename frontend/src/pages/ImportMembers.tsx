@@ -7,6 +7,7 @@ import { userService, roleService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { displayNameOf } from '../utils/memberName';
+import { memberClassAndStatusFor } from '../utils/membership';
 
 /**
  * One rejected row: why it was rejected, and the cells it was rejected from.
@@ -71,6 +72,7 @@ const TEMPLATE_HEADERS = [
   'secondaryPhone',
   'email',
   'joinDate',
+  'membershipType',
   'rank',
   'role',
   'station',
@@ -108,6 +110,7 @@ const TEMPLATE_EXAMPLE: Record<(typeof TEMPLATE_HEADERS)[number], string> = {
   secondaryPhone: '(555) 987-6543',
   email: 'john.doe@example.com',
   joinDate: '2020-01-15',
+  membershipType: 'regular',
   rank: 'Firefighter',
   role: 'Member',
   station: 'Station 1',
@@ -181,6 +184,16 @@ const RECOGNIZED_HEADERS: readonly string[] = [...TEMPLATE_HEADERS.map(normalize
  * is created Active and adjusted afterwards.
  */
 const STATUS_HEADER = 'status';
+
+/**
+ * What the `membershipType` column accepts: the same choices as the Add Member
+ * form, which are the ones the create endpoint can express as a class/status
+ * pair. `active` is taken as a spelling of `regular`, because the edit page
+ * labels that standing "Active". Without the column every imported member was
+ * a regular operational member and nothing in the file could say otherwise.
+ */
+const MEMBERSHIP_TYPE_VALUES = ['probationary', 'regular', 'active', 'life', 'administrative'] as const;
+const MEMBERSHIP_TYPE_HELP = 'probationary, regular, life or administrative';
 
 /**
  * Length ceilings copied from `AdminUserCreate` and `EmergencyContact`.
@@ -368,6 +381,7 @@ const buildRow = (row: string[], headers: string[]): CSVMemberRow => ({
   email: cell(row, headers, 'email') || '',
   joinDate: cell(row, headers, 'joindate') || '',
   status: cell(row, headers, 'status'),
+  membershipType: cell(row, headers, 'membershiptype'),
   rank: cell(row, headers, 'rank'),
   role: cell(row, headers, 'role'),
   station: cell(row, headers, 'station'),
@@ -462,6 +476,11 @@ const validateRow = (data: CSVMemberRow): string[] => {
     if (value && toIsoDate(value) === null) {
       problems.push(`${column} "${value}" is not a recognized date — use YYYY-MM-DD or MM/DD/YYYY`);
     }
+  }
+
+  const membershipType = data.membershipType?.trim().toLowerCase();
+  if (membershipType && !(MEMBERSHIP_TYPE_VALUES as readonly string[]).includes(membershipType)) {
+    problems.push(`membershipType "${data.membershipType}" is not one of ${MEMBERSHIP_TYPE_HELP}`);
   }
 
   return problems;
@@ -897,6 +916,10 @@ const ImportMembers: React.FC = () => {
           ...(rowData.secondaryPhone ? { mobile: rowData.secondaryPhone } : {}),
           ...(dateOfBirth ? { date_of_birth: dateOfBirth } : {}),
           ...(joinDate ? { hire_date: joinDate } : {}),
+          // Pre-flight has already rejected a value outside MEMBERSHIP_TYPE_VALUES.
+          ...(rowData.membershipType?.trim()
+            ? memberClassAndStatusFor(rowData.membershipType.trim().toLowerCase())
+            : {}),
           ...(rowData.rank ? { rank: rowData.rank } : {}),
           ...(rowData.station ? { station: rowData.station } : {}),
           ...(rowData.platoon ? { platoon: rowData.platoon } : {}),
@@ -994,6 +1017,7 @@ const ImportMembers: React.FC = () => {
             <li>Replace the sample row — it is imported like any other row if left in</li>
             <li>Wrap any value containing a comma in double quotes, or its row will be rejected</li>
             <li>Leave membershipNumber blank to have the system assign one</li>
+            <li>membershipType is probationary, regular, life or administrative; blank imports as regular</li>
             <li>Role must match a role name configured under Roles</li>
             <li>Dates accept either YYYY-MM-DD or MM/DD/YYYY</li>
             <li>Upload your completed CSV file and review the check results</li>
