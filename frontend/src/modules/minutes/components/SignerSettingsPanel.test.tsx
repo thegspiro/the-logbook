@@ -25,6 +25,7 @@ const defaults: MinutesReminderSettings = {
   executive_effective_library: false,
   executive_effective_public: false,
   attendance_listing: 'all',
+  auto_file_election_results: true,
   signature_slots: [
     { key: 'recording_secretary', title: 'Recording Secretary', position_slug: null },
     { key: 'presiding_officer', title: 'Presiding Officer', position_slug: null },
