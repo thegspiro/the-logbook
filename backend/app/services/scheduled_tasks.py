@@ -37,6 +37,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:25 AM — the weekly list of document folders only full administrators can open
 25 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=admin_only_folder_digest
 
+# Daily at 7:28 AM — re-suspend a departed member's account turned back on in the directory
+28 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=directory_account_departure_check
+
 # Daily at 7:35 AM — Google Workspace accounts waiting over a day for an administrator
 35 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=google_workspace_attention_digest
 
@@ -574,6 +577,16 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
+    },
+    "directory_account_departure_check": {
+        "description": (
+            "Re-suspend any departed member's Google Workspace or Microsoft 365 "
+            "account that was turned back on in the directory, and record it "
+            "for the administrators' morning email"
+        ),
+        "frequency": "daily",
+        "recommended_time": "07:28",
+        "cron": "28 7 * * *",
     },
     "google_workspace_attention_digest": {
         "description": (
@@ -6600,6 +6613,22 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
     }
 
 
+async def run_directory_account_departure_check(db: AsyncSession) -> Dict[str, Any]:
+    """Re-suspend departed members' directory accounts found active again.
+
+    Runs before the attention digest so the same morning's email names them.
+    """
+    from app.services.directory_account_service import DirectoryAccountService
+
+    async def _process(db_session: AsyncSession, org: Organization) -> int:
+        found = await DirectoryAccountService(db_session).check_departed_suspensions(
+            str(org.id)
+        )
+        return len(found)
+
+    return await _for_each_org(db, "directory_account_departure_check", _process)
+
+
 async def run_google_workspace_attention_digest(db: AsyncSession) -> Dict[str, Any]:
     """Email administrators the Google Workspace accounts waiting over a day."""
     from app.services.google_workspace_attention_digest import (
@@ -7600,6 +7629,7 @@ TASK_RUNNERS = {
     "salesforce_auto_sync": run_salesforce_auto_sync,
     "calendar_sync": run_calendar_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
+    "directory_account_departure_check": run_directory_account_departure_check,
     "google_workspace_attention_digest": run_google_workspace_attention_digest,
     "google_workspace_suspension_sync": run_google_workspace_suspension_sync,
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
@@ -7685,6 +7715,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "trainee_report_escalation": 86400,
     "mark_overdue_dues": 86400,
     # Checked daily; sends at most once a day per org, only while overdue.
+    "directory_account_departure_check": 86400,
     "google_workspace_attention_digest": 86400,
     "google_workspace_suspension_sync": 900,
     "mark_overdue_maintenance": 86400,

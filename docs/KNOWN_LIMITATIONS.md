@@ -211,6 +211,14 @@ choice an owner may want to revisit:
   member, so a Google failure while suspending is recorded only in the audit
   log; an administrator suspends the account by hand.
 - **No rename.** A member's name change in The Logbook does not reach Google.
+- **A departed member's account cannot be kept on.** The daily departure check
+  (owner decision, 2026-10-20) suspends again any departed member's account
+  found active in the directory, every morning, with no exemption: an
+  administrator who re-enables one to export a mailbox must finish within the
+  day or return the member in The Logbook. The check runs once a day, so an
+  account re-enabled just after it is active for up to a day; the morning
+  email reports only what the last day's check found, and anything older is
+  in the audit log.
 - **Add Member creates an account only when asked; import never does.** Add
   Member's **Create a … account** box starts unticked (owner decision,
   2026-10-20), and a roster import only links members to accounts already at
