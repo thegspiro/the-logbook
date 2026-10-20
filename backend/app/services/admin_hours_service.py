@@ -148,10 +148,27 @@ class AdminHoursService:
         """
         if not isinstance(name, str) or not name.strip():
             return
-        query = select(AdminHoursCategory.id).where(
-            AdminHoursCategory.organization_id == organization_id,
-            AdminHoursCategory.is_active.is_(True),
-            func.lower(func.trim(AdminHoursCategory.name)) == name.strip().lower(),
+        # Two officers adding the same name at once both read "free" and both
+        # insert, and no unique index can stop them: the rule ignores case and
+        # retired rows. Lock the organization row so the second waits, and make
+        # the check itself a locking read, because under REPEATABLE READ a plain
+        # SELECT answers from the transaction's first snapshot, which predates
+        # the lock (CLAUDE.md pitfall #27). Nothing else here locks category
+        # rows, and no code that holds this lock waits on them, so there is no
+        # lock-order inversion to guard against.
+        await self.db.execute(
+            select(Organization.id)
+            .where(Organization.id == organization_id)
+            .with_for_update()
+        )
+        query = (
+            select(AdminHoursCategory.id)
+            .where(
+                AdminHoursCategory.organization_id == organization_id,
+                AdminHoursCategory.is_active.is_(True),
+                func.lower(func.trim(AdminHoursCategory.name)) == name.strip().lower(),
+            )
+            .with_for_update()
         )
         if exclude_id is not None:
             query = query.where(AdminHoursCategory.id != exclude_id)
