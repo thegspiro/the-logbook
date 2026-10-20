@@ -101,4 +101,21 @@ describe('CreateTrainingSessionPage lead instructor', () => {
     expect(payload.instructor_id).toBeUndefined();
     expect(payload.instructor).toBeUndefined();
   });
+
+  // The apparatus picker was never sent, so a choice made there was silently
+  // dropped; it was removed rather than left to imply something is recorded.
+  it('offers no apparatus picker and does not load the apparatus list', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Ladder Drill');
+    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
+    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(await screen.findByDisplayValue('Select instructor...')).toBeInTheDocument();
+    expect(screen.queryByText('No apparatus')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Apparatus/)).not.toBeInTheDocument();
+    expect(getBasicApparatus).not.toHaveBeenCalled();
+  });
 });

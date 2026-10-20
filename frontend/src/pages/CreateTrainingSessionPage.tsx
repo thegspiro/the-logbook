@@ -21,7 +21,6 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { userService, locationsService, trainingSessionService, trainingService } from '../services/api';
-import { schedulingService } from '../modules/scheduling/services/api';
 import { useRanks } from '../hooks/useRanks';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { TrainingLinkageFields } from '../components/training/TrainingLinkageFields';
@@ -87,9 +86,7 @@ const CreateTrainingSessionPage: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [availableCourses, setAvailableCourses] = useState<TrainingCourse[]>([]);
   const [members, setMembers] = useState<User[]>([]);
-  const [apparatusList, setApparatusList] = useState<Array<{ id: string; name: string }>>([]);
   const [instructorId, setInstructorId] = useState('');
-  const [apparatusId, setApparatusId] = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationMode, setLocationMode] = useState<'select' | 'other'>('select');
 
@@ -138,7 +135,7 @@ const CreateTrainingSessionPage: React.FC = () => {
   });
 
   useEffect(() => {
-    // Load available courses, members, apparatus, and locations from API
+    // Load available courses, members, and locations from API
     trainingService
       .getCourses()
       .then(setAvailableCourses)
@@ -148,14 +145,6 @@ const CreateTrainingSessionPage: React.FC = () => {
     userService
       .getUsers()
       .then(setMembers)
-      .catch(() => {
-        /* non-critical */
-      });
-    schedulingService
-      .getBasicApparatus({ is_active: true })
-      .then((data) => {
-        setApparatusList(data.map((a) => ({ id: a.id, name: a.name || a.unit_number || 'Unknown' })));
-      })
       .catch(() => {
         /* non-critical */
       });
@@ -927,25 +916,6 @@ const CreateTrainingSessionPage: React.FC = () => {
                         </option>
                       ))}
                     </select>
-                  </div>
-
-                  <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                      Apparatus <Optional />
-                    </label>
-                    <select
-                      value={apparatusId}
-                      onChange={(e) => setApparatusId(e.target.value)}
-                      className="form-input py-3"
-                    >
-                      <option value="">No apparatus</option>
-                      {apparatusList.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-theme-text-muted mt-1 text-xs">Apparatus used during this training session</p>
                   </div>
                 </>
               )}
