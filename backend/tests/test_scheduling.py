@@ -19,7 +19,7 @@ Covers:
 import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -773,6 +773,39 @@ class TestCalendarHelpers:
         assert summary["shifts_scheduled_this_week"] >= 0
         assert summary["shifts_scheduled_this_month"] >= 1
         assert "hours_worked_this_month" in summary
+
+    async def test_summary_week_runs_sunday_to_saturday(
+        self, db_session, setup_org_and_users
+    ):
+        """ "Shifts this week" counts the week the board shows.
+
+        Frozen to a Wednesday: a Monday-based week counts only the Saturday
+        here, so the Sunday shift is what tells the two rules apart.
+        """
+        from app.services import scheduling_service as module
+
+        org_id, user_id, _ = setup_org_and_users
+        svc = SchedulingService(db_session)
+        for day in (date(2026, 10, 18), date(2026, 10, 24), date(2026, 10, 25)):
+            await svc.create_shift(
+                uuid.UUID(org_id),
+                {
+                    "shift_date": day,
+                    "start_time": datetime(day.year, day.month, day.day, 7, 0),
+                },
+                uuid.UUID(user_id),
+            )
+
+        class _Wednesday(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime(2026, 10, 21, 12, 0, tzinfo=tz)
+
+        with patch.object(module, "datetime", _Wednesday):
+            summary = await svc.get_summary(uuid.UUID(org_id))
+
+        # Sunday the 18th and Saturday the 24th; not Sunday the 25th.
+        assert summary["shifts_scheduled_this_week"] == 2
 
     async def test_summary_counts_active_templates_for_the_setup_guide(
         self, db_session, setup_org_and_users
@@ -3229,6 +3262,34 @@ class TestReporting:
         assert len(report) >= 1
         assert report[0]["total_calls"] == 2
         assert "medical" in report[0]["by_type"]
+
+    async def test_call_volume_weeks_start_on_sunday(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, _ = setup_org_and_users
+        svc = SchedulingService(db_session)
+        # Sunday and Saturday of one week, and the Sunday that opens the next.
+        for day in (date(2026, 10, 18), date(2026, 10, 24), date(2026, 10, 25)):
+            shift, _ = await svc.create_shift(
+                uuid.UUID(org_id),
+                {
+                    "shift_date": day,
+                    "start_time": datetime(day.year, day.month, day.day, 7, 0),
+                },
+                uuid.UUID(user_id),
+            )
+            await svc.create_shift_call(
+                uuid.UUID(org_id), uuid.UUID(shift.id), {"incident_type": "fire"}
+            )
+
+        report = await svc.get_call_volume_report(
+            uuid.UUID(org_id), date(2026, 10, 18), date(2026, 10, 25), group_by="week"
+        )
+
+        assert [(row["period"], row["total_calls"]) for row in report] == [
+            ("2026-10-18", 2),
+            ("2026-10-25", 1),
+        ]
 
     @pytest.mark.asyncio
     async def test_my_shifts(self, db_session, setup_org_and_users):

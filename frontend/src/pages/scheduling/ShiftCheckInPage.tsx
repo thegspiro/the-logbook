@@ -234,7 +234,7 @@ const ShiftCheckInPage: React.FC = () => {
           {preWorkShifts.length > 0 && <div className="mb-4 text-left">{preWorkOffer}</div>}
           <button
             onClick={() => void navigate('/scheduling')}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+            className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
           >
             Go to Scheduling
           </button>
@@ -264,7 +264,7 @@ const ShiftCheckInPage: React.FC = () => {
           </p>
           <button
             onClick={() => void navigate('/scheduling?tab=my-shifts')}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
+            className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-800"
           >
             Go to My Shifts
           </button>

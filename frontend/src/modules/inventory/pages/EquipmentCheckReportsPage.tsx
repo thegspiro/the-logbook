@@ -101,7 +101,7 @@ const EquipmentCheckReportsPage: React.FC = () => {
                 aria-current={activeTab === tab.id ? 'page' : undefined}
                 className={`touch:min-h-11 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'bg-violet-600 text-white'
+                    ? 'bg-violet-700 text-white'
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
                 }`}
               >

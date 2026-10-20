@@ -105,6 +105,17 @@ from app.utils.positions import (
 )
 
 
+def sunday_week_start(day: date) -> date:
+    """The Sunday that starts the week containing ``day``.
+
+    The department's week runs Sunday to Saturday, which is how the shift board
+    draws it. Python's ``weekday()`` counts from Monday, so a week built from it
+    disagreed with the board every Sunday: "Shifts this week" counted the week
+    just ending while the board showed the one starting.
+    """
+    return day - timedelta(days=(day.weekday() + 1) % 7)
+
+
 def _scheduling_minutes(
     settings: Dict[str, Any], key: str, default: int, ceiling: int
 ) -> int:
@@ -3223,12 +3234,12 @@ class SchedulingService:
         total_shifts = total_result.scalar() or 0
 
         # Shifts this week
-        week_start = today - timedelta(days=today.weekday())
-        week_end = week_start + timedelta(days=6)
+        this_week_start = sunday_week_start(today)
+        week_end = this_week_start + timedelta(days=6)
         week_result = await self.db.execute(
             select(func.count(Shift.id))
             .where(*scope)
-            .where(Shift.shift_date >= week_start)
+            .where(Shift.shift_date >= this_week_start)
             .where(Shift.shift_date <= week_end)
         )
         shifts_this_week = week_result.scalar() or 0
@@ -8670,9 +8681,7 @@ class SchedulingService:
         groups: Dict[str, list] = {}
         for shift_date_val, call in call_data:
             if group_by == "week":
-                # Use ISO week start (Monday)
-                week_start = shift_date_val - timedelta(days=shift_date_val.weekday())
-                key = week_start.isoformat()
+                key = sunday_week_start(shift_date_val).isoformat()
             elif group_by == "month":
                 key = f"{shift_date_val.year}-{shift_date_val.month:02d}"
             else:  # day
