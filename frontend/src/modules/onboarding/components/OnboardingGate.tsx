@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Navigate, Outlet } from 'react-router';
+import { Navigate } from 'react-router';
 import { Loader2 } from 'lucide-react';
 import { apiClient } from '../services/api-client';
 import {
@@ -25,7 +25,11 @@ type GateState = OnboardingGateAnswer | 'checking';
  * a failed check. `/onboarding/complete` is outside this gate, since the last
  * step of a first run lands there after setup has just been marked finished.
  */
-export const OnboardingGate: React.FC = () => {
+interface OnboardingGateProps {
+  children: React.ReactNode;
+}
+
+export const OnboardingGate: React.FC<OnboardingGateProps> = ({ children }) => {
   const [state, setState] = useState<GateState>(() => getOnboardingGateAnswer() ?? 'checking');
 
   useEffect(() => {
@@ -66,7 +70,7 @@ export const OnboardingGate: React.FC = () => {
     );
   }
 
-  return <Outlet />;
+  return <>{children}</>;
 };
 
 export default OnboardingGate;

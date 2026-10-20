@@ -16,9 +16,14 @@ const renderGate = () =>
   render(
     <MemoryRouter initialEntries={['/onboarding/start']}>
       <Routes>
-        <Route element={<OnboardingGate />}>
-          <Route path="/onboarding/start" element={<div>Setup form</div>} />
-        </Route>
+        <Route
+          path="/onboarding/start"
+          element={
+            <OnboardingGate>
+              <div>Setup form</div>
+            </OnboardingGate>
+          }
+        />
         <Route path="/login" element={<div>Sign in page</div>} />
       </Routes>
     </MemoryRouter>
