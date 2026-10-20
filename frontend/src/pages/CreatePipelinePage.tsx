@@ -1646,7 +1646,9 @@ const CreatePipelinePage: React.FC = () => {
 
         {/* Step indicator */}
         {/* Five 44px steps and their connectors fit a 320px phone only with
-            the spacing tightened below sm; the labels are sr-only there. */}
+            the spacing tightened below sm. The labels wait for lg rather than sm: the
+            sidebar leaves a tablet well under its viewport width, and six labelled
+            steps overflowed the page there. */}
         <div className="bg-theme-surface mb-8 flex items-center rounded-lg p-2 sm:p-3">
           {wizardSteps.map((step, i) => {
             const StepIcon = step.icon;
@@ -1674,7 +1676,7 @@ const CreatePipelinePage: React.FC = () => {
                   }`}
                 >
                   {isComplete ? <Check className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
-                  <span className="sr-only sm:not-sr-only">{step.label}</span>
+                  <span className="sr-only lg:not-sr-only">{step.label}</span>
                 </button>
               </React.Fragment>
             );
