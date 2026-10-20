@@ -20,6 +20,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import Request
 
 from app.api.v1.public_portal_admin import list_api_keys, update_api_key
 from app.core.public_portal_security import generate_api_key, hash_api_key
@@ -154,7 +155,7 @@ class TestTheUpdatedRateLimit:
     async def test_patch_returns_the_effective_limit(
         self, db_session: AsyncSession, setup_org_and_admin
     ):
-        org_id, _ = setup_org_and_admin
+        org_id, admin_id = setup_org_and_admin
         config_id = await _make_config(db_session, org_id, default_rate_limit=250)
         key_id = await _make_key(db_session, org_id, config_id, "Site", override=None)
         db_session.expunge_all()
@@ -162,7 +163,10 @@ class TestTheUpdatedRateLimit:
         updated = await update_api_key(
             key_id=key_id,
             key_update=PublicPortalAPIKeyUpdate(name="Renamed"),
-            current_user=SimpleNamespace(organization_id=org_id),
+            request=Request(
+                {"type": "http", "headers": [], "client": ("192.0.2.10", 443)}
+            ),
+            current_user=SimpleNamespace(organization_id=org_id, id=admin_id),
             db=db_session,
         )
 
