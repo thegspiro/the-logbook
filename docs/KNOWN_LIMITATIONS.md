@@ -1916,6 +1916,51 @@ encumbrance accruing on approval, so the progress bar was permanently stuck at
 0% — is unblocked by this; the transaction-table stub in the section above is
 not, and remains unwired.
 
+## Upgraded and Fresh Databases Still Differ (2026-10-20)
+
+A fresh install is built from the models (`main.py`'s fast path:
+`create_all`, then `MIGRATION_ONLY_FILES` and the seed files, then a stamp at
+head). An existing installation is built by the Alembic chain plus the startup
+column repair. A comparison of the two on 2026-10-20 found two defects, which
+are fixed (duplicate RESTRICT foreign keys on 18 apparatus columns, and three
+redundant `organization_id` indexes), and the differences below, which are
+**accepted** for now. `backend/tests/test_live_schema_drift.py` guards the
+fixed directions on CI's migrated database. It deliberately does not assert
+these.
+
+**Tables only an upgraded database has: by design.** Three bookkeeping tables,
+`document_unfiled_backfill`, `facility_document_refile_backfill` and
+`facility_folder_tier_backfill`, are written by the 2026-10-11 folder backfills
+so their downgrades can move each document back. A fresh install never ran
+those backfills and has nothing to undo. Drop them only after deciding those
+downgrades are no longer needed.
+
+**Five tables that no code reads.** `compliance_policies`,
+`policy_acknowledgments`, `compliance_checklists`, `checklist_submissions` and
+`compliance_incidents` come from `20260201_0016`. Every installation has them,
+fresh ones included, because `MIGRATION_ONLY_FILES` replays that migration, but
+nothing under `backend/app/` references them. The facilities module's checklist
+tables are the separately named `facility_compliance_checklists` family.
+**Open decision:** retire them (this drops whatever rows a department has in
+them), or leave them as harmless empty tables.
+
+**Upgraded databases are stricter than the models.** About 100 columns are
+`NOT NULL` on an upgraded database and nullable in the models, and about 177
+carry a server default that a fresh install lacks. They are mostly booleans,
+sort orders and timestamps. The
+application supplies every one of these values on insert, so ordinary use does
+not reach the gap. It shows up when code writes an explicit `null` to one of
+these columns: `apply_updates` reads nullability from the models, so it passes
+the write, and an upgraded database then rejects it at flush time with a 500
+instead of a 400. Closing it means choosing, per column, which side is right.
+That makes it a sweep with its own review, not a mechanical migration.
+
+**One unused index on upgraded databases.** `20260808_0003` dropped the
+foreign key on `shift_equipment_checks.apparatus_id`, and MySQL kept the index
+it had created for that key (`fk_shift_equipment_checks_apparatus_id_apparatus`).
+Nothing queries it and fresh installs do not have it. It costs one index write
+per equipment-check submission.
+
 ## Two Migrations Claimed 20260808_0002 — and What It Left Behind (2026-08-09)
 
 Two pull requests merged migrations numbered `20260808_0002`: "drop the
