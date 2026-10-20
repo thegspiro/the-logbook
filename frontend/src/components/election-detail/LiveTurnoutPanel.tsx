@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Maximize2, RefreshCw } from 'lucide-react';
 import { electionService } from '../../services/electionService';
+import { BACKGROUND_REQUEST_CONFIG } from '../../utils/backgroundRequest';
 import type { Election, ElectionStats } from '../../types/election';
 import { formatTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -25,7 +26,7 @@ const LiveTurnoutPanel: React.FC<LiveTurnoutPanelProps> = ({ electionId, electio
 
   const refresh = useCallback(async () => {
     try {
-      const data = await electionService.getStats(electionId);
+      const data = await electionService.getStats(electionId, BACKGROUND_REQUEST_CONFIG);
       setStats(data);
       setLastUpdated(new Date());
     } catch {

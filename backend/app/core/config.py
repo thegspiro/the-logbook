@@ -266,6 +266,10 @@ class Settings(BaseSettings):
     HIPAA_SESSION_TIMEOUT_MINUTES: int = (
         15  # Automatic logoff after inactivity (§164.312(a)(2)(iii))
     )
+    # Hours a session may live however active it is; 0 turns the cap off. Idle
+    # time alone does not end a session that keeps refreshing, so without this a
+    # stolen cookie that keeps being used never has to sign in again.
+    SESSION_ABSOLUTE_MAX_HOURS: int = Field(default=12, ge=0)
     HIPAA_PASSWORD_HISTORY_COUNT: int = (
         12  # Previous passwords remembered (§164.312(d))
     )
