@@ -19,7 +19,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
 from app.utils.garment_styles import FIT_VALUES, first_conflicting_axis
 from app.utils.item_aliases import normalize_aliases
 from app.utils.label_renderer import SHEET_LABELS_PER_PAGE, SYMBOLOGY_CODE128
@@ -1123,7 +1123,7 @@ class ItemIssuanceResponse(UTCResponseBase):
 class CheckOutRecordBase(BaseModel):
     """Base checkout record schema"""
 
-    expected_return_at: Optional[datetime] = None
+    expected_return_at: Optional[UTCDateTime] = None
     checkout_reason: Optional[FreeText] = None
 
 
@@ -1993,7 +1993,7 @@ class EquipmentRequestFulfill(BaseModel):
     fulfillment_type: FulfillmentTypeLiteral
     item_id: Optional[UUID] = None
     quantity: Optional[int] = Field(default=None, ge=1)
-    expected_return_at: Optional[datetime] = None
+    expected_return_at: Optional[UTCDateTime] = None
     override_allowance: bool = False
     substitution_override_reason: Optional[FreeText] = Field(
         default=None,
