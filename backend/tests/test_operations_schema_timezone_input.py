@@ -20,7 +20,11 @@ from app.schemas.apparatus import (
     ApparatusPhotoBase,
     ApparatusPhotoCreate,
 )
-from app.schemas.inventory import CheckOutCreate, EquipmentRequestFulfill
+from app.schemas.inventory import (
+    CheckOutCreate,
+    CheckoutExtendRequest,
+    EquipmentRequestFulfill,
+)
 from app.schemas.public_portal import PublicPortalAPIKeyCreate, PublicPortalAPIKeyUpdate
 from app.schemas.storefront import StoreOrderWindowCreate, StoreOrderWindowUpdate
 
@@ -106,6 +110,27 @@ class TestInventoryCheckout:
         )
 
         assert _stored(data.expected_return_at) == "'2026-10-24 22:00:00'"
+
+
+class TestCheckoutExtend:
+    def test_offset_return_time_is_stored_as_the_utc_instant(self):
+        due = (datetime.now(EDT) + timedelta(days=7)).replace(microsecond=0)
+        data = CheckoutExtendRequest(expected_return_at=due.isoformat())
+
+        assert data.expected_return_at.utcoffset() == timedelta(0)
+        assert _stored(data.expected_return_at) == _stored(due.astimezone(timezone.utc))
+
+    def test_naive_return_time_is_read_as_utc(self):
+        due = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=7)
+        data = CheckoutExtendRequest(expected_return_at=due)
+
+        assert data.expected_return_at.tzinfo is not None
+        assert _stored(data.expected_return_at) == _stored(due)
+
+    def test_past_time_is_still_refused(self):
+        past = datetime.now(EDT) - timedelta(hours=1)
+        with pytest.raises(ValidationError, match="must be in the future"):
+            CheckoutExtendRequest(expected_return_at=past)
 
 
 class TestEquipmentRequestFulfill:
