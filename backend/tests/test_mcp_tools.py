@@ -1083,6 +1083,47 @@ class TestScheduleVisibility:
         assert len(open_shifts["items"]) == 2
 
 
+class TestOpenShiftsExcludeEnded:
+    """``list_open_shifts`` offers the same candidates as the Open Shifts
+    board: a shift dated today whose end has passed has no gap left to
+    fill, so it is not listed even though the date window still covers it."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_a_shift_that_has_ended_is_not_listed(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        now = datetime.now(timezone.utc)
+        today = now.date()
+        ended = Shift(
+            organization_id=org_id,
+            shift_date=today,
+            start_time=now - timedelta(hours=6),
+            end_time=now - timedelta(hours=1),
+            min_staffing=2,
+            open_to_all_members=True,
+        )
+        running = Shift(
+            organization_id=org_id,
+            shift_date=today,
+            start_time=now - timedelta(hours=1),
+            end_time=now + timedelta(hours=4),
+            min_staffing=2,
+            open_to_all_members=True,
+        )
+        db_session.add_all([ended, running])
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        listed = await _call(
+            server,
+            principal,
+            "list_open_shifts",
+            start_date=(today - timedelta(days=1)).isoformat(),
+            end_date=(today + timedelta(days=1)).isoformat(),
+        )
+        assert [s["id"] for s in listed["items"]] == [running.id]
+
+
 class TestEighthRoundFindings:
     """Regressions for the eighth review round on #2197."""
 
