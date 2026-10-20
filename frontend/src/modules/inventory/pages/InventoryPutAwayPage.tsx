@@ -30,12 +30,11 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { AlertTriangle, ArrowLeft, Box, Check, CloudOff, Loader2, Nfc, Package, X } from 'lucide-react';
+import { AlertTriangle, Box, Check, CloudOff, Loader2, Nfc, Package, X } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { useNfcScanner } from '../../../hooks/useNfcScanner';
 import { useScanFeedback } from '../../../hooks/useScanFeedback';
 import { ScanSuccessFlash } from '../../../components/ux/ScanSuccessFlash';
-import { Breadcrumbs } from '../../../components/ux';
 import { parseInventoryTagCode } from '../../../constants/nfc';
 import { getErrorMessage, isNetworkError } from '../../../utils/errorHandling';
 import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
@@ -47,6 +46,7 @@ import { newOfflineId, putAwaySessionItem, replayTap } from '../utils/nfcOffline
 import type { StorageAreaResponse } from '../types';
 import type { InventoryNfcPutAwayReplayRequest, InventoryNfcPutAwayResponse } from '../types/nfc';
 import { MAX_AUDIT_TAPS } from '../types/nfc';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 interface Shelf {
   id: string;
@@ -368,24 +368,15 @@ export const InventoryPutAwayPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 sm:px-6">
+    <div className="mx-auto max-w-7xl space-y-4">
       <ScanSuccessFlash active={flashing} />
-      <Breadcrumbs underHub="/inventory/admin" />
-      <Link
-        to="/inventory/storage-areas"
-        className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target justify-start gap-2 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to Storage Areas
-      </Link>
-
-      <header>
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-          <Nfc className="h-5 w-5" /> Put Away by NFC
-        </h1>
-        <p className="text-theme-text-secondary mt-1 text-sm">
-          Tap a shelf, then tap each item you put on it. Or tap one item, then the shelf it goes on.
-        </p>
-      </header>
+      <OperationsPageHeader
+        underHub="/inventory/admin"
+        icon={Nfc}
+        title="Put Away by NFC"
+        subtitle="Tap a shelf, then tap each item you put on it. Or tap one item, then the shelf it goes on."
+        parentCrumbs={[{ label: 'Storage Areas', path: '/inventory/storage-areas' }]}
+      />
 
       {!enabled ? (
         <div className="alert-warning" role="status">
