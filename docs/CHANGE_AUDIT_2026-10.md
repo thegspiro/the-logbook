@@ -5,6 +5,85 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 19 – 20, 2026
+
+Net changes merged to `main` after the
+[October 18 – 19 pass](#change-audit-october-18--19-2026) (written 2026-10-19
+~13:15 UTC) to 2026-10-20 ~12:15 UTC, written against `1da2c1c9`. Eight
+non-merge commits outside the security-review ledgers and two dependency bumps.
+Themes: **Minutes Settings page and archive search**, **screening requirements
+scoped to positions**, and **two count and layout corrections**. `CHANGELOG.md`
+is closed; this section and its wiki handoff are the record.
+
+Wiki handoff:
+[`Recent-Changes-2026-10`](../wiki/Recent-Changes-2026-10.md#recent-changes-october-19--20-2026).
+
+**Migration route.** None. Every change here is code only; no new revision.
+
+### Read this first
+
+1. **Screening requirements now honour "Applies to Positions".** The field
+   (`screening_requirements.applies_to_roles`) was stored and read by nothing, so
+   every active requirement graded every member. A requirement that lists
+   positions now grades only members who hold one; a blank list still means
+   everyone; prospects (no positions) are graded on every requirement. A member
+   left with nothing that applies reads **Not applicable**, never Compliant. A
+   department that had typed a list into the field, expecting it to be ignored,
+   will see rosters change on upgrade. Recorded in `KNOWN_LIMITATIONS.md`.
+   `grace_period_days` is still unwired and keeps its "Not enforced yet" notice.
+2. **The dashboard's overdue-dues count drops part-paid records.** It now uses
+   `dues_overdue_clause`, the rule the dues list, filter, summary and the daily
+   check use. The number can fall after upgrade; the dues screen it links to is
+   unchanged.
+
+### User-visible changes, by area
+
+| Area              | Change                                                                                                                                                                            | Where documented                                 |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Minutes           | One **Settings** button opens `/minutes/settings` (Attendance, Signatures, Reminders, Publishing; `?tab=`) in place of four dialogs; action buttons wrap under the title          | training 04; `MEETING_MINUTES_MODULE.md`         |
+| Minutes           | Search box also searches section, motion and action-item text; every word must appear, quotes for phrases; newest 500 searched; members see circulated/adopted non-executive only | training 04; `MEETING_MINUTES_MODULE.md`         |
+| Minutes           | Signer panel no longer discards the inputs it painted on first render; prepared-motion removal returns the refreshed minutes (MM-18)                                              | `docs/security-review/MM-24-meetings-minutes.md` |
+| Medical screening | Requirements limited to named positions; form relabelled to positions                                                                                                             | training 13; `MEDICAL_SCREENING_MODULE.md`       |
+| Finance           | Dashboard tile counts overdue dues by the dues screen's rule                                                                                                                      | training 11                                      |
+| Layout            | Date and time `form-input` fields pinned so iOS WebKit cannot size them past their grid column (Edit Member Date of Birth overran Personal Email)                                 | this section                                     |
+
+**Security-review passes** found no new fixes except meetings-minutes pass 8
+(MM-18 fixed: a stale motion could still appear in a PUT response, the cause of
+a flaky test; MM-19 and MM-20, lock-free find-or-create races, flagged and
+mirrored into `KNOWN_LIMITATIONS.md`). Others: training-core, training-extended,
+skills-testing, compliance, medical-supplies (15), forms and
+messaging-notifications 0 new; admin-hours pass 9 flagged AH-18 (duplicate
+category-name race, LOW); grants-fundraising GF-9 extended to budget-summary
+fields. Detail in `docs/security-review/PROGRESS.md`. Dependabot bumped the npm
+and Python minor-patch groups.
+
+### Documentation changes in this pass
+
+| File                                                                              | Change                                                         |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `docs/training/04-events-meetings.md`                                             | Settings page section; archive search section; renamed buttons |
+| `docs/training/11-finance.md`                                                     | Dashboard overdue-dues rule                                    |
+| `docs/training/21-october-2026-release-changes.md`                                | Index for this window                                          |
+| `docs/training/SCREENSHOT_CURRENCY.md`, `docs/youtube-scripts/SCRIPT_CURRENCY.md` | Queues                                                         |
+| `wiki/Recent-Changes-2026-10.md`                                                  | Wiki handoff                                                   |
+
+`training/13-medical-screening.md` and `MEDICAL_SCREENING_MODULE.md` were already
+updated by the feature commit and were checked, not edited.
+
+### Screenshots
+
+Nothing was captured. Queued in `docs/training/SCREENSHOT_CURRENCY.md` under
+_Queued by the October 19 – 20 documentation pass_. The Publishing settings,
+Roll listing and Signers screens queued on October 18 – 19 are now sections of
+the Settings page and should be shot there; `04-14-meeting-minutes.png` should be
+replaced (single Settings button).
+
+### Scripts
+
+`docs/youtube-scripts/SCRIPT_CURRENCY.md` has a new queue. Re-record script 07
+(secretary) beats that open the old buttons; script 13-style medical screening
+narration needs one spoken line about positions.
+
 ## Change audit: October 18 – 19, 2026
 
 Net changes merged to `main` from the close of the

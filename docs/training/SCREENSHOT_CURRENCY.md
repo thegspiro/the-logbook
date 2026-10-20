@@ -1,5 +1,29 @@
 # Screenshot currency
 
+## Queued by the October 19 – 20 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
+Nothing was captured by this pass.
+
+### New screens to create
+
+| Guide | Screen to capture | Notes |
+| ----- | ----------------- | ----- |
+| 04 | Minutes page header with the single **Settings** button | Needs `minutes.manage` |
+| 04 | **Minutes > Settings** at desktop width (Attendance section) and at 390px (tab strip) | |
+| 04 | Settings **Signatures**, **Reminders** and **Publishing** sections | Replaces the dialog shots queued on October 18 – 19 |
+| 04 | **Found in the minutes** search card for a two-word search, highlighted snippets, and the newest-500 note | Seed minutes that mention both words |
+| 13 | Requirement form showing **Applies to Positions** with two positions; roster row reading **Not applicable** | |
+
+### Replace
+
+| Image | Why |
+| ----- | --- |
+| `04-14-meeting-minutes.png` | Four settings buttons became one **Settings** button; action buttons wrap under the title |
+| Edit Member shot showing Date of Birth | Date and time fields are now pinned inside their column on iOS; re-shoot on a tablet width if one exists |
+| Any 13 requirement-form shot | Field renamed to positions; the "Not enforced yet" notice is gone (grace period keeps its notice) |
+| Queued 10-18 dialog shots (Publishing settings, Roll listing, Signers) | Superseded; capture the Settings page sections instead |
+
 ## Queued by the October 18 – 19 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).

@@ -1574,27 +1574,66 @@ So every approved meeting records who approved it and when. Creating,
 editing, deleting or approving a meeting — and changing its attendees or
 action items — is recorded in the audit log.
 
+### Minutes settings in one place
+
+_(2026-10-19)_ The four settings buttons that used to crowd the Minutes page
+(roll listing, signers, reminders, publishing) are now one **Settings** button.
+It opens **Minutes > Settings**, a page with four sections down the side (a
+scrolling tab strip on a phone): **Attendance**, **Signatures**, **Reminders**
+and **Publishing**. A section's address ends in `?tab=attendance`, `signatures`,
+`reminders` or `publishing`, so you can bookmark or link to one. What each
+setting does has not changed, only where you find it. The page's action buttons
+also wrap onto their own row under the title, so the title is no longer squeezed
+when the sidebar is open.
+
+_[Screenshot to create: the Minutes page header with the single Settings button;
+the Settings page at desktop width and at 390px.]_
+
+### Searching inside the minutes
+
+_(2026-10-19)_ The search box on the Minutes page now looks at the words in the
+minutes, not only meeting titles. Type two or more characters and a **Found in
+the minutes** card appears under the box, with one entry per set of minutes,
+newest first, and a snippet around each match with the words highlighted. The
+meeting-type filter narrows it.
+
+- **Every word must appear somewhere** in the minutes, not necessarily together:
+  `budget hose` finds minutes that mention both. A word matches where a word
+  starts (`hose` finds `hoses`, not `purchase`). Put a phrase in double quotes to
+  find it exactly as typed.
+- **It searches** titles, every section, motions and their discussion, and action
+  items with their notes and assignee.
+- **You only find what you may read.** Members search circulated and adopted,
+  non-executive minutes. People who manage minutes search everything, and each
+  result shows its status. Drafts and executive sessions are never quoted to a
+  member.
+- **Only the newest 500 sets of minutes are searched.** Past that the card says
+  so; choose a meeting type to reach older ones.
+
+_[Screenshot to create: a search for two words showing the Found in the minutes
+card with highlighted snippets and the 500-limit note.]_
+
 ### Who is listed on the roll (department default and per minutes)
 
 _(2026-10-18)_ The roll is always recorded in full; quorum and the attendance
 reports read all of it. A new setting chooses which statuses a **reader** of the
 minutes sees: **everyone**, **present and excused**, or **present only**. Guests
-are named under every choice. Open **Minutes** and select **Roll listing** to set
-the department default. On draft or rejected minutes the roll panel has its own
+are named under every choice. Open **Minutes**, select **Settings** and choose the
+**Attendance** section to set the department default. On draft or rejected minutes the roll panel has its own
 selector that overrides the default for that one set of minutes (leave it on
 "follow the department" to inherit). The choice applies to the minutes page, the
 PDF, the library copy and the public copy; the public copy leaves out counts that
 are not listed rather than showing zero. Nothing changes until someone sets it.
 
-_[Screenshot to create: the Roll listing dialog, and the roll panel's per-minutes
-selector on a draft.]_
+_[Screenshot to create: the Settings page on its Attendance section, and the roll
+panel's per-minutes selector on a draft.]_
 
 ### Publishing adopted minutes (library and public page)
 
 _(2026-10-18)_ Publishing adopted minutes files the library copy in Documents.
 When the department allows it, it also posts a **public copy** on a hosted
 `/public/minutes` page. Three settings, all **off** by default, are in the
-**Publishing settings** dialog on the Minutes page: public posting, and two
+**Publishing** section of **Minutes > Settings**: public posting, and two
 switches for executive-session minutes (library, public).
 
 - **Republishing** replaces the library document and the public copy in place and
@@ -1608,7 +1647,7 @@ switches for executive-session minutes (library, public).
   publishing refuses if that folder's access was loosened.
 - The Minutes page shows a publishing status line for each set of minutes.
 
-_[Screenshot to create: the Publishing settings dialog; the publishing status
+_[Screenshot to create: the Publishing section of Minutes > Settings; the publishing status
 note on adopted minutes; the public minutes page at phone and desktop widths.]_
 
 ### Circulating and adopting minutes
@@ -1684,7 +1723,7 @@ fingerprint.
 department's signature slots sign them in the app. The slots default to a
 **Recording Secretary** and a **Presiding Officer**, both open to anyone who
 manages minutes; a settings administrator can rename them or name positions
-instead (up to six) under **Minutes → Signers**. To sign, type your name as it
+instead (up to six) under **Minutes > Settings > Signatures**. To sign, type your name as it
 stands on your account and confirm your password, so the signature belongs to a
 person at the keyboard. An account that signs in only through single sign-on
 cannot sign. A slot is signed once, a person may sign more than one slot, and
@@ -1694,7 +1733,7 @@ and corrected, the new version starts unsigned and the earlier signatures stay
 on file against the text they were given for. Signing is rate-limited, since it
 is a place a password could be guessed from a signed-in session.
 
-_[Screenshots to create: Minutes → Signers with the two default slots; the Sign
+_[Screenshots to create: Minutes > Settings > Signatures with the two default slots; the Sign
 dialog (name and password); the Signatures panel on adopted minutes with one slot
 signed and one open.]_
 

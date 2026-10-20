@@ -5,6 +5,49 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 19 – 20, 2026
+
+This wiki handoff is usable without the repository `docs/` tree. The engineering
+audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
+Predecessor: [October 18 – 19](#recent-changes-october-18--19-2026).
+
+**The headline:** Minutes settings live on one page, the Minutes search box finds
+words inside the minutes, and medical-screening requirements now apply only to the
+positions they name.
+
+### Read this first
+
+**If you run the server:** no migrations and nothing to configure.
+
+**If you administer a department:**
+
+- **Check your screening requirements.** If **Applies to Positions** has text in
+  it, that list now decides who is graded. Leave it blank for everyone. A member
+  with no applicable requirement reads **Not applicable**.
+- **The dashboard's overdue-dues number may drop.** Part-paid dues are Partial,
+  not overdue, matching the dues page.
+
+### What changed, by area
+
+- **Minutes:** a single **Settings** button opens a page with Attendance,
+  Signatures, Reminders and Publishing sections; each can be bookmarked. The old
+  separate buttons and dialogs are gone.
+- **Minutes search:** type two or more characters to search titles, sections,
+  motions and action items. All words must appear; use quotes for a phrase.
+  Members only find circulated or adopted, non-executive minutes. The newest 500
+  sets are searched.
+- **Medical screening:** requirements can be limited to positions; prospects are
+  graded on all of them.
+- **Finance dashboard:** the overdue-dues count follows the dues page.
+- **iPad and iPhone:** date and time fields no longer overlap the field beside
+  them (Edit Member).
+- **Reliability:** removing a prepared motion now returns the right minutes
+  (security review MM-18); the signer panel keeps what you type.
+
+Screenshots to create are listed in the repository's `SCREENSHOT_CURRENCY.md`:
+Minutes Settings page, search results card, and the Applies to Positions form.
+
 ## Recent changes: October 18 – 19, 2026
 
 This wiki handoff is usable without the repository `docs/` tree. The engineering

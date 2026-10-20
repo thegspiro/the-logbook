@@ -1418,6 +1418,12 @@ After creating a schedule, you need to generate individual dues records for each
 | **Waived**  | The dues have been waived by an officer (e.g., financial hardship, service credit)                        |
 | **Exempt**  | The member is exempt from this dues schedule (e.g., Life members exempt from annual dues)                 |
 
+_(2026-10-19)_ The **overdue dues** number on the dashboard's finance tile uses
+the same rule as this page: Overdue records, plus Pending records past their due
+date with nothing paid. A Partial record is not counted, because it shows as
+Partial here. Before, the tile counted part-paid records too and read higher than
+the list it links to.
+
 ### Recording Payments
 
 **Required Permission:** finance manager
