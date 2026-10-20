@@ -909,13 +909,13 @@ const NotificationsPage: React.FC = () => {
                 const display = getTriggerDisplay(rule.trigger);
                 return (
                   <div key={rule.id} className="stat-card">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className={`bg-theme-surface-secondary rounded-lg p-2 ${display.color}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center space-x-4">
+                        <div className={`bg-theme-surface-secondary shrink-0 rounded-lg p-2 ${display.color}`}>
                           {display.icon}
                         </div>
-                        <div>
-                          <div className="flex items-center space-x-2">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <h3 className="text-theme-text-primary font-semibold">{rule.name}</h3>
                             <span className="bg-theme-surface-secondary text-theme-text-muted rounded-sm px-2 py-0.5 text-xs">
                               {formatCategory(rule.category)}
@@ -942,7 +942,7 @@ const NotificationsPage: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-3">
+                      <div className="flex shrink-0 items-center space-x-3">
                         {rule.enabled ? (
                           <span className="flex items-center space-x-1 text-sm text-green-700 dark:text-green-400">
                             <CheckCircle className="h-4 w-4" />

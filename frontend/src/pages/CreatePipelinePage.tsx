@@ -1674,7 +1674,7 @@ const CreatePipelinePage: React.FC = () => {
                   }`}
                 >
                   {isComplete ? <Check className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
-                  <span className="sr-only sm:not-sr-only">{step.label}</span>
+                  <span className="sr-only lg:not-sr-only">{step.label}</span>
                 </button>
               </React.Fragment>
             );

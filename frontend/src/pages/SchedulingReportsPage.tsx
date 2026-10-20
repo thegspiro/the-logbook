@@ -339,9 +339,9 @@ export const SchedulingReportsPage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-7xl p-6">
+    <div>
       {/* No heading here. This renders only inside SchedulingAdminReportsPage,
-          which supplies the page chrome — trail, back link, icon and the <h1>
+          which supplies the page chrome and its padding — trail, back link, icon and the <h1>
           naming this page. A second identical "Scheduling Reports" heading is a
           duplicate landmark to a screen reader and a repeated title to everyone
           else. */}
@@ -455,7 +455,7 @@ export const SchedulingReportsPage: React.FC = () => {
           ) : memberHoursReport ? (
             <div>
               {/* Summary Stats */}
-              <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard
                   label="Total Members"
                   value={memberHoursReport.total_members}
@@ -624,7 +624,7 @@ export const SchedulingReportsPage: React.FC = () => {
           ) : (
             <div>
               {/* Summary Stats */}
-              <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard
                   label="Total Days"
                   value={coverageData.length}
@@ -1012,7 +1012,7 @@ export const SchedulingReportsPage: React.FC = () => {
                   three requirements is three checks. The payload carries no
                   distinct-member count, and the labels say what is summed
                   rather than claiming people. */}
-              <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard
                   label="Requirements"
                   value={complianceData.length}

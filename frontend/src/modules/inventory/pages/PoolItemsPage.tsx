@@ -553,7 +553,7 @@ const PoolItemsPage: React.FC = () => {
 
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
+        <div className="relative min-w-0 flex-1">
           <Search size={16} className="text-theme-text-muted absolute top-1/2 left-3 -translate-y-1/2" />
           <input
             autoCapitalize="none"
