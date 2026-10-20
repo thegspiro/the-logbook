@@ -583,14 +583,14 @@ export const PipelineSettingsPage: React.FC = () => {
                         <span
                           className={`rounded px-2 py-0.5 text-xs ${
                             currentPipeline.is_active
-                              ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                              ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300'
                               : 'bg-theme-surface-hover text-theme-text-muted'
                           }`}
                         >
                           {currentPipeline.is_active ? 'Active' : 'Inactive'}
                         </span>
                         {currentPipeline.is_default && (
-                          <span className="flex items-center gap-1 rounded-sm bg-amber-500/20 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400">
+                          <span className="flex items-center gap-1 rounded-sm bg-amber-500/20 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-400">
                             <Star className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
                             Default
                           </span>

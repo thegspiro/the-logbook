@@ -130,7 +130,7 @@ const ActiveSessionsTab: React.FC = () => {
                           </span>
                         )}
                         {isOverLimit && (
-                          <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
+                          <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-800 dark:text-red-400">
                             Over limit
                           </span>
                         )}

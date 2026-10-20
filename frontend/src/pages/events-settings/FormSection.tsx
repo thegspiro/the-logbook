@@ -25,9 +25,9 @@ const FormSection: React.FC<FormSectionProps> = ({
   const statusBadge = (status: string) => {
     switch (status) {
       case FormStatus.PUBLISHED:
-        return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30';
+        return 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/30';
       case FormStatus.DRAFT:
-        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
+        return 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/30';
       case FormStatus.ARCHIVED:
         return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
       default:
@@ -87,7 +87,7 @@ const FormSection: React.FC<FormSectionProps> = ({
                           {form.status}
                         </span>
                         {form.is_public && (
-                          <span className="inline-flex items-center gap-1 rounded-sm border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700 dark:text-cyan-400">
+                          <span className="inline-flex items-center gap-1 rounded-sm border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
                             <Globe className="h-3 w-3" />
                             Public
                           </span>

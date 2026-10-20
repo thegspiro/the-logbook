@@ -893,9 +893,9 @@ export const ShiftReportsTab: React.FC = () => {
     const colorMap: Record<number, string> = {
       1: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
       2: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/20',
-      3: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+      3: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
       4: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-      5: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+      5: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
     };
 
     return (
@@ -1194,7 +1194,7 @@ export const ShiftReportsTab: React.FC = () => {
           {statusStyle.label}
         </span>
         {isMyReport && !report.trainee_acknowledged && report.review_status === SubmissionStatus.APPROVED && (
-          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-400">
             Needs Acknowledgment
           </span>
         )}
@@ -1209,7 +1209,7 @@ export const ShiftReportsTab: React.FC = () => {
             </span>
           )}
         {report.trainee_acknowledged && (
-          <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+          <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:text-green-400">
             Acknowledged
           </span>
         )}
@@ -1527,7 +1527,7 @@ export const ShiftReportsTab: React.FC = () => {
                             onClick={() => toggleSkill(setDraftForm, skill)}
                             className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
                               isSelected
-                                ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                                ? 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-400'
                                 : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
                             }`}
                           >
@@ -1774,7 +1774,7 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Encryption notice for officers */}
       {canManage && viewMode === 'create' && (
-        <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-xs text-green-700 dark:text-green-400">
+        <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-xs text-green-800 dark:text-green-400">
           <Shield className="h-3.5 w-3.5 shrink-0" />
           Narratives and evaluations are encrypted at rest (AES-256).
         </div>
@@ -1782,7 +1782,7 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Offline indicator */}
       {!isOnline && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-400">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
           You&apos;re offline. Reports are saved on this device and sent automatically when you&apos;re back online.
           {pendingOfflineCount > 0 && <span className="ml-1 font-medium">({pendingOfflineCount} pending)</span>}
@@ -2229,7 +2229,7 @@ export const ShiftReportsTab: React.FC = () => {
                                           }}
                                           className={`rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
                                             selected
-                                              ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                                              ? 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-400'
                                               : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
                                           }`}
                                         >
@@ -2517,7 +2517,7 @@ export const ShiftReportsTab: React.FC = () => {
                               oldestDays >= 7
                                 ? 'bg-red-500/10 text-red-700 dark:text-red-400'
                                 : oldestDays >= 3
-                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                  ? 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
                                   : 'bg-theme-surface-hover text-theme-text-muted'
                             }`}
                           >

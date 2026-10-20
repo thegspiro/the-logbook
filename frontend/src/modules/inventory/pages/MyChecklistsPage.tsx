@@ -126,7 +126,7 @@ const TIMING_SHORT: Record<string, string> = {
 const timingBadgeClass = (timing: string | undefined) =>
   timing === 'start_of_shift'
     ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-    : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400';
+    : 'border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-400';
 
 const DAY_HEADING_CLASS =
   'bg-theme-bg text-theme-text-primary mobile-header-inset sticky z-10 flex items-baseline gap-2 py-1.5 text-sm font-semibold md:top-0';
@@ -861,7 +861,7 @@ export const MyChecklistsPage: React.FC = () => {
                               className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
                                 tmpl.checkTiming === 'start_of_shift'
                                   ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-                                  : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                  : 'border-amber-500/20 bg-amber-500/10 text-amber-800 dark:text-amber-400'
                               }`}
                             >
                               {TIMING_LABELS[tmpl.checkTiming ?? ''] ?? tmpl.checkTiming}

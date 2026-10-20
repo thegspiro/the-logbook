@@ -1229,7 +1229,7 @@ const StepReview: React.FC<{
             <span className="bg-theme-surface-hover text-theme-text-secondary rounded-sm px-2 py-1">{info.code}</span>
           )}
           {info.target_position && (
-            <span className="rounded-sm bg-red-500/20 px-2 py-1 text-red-700 dark:text-red-400">
+            <span className="rounded-sm bg-red-500/20 px-2 py-1 text-red-800 dark:text-red-400">
               {TARGET_POSITIONS.find((position) => position.value === info.target_position)?.label ??
                 info.target_position}
             </span>
@@ -1238,7 +1238,7 @@ const StepReview: React.FC<{
             {info.structure_type === 'phases' ? 'Phases, in order' : 'One list, any order'}
           </span>
           {info.is_template && (
-            <span className="rounded-sm bg-green-500/20 px-2 py-1 text-green-700 dark:text-green-400">Template</span>
+            <span className="rounded-sm bg-green-500/20 px-2 py-1 text-green-800 dark:text-green-400">Template</span>
           )}
           {info.prerequisite_program_ids.length > 0 && (
             <span className="bg-theme-surface-hover text-theme-text-secondary rounded-sm px-2 py-1">
@@ -1268,7 +1268,7 @@ const StepReview: React.FC<{
                 </span>
               )}
               {phase?.requires_manual_advancement && (
-                <span className="rounded-sm bg-yellow-500/20 px-2 py-1 text-yellow-700 dark:text-yellow-400">
+                <span className="rounded-sm bg-yellow-500/20 px-2 py-1 text-yellow-800 dark:text-yellow-400">
                   Officer must approve advancement
                 </span>
               )}

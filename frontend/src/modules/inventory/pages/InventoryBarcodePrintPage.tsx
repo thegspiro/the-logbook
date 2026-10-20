@@ -376,7 +376,7 @@ function getBarcodeValue(item: InventoryItem): string | null {
 function labelToggleClass(active: boolean): string {
   return `rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
     active
-      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-800 dark:text-emerald-400'
       : 'border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-secondary'
   }`;
 }

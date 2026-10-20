@@ -74,7 +74,7 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({ te
                 })()}
               </div>
               {t.is_default && (
-                <span className="shrink-0 rounded-sm bg-green-500/10 px-1.5 py-0.5 text-[10px] text-green-700 dark:text-green-400">
+                <span className="shrink-0 rounded-sm bg-green-500/10 px-1.5 py-0.5 text-[10px] text-green-800 dark:text-green-400">
                   Default
                 </span>
               )}

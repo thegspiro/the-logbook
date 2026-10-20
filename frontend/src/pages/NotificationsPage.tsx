@@ -933,7 +933,7 @@ const NotificationsPage: React.FC = () => {
                               beats the Active badge below implying it works. */}
                             {!rule.enforced && (
                               <span
-                                className="rounded-sm bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400"
+                                className="rounded-sm bg-amber-500/15 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-400"
                                 title="No notification is wired to this trigger yet, so this rule has no effect."
                               >
                                 Not enforced

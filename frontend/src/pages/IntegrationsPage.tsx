@@ -2106,7 +2106,7 @@ const IntegrationsPage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1">
                     {integration.status === ConnectionStatus.CONNECTED && (
-                      <span className="flex items-center space-x-1 rounded-sm border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">
+                      <span className="flex items-center space-x-1 rounded-sm border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
                         {activation ? <Check className="h-3 w-3" /> : <Wifi className="h-3 w-3" />}
                         <span>{activation ? 'Active' : 'Connected'}</span>
                       </span>

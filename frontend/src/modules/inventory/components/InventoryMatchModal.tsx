@@ -38,8 +38,8 @@ const CONFIDENCE_LABEL: Record<string, string> = {
 };
 
 const CONFIDENCE_CLASS: Record<string, string> = {
-  exact: 'bg-green-500/10 text-green-700 dark:text-green-400',
-  strong: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  exact: 'bg-green-500/10 text-green-800 dark:text-green-400',
+  strong: 'bg-amber-500/10 text-amber-800 dark:text-amber-400',
   weak: 'bg-theme-surface-secondary text-theme-text-muted',
 };
 

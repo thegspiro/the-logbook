@@ -41,7 +41,7 @@ const CHANGELOG: ChangelogEntry[] = [
 const STORAGE_KEY = 'logbook_last_seen_version';
 
 const typeStyles = {
-  feature: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30',
+  feature: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/30',
   improvement: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
   fix: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/30',
 };

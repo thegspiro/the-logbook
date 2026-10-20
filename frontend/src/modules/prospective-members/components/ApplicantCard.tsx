@@ -52,7 +52,7 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({ applicant, onClick
           className={`mb-2 flex items-center gap-1.5 rounded px-2 py-1 text-xs ${
             alertLevel === 'critical'
               ? 'bg-red-500/10 text-red-700 dark:text-red-400'
-              : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+              : 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
           }`}
         >
           <AlertTriangle className="h-3 w-3 shrink-0" />

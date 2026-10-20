@@ -138,8 +138,8 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({ equipment, loadingTa
                   <span
                     className={`rounded px-2 py-0.5 text-xs ${
                       item.isPresent
-                        ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-                        : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
+                        ? 'bg-green-500/10 text-green-800 dark:text-green-400'
+                        : 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400'
                     }`}
                   >
                     {item.isPresent ? 'Present' : 'Missing'}

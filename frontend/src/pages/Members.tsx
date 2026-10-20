@@ -322,11 +322,11 @@ const Members: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case UserStatus.ACTIVE:
-        return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30';
+        return 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/30';
       case UserStatus.INACTIVE:
         return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
       case UserStatus.LEAVE:
-        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
+        return 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/30';
       case UserStatus.RETIRED:
         return 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30';
       default:
@@ -410,7 +410,7 @@ const Members: React.FC = () => {
         <div className="card mb-6 p-4">
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row md:flex-wrap">
             {/* Search */}
-            <div className="relative w-full flex-1 md:min-w-[16rem] md:max-w-md">
+            <div className="relative w-full flex-1 md:max-w-md md:min-w-[16rem]">
               <Search className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 transform" />
               <input
                 autoCapitalize="none"

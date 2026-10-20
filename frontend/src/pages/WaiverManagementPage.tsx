@@ -68,9 +68,9 @@ function getStatusBadge(waiver: { start_date: string; end_date: string | null; a
     return { label: 'Permanent', color: 'bg-purple-500/20 text-purple-700 dark:text-purple-400' };
   }
   if (waiver.end_date < today) {
-    return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400' };
+    return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-400' };
   }
-  return { label: 'Active', color: 'bg-green-500/20 text-green-700 dark:text-green-400' };
+  return { label: 'Active', color: 'bg-green-500/20 text-green-800 dark:text-green-400' };
 }
 
 // Unified waiver type combining leaves and training waivers
@@ -400,7 +400,7 @@ export const WaiverManagementPage: React.FC = () => {
               >
                 {tab.label}
                 {tab.id === 'active' && activeWaivers.length > 0 && (
-                  <span className="ml-2 rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">
+                  <span className="ml-2 rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
                     {activeWaivers.length}
                   </span>
                 )}
@@ -543,7 +543,7 @@ export const WaiverManagementPage: React.FC = () => {
               <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Create New Waiver</h2>
 
               {createSuccess && (
-                <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
+                <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-800 dark:text-green-400">
                   {createSuccess}
                 </div>
               )}

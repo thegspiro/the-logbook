@@ -120,7 +120,7 @@ export const CourseLibraryPicker: React.FC<CourseLibraryPickerProps> = ({
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
                   course
                     ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
-                    : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                    : 'bg-amber-500/15 text-amber-800 dark:text-amber-300'
                 }`}
               >
                 {course ? course.name : 'Course no longer in the library'}

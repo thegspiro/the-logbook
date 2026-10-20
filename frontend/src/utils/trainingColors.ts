@@ -11,15 +11,15 @@ import { SubmissionStatus } from '../constants/enums';
 export const getTrainingStatusColor = (status: string) => {
   switch (status) {
     case 'completed':
-      return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
+      return 'bg-green-500/10 text-green-800 dark:bg-green-500/20 dark:text-green-400';
     case SubmissionStatus.APPROVED:
-      return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
+      return 'bg-green-500/10 text-green-800 dark:bg-green-500/20 dark:text-green-400';
     case 'active':
       return 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400';
     case 'in_progress':
       return 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400';
     case SubmissionStatus.PENDING_REVIEW:
-      return 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400';
+      return 'bg-yellow-500/10 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
     case SubmissionStatus.REJECTED:
       return 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400';
     case SubmissionStatus.REVISION_REQUESTED:

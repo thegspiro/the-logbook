@@ -131,7 +131,7 @@ const NeedsAttention: React.FC<{
             <span className="text-theme-text-secondary text-sm">{row.party}</span>
             <span className="text-theme-text-muted text-sm">{row.when}</span>
             <span
-              className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ${row.severity === 'Critical' ? 'bg-red-500/15 text-red-700 dark:text-red-300' : row.severity === 'High' ? 'bg-orange-500/15 text-orange-800 dark:text-orange-300' : 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300'}`}
+              className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ${row.severity === 'Critical' ? 'bg-red-500/15 text-red-700 dark:text-red-300' : row.severity === 'High' ? 'bg-orange-500/15 text-orange-800 dark:text-orange-300' : 'bg-yellow-500/15 text-yellow-800 dark:text-yellow-300'}`}
             >
               {row.severity}
             </span>
@@ -584,7 +584,7 @@ export const InventoryAdminHub: React.FC = () => {
     items: { badge: summary?.non_medical_items },
     checkouts: {
       badge: summary?.overdue_checkouts,
-      badgeColor: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+      badgeColor: 'bg-amber-500/10 text-amber-800 dark:text-amber-400',
     },
     maintenance: {
       badge: summary?.maintenance_due_count,
@@ -592,15 +592,15 @@ export const InventoryAdminHub: React.FC = () => {
     },
     requests: {
       badge: pendingRequests > 0 ? pendingRequests : undefined,
-      badgeColor: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+      badgeColor: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
     },
     returns: {
       badge: pendingReturns > 0 ? pendingReturns : undefined,
-      badgeColor: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+      badgeColor: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
     },
     reorder: {
       badge: lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined,
-      badgeColor: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+      badgeColor: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
     },
   };
   const statFor = (id: string): CardStat => cardStats[id] ?? {};

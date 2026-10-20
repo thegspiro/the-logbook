@@ -325,7 +325,7 @@ const SubmissionViewer = ({
                       </span>
                     ) : allOk ? (
                       <span
-                        className="flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-700 dark:text-green-400"
+                        className="flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-800 dark:text-green-400"
                         title="Integration succeeded"
                       >
                         <CheckCircle2 className="h-3 w-3" />

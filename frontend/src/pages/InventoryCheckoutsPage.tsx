@@ -365,7 +365,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                                 Overdue
                               </span>
                             ) : (
-                              <span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                              <span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                                 Active
                               </span>
                             )}

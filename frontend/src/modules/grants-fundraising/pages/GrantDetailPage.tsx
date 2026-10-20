@@ -1124,7 +1124,7 @@ export const GrantDetailPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => void handleMarkTaskComplete(task.id)}
-                                className="inline-flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/20"
+                                className="inline-flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-800 transition-colors hover:bg-green-500/20"
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                                 Mark Complete

@@ -509,7 +509,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   className={`rounded px-2 py-1 text-xs font-semibold ${
                     requirement.source === 'national'
                       ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
-                      : 'bg-green-500/20 text-green-700 dark:text-green-400'
+                      : 'bg-green-500/20 text-green-800 dark:text-green-400'
                   }`}
                 >
                   {requirement.registry_name || (requirement.source === 'national' ? 'National' : 'State')}
@@ -592,7 +592,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
               onClick={onToggleActive}
               className={`rounded-lg p-2 transition-colors ${
                 requirement.active
-                  ? 'bg-green-600/20 text-green-700 hover:bg-green-600/30 dark:text-green-400'
+                  ? 'bg-green-600/20 text-green-800 hover:bg-green-600/30 dark:text-green-400'
                   : 'bg-theme-surface-hover/20 text-theme-text-muted hover:bg-theme-surface-hover/30'
               }`}
               title={requirement.active ? 'Deactivate' : 'Activate'}
@@ -622,7 +622,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
             </button>
             <button
               onClick={onDelete}
-              className="rounded-lg bg-red-600/20 p-2 text-red-700 transition-colors hover:bg-red-600/30 dark:text-red-400"
+              className="rounded-lg bg-red-600/20 p-2 text-red-800 transition-colors hover:bg-red-600/30 dark:text-red-400"
               title="Delete"
               aria-label={`Delete ${requirement.name}`}
             >

@@ -2836,12 +2836,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         entry.status === 'assigned'
                           ? {
                               label: 'On shift',
-                              cls: 'bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20',
+                              cls: 'bg-green-500/10 text-green-800 dark:text-green-300 border-green-500/20',
                             }
                           : entry.status === 'on_leave'
                             ? {
                                 label: 'On leave',
-                                cls: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
+                                cls: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/20',
                               }
                             : {
                                 label: 'Available',

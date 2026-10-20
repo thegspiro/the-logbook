@@ -32,10 +32,10 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  applied: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30',
+  applied: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/30',
   matched: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
-  unmatched: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
-  ambiguous: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
+  unmatched: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/30',
+  ambiguous: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/30',
   ignored: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border',
   duplicate: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border',
 };

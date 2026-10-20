@@ -5981,8 +5981,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       aria-label="Template status"
       className={`flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
         form.isActive
-          ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-          : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+          ? 'bg-green-500/10 text-green-800 dark:text-green-400'
+          : 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
       }`}
     >
       {form.isActive ? 'Published' : 'Draft'}
@@ -6145,7 +6145,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             const first = blockers[0];
             if (first) goToBlocker(first.anchorId, first.expandKey, first.focusId, first.editorTarget, first.addKey);
           }}
-          className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-700 hover:bg-amber-500/25 dark:text-amber-400"
+          className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-800 hover:bg-amber-500/25 dark:text-amber-400"
         >
           {blockers.length} to fix
         </button>

@@ -862,7 +862,7 @@ const RecertificationSection: React.FC = () => {
                 <span
                   className={`rounded-sm px-2 py-0.5 text-xs ${
                     pathway.active
-                      ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                      ? 'bg-green-500/10 text-green-800 dark:text-green-400'
                       : 'bg-theme-surface-secondary text-theme-text-muted'
                   }`}
                 >
@@ -1317,7 +1317,7 @@ const MultiAgencySection: React.FC = () => {
                   </div>
                 </div>
                 {exercise.nims_compliant && (
-                  <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">
+                  <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
                     NIMS Compliant
                   </span>
                 )}

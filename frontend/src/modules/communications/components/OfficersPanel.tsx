@@ -36,7 +36,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 const SOURCE_BADGES: Record<DepartmentOfficer['source'], { label: string; className: string; title: string }> = {
   assigned: {
     label: 'Assigned',
-    className: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30',
+    className: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/30',
     title: 'Pinned by an administrator on this screen',
   },
   auto: {

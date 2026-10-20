@@ -84,19 +84,19 @@ const complianceStatusStyle = (status: string): { label: string; badge: string; 
     case 'compliant':
       return {
         label: 'On track',
-        badge: 'bg-green-500/20 text-green-700 dark:text-green-400',
+        badge: 'bg-green-500/20 text-green-800 dark:text-green-400',
         bar: 'bg-green-500',
       };
     case 'at_risk':
       return {
         label: 'At risk',
-        badge: 'bg-amber-500/20 text-amber-700 dark:text-amber-400',
+        badge: 'bg-amber-500/20 text-amber-800 dark:text-amber-400',
         bar: 'bg-amber-500',
       };
     default:
       return {
         label: 'Behind',
-        badge: 'bg-red-500/20 text-red-700 dark:text-red-400',
+        badge: 'bg-red-500/20 text-red-800 dark:text-red-400',
         bar: 'bg-red-500',
       };
   }
@@ -362,11 +362,11 @@ const AdminHoursPage: React.FC = () => {
   const statusColor = (status: string) => {
     switch (status) {
       case 'approved':
-        return 'bg-green-500/20 text-green-700 dark:text-green-400';
+        return 'bg-green-500/20 text-green-800 dark:text-green-400';
       case 'pending':
-        return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
+        return 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-400';
       case 'rejected':
-        return 'bg-red-500/20 text-red-700 dark:text-red-400';
+        return 'bg-red-500/20 text-red-800 dark:text-red-400';
       case 'active':
         return 'bg-blue-500/20 text-blue-700 dark:text-blue-400';
       case 'withdrawn':

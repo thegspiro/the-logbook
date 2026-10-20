@@ -51,11 +51,11 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+  pending: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
   approved: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
   ordered: 'bg-purple-500/10 text-purple-700 dark:text-purple-400',
-  partially_received: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400',
-  received: 'bg-green-500/10 text-green-700 dark:text-green-400',
+  partially_received: 'bg-cyan-500/10 text-cyan-800 dark:text-cyan-400',
+  received: 'bg-green-500/10 text-green-800 dark:text-green-400',
   cancelled: 'bg-theme-surface-secondary text-theme-text-muted',
 };
 
@@ -251,7 +251,7 @@ const ReorderFormModal: React.FC<{
                 <button
                   key={alert.category_id}
                   type="button"
-                  className="touch:min-h-[44px] touch:min-w-[44px] rounded bg-yellow-500/20 px-2 py-1 text-xs text-yellow-700 hover:bg-yellow-500/30 dark:text-yellow-300"
+                  className="touch:min-h-[44px] touch:min-w-[44px] rounded bg-yellow-500/20 px-2 py-1 text-xs text-yellow-800 hover:bg-yellow-500/30 dark:text-yellow-300"
                   onClick={() => {
                     const firstItem = alert.items?.[0];
                     setF((p) => ({

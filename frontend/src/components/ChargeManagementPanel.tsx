@@ -10,7 +10,7 @@ import { formatCurrency } from '@/utils/currencyFormatting';
 import toast from 'react-hot-toast';
 
 const CHARGE_STATUS_BADGES: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+  pending: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
   charged: 'bg-red-500/10 text-red-700 dark:text-red-400',
   waived: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
 };

@@ -74,12 +74,12 @@ interface QueueGroup {
  */
 const TONE_CLASSES: Record<CellTone, { pill: string; bar: string; pip: string }> = {
   [CellTone.MET]: {
-    pill: 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300',
+    pill: 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-300',
     bar: 'bg-green-600 dark:bg-green-400',
     pip: 'bg-green-600 dark:bg-green-400',
   },
   [CellTone.SHORT]: {
-    pill: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    pill: 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300',
     bar: 'bg-amber-500 dark:bg-amber-400',
     pip: 'bg-amber-500 dark:bg-amber-400',
   },
@@ -127,9 +127,9 @@ const STANDING_CLASSES: Record<Standing, { pill: string; dot: string; head: stri
     head: 'bg-orange-500/10 text-orange-800 dark:text-orange-300',
   },
   [Standing.COMPLIANT]: {
-    pill: 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300',
+    pill: 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-300',
     dot: 'bg-green-600 dark:bg-green-400',
-    head: 'bg-green-500/10 text-green-700 dark:text-green-300',
+    head: 'bg-green-500/10 text-green-800 dark:text-green-300',
   },
   // Muted, not green: nothing grades these, so there is no standing to colour.
   [Standing.NOT_APPLICABLE]: {

@@ -11,8 +11,8 @@ import { useDeepLinkedRecord } from '../hooks/useDeepLinkedRecord';
 import toast from 'react-hot-toast';
 
 const STATUS_BADGES: Record<string, string> = {
-  requested: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
-  received: 'bg-green-500/10 text-green-700 dark:text-green-400',
+  requested: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
+  received: 'bg-green-500/10 text-green-800 dark:text-green-400',
   denied: 'bg-red-500/10 text-red-700 dark:text-red-400',
   completed: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
 };

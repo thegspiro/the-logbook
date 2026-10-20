@@ -584,7 +584,7 @@ const EquipmentKitsPage: React.FC = () => {
               <span
                 className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
                   detailKit.active
-                    ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                    ? 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-400'
                     : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
                 }`}
               >

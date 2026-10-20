@@ -597,7 +597,7 @@ const InventoryMaintenancePage: React.FC = () => {
                     {rec.maintenance_type.replace(/_/g, ' ')}
                   </span>
                   {rec.passed === true && (
-                    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-400">
+                    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-800 dark:text-emerald-400">
                       Passed
                     </span>
                   )}

@@ -428,7 +428,7 @@ const InventoryMembersPage: React.FC = () => {
                       <CountBadge
                         label="checked out"
                         count={member.checkout_count}
-                        color="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+                        color="bg-yellow-500/10 text-yellow-800 dark:text-yellow-400"
                       />
                       <CountBadge
                         label="issued"

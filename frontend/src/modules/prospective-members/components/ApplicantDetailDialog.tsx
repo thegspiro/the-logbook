@@ -982,9 +982,9 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
                               <div
                                 className={`flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs ${
                                   isComplete
-                                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                                    ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-400'
                                     : isSkipped
-                                      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                      ? 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
                                       : isCurrent
                                         ? 'bg-red-500/10 text-red-700 ring-1 ring-red-500/30 dark:text-red-400'
                                         : 'bg-theme-surface-hover text-theme-text-muted'

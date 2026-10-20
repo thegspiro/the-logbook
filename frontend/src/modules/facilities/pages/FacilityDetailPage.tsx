@@ -157,7 +157,7 @@ export default function FacilityDetailPage() {
             </span>
           )}
           {facility.isArchived && (
-            <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs text-amber-700 dark:text-amber-400">
+            <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs text-amber-800 dark:text-amber-400">
               Archived
             </span>
           )}

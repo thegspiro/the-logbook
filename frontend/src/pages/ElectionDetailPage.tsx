@@ -2418,7 +2418,7 @@ export const ElectionDetailPage: React.FC = () => {
                                           entry.severity === 'critical'
                                             ? 'bg-red-500/10 text-red-700 dark:text-red-400'
                                             : entry.severity === 'warning'
-                                              ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
+                                              ? 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400'
                                               : 'bg-theme-surface-secondary text-theme-text-muted'
                                         }`}
                                       >

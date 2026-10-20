@@ -237,7 +237,7 @@ const LocationKioskPage: React.FC = () => {
                   ))}
                 </div>
               )}
-              <div className="mb-4 inline-flex items-center rounded-full border border-green-500/40 bg-green-500/20 px-4 py-2 text-sm font-medium text-green-700 dark:text-green-400">
+              <div className="mb-4 inline-flex items-center rounded-full border border-green-500/40 bg-green-500/20 px-4 py-2 text-sm font-medium text-green-800 dark:text-green-400">
                 <span className="mr-2 h-2 w-2 animate-pulse rounded-full bg-green-400" />
                 Check-In Active
               </div>

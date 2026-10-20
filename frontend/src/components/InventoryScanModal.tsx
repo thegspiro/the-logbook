@@ -858,7 +858,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
               return (
                 <div className="flex items-center gap-3">
                   <h4 className="text-theme-text-primary font-medium">Results</h4>
-                  <span className="rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">
+                  <span className="rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
                     {successCount} succeeded
                   </span>
                   {failCount > 0 && (

@@ -711,7 +711,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                     </button>
                   ) : (
                     <span
-                      className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+                      className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-xs font-medium text-amber-800 dark:text-amber-300"
                       role="status"
                       aria-live="polite"
                       title={
@@ -903,7 +903,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 <div className="border-theme-surface-border mt-2 space-y-1 border-t pt-2">
                   {!isOnline && (
                     <div
-                      className="flex items-center space-x-2 rounded-md bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300"
+                      className="flex items-center space-x-2 rounded-md bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-800 dark:text-amber-300"
                       role="status"
                       aria-live="polite"
                     >
