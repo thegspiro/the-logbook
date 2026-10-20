@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 const getModuleSettings = vi.fn();
 const getForms = vi.fn();
 const createEmailTemplate = vi.fn();
+const listEmailTemplates = vi.fn();
+const deleteEmailTemplate = vi.fn();
 
 vi.mock('../services/api', () => ({
   eventService: {
@@ -13,7 +15,8 @@ vi.mock('../services/api', () => ({
     updateModuleSettings: vi.fn(),
   },
   eventRequestService: {
-    listEmailTemplates: () => Promise.resolve([]),
+    listEmailTemplates: (...args: unknown[]) => listEmailTemplates(...args) as unknown,
+    deleteEmailTemplate: (...args: unknown[]) => deleteEmailTemplate(...args) as unknown,
     getForms: (...args: unknown[]) => getForms(...args) as unknown,
     createEmailTemplate: (...args: unknown[]) => createEmailTemplate(...args) as unknown,
   },
@@ -55,6 +58,10 @@ describe('EventsSettingsTab', () => {
     getModuleSettings.mockResolvedValue(structuredClone(settings));
     getForms.mockReset();
     getForms.mockResolvedValue({ forms: [], total: 0, skip: 0, limit: 50 });
+    listEmailTemplates.mockReset();
+    listEmailTemplates.mockResolvedValue([]);
+    deleteEmailTemplate.mockReset();
+    deleteEmailTemplate.mockResolvedValue({ message: 'Template deleted' });
   });
 
   // A 200 that is not a settings object — a captive portal's HTML page — used
@@ -186,6 +193,55 @@ describe('EventsSettingsTab', () => {
       const payload = createEmailTemplate.mock.calls[0]?.[0] as Record<string, unknown>;
       expect(payload.trigger).toBe('on_scheduled');
       expect(payload.trigger_days_before).toBeUndefined();
+    });
+  });
+
+  describe('deleting an email template', () => {
+    const template = {
+      id: 'tpl-9',
+      name: 'Request received',
+      subject: 'We got your request',
+      body_html: '<p>Thanks</p>',
+      is_active: true,
+      created_at: '2026-08-01T00:00:00Z',
+      updated_at: '2026-08-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      listEmailTemplates.mockReset();
+      listEmailTemplates.mockResolvedValue([structuredClone(template)]);
+    });
+
+    const openEmailSection = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderWithRouter(<EventsSettingsTab />);
+      await screen.findByRole('heading', { name: 'Event Settings' });
+      await user.click(screen.getByRole('button', { name: 'Email' }));
+      await screen.findByText('Request received');
+    };
+
+    it('asks first, naming the template, and keeps it on cancel', async () => {
+      const user = userEvent.setup();
+      await openEmailSection(user);
+
+      await user.click(screen.getByRole('button', { name: 'Delete "Request received"' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Delete email template "Request received"?' });
+      expect(dialog).toHaveTextContent('Emails already sent are unaffected');
+      await user.click(screen.getByRole('button', { name: 'Keep it' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(deleteEmailTemplate).not.toHaveBeenCalled();
+      expect(screen.getByText('Request received')).toBeInTheDocument();
+    });
+
+    it('deletes the template once confirmed', async () => {
+      const user = userEvent.setup();
+      await openEmailSection(user);
+
+      await user.click(screen.getByRole('button', { name: 'Delete "Request received"' }));
+      await user.click(await screen.findByRole('button', { name: 'Delete template' }));
+
+      await waitFor(() => expect(deleteEmailTemplate).toHaveBeenCalledWith('tpl-9'));
+      await waitFor(() => expect(screen.queryByText('Request received')).not.toBeInTheDocument());
     });
   });
 });
