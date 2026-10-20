@@ -504,6 +504,31 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Sessions now end after 12 hours, and idle sessions no longer sign you out everywhere (2026-10-20)
+
+Three changes to how a session ends. None blocks a restart and none needs a migration.
+
+- **A 12-hour absolute lifetime.** A session now ends 12 hours after sign-in however
+  active it is, and the member signs in again. Before, a session that kept refreshing
+  never had to. Change it with `SESSION_ABSOLUTE_MAX_HOURS` (`0` turns it off). **A
+  wall-mounted Check-In Station or inventory kiosk left signed in will ask for a
+  sign-in at least once every 12 hours.** A longer limit for kiosk accounts is planned
+  as a separate change; until it lands, raise `SESSION_ABSOLUTE_MAX_HOURS` if a
+  station must stay up longer.
+- **Idle sessions are refused on refresh, and no longer revoke the member's other
+  sessions.** Coming back to a tab after more than 15 minutes (but before the access
+  cookie lapsed) used to be read as a stolen refresh token, and signed the member
+  out on every device. It now just asks them to sign in on that device.
+- **Background polls no longer count as activity.** The notification count, the
+  shift board, the check-in station's target list and live election turnout send an
+  `X-Background-Request: 1` header, and the server leaves the idle timer alone for
+  them. A tab left open on an unattended computer therefore signs out after the idle
+  limit. Real typing or clicking reports itself to the server every couple of minutes
+  while it happens, so a member filling in a long form is not signed out.
+
+A reverse proxy that strips unknown request headers needs nothing: the header only
+shortens the sender's own session.
+
 ### Ranked-choice paper ballots are counted, and entered ballot by ballot (2026-10-20)
 
 Paper votes in a **ranked-choice** race were miscounted. The instant-runoff
