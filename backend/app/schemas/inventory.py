@@ -2336,14 +2336,16 @@ class IssuanceAllowanceCreate(BaseModel):
     role_id: Optional[UUID] = Field(
         None, description="Role this applies to. NULL = all members."
     )
-    max_quantity: int = Field(..., ge=1, description="Max units per period")
+    # 0 is a deliberate setting: "none may be issued" for this role/category.
+    # It is distinct from having no allowance row, which leaves issuance uncapped.
+    max_quantity: int = Field(..., ge=0, description="Max units per period")
     period_type: AllowancePeriodLiteral = "annual"
 
 
 class IssuanceAllowanceUpdate(BaseModel):
     """Update an issuance allowance."""
 
-    max_quantity: Optional[int] = Field(None, ge=1)
+    max_quantity: Optional[int] = Field(None, ge=0)
     period_type: Optional[AllowancePeriodLiteral] = None
     is_active: Optional[bool] = None
 
