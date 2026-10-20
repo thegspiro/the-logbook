@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**This PR** (branch `claude/security-review-admin-hours-p9`). PR #3449
+**PR [#3451](https://github.com/thegspiro/the-logbook/pull/3451)** (branch `claude/security-review-admin-hours-p9`). PR #3449
 (Feature 20, Compliance, pass 9) merged 2026-10-19, docs-only, so there was
 nothing to record. `list_pull_requests` (state open) returned 0 PRs, so this
 iteration reviewed Feature 21 (Admin hours), pass 9: 0 fixed, 1 new LOW
