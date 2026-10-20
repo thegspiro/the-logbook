@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**This PR** (branch `claude/security-review-admin-hours-p9`). PR #3449
+(Feature 20, Compliance, pass 9) merged 2026-10-19, docs-only, so there was
+nothing to record. `list_pull_requests` (state open) returned 0 PRs, so this
+iteration reviewed Feature 21 (Admin hours), pass 9: 0 fixed, 1 new LOW
+flagged (AH-18, the W70 duplicate-category-name check is a read-then-write
+with no lock). One non-rotation commit, `1ae0d0ac` (W70), touched
+`admin_hours_service.py` and eleven frontend files since pass 8's baseline
+`f698cdc2` and was reviewed in full; no other scope file moved. Rotation row
+21 is now ✅ (pending this PR's merge); next is Feature 22 (Grants &
+fundraising).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20 Compliance pass 9, PR #3449, before it merged), preserved for history</summary>
+
 **PR [#3449](https://github.com/thegspiro/the-logbook/pull/3449)** (branch
 `claude/security-review-compliance`). PR #3448
 (Feature 19, Skills testing, pass 9) merged 2026-10-19, docs-only — not
@@ -31,6 +45,8 @@ set touched only `training.ts` fields outside this feature's own type
 (CMP2-1, CS-8, CS-9 residual, `grace_period_days` unwired) all re-verified
 unchanged. Rotation row 20 → ✅ (pending this PR's merge); next is Feature 21
 (Admin hours).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19 Skills testing pass 9, PR #3448, before it merged), preserved for history</summary>
@@ -20316,7 +20332,7 @@ iteration's commit" rule.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
@@ -20337,6 +20353,33 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-20 — Feature 21 (Admin hours, pass 9) — 0 fixed, 1 new LOW flagged (AH-18); W70 commit `1ae0d0ac` reviewed in full
+
+`list_pull_requests` (state open) returned 0 PRs; PR #3449 (Feature 20,
+Compliance, pass 9) had merged, docs-only. Row 21 was the first `⬜`.
+
+**Delta.** Baseline `f698cdc2` (pass 8). One non-rotation commit, `1ae0d0ac`
+(workflow-review W70), added `AdminHoursService._assert_name_free`
+(`admin_hours_service.py:136-162`) and eleven frontend label/aria changes. The
+query is org-scoped and parameterised, both category endpoints map its
+`ValueError` to 400, and a scan of the frontend diff for HTML injection,
+browser storage and new requests found nothing.
+
+**AH-18 (LOW, FLAGGED).** The duplicate-name check reads and then the caller
+writes, with no lock, so two simultaneous creates of one name both succeed.
+Cosmetic, officer-only, and closing it means locking the organization row, so
+it is flagged. Findings file: `AH-21-admin-hours.md`.
+
+**Re-verified.** 30 of 30 routes authenticated (18 gated on
+`admin_hours.manage`, 12 self-scoped or org-scoped reads). All 11 service
+queries without a literal `organization_id` were read and each is scoped
+through a shared filter, a self lock, or the intended scheduled sweep.
+
+**Gate.** 240 passed, 1 skipped (`py_vapid`) on the targeted guard tests;
+8 passed on `test_admin_hours_category_names.py`; migration validation
+passed. No Python or TypeScript file is in the diff, so `flake8`, `black`,
+`isort`, `tsc` and `npm run lint` were not run.
 
 ### 2026-10-19 — Feature 20 (Compliance, pass 9) — watchdog pickup, true zero delta on backend code, 0 fixed, 0 new findings
 
