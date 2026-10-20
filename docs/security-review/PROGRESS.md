@@ -16,25 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#3467](https://github.com/thegspiro/the-logbook/pull/3467)** (branch
-`claude/security-review-integrations-p8`). This row was last updated for PR
-#3455 (Feature 23, Medical supplies, pass 15); PRs #3456 (Feature 24,
-Meetings & minutes, pass 8), #3457 (Feature 25, Messaging & notifications,
-pass 8) and #3458 (Feature 26, Forms, pass 8) all merged to `main` since,
-each recording itself in the Log below — see those entries rather than a
-superseded note here for any of them. With all three merged,
+**PR [#3475](https://github.com/thegspiro/the-logbook/pull/3475)** (branch
+`claude/security-review-security-audit-ip-p8`). This row was last updated
+for PR #3458 (Feature 26, Forms, pass 8); PR #3467 (Feature 27,
+Integrations, pass 8) merged to `main` since, recording itself in the Log
+below — see that entry rather than a superseded note here. With it merged,
 `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
 returned 0 results, checked once before starting and again immediately
-before branching, so this iteration reviewed Feature 27 (Integrations),
-pass 8. **0 fixed, 0 new findings** — the real delta since pass 7 (the
-Google Workspace engine generalized into a provider-neutral
-directory-account engine, Microsoft 365 added as a second provider, and
-Outlook calendar OAuth connect added) was read in full and found clean;
-INT-11, carried forward as open across two passes, is corrected to ✅ FIXED
-— the control was already present and reachable, a review error rather than
-a regression. See `INT-27-integrations.md`'s **Pass 8** section. Rotation
-row 27 → ✅ (pending this PR's merge); next is Feature 28 (Security, audit &
-IP).
+before branching, so this iteration reviewed Feature 28 (Security, audit &
+IP), pass 8. **0 fixed, 0 new findings** — the one real delta since pass 7
+(the new weekly security/audit report's `GET`/`PUT /security/weekly-report`
+endpoints) was read in full from this feature's own angle — org scoping,
+permission gating, audit logging, deep-copy-safe JSON mutation — and found
+clean. See `SEC2-28-security-audit-ip.md`'s **Pass 8** section. Rotation
+row 28 → ✅ (pending this PR's merge); next is Feature 29 (Reports &
+analytics).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23 Medical supplies pass 15, PR #3455, merged), preserved for history</summary>
