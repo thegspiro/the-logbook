@@ -4,7 +4,7 @@
  * Handles all API calls for the Scheduling module.
  */
 
-import { AxiosError } from 'axios';
+import { AxiosError, type AxiosRequestConfig } from 'axios';
 import { createApiClient } from '../../../utils/createApiClient';
 import { asArray, expectArray } from '../../../utils/asArray';
 import type {
@@ -736,15 +736,18 @@ const api = createApiClient();
 // ============================================
 
 export const schedulingService = {
-  async getShifts(params?: {
-    start_date?: string;
-    end_date?: string;
-    skip?: number;
-    limit?: number;
-  }): Promise<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }> {
+  async getShifts(
+    params?: {
+      start_date?: string;
+      end_date?: string;
+      skip?: number;
+      limit?: number;
+    },
+    config?: AxiosRequestConfig
+  ): Promise<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }> {
     const response = await api.get<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }>(
       '/scheduling/shifts',
-      { params }
+      { params, ...config }
     );
     return { ...response.data, shifts: asArray(response.data?.shifts).map(normalizeShift) };
   },
@@ -869,18 +872,18 @@ export const schedulingService = {
     return response.data;
   },
 
-  async getWeekCalendar(weekStart?: string): Promise<ShiftRecord[]> {
+  async getWeekCalendar(weekStart?: string, config?: AxiosRequestConfig): Promise<ShiftRecord[]> {
     const params: Record<string, string> = {};
     if (weekStart) params.week_start = weekStart;
-    const response = await api.get<ShiftRecord[]>('/scheduling/calendar/week', { params });
+    const response = await api.get<ShiftRecord[]>('/scheduling/calendar/week', { params, ...config });
     return asArray(response.data).map(normalizeShift);
   },
 
-  async getMonthCalendar(year?: number, month?: number): Promise<ShiftRecord[]> {
+  async getMonthCalendar(year?: number, month?: number, config?: AxiosRequestConfig): Promise<ShiftRecord[]> {
     const params: Record<string, number> = {};
     if (year) params.year = year;
     if (month) params.month = month;
-    const response = await api.get<ShiftRecord[]>('/scheduling/calendar/month', { params });
+    const response = await api.get<ShiftRecord[]>('/scheduling/calendar/month', { params, ...config });
     return asArray(response.data).map(normalizeShift);
   },
 
@@ -1129,9 +1132,13 @@ export const schedulingService = {
 
   // Swap Requests
   /** Swaps the caller is a participant in — what is waiting on them. */
-  async getMySwapRequests(status?: 'pending' | 'approved' | 'denied' | 'cancelled'): Promise<SchedulingSwapRequest[]> {
+  async getMySwapRequests(
+    status?: 'pending' | 'approved' | 'denied' | 'cancelled',
+    config?: AxiosRequestConfig
+  ): Promise<SchedulingSwapRequest[]> {
     const response = await api.get<PaginatedResponse<SchedulingSwapRequest>>('/scheduling/swap-requests', {
       params: { mine: true, ...(status ? { status } : {}) },
+      ...config,
     });
     return asArray(response.data?.items);
   },

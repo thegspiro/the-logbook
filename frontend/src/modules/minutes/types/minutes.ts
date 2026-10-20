@@ -630,6 +630,8 @@ export interface MinutesReminderSettings {
   executive_effective_library: boolean;
   executive_effective_public: boolean;
   attendance_listing: AttendanceListing;
+  /** File a closed election's result with its meeting's minutes without being asked. */
+  auto_file_election_results: boolean;
 }
 
 /** What every panel on the minutes settings page is given. */

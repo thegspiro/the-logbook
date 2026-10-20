@@ -10,12 +10,12 @@ The Logbook includes security features designed with HIPAA (Health Insurance Por
 
 ### Access Control (§ 164.312(a))
 
-| HIPAA Requirement          | Feature                                                                                                   |
-| -------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Unique user identification | Every user has a unique ID and username                                                                   |
-| Emergency access procedure | System owner bypass for emergency situations                                                              |
-| Automatic logoff           | 15-minute inactivity timeout (`HIPAA_SESSION_TIMEOUT_MINUTES`), enforced in the browser and on the server |
-| Encryption and decryption  | AES-256-GCM authenticated encryption for PHI at rest (legacy Fernet values still readable)                |
+| HIPAA Requirement          | Feature                                                                                                                                                                                                   |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unique user identification | Every user has a unique ID and username                                                                                                                                                                   |
+| Emergency access procedure | System owner bypass for emergency situations                                                                                                                                                              |
+| Automatic logoff           | 15-minute inactivity timeout (`HIPAA_SESSION_TIMEOUT_MINUTES`), enforced in the browser and on the server, and a 12-hour absolute session lifetime (`SESSION_ABSOLUTE_MAX_HOURS`), enforced on the server |
+| Encryption and decryption  | AES-256-GCM authenticated encryption for PHI at rest (legacy Fernet values still readable)                                                                                                                |
 
 ### Audit Controls (§ 164.312(b))
 

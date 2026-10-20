@@ -883,13 +883,16 @@ made these choices where nothing had been decided. Each is easy to reverse.
   it and can never be deleted from approved minutes. If the department would
   rather file the signed copy as a Document and leave the minutes wholly
   untouched, remove the `signed_copy` branch in `MinutesRecordService.store_minutes_attachment`.
-- **Election results are filed by hand.** A manager imports a closed election's
-  result into the minutes; nothing files it when the election is certified.
-  The copy is taken at that moment. In a draft it can be removed and filed again
-  if the election is revised (a voided ballot after certification, W50); once the
+- **Election results are filed automatically, and a correction is a second
+  addendum.** A closed election tied to a meeting (its calendar event or meeting
+  record) files its certified result with that meeting's minutes: when the
+  election closes if the minutes exist, otherwise when they are made. The copy
+  is taken at that moment. In a draft it can be removed and filed again if the
+  election is revised (a voided ballot after certification, W50); once the
   minutes are circulated or adopted it is filed as a permanent addendum and
   cannot be removed, so a later correction is a second addendum, not a
-  replacement.
+  replacement. A department that prefers to file by hand switches
+  **Minutes → Settings → Elections** off; the manual import is unchanged.
 - **Approved minutes from before this change have no approved version.**
   `GET /{id}/verify` says so rather than inventing a hash for content nobody
   hashed. Reopening and re-approving one creates version 1.

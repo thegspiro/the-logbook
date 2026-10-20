@@ -369,6 +369,7 @@ the app):
 | Access token lifetime  | 30 minutes by default (`ACCESS_TOKEN_EXPIRE_MINUTES`), renewed silently by the refresh flow                             |
 | Refresh token lifetime | 7 days by default (`REFRESH_TOKEN_EXPIRE_DAYS`)                                                                         |
 | Inactivity timeout     | 15 minutes by default (`HIPAA_SESSION_TIMEOUT_MINUTES`), enforced server-side; the app warns 60 seconds before sign-out |
+| Absolute lifetime      | 12 hours by default (`SESSION_ABSOLUTE_MAX_HOURS`), however active the session is; the member then signs in again       |
 | Session IP monitoring  | Alerts on IP change during session                                                                                      |
 | Password change        | Signs the member out of every session                                                                                   |
 
