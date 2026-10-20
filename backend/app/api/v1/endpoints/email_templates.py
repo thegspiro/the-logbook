@@ -946,16 +946,10 @@ async def schedule_email(
     ),
 ):
     """Schedule an email to be sent at a specific date/time."""
-    from app.core.utils import generate_uuid
-
-    if body.scheduled_at.tzinfo is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="scheduled_at must include timezone info (UTC recommended)",
-        )
-
     from datetime import datetime as _dt
     from datetime import timezone as _tz
+
+    from app.core.utils import generate_uuid
 
     if body.scheduled_at <= _dt.now(_tz.utc):
         raise HTTPException(
@@ -1049,11 +1043,6 @@ async def update_scheduled_email(
 
     changes: list[str] = []
     if body.scheduled_at is not None:
-        if body.scheduled_at.tzinfo is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="scheduled_at must include timezone info (UTC recommended)",
-            )
         from datetime import datetime as _dt
         from datetime import timezone as _tz
 
