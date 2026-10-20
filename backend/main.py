@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.utils import is_body_allowed_for_status_code
@@ -23,6 +23,7 @@ from slowapi.util import get_remote_address
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
+from app.api.dependencies import require_permission
 from app.api.public import responses as public_responses
 from app.api.public.branding import router as public_branding_router
 from app.api.public.calendar import router as public_calendar_router
@@ -2578,16 +2579,29 @@ async def health_check():
     return JSONResponse(content=body, status_code=status_code)
 
 
-@app.get("/health/detailed")
+@app.get(
+    "/health/detailed",
+    dependencies=[Depends(require_permission("settings.manage"))],
+)
 async def health_check_detailed():
     """
     Detailed health check with system information
-    Only available in non-production environments for security
+
+    Requires ``settings.manage``: the response names the version, the
+    environment and the debug / docs switches, which is a fingerprint nobody
+    needs unless they administer the installation. Also refused outright in
+    production. ``/health`` stays public for load balancers.
     """
     if settings.ENVIRONMENT == "production":
         return {"error": "Detailed health check not available in production"}
 
+    import asyncio
+
     import psutil
+
+    # cpu_percent(interval=1) sleeps for the whole second; run on a worker
+    # thread so the event loop keeps serving other requests meanwhile.
+    cpu_percent = await asyncio.to_thread(psutil.cpu_percent, 1)
 
     return {
         "status": "healthy",
@@ -2595,7 +2609,7 @@ async def health_check_detailed():
         "environment": settings.ENVIRONMENT,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "system": {
-            "cpu_percent": psutil.cpu_percent(interval=1),
+            "cpu_percent": cpu_percent,
             "memory_percent": psutil.virtual_memory().percent,
             "disk_percent": psutil.disk_usage("/").percent,
         },

@@ -9348,8 +9348,10 @@ curl http://YOUR-IP:3001/health
 # raised an error. While the app is still starting,
 # the body also carries "checks": {"database": ..., "redis": ...}.
 
-# System and configuration detail (non-production environments only)
-curl http://YOUR-IP:3001/health/detailed
+# System and configuration detail (non-production environments only). Needs a
+# signed-in administrator, so open it in the browser while signed in rather
+# than from curl.
+http://YOUR-IP:3001/health/detailed
 ```
 
 #### Common API Errors

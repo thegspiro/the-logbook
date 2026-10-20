@@ -3286,10 +3286,11 @@ backend. **Fixed:** pages that scrolled sideways at phone or tablet width, acces
 (unnamed controls, nested interactive rows, QR codes with no alternative, a
 malformed definition list), contrast failures in the orange, emerald and
 warning-text palettes and on the compliance print sheet, and two unused
-components. **Open (owner decision):** `GET /health/detailed` is
-unauthenticated, `/onboarding/*` renders on a configured installation, and an
-unknown URL redirects silently to the dashboard — mirrored to
-KNOWN_LIMITATIONS. **Verified good:** every protected route redirects signed
+components. `GET /health/detailed` now requires `settings.manage` (it
+was unauthenticated; the owner approved the change) and its CPU sample no longer
+blocks the event loop. **Open (owner decision):** `/onboarding/*` renders on a
+configured installation, and an unknown URL redirects silently to the
+dashboard — mirrored to KNOWN_LIMITATIONS. **Verified good:** every protected route redirects signed
 out, a member is denied every administrative page, no token in a response body,
 secrets redacted for non-admins. See
 [final-sweep-2026-10.md](./final-sweep-2026-10.md).

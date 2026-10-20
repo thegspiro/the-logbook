@@ -101,22 +101,12 @@ entry stays only while code, tests or `CLAUDE.md` still cite it by name.
 | **A requirement cannot name one policy acknowledgment**                                 | ✅ Resolved (2026-10-07, owner decision: map provider courses to library courses) | A requirement graded only by training type (`training_compliance.py`) is still met by **any** record of that type. A particular policy is now required by mapping its Target Solutions Course ID to a library course (`external_course_mappings`) and linking a COURSES requirement to that course; imports set `TrainingRecord.course_id` from the mapping. Every version of a course maps to the same library course, so a reissued course never needs the requirement edited. **Residual, accepted:** members who complete a new version read as not current until an officer maps it. Training officers are emailed when a new course resembles a library course, and mapping it backfills the records already imported. See [16-integrations.md](./training/16-integrations.md). |
 | **Requirement grandfathering reads a missing hire date as the account's creation date** | Accepted (owner to note, 2026-10-03)                                              | A requirement's `new_member_cutoff_date` separates existing members from new ones by join date: `hire_date`, else the UTC date the account was created (`training_compliance.member_join_date`). A roster imported into The Logbook without hire dates therefore reads every imported member as having joined on the import day. If that day falls on or after a cutoff, veterans are graded as new members. Before relying on a cutoff, record hire dates for the existing roster, or choose a cutoff earlier than the import. Members already enrolled in a training program are governed separately, by the per-program `apply_to_current_enrollments` choice made when a requirement is added to it.                                                                              |
 
-## Final Page Sweep — Three Decisions Left Open (2026-10-20)
+## Final Page Sweep — Two Decisions Left Open (2026-10-20)
 
-**Open decision.** A browser-driven pass over every route found these. Each is
-a change to a public endpoint or to what a stale link does, so none was made
-unprompted. The full method and the defects that _were_ fixed are in
+**Open decision.** A browser-driven pass over every route found these. Each
+changes what a visitor or a stale link sees, so neither was made unprompted. The full method and the defects that _were_ fixed are in
 [`app-review/final-sweep-2026-10.md`](./app-review/final-sweep-2026-10.md).
 
-- **`GET /health/detailed` has no authentication.** The `/health` docstring
-  calls it "authenticated, non-production"; the handler takes no dependency. It
-  is refused only when `ENVIRONMENT=production`, so on `staging` or
-  `development` anyone can read the version, environment name, CPU / memory /
-  disk percentages and the `debug` / `enable_docs` flags. It also calls
-  `psutil.cpu_percent(interval=1)` inside an `async` handler, which stalls the
-  event loop for a second per request — cheap to trigger anonymously. _Proposed:_
-  require `settings.manage` and sample with `interval=None`. Breaking only for a
-  monitor that calls it signed out; `/health` is unaffected.
 - **`/onboarding/*` renders on a configured installation.** Deep-linking to
   `/onboarding/start` shows the full Organization Setup form; the backend
   refuses the submit with `LB-ONBD-001` (400), so nothing is exposed, but the

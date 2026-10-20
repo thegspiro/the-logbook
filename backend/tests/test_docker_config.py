@@ -857,8 +857,8 @@ class TestHealthEndpointContract:
         ), "main.py must define a GET /health endpoint"
 
     def test_health_detailed_endpoint_is_defined(self):
-        assert (
-            '@app.get("/health/detailed")' in self.main_py
+        assert re.search(
+            r'@app\.get\(\s*"/health/detailed"', self.main_py
         ), "main.py must define a GET /health/detailed endpoint"
 
     def test_health_returns_required_fields(self):
