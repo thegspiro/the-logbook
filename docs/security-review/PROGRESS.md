@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (this branch, `claude/security-review-medical-supplies-p15`), not yet
+numbered at commit time.** PR #3454 (Feature 22, Grants & fundraising, pass 9)
+merged to `main` with no open PR whose head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results, checked twice —
+once before starting and again immediately before branching) and nothing
+started for Feature 23 since, so this iteration reviewed Feature 23 (Medical
+supplies), pass 15. **0 fixed, 0 new findings** — a real (not zero-) delta
+since pass 14's baseline `dfa2d748`: one commit (`dce89db1`, truck-stock Next
+expiry, apparatus-only CSV column, old-lot exclusion) re-verified by direct
+code read against all seven `CHECKLIST.md` dimensions, org scoping and domain
+pinning intact throughout. MSUP-4/MSUP-11 (no row cap on
+`get_expiring_lots`/`list_lots`) re-confirmed open, owner-accepted, unchanged.
+See `MSUP-23-medical-supplies.md`'s **Pass 15** section. Rotation row 23 → ✅
+(pending this PR's merge); next is Feature 24 (Meetings & minutes).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22 Grants & fundraising pass 9, PR #3454, merged), preserved for history</summary>
+
 **PR [#3454](https://github.com/thegspiro/the-logbook/pull/3454)** (branch
 `claude/security-review-grants-fundraising-p9` — a distinct name, not the
 reused `claude/security-review-grants-fundraising` every prior pass of this
@@ -37,6 +55,8 @@ exact unbounded-amount shape, so the open item now covers them too (mirrored
 to `KNOWN_LIMITATIONS.md`). Route surface re-enumerated (45/45, unchanged).
 See `GF-22-grants-fundraising.md`'s **Pass 9** section. Rotation row 22 → ✅
 (pending this PR's merge); next is Feature 23 (Medical supplies).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21 Admin hours pass 9, PR #3451, merged), preserved for history</summary>
