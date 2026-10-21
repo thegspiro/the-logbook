@@ -833,6 +833,16 @@ message spells out the total, the eligible count and the limit.
 - The tick box only appears after the check has refused a batch. You cannot
   switch the check off in advance.
 
+**Ranked-choice races are entered ballot by ballot.** Totals per candidate lose
+each ballot's order, so a ranked race asks for one ballot at a time: its 1st,
+2nd, 3rd choice and so on, with a copy count when several ballots are marked
+identically. Submitting totals for a ranked race is refused. Each paper ballot
+counts as its own ballot in the runoff (before this fix a stack of thirty was
+counted as one).
+
+_[Screenshot to create: Record Paper Ballots on a ranked-choice race, showing
+the rank menus and the copy count.]_
+
 ![Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
 
 ### Officer Attestation

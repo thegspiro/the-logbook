@@ -664,7 +664,8 @@ coordinator's notes. It lists only stages that ask for a role you hold. With
 nothing waiting, it reads **Nothing is waiting on you**.
 
 In the applicant's drawer, **Approval Status** lists the stage's named signers
-and who has signed.
+and who has signed. A stage that needs several approvers names each by office
+(for example **Chief**, **EMS Supply Officer**), not by the raw role key.
 
 ![Sign-offs for an officer in the Chief position: one applicant on the Chief and President approval stage, pills Chief: waiting and President: signed, and Sign as Chief](./images/15-25-sign-offs-chief.png)
 
