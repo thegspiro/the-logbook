@@ -9880,6 +9880,37 @@ export const SHOTS = [
     },
   },
   {
+    id: "09-28-void-result-dialog",
+    doc: "09-skills-testing.md",
+    line: 1320,
+    anchor:
+      'The "Void test result" dialog opened from the Void result button, with a reason typed in',
+    alt: "The Void test result dialog, saying the record stays in the member's history marked as voided, with an example reason typed in and the amber Void result button enabled",
+    route: "/training/skills-testing",
+    // The reason is typed but the dialog is never confirmed: the held result is
+    // shared with the release shots, and voiding it would take them out of the
+    // seeded data.
+    prepare: async (page) => {
+      const { id: testId } = await findHeldResult(page);
+      await page.goto(
+        new URL(
+          `/training/skills-testing/test/${testId}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      const open = page.getByRole("button", { name: "Void result" });
+      await open.waitFor({ state: "visible", timeout: 15_000 });
+      await open.click();
+      const reason = page.locator("#void-reason-detail");
+      await reason.waitFor({ state: "visible", timeout: 10_000 });
+      await reason.fill("Scored against the wrong candidate");
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-panel']",
+    expect: { selector: "#void-reason-detail" },
+  },
+  {
     id: "09-09-member-skills-testing",
     doc: "09-skills-testing.md",
     line: 187,
