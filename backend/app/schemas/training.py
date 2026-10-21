@@ -18,6 +18,7 @@ from app.models.training import TrainingStatus as ModelTrainingStatus
 from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
+from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.schemas.enum_validation import validate_enum_value
 from app.services.qualification_service import QUALIFICATIONS
 from app.utils.email_providers import REDACTED_SECRET
@@ -69,7 +70,7 @@ class TrainingCategoryBase(BaseModel):
     description: Optional[str] = None
     color: Optional[str] = Field(None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
     parent_category_id: Optional[UUID] = None
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     icon: Optional[str] = Field(None, max_length=50)
 
 
@@ -85,7 +86,7 @@ class TrainingCategoryUpdate(BaseModel):
     description: Optional[str] = None
     color: Optional[str] = Field(None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
     parent_category_id: Optional[UUID] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     icon: Optional[str] = Field(None, max_length=50)
     active: Optional[bool] = None
 
@@ -134,12 +135,12 @@ class TrainingCourseBase(BaseModel):
     code: Optional[str] = Field(None, max_length=50)
     description: Optional[str] = None
     training_type: str
-    duration_hours: Optional[float] = Field(None, ge=0)
-    credit_hours: Optional[float] = Field(None, ge=0)
+    duration_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
+    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     prerequisites: Optional[List[str]] = None
-    expiration_months: Optional[int] = Field(None, ge=0)
+    expiration_months: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     instructor: Optional[str] = Field(None, max_length=255)
-    max_participants: Optional[int] = Field(None, ge=1)
+    max_participants: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     materials_required: Optional[List[str]] = None
     category_ids: Optional[List[str]] = None  # Categories this course belongs to
     # The qualification code completing this course grants. Null for a course
@@ -168,12 +169,12 @@ class TrainingCourseUpdate(BaseModel):
     code: Optional[str] = Field(None, max_length=50)
     description: Optional[str] = None
     training_type: Optional[str] = None
-    duration_hours: Optional[float] = Field(None, ge=0)
-    credit_hours: Optional[float] = Field(None, ge=0)
+    duration_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
+    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     prerequisites: Optional[List[str]] = None
-    expiration_months: Optional[int] = Field(None, ge=0)
+    expiration_months: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     instructor: Optional[str] = Field(None, max_length=255)
-    max_participants: Optional[int] = Field(None, ge=1)
+    max_participants: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     materials_required: Optional[List[str]] = None
     category_ids: Optional[List[str]] = None
     grants_qualification: Optional[str] = Field(None, max_length=50)
@@ -234,8 +235,8 @@ class TrainingRecordBase(BaseModel):
     scheduled_date: Optional[date] = None
     completion_date: Optional[date] = None
     expiration_date: Optional[date] = None
-    hours_completed: float = Field(..., ge=0)
-    credit_hours: Optional[float] = Field(None, ge=0)
+    hours_completed: float = Field(..., ge=0, le=FLOAT32_MAX)
+    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     certification_number: Optional[str] = Field(None, max_length=100)
     issuing_agency: Optional[str] = Field(None, max_length=255)
     status: str = "scheduled"
@@ -244,8 +245,8 @@ class TrainingRecordBase(BaseModel):
     # column's documented intent. Capping at 100 rejected legitimate
     # point-based scores with a 422. passing_score is the record-level
     # threshold and follows the same unit as score.
-    score: Optional[float] = Field(None, ge=0)
-    passing_score: Optional[float] = Field(None, ge=0)
+    score: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
+    passing_score: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     passed: Optional[bool] = None
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
@@ -286,14 +287,14 @@ class TrainingRecordUpdate(BaseModel):
     scheduled_date: Optional[date] = None
     completion_date: Optional[date] = None
     expiration_date: Optional[date] = None
-    hours_completed: Optional[float] = Field(None, ge=0)
-    credit_hours: Optional[float] = Field(None, ge=0)
+    hours_completed: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
+    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     certification_number: Optional[str] = Field(None, max_length=100)
     issuing_agency: Optional[str] = Field(None, max_length=255)
     status: Optional[str] = None
     # See TrainingRecordBase.score: percentage or raw points, no upper cap.
-    score: Optional[float] = Field(None, ge=0)
-    passing_score: Optional[float] = Field(None, ge=0)
+    score: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
+    passing_score: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     passed: Optional[bool] = None
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
@@ -415,10 +416,10 @@ class TrainingRequirementBase(BaseModel):
     shift_credited: Optional[bool] = None
     training_type: Optional[str] = None
     # Requirement quantities (field used depends on requirement_type)
-    required_hours: Optional[float] = Field(None, ge=0)
+    required_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     required_courses: Optional[List[str]] = None
-    required_shifts: Optional[int] = Field(None, ge=0)
-    required_calls: Optional[int] = Field(None, ge=0)
+    required_shifts: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
     checklist_items: Optional[List[ChecklistItem]] = None
@@ -431,7 +432,7 @@ class TrainingRequirementBase(BaseModel):
         return coerce_checklist_items(v)
 
     passing_score: Optional[float] = Field(None, ge=0, le=100)
-    max_attempts: Optional[int] = Field(None, ge=1)
+    max_attempts: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     frequency: str
     year: Optional[int] = Field(None, ge=2020, le=2100)
     applies_to_all: bool = True
@@ -445,7 +446,7 @@ class TrainingRequirementBase(BaseModel):
     existing_member_deadline: Optional[date] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
-    time_limit_days: Optional[int] = Field(None, ge=1)
+    time_limit_days: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     # Due date calculation fields
     due_date_type: DueDateType = DueDateType.CALENDAR_PERIOD
     rolling_period_months: Optional[int] = Field(None, ge=1, le=120)  # 1-10 years
@@ -620,10 +621,10 @@ class TrainingRequirementUpdate(BaseModel):
     allows_external_credit: Optional[bool] = None
     shift_credited: Optional[bool] = None
     training_type: Optional[str] = None
-    required_hours: Optional[float] = Field(None, ge=0)
+    required_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     required_courses: Optional[List[str]] = None
-    required_shifts: Optional[int] = Field(None, ge=0)
-    required_calls: Optional[int] = Field(None, ge=0)
+    required_shifts: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
     checklist_items: Optional[List[ChecklistItem]] = None
@@ -636,7 +637,7 @@ class TrainingRequirementUpdate(BaseModel):
         return coerce_checklist_items(v)
 
     passing_score: Optional[float] = Field(None, ge=0, le=100)
-    max_attempts: Optional[int] = Field(None, ge=1)
+    max_attempts: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     frequency: Optional[str] = None
     year: Optional[int] = Field(None, ge=2020, le=2100)
     applies_to_all: Optional[bool] = None
@@ -647,7 +648,7 @@ class TrainingRequirementUpdate(BaseModel):
     existing_member_deadline: Optional[date] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
-    time_limit_days: Optional[int] = Field(None, ge=1)
+    time_limit_days: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     # Due date calculation fields
     due_date_type: Optional[DueDateType] = None
     rolling_period_months: Optional[int] = Field(None, ge=1, le=120)
@@ -1252,13 +1253,13 @@ class HistoricalImportParsedRow(BaseModel):
     training_type: Optional[str] = None
     completion_date: Optional[date] = None
     expiration_date: Optional[date] = None
-    hours_completed: Optional[float] = None
-    credit_hours: Optional[float] = None
+    hours_completed: Optional[float] = Field(None, ge=-FLOAT32_MAX, le=FLOAT32_MAX)
+    credit_hours: Optional[float] = Field(None, ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     certification_number: Optional[str] = None
     issuing_agency: Optional[str] = None
     instructor: Optional[str] = None
     location: Optional[str] = None
-    score: Optional[float] = None
+    score: Optional[float] = Field(None, ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     passed: Optional[bool] = None
     notes: Optional[str] = None
     errors: List[str] = []
@@ -1343,8 +1344,8 @@ class BulkTrainingRecordEntry(BaseModel):
     training_type: str = "continuing_education"
     completion_date: Optional[date] = None
     expiration_date: Optional[date] = None
-    hours_completed: float = Field(..., ge=0)
-    credit_hours: Optional[float] = Field(None, ge=0)
+    hours_completed: float = Field(..., ge=0, le=FLOAT32_MAX)
+    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     certification_number: Optional[str] = Field(None, max_length=100)
     issuing_agency: Optional[str] = Field(None, max_length=255)
     status: str = "completed"

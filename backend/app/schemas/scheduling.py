@@ -25,6 +25,7 @@ from app.models.call_tracking import (
     CallTrackingMode,
 )
 from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.utils.positions import SEAT_NAME_MAX_LENGTH, canonical_position
 
 _response_config = ConfigDict(from_attributes=True)
@@ -90,7 +91,7 @@ class ShiftCreate(BaseModel):
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
     positions: Optional[List[PositionSlot | str]] = None
-    min_staffing: Optional[int] = None
+    min_staffing: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     notes: Optional[str] = None
     activities: Optional[Any] = None
     # The template this shift was built from, when the caller built it from
@@ -117,7 +118,7 @@ class ShiftUpdate(BaseModel):
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
     positions: Optional[List[PositionSlot | str]] = None
-    min_staffing: Optional[int] = None
+    min_staffing: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     notes: Optional[str] = None
     activities: Optional[Any] = None
 
@@ -241,7 +242,7 @@ class ShiftAttendanceUpdate(BaseModel):
 
     checked_in_at: Optional[UTCDateTime] = None
     checked_out_at: Optional[UTCDateTime] = None
-    duration_minutes: Optional[int] = None
+    duration_minutes: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
 
 
 class ManualHoursEntry(BaseModel):
@@ -970,10 +971,10 @@ class ShiftTemplateCreate(BaseModel):
     description: Optional[str] = None
     start_time_of_day: str
     end_time_of_day: str
-    duration_hours: float
+    duration_hours: float = Field(..., ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     color: Optional[str] = None
     positions: Optional[Any] = None
-    min_staffing: int = 1
+    min_staffing: int = Field(1, ge=INT32_MIN, le=INT32_MAX)
     category: Optional[str] = "standard"
     apparatus_type: Optional[str] = None
     apparatus_id: Optional[str] = None
@@ -992,10 +993,10 @@ class ShiftTemplateUpdate(BaseModel):
     description: Optional[str] = None
     start_time_of_day: Optional[str] = None
     end_time_of_day: Optional[str] = None
-    duration_hours: Optional[float] = None
+    duration_hours: Optional[float] = Field(None, ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     color: Optional[str] = None
     positions: Optional[Any] = None
-    min_staffing: Optional[int] = None
+    min_staffing: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     category: Optional[str] = None
     apparatus_type: Optional[str] = None
     apparatus_id: Optional[str] = None
@@ -1049,9 +1050,9 @@ class ShiftPatternCreate(BaseModel):
     description: Optional[str] = None
     pattern_type: PatternType
     template_id: Optional[UUID] = None
-    rotation_days: Optional[int] = None
-    days_on: Optional[int] = None
-    days_off: Optional[int] = None
+    rotation_days: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    days_on: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    days_off: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     schedule_config: Optional[Any] = None
     start_date: date
     end_date: Optional[date] = None
@@ -1065,9 +1066,9 @@ class ShiftPatternUpdate(BaseModel):
     description: Optional[str] = None
     pattern_type: Optional[PatternType] = None
     template_id: Optional[UUID] = None
-    rotation_days: Optional[int] = None
-    days_on: Optional[int] = None
-    days_off: Optional[int] = None
+    rotation_days: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    days_on: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    days_off: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     schedule_config: Optional[Any] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None

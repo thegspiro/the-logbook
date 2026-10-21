@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import FLOAT32_MAX
 from app.schemas.enum_validation import validate_enum_value
 
 # ==================== Self-Report Config Schemas ====================
@@ -61,7 +62,9 @@ class SelfReportConfigUpdate(BaseModel):
     """Schema for updating self-report configuration"""
 
     require_approval: Optional[bool] = None
-    auto_approve_under_hours: Optional[float] = None
+    auto_approve_under_hours: Optional[float] = Field(
+        None, ge=-FLOAT32_MAX, le=FLOAT32_MAX
+    )
     approval_deadline_days: Optional[int] = Field(None, ge=1, le=90)
 
     notify_officer_on_submit: Optional[bool] = None
@@ -70,7 +73,7 @@ class SelfReportConfigUpdate(BaseModel):
     field_config: Optional[dict] = None
 
     allowed_training_types: Optional[list[str]] = None
-    max_hours_per_submission: Optional[float] = Field(None, ge=0.5)
+    max_hours_per_submission: Optional[float] = Field(None, ge=0.5, le=FLOAT32_MAX)
     member_instructions: Optional[str] = None
     # null clears it (keep indefinitely). The floor is there so a mistyped
     # value cannot destroy the evidence behind a training approved last week.
@@ -102,8 +105,8 @@ class TrainingSubmissionCreate(BaseModel):
     # Time of day the training started. The form derives hours from this plus a
     # length; keeping it means an edit does not have to invent one.
     start_time: Optional[time] = None
-    hours_completed: float = Field(..., gt=0)
-    credit_hours: Optional[float] = Field(None, ge=0)
+    hours_completed: float = Field(..., gt=0, le=FLOAT32_MAX)
+    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
 
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
@@ -147,8 +150,8 @@ class TrainingSubmissionUpdate(BaseModel):
 
     completion_date: Optional[date] = None
     start_time: Optional[time] = None
-    hours_completed: Optional[float] = Field(None, gt=0)
-    credit_hours: Optional[float] = Field(None, ge=0)
+    hours_completed: Optional[float] = Field(None, gt=0, le=FLOAT32_MAX)
+    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
 
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
@@ -266,8 +269,8 @@ class SubmissionReviewRequest(BaseModel):
     reviewer_notes: Optional[str] = None
 
     # Optional overrides (officer can adjust hours, etc.)
-    override_hours: Optional[float] = Field(None, gt=0)
-    override_credit_hours: Optional[float] = Field(None, ge=0)
+    override_hours: Optional[float] = Field(None, gt=0, le=FLOAT32_MAX)
+    override_credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     override_training_type: Optional[str] = None
 
     # Optionally apply the approved training toward a pipeline requirement
@@ -302,7 +305,7 @@ class CrewTrainingCreate(BaseModel):
 
     completion_date: date
     start_time: Optional[time] = None
-    hours_completed: float = Field(..., gt=0)
+    hours_completed: float = Field(..., gt=0, le=FLOAT32_MAX)
 
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)

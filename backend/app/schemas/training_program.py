@@ -14,6 +14,7 @@ from app.models.training import RequirementFrequency as ModelRequirementFrequenc
 from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
+from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX
 from app.schemas.enum_validation import validate_enum_value
 
 _response_config = ConfigDict(from_attributes=True)
@@ -53,21 +54,21 @@ class TrainingRequirementEnhancedBase(BaseModel):
     # They are NOT lists of dicts, and required_roles holds role slugs, not
     # UUIDs — a UUID type here would fail to serialize a slug-based value.
     training_type: Optional[str] = None
-    required_hours: Optional[float] = Field(None, ge=0)
+    required_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     required_courses: Optional[List[str]] = None
-    required_shifts: Optional[int] = Field(None, ge=0)
-    required_calls: Optional[int] = Field(None, ge=0)
+    required_shifts: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
     checklist_items: Optional[List[ChecklistItem]] = None
     passing_score: Optional[float] = Field(None, ge=0, le=100)
-    max_attempts: Optional[int] = Field(None, ge=1)
+    max_attempts: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     # Freshness window: a completion older than this many days doesn't count
     # toward the requirement. None = any completion counts however old.
     recency_days: Optional[int] = Field(None, ge=1, le=3650)
 
     frequency: str
-    time_limit_days: Optional[int] = Field(None, ge=0)
+    time_limit_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     # Default matches the model column (default=True) and the base
     # TrainingRequirement schema so the same table isn't created with
     # conflicting defaults depending on which endpoint is used.
@@ -106,18 +107,18 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     is_editable: Optional[bool] = None
     allows_external_credit: Optional[bool] = None
     training_type: Optional[str] = None
-    required_hours: Optional[float] = Field(None, ge=0)
+    required_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     required_courses: Optional[List[str]] = None
-    required_shifts: Optional[int] = Field(None, ge=0)
-    required_calls: Optional[int] = Field(None, ge=0)
+    required_shifts: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     required_call_types: Optional[List[str]] = None
     required_skills: Optional[List[str]] = None
     checklist_items: Optional[List[ChecklistItem]] = None
     passing_score: Optional[float] = Field(None, ge=0, le=100)
-    max_attempts: Optional[int] = Field(None, ge=1)
+    max_attempts: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     recency_days: Optional[int] = Field(None, ge=1, le=3650)
     frequency: Optional[str] = None
-    time_limit_days: Optional[int] = Field(None, ge=0)
+    time_limit_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     applies_to_all: Optional[bool] = None
     required_positions: Optional[List[str]] = None
     required_roles: Optional[List[str]] = None
@@ -202,8 +203,8 @@ class TrainingProgramBase(BaseModel):
     target_position: Optional[str] = Field(None, max_length=100)
     target_roles: Optional[List[UUID]] = None
     structure_type: ProgramStructureTypeStr = "flexible"
-    time_limit_days: Optional[int] = Field(None, ge=0)
-    warning_days_before: int = Field(default=30, ge=0)
+    time_limit_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    warning_days_before: int = Field(default=30, ge=0, le=INT32_MAX)
     reminder_conditions: Optional[ReminderConditions] = None
     is_template: bool = False
     # Recertification cycle: when enabled, enrolled members' progress auto-resets
@@ -234,8 +235,8 @@ class TrainingProgramUpdate(BaseModel):
     target_position: Optional[str] = Field(None, max_length=100)
     target_roles: Optional[List[UUID]] = None
     structure_type: Optional[ProgramStructureTypeStr] = None
-    time_limit_days: Optional[int] = Field(None, ge=0)
-    warning_days_before: Optional[int] = Field(None, ge=0)
+    time_limit_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    warning_days_before: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     reminder_conditions: Optional[ReminderConditions] = None
     is_template: Optional[bool] = None
     active: Optional[bool] = None
@@ -300,11 +301,11 @@ class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
 class ProgramPhaseBase(BaseModel):
     """Base program phase schema"""
 
-    phase_number: int = Field(..., ge=1)
+    phase_number: int = Field(..., ge=1, le=INT32_MAX)
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     prerequisite_phase_ids: Optional[List[UUID]] = None
-    time_limit_days: Optional[int] = Field(None, ge=0)
+    time_limit_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     requires_manual_advancement: bool = False
 
 
@@ -317,11 +318,11 @@ class ProgramPhaseCreate(ProgramPhaseBase):
 class ProgramPhaseUpdate(BaseModel):
     """Schema for updating a program phase"""
 
-    phase_number: Optional[int] = Field(None, ge=1)
+    phase_number: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     prerequisite_phase_ids: Optional[List[UUID]] = None
-    time_limit_days: Optional[int] = Field(None, ge=0)
+    time_limit_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     requires_manual_advancement: Optional[bool] = None
 
 
@@ -382,7 +383,7 @@ class ProgramRequirementBase(BaseModel):
 
     is_required: bool = True
     is_prerequisite: bool = False
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: int = Field(default=0, ge=0, le=INT32_MAX)
 
 
 class ProgramRequirementCreate(ProgramRequirementBase, ProgramRequirementCustomization):
@@ -407,7 +408,7 @@ class ProgramRequirementUpdate(BaseModel):
 
     is_required: Optional[bool] = None
     is_prerequisite: Optional[bool] = None
-    sort_order: Optional[int] = Field(None, ge=0)
+    sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     # Move the requirement to a different phase (or None for program-level).
     phase_id: Optional[UUID] = None
     # Omitted leaves the stored value alone; an explicit null clears it.
@@ -616,7 +617,7 @@ class RequirementProgressUpdate(BaseModel):
     """Schema for updating requirement progress"""
 
     status: Optional[RequirementProgressStatusStr] = None
-    progress_value: Optional[float] = Field(None, ge=0)
+    progress_value: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     progress_notes: Optional[Dict[str, Any]] = None
     verified_by: Optional[UUID] = None
     # Officer-entered knowledge/skills test score (0-100). Pass/fail is derived
@@ -994,9 +995,9 @@ class ProgramBuildRequirementInput(BaseModel):
     description: Optional[str] = None
     requirement_type: RequirementTypeStr = "hours"
     frequency: str = "one_time"
-    required_hours: Optional[float] = Field(None, ge=0)
-    required_shifts: Optional[int] = Field(None, ge=0)
-    required_calls: Optional[int] = Field(None, ge=0)
+    required_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
+    required_shifts: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_calls: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     # Same type and (absent) validation as TrainingRequirementEnhancedBase, so a
     # requirement built here reads exactly like one created from the edit modal.
     # Omitted/None/[] all mean "every call counts".
@@ -1005,7 +1006,7 @@ class ProgramBuildRequirementInput(BaseModel):
         description="Call types that count toward a 'calls' requirement",
     )
     passing_score: Optional[float] = Field(None, ge=0, le=100)
-    max_attempts: Optional[int] = Field(None, ge=1)
+    max_attempts: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     checklist_items: Optional[List[ChecklistItem]] = None
     required_courses: Optional[List[str]] = Field(
         None, description="Course IDs that satisfy a 'courses' requirement"
@@ -1029,7 +1030,7 @@ class ProgramBuildRequirementInput(BaseModel):
     # prerequisite flag. Build did not, so a program assembled in one call came
     # out with its gating requirements ungated and had to be patched afterwards.
     is_prerequisite: bool = False
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: int = Field(default=0, ge=0, le=INT32_MAX)
 
     @field_validator("checklist_items", mode="before")
     @classmethod
@@ -1069,10 +1070,10 @@ class ProgramBuildMilestoneInput(BaseModel):
 class ProgramBuildPhaseInput(BaseModel):
     """A phase (with its requirements and milestones) during program build."""
 
-    phase_number: int = Field(..., ge=1)
+    phase_number: int = Field(..., ge=1, le=INT32_MAX)
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    time_limit_days: Optional[int] = Field(None, ge=0)
+    time_limit_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     requires_manual_advancement: bool = False
     requirements: List[ProgramBuildRequirementInput] = []
     milestones: List[ProgramBuildMilestoneInput] = []

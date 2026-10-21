@@ -51,6 +51,7 @@ from app.models.election import (
 from app.models.event import Event, EventRSVP, RSVPStatus
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import Organization, User
+from app.schemas.column_bounds import INT32_MAX
 from app.schemas.election import (
     AttendeeCheckIn,
     AttendeeCheckInResponse,
@@ -800,7 +801,7 @@ class VoteWithToken(BaseModel):
     token: str = Field(..., min_length=1, max_length=256)
     candidate_id: UUID
     position: Optional[str] = Field(None, max_length=100)
-    vote_rank: Optional[int] = Field(None, ge=1)
+    vote_rank: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     model_config = ConfigDict(extra="forbid")
 
 

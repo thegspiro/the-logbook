@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 
 # =============================================================================
 # Admin Hours Requirement (embedded in ComplianceProfile)
@@ -21,7 +22,7 @@ class AdminHoursRequirementItem(BaseModel):
     """A single admin hours category requirement within a compliance profile."""
 
     category_id: str
-    required_hours: float = Field(..., gt=0)
+    required_hours: float = Field(..., gt=0, le=FLOAT32_MAX)
     frequency: str = Field(
         "annual",
         description="annual, biannual, or quarterly",
@@ -54,7 +55,7 @@ class ComplianceProfileBase(BaseModel):
     optional_requirement_ids: Optional[List[str]] = None
     admin_hours_requirements: Optional[List[AdminHoursRequirementItem]] = None
     is_active: bool = True
-    priority: int = 0
+    priority: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
 
 
 class ComplianceProfileCreate(ComplianceProfileBase):
@@ -84,7 +85,7 @@ class ComplianceProfileUpdate(BaseModel):
     optional_requirement_ids: Optional[List[str]] = None
     admin_hours_requirements: Optional[List[AdminHoursRequirementItem]] = None
     is_active: Optional[bool] = None
-    priority: Optional[int] = None
+    priority: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
 
 
 class ComplianceProfileResponse(ComplianceProfileBase):
