@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#(recorded after open)](<>)** (branch `claude/security-review-core-infrastructure-p8`).
+PR #3530 (Feature 32, Locations & kiosk, pass 8) had merged 2026-10-21
+(`claude/security-review-locations-kiosk`, not docs-only — see the Log entry
+below for its own record). `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 results, checked
+once before starting and again immediately before branching, and no branch
+existed for Feature 33 — row 33 (Core infrastructure) was confirmed the first
+`⬜`. This iteration (a watchdog pickup — `ListAgents` found no reachable
+session) reviewed Feature 33, pass 8: **0 fixed by this pass itself, 0 new
+findings.** The 35-line diff since pass 7's baseline (`62d24e3e`, PR #3393) —
+a UTC `init_command` fix on the MySQL connection args, a
+`SESSION_ABSOLUTE_MAX_HOURS` session cap, cross-worker IP-exception cache
+invalidation, `/health/detailed` dropped from the IP-blocking bypass list,
+and two new `EXPORT_ENDPOINTS` entries — was read in full; every change was
+already landed by ordinary engineering work (one commit, `54fe07cd`, closing
+the `/health/detailed` IP-block bypass, pre-dates this pass) and each has its
+own guard test, all re-confirmed passing. See `CI8-33-core-infra.md`. Rotation
+row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend shared).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 32 Locations & kiosk pass 8, PR #3530, merged), preserved for history</summary>
+
 **PR [#3530](https://github.com/thegspiro/the-logbook/pull/3530)** (branch `claude/security-review-locations-kiosk`). PR #3521
 (Feature 31, Scheduled tasks, pass 8) merged 2026-10-21, docs-only, so there
 was nothing to record. `list_pull_requests` (state open) returned no PR whose
@@ -29,6 +51,8 @@ drop) and were read in full. LOC8-2, a hard delete that nulls the location on
 eight kinds of record, is an owner decision and is mirrored into
 `KNOWN_LIMITATIONS.md`. Rotation row 32 is now ✅ (pending this PR's merge);
 next is Feature 33 (Core infrastructure).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 31 Scheduled tasks pass 8, PR #3521, before it merged), preserved for history</summary>
@@ -20471,7 +20495,7 @@ iteration's commit" rule.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -20480,6 +20504,52 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-21 — Feature 33 (Core infrastructure, pass 8) — watchdog pickup, 0 fixed, 0 new findings
+
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`) returned
+0 results, checked once before starting and again immediately before
+branching — no open security-review PR either time. PR #3530 (Feature 32,
+Locations & kiosk, pass 8) had merged 2026-10-21T20:56:12Z with nothing
+started for the next feature in the roughly two hours since (no new
+`claude/security-review-*` branch, and `ListAgents` found no reachable
+session); row 33 (Core infrastructure) was confirmed the first `⬜`.
+
+**Delta.** Baseline `62d24e3e` (PR #3393, pass 7). `database.py` has zero
+diff. `config.py` (+12) and `security_middleware.py` (+23/-3) changed, both
+read in full: a `"SET time_zone = '+00:00'"` `init_command` on the shared
+MySQL `connect_args` (closing a real bug where `server_default=func.now()`
+columns were written in the server's local zone while application-written
+columns were written in UTC — paired with migration `da76465bc3d2` and
+`test_connect_args_pin_the_session_time_zone_to_utc`); a
+`SESSION_ABSOLUTE_MAX_HOURS` cap read by `auth_service.session_end_reason`,
+server-timestamp-derived and 0-means-off (Pitfall #19 satisfied, default 12);
+a cross-worker `invalidate_ip_exception_cache()` wired into
+`ip_security_service.py`'s revoke path and `geoip_sync.py`'s pub/sub
+listener, closing the revocation-propagation delay the cache's own docstring
+used to admit; `/health/detailed` dropped from `IPBlockingMiddleware.
+BYPASS_PATHS` and its `psutil.cpu_percent(interval=1)` event-loop stall
+removed, both by commit `54fe07cd` landed before this pass, re-verified by
+direct read rather than taken on the commit message; and two new
+`EXPORT_ENDPOINTS` entries for genuine finance export routes, re-confirmed
+against the live OpenAPI schema by the two standing guard tests. **0 new
+findings** — every change closes a real, previously-open gap and ships with
+its own test. Neither historical open finding (CI3-33-3, CI3-33-4) falls
+inside this window's diff; both re-confirmed unchanged.
+
+**Environment note.** `main`'s Alembic chain is currently forked (two heads,
+`33922563bb88`/`75a6edc2ae4a`, left by PRs #3529 and #3531 landing within the
+same minute; PR #3546 is open to merge them), unrelated to this feature. To
+run this pass's DB-backed tests and `validate_migrations.py --strict`
+locally, PR #3546's single merge-migration file was temporarily applied to
+the local checkout for the schema build only, then removed before
+committing — this PR's diff does not include it and does not depend on
+#3546 merging first.
+
+**Gate.** flake8/black/isort clean at CI's pins (7.4.1/26.10.1/9.0.2); 737
+feature-scoped tests passed, 1 pre-existing skip; 241 cross-cutting guard
+tests passed; frontend typecheck and lint both exit 0 (no frontend file in
+scope this pass). Findings file: `CI8-33-core-infra.md`.
 
 ### 2026-10-21 — Feature 32 (Locations & kiosk, pass 8) — 1 fixed (LOC8-1 guard test), 1 flagged (LOC8-2); 0 defects in three changed commits
 
