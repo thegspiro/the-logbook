@@ -13,7 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
 from loguru import logger
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -32,6 +32,7 @@ from app.models.training import (
     RequirementProgress,
     ShiftCompletionReport,
     SkillEvaluation,
+    TrainingCourse,
     TrainingProgram,
     TrainingRecord,
     TrainingRequirement,
@@ -54,6 +55,10 @@ from app.services.training_compliance import (
     member_join_date,
     requirement_applies_to_member,
     tally_standing,
+)
+from app.services.training_course_names import (
+    library_course_names,
+    member_course_name,
 )
 from app.services.training_module_config_service import TrainingModuleConfigService
 from app.services.training_program_service import TrainingProgramService
@@ -254,11 +259,16 @@ async def get_my_training_summary(
             .limit(100)
         )
         records = records_result.scalars().all()
+        record_course_names = await library_course_names(
+            db, org_id, (r.course_id for r in records)
+        )
 
         result["training_records"] = [
             {
                 "id": str(r.id),
-                "course_name": r.course_name,
+                "course_name": member_course_name(
+                    r.course_id, r.course_name, record_course_names
+                ),
                 "course_code": r.course_code,
                 "training_type": (
                     r.training_type.value
@@ -481,10 +491,15 @@ async def get_my_training_summary(
             .order_by(TrainingRecord.expiration_date.asc())
         )
         certs = cert_result.scalars().all()
+        cert_course_names = await library_course_names(
+            db, org_id, (c.course_id for c in certs)
+        )
         result["certifications"] = [
             {
                 "id": str(c.id),
-                "course_name": c.course_name,
+                "course_name": member_course_name(
+                    c.course_id, c.course_name, cert_course_names
+                ),
                 "certification_number": c.certification_number,
                 "expiration_date": (
                     str(c.expiration_date) if c.expiration_date else None
@@ -786,9 +801,19 @@ async def get_my_training_records(
         TrainingRecord.user_id == str(current_user.id),
     ]
     if search and search.strip():
+        pattern = like_pattern(search.strip())
+        # A member searches by the name they are shown, which for a record
+        # linked to a library course is that course's name, not the stored one.
         filters.append(
-            TrainingRecord.course_name.ilike(
-                like_pattern(search.strip()), escape=LIKE_ESCAPE_CHAR
+            or_(
+                TrainingRecord.course_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                TrainingRecord.course_id.in_(
+                    select(TrainingCourse.id).where(
+                        TrainingCourse.organization_id
+                        == str(current_user.organization_id),
+                        TrainingCourse.name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    )
+                ),
             )
         )
     if training_type:
@@ -847,11 +872,17 @@ async def get_my_training_records(
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
+    page_records = records_result.scalars().all()
+    page_course_names = await library_course_names(
+        db, str(current_user.organization_id), (r.course_id for r in page_records)
+    )
     items: list[dict[str, Any]] = []
-    for r in records_result.scalars().all():
+    for r in page_records:
         item: dict[str, Any] = {
             "id": str(r.id),
-            "course_name": r.course_name,
+            "course_name": member_course_name(
+                r.course_id, r.course_name, page_course_names
+            ),
             "course_code": r.course_code,
             "training_type": (
                 r.training_type.value

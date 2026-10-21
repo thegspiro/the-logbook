@@ -103,6 +103,10 @@ from app.services.training_compliance import (
     requirement_applies_to_user,
     tally_standing,
 )
+from app.services.training_course_names import (
+    library_course_names,
+    member_course_name,
+)
 from app.services.training_record_notices import (
     CHANGED,
     VOIDED,
@@ -748,7 +752,24 @@ async def list_records(
     )
 
     result = await db.execute(query)
-    return result.scalars().all()
+    records = result.scalars().all()
+    if is_officer:
+        # Officers get the stored name: the record edit form sends it back on
+        # save, so a display name here would overwrite it.
+        return records
+    names = await library_course_names(
+        db, str(current_user.organization_id), (r.course_id for r in records)
+    )
+    # Copies, never the ORM rows: assigning to a loaded record would let the
+    # session flush the display name into the stored one.
+    return [
+        TrainingRecordResponse.model_validate(r).model_copy(
+            update={
+                "course_name": member_course_name(r.course_id, r.course_name, names)
+            }
+        )
+        for r in records
+    ]
 
 
 @router.post(
