@@ -31,6 +31,7 @@ import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { SkeletonPage } from '../components/ux/Skeleton';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { EmptyState } from '../components/ux/EmptyState';
+import { attributionName } from '../utils/memberName';
 
 export const MySkillTestResultPage: React.FC = () => {
   const navigate = useNavigate();
@@ -166,8 +167,8 @@ export const MySkillTestResultPage: React.FC = () => {
         <div className="alert-purple">
           <p className="text-sm font-medium">Awaiting validation</p>
           <p className="mt-1 text-sm">
-            {currentTest.examiner_name} has finished scoring this evaluation. A training officer reviews it before the
-            result counts — you&apos;ll see the outcome here once they do.
+            {attributionName(currentTest.examiner_name, currentTest.examiner_id)} has finished scoring this evaluation.
+            A training officer reviews it before the result counts — you&apos;ll see the outcome here once they do.
           </p>
         </div>
       ) : (
@@ -191,7 +192,9 @@ export const MySkillTestResultPage: React.FC = () => {
             <ClipboardCheck className="text-theme-text-muted h-3 w-3" />
             <p className="text-theme-text-muted text-xs">Examiner</p>
           </div>
-          <p className="text-theme-text-primary text-sm font-medium">{currentTest.examiner_name}</p>
+          <p className="text-theme-text-primary text-sm font-medium">
+            {attributionName(currentTest.examiner_name, currentTest.examiner_id)}
+          </p>
         </div>
         {currentTest.elapsed_seconds != null && (
           <div className="card">

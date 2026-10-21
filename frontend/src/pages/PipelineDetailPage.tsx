@@ -1492,11 +1492,61 @@ const PipelineDetailPage: React.FC = () => {
       },
     });
 
-  const confirmDeleteProgram = () => {
-    if (!program) return;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  // The backend deactivates a pipeline anyone has graduated from instead of
+  // deleting it (graduations are history), and withdraws whoever is still in
+  // progress. Which one happens depends on every enrollment, not the
+  // status-filtered list the Enrollments tab may be showing, so fetch them
+  // unfiltered before asking.
+  const confirmDeleteProgram = async () => {
+    if (!program || !programId) return;
+    const all: ProgramEnrollmentWithUser[] | null = await trainingProgramService
+      .getProgramEnrollments(programId)
+      .catch(() => null);
+    const graduates = all?.filter((e) => e.status === 'completed').length ?? 0;
+    const inProgress = all?.filter((e) => e.status === 'active' || e.status === 'on_hold').length ?? 0;
+
+    if (all === null) {
+      setConfirm({
+        title: 'Delete pipeline',
+        confirmLabel: 'Delete pipeline',
+        message:
+          `Delete "${program.name}"? If any member has graduated from it, it is deactivated instead of ` +
+          `deleted: it leaves the pipeline list, every enrollment is kept, and members still in progress ` +
+          `are withdrawn. Otherwise its phases, requirements, milestones and enrollments are permanently ` +
+          `deleted, which can't be undone.`,
+        run: async () => {
+          await trainingProgramService.deleteProgram(programId);
+          toast.success('Pipeline deleted, or deactivated if anyone had graduated from it');
+        },
+        after: () => void navigate('/training/programs'),
+      });
+      return;
+    }
+
+    if (graduates > 0) {
+      const withdrawNote =
+        inProgress > 0 ? ` The ${plural(inProgress, 'member')} still in progress will be withdrawn from it.` : '';
+      setConfirm({
+        title: 'Deactivate pipeline',
+        confirmLabel: 'Deactivate pipeline',
+        message:
+          `"${program.name}" has ${plural(graduates, 'graduate')}, so it is deactivated instead of deleted: ` +
+          `it leaves the pipeline list, and its phases, requirements and every enrollment are kept as ` +
+          `the record of who finished it.${withdrawNote}`,
+        run: async () => {
+          await trainingProgramService.deleteProgram(programId);
+          toast.success('Pipeline deactivated');
+        },
+        after: () => void navigate('/training/programs'),
+      });
+      return;
+    }
+
     const enrolledNote =
-      enrollments.length > 0
-        ? ` This pipeline has ${enrollments.length} enrolled member${enrollments.length === 1 ? '' : 's'} — their progress will be permanently deleted.`
+      all.length > 0
+        ? ` This pipeline has ${plural(all.length, 'enrolled member')} — their progress will be permanently deleted.`
         : '';
     setConfirm({
       title: 'Delete pipeline',
@@ -1505,7 +1555,7 @@ const PipelineDetailPage: React.FC = () => {
         `Permanently delete "${program.name}"? Its phases, requirements, milestones, ` +
         `and all enrollments are removed.${enrolledNote} This can't be undone.`,
       run: async () => {
-        if (programId) await trainingProgramService.deleteProgram(programId);
+        await trainingProgramService.deleteProgram(programId);
         toast.success('Pipeline deleted');
       },
       after: () => void navigate('/training/programs'),
@@ -1679,7 +1729,7 @@ const PipelineDetailPage: React.FC = () => {
             )}
             {canManage && (
               <button
-                onClick={confirmDeleteProgram}
+                onClick={() => void confirmDeleteProgram()}
                 title="Delete pipeline"
                 className="flex items-center space-x-1 rounded-lg px-3 py-2 text-sm text-red-700 hover:bg-red-500/10 dark:text-red-400"
               >

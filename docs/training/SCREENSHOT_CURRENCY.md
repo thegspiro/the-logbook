@@ -1,5 +1,22 @@
 # Screenshot currency
 
+## Queued by the October 20 – 21 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 04 | Member's event detail page with **Check In** offered, and again after check-in (**You're checked in**) | Create (placeholder in the guide) |
+| 04 | Event detail as a member without manage rights: no **View QR Code** button | Check existing `04-02-event-detail.png` still matches; replace if it shows the button |
+| 02 | My Training History with the **No completion date** group | Replace any image showing **Awaiting approval** as a group heading |
+| 14 | **Record Paper Ballots** on a ranked-choice race (rank menus, copy count) | Create (placeholder in the guide) |
+| 15 | Applicant drawer **Approval Status** with office labels | Re-check `15-24-approval-status-drawer.png` |
+| 01 | Roster showing rank, membership type and positions apart; reshoot of 01-41 was already done | Verify once |
+| 05 | Medical Supplies truck rows with links to Inventory swap and restock pages; lot recall lookup | Create |
+| 03 | Checklist builder with **Present** presets; checklist reports on a phone | Re-check existing images |
+| 03 | Scheduling weeks now begin on Sunday | Re-check any week-grid image that starts on Monday |
+
 ## Queued by the October 19 – 20 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).

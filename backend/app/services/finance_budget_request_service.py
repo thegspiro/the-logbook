@@ -535,6 +535,13 @@ class FinanceBudgetRequestService:
             await assert_in_org(
                 self.db, BudgetCategory, category_id, org_id, label="Budget category"
             )
+            proposed = await self.finance.get_budget_category(category_id, org_id)
+            if proposed is not None and not proposed.is_active:
+                # Kept, not deleted, because existing lines use it; it is no
+                # longer offered for new ones (proposal_options filters it).
+                raise ValueError(
+                    "That budget category is inactive. Choose an active category."
+                )
             if station_id:
                 await assert_in_org(
                     self.db, Facility, station_id, org_id, label="Station"

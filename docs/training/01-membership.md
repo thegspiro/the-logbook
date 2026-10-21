@@ -1028,6 +1028,14 @@ financial trail still makes sense. See
 Deletion is also refused if it would remove the department's last
 administrator.
 
+**You cannot act on a member who holds permissions you do not.** Deleting,
+changing the status of, or archiving a member is refused (403) when that member
+holds a permission you lack, so a member manager cannot deactivate or delete the
+System Owner or a more senior officer. The attempt is reported to the security
+log as a privilege-escalation attempt, the same as a password or MFA reset
+refused for the same reason. Administrators with every permission are not
+affected.
+
 ### Anonymizing a Former Member
 
 Anonymizing permanently removes a departed member's personal information. The

@@ -529,6 +529,52 @@ Three changes to how a session ends. None blocks a restart and none needs a migr
 A reverse proxy that strips unknown request headers needs nothing: the header only
 shortens the sender's own session.
 
+### Account status follows membership type for probationary members (2026-10-21)
+
+A member's **membership type** (probationary, active, life, administrative, or
+a tier of your ladder) and their **account status** (active, probationary, on
+leave, retired, dropped) were two separate facts that nothing connected: a
+member added as probationary had an active account, and the tier ladder
+advancing them off probation never changed their status.
+
+From this version the type drives the status, one way, between the two
+statuses that say nothing about leave or separation:
+
+- Setting a member's type to **Probationary** (Add Member, Edit Member, the
+  importer's `membershipType` column, or a prospect converted as one) puts an
+  **active** account on **probationary**.
+- Setting it to anything else, including the monthly tier advance moving a
+  member up the ladder, moves a **probationary** account back to **active**.
+- A member who is on leave, inactive, suspended, retired or dropped keeps that
+  status whatever their type says; it catches up when they return.
+- The profile's **Change Status** dialog still works on its own. A status set
+  there holds until the member's type is next written.
+
+**Migration `2794794bda6e` settles the members you already have.** On the
+first start after upgrading it moves every active account whose type is
+probationary onto probationary, and every probationary account whose type is
+anything else onto active. Each change is written to the audit log as
+`account_status_backfilled` with both statuses and the member, and sets the
+member's status-change reason to "Follows membership type …", so the profile's
+status history shows it. To list what moved:
+
+```sql
+SELECT JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.username')) AS member,
+       JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.previous_status')) AS was,
+       JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.new_status')) AS now_
+FROM audit_logs WHERE event_type = 'account_status_backfilled';
+```
+
+`alembic downgrade -1` restores the previous status of every member the
+migration moved who still holds the status it wrote, and logs each reversal
+the same way. A member whose status an officer changed since is not touched.
+Audit rows are never deleted.
+
+Because the previous version already counts a probationary account as a
+current member everywhere (the entry below), moving these accounts changes
+nothing about what a member can do; it changes what the roster, the admin
+hub's Active and Probationary tiles, and the status filters show.
+
 ### A probationary account is a current member everywhere (2026-10-20)
 
 `probationary` is one of the account statuses an officer can set from a

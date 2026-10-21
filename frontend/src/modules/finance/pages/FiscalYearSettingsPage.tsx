@@ -939,13 +939,22 @@ const FiscalYearSettingsPage: React.FC = () => {
     void fetchBudgetCategories();
   }, [fetchFiscalYears, fetchBudgetCategories]);
 
+  const deletingCategory = budgetCategories.find((c) => c.id === deletingCategoryId);
+
   const handleDeleteCategory = async (id: string) => {
+    const name = budgetCategories.find((c) => c.id === id)?.name ?? 'The category';
     try {
-      await budgetCategoryService.delete(id);
-      toast.success('Category deleted');
+      const outcome = await budgetCategoryService.delete(id);
+      if (outcome === 'deactivated') {
+        toast.success(
+          `${name} is still used by budget lines, budget requests or approval chains, so it was deactivated instead of deleted. Those keep it; new budget lines can't use it.`
+        );
+      } else {
+        toast.success('Category deleted');
+      }
       void fetchBudgetCategories();
-    } catch {
-      toast.error('Failed to delete category');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete category'));
     } finally {
       setDeletingCategoryId(null);
     }
@@ -1109,7 +1118,14 @@ const FiscalYearSettingsPage: React.FC = () => {
               <div key={cat.id} className="flex items-center justify-between py-3">
                 {/* Indented by depth, capped so a deep tree still fits a phone. */}
                 <div style={{ paddingLeft: `${Math.min(depth, 4) * 1.25}rem` }} className="min-w-0">
-                  <p className="text-theme-text-primary text-sm font-medium">{cat.name}</p>
+                  <p className="text-theme-text-primary text-sm font-medium">
+                    {cat.name}
+                    {!cat.isActive && (
+                      <span className="bg-theme-surface-secondary text-theme-text-secondary ml-2 rounded-sm px-1.5 py-0.5 text-xs font-medium">
+                        Inactive
+                      </span>
+                    )}
+                  </p>
                   {cat.description && <p className="text-theme-text-secondary text-xs">{cat.description}</p>}
                   <p className="text-theme-text-secondary text-xs">Owner: {cat.ownerPositionName || 'No owner'}</p>
                   <p className="text-theme-text-secondary text-xs">
@@ -1170,7 +1186,7 @@ const FiscalYearSettingsPage: React.FC = () => {
           if (deletingCategoryId) void handleDeleteCategory(deletingCategoryId);
         }}
         title="Delete Category"
-        message="Its budgets in every fiscal year are deleted too, and requests charged to them are left without a budget. This can't be undone."
+        message={`Delete ${deletingCategory ? `"${deletingCategory.name}"` : 'this category'}? If budget lines in any fiscal year, budget requests or approval chains use it, it is deactivated instead of deleted: they keep it, and new budget lines can't choose it. Otherwise it is deleted, which can't be undone.`}
         confirmLabel="Delete"
         variant="danger"
       />

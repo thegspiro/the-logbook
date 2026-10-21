@@ -1548,7 +1548,8 @@ You can see your shifts in Google Calendar, Apple Calendar or Outlook.
 3. Copy the link. Add it to your calendar app as a subscribed (or "Internet")
    calendar.
 
-Your shifts then appear and stay up to date. The feed shows your assigned,
+Disconnecting the feed stops the link working for every calendar that
+subscribed to it, and subscribing again issues a new link. Your shifts then appear and stay up to date. The feed shows your assigned,
 non-cancelled shifts from 60 days ago to a year ahead. You cannot edit shifts
 from your calendar.
 

@@ -1504,6 +1504,11 @@ export const MemberProfilePage: React.FC = () => {
                         </option>
                       ))}
                   </select>
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    Probationary follows the member&rsquo;s membership type: setting the type to Probationary on their
+                    record, or the tier ladder advancing them off it, moves this status on its own. A status set here
+                    holds until the type is next changed.
+                  </p>
                 </div>
                 <div>
                   <label htmlFor="status-reason" className="text-theme-text-secondary mb-1 block text-sm font-medium">

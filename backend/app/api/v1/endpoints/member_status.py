@@ -24,7 +24,14 @@ from app.core.audit import log_audit_event
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.core.database import database_manager, get_db
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
-from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User, UserStatus
+from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
+    STATUS_FOLLOWS_MEMBERSHIP_REASON,
+    Organization,
+    User,
+    UserStatus,
+    sync_account_status_with_membership,
+)
 from app.schemas.member_service import RejoinServiceOptions
 from app.schemas.organization import MembershipTierSettings
 from app.services.admin_continuity_service import (
@@ -36,6 +43,9 @@ from app.services.member_service_history_service import (
     MemberServiceHistoryService,
     effective_separation_at,
     is_separated,
+)
+from app.services.member_shift_release_service import (
+    release_future_shift_commitments,
 )
 from app.utils.membership import LEGACY_MEMBERSHIP_TYPES, is_administrative
 from app.utils.org_timezone import (
@@ -474,6 +484,21 @@ async def change_member_status(
         user_id=str(current_user.id),
         username=current_user.username,
     )
+
+    # A status outside ACTIVE_ACCOUNT_STATUSES fails the is_active check that
+    # signing in and scheduling require, so the member cannot work the seats
+    # still ahead of them. Hand those back to the roster. Run on every such
+    # change, not only on leaving active: it is idempotent, and it also sweeps
+    # up anything rostered while the member was already inactive.
+    if new_status not in ACTIVE_ACCOUNT_STATUSES:
+        await release_future_shift_commitments(
+            db,
+            organization_id=str(current_user.organization_id),
+            user_id=str(user_id),
+            reason=f"status_changed:{new_status.value}",
+            performed_by_id=str(current_user.id),
+            performed_by_username=current_user.username,
+        )
 
     response = MemberStatusChangeResponse(
         user_id=str(user_id),
@@ -980,6 +1005,15 @@ async def archive_member(
         username=current_user.username,
     )
 
+    await release_future_shift_commitments(
+        db,
+        organization_id=str(current_user.organization_id),
+        user_id=str(user_id),
+        reason="archived",
+        performed_by_id=str(current_user.id),
+        performed_by_username=current_user.username,
+    )
+
     return {
         "user_id": str(user_id),
         "member_name": member.display_name,
@@ -1293,6 +1327,10 @@ async def change_membership_type(
         member.rank = None
         cleared_rank = previous_rank
 
+    # Applied here as well as at flush so the audit entry below can say what
+    # moved. The flush listener finds nothing left to do.
+    status_change = sync_account_status_with_membership(member, now=now)
+
     await db.commit()
 
     await log_audit_event(
@@ -1307,10 +1345,33 @@ async def change_membership_type(
             "new_type": request.membership_type,
             "reason": request.reason,
             "cleared_rank": cleared_rank,
+            **(
+                {"previous_status": status_change[0], "new_status": status_change[1]}
+                if status_change
+                else {}
+            ),
         },
         user_id=str(current_user.id),
         username=current_user.username,
     )
+    if status_change:
+        # Its own entry too, so the member's status history reads the move
+        # the same way it reads one made from the Change Status dialog.
+        await log_audit_event(
+            db=db,
+            event_type="member_status_changed",
+            event_category="user_management",
+            severity="info",
+            event_data={
+                "target_user_id": str(user_id),
+                "member_name": member.full_name,
+                "previous_status": status_change[0],
+                "new_status": status_change[1],
+                "reason": f"{STATUS_FOLLOWS_MEMBERSHIP_REASON} '{request.membership_type}'",
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
 
     return {
         "user_id": str(user_id),
@@ -1318,6 +1379,11 @@ async def change_membership_type(
         "previous_membership_type": previous_type,
         "new_membership_type": request.membership_type,
         "changed_at": now.isoformat(),
+        "account_status": (
+            member.status.value
+            if isinstance(member.status, UserStatus)
+            else member.status
+        ),
     }
 
 
