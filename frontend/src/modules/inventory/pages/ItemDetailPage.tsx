@@ -20,7 +20,6 @@ import {
   Wrench,
   Shield,
   AlertTriangle,
-  ChevronRight,
   Loader2,
   Radio,
   Shirt,
@@ -63,6 +62,7 @@ import { labelChangeAfterEdit } from '../utils/labelStaleness';
 import type { LabelChange } from '../utils/labelStaleness';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -82,16 +82,16 @@ const HISTORY_ICONS: Record<string, React.ReactNode> = {
   label_printed: <Printer className="h-4 w-4 text-slate-500" />,
 };
 
-function typeIcon(itemType: string) {
+function typeIcon(itemType: string): React.ElementType {
   switch (itemType) {
     case 'electronics':
-      return <Radio className="h-5 w-5" />;
+      return Radio;
     case 'uniform':
-      return <Shirt className="h-5 w-5" />;
+      return Shirt;
     case 'ppe':
-      return <HardHat className="h-5 w-5" />;
+      return HardHat;
     default:
-      return <Cog className="h-5 w-5" />;
+      return Cog;
   }
 }
 
@@ -156,8 +156,8 @@ const ItemDetailPage: React.FC = () => {
   const canManage = checkPermission('inventory.manage');
   const { enabled: nfcEnabled } = useInventoryNfcEnabled(canManage);
   // A member reaches this page from their own issued gear, and the catalogue
-  // above it is manager-only — so every way out of here (breadcrumb, header
-  // Back, and the error state's link) has to lead somewhere they can open.
+  // above it is manager-only — so the error state's way out has to lead
+  // somewhere they can open.
   const backTo = canManage ? '/inventory/items' : '/inventory/my-equipment';
   const backLabel = canManage ? 'Items' : 'My Issued Gear';
 
@@ -375,32 +375,19 @@ const ItemDetailPage: React.FC = () => {
   /*  Render                                                           */
   /* ================================================================ */
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
-      {/* Breadcrumbs */}
-      <nav className="text-theme-text-muted flex items-center gap-1 text-sm">
-        {canManage && (
-          <>
-            <Link to="/inventory" className="hover:text-theme-text-primary">
-              Inventory
-            </Link>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </>
-        )}
-        <Link to={backTo} className="hover:text-theme-text-primary">
-          {backLabel}
-        </Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-theme-text-primary max-w-[200px] truncate font-medium">{item.name}</span>
-      </nav>
-
-      {/* Header */}
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-        <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-2">
-            <span className="text-theme-text-muted shrink-0">{typeIcon(itemType)}</span>
-            <h1 className="text-theme-text-primary truncate text-2xl font-bold">{getDisplayName(item)}</h1>
+    <div className="mx-auto max-w-7xl space-y-6">
+      {/* No header Back: a manager's trail leads to Inventory, and a member
+          who came from their own gear has My Issued Gear in the strip. */}
+      <OperationsPageHeader
+        icon={typeIcon(itemType)}
+        title={
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate">{getDisplayName(item)}</span>
             <VariantCapsules item={item} showLabels />
-          </div>
+          </span>
+        }
+        breadcrumbLabel={getDisplayName(item)}
+        subtitle={
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${getStatusStyle(item.status)}`}>
               {getStatusLabel(item.status)}
@@ -412,12 +399,9 @@ const ItemDetailPage: React.FC = () => {
               {item.tracking_type === 'individual' ? 'Individual' : 'Pool'}
             </span>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link to={backTo} className="btn-secondary btn-sm inline-flex items-center gap-1">
-            <ArrowLeft className="h-4 w-4" /> Back
-          </Link>
-          {canManage && (
+        }
+        actions={
+          canManage && (
             <>
               {/* Inside the manage gate with Edit: the label printer is
                   quartermaster work and /inventory/print-labels requires
@@ -430,13 +414,16 @@ const ItemDetailPage: React.FC = () => {
               >
                 <Printer className="h-4 w-4" /> Print Barcode
               </Link>
-              <button onClick={() => setShowEditModal(true)} className="btn-info btn-sm inline-flex items-center gap-1">
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="btn-primary btn-sm inline-flex items-center gap-1"
+              >
                 <Pencil className="h-4 w-4" /> Edit
               </button>
             </>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
       {canManage && labelChange && (
         <div

@@ -25,6 +25,8 @@ import {
   ScanLine,
   PackageCheck,
   ClipboardCheck,
+  Settings,
+  Warehouse,
 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { facilitiesService, inventoryService, locationsService } from '../../../services/api';
@@ -35,7 +37,7 @@ import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
-import { Breadcrumbs } from '../../../components/ux';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 import { NfcTagsCard } from '../components/NfcTagsCard';
 import { AuditScheduleField } from '../components/AuditScheduleField';
 import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
@@ -783,80 +785,72 @@ const StorageAreasPage: React.FC = () => {
   const set = (patch: Partial<AreaFormData>) => setFormData((p) => ({ ...p, ...patch }));
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
-      {/* Header */}
-      <Breadcrumbs underHub="/inventory/admin" />
-
-      <Link
-        to="/inventory/admin"
-        className="text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Admin
-      </Link>
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-theme-text-primary text-2xl font-bold">Storage Areas</h1>
-          <p className="text-theme-text-secondary mt-1">
-            Racks, shelves, and bins inside each room. Nest one inside another as needed.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => {
-              setPutAwayOpen((open) => !open);
-              setScanOpen(false);
-              setCheckOpen(false);
-            }}
-            aria-expanded={putAwayOpen}
-            className="btn-secondary btn-md flex items-center gap-2"
-          >
-            <PackageCheck className="h-4 w-4" /> Put away
-          </button>
-          <button
-            onClick={() => {
-              setScanOpen((open) => !open);
-              setPutAwayOpen(false);
-              setCheckOpen(false);
-              setScanMiss(null);
-            }}
-            aria-expanded={scanOpen}
-            className="btn-secondary btn-md flex items-center gap-2"
-          >
-            <ScanLine className="h-4 w-4" /> Scan shelf label
-          </button>
-          <button
-            onClick={() => {
-              setCheckOpen((open) => !open);
-              setPutAwayOpen(false);
-              setScanOpen(false);
-            }}
-            aria-expanded={checkOpen}
-            className="btn-secondary btn-md flex items-center gap-2"
-          >
-            <ClipboardCheck className="h-4 w-4" /> Check contents
-          </button>
-          <button
-            onClick={() => printLabels(areasInView.map((area) => area.id))}
-            disabled={areasInView.length === 0}
-            className="btn-secondary btn-md flex items-center gap-2"
-          >
-            <Printer className="h-4 w-4" />
-            {areasInView.length > 0
-              ? `Print ${areasInView.length} ${areasInView.length === 1 ? 'label' : 'labels'}`
-              : 'Print labels'}
-          </button>
-          {nfcEnabled && (
-            <Link to="/inventory/put-away" className="btn-secondary btn-md flex items-center gap-2">
-              <Nfc className="h-4 w-4" aria-hidden="true" /> Put Away by NFC
+    <div className="mx-auto max-w-7xl space-y-6">
+      <OperationsPageHeader
+        underHub="/inventory/admin"
+        icon={Warehouse}
+        title="Storage Areas"
+        subtitle="Racks, shelves, and bins inside each room. Nest one inside another as needed."
+        actions={
+          <>
+            <Link to="/inventory/admin" className="btn-secondary btn-md flex items-center gap-2">
+              <Settings className="h-4 w-4" aria-hidden="true" /> Administration
             </Link>
-          )}
-          <button onClick={openCreateModal} className="btn-info btn-md flex items-center gap-2">
-            <Plus className="h-4 w-4" /> Add Storage Area
-          </button>
-        </div>
-      </div>
+            <button
+              onClick={() => {
+                setPutAwayOpen((open) => !open);
+                setScanOpen(false);
+                setCheckOpen(false);
+              }}
+              aria-expanded={putAwayOpen}
+              className="btn-secondary btn-md flex items-center gap-2"
+            >
+              <PackageCheck className="h-4 w-4" /> Put away
+            </button>
+            <button
+              onClick={() => {
+                setScanOpen((open) => !open);
+                setPutAwayOpen(false);
+                setCheckOpen(false);
+                setScanMiss(null);
+              }}
+              aria-expanded={scanOpen}
+              className="btn-secondary btn-md flex items-center gap-2"
+            >
+              <ScanLine className="h-4 w-4" /> Scan shelf label
+            </button>
+            <button
+              onClick={() => {
+                setCheckOpen((open) => !open);
+                setPutAwayOpen(false);
+                setScanOpen(false);
+              }}
+              aria-expanded={checkOpen}
+              className="btn-secondary btn-md flex items-center gap-2"
+            >
+              <ClipboardCheck className="h-4 w-4" /> Check contents
+            </button>
+            <button
+              onClick={() => printLabels(areasInView.map((area) => area.id))}
+              disabled={areasInView.length === 0}
+              className="btn-secondary btn-md flex items-center gap-2"
+            >
+              <Printer className="h-4 w-4" />
+              {areasInView.length > 0
+                ? `Print ${areasInView.length} ${areasInView.length === 1 ? 'label' : 'labels'}`
+                : 'Print labels'}
+            </button>
+            {nfcEnabled && (
+              <Link to="/inventory/put-away" className="btn-secondary btn-md flex items-center gap-2">
+                <Nfc className="h-4 w-4" aria-hidden="true" /> Put Away by NFC
+              </Link>
+            )}
+            <button onClick={openCreateModal} className="btn-primary btn-md flex items-center gap-2">
+              <Plus className="h-4 w-4" /> Add Storage Area
+            </button>
+          </>
+        }
+      />
 
       {putAwayOpen && (
         <PutAwayPanel

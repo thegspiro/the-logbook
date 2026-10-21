@@ -8,6 +8,10 @@ const mockGetOverdue = vi.fn();
 const mockExtend = vi.fn();
 
 vi.mock('../services/api', () => ({
+  // Read by the Operations section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   inventoryService: {
     getActiveTemporaryLoans: (...a: unknown[]) => mockGetActive(...a) as unknown,
     getOverdueTemporaryLoans: (...a: unknown[]) => mockGetOverdue(...a) as unknown,
