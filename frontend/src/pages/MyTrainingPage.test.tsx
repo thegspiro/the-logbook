@@ -10,6 +10,7 @@ const mockGetConfig = vi.fn();
 const mockGetVisibility = vi.fn();
 const mockExportMyTraining = vi.fn();
 const mockGetMyTrainingRecords = vi.fn();
+const mockGetTests = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingModuleConfigService: {
@@ -19,6 +20,18 @@ vi.mock('../services/api', () => ({
     exportMyTraining: (...args: unknown[]) => mockExportMyTraining(...args) as unknown,
     getMyTrainingRecords: (...args: unknown[]) => mockGetMyTrainingRecords(...args) as unknown,
   },
+  skillsTestingService: {
+    getTests: (...args: unknown[]) => mockGetTests(...args) as unknown,
+  },
+}));
+
+// The department's practical-skills method. Null is "unknown", which shows
+// Skills Testing — what every test below that does not set it expects.
+const skills = vi.hoisted(() => ({ method: null as string | null }));
+
+vi.mock('../stores/practicalSkillsStore', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../stores/practicalSkillsStore')>()),
+  usePracticalSkillsMethod: () => skills.method,
 }));
 
 vi.mock('../hooks/useTimezone', () => ({
@@ -125,6 +138,9 @@ describe('MyTrainingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     auth.permissions = [];
+    skills.method = null;
+    mockGetTests.mockReset();
+    mockGetTests.mockResolvedValue({ items: [], total: 0 });
     mockGetMyTraining.mockResolvedValue(mockTrainingData);
     mockGetConfig.mockResolvedValue({});
     mockGetVisibility.mockResolvedValue(mockTrainingData.visibility);
@@ -588,6 +604,57 @@ describe('MyTrainingPage', () => {
       expect(await screen.findByText('72%')).toBeInTheDocument();
       expect(screen.getByText('3 of 5 requirements met')).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'Nothing is on your training record yet' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('past skills test results under shift-report sign-offs', () => {
+    const pastResult = {
+      id: 'test-1',
+      template_id: 'tpl-1',
+      template_name: 'SCBA Donning',
+      candidate_id: 'user-1',
+      candidate_name: 'Test User',
+      examiner_id: 'user-2',
+      examiner_name: 'Captain Jones',
+      status: 'completed' as const,
+      result: 'pass' as const,
+      is_practice: false,
+      overall_score: 94,
+      completed_at: '2026-03-01T12:00:00Z',
+      created_at: '2026-03-01T11:00:00Z',
+    };
+
+    it('offers a read-only section to a member with results on file', async () => {
+      skills.method = 'shift_signoffs';
+      mockGetTests.mockResolvedValue({ items: [pastResult], total: 1 });
+      const user = userEvent.setup();
+      renderWithRouter(<MyTrainingPage />);
+
+      const toggle = await screen.findByRole('button', { name: /Past skills test results/ });
+      expect(screen.queryByRole('button', { name: /^Skills Tests$/ })).not.toBeInTheDocument();
+      // Scoped to the member's own tests, not the department's.
+      expect(mockGetTests).toHaveBeenCalledWith(expect.objectContaining({ candidate_id: 'user-1' }));
+
+      await user.click(toggle);
+      expect(await screen.findByText(/no new skills tests are taken/)).toBeInTheDocument();
+      expect(await screen.findByText('SCBA Donning')).toBeInTheDocument();
+    });
+
+    it('draws nothing for a member with no results on file', async () => {
+      skills.method = 'shift_signoffs';
+      renderWithRouter(<MyTrainingPage />);
+
+      await waitFor(() => expect(mockGetTests).toHaveBeenCalled());
+      expect(screen.queryByRole('button', { name: /Past skills test results/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Skills Tests$/ })).not.toBeInTheDocument();
+    });
+
+    it('keeps the ordinary Skills Tests section for a Skills Testing department', async () => {
+      skills.method = 'skills_testing';
+      renderWithRouter(<MyTrainingPage />);
+
+      expect(await screen.findByRole('button', { name: /^Skills Tests$/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Past skills test results/ })).not.toBeInTheDocument();
     });
   });
 });

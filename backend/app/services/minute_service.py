@@ -4,7 +4,6 @@ Meeting Minutes Service
 Business logic for meeting minutes management.
 """
 
-import asyncio
 import copy
 from datetime import datetime, time, timezone
 from typing import List, Optional, Tuple
@@ -1263,7 +1262,7 @@ class MinuteService:
         # Only after the commit: a rolled-back delete must keep its files.
         for path in paths:
             if path:
-                await asyncio.to_thread(file_storage.remove_quietly, path)
+                await file_storage.delete_quietly(path)
         return True
 
     async def _release_carried_sources(

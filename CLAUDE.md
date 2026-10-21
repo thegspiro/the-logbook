@@ -308,13 +308,22 @@ Consequences worth knowing:
   `npm ci`. Never trust a bare `tsc` invocation's version from either
   directory; use `tsc-native.mjs` (or, to deliberately run the `5.9.3` the
   linter uses, `node_modules/typescript/bin/tsc` from the repo root).
-- **Point your editor at the aliased compiler.** In VS Code, set this in your
-  local `.vscode/settings.json` (the directory is gitignored, so this cannot
-  be committed for you):
+- **The editor runs the aliased compiler, and the setting is committed.**
+  `.vscode/` is gitignored, but `.vscode/settings.json` and
+  `.vscode/extensions.json` are tracked, so a fresh clone already carries:
 
   ```json
-  "typescript.tsdk": "node_modules/typescript-native/lib"
+  "js/ts.experimental.useTsgo": true,
+  "js/ts.tsdk.path": "node_modules/typescript-native/lib"
   ```
+
+  Do not swap these back for `typescript.tsdk`. TypeScript 7 ships no
+  `tsserver.js`, so the classic key cannot load it from any path, and VS Code
+  quietly falls back to its own bundled version instead of the compiler the
+  build runs. The keys above are read by the TypeScript 7 extension
+  (`TypeScriptTeam.native-preview`, in the recommended extensions). If the
+  editor does not pick the workspace version up on its own, run
+  **TypeScript: Select TypeScript Version → Use Workspace Version** once.
 
 - Type-aware lint runs against 5.9.3 while the build uses 7.0.2. That gap is
   forced by upstream, not chosen. **When typescript-eslint ships TS 7 support,

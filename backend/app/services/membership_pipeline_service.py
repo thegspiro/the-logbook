@@ -6,7 +6,6 @@ pipeline configuration, prospect tracking, step progression, and
 transfer to full membership.
 """
 
-import asyncio
 import copy
 import secrets
 import unicodedata
@@ -6534,8 +6533,6 @@ class MembershipPipelineService:
             .scalars()
             .all()
         )
-        import os
-
         for stored_path in paths:
             confined = prospect_document_path(stored_path, organization_id)
             if stored_path and confined is None:
@@ -6544,17 +6541,12 @@ class MembershipPipelineService:
                     f"path is outside organization {organization_id}'s storage"
                 )
                 continue
-            if confined and os.path.exists(confined):
-                try:
-                    await asyncio.to_thread(os.remove, confined)
-                except OSError as exc:
-                    logger.error(
-                        f"Failed to remove prospect document file {stored_path}: {exc}"
-                    )
-                    raise ValueError(
-                        "Could not delete an applicant's document file, so "
-                        "nothing was purged; please try again"
-                    ) from exc
+            if confined and not await file_storage.delete(confined):
+                logger.error(f"Failed to remove prospect document file {stored_path}")
+                raise ValueError(
+                    "Could not delete an applicant's document file, so "
+                    "nothing was purged; please try again"
+                )
 
         # Cascade handles the dependent rows.
         await self.db.execute(
@@ -6986,24 +6978,15 @@ class MembershipPipelineService:
         # the row goes, the foreign file stays where it is.
         stored_path = doc.file_path
         if stored_path:
-            import os
-
             confined = prospect_document_path(stored_path, organization_id)
             if confined is None:
                 logger.warning(
                     f"Not removing prospect document {document_id}: stored path "
                     f"is outside organization {organization_id}'s storage"
                 )
-            elif os.path.exists(confined):
-                try:
-                    await asyncio.to_thread(os.remove, confined)
-                except OSError as exc:
-                    logger.error(
-                        f"Failed to remove prospect document file {confined}: {exc}"
-                    )
-                    raise ValueError(
-                        "Could not delete the document file; please try again"
-                    ) from exc
+            elif not await file_storage.delete(confined):
+                logger.error(f"Failed to remove prospect document file {confined}")
+                raise ValueError("Could not delete the document file; please try again")
 
         await self._log_activity(
             prospect_id=prospect_id,

@@ -36,6 +36,8 @@ import { ElectionBallot } from '../components/ElectionBallot';
 import { ElectionStatus, VotingMethod } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
+import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
+import { Vote } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
@@ -1055,22 +1057,19 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  // Explicit items rather than a generated trail: the URL is /elections/:id, and
-  // the generator skips the id, which would leave a single "Elections" crumb —
-  // and a one-crumb generated trail renders nothing at all. Defined once so it
-  // reaches the loading and not-found branches too; before this they offered no
-  // route away from the page whatsoever, not even the "Back to Elections" link
-  // the loaded branch carries.
+  // The loading and not-found branches have no record to head, so they keep an
+  // explicit trail as their way out; the loaded branch's trail comes from the
+  // Governance header. Explicit rather than generated: the URL is
+  // /elections/:id, and the generator skips the id, which would leave a single
+  // "Elections" crumb — and a one-crumb generated trail renders nothing at all.
   const trail = [{ label: 'Elections', path: '/elections' }, { label: election?.title || 'Election' }];
 
   if (loading) {
     return (
-      <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <Breadcrumbs items={trail} />
-          <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
-            <div className="text-theme-text-muted">Loading election...</div>
-          </div>
+      <div className="mx-auto max-w-7xl">
+        <Breadcrumbs items={trail} />
+        <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
+          <div className="text-theme-text-muted">Loading election...</div>
         </div>
       </div>
     );
@@ -1078,12 +1077,10 @@ export const ElectionDetailPage: React.FC = () => {
 
   if (error || !election) {
     return (
-      <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <Breadcrumbs items={trail} />
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
-            <p className="text-sm text-red-700 dark:text-red-300">{error || 'Election not found'}</p>
-          </div>
+      <div className="mx-auto max-w-7xl">
+        <Breadcrumbs items={trail} />
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
+          <p className="text-sm text-red-700 dark:text-red-300">{error || 'Election not found'}</p>
         </div>
       </div>
     );
@@ -1119,37 +1116,37 @@ export const ElectionDetailPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs items={trail} />
-
-        {/* Header */}
-        <div className="mb-6">
-          <div className="mb-2 flex items-center">
-            <Link to="/elections" className="mr-2 text-blue-600 hover:text-blue-700">
-              &larr; Back to Elections
-            </Link>
-          </div>
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <h2 className="text-theme-text-primary min-w-0 text-2xl font-bold break-words">{election.title}</h2>
-                {election.is_runoff && (
-                  <span className="rounded-sm bg-purple-100 px-2 py-1 text-xs font-semibold text-purple-800 dark:bg-purple-500/20 dark:text-purple-400">
-                    Runoff Round {election.runoff_round}
-                  </span>
-                )}
-              </div>
-              {election.is_runoff && election.parent_election_id && (
-                <Link
-                  to={`/elections/${election.parent_election_id}`}
-                  className="text-sm text-blue-600 hover:text-blue-700"
-                >
-                  &larr; View original election
-                </Link>
+    <div className="mx-auto max-w-7xl">
+      <div>
+        <GovernancePageHeader
+          icon={Vote}
+          breadcrumbLabel={election.title}
+          title={
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 break-words">{election.title}</span>
+              {election.is_runoff && (
+                <span className="rounded-sm bg-purple-100 px-2 py-1 text-xs font-semibold text-purple-800 dark:bg-purple-500/20 dark:text-purple-400">
+                  Runoff Round {election.runoff_round}
+                </span>
               )}
-              {election.description && <p className="text-theme-text-secondary mt-2">{election.description}</p>}
-            </div>
+            </span>
+          }
+          subtitle={
+            election.is_runoff || election.description ? (
+              <>
+                {election.is_runoff && election.parent_election_id && (
+                  <Link
+                    to={`/elections/${election.parent_election_id}`}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    &larr; View original election
+                  </Link>
+                )}
+                {election.description && <p className="text-theme-text-secondary mt-2">{election.description}</p>}
+              </>
+            ) : undefined
+          }
+          actions={
             <span
               className={`inline-flex shrink-0 rounded-full px-3 py-1 text-sm leading-5 font-semibold ${getStatusBadgeClass(
                 election.status
@@ -1157,8 +1154,8 @@ export const ElectionDetailPage: React.FC = () => {
             >
               {election.status}
             </span>
-          </div>
-        </div>
+          }
+        />
 
         {/* Election Lifecycle Stepper */}
         {election.status !== ElectionStatus.CANCELLED && (

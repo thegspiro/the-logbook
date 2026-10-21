@@ -1275,6 +1275,11 @@ export const schedulingService = {
     const response = await api.patch<BasicApparatusRecord>(`/scheduling/apparatus/${apparatusId}`, data);
     return normalizeApparatus(response.data);
   },
+  /** Undoes a delete that deactivated a vehicle in use; nothing it was removed from is restored. */
+  async reactivateBasicApparatus(apparatusId: string): Promise<BasicApparatusRecord> {
+    const response = await api.post<BasicApparatusRecord>(`/scheduling/apparatus/${apparatusId}/reactivate`);
+    return normalizeApparatus(response.data);
+  },
   /** Deletes an unused vehicle; one that templates, shifts or call records name is deactivated instead. */
   async deleteBasicApparatus(apparatusId: string): Promise<DeleteOutcome> {
     const response = await api.delete(`/scheduling/apparatus/${apparatusId}`);

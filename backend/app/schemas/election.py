@@ -19,6 +19,7 @@ from pydantic import (
 )
 
 from app.schemas.base import UTCResponseBase, as_utc
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 
 VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "supermajority"}
 VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
@@ -361,7 +362,7 @@ class ElectionBase(BaseModel):
     end_date: datetime
     anonymous_voting: bool = Field(default=True)
     allow_write_ins: bool = Field(default=False)
-    max_votes_per_position: int = Field(default=1, ge=1)
+    max_votes_per_position: int = Field(default=1, ge=1, le=INT32_MAX)
     seats_per_position: int = Field(default=1, ge=1, le=MAX_SEATS_PER_POSITION)
     results_visible_immediately: bool = Field(default=False)
     eligible_voters: Optional[List[UUID]] = Field(
@@ -379,7 +380,10 @@ class ElectionBase(BaseModel):
         description="Victory condition: most_votes, majority, supermajority, threshold",
     )
     victory_threshold: Optional[int] = Field(
-        default=None, description="Numerical threshold for victory (e.g., 10 votes)"
+        default=None,
+        description="Numerical threshold for victory (e.g., 10 votes)",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     victory_percentage: Optional[int] = Field(
         default=None,
@@ -409,6 +413,7 @@ class ElectionBase(BaseModel):
         default=None,
         ge=1,
         description="Quorum value (percentage or count depending on quorum_type)",
+        le=INT32_MAX,
     )
 
     # Lifecycle automation
@@ -576,19 +581,19 @@ class ElectionUpdate(BaseModel):
     end_date: Optional[datetime] = None
     anonymous_voting: Optional[bool] = None
     allow_write_ins: Optional[bool] = None
-    max_votes_per_position: Optional[int] = Field(None, ge=1)
+    max_votes_per_position: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     seats_per_position: Optional[int] = Field(None, ge=1, le=MAX_SEATS_PER_POSITION)
     results_visible_immediately: Optional[bool] = None
     eligible_voters: Optional[List[UUID]] = None
     voting_method: Optional[str] = None
     victory_condition: Optional[str] = None
-    victory_threshold: Optional[int] = None
+    victory_threshold: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     victory_percentage: Optional[int] = Field(None, ge=1, le=100)
     enable_runoffs: Optional[bool] = None
     runoff_type: Optional[str] = None
     max_runoff_rounds: Optional[int] = Field(None, ge=1, le=10)
     quorum_type: Optional[str] = None
-    quorum_value: Optional[int] = Field(None, ge=1)
+    quorum_value: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     auto_open: Optional[bool] = None
     reminder_hours_before_close: Optional[int] = Field(None, ge=1, le=720)
     nomination_deadline: Optional[datetime] = None
@@ -818,7 +823,10 @@ class CandidateBase(BaseModel):
     )
     photo_url: Optional[str] = Field(None, max_length=500)
     display_order: int = Field(
-        default=0, description="Order to display candidate in list"
+        default=0,
+        description="Order to display candidate in list",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
 
 
@@ -845,7 +853,7 @@ class CandidateUpdate(BaseModel):
     statement: Optional[str] = Field(None, max_length=CANDIDATE_STATEMENT_MAX_LENGTH)
     photo_url: Optional[str] = Field(None, max_length=500)
     accepted: Optional[bool] = None
-    display_order: Optional[int] = None
+    display_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
 
     @model_validator(mode="after")
     def refuse_cleared_required_fields(self) -> "CandidateUpdate":
@@ -1139,7 +1147,10 @@ class VoteCreate(BaseModel):
     candidate_id: UUID
     position: Optional[str] = Field(None, max_length=100)
     vote_rank: Optional[int] = Field(
-        None, ge=1, description="Rank for ranked-choice voting (1 = first choice)"
+        None,
+        ge=1,
+        description="Rank for ranked-choice voting (1 = first choice)",
+        le=INT32_MAX,
     )
 
 
@@ -1260,7 +1271,10 @@ class BulkVoteItem(BaseModel):
     candidate_id: UUID
     position: Optional[str] = Field(None, max_length=100)
     vote_rank: Optional[int] = Field(
-        None, ge=1, description="Rank for ranked-choice voting (1 = first choice)"
+        None,
+        ge=1,
+        description="Rank for ranked-choice voting (1 = first choice)",
+        le=INT32_MAX,
     )
 
 
@@ -1771,7 +1785,7 @@ class ProxyVoteCreate(BaseModel):
     )
     position: Optional[str] = Field(None, max_length=100)
     vote_rank: Optional[int] = Field(
-        None, ge=1, description="Rank for ranked-choice voting"
+        None, ge=1, description="Rank for ranked-choice voting", le=INT32_MAX
     )
 
 

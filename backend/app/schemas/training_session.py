@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase, as_utc
+from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.schemas.enum_validation import validate_enum_value
 
 
@@ -32,15 +33,15 @@ class TrainingSessionCreate(BaseModel):
     # RSVP settings
     requires_rsvp: bool = Field(default=True)
     rsvp_deadline: Optional[datetime] = None
-    max_attendees: Optional[int] = Field(default=None, ge=1)
+    max_attendees: Optional[int] = Field(default=None, ge=1, le=INT32_MAX)
     is_mandatory: bool = Field(default=False)
 
     # Check-in settings
     check_in_window_type: str = Field(
         default="flexible", description="flexible, strict, or window"
     )
-    check_in_minutes_before: int = Field(default=15)
-    check_in_minutes_after: int = Field(default=15)
+    check_in_minutes_before: int = Field(default=15, ge=INT32_MIN, le=INT32_MAX)
+    check_in_minutes_after: int = Field(default=15, ge=INT32_MIN, le=INT32_MAX)
     require_checkout: bool = Field(
         default=True,
         description="Require manual check-out for accurate duration tracking",
@@ -76,7 +77,7 @@ class TrainingSessionCreate(BaseModel):
             "refresher, specialty, policy_acknowledgment"
         ),
     )
-    credit_hours: float = Field(..., ge=0)
+    credit_hours: float = Field(..., ge=0, le=FLOAT32_MAX)
     instructor: Optional[str] = Field(None, max_length=255)
     instructor_id: Optional[UUID] = Field(
         None, description="Member teaching this session (enables qualification checks)"
@@ -96,7 +97,7 @@ class TrainingSessionCreate(BaseModel):
     issues_certification: bool = Field(default=False)
     certification_number_prefix: Optional[str] = Field(None, max_length=50)
     issuing_agency: Optional[str] = Field(None, max_length=255)
-    expiration_months: Optional[int] = Field(None, ge=1)
+    expiration_months: Optional[int] = Field(None, ge=1, le=INT32_MAX)
 
     # When False, attendance still credits the member but the session does not
     # advance the linked pipeline/certificate requirements (hours a certifying
@@ -144,6 +145,8 @@ class RecurringTrainingSessionCreate(TrainingSessionCreate):
     recurrence_week_ordinal: Optional[int] = Field(
         None,
         description="Which occurrence: 1=first, 2=second, ..., 5=fifth, -1=last",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     recurrence_month: Optional[int] = Field(
         None,
@@ -296,7 +299,7 @@ class AttendeeApprovalData(UTCResponseBase):
     # Override times (for adjustments)
     override_check_in_at: Optional[datetime] = None
     override_check_out_at: Optional[datetime] = None
-    override_duration_minutes: Optional[int] = None
+    override_duration_minutes: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
 
     # Status
     approved: bool = False

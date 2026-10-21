@@ -12,6 +12,10 @@ const mockGetElections = vi.fn();
 const mockCreateElection = vi.fn();
 
 vi.mock('../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   electionService: {
     getElections: (...args: unknown[]) => mockGetElections(...args) as unknown,
     createElection: (...args: unknown[]) => mockCreateElection(...args) as unknown,

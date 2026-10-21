@@ -51,6 +51,7 @@ from app.models.election import (
 from app.models.event import Event, EventRSVP, RSVPStatus
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import Organization, User
+from app.schemas.column_bounds import INT32_MAX
 from app.schemas.election import (
     AttendeeCheckIn,
     AttendeeCheckInResponse,
@@ -815,7 +816,7 @@ class VoteWithToken(BaseModel):
     token: str = Field(..., min_length=1, max_length=256)
     candidate_id: UUID
     position: Optional[str] = Field(None, max_length=100)
-    vote_rank: Optional[int] = Field(None, ge=1)
+    vote_rank: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     model_config = ConfigDict(extra="forbid")
 
 
@@ -3255,7 +3256,7 @@ async def send_election_report(
     current_user: User = Depends(require_permission("elections.manage")),
 ):
     """
-    Send an election report email to the secretary.
+    Email the election report to the officer who requested it.
 
     The report includes election results, ballot recipients, and reasons
     why specific members did not receive ballots.
@@ -3268,7 +3269,7 @@ async def send_election_report(
         success, message = await service.generate_and_send_election_report(
             election_id=election_id,
             organization_id=current_user.organization_id,
-            requested=True,
+            requested_by=current_user.id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
