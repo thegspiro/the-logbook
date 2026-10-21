@@ -1049,6 +1049,10 @@ class TestSuspension:
         org, user_id, caller = await _member_with_account(db_session)
         fake = FakeDirectory()
         with patch(f"{SERVICE}.directory_for", return_value=fake):
+            # The transferred applicant starts on probation (membership type
+            # drives status), and probationary cannot go straight to retired;
+            # every step below is an allowed transition and none is a drop.
+            await _change_status(db_session, user_id, caller, "active")
             await _change_status(db_session, user_id, caller, "retired")
             await _change_status(db_session, user_id, caller, "active")
             await _change_status(db_session, user_id, caller, "leave")
