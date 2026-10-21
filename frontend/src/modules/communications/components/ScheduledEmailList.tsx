@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../../../components/ux';
 import { formatShortDateTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useScheduledEmailsStore } from '../store/scheduledEmailsStore';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 const STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
   pending: { icon: Clock, color: 'text-yellow-500', label: 'Pending' },
@@ -34,8 +35,8 @@ const ScheduledEmailList: React.FC = () => {
     try {
       await cancelScheduledEmail(cancelTarget);
       toast.success('Scheduled email cancelled');
-    } catch {
-      // Error handled by store
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not cancel the scheduled email. It may still be sent.'));
     } finally {
       setCancelTarget(null);
     }

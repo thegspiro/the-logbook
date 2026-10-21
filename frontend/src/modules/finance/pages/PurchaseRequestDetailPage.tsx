@@ -35,6 +35,8 @@ import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
+import { useConfirm } from '@/contexts/ConfirmContext';
+import { getErrorMessage } from '@/utils/errorHandling';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import {
   ApprovalEntityType,
@@ -203,6 +205,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
     submitPurchaseRequest,
   } = useFinanceStore();
   const access = useFinanceRequestAccess();
+  const { confirm } = useConfirm();
 
   useEffect(() => {
     if (id) {
@@ -256,12 +259,20 @@ const PurchaseRequestDetailPage: React.FC = () => {
 
   const handleCancel = async () => {
     if (!id) return;
+    const confirmed = await confirm({
+      title: 'Cancel this purchase request?',
+      message:
+        'The request is closed for good: any approval still outstanding is withdrawn, emailed approval links stop working, and any budget held for it is released. It cannot be reopened.',
+      confirmLabel: 'Cancel request',
+      cancelLabel: 'Keep it',
+    });
+    if (!confirmed) return;
     try {
       await purchaseRequestService.cancel(id);
       toast.success('Purchase request cancelled');
       void fetchPurchaseRequest(id);
-    } catch {
-      toast.error('Failed to cancel purchase request');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to cancel purchase request'));
     }
   };
 

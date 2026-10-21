@@ -568,6 +568,8 @@ export interface Applicant {
   current_stage_name?: string | undefined;
   current_stage_type?: StageType | undefined;
   current_stage_config?: StageConfig | undefined;
+  /** Display label for each of the current stage's `required_approvers`, keyed as stored. */
+  current_stage_approver_labels?: Record<string, string> | undefined;
   /** Whether the stage is marked Required. A required stage cannot be skipped. */
   current_stage_required?: boolean | undefined;
   stage_entered_at: string;
@@ -1028,6 +1030,8 @@ export interface BackendStepResponse {
   email_template_id: string | null;
   required: boolean;
   config: Record<string, unknown> | null;
+  /** Office label for each stored `required_approvers` value, keyed as stored. */
+  approver_labels?: Record<string, string> | undefined;
   inactivity_timeout_days: number | null;
   notify_prospect_on_completion: boolean;
   public_visible: boolean;

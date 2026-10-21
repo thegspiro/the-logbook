@@ -143,3 +143,16 @@ describe('the shell arrangement', () => {
     expect(await screen.findByTestId('side-nav')).toBeInTheDocument();
   });
 });
+
+describe('printing', () => {
+  // The print sheet hides `.no-print`; the shell footer is chrome and must not
+  // land under a check-in sticker or a shift report.
+  it.each(['top', 'left'] as const)('keeps the footer off the page in the %s layout', async (layout) => {
+    getBranding.mockResolvedValue({ name: 'Engine Co.', navigation_layout: layout });
+
+    renderShell();
+
+    expect(await screen.findByTestId(layout === 'top' ? 'top-nav' : 'side-nav')).toBeInTheDocument();
+    expect(screen.getByRole('contentinfo')).toHaveClass('no-print');
+  });
+});

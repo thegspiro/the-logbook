@@ -211,6 +211,14 @@ choice an owner may want to revisit:
   member, so a Google failure while suspending is recorded only in the audit
   log; an administrator suspends the account by hand.
 - **No rename.** A member's name change in The Logbook does not reach Google.
+- **A departed member's account cannot be kept on.** The daily departure check
+  (owner decision, 2026-10-20) suspends again any departed member's account
+  found active in the directory, every morning, with no exemption: an
+  administrator who re-enables one to export a mailbox must finish within the
+  day or return the member in The Logbook. The check runs once a day, so an
+  account re-enabled just after it is active for up to a day; the morning
+  email reports only what the last day's check found, and anything older is
+  in the audit log.
 - **Add Member creates an account only when asked; import never does.** Add
   Member's **Create a … account** box starts unticked (owner decision,
   2026-10-20), and a roster import only links members to accounts already at
@@ -489,12 +497,12 @@ numbers a column cannot hold, duplicate identifiers, a tracking-mode change
 under a live assignment, the assign URL/body mismatch, category loops) is fixed;
 these were left because each is a policy choice or needs a schema change.
 
-| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                  |
-| ----------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.               |
-| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                       |
-| Same overflow class on the other inventory schemas    | Open          | Bounds now match the column types on item create/update, category create/update and the bulk-entry name. Other request schemas with unbounded `int`/`Decimal` fields (stock lots, issuances, requests, kits) were not audited and will still report a 1264 overflow as a generic error. |
-| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                  |
+| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.                                                                                                                                                                                                                                                          |
+| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                                                                                                                                                                                                                                                                  |
+| Same overflow class outside inventory                 | Open          | The inventory, medical-supplies and equipment-check request schemas are bounded to their columns and `tests/test_request_numeric_bounds.py` fails on a new unbounded field there. Measured 2026-10-20 across the whole API: 488 unbounded numeric request fields in 214 schemas in 22 other route groups (training 124, apparatus 86, facilities 54, grants 53, finance 31, events 27, store 22, elections 17). Each still reports a 1264 overflow as a generic error. Add a router to `_ROUTERS` in that test to list its fields. |
+| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                                                                                                                                                                                                                                                             |
 
 ## Medical Supplies — Automatic Reorders Land in a Queue the EMS Officer Cannot Open (2026-10-11)
 
@@ -883,13 +891,16 @@ made these choices where nothing had been decided. Each is easy to reverse.
   it and can never be deleted from approved minutes. If the department would
   rather file the signed copy as a Document and leave the minutes wholly
   untouched, remove the `signed_copy` branch in `MinutesRecordService.store_minutes_attachment`.
-- **Election results are filed by hand.** A manager imports a closed election's
-  result into the minutes; nothing files it when the election is certified.
-  The copy is taken at that moment. In a draft it can be removed and filed again
-  if the election is revised (a voided ballot after certification, W50); once the
+- **Election results are filed automatically, and a correction is a second
+  addendum.** A closed election tied to a meeting (its calendar event or meeting
+  record) files its certified result with that meeting's minutes: when the
+  election closes if the minutes exist, otherwise when they are made. The copy
+  is taken at that moment. In a draft it can be removed and filed again if the
+  election is revised (a voided ballot after certification, W50); once the
   minutes are circulated or adopted it is filed as a permanent addendum and
   cannot be removed, so a later correction is a second addendum, not a
-  replacement.
+  replacement. A department that prefers to file by hand switches
+  **Minutes → Settings → Elections** off; the manual import is unchanged.
 - **Approved minutes from before this change have no approved version.**
   `GET /{id}/verify` says so rather than inventing a hash for content nobody
   hashed. Reopening and re-approving one creates version 1.
@@ -1912,6 +1923,51 @@ Found 2026-08-12 while trying to seed a budget with charges for
 encumbrance accruing on approval, so the progress bar was permanently stuck at
 0% — is unblocked by this; the transaction-table stub in the section above is
 not, and remains unwired.
+
+## Upgraded and Fresh Databases Still Differ (2026-10-20)
+
+A fresh install is built from the models (`main.py`'s fast path:
+`create_all`, then `MIGRATION_ONLY_FILES` and the seed files, then a stamp at
+head). An existing installation is built by the Alembic chain plus the startup
+column repair. A comparison of the two on 2026-10-20 found two defects, which
+are fixed (duplicate RESTRICT foreign keys on 18 apparatus columns, and three
+redundant `organization_id` indexes), and the differences below, which are
+**accepted** for now. `backend/tests/test_live_schema_drift.py` guards the
+fixed directions on CI's migrated database. It deliberately does not assert
+these.
+
+**Tables only an upgraded database has: by design.** Three bookkeeping tables,
+`document_unfiled_backfill`, `facility_document_refile_backfill` and
+`facility_folder_tier_backfill`, are written by the 2026-10-11 folder backfills
+so their downgrades can move each document back. A fresh install never ran
+those backfills and has nothing to undo. Drop them only after deciding those
+downgrades are no longer needed.
+
+**Five tables that no code reads.** `compliance_policies`,
+`policy_acknowledgments`, `compliance_checklists`, `checklist_submissions` and
+`compliance_incidents` come from `20260201_0016`. Every installation has them,
+fresh ones included, because `MIGRATION_ONLY_FILES` replays that migration, but
+nothing under `backend/app/` references them. The facilities module's checklist
+tables are the separately named `facility_compliance_checklists` family.
+**Open decision:** retire them (this drops whatever rows a department has in
+them), or leave them as harmless empty tables.
+
+**Upgraded databases are stricter than the models.** About 100 columns are
+`NOT NULL` on an upgraded database and nullable in the models, and about 177
+carry a server default that a fresh install lacks. They are mostly booleans,
+sort orders and timestamps. The
+application supplies every one of these values on insert, so ordinary use does
+not reach the gap. It shows up when code writes an explicit `null` to one of
+these columns: `apply_updates` reads nullability from the models, so it passes
+the write, and an upgraded database then rejects it at flush time with a 500
+instead of a 400. Closing it means choosing, per column, which side is right.
+That makes it a sweep with its own review, not a mechanical migration.
+
+**One unused index on upgraded databases.** `20260808_0003` dropped the
+foreign key on `shift_equipment_checks.apparatus_id`, and MySQL kept the index
+it had created for that key (`fk_shift_equipment_checks_apparatus_id_apparatus`).
+Nothing queries it and fresh installs do not have it. It costs one index write
+per equipment-check submission.
 
 ## Two Migrations Claimed 20260808_0002 — and What It Left Behind (2026-08-09)
 

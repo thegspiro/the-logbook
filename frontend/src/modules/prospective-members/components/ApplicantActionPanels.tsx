@@ -24,6 +24,7 @@ import toast from 'react-hot-toast';
 import type { Applicant } from '../types';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService } from '../services/api';
+import { approverRoleLabel } from '../utils';
 import { ApplicantStatus, StageType } from '../../../constants/enums';
 import { getErrorMessage } from '../../../utils/errorHandling';
 
@@ -53,7 +54,7 @@ const getStageRequirementHint = (applicant: Applicant): string | null => {
     case StageType.MULTI_APPROVAL: {
       const roles = 'required_approvers' in config ? config.required_approvers : [];
       return roles.length > 0
-        ? `Waiting for approval from: ${roles.map((role) => role.replace(/_/g, ' ')).join(', ')}.`
+        ? `Waiting for approval from: ${roles.map((role) => approverRoleLabel(role, applicant.current_stage_approver_labels)).join(', ')}.`
         : null;
     }
     case StageType.REFERENCE_CHECK: {

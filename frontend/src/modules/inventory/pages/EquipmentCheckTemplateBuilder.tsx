@@ -38,6 +38,7 @@ import {
   ArrowRightLeft,
   List,
   Package,
+  PackageCheck,
   PackageSearch,
   Link2,
   MoreHorizontal,
@@ -487,6 +488,19 @@ function emptyInlineGroup(): CompartmentFormState {
 
 function isEmptyInlineGroup(comp: CompartmentFormState): boolean {
   return comp.isInline && comp.items.length === 0;
+}
+
+/**
+ * The instruction the 2026-08-23 type migration wrote onto every line that had
+ * been a `present` check when it folded that type into Works
+ * (`LEGACY_TYPE_INSTRUCTIONS` in backend/app/utils/check_types.py). A Works
+ * line still carrying it was an "is it on the truck?" question, which the
+ * Present type now asks directly.
+ */
+const LEGACY_PRESENT_INSTRUCTION = 'Confirm the item is in place.';
+
+function wasLegacyPresentCheck(item: ItemFormState): boolean {
+  return item.checkType === 'function' && item.description.trim() === LEGACY_PRESENT_INSTRUCTION;
 }
 
 /**
@@ -1404,6 +1418,67 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     markDirty();
   };
 
+  /**
+   * Remove a group of items placed directly on the checklist once nothing is
+   * left in it.
+   *
+   * Such a group has no heading, so once emptied an author has nothing to
+   * find it by, and item edits autosave — Save, which also drops empty groups,
+   * may never be pressed. Skipped while a Save is running: that Save drops it
+   * anyway, and deleting under it is the race `deleteCompartment` guards
+   * against. If the server delete fails the group stays, and the next Save
+   * drops it.
+   */
+  const dropEmptyInlineGroup = async (compartmentKey: string) => {
+    // Let the removal that emptied it commit before reading the snapshot.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    const comp = compartmentsRef.current.find((candidate) => (candidate.id ?? candidate.clientKey) === compartmentKey);
+    if (!comp || !isEmptyInlineGroup(comp) || saveOperationActive) return;
+    if (comp.id && isEditing) {
+      try {
+        await ensureDraftBeforeStructureEdit();
+        await equipmentCheckService.deleteCompartment(comp.id);
+        savedParentByIdRef.current.delete(comp.id);
+      } catch {
+        return;
+      }
+    }
+    setCompartments((prev) => prev.filter((candidate) => (candidate.id ?? candidate.clientKey) !== compartmentKey));
+  };
+
+  /** Works lines that were "is it on the truck?" checks before Present existed. */
+  const legacyPresentLines = compartments.flatMap((comp, compIdx) =>
+    comp.items.flatMap((item, itemIdx) => (wasLegacyPresentCheck(item) ? [{ compIdx, itemIdx, item }] : []))
+  );
+
+  /**
+   * Switch every such line to Present in one step.
+   *
+   * Only lines the migration marked, never an arbitrary Works line: "does it
+   * work" and "is it there" are different questions, and guessing from a name
+   * would turn a function test into a presence one without anyone asking. The
+   * instruction stays on the line — it still reads correctly under Present.
+   */
+  const convertLegacyPresentLines = async () => {
+    const lines = legacyPresentLines;
+    if (lines.length === 0) return;
+    const shown = lines.slice(0, 8).map(({ item }) => item.name || 'Untitled item');
+    const more = lines.length - shown.length;
+    if (
+      !(await confirm({
+        title: `Switch ${String(lines.length)} line${lines.length === 1 ? '' : 's'} to Present?`,
+        message: `These Works lines ask the crew to confirm the item is in place. As Present lines the crew answers Present or Absent, and Absent fails the line without a note.\n\n${shown.join('\n')}${more > 0 ? `\nand ${String(more)} more` : ''}`,
+        confirmLabel: 'Switch to Present',
+        cancelLabel: 'Leave them',
+      }))
+    )
+      return;
+    for (const { compIdx, itemIdx } of lines) {
+      updateItemFieldWithAutoSave(compIdx, itemIdx, { checkType: CheckType.PRESENCE });
+    }
+    toast.success(`Switched ${String(lines.length)} line${lines.length === 1 ? '' : 's'} to Present`);
+  };
+
   const deleteItem = async (compartmentIdx: number, itemIdx: number) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
@@ -1434,6 +1509,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     const updatedItems = comp.items.filter((_, i) => i !== itemIdx);
     updateCompartmentField(compartmentIdx, { items: updatedItems });
+    if (comp.isInline && updatedItems.length === 0) await dropEmptyInlineGroup(comp.id ?? comp.clientKey);
   };
 
   const duplicateItem = async (compartmentIdx: number, itemIdx: number) => {
@@ -1621,6 +1697,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           ? `Moved "${currentItem.name || 'item'}" directly onto the checklist`
           : `Moved "${currentItem.name || 'item'}" to ${currentDestination.name || 'compartment'}`
       );
+      if (currentSource.isInline) await dropEmptyInlineGroup(currentSource.id ?? currentSource.clientKey);
     };
 
     const queuedMove = itemMoveQueue.current.then(persistAndApply);
@@ -1763,6 +1840,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
       delete bulkDeleteIdempotencyKeys.current[key];
       toast.success(`Deleted ${deletedCount} item${deletedCount !== 1 ? 's' : ''}`);
+      if (comp.isInline && remainingItems.length === 0) await dropEmptyInlineGroup(key);
     } catch (err) {
       toast.error(getErrorMessage(err, `Could not delete ${count} item${count !== 1 ? 's' : ''}`));
     }
@@ -6064,6 +6142,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         >
           <Download className="h-4 w-4" /> Download CSV sample
         </a>
+        {legacyPresentLines.length > 0 && (
+          <button
+            type="button"
+            onClick={() => void convertLegacyPresentLines()}
+            className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+          >
+            <PackageCheck className="h-4 w-4" /> Switch &ldquo;in place&rdquo; checks to Present (
+            {legacyPresentLines.length})
+          </button>
+        )}
         {templateId && coverage && coverage.linkable > 0 && (
           <button
             type="button"

@@ -5,7 +5,7 @@ Request and response schemas for election-related endpoints.
 """
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import AbstractSet, Any, Dict, List, Optional, Sequence, TypeVar
 from uuid import UUID
 
@@ -18,7 +18,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCResponseBase, as_utc
 
 VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "supermajority"}
 VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
@@ -68,21 +68,6 @@ def _refuse_cleared(model: BaseModel, required: AbstractSet[str]) -> None:
             f"{', '.join(cleared)} cannot be null; "
             "leave the field out to keep its current value"
         )
-
-
-def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
-    """Treat a naive datetime as UTC (the project-wide wire convention).
-
-    Pydantic v2 accepts both naive and timezone-aware ISO datetimes, but
-    comparing the two forms raises TypeError — which model validators do
-    NOT convert to a validation error, so a mixed create/update payload
-    surfaced as a 500 instead of a 422. Normalizing every incoming
-    datetime here keeps all cross-field date comparisons (in this module
-    and in the update endpoint) well-defined.
-    """
-    if value is not None and value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value
 
 
 def _empty_roster_means_everyone(
@@ -484,10 +469,10 @@ class ElectionBase(BaseModel):
     @field_validator("meeting_date", "start_date", "end_date", "nomination_deadline")
     @classmethod
     def normalize_datetimes(cls, v: Optional[datetime]) -> Optional[datetime]:
-        # See _as_utc: without this, a payload mixing naive and aware
+        # See as_utc: without this, a payload mixing naive and aware
         # datetimes makes validate_election_configuration raise TypeError
         # (a 500) instead of returning a 422.
-        return _as_utc(v)
+        return as_utc(v)
 
     @field_validator("eligible_voters")
     @classmethod
@@ -637,9 +622,9 @@ class ElectionUpdate(BaseModel):
     @field_validator("meeting_date", "start_date", "end_date", "nomination_deadline")
     @classmethod
     def normalize_datetimes(cls, v: Optional[datetime]) -> Optional[datetime]:
-        # See _as_utc: the update endpoint compares these against each other
+        # See as_utc: the update endpoint compares these against each other
         # and against stored values; a naive/aware mix raised TypeError (500).
-        return _as_utc(v)
+        return as_utc(v)
 
     @field_validator("eligible_voters")
     @classmethod
@@ -1045,8 +1030,8 @@ class CloneElectionRequest(BaseModel):
     @field_validator("start_date", "end_date", "nomination_deadline")
     @classmethod
     def normalize_datetimes(cls, v: Optional[datetime]) -> Optional[datetime]:
-        # See _as_utc: naive/aware mix in validate_dates was TypeError (500).
-        return _as_utc(v)
+        # See as_utc: naive/aware mix in validate_dates was TypeError (500).
+        return as_utc(v)
 
     @model_validator(mode="after")
     def validate_dates(self) -> "CloneElectionRequest":

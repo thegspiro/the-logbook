@@ -727,21 +727,22 @@ file.
 
 **CSV columns.** The template has all of them. The order does not matter.
 
-| Column                                                                           | Notes                                                                        |
-| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `firstName`, `lastName`                                                          | **Required**                                                                 |
-| `email`                                                                          | **Required.** Must be unique in the department                               |
-| `middleName`                                                                     |                                                                              |
-| `membershipNumber`                                                               | Must be unique. Leave blank to have one given when automatic numbering is on |
-| `username`                                                                       | Sign-in name. If blank, it is the part of the email before `@`               |
-| `dateOfBirth`, `joinDate`                                                        | Write dates as `YYYY-MM-DD` or `MM/DD/YYYY`                                  |
-| `street`, `city`, `state`, `zipCode`                                             | Put double quotes around any value that has a comma in it                    |
-| `primaryPhone`, `secondaryPhone`                                                 |                                                                              |
-| `rank`, `station`, `platoon`                                                     |                                                                              |
-| `role`                                                                           | Must match a role name set up under **Roles**                                |
-| `emergencyName1`, `emergencyRelationship1`, `emergencyPhone1`                    | Fill in all three, or leave all three blank                                  |
-| `emergencyEmail1`                                                                |                                                                              |
-| `emergencyName2`, `emergencyRelationship2`, `emergencyPhone2`, `emergencyEmail2` | Optional second contact, same rule                                           |
+| Column                                                                           | Notes                                                                           |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `firstName`, `lastName`                                                          | **Required**                                                                    |
+| `email`                                                                          | **Required.** Must be unique in the department                                  |
+| `middleName`                                                                     |                                                                                 |
+| `membershipNumber`                                                               | Must be unique. Leave blank to have one given when automatic numbering is on    |
+| `username`                                                                       | Sign-in name. If blank, it is the part of the email before `@`                  |
+| `dateOfBirth`, `joinDate`                                                        | Write dates as `YYYY-MM-DD` or `MM/DD/YYYY`                                     |
+| `street`, `city`, `state`, `zipCode`                                             | Put double quotes around any value that has a comma in it                       |
+| `primaryPhone`, `secondaryPhone`                                                 |                                                                                 |
+| `membershipType`                                                                 | `probationary`, `regular`, `life` or `administrative`. Blank imports as regular |
+| `rank`, `station`, `platoon`                                                     |                                                                                 |
+| `role`                                                                           | Must match a role name set up under **Roles**                                   |
+| `emergencyName1`, `emergencyRelationship1`, `emergencyPhone1`                    | Fill in all three, or leave all three blank                                     |
+| `emergencyEmail1`                                                                |                                                                                 |
+| `emergencyName2`, `emergencyRelationship2`, `emergencyPhone2`, `emergencyEmail2` | Optional second contact, same rule                                              |
 
 Only `firstName`, `lastName` and `email` are required. A file with just those
 three columns imports. Older templates called the membership number column
@@ -871,7 +872,7 @@ The Admin Edit page has these sections:
 - **Emergency Contacts:** add, change or remove contacts.
 
 You cannot change status here. Use the status button on the member's profile.
-Positions are given with **Manage Roles** on the member's row in Member
+Positions are given with **Manage Positions** on the member's row in Member
 Management.
 
 ![Admin member edit form with personal, department and access sections](./images/01-07-admin-member-edit.png)

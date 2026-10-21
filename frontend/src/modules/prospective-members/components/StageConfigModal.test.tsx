@@ -1192,3 +1192,54 @@ describe('StageConfigModal', () => {
     );
   });
 });
+
+describe('StageConfigModal multi-signer approver roles', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetForms.mockResolvedValue(mockForms);
+    mockGetEvents.mockResolvedValue(mockUpcomingEvents);
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  const approverRows = () => screen.queryAllByLabelText(/^Approver role \d+$/);
+
+  const openWithRows = async (user: ReturnType<typeof userEvent.setup>, rows: number) => {
+    render(<StageConfigModal {...defaultProps} />);
+    await user.click(screen.getByText('Multi-Signer Approval'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Officer Sign-Off');
+    while (approverRows().length < rows) {
+      await user.click(screen.getByRole('button', { name: /add approver role/i }));
+    }
+    for (const row of approverRows()) await user.clear(row);
+  };
+
+  // Validation trimmed the roles but the save sent them as typed, so a stage
+  // could store " chief " (which no holder matched) or a blank role nobody
+  // could ever sign for.
+  it('saves approver roles trimmed, without blank rows', async () => {
+    const user = userEvent.setup();
+    await openWithRows(user, 3);
+    await user.type(screen.getByLabelText('Approver role 1'), '  chief ');
+    await user.type(screen.getByLabelText('Approver role 3'), ' president');
+
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage_type: 'multi_approval',
+        config: expect.objectContaining({ required_approvers: ['chief', 'president'] }) as unknown,
+      })
+    );
+  });
+
+  it('refuses to save a stage whose approver rows are all blank', async () => {
+    const user = userEvent.setup();
+    await openWithRows(user, 2);
+    await user.type(screen.getByLabelText('Approver role 1'), '   ');
+
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(screen.getAllByText('At least one approver role is required').length).toBeGreaterThan(0);
+    expect(defaultProps.onSave).not.toHaveBeenCalled();
+  });
+});

@@ -939,8 +939,15 @@ async def _member_with_account(db_session, status=DirectoryAccountStatus.CREATED
     )
     db_session.add(officer)
     await db_session.commit()
+    # An administrator: member deletion checks that the caller holds every
+    # permission the member does, so the caller carries positions and a rank
+    # the way the loaded current user does.
     caller = SimpleNamespace(
-        id=officer.id, organization_id=org.id, username=officer.username
+        id=officer.id,
+        organization_id=org.id,
+        username=officer.username,
+        rank=None,
+        positions=[SimpleNamespace(permissions=["*"])],
     )
     return org, str(result["user_id"]), caller
 

@@ -24,6 +24,7 @@ const defaults: MinutesReminderSettings = {
   executive_effective_library: false,
   executive_effective_public: false,
   attendance_listing: 'all',
+  auto_file_election_results: true,
 };
 
 describe('ReminderSettingsPanel', () => {

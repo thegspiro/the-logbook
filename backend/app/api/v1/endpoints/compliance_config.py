@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.schemas.compliance_config import (
@@ -174,9 +175,22 @@ async def delete_compliance_profile(
     """Delete a compliance profile."""
     async with handle_service_errors("Failed to delete profile"):
         service = ComplianceConfigService(db)
-        await service.delete_profile(
+        profile_name = await service.delete_profile(
             profile_id=profile_id,
             organization_id=current_user.organization_id,
+        )
+        await log_audit_event(
+            db=db,
+            event_type="compliance_profile_deleted",
+            event_category="training",
+            severity="warning",
+            event_data={
+                "profile_id": profile_id,
+                "profile_name": profile_name,
+                "action": "compliance_profile_deleted",
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
         )
         await db.commit()
         return {"message": "Profile deleted"}
@@ -266,9 +280,22 @@ async def delete_compliance_report(
     """Delete a stored compliance report."""
     async with handle_service_errors("Failed to delete report"):
         service = ComplianceReportService(db)
-        await service.delete_report(
+        period_label = await service.delete_report(
             report_id=report_id,
             organization_id=current_user.organization_id,
+        )
+        await log_audit_event(
+            db=db,
+            event_type="compliance_report_deleted",
+            event_category="training",
+            severity="warning",
+            event_data={
+                "report_id": report_id,
+                "period_label": period_label,
+                "action": "compliance_report_deleted",
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
         )
         await db.commit()
         return {"message": "Report deleted"}

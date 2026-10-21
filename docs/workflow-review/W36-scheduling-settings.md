@@ -91,7 +91,7 @@ Add Position, named only by its placeholder "Display name (e.g., Tillerman)".
 **Fix:** named "Custom position name". Covered by the new
 `PositionNamesCard.test.tsx` (fails against the old card).
 
-### W36-4 — NIT — `/settings/platoons` shows General under a "Platoons" breadcrumb while platoons are off — OPEN
+### W36-4 — NIT — `/settings/platoons` shows General under a "Platoons" breadcrumb while platoons are off — FIXED 2026-10-20
 
 With platoon scheduling off, Platoons is not offered as a section, which is
 deliberate: the General toggle reveals it. A link straight to
@@ -100,6 +100,11 @@ section nav, under a breadcrumb that still says "Platoons", with nothing
 saying why. W35's platoons page links to Scheduling Settings the same way.
 Left: a one-line explanation would do, but the fallback is deliberate, so this
 is a copy choice for the owner.
+
+**Fixed:** the fallback still holds while settings load. Once they have loaded
+and platoons are off, the page replaces the URL with General, so the breadcrumb
+and nav agree, and General says platoon scheduling is off and that turning it
+on adds the section.
 
 ## Checklist
 

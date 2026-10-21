@@ -251,14 +251,15 @@ class TestDeletePhase:
     async def test_cleans_up_and_reanchors(self):
         phase_id = str(uuid4())
         phase = SimpleNamespace(id=phase_id)
-        link_id, req_id = str(uuid4()), str(uuid4())
+        req_id = str(uuid4())
         e1, e2 = str(uuid4()), str(uuid4())
         remaining = SimpleNamespace(
             id=str(uuid4()), phase_number=2, prerequisite_phase_ids=[phase_id]
         )
         db = RecordingSession(
             [
-                _rows([(link_id, req_id)]),  # requirement links on phase
+                _rows([(req_id, False)]),  # requirement links on phase
+                _rows([]),  # no other phase of the program links it
                 _rows([(e1, phase_id), (e2, "other")]),  # enrollments
                 MagicMock(),  # delete RequirementProgress
                 _scalars([remaining]),  # remaining phases

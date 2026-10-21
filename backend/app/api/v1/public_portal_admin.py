@@ -8,7 +8,7 @@ Requires authentication and appropriate permissions.
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from loguru import logger
 from sqlalchemy import and_, case, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -16,9 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.api.dependencies import require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.public_portal_fields import PUBLIC_PORTAL_FIELDS
 from app.core.public_portal_security import as_utc, generate_api_key, hash_api_key
+from app.core.security_middleware import get_client_ip
 from app.models.public_portal import (
     PublicPortalAccessLog,
     PublicPortalAPIKey,
@@ -44,6 +46,20 @@ from app.schemas.public_portal import (
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 router = APIRouter(prefix="/public-portal", tags=["public-portal-admin"])
+
+
+def _api_key_audit_data(api_key: PublicPortalAPIKey) -> dict[str, Any]:
+    """What an audit entry records about a key: never the key or its hash.
+
+    The stored prefix is the identifier an admin sees on the keys screen; the
+    plaintext is shown once at creation and the hash is a credential check,
+    so neither belongs in a log anyone with audit access can read.
+    """
+    return {
+        "key_id": str(api_key.id),
+        "key_prefix": api_key.key_prefix,
+        "name": api_key.name,
+    }
 
 
 # ============================================================================
@@ -229,6 +245,7 @@ async def list_api_keys(
 @router.post("/api-keys", response_model=PublicPortalAPIKeyCreatedResponse)
 async def create_api_key(
     key_data: PublicPortalAPIKeyCreate,
+    request: Request,
     current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -271,6 +288,23 @@ async def create_api_key(
     )
 
     db.add(api_key_obj)
+    await db.flush()
+    await log_audit_event(
+        db,
+        "public_portal.api_key_created",
+        "security",
+        "warning",
+        {
+            **_api_key_audit_data(api_key_obj),
+            "rate_limit_override": api_key_obj.rate_limit_override,
+            "expires_at": (
+                api_key_obj.expires_at.isoformat() if api_key_obj.expires_at else None
+            ),
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+    )
     await db.commit()
     await db.refresh(api_key_obj)
 
@@ -295,13 +329,15 @@ async def create_api_key(
 async def update_api_key(
     key_id: str,
     key_update: PublicPortalAPIKeyUpdate,
+    request: Request,
     current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Update an API key's settings.
 
-    Can update name, rate limit, expiration, or revoke the key.
+    Can update name, rate limit, expiration, or revoke the key. A revoked key
+    cannot be re-activated.
 
     **Requires permission: settings.manage**
     """
@@ -322,17 +358,57 @@ async def update_api_key(
             status_code=status.HTTP_404_NOT_FOUND, detail="API key not found"
         )
 
-    # Update fields
-    if key_update.name is not None:
+    # The model has no separate "disabled" state: is_active=False is what the
+    # DELETE endpoint writes, and the keys screen tells the admin a revocation
+    # cannot be undone. Turning a key back on would restore access for a
+    # credential that may have been revoked because it leaked.
+    if key_update.is_active and not api_key.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A revoked API key cannot be re-activated. Create a new key instead.",
+        )
+
+    was_active = api_key.is_active
+    changes: dict[str, Any] = {}
+    if key_update.name is not None and key_update.name != api_key.name:
+        changes["name"] = {"old": api_key.name, "new": key_update.name}
         api_key.name = key_update.name
     if key_update.rate_limit_override is not None:
+        if key_update.rate_limit_override != api_key.rate_limit_override:
+            changes["rate_limit_override"] = {
+                "old": api_key.rate_limit_override,
+                "new": key_update.rate_limit_override,
+            }
         api_key.rate_limit_override = key_update.rate_limit_override
     if key_update.expires_at is not None:
-        api_key.expires_at = as_utc(key_update.expires_at)
-    if key_update.is_active is not None:
-        api_key.is_active = key_update.is_active
-        if not key_update.is_active:
-            logger.info(f"API key revoked: {api_key.key_prefix}")
+        new_expiry = as_utc(key_update.expires_at)
+        old_expiry = api_key.expires_at
+        changes["expires_at"] = {
+            "old": as_utc(old_expiry).isoformat() if old_expiry else None,
+            "new": new_expiry.isoformat(),
+        }
+        api_key.expires_at = new_expiry
+    revoked = was_active and key_update.is_active is False
+    if revoked:
+        api_key.is_active = False
+        changes["is_active"] = {"old": True, "new": False}
+        logger.info(f"API key revoked: {api_key.key_prefix}")
+
+    if changes:
+        await log_audit_event(
+            db,
+            (
+                "public_portal.api_key_revoked"
+                if revoked
+                else "public_portal.api_key_updated"
+            ),
+            "security",
+            "warning",
+            {**_api_key_audit_data(api_key), "changes": changes},
+            user_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
+            ip_address=get_client_ip(request),
+        )
 
     await db.commit()
     await db.refresh(api_key)
@@ -343,6 +419,7 @@ async def update_api_key(
 @router.delete("/api-keys/{key_id}")
 async def revoke_api_key(
     key_id: str,
+    request: Request,
     current_user: User = Depends(require_permission("settings.manage")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -368,7 +445,18 @@ async def revoke_api_key(
             status_code=status.HTTP_404_NOT_FOUND, detail="API key not found"
         )
 
+    was_active = api_key.is_active
     api_key.is_active = False
+    await log_audit_event(
+        db,
+        "public_portal.api_key_revoked",
+        "security",
+        "warning",
+        {**_api_key_audit_data(api_key), "was_active": was_active},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+    )
     await db.commit()
 
     logger.info(f"API key revoked: {api_key.key_prefix}")

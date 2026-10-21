@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Settings, Plus, Trash2, Loader2, Pencil, Save } from 'lucide-react';
+import { Archive, Settings, Plus, Loader2, Pencil, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
 import type { FacilitySystemCreate } from '../../../services/facilitiesServices';
@@ -13,6 +13,7 @@ import { inputCls, labelCls, CONDITION_OPTIONS, CONDITION_COLORS } from '../cons
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, isPastDate } from '../../../utils/dateFormatting';
 import { formCoercions } from '../../../utils/formValues';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
@@ -140,19 +141,21 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
   const handleDelete = async (sys: FacilitySystem) => {
     if (
       !(await confirm({
-        title: 'Delete system',
-        message: `Delete "${sys.name}"? This cannot be undone.`,
-        confirmLabel: 'Delete',
+        // The endpoint archives (`delete_system` sets is_active false and
+        // stamps archived_at); the record and its history are kept.
+        title: 'Archive system',
+        message: `Archive "${sys.name}"? It leaves this facility's systems list, but its record and history are kept.`,
+        confirmLabel: 'Archive',
         cancelLabel: 'Keep it',
       }))
     )
       return;
     try {
       await facilitiesService.deleteSystem(sys.id);
-      toast.success('System deleted');
+      toast.success('System archived');
       void loadSystems();
-    } catch {
-      toast.error('Failed to delete system');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to archive system'));
     }
   };
 
@@ -360,9 +363,9 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
                           void handleDelete(sys);
                         }}
                         className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                        aria-label={`Delete ${sys.name}`}
+                        aria-label={`Archive ${sys.name}`}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Archive className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>

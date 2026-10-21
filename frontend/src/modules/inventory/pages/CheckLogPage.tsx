@@ -58,6 +58,7 @@ import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefres
 import { EmptyState } from '../../../components/ux';
 import { ScrollCueRow } from '../../../components/ux/ScrollCueRow';
 import { Modal } from '../../../components/Modal';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 const WINDOW_OPTIONS = [7, 14, 30] as const;
 
@@ -239,29 +240,20 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
   const [openDay, setOpenDay] = useState<{ row: CheckLogRow; cell: CheckLogCell } | null>(null);
 
   return (
-    <div className="space-y-4">
+    <div className={showHeader ? 'mx-auto max-w-7xl space-y-4' : 'space-y-4'}>
+      {/* No back link: the section strip and the trail above the title carry
+          the way out, and for a member reading their own log the strip's My
+          Checklists row is the link the old "← My checklists" was. */}
       {showHeader && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <ClipboardList className="text-theme-text-primary h-6 w-6 shrink-0" aria-hidden="true" />
-            <div>
-              <h1 className="text-theme-text-primary text-xl font-bold">Check log</h1>
-              <p className="text-theme-text-muted text-xs">
-                {data?.scope === 'own'
-                  ? 'Checks you performed'
-                  : 'Every expected check, including the ones that did not happen'}
-              </p>
-            </div>
-          </div>
-          {/* A member reading their own log does not hold the fleet board's
-              grant, so "Fleet" would lead them to Access Denied. */}
-          <Link
-            to={data?.scope === 'own' ? '/inventory/checklists/my' : '/inventory/checklists'}
-            className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 self-start rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-          >
-            &larr; {data?.scope === 'own' ? 'My checklists' : 'Fleet'}
-          </Link>
-        </div>
+        <OperationsPageHeader
+          icon={ClipboardList}
+          title="Check log"
+          subtitle={
+            data?.scope === 'own'
+              ? 'Checks you performed'
+              : 'Every expected check, including the ones that did not happen'
+          }
+        />
       )}
 
       {/* Window + view controls */}

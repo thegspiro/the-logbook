@@ -24,7 +24,7 @@ from app.models.finance import (
     FunctionalClass,
     PurchaseRequestPriority,
 )
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
 from app.utils.external_url import safe_external_url, validate_external_http_url
 
 # applies_to / step_type / approver_type / frequency / expense_type / mapping_type /
@@ -1685,7 +1685,7 @@ class CheckRequestUpdate(BaseModel):
     purpose: Optional[str] = None
     notes: Optional[str] = None
     check_number: Optional[str] = None
-    check_date: Optional[datetime] = None
+    check_date: Optional[UTCDateTime] = None
 
 
 class CheckRequestResponse(UTCResponseBase):
@@ -1756,7 +1756,7 @@ class DuesScheduleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     frequency: str
-    due_date: datetime
+    due_date: UTCDateTime
     grace_period_days: int = Field(30, ge=0)
     late_fee_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     fiscal_year_id: Optional[str] = None
@@ -1784,7 +1784,7 @@ class DuesScheduleUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
     frequency: Optional[str] = None
-    due_date: Optional[datetime] = None
+    due_date: Optional[UTCDateTime] = None
     grace_period_days: Optional[int] = Field(None, ge=0)
     late_fee_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     fiscal_year_id: Optional[str] = None
@@ -2167,7 +2167,7 @@ class AdvanceReturnCreate(BaseModel):
 
     amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     # Defaults to now.
-    returned_at: Optional[datetime] = None
+    returned_at: Optional[UTCDateTime] = None
     payment_method: Optional[str] = Field(None, max_length=50)
     reference: Optional[str] = Field(None, max_length=200)
     notes: Optional[str] = Field(None, max_length=5000)

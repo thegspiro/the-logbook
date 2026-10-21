@@ -1450,11 +1450,7 @@ narrows the search. Members search only circulated and adopted minutes, never a
 draft or an executive session; people who manage minutes search everything, and
 each result shows its status.
 
-<!-- Screenshot needed:
-The Minutes page with a word typed in the search box and the Found in the minutes
-card under it showing two results, each with its matching places and the found
-words highlighted.
--->
+![The Minutes page with the word budget typed in the search box and the Found in the minutes card listing the matching minutes with the word highlighted](./images/04-70-minutes-archive-search.png)
 
 **Minutes Settings.** _(2026-10-19)_ The department-wide choices about minutes
 are on one screen, opened with the **Settings** button beside **Outlines** at the
@@ -1468,16 +1464,9 @@ until something changes. Before 2026-10-19 these were four separate buttons on t
 Minutes page (**Reminders**, **Roll listing**, **Publishing**, **Signers**), each
 opening its own dialog.
 
-<!-- Screenshot needed:
-Minutes Settings as a settings administrator: the section list (Attendance,
-Signatures, Reminders, Publishing) beside the Attendance section, with its Save row.
--->
+![Minutes Settings: the section tabs (Attendance, Signatures, Reminders, Publishing) above the Attendance section and its Save row](./images/04-71-minutes-settings-attendance.png)
 
-<!-- Screenshot needed:
-Minutes Settings as a minutes manager who cannot change settings: the Attendance
-section with the controls disabled, the line saying a settings administrator
-changes it, and no Save row.
--->
+![Minutes Settings as a minutes manager without the settings permission: the Attendance section with disabled controls, a note that a settings administrator changes it, and no Save row](./images/04-72-minutes-settings-read-only.png)
 
 ![The Meeting Minutes page: the Outlines button, the summary tiles, and each meeting card listing its minutes with their state, one Circulated for review and one Adopted](./images/04-14-meeting-minutes.png)
 
@@ -1527,11 +1516,7 @@ the earlier minutes show a note that this meeting accepted them, and **Adopt
 Minutes** then opens already filled in from the motion (see
 [Circulating and adopting minutes](#circulating-and-adopting-minutes)).
 
-<!-- Screenshot needed:
-Draft minutes with the prepared Approval of Previous Minutes motion open: the
-line naming the earlier minutes being accepted, Result set to Passed, and the
-As submitted / As revised choice, nothing recorded yet.
--->
+![Draft minutes with the Approval of Previous Minutes motion prepared: the line naming the minutes being accepted, Result set to Passed and the As submitted / As revised choice](./images/04-76-minutes-prepared-acceptance-motion.png)
 
 ### Creating Minutes from a Meeting or an Event
 
@@ -1681,10 +1666,7 @@ for confirmation.
   publishing refuses if that folder's access was loosened.
 - The Minutes page shows a publishing status line for each set of minutes.
 
-<!-- Screenshot needed:
-Minutes Settings, Publishing section: the public-copy switch and the
-Executive-session minutes group with its two switches.
--->
+![Minutes Settings, Publishing: the public-copy switch and the Executive-session minutes group with its two switches](./images/04-73-minutes-settings-publishing.png)
 
 _[Screenshot to create: the publishing status note on adopted minutes; the public
 minutes page at phone and desktop widths.]_
@@ -1725,17 +1707,9 @@ and adopt them at the next meeting. The screen now follows that order:
   filled in from it (the meeting, the date, as submitted or as amended, mover and
   seconder) under a note saying so; check it, then adopt.
 
-<!-- Screenshot needed:
-Circulated minutes as an officer, with the note saying a later meeting accepted
-them as submitted, moved and seconded by named members, and that Adopt Minutes
-opens already filled in.
--->
+![Circulated minutes with the note that the Membership Business Meeting accepted them as submitted, moved and seconded by named members, and that Adopt Minutes opens already filled in](./images/04-77-minutes-accepted-by-later-meeting.png)
 
-<!-- Screenshot needed:
-The Adopt these minutes dialog opened by a second officer on those minutes, with
-the note "Filled in from the motion recorded at …" above the date, the meeting
-and the mover and seconder already filled in.
--->
+![The Adopt these minutes dialog filled in from the motion recorded at the Membership Business Meeting: the date the body voted, the meeting that accepted them, and the note saying where it came from](./images/04-78-minutes-adopt-dialog-prefilled.png)
 - **Adopted minutes are locked.** **Reopen for Correction** works as described
   above; it clears the adoption details but keeps the earlier version.
 
@@ -1787,10 +1761,7 @@ and corrected, the new version starts unsigned and the earlier signatures stay
 on file against the text they were given for. Signing is rate-limited, since it
 is a place a password could be guessed from a signed-in session.
 
-<!-- Screenshot needed:
-Minutes Settings, Signatures section with the two default slots, Recording
-Secretary and Presiding Officer, each open to anyone who manages minutes.
--->
+![Minutes Settings, Signatures: the Recording Secretary and Presiding Officer slots, each open to anyone who manages minutes](./images/04-74-minutes-settings-signatures.png)
 
 _[Screenshots to create: the Sign dialog (name and password); the Signatures
 panel on adopted minutes with one slot signed and one open.]_
@@ -1856,10 +1827,7 @@ days before the due date** (default 3; 0 is the due date itself), **Repeat while
 overdue, every this many days** (default 7; 0 is one overdue reminder only) and
 the weekly open-items list. Changing them needs the settings permission.
 
-<!-- Screenshot needed:
-Minutes Settings, Reminders section: the email switch, the first-reminder and
-repeat-while-overdue day fields, and the weekly open-items list switch.
--->
+![Minutes Settings, Reminders: the email switch, the first-reminder and repeat-while-overdue day fields, and the weekly open-items list switch](./images/04-75-minutes-settings-reminders.png)
 
 ### Attendance Dashboard (Secretary)
 

@@ -201,7 +201,12 @@ from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.equipment_request_notifications import (
     send_equipment_request_notice,
 )
-from app.services.inventory_service import InventoryService, is_pool_without_stock
+from app.services.inventory_service import (
+    InventoryService,
+    LotReceivedAgainstReorderError,
+    StorageAreaNotEmptyError,
+    is_pool_without_stock,
+)
 from app.services.label_printer_service import LabelPrinterService
 from app.services.label_service import UNSET, LabelService
 from app.services.organization_service import OrganizationService
@@ -4943,18 +4948,20 @@ async def delete_storage_area(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
-    """Delete (deactivate) a storage area"""
-    result = await db.execute(
-        select(StorageArea)
-        .where(StorageArea.id == str(area_id))
-        .where(StorageArea.organization_id == str(current_user.organization_id))
-    )
-    area = result.scalar_one_or_none()
+    """Delete (deactivate) a storage area.
+
+    Refused (409) while it holds active items or active nested areas.
+    """
+    try:
+        area = await InventoryService(db).deactivate_storage_area(
+            str(area_id), str(current_user.organization_id)
+        )
+    except StorageAreaNotEmptyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
     if not area:
         raise HTTPException(status_code=404, detail="Storage area not found")
-
-    area.is_active = False
-    await db.commit()
 
     await log_audit_event(
         db=db,
@@ -7663,9 +7670,14 @@ async def delete_item_lot(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
-    """Delete a stock lot."""
+    """Delete a stock lot. A lot received against a reorder is refused (409)."""
     service = InventoryService(db)
-    deleted = await service.delete_lot(lot_id, str(current_user.organization_id))
+    try:
+        deleted = await service.delete_lot(lot_id, str(current_user.organization_id))
+    except LotReceivedAgainstReorderError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
     if not deleted:
         raise HTTPException(status_code=404, detail="Lot not found")
 

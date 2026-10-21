@@ -120,7 +120,15 @@ class Location(Base):
     )
 
     # Relationships
-    events: Mapped[list["Event"]] = relationship("Event", back_populates="location_obj")
+    # passive_deletes="all": events.location_id is ON DELETE RESTRICT, and
+    # without this the ORM would null every loaded or lazily fetched event's
+    # location before deleting the row, so the constraint never fired and a
+    # deleted location silently stripped events of where they happen.
+    # LocationService.remove_location deactivates a referenced location
+    # instead; this keeps a reference that races in past that check a refusal.
+    events: Mapped[list["Event"]] = relationship(
+        "Event", back_populates="location_obj", passive_deletes="all"
+    )
     facility: Mapped[Optional["Facility"]] = relationship(
         "Facility", foreign_keys=[facility_id]
     )

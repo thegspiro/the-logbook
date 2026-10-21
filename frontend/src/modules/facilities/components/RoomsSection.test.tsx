@@ -3,6 +3,16 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithRouter } from '../../../test/utils';
 
+const mockToastError = vi.fn();
+vi.mock('react-hot-toast', () => ({
+  default: {
+    error: (...args: unknown[]): void => {
+      mockToastError(...args);
+    },
+    success: vi.fn(),
+  },
+}));
+
 const getRooms = vi.fn();
 const createRoom = vi.fn();
 const updateRoom = vi.fn();
@@ -237,5 +247,50 @@ describe('RoomsSection nesting', () => {
 
     expect(await screen.findByText(/2 sub-rooms will move up a level/)).toBeInTheDocument();
     expect(screen.queryByText(/3 sub-rooms will move up a level/)).not.toBeInTheDocument();
+  });
+});
+
+describe('RoomsSection deleting a room', () => {
+  beforeEach(() => {
+    getRooms.mockReset();
+    deleteRoom.mockReset();
+    mockToastError.mockReset();
+    getRooms.mockResolvedValue([office]);
+    deleteRoom.mockResolvedValue(undefined);
+  });
+
+  it('says what happens to the room location and the records that use it', async () => {
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(await screen.findByRole('button', { name: 'Delete room Volunteer Office' }));
+
+    expect(
+      await screen.findByText(
+        /Its location is deleted too — or, if events, event templates or apparatus still use it, deactivated and kept for them/
+      )
+    ).toBeInTheDocument();
+    expect(deleteRoom).not.toHaveBeenCalled();
+  });
+
+  it("shows the server's message and reloads when the delete is refused", async () => {
+    deleteRoom.mockRejectedValue({
+      response: {
+        status: 409,
+        data: { detail: 'This location was just put into use by another record, so it could not be removed.' },
+      },
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await user.click(await screen.findByRole('button', { name: 'Delete room Volunteer Office' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith(
+        'This location was just put into use by another record, so it could not be removed.'
+      )
+    );
+    await waitFor(() => expect(getRooms).toHaveBeenCalledTimes(2));
   });
 });

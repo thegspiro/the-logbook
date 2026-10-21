@@ -256,7 +256,8 @@ class TestCrud:
 
     async def test_delete_succeeds(self):
         rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
-        db = _db([_one(rank), _scalar(0)])
+        # The member count, then the org chart seats naming the rank.
+        db = _db([_one(rank), _scalar(0), _scalars([])])
         assert await OperationalRankService(db).delete_rank("r1", "org-1") is True
         db.delete.assert_awaited()
         db.commit.assert_awaited()

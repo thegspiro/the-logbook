@@ -9,6 +9,7 @@ from typing import List, Optional, Tuple
 
 from loguru import logger
 from sqlalchemy import and_, desc, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -78,6 +79,7 @@ from app.schemas.facilities import (
     FacilityUtilityReadingCreate,
     FacilityUtilityReadingUpdate,
 )
+from app.services.location_service import LocationInUseError, LocationService
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today
@@ -2491,12 +2493,17 @@ class FacilitiesService:
             await self._sync_room_location(descendant, facility, organization_id)
 
     async def delete_room(self, room_id: str, organization_id: str) -> bool:
-        """Delete room and its linked Location.
+        """Delete room, and delete or deactivate its linked Location.
 
         Sub-rooms are kept and re-parented onto the deleted room's own parent
         (or to the facility's top level). Deleting the volunteer office must
         not take the quartermaster's storage — and whatever is stored in it —
         down with it.
+
+        The linked Location follows ``LocationService.remove_location``: when
+        events, event templates or apparatus still reference it, it is
+        deactivated and kept, so they do not lose where they happened. Raises
+        ``LocationInUseError`` if a reference appeared mid-delete.
         """
         room = await self.get_room(room_id, organization_id)
         if not room:
@@ -2518,7 +2525,8 @@ class FacilitiesService:
             .execution_options(synchronize_session=False)
         )
 
-        # Remove the linked Location (cascade won't handle this since FK is SET NULL)
+        # The room's FK on the Location is SET NULL, so nothing removes the
+        # Location for us; the shared rule decides between delete and keep.
         result = await self.db.execute(
             select(Location).where(
                 Location.facility_room_id == room_id,
@@ -2527,10 +2535,14 @@ class FacilitiesService:
         )
         linked_location = result.scalar_one_or_none()
         if linked_location:
-            await self.db.delete(linked_location)
+            await LocationService(self.db).remove_location(linked_location)
 
         await self.db.delete(room)
-        await self.db.flush()
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            await self.db.rollback()
+            raise LocationInUseError()
 
         # The subtree's Location names embed the path that just lost a level.
         if descendant_ids:

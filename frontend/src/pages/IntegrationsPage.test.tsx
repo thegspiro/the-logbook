@@ -720,6 +720,45 @@ describe('IntegrationsPage', () => {
       expect(mockRotateIcalFeed).toHaveBeenCalledWith('ical-1');
     });
 
+    describe('Disconnecting the iCalendar feed', () => {
+      beforeEach(() => {
+        mockDisconnectIntegration.mockReset();
+        mockDisconnectIntegration.mockResolvedValue(undefined);
+      });
+
+      it('warns that subscribers lose the link for good, not that settings are kept', async () => {
+        const user = userEvent.setup();
+        mockGetIntegrations.mockResolvedValue([calendarRow('ical', 'iCalendar (ICS)', 'connected')]);
+
+        renderPage();
+        const card = await screen.findByTestId('integration-card-ical');
+        await user.click(within(card).getByRole('button', { name: 'Disconnect iCalendar (ICS)' }));
+
+        const dialog = await screen.findByRole('dialog', { name: 'Disconnect iCalendar (ICS)?' });
+        expect(dialog).toHaveTextContent('every calendar subscribed to it stops updating');
+        expect(dialog).toHaveTextContent('Reconnecting does not bring the link back: it issues a new one');
+        expect(dialog).not.toHaveTextContent('saved settings are kept');
+
+        await user.click(within(dialog).getByRole('button', { name: 'Keep it connected' }));
+        expect(mockDisconnectIntegration).not.toHaveBeenCalled();
+      });
+
+      it('keeps the generic wording for other integrations', async () => {
+        const user = userEvent.setup();
+        mockGetIntegrations.mockResolvedValue(mockIntegrations);
+
+        renderPage();
+        await screen.findByText('Slack');
+        await user.click(screen.getByRole('button', { name: 'Disconnect Generic ePCR Import' }));
+
+        const dialog = await screen.findByRole('dialog', { name: 'Disconnect Generic ePCR Import?' });
+        expect(dialog).toHaveTextContent(
+          'Generic ePCR Import stops working for the department until it is connected again. Its saved settings are kept.'
+        );
+        expect(dialog).not.toHaveTextContent('feed link');
+      });
+    });
+
     it('does not fetch the feed link while the iCalendar card is not connected', async () => {
       mockGetIntegrations.mockResolvedValue([calendarRow('ical', 'iCalendar (ICS)', 'available')]);
 

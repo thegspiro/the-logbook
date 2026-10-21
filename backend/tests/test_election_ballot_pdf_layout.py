@@ -83,8 +83,24 @@ def test_unusable_logo_still_prints_the_ballot(logo):
     assert "OFFICIAL BALLOT" in reader.pages[0].extract_text()
 
 
-def test_ranked_ballot_renders():
+def test_ranked_ballot_renders_as_a_grid():
+    # Two candidates plus two write-in lines: four options, four rank columns.
     data = {**DATA, "election": {**DATA["election"], "voting_method": "ranked_choice"}}
     buf = render_printable_ballot_pdf(data, {"org_name": "Test FD"})
-    text = PdfReader(BytesIO(buf.getvalue())).pages[0].extract_text()
+    text = " ".join(PdfReader(BytesIO(buf.getvalue())).pages[0].extract_text().split())
+    assert "mark one box in the 1st column for your first choice" in text
+    assert "1st 2nd 3rd 4th" in text
+    assert "5th" not in text
+    assert "write 1 next to your first choice" not in text
+
+
+def test_a_ranked_race_too_wide_for_the_grid_takes_written_ranks():
+    candidates = [f"Candidate {n}" for n in range(1, 13)]
+    data = {
+        "election": {"title": "Big Race", "voting_method": "ranked_choice"},
+        "positions": [{"name": "Board", "candidates": candidates}],
+    }
+    buf = render_printable_ballot_pdf(data, {"org_name": "Test FD"})
+    text = " ".join(PdfReader(BytesIO(buf.getvalue())).pages[0].extract_text().split())
     assert "write 1 next to your first choice" in text
+    assert "1st 2nd" not in text

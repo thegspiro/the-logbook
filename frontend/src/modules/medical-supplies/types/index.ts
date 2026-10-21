@@ -68,3 +68,18 @@ export function storageNote(item: {
   const norm = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
   return norm(note) === norm(last) ? null : note;
 }
+
+/** Severity of a dated lot, by how long is left on it. */
+export function expiryTone(days: number | undefined): string {
+  if (days === undefined || days === null) return 'text-theme-text-muted';
+  if (days < 0) return 'text-red-700 dark:text-red-400';
+  if (days <= 7) return 'text-orange-700 dark:text-orange-400';
+  return 'text-amber-700 dark:text-amber-400';
+}
+
+export function expiryLabel(days: number | undefined): string {
+  if (days === undefined || days === null) return '—';
+  if (days < 0) return `Expired ${Math.abs(days)}d ago`;
+  if (days === 0) return 'Expires today';
+  return `${days}d left`;
+}
