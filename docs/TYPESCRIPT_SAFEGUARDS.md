@@ -442,6 +442,8 @@ Install from `.vscode/extensions.json`:
 - **ESLint** (dbaeumer.vscode-eslint)
 - **Prettier** (esbenp.prettier-vscode)
 - **Tailwind CSS IntelliSense** (bradlc.vscode-tailwindcss)
+- **TypeScript 7** (TypeScriptTeam.native-preview) — runs the 7.x compiler the
+  build uses; the settings below point it at the workspace copy
 
 VSCode will prompt on first open:
 
@@ -458,13 +460,15 @@ Click **Install All**.
 
 From `.vscode/settings.json`:
 
-| Setting                                        | Benefit                       |
-| ---------------------------------------------- | ----------------------------- |
-| `editor.codeActionsOnSave` → `organizeImports` | Auto-removes unused imports   |
-| `editor.codeActionsOnSave` → `fixAll.eslint`   | Auto-fixes ESLint issues      |
-| `editor.formatOnSave`                          | Auto-formats with Prettier    |
-| `typescript.validate.enable`                   | Shows type errors inline      |
-| Problems panel                                 | Shows all errors in one place |
+| Setting                                                  | Benefit                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------- |
+| `editor.codeActionsOnSave` → `organizeImports`           | Auto-removes unused imports                                   |
+| `editor.codeActionsOnSave` → `fixAll.eslint`             | Auto-fixes ESLint issues                                      |
+| `editor.formatOnSave`                                    | Auto-formats with Prettier                                    |
+| `typescript.validate.enable`                             | Shows type errors inline                                      |
+| `js/ts.experimental.useTsgo`                             | Turns on the TypeScript 7 extension                           |
+| `js/ts.tsdk.path` → `node_modules/typescript-native/lib` | Type-checks with the same 7.x compiler as `npm run typecheck` |
+| Problems panel                                           | Shows all errors in one place                                 |
 
 ---
 
