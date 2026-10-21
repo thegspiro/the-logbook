@@ -3801,7 +3801,7 @@ Lt. Santos opens **Events > Create Event** and fills in the drill:
 | Event Type           | Training                                              |
 | Recurring            | No                                                    |
 | Date                 | Saturday, June 13, 2026                               |
-| Time                 | 08:30 – 12:30                                         |
+| Time                 | 08:00 – 12:00                                         |
 | Location             | 415 Industrial Pkwy (acquired structure)              |
 | RSVP Required        | Yes                                                   |
 | RSVP Fields          | Dietary restrictions, accessibility needs (for lunch) |
@@ -3866,7 +3866,7 @@ By 08:15, 24 of the 28 have checked in. Two more arrive by 08:20 and scan in.
 phone camera. Lt. Santos opens the event's check-in list on his tablet, finds
 Thompson, and checks him in.
 
-Final attendance at 08:30: 26 present out of 28. FF Garcia called in sick and one other member did not come.
+Final attendance at 08:30: 27 present out of 28. FF Garcia called in sick.
 
 ### Part 4: Drill Execution & Documentation
 
@@ -3885,9 +3885,8 @@ shift reports afterwards.
 
 ### Part 5: Post-Drill Reports (Same Evening)
 
-After the drill, Lt. Santos selects **End Event** at 12:30 and then finalizes the
-event's attendance. Each member is credited the time they were there, so everyone
-who stayed to the end gets the 4 hours of "Structural Firefighting Operations". The three
+After the drill, Lt. Santos finalizes the event's attendance, which credits
+everyone the 4 hours of "Structural Firefighting Operations". The three
 apparatus officers then file shift completion reports for their crews.
 
 Each officer starts from the drill shift. The form fills in the date, hours and
@@ -3913,8 +3912,8 @@ roof ventilation. All 10 get 4 hours.
 | Measure            | Value                              |
 | ------------------ | ---------------------------------- |
 | Reports filed      | 26 (one per trainee present)       |
-| Credit hours each  | 4 (2 for FF Patel)                 |
-| Total hours logged | 102                                |
+| Credit hours each  | 4                                  |
+| Total hours logged | 104                                |
 | Linked course      | Structural Firefighting Operations |
 
 ![The Crew summary table on Scheduling > Shift Reports — one row per crew member with report count, hours, calls and average rating](./images/02-90-crew-summary-table.png)
