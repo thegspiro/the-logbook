@@ -1,6 +1,6 @@
 """Regression tests for recording an event's actual time interval."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
@@ -12,7 +12,9 @@ from app.api.v1.endpoints.events import record_actual_times as record_actual_tim
 from app.schemas.event import RecordActualTimes
 from app.services.event_service import EventService
 
-BASE_TIME = datetime(2026, 8, 22, 12, 0)
+# Aware, as the ORM load hook stamps every stored DATETIME and as
+# RecordActualTimes hands the service every incoming time.
+BASE_TIME = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
 
 
 def _service(actual_start=None, actual_end=None):

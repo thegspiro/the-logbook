@@ -22,7 +22,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 
 from app.models.grant import allowed_next_statuses as _allowed_next_statuses
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
 from app.utils.external_url import validate_external_http_url
 from app.utils.grant_spending import application_overspend, budget_item_overspend
 from app.utils.grant_spending import total_expended as _total_expended
@@ -860,7 +860,7 @@ class DonationBase(BaseModel):
     model_config = _request_config
 
     amount: Decimal = Field(..., ge=0)
-    donation_date: datetime
+    donation_date: UTCDateTime
     payment_method: PaymentMethodLiteral
     payment_status: PaymentStatusLiteral = "completed"
     is_recurring: bool = False
@@ -887,7 +887,7 @@ class DonationUpdate(BaseModel):
     model_config = _request_config
 
     amount: Optional[Decimal] = Field(None, ge=0)
-    donation_date: Optional[datetime] = None
+    donation_date: Optional[UTCDateTime] = None
     payment_method: Optional[PaymentMethodLiteral] = None
     payment_status: Optional[PaymentStatusLiteral] = None
     is_recurring: Optional[bool] = None
@@ -995,7 +995,7 @@ class FundraisingEventBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     event_type: FundraisingEventTypeLiteral
-    event_date: datetime
+    event_date: UTCDateTime
     location: Optional[str] = Field(None, max_length=300)
     ticket_price: Optional[Decimal] = Field(None, ge=0)
     max_attendees: Optional[int] = Field(None, ge=0)
@@ -1023,7 +1023,7 @@ class FundraisingEventUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     event_type: Optional[FundraisingEventTypeLiteral] = None
-    event_date: Optional[datetime] = None
+    event_date: Optional[UTCDateTime] = None
     location: Optional[str] = Field(None, max_length=300)
     ticket_price: Optional[Decimal] = Field(None, ge=0)
     max_attendees: Optional[int] = Field(None, ge=0)

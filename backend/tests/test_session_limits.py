@@ -17,14 +17,11 @@ from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token
 from app.services.auth_service import AuthService, session_end_reason
 
-# The fixed reference for checks that are handed it (session_end_reason).
-# Sessions judged against the real clock are built from the time of the test
-# instead (_live): under a full suite this module is imported minutes before
-# its tests run, which ages a "10 minutes idle" session past the idle limit.
 NOW = datetime.now(timezone.utc)
 
 
-def _session(idle_minutes=1, age_hours=1, now=NOW, **extra):
+def _session(idle_minutes=1, age_hours=1, now=None, **extra):
+    now = NOW if now is None else now
     return SimpleNamespace(
         id="session-1",
         user_id="user-123",
@@ -136,8 +133,11 @@ def _access_db(session):
 
 
 def _live(**kw):
-    token = create_access_token({"sub": "user-123"})
+    # get_user_from_token measures idleness against the real clock, so the
+    # session is built from the time of the call, not the module-import NOW:
+    # a full suite runs long past the idle limit before these tests are reached.
     now = datetime.now(timezone.utc)
+    token = create_access_token({"sub": "user-123"})
     return token, _session(
         token=token, expires_at=now + timedelta(minutes=20), now=now, **kw
     )
