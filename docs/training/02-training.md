@@ -221,8 +221,10 @@ record for you.
    for the rest.
 3. **Search courses** filters by course name. **Type** filters by training
    type. Both narrow the years and the lists together.
-4. A record **still waiting for approval has no completion date**. It is
-   grouped under **Awaiting approval**, above the years, whatever you filter by.
+4. A record **with no completion date** is grouped under **No completion date**,
+   above the years, whatever you filter by. This includes a record still waiting
+   for approval and a completed record imported without a date; each row shows
+   its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
 
 The top of the tab shows your **all-time** courses and hours and how many years
 are on record. The History tab reads your whole record, however long it is.
@@ -1343,8 +1345,8 @@ Turn it on for a requirement that online or outside training may satisfy —
 HIPAA is the usual example.
 
 **5. Is the record completed?** Only **completed** records count. A record
-waiting for approval is listed under **Awaiting approval** on the member's
-History tab until an officer approves it.
+waiting for approval has no completion date, so it is listed under **No completion
+date** on the member's History tab until an officer approves it.
 
 The member can see most of this themselves. **My Training** shows the
 requirement's progress and, for a window about to open, an **Opens** row. The
