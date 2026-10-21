@@ -2094,6 +2094,16 @@ export interface OfficerShiftAnalytics {
 }
 
 // ============================================
+// Certification expiry alerts
+// ============================================
+
+export interface CertAlertSettings {
+  enabled: boolean;
+  cc_chief_on_escalation: boolean;
+  include_personal_email_on_final: boolean;
+}
+
+// ============================================
 // Training Module Configuration (Visibility)
 // ============================================
 

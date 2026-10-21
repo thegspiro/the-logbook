@@ -8532,6 +8532,29 @@ export const SHOTS = [
     expect: "Filled in from the motion recorded at",
   },
   {
+    // Ticked but not saved: saving would switch alerts on for the demo
+    // department, and nothing here should persist. The shot is the panel alone,
+    // so the administrator's malware-scanning notice on a stack with scanning
+    // off is not in the frame.
+    id: "02-121-cert-alert-settings",
+    doc: "02-training.md",
+    line: 2012,
+    anchor:
+      "The Expiry alert emails panel at the top of Training Admin → Overview → Expiring",
+    alt: "The Expiry alert emails panel on the Expiring Certs tab: Email members when a certification is close to expiring ticked, with the two copy options for the expired notice available beneath it",
+    route: "/training/admin?page=dashboard&tab=expiring-certs",
+    prepare: async (page) => {
+      const box = page.getByRole("checkbox", {
+        name: /Email members when a certification/,
+      });
+      await box.waitFor({ timeout: 20_000 });
+      await box.check();
+      await page.waitForTimeout(400);
+    },
+    selector: "section[aria-labelledby='cert-alerts-heading']",
+    expect: "Expiry alert emails",
+  },
+  {
     id: "04-15-action-items",
     doc: "04-events-meetings.md",
     line: 454,

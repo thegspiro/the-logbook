@@ -48,6 +48,7 @@ import type {
   BulkImportResponse,
   BulkTrainingRecordCreate,
   BulkTrainingRecordResult,
+  CertAlertSettings,
   ComplianceSummary,
   ExternalCategoryMapping,
   ExternalCategoryMappingUpdate,
@@ -449,6 +450,16 @@ export const trainingService = {
       params: { days },
     });
     return asArray(response.data);
+  },
+
+  async getCertAlertSettings(): Promise<CertAlertSettings> {
+    const response = await api.get<CertAlertSettings>('/training/certifications/alert-settings');
+    return response.data;
+  },
+
+  async updateCertAlertSettings(settings: CertAlertSettings): Promise<CertAlertSettings> {
+    const response = await api.put<CertAlertSettings>('/training/certifications/alert-settings', settings);
+    return response.data;
   },
 
   // ==================== Historical Training Import ====================

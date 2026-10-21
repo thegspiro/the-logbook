@@ -313,6 +313,35 @@ class TrainingRecordUpdate(BaseModel):
         return validate_enum_value(v, ModelTrainingStatus, "status")
 
 
+class CertAlertSettings(BaseModel):
+    """What the department's certification expiry alerts are set to do."""
+
+    enabled: bool
+    cc_chief_on_escalation: bool
+    include_personal_email_on_final: bool
+
+
+class CertAlertSettingsUpdate(BaseModel):
+    """Change any of the three alert switches; an omitted one is left alone.
+
+    A switch has no "cleared" state, so an explicit null is refused rather
+    than read as off.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[bool] = None
+    cc_chief_on_escalation: Optional[bool] = None
+    include_personal_email_on_final: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def _no_null_switches(self) -> "CertAlertSettingsUpdate":
+        for name in self.model_fields_set:
+            if getattr(self, name) is None:
+                raise ValueError(f"{name} must be true or false")
+        return self
+
+
 class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     """Schema for training record response"""
 
