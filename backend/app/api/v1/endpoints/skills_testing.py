@@ -1379,7 +1379,7 @@ async def list_tests(
         page = visible[offset : offset + limit]
 
     # Names for this page only.
-    user_ids = {i for t, _ in page for i in (t.candidate_id, t.examiner_id)}
+    user_ids = {i for t, _ in page for i in (t.candidate_id, t.examiner_id) if i}
     users_map = {}
     if user_ids:
         users_result = await db.execute(
@@ -1392,7 +1392,7 @@ async def list_tests(
     items = []
     for t, view in page:
         candidate = users_map.get(t.candidate_id)
-        examiner = users_map.get(t.examiner_id)
+        examiner = users_map.get(t.examiner_id) if t.examiner_id else None
         tmpl = templates_map.get(t.template_id)
 
         candidate_name = _format_user_name(candidate) if candidate else None
@@ -3347,7 +3347,14 @@ async def email_test_results(
 
     # Build email body
     candidate_name = _format_user_name(candidate)
-    examiner_name = _format_user_name(examiner) if examiner else "Unknown"
+    # examiner_id is NULL once the examiner's account was permanently deleted;
+    # the result stands, credited to a former member.
+    if examiner:
+        examiner_name = _format_user_name(examiner)
+    elif test.examiner_id is None:
+        examiner_name = "Former member"
+    else:
+        examiner_name = "Unknown"
     template_name = template.name if template else "Unknown Template"
     test_type = "Practice" if test.is_practice else "Official"
     result_text = _email_result_text(test.result)

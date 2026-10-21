@@ -1,11 +1,13 @@
 /**
- * Deleting a form takes every submission with it, and deleting an
- * integration stops automatic processing, so both ask first.
+ * A form with submissions is archived rather than deleted (the backend keeps
+ * the submissions), one without is deleted, and deleting an integration stops
+ * automatic processing; each asks first and says which will happen.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import toast from 'react-hot-toast';
 import { renderWithRouter } from '../test/utils';
 import type { FormDef, FormDetailDef } from '../services/api';
 
@@ -102,28 +104,49 @@ describe('FormsPage deletions', () => {
     mockDeleteIntegration.mockResolvedValue(undefined);
   });
 
-  it('says the submissions go with the form, and Keep form deletes nothing', async () => {
+  it('says a form with submissions is archived instead, and Keep form changes nothing', async () => {
     const user = userEvent.setup();
     renderWithRouter(<FormsPage />);
 
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Delete this form?' });
-    expect(dialog).toHaveTextContent('every submission made to it is deleted with it (12 submissions)');
+    const dialog = await screen.findByRole('dialog', { name: 'Archive this form?' });
+    expect(dialog).toHaveTextContent(
+      'Equipment Request has 12 submissions, so it is archived instead of deleted: it stops taking new submissions, and the 12 submissions already made are kept.'
+    );
 
     await user.click(within(dialog).getByRole('button', { name: 'Keep form' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(mockDeleteForm).not.toHaveBeenCalled();
   });
 
-  it('deletes the form once confirmed', async () => {
+  it('archives a form with submissions once confirmed, and says so', async () => {
+    const success = vi.spyOn(toast, 'success');
+    const user = userEvent.setup();
+    renderWithRouter(<FormsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Archive this form?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Archive form' }));
+
+    await waitFor(() => expect(mockDeleteForm).toHaveBeenCalledWith('form-1'));
+    expect(success).toHaveBeenCalledWith('Form archived; its 12 submissions are kept');
+    success.mockRestore();
+  });
+
+  it('deletes a form nobody has submitted once confirmed', async () => {
+    mockGetForms.mockResolvedValue({ forms: [{ ...form, submission_count: 0 }], total: 1 });
+    const success = vi.spyOn(toast, 'success');
     const user = userEvent.setup();
     renderWithRouter(<FormsPage />);
 
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
     const dialog = await screen.findByRole('dialog', { name: 'Delete this form?' });
-    await user.click(within(dialog).getByRole('button', { name: 'Delete form and submissions' }));
+    expect(dialog).toHaveTextContent('Equipment Request has no submissions, so it is deleted permanently.');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete form' }));
 
     await waitFor(() => expect(mockDeleteForm).toHaveBeenCalledWith('form-1'));
+    expect(success).toHaveBeenCalledWith('Form deleted');
+    success.mockRestore();
   });
 
   it('says automatic processing stops before deleting an integration', async () => {

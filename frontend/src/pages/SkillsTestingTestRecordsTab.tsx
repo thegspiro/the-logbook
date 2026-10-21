@@ -20,6 +20,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { MIN_VOID_REASON_LENGTH } from '../components/training/SkillTestOfficerActions';
 import { formatScore } from '../utils/skillScoreFormat';
 import { ClipboardList } from 'lucide-react';
+import { attributionName } from '../utils/memberName';
 
 /** Sentinel for the status dropdown. Not a SkillTestStatus — pending validation
  *  is a property of a *completed* test, so it maps to its own query param. */
@@ -126,7 +127,8 @@ const TestCard: React.FC<{
               )}
             </div>
             <p className="text-theme-text-muted text-sm">
-              Candidate: {test.candidate_name} &middot; Examiner: {test.examiner_name}
+              Candidate: {test.candidate_name} &middot; Examiner:{' '}
+              {attributionName(test.examiner_name, test.examiner_id)}
             </p>
           </div>
         </div>

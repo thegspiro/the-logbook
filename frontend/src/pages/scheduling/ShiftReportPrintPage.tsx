@@ -21,6 +21,7 @@ import {
   useCallTypeLabelsReady,
 } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import PrintPageStyles from '../../components/print/PrintPageStyles';
+import { attributionName } from '../../utils/memberName';
 
 /** Settle time for layout and webfonts before the print dialog opens. */
 const PRINT_DELAY_MS = 600;
@@ -258,7 +259,7 @@ const ShiftReportPrintPage: React.FC = () => {
           <section className="shift-report-print__signatures" aria-label="Signatures and review">
             <div className="shift-report-print__signature">
               <h2>Filing Officer</h2>
-              <p>{report.officer_name || '—'}</p>
+              <p>{attributionName(report.officer_name, report.officer_id, '—')}</p>
               <div className="shift-report-print__signature-line" />
               <span>Signature / Date</span>
             </div>

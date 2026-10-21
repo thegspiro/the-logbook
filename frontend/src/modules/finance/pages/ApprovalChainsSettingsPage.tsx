@@ -725,11 +725,14 @@ const ApprovalChainsSettingsPage: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, budgetCategoryId: e.target.value })}
               >
                 <option value="">Any category</option>
-                {budgetCategories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
+                {/* A deactivated category is kept for the records that use it, not offered for new chains. */}
+                {budgetCategories
+                  .filter((cat) => cat.isActive)
+                  .map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
               </select>
             </div>
             <div>

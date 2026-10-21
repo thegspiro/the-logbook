@@ -20,7 +20,7 @@ def _user():
 async def test_delete_training_program_records_audit_event(monkeypatch):
     program_id = uuid4()
     service = MagicMock()
-    service.delete_training_program = AsyncMock(return_value=(True, None))
+    service.delete_training_program = AsyncMock(return_value=("deleted", None))
     monkeypatch.setattr(
         training_programs, "TrainingProgramService", lambda _db: service
     )
@@ -48,10 +48,32 @@ async def test_delete_training_program_records_audit_event(monkeypatch):
     db.commit.assert_awaited_once()
 
 
+async def test_deactivation_in_place_of_delete_is_audited_as_such(monkeypatch):
+    program_id = uuid4()
+    service = MagicMock()
+    service.delete_training_program = AsyncMock(return_value=("deactivated", None))
+    monkeypatch.setattr(
+        training_programs, "TrainingProgramService", lambda _db: service
+    )
+    audit = AsyncMock()
+    monkeypatch.setattr(training_programs, "log_audit_event", audit)
+    db = MagicMock()
+    db.commit = AsyncMock()
+
+    await training_programs.delete_training_program(program_id, db, _user())
+
+    # A program with graduates is kept, so the trail must not claim a delete.
+    assert audit.await_args.kwargs["event_data"] == {
+        "program_id": str(program_id),
+        "action": "program_deactivated",
+    }
+    db.commit.assert_awaited_once()
+
+
 async def test_missing_training_program_is_not_audited(monkeypatch):
     service = MagicMock()
     service.delete_training_program = AsyncMock(
-        return_value=(False, "Training program not found")
+        return_value=(None, "Training program not found")
     )
     monkeypatch.setattr(
         training_programs, "TrainingProgramService", lambda _db: service

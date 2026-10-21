@@ -17,10 +17,13 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
 const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
 
 vi.mock('react-hot-toast', () => ({
   default: {
-    success: vi.fn(),
+    success: (...args: unknown[]): void => {
+      mockToastSuccess(...args);
+    },
     error: (...args: unknown[]): void => {
       mockToastError(...args);
     },
@@ -227,5 +230,64 @@ describe('ApparatusBasicPage save validation', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Add Apparatus' }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Unit number E-52 is already in use'));
+  });
+});
+
+// A vehicle that templates, shifts or call records name is deactivated rather
+// than deleted, so those records still resolve it. The dialog says which can
+// happen, the toast says which did, and a failure carries the server's reason.
+describe('ApparatusBasicPage delete', () => {
+  beforeEach(() => {
+    mockGetBasicApparatus.mockReset();
+    mockGetBasicApparatus.mockResolvedValue([engine]);
+    mockDeleteBasicApparatus.mockReset();
+    mockDeleteBasicApparatus.mockResolvedValue('deleted');
+    mockToastError.mockReset();
+    mockToastSuccess.mockReset();
+    hasManagePermission = true;
+  });
+
+  const confirmDelete = async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: 'Delete Engine 51' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+  };
+
+  it('says a vehicle in use is deactivated rather than deleted', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: 'Delete Engine 51' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('it is deactivated instead of deleted');
+  });
+
+  it('reports a deactivation as one', async () => {
+    mockDeleteBasicApparatus.mockResolvedValue('deactivated');
+    await confirmDelete();
+
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledTimes(1));
+    expect(mockDeleteBasicApparatus).toHaveBeenCalledWith('app-1');
+    expect(mockToastSuccess.mock.calls[0]?.[0]).toMatch(/Engine 51 is still named .* deactivated instead of deleted/);
+  });
+
+  it('reports a deletion as one', async () => {
+    await confirmDelete();
+
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Apparatus deleted'));
+  });
+
+  it("shows the server's reason when the delete fails", async () => {
+    mockDeleteBasicApparatus.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 404'), {
+        isAxiosError: true,
+        response: { status: 404, data: { detail: 'Apparatus not found' } },
+      })
+    );
+    await confirmDelete();
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Apparatus not found'));
   });
 });

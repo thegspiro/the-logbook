@@ -56,12 +56,22 @@ def _member(**kw):
 
 @pytest.fixture(autouse=True)
 def _quiet_collaborators(monkeypatch):
-    """Neutralise audit logging and the administrator-continuity guards."""
+    """Neutralise audit logging, the administrator-continuity guards, and the
+    inventory return / shift release side effects (each has its own
+    database-backed tests)."""
     monkeypatch.setattr(users_endpoint, "log_audit_event", AsyncMock())
     monkeypatch.setattr(users_endpoint, "assert_not_last_administrator", AsyncMock())
     monkeypatch.setattr(
         users_endpoint, "assert_positions_retain_administrator", AsyncMock()
     )
+    monkeypatch.setattr(
+        users_endpoint,
+        "return_member_inventory",
+        AsyncMock(
+            return_value=SimpleNamespace(unassigned=0, pool_returns=0, checked_in=0)
+        ),
+    )
+    monkeypatch.setattr(users_endpoint, "release_future_shift_commitments", AsyncMock())
 
 
 class TestDeleteUserHard:
@@ -103,6 +113,41 @@ class TestDeleteUserHard:
         )
 
         release.assert_awaited_once_with(db, str(target.id))
+
+    async def test_returns_held_inventory_before_deleting(self, monkeypatch):
+        """Gear goes back to stock in the delete's own transaction, before the
+        holding rows CASCADE away with the member."""
+        order: list[str] = []
+        returned = AsyncMock(
+            side_effect=lambda *a, **k: order.append("return")
+            or SimpleNamespace(unassigned=1, pool_returns=2, checked_in=0)
+        )
+        monkeypatch.setattr(users_endpoint, "return_member_inventory", returned)
+        target = _member()
+        db = _db(_result(scalar_one=target))
+        db.delete = AsyncMock(side_effect=lambda *_: order.append("delete"))
+        db.commit = AsyncMock(side_effect=lambda: order.append("commit"))
+
+        await users_endpoint.delete_user(
+            user_id=target.id, hard=True, db=db, current_user=_member(id="admin-1")
+        )
+
+        returned.assert_awaited_once_with(
+            db, str(target.id), "org-1", performed_by="admin-1"
+        )
+        assert order == ["return", "delete", "commit"]
+
+    async def test_hard_delete_does_not_run_the_shift_release(self):
+        """The member's assignments CASCADE with them; there is nothing to
+        hand back through the roster."""
+        target = _member()
+        db = _db(_result(scalar_one=target))
+
+        await users_endpoint.delete_user(
+            user_id=target.id, hard=True, db=db, current_user=_member(id="admin-1")
+        )
+
+        users_endpoint.release_future_shift_commitments.assert_not_awaited()
 
     async def test_refuses_when_records_must_keep_an_owner(self, monkeypatch):
         monkeypatch.setattr(
@@ -163,6 +208,21 @@ class TestDeleteUserSoft:
         assert target.membership_number is None
         assert target.deleted_at is not None
         db.delete.assert_not_awaited()
+
+    async def test_releases_future_shifts_after_committing(self):
+        target = _member()
+        db = _db(_result(scalar_one=target))
+
+        await users_endpoint.delete_user(
+            user_id=target.id, hard=False, db=db, current_user=_member(id="admin-1")
+        )
+
+        release = users_endpoint.release_future_shift_commitments
+        release.assert_awaited_once()
+        assert release.await_args.kwargs["user_id"] == str(target.id)
+        assert release.await_args.kwargs["organization_id"] == "org-1"
+        assert release.await_args.kwargs["reason"] == "soft_deleted"
+        db.commit.assert_awaited_once()
 
 
 def _position(*permissions):

@@ -264,11 +264,12 @@ const MinutesPage: React.FC = () => {
     await createMinutesFor(meetingId);
   };
 
-  const handleDeleteMeeting = async (meetingId: string) => {
+  const handleDeleteMeeting = async (meeting: MeetingRecord) => {
+    const meetingId = meeting.id;
     if (
       !(await confirm({
         title: 'Delete meeting',
-        message: 'Delete this meeting with its attendees and action items? Minutes already created from it are kept.',
+        message: `Delete "${meeting.title}"? Its attendance record is removed with it, so that attendance no longer counts toward anyone's membership tier, and its action items are deleted. Minutes already created from it are kept. This cannot be undone.`,
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
@@ -279,7 +280,9 @@ const MinutesPage: React.FC = () => {
       await meetingsService.deleteMeeting(meetingId);
       await fetchData();
     } catch (err: unknown) {
-      setError(getErrorDetail(err) ?? 'Unable to delete the meeting. Check your connection and try again.');
+      // The server's reason when it gave one — a refusal is not a network
+      // problem, and saying "check your connection" sent the clerk the wrong way.
+      toast.error(getErrorDetail(err) ?? 'Unable to delete the meeting. Check your connection and try again.');
     } finally {
       setDeletingId(null);
     }
@@ -596,21 +599,25 @@ const MinutesPage: React.FC = () => {
                         >
                           <BookOpen className="h-4 w-4" aria-hidden="true" />
                         </button>
-                        <button
-                          onClick={() => {
-                            void handleDeleteMeeting(meeting.id);
-                          }}
-                          disabled={deletingId === meeting.id}
-                          className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-700 disabled:opacity-50"
-                          title="Delete meeting"
-                          aria-label={`Delete ${meeting.title}`}
-                        >
-                          {deletingId === meeting.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </button>
+                        {/* An approved meeting's attendance is the settled record and the
+                            server refuses to delete it, so the control is not offered. */}
+                        {meeting.status !== 'approved' && (
+                          <button
+                            onClick={() => {
+                              void handleDeleteMeeting(meeting);
+                            }}
+                            disabled={deletingId === meeting.id}
+                            className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-700 disabled:opacity-50"
+                            title="Delete meeting"
+                            aria-label={`Delete ${meeting.title}`}
+                          >
+                            {deletingId === meeting.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
