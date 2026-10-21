@@ -31,6 +31,7 @@ from app.api.v1.endpoints import operational_ranks
 def _caller(perms):
     return SimpleNamespace(
         id="u1",
+        username="caller",
         organization_id="org1",
         positions=[SimpleNamespace(permissions=list(perms))],
         rank=None,
