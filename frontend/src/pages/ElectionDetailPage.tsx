@@ -29,6 +29,7 @@ import { ProxyVotingManagement } from '../components/ProxyVotingManagement';
 import { EligibilityRoster } from '../modules/elections/components/EligibilityRoster';
 import { RunoffChain } from '../modules/elections/components/RunoffChain';
 import { PublishResultsPanel } from '../modules/elections/components/PublishResultsPanel';
+import { NominationsAnnouncementStatus } from '../modules/elections/components/NominationsAnnouncementStatus';
 import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWorkflowTabs';
 import { useAuthStore } from '../stores/authStore';
 import { ElectionBallot } from '../components/ElectionBallot';
@@ -1949,7 +1950,16 @@ export const ElectionDetailPage: React.FC = () => {
 
               {/* Tab: Nominations */}
               {activeTab === 'nominations' && election.status !== ElectionStatus.CANCELLED && (
-                <div className="mb-6">
+                <div className="mb-6 space-y-4">
+                  {canManage && election.nominations_announcement && (
+                    <NominationsAnnouncementStatus
+                      electionId={electionId}
+                      announcement={election.nominations_announcement}
+                      onFinished={() => {
+                        void fetchElection();
+                      }}
+                    />
+                  )}
                   <NominationsPanel
                     electionId={electionId}
                     election={election}

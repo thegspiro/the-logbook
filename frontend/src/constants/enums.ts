@@ -240,6 +240,7 @@ export const BallotSendJobKind = {
   BALLOTS: 'ballots',
   REMINDER: 'reminder',
   PACKAGE: 'package',
+  ANNOUNCEMENT: 'announcement',
 } as const;
 export type BallotSendJobKind = (typeof BallotSendJobKind)[keyof typeof BallotSendJobKind];
 

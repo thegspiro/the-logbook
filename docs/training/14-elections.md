@@ -345,7 +345,11 @@ themselves, the label goes away.
   address hidden in the copy line, which a provider with a recipient cap could
   refuse whole). It goes out just after nominations open, so a failed email never
   stops nominations opening, and it is skipped if nominations were closed again
-  in the meantime.
+  in the meantime. The **Nominations** tab shows election managers how it went:
+  _"Emailing members that nominations are open…"_ while it sends, then how many
+  members were emailed and how many could not be reached. If anyone was missed,
+  the election managers are also emailed, so the missed members can be told
+  another way.
 - Only candidates who **accepted** reach the ballot.
 - **Members see pending nominations only while nominations are open**, so
   nominees can find and answer theirs. After closing, members see accepted
