@@ -32,6 +32,7 @@ from app.models.user import (
     Organization,
     User,
     UserStatus,
+    sync_account_status_with_membership,
 )
 from app.services.member_service_history_service import (
     MemberServiceHistoryService,
@@ -518,6 +519,11 @@ class MembershipTierService:
             else:
                 cleared_rank = None
 
+            # The account status follows the tier the same way it follows a
+            # change made by hand: a member advanced off the probationary rung
+            # becomes active. Applied here so the audit entry records it.
+            status_change = sync_account_status_with_membership(member, now=now)
+
             advanced.append(
                 {
                     "user_id": str(member.id),
@@ -526,6 +532,14 @@ class MembershipTierService:
                     "new_tier": target_tier["id"],
                     "years_of_service": yos,
                     "cleared_rank": cleared_rank,
+                    **(
+                        {
+                            "previous_status": status_change[0],
+                            "new_status": status_change[1],
+                        }
+                        if status_change
+                        else {}
+                    ),
                 }
             )
 
