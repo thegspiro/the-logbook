@@ -1711,6 +1711,11 @@ export interface BulkImportRequest {
   default_category_id?: string;
 }
 
+export interface ImportMatchedResponse {
+  imported: number;
+  failed: number;
+}
+
 export interface BulkImportResponse {
   total: number;
   imported: number;
