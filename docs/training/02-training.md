@@ -3415,6 +3415,14 @@ page's skills-test approval row and its tests-passed figure follow the choice.
 So does the **Evaluations** card on the Training Administration home: it
 describes only what the area holds under your method.
 
+**Under shift report sign-offs, no new skills test can be started**, practice
+runs included. A link or bookmark to a Skills Testing page opens a short
+explanation instead of the page. A test that was already under way when you
+switched can still be scored and finished, and results already on file can
+still be validated, released or voided. Members find their own past results on
+**My Training** under **Past skills test results**; the section appears only for
+a member who has some.
+
 Under Skills Testing, the **Shift Reports** settings still let you edit the
 **Observable Skills** list (**Feedback Defaults**) and the per-apparatus lists
 in **Apparatus Skills**, but they do nothing. Each carries a note saying so,

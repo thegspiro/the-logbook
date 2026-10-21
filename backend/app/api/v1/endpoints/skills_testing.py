@@ -88,6 +88,7 @@ from app.services.skills_testing_service import (
     viewer_positions_for,
     waived_critical_criteria,
 )
+from app.services.training_module_config_service import get_practical_skills_method
 from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -266,6 +267,35 @@ def _authorize_test_write(test: SkillTest, user: User) -> None:
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Only a training officer can modify this test",
     )
+
+
+# The practical-skills method under which this module records nothing new.
+_SKILLS_TESTING_OFF_METHOD = "shift_signoffs"
+
+
+async def _assert_skills_testing_offered(db: AsyncSession, organization_id) -> None:
+    """Refuse to open a new skills test for a department that records skills
+    on shift reports instead.
+
+    Only *opening* a test is refused. A test already under way when the
+    department switched may still be scored and completed, so nobody is left
+    holding a half-scored evaluation, and validating, releasing, voiding and
+    every read keep working: switching deletes nothing, and the results on
+    file stay the department's to manage. An unrecognised or unset method
+    reads as Skills Testing, as everywhere else.
+    """
+    if await get_practical_skills_method(db, organization_id) == (
+        _SKILLS_TESTING_OFF_METHOD
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Your department records practical skills as sign-offs on shift "
+                "reports, so skills tests are not taken. A training officer can "
+                "change this under Training Administration > Settings & Data > "
+                "Practical Skills."
+            ),
+        )
 
 
 async def _org_training_config(db: AsyncSession, organization_id) -> object | None:
@@ -1516,6 +1546,11 @@ async def create_test(
                 current_user,
                 org_config=await _org_training_config(db, current_user.organization_id),
             )
+
+    # After the replay check, not before it: a queued create that already
+    # landed before the department switched returns its test rather than an
+    # error, while a genuinely new one is refused.
+    await _assert_skills_testing_offered(db, current_user.organization_id)
 
     # Mirror get_template's visibility rule. The test response carries the full
     # template body (template_sections), so without this a member could practice
