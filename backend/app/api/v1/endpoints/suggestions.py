@@ -22,7 +22,6 @@ submission, which is the timing the service otherwise refuses to keep.
 """
 
 import asyncio
-import os
 from typing import List, Optional
 
 from fastapi import (
@@ -68,7 +67,7 @@ from app.schemas.suggestion import (
     SuggestionBoxPublic,
     SuggestionBoxWrite,
 )
-from app.services.file_storage_service import stored_file_response
+from app.services import file_storage_service as file_storage
 from app.services.notification_rules import NotificationRuleResolver
 from app.services.suggestion_service import (
     MAX_SCREENSHOT_BYTES,
@@ -143,7 +142,7 @@ async def _serve_attachment(
     if attachment is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
     real_path = SuggestionService.confined_path(attachment)
-    if not real_path or not await asyncio.to_thread(os.path.isfile, real_path):
+    if not real_path or not await file_storage.exists(real_path):
         raise HTTPException(status_code=404, detail="Attachment file not found")
     # Day precision only: an anonymous submission's timestamp is already
     # rounded to the day, and the name must not be more exact than the row.
@@ -155,7 +154,7 @@ async def _serve_attachment(
         extension=download_names.stored_extension(real_path),
         fallback="screenshot",
     )
-    return stored_file_response(
+    return await file_storage.file_response(
         real_path, media_type=attachment.content_type, filename=filename
     )
 

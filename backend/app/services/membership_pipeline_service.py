@@ -6,7 +6,6 @@ pipeline configuration, prospect tracking, step progression, and
 transfer to full membership.
 """
 
-import asyncio
 import copy
 import secrets
 import unicodedata
@@ -31,7 +30,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.audit import log_audit_event
-from app.core.constants import OFFICE_CATALOG
+from app.core.constants import OFFICE_CATALOG, office_label
 from app.models.election import Election, ElectionStatus
 from app.models.email_template import EmailTemplate
 from app.models.event import Event, EventExternalAttendee
@@ -51,7 +50,14 @@ from app.models.membership_pipeline import (
     ProspectStepProgress,
     StepProgressStatus,
 )
-from app.models.user import Organization, Role, User, UserStatus, generate_uuid
+from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
+    Organization,
+    Role,
+    User,
+    UserStatus,
+    generate_uuid,
+)
 from app.schemas.membership_pipeline import resolve_conversion_outcome
 from app.services import file_storage_service as file_storage
 from app.services.email_policy import (
@@ -488,12 +494,17 @@ def _approval_roles_held(positions: Iterable[Any]) -> set[str]:
     return roles
 
 
-def _approval_role_label(role: str) -> str:
-    """The office's display label for a stage's stored approver key."""
-    for office in OFFICE_CATALOG:
-        if str(office["key"]).casefold() == role.casefold():
-            return str(office["label"])
-    return role.replace("_", " ").title()
+def _required_approver_roles(config: Optional[Dict[str, Any]]) -> List[str]:
+    """A multi-approval stage's configured approver roles, as matched.
+
+    The stage editor stores what was typed, so " chief" is a value a stage can
+    hold, and compared verbatim it matches no holder — the stage can never
+    complete. Stripping here is the single point every approval check reads
+    through. Blank entries are kept, not dropped: a role nobody can hold keeps
+    the stage closed, whereas dropping it could leave a stage with no required
+    approvers, which would let it complete without any sign-off at all.
+    """
+    return [str(r).strip() for r in (config or {}).get("required_approvers") or []]
 
 
 def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
@@ -2168,7 +2179,7 @@ class MembershipPipelineService:
                     )
 
         elif step_type == PipelineStepType.MULTI_APPROVAL:
-            required_approvers = config.get("required_approvers", [])
+            required_approvers = _required_approver_roles(config)
             if required_approvers:
                 approvals = self._effective_action_result(
                     prospect, step, action_result
@@ -2179,13 +2190,12 @@ class MembershipPipelineService:
                     if isinstance(a, dict)
                 }
                 missing = [
-                    r
-                    for r in required_approvers
-                    if str(r).casefold() not in approved_roles
+                    r for r in required_approvers if r.casefold() not in approved_roles
                 ]
                 if missing:
                     raise ValueError(
-                        f"Approval still needed from: {', '.join(missing)}."
+                        "Approval still needed from: "
+                        f"{', '.join(office_label(r) for r in missing)}."
                     )
 
         elif step_type == PipelineStepType.REFERENCE_CHECK:
@@ -2539,7 +2549,7 @@ class MembershipPipelineService:
             .where(
                 User.id == completed_by,
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
             .options(selectinload(User.positions))
@@ -2661,7 +2671,7 @@ class MembershipPipelineService:
             .where(
                 User.id == user_id,
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
             .options(selectinload(User.positions))
@@ -2693,9 +2703,7 @@ class MembershipPipelineService:
 
         waiting: List[Dict[str, Any]] = []
         for prospect, step in rows.all():
-            required = [
-                str(r) for r in (step.config or {}).get("required_approvers") or []
-            ]
+            required = _required_approver_roles(step.config)
             progress = next(
                 (p for p in prospect.step_progress if str(p.step_id) == str(step.id)),
                 None,
@@ -2729,12 +2737,12 @@ class MembershipPipelineService:
                     "step_name": step.name,
                     "step_description": step.description,
                     "roles_to_sign": [
-                        {"role": r, "label": _approval_role_label(r)} for r in to_sign
+                        {"role": r, "label": office_label(r)} for r in to_sign
                     ],
                     "required_roles": [
                         {
                             "role": r,
-                            "label": _approval_role_label(r),
+                            "label": office_label(r),
                             "signed": r.casefold() in signed,
                         }
                         for r in required
@@ -2781,7 +2789,7 @@ class MembershipPipelineService:
         # full prospect record back), and a stage with no configured approvers
         # would leave nothing "missing" — completing and advancing the
         # prospect outright.
-        required = [str(r) for r in (step.config or {}).get("required_approvers") or []]
+        required = _required_approver_roles(step.config)
         if not required:
             raise ValueError("This step has no approver roles configured")
         if role.casefold() not in {r.casefold() for r in required}:
@@ -2856,12 +2864,12 @@ class MembershipPipelineService:
                 organization_id, completed_by, action_result
             )
             if action_result and "approvals" in action_result:
-                required = (step.config or {}).get("required_approvers", [])
+                required = _required_approver_roles(step.config)
                 # An approval for a role the stage never asked for is not an
                 # approval — recording it would store misleading sign-off
                 # evidence against the prospect's file.
                 if required:
-                    wanted = {str(r).casefold() for r in required}
+                    wanted = {r.casefold() for r in required}
                     for approval in action_result.get("approvals") or []:
                         role_name = (
                             approval.get("role") if isinstance(approval, dict) else None
@@ -6525,8 +6533,6 @@ class MembershipPipelineService:
             .scalars()
             .all()
         )
-        import os
-
         for stored_path in paths:
             confined = prospect_document_path(stored_path, organization_id)
             if stored_path and confined is None:
@@ -6535,17 +6541,12 @@ class MembershipPipelineService:
                     f"path is outside organization {organization_id}'s storage"
                 )
                 continue
-            if confined and os.path.exists(confined):
-                try:
-                    await asyncio.to_thread(os.remove, confined)
-                except OSError as exc:
-                    logger.error(
-                        f"Failed to remove prospect document file {stored_path}: {exc}"
-                    )
-                    raise ValueError(
-                        "Could not delete an applicant's document file, so "
-                        "nothing was purged; please try again"
-                    ) from exc
+            if confined and not await file_storage.delete(confined):
+                logger.error(f"Failed to remove prospect document file {stored_path}")
+                raise ValueError(
+                    "Could not delete an applicant's document file, so "
+                    "nothing was purged; please try again"
+                )
 
         # Cascade handles the dependent rows.
         await self.db.execute(
@@ -6977,24 +6978,15 @@ class MembershipPipelineService:
         # the row goes, the foreign file stays where it is.
         stored_path = doc.file_path
         if stored_path:
-            import os
-
             confined = prospect_document_path(stored_path, organization_id)
             if confined is None:
                 logger.warning(
                     f"Not removing prospect document {document_id}: stored path "
                     f"is outside organization {organization_id}'s storage"
                 )
-            elif os.path.exists(confined):
-                try:
-                    await asyncio.to_thread(os.remove, confined)
-                except OSError as exc:
-                    logger.error(
-                        f"Failed to remove prospect document file {confined}: {exc}"
-                    )
-                    raise ValueError(
-                        "Could not delete the document file; please try again"
-                    ) from exc
+            elif not await file_storage.delete(confined):
+                logger.error(f"Failed to remove prospect document file {confined}")
+                raise ValueError("Could not delete the document file; please try again")
 
         await self._log_activity(
             prospect_id=prospect_id,

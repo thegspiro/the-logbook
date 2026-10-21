@@ -26,7 +26,6 @@ import {
   apparatusEquipmentService,
 } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 
 type TabType = 'overview' | 'maintenance' | 'fuel' | 'operators' | 'equipment' | 'documents' | 'nfpa';
 
@@ -163,11 +162,7 @@ export const ApparatusDetailPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-6 pt-6">
-        <Breadcrumbs />
-      </div>
-      {/* Header */}
+    <div className="mx-auto max-w-7xl">
       <ApparatusDetailHeader
         currentApparatus={currentApparatus}
         status={status}
@@ -180,7 +175,7 @@ export const ApparatusDetailPage: React.FC = () => {
 
       {/* Error Display */}
       {error && (
-        <div className="mx-auto max-w-7xl px-6 pt-4">
+        <div className="mb-6">
           <div className="flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 p-4">
             <div className="flex items-center gap-3">
               <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-400" />
@@ -197,7 +192,7 @@ export const ApparatusDetailPage: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div className="mx-auto max-w-7xl px-6 pt-6">
+      <div>
         <div className="segmented-group-secondary hscroll flex space-x-1">
           {tabs.map((tab) => (
             <button
@@ -217,7 +212,7 @@ export const ApparatusDetailPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div data-page-main className="mx-auto max-w-7xl px-6 py-6">
+      <div data-page-main className="mt-6">
         {activeTab === 'overview' && (
           <ApparatusOverviewTab
             currentApparatus={currentApparatus}

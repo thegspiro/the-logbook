@@ -23,6 +23,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 
 from app.api.v1.endpoints.email_templates import delete_attachment
 from app.services import file_storage_service
@@ -75,8 +76,9 @@ class TestDeleteAttachmentOrdering:
 
         monkeypatch.setattr(os, "remove", _boom)
 
-        with pytest.raises(PermissionError):
+        with pytest.raises(HTTPException) as refused:
             await delete_attachment("tpl-1", "att-1", db=db, current_user=_user())
+        assert refused.value.status_code == 500
 
         db.delete.assert_not_awaited()
         db.commit.assert_not_awaited()

@@ -150,6 +150,22 @@ describe('MedicalItemLotsModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the server's reason when a lot received against a reorder is refused", async () => {
+    const refusal =
+      'This lot was received against reorder "Gauze Pads 4x4", so it cannot be deleted. Adjust its quantity to 0 instead.';
+    mockDeleteLot.mockRejectedValue({ response: { status: 409, data: { detail: refusal } } });
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByText('GZ-11');
+
+    await user.click(screen.getByRole('button', { name: 'Delete lot GZ-11' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete lot' });
+    await user.click(within(dialog).getByRole('button', { name: 'Delete lot' }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(refusal));
+    expect(screen.getByText('GZ-11')).toBeInTheDocument();
+  });
+
   it('closes without a refresh when nothing changed', async () => {
     const user = userEvent.setup();
     renderModal();

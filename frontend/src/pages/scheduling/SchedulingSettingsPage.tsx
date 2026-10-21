@@ -11,7 +11,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { Loader2 } from 'lucide-react';
 import { ShiftSettingsPanel } from '../../modules/scheduling/components/ShiftSettingsPanel';
 import {
@@ -36,6 +36,9 @@ const SchedulingSettingsPage: React.FC<SchedulingSettingsPageProps> = ({ section
     loadInitialData,
   } = useSchedulingStore();
   const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
+  const settingsLoaded = useSchedulingStore((s) => s.settingsLoaded);
+  const location = useLocation();
+  const arrivedForPlatoons = (location.state as { platoonsOff?: boolean } | null)?.platoonsOff === true;
 
   const handleSectionChange = useCallback(
     (tab: SettingsTab) => {
@@ -64,6 +67,17 @@ const SchedulingSettingsPage: React.FC<SchedulingSettingsPageProps> = ({ section
   // appear once the flag resolves.
   const visibleSection = sections.some((s) => s.key === section) ? section : 'general';
 
+  // Once the setting has loaded and says platoons are off, the fallback above
+  // is the answer rather than a holding state, so the URL follows it. Left on
+  // /settings/platoons, the breadcrumb named a section the page was not
+  // showing and nothing said why. Replace, not push: the platoons URL is not
+  // somewhere the back button should return to.
+  useEffect(() => {
+    if (section === 'platoons' && settingsLoaded && !platoonsEnabled) {
+      void navigate(settingsPathFor('general'), { replace: true, state: { platoonsOff: true } });
+    }
+  }, [section, settingsLoaded, platoonsEnabled, navigate]);
+
   return (
     <div className="min-h-screen">
       <SettingsLayout<SettingsTab>
@@ -88,13 +102,23 @@ const SchedulingSettingsPage: React.FC<SchedulingSettingsPageProps> = ({ section
             <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <ShiftSettingsPanel
-            templates={backendTemplates}
-            apparatusList={apparatusList}
-            onNavigateToTemplates={() => void navigate('/scheduling/admin/planning/templates')}
-            activeTab={visibleSection}
-            onTabChange={handleSectionChange}
-          />
+          <>
+            {visibleSection === 'general' && arrivedForPlatoons && !platoonsEnabled && (
+              <div className="alert-info mb-4" role="status">
+                <p className="text-sm">
+                  Platoon scheduling is turned off, so there are no platoon settings yet. Turn on platoon scheduling
+                  below and a Platoons section appears.
+                </p>
+              </div>
+            )}
+            <ShiftSettingsPanel
+              templates={backendTemplates}
+              apparatusList={apparatusList}
+              onNavigateToTemplates={() => void navigate('/scheduling/admin/planning/templates')}
+              activeTab={visibleSection}
+              onTabChange={handleSectionChange}
+            />
+          </>
         )}
       </SettingsLayout>
     </div>

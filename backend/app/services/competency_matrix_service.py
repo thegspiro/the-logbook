@@ -27,7 +27,7 @@ from app.models.training import (
     TrainingRequirement,
     TrainingStatus,
 )
-from app.models.user import User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     apply_recency,
@@ -114,7 +114,7 @@ class CompetencyMatrixService:
             select(User)
             .options(selectinload(User.positions))
             .where(User.organization_id == str(organization_id))
-            .where(User.status == UserStatus.ACTIVE)
+            .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
             .where(User.compliance_exempt == False)  # noqa: E712
             .where(User.deleted_at.is_(None))
         )

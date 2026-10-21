@@ -15,6 +15,10 @@ import type { ActionItemSummary } from '../services/api';
 
 const mockGetActionItems = vi.fn();
 vi.mock('../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   dashboardService: {
     getActionItems: (...args: unknown[]) => mockGetActionItems(...args) as unknown,
   },

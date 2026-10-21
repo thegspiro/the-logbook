@@ -31,7 +31,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.consent import ConsentType, UserConsent
-from app.models.user import User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 
 
 class ConsentService:
@@ -113,7 +113,7 @@ class ConsentService:
             User.deleted_at.is_(None),
         ]
         if not include_inactive:
-            conditions.append(User.status == UserStatus.ACTIVE)
+            conditions.append(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
 
         result = await self.db.execute(
             select(

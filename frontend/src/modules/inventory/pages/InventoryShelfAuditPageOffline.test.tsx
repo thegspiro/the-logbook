@@ -29,7 +29,13 @@ const { service, scanner, net, queue } = vi.hoisted(() => ({
   queue: new Map<string, GenericQueuedItem>(),
 }));
 
-vi.mock('../../../services/api', () => ({ inventoryService: service }));
+vi.mock('../../../services/api', () => ({
+  inventoryService: service,
+  // Read by the Operations section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
+}));
 vi.mock('../../../components/ux', () => ({ Breadcrumbs: () => null }));
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../../hooks/useNfcScanner', () => ({

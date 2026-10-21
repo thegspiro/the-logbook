@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.minute import MeetingMinutes, MinutesStatus
-from app.models.user import Organization, User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
 from app.utils.minutes_attendance import counts_toward_quorum
 
 
@@ -50,7 +50,7 @@ class QuorumService:
         result = await self.db.execute(
             select(func.count(User.id))
             .where(User.organization_id == str(organization_id))
-            .where(User.status == UserStatus.ACTIVE)
+            .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
             .where(User.deleted_at.is_(None))
         )
         return result.scalar() or 0

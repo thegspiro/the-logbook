@@ -137,6 +137,32 @@ describe('MyTrainingHistory', () => {
     vi.unstubAllGlobals();
   });
 
+  it('files undated records under their own group without calling them pending', async () => {
+    const withUndated = [{ year: 'undated', records: 1, hours: 3 }, ...YEARS];
+    mockGetRecords.mockImplementation(
+      (params: { year?: string }) =>
+        Promise.resolve(
+          params.year === 'undated'
+            ? {
+                items: [{ ...record('u', 'Imported without a date', ''), completion_date: null }],
+                total: 1,
+                page: 1,
+                page_size: 25,
+                years: withUndated,
+              }
+            : { ...pageFor(params.year), years: withUndated }
+        ) as unknown
+    );
+    const user = userEvent.setup();
+    render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);
+
+    const header = await screen.findByRole('button', { name: /No completion date/ });
+    expect(screen.queryByText('Awaiting approval')).not.toBeInTheDocument();
+    await user.click(header);
+    const row = await screen.findByRole('row', { name: /Imported without a date/ });
+    expect(within(row).getByText('completed')).toBeInTheDocument();
+  });
+
   it('reports a failed load instead of an empty history', async () => {
     mockGetRecords.mockRejectedValue(new Error('boom'));
     render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);

@@ -17,6 +17,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX
 
 MAX_OPTIONS = 10
 MAX_QUESTIONS_PER_TEST = 500
@@ -87,7 +88,7 @@ class QuestionWrite(BaseModel):
     options: List[OptionWrite] = Field(..., min_length=2, max_length=MAX_OPTIONS)
     explanation: Optional[str] = Field(None, max_length=5000)
     points: float = Field(1.0, gt=0, le=100)
-    sort_order: Optional[int] = Field(None, ge=0)
+    sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     active: bool = True
 
     @model_validator(mode="after")

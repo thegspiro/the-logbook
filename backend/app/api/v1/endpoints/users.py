@@ -44,7 +44,7 @@ from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
 from app.models.directory_account import DirectoryAccountStatus
 from app.models.document import Document
-from app.models.inventory import ItemAssignment, ItemIssuance
+from app.models.inventory import CheckOutRecord, ItemAssignment, ItemIssuance
 from app.models.training import TrainingRecord as TrainingRecordModel
 from app.models.user import Organization, Role, User, UserStatus, user_roles
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
@@ -53,6 +53,7 @@ from app.schemas.user import (
     AdminUserCreate,
     BottomNavigationPreference,
     ContactInfoUpdate,
+    DeletionImpactRecord,
     DeletionImpactResponse,
     MemberAuditLogEntry,
     MemberCreateResponse,
@@ -90,6 +91,9 @@ from app.services.email_policy import (
 )
 from app.services.email_service import welcome_email_can_send
 from app.services.member_service_history_service import MemberServiceHistoryService
+from app.services.member_shift_release_service import (
+    release_future_shift_commitments,
+)
 from app.services.operational_rank_service import (
     OperationalRankService,
     rank_not_configured_message,
@@ -98,8 +102,10 @@ from app.services.organization_service import OrganizationService
 from app.services.security_monitoring import report_privilege_escalation_attempt
 from app.services.upload_scanning import reject_if_malicious
 from app.services.user_deletion_service import (
+    count_records_removed_with_member,
     find_hard_delete_blockers,
     release_user_references,
+    return_member_inventory,
 )
 from app.services.user_service import UserService
 from app.utils.membership import (
@@ -1253,23 +1259,25 @@ async def _enforce_account_reset_ceiling(
     current_user: User,
     target_user: User,
     db: AsyncSession,
+    *,
+    action: str = "account-reset",
+    detail: str = "You cannot reset the account of a user with privileges beyond your own.",
 ) -> None:
     """Prevent account resets from becoming a privilege-escalation path.
 
     Member managers may assist users whose effective permissions are within
     their own permission ceiling, but may not reset credentials or MFA for a
-    user who has permissions they do not possess.
+    user who has permissions they do not possess. Member deletion applies the
+    same ceiling: removing an account is no less a takeover of it than
+    resetting its password.
     """
     caller_perms = _collect_user_permissions(current_user)
     target_perms = _collect_user_permissions(target_user)
     if any(not _has_permission(perm, caller_perms) for perm in target_perms):
         await report_privilege_escalation_attempt(
-            db, str(current_user.id), f"account-reset:{target_user.id}", None
+            db, str(current_user.id), f"{action}:{target_user.id}", None
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You cannot reset the account of a user with privileges beyond your own.",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
 BASE_POSITION_REMOVAL_REFUSED = (
@@ -2182,11 +2190,24 @@ async def update_user_profile(
         "address_zip",
         "address_country",
     }
+    previous_status = (
+        user.status.value if isinstance(user.status, UserStatus) else user.status
+    )
     for field, value in update_data.items():
         if field in ALLOWED_PROFILE_FIELDS and hasattr(user, field):
             setattr(user, field, value)
 
     await db.commit()
+    # A class/status write may have moved the account status at flush (the
+    # membership-drives-status rule); the audit entry below names the move.
+    resulting_status = (
+        user.status.value if isinstance(user.status, UserStatus) else user.status
+    )
+    account_status_change = (
+        {"from": previous_status, "to": resulting_status}
+        if resulting_status != previous_status
+        else None
+    )
 
     # Re-query with eager loading to avoid MissingGreenlet on serialization.
     # The org filter is redundant — the user was resolved in-org above and 404s
@@ -2218,6 +2239,11 @@ async def update_user_profile(
             **(
                 {"preferred_name_change": preferred_name_change}
                 if preferred_name_change
+                else {}
+            ),
+            **(
+                {"account_status_change": account_status_change}
+                if account_status_change
                 else {}
             ),
         },
@@ -2252,9 +2278,13 @@ async def delete_user(
         )
 
     # For hard delete, include soft-deleted users too
-    query = select(User).where(
-        User.id == str(user_id),
-        User.organization_id == str(current_user.organization_id),
+    query = (
+        select(User)
+        .where(
+            User.id == str(user_id),
+            User.organization_id == str(current_user.organization_id),
+        )
+        .options(selectinload(User.positions))
     )
     if not hard:
         query = query.where(User.deleted_at.is_(None))
@@ -2267,6 +2297,16 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+
+    # members.manage alone let a member manager delete the System Owner or
+    # any other account holding permissions the manager lacks.
+    await _enforce_account_reset_ceiling(
+        current_user,
+        user,
+        db,
+        action="member-delete",
+        detail="You cannot delete a member with privileges beyond your own.",
+    )
 
     # The self-delete check above stops an admin removing themselves, but not
     # one admin removing the other and only remaining one.
@@ -2301,6 +2341,16 @@ async def delete_user(
                     "information while keeping those records intact."
                 ),
             )
+
+        # Gear the member still holds goes back to stock in this transaction:
+        # the holding rows CASCADE with the member, and without this an item
+        # stayed "assigned" to nobody and pool counts stayed short for good.
+        returned = await return_member_inventory(
+            db,
+            str(user_id),
+            str(current_user.organization_id),
+            performed_by=str(current_user.id),
+        )
 
         await release_user_references(db, str(user_id))
 
@@ -2338,6 +2388,11 @@ async def delete_user(
                 "deleted_username": deleted_username,
                 "deleted_full_name": deleted_full_name,
                 "action": "permanent_deletion",
+                "inventory_returned": {
+                    "unassigned": returned.unassigned,
+                    "pool_returns": returned.pool_returns,
+                    "checked_in": returned.checked_in,
+                },
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -2363,6 +2418,17 @@ async def delete_user(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+        )
+
+        # A deactivated member cannot work, so their seats on shifts that
+        # have not started go back to the roster (and standing claims end).
+        await release_future_shift_commitments(
+            db,
+            organization_id=str(current_user.organization_id),
+            user_id=str(user_id),
+            reason="soft_deleted",
+            performed_by_id=str(current_user.id),
+            performed_by_username=current_user.username,
         )
 
 
@@ -2669,11 +2735,16 @@ async def get_deletion_impact(
             detail="User not found",
         )
 
+    org_id = str(current_user.organization_id)
+
     # Count training records
     tr_result = await db.execute(
         select(func.count())
         .select_from(TrainingRecordModel)
-        .where(TrainingRecordModel.user_id == str(user_id))
+        .where(
+            TrainingRecordModel.user_id == str(user_id),
+            TrainingRecordModel.organization_id == org_id,
+        )
     )
     training_count = tr_result.scalar() or 0
 
@@ -2689,6 +2760,7 @@ async def get_deletion_impact(
         .select_from(ItemAssignment)
         .where(
             ItemAssignment.user_id == str(user_id),
+            ItemAssignment.organization_id == org_id,
             ItemAssignment.is_active.is_(True),
         )
     )
@@ -2697,6 +2769,7 @@ async def get_deletion_impact(
         .select_from(ItemIssuance)
         .where(
             ItemIssuance.user_id == str(user_id),
+            ItemIssuance.organization_id == org_id,
             ItemIssuance.returned_at.is_(None),
         )
     )
@@ -2704,15 +2777,34 @@ async def get_deletion_impact(
         issuance_result.scalar() or 0
     )
 
+    # Items out on a temporary checkout. A permanent delete checks them back
+    # in; the preview says so rather than leaving them out of the picture.
+    checkout_result = await db.execute(
+        select(func.count())
+        .select_from(CheckOutRecord)
+        .where(
+            CheckOutRecord.user_id == str(user_id),
+            CheckOutRecord.organization_id == org_id,
+            CheckOutRecord.is_returned.isnot(True),
+        )
+    )
+    checked_out_count = checkout_result.scalar() or 0
+
     # Count uploaded documents
     doc_result = await db.execute(
         select(func.count())
         .select_from(Document)
-        .where(Document.uploaded_by == str(user_id))
+        .where(
+            Document.uploaded_by == str(user_id),
+            Document.organization_id == org_id,
+        )
     )
     document_count = doc_result.scalar() or 0
 
-    total = training_count + inventory_count + document_count
+    # Everything a permanent delete removes outright, per table, read from
+    # the models' ON DELETE CASCADE references rather than a hand-kept list.
+    removed = await count_records_removed_with_member(db, str(user_id), org_id)
+    total = sum(r.count for r in removed)
 
     return DeletionImpactResponse(
         user_id=str(user_id),
@@ -2725,7 +2817,12 @@ async def get_deletion_impact(
         ),
         training_records=training_count,
         inventory_items=inventory_count,
+        checked_out_items=checked_out_count,
         documents=document_count,
+        removed_records=[
+            DeletionImpactRecord(table=r.table, label=r.label, count=r.count)
+            for r in removed
+        ],
         total_records=total,
     )
 

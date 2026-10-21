@@ -32,6 +32,7 @@ import {
   RotateCcw,
   EyeOff,
   Lock,
+  ArchiveRestore,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -1315,6 +1316,10 @@ const PipelineDetailPage: React.FC = () => {
     after?: () => void;
   } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  // `confirm` above is this page's own dialog state; reactivation goes through
+  // the shared promise-based dialog instead.
+  const { confirm: askConfirm } = useConfirm();
+  const [isReactivating, setIsReactivating] = useState(false);
 
   useEffect(() => {
     if (programId) void loadProgram();
@@ -1492,11 +1497,61 @@ const PipelineDetailPage: React.FC = () => {
       },
     });
 
-  const confirmDeleteProgram = () => {
-    if (!program) return;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  // The backend deactivates a pipeline anyone has graduated from instead of
+  // deleting it (graduations are history), and withdraws whoever is still in
+  // progress. Which one happens depends on every enrollment, not the
+  // status-filtered list the Enrollments tab may be showing, so fetch them
+  // unfiltered before asking.
+  const confirmDeleteProgram = async () => {
+    if (!program || !programId) return;
+    const all: ProgramEnrollmentWithUser[] | null = await trainingProgramService
+      .getProgramEnrollments(programId)
+      .catch(() => null);
+    const graduates = all?.filter((e) => e.status === 'completed').length ?? 0;
+    const inProgress = all?.filter((e) => e.status === 'active' || e.status === 'on_hold').length ?? 0;
+
+    if (all === null) {
+      setConfirm({
+        title: 'Delete pipeline',
+        confirmLabel: 'Delete pipeline',
+        message:
+          `Delete "${program.name}"? If any member has graduated from it, it is deactivated instead of ` +
+          `deleted: it leaves the pipeline list, every enrollment is kept, and members still in progress ` +
+          `are withdrawn. Otherwise its phases, requirements, milestones and enrollments are permanently ` +
+          `deleted, which can't be undone.`,
+        run: async () => {
+          await trainingProgramService.deleteProgram(programId);
+          toast.success('Pipeline deleted, or deactivated if anyone had graduated from it');
+        },
+        after: () => void navigate('/training/programs'),
+      });
+      return;
+    }
+
+    if (graduates > 0) {
+      const withdrawNote =
+        inProgress > 0 ? ` The ${plural(inProgress, 'member')} still in progress will be withdrawn from it.` : '';
+      setConfirm({
+        title: 'Deactivate pipeline',
+        confirmLabel: 'Deactivate pipeline',
+        message:
+          `"${program.name}" has ${plural(graduates, 'graduate')}, so it is deactivated instead of deleted: ` +
+          `it leaves the pipeline list, and its phases, requirements and every enrollment are kept as ` +
+          `the record of who finished it.${withdrawNote}`,
+        run: async () => {
+          await trainingProgramService.deleteProgram(programId);
+          toast.success('Pipeline deactivated');
+        },
+        after: () => void navigate('/training/programs'),
+      });
+      return;
+    }
+
     const enrolledNote =
-      enrollments.length > 0
-        ? ` This pipeline has ${enrollments.length} enrolled member${enrollments.length === 1 ? '' : 's'} — their progress will be permanently deleted.`
+      all.length > 0
+        ? ` This pipeline has ${plural(all.length, 'enrolled member')} — their progress will be permanently deleted.`
         : '';
     setConfirm({
       title: 'Delete pipeline',
@@ -1505,11 +1560,38 @@ const PipelineDetailPage: React.FC = () => {
         `Permanently delete "${program.name}"? Its phases, requirements, milestones, ` +
         `and all enrollments are removed.${enrolledNote} This can't be undone.`,
       run: async () => {
-        if (programId) await trainingProgramService.deleteProgram(programId);
+        await trainingProgramService.deleteProgram(programId);
         toast.success('Pipeline deleted');
       },
       after: () => void navigate('/training/programs'),
     });
+  };
+
+  // A deactivated pipeline is reached from the list's "Show inactive" view.
+  // Reactivating restores the flag only: the backend leaves enrollments it
+  // withdrew on deactivation withdrawn, so the dialog says so.
+  const handleReactivateProgram = async () => {
+    if (!program || !programId) return;
+    const confirmed = await askConfirm({
+      title: 'Reactivate pipeline',
+      message:
+        `Reactivate "${program.name}"? It returns to the pipeline list and members can be enrolled in it again. ` +
+        `Members who were withdrawn when it was deactivated are not re-enrolled; enroll them again if they should continue.`,
+      confirmLabel: 'Reactivate',
+      cancelLabel: 'Leave inactive',
+      variant: 'info',
+    });
+    if (!confirmed) return;
+    setIsReactivating(true);
+    try {
+      await trainingProgramService.updateProgram(programId, { active: true });
+      toast.success(`${program.name} reactivated`);
+      await loadProgram();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reactivate pipeline'));
+    } finally {
+      setIsReactivating(false);
+    }
   };
 
   // Toggle whether a linked requirement is required to complete its phase.
@@ -1600,6 +1682,7 @@ const PipelineDetailPage: React.FC = () => {
                     Template
                   </span>
                 )}
+                {!program.active && <span className="badge bg-theme-surface text-theme-text-secondary">Inactive</span>}
               </div>
               {program.description && (
                 <p className="text-theme-text-muted mb-3 max-w-2xl text-sm">{program.description}</p>
@@ -1647,6 +1730,21 @@ const PipelineDetailPage: React.FC = () => {
               <Printer className="h-4 w-4" />
               <span>Print</span>
             </button>
+            {canManage && !program.active && (
+              <button
+                type="button"
+                onClick={() => void handleReactivateProgram()}
+                disabled={isReactivating}
+                className="btn-secondary btn-sm"
+              >
+                {isReactivating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+                )}
+                <span>Reactivate</span>
+              </button>
+            )}
             {canManage && (
               <button
                 onClick={() => setShowEditProgram(true)}
@@ -1679,7 +1777,7 @@ const PipelineDetailPage: React.FC = () => {
             )}
             {canManage && (
               <button
-                onClick={confirmDeleteProgram}
+                onClick={() => void confirmDeleteProgram()}
                 title="Delete pipeline"
                 className="flex items-center space-x-1 rounded-lg px-3 py-2 text-sm text-red-700 hover:bg-red-500/10 dark:text-red-400"
               >

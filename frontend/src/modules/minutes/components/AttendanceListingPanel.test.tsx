@@ -24,6 +24,7 @@ const settings = (listing: AttendanceListing): MinutesReminderSettings => ({
   executive_effective_library: false,
   executive_effective_public: false,
   attendance_listing: listing,
+  auto_file_election_results: true,
 });
 
 describe('AttendanceListingPanel', () => {

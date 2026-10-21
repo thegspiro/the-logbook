@@ -115,6 +115,44 @@ describe('EventForm', () => {
       expect(headingTexts).toContain('Schedule');
     });
 
+    // Nothing in the form can add a file, so the section appears only to list
+    // files an event already has rather than to say none can be added.
+    it('has no Attachments section on a new event', async () => {
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      await screen.findAllByRole('heading', { level: 2 });
+      expect(screen.queryByText('Attachments')).not.toBeInTheDocument();
+      expect(screen.queryByText(/can't be attached/i)).not.toBeInTheDocument();
+    });
+
+    it("lists an event's existing attachments when editing", () => {
+      renderWithRouter(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          editingEventId="evt-1"
+          initialData={{
+            title: 'Hose drill',
+            attachments: [
+              {
+                id: 'att-1',
+                file_name: 'drill-plan.pdf',
+                file_path: 'events/evt-1/drill-plan.pdf',
+                file_size: 2048,
+                file_type: 'application/pdf',
+                uploaded_by: 'user-1',
+                uploaded_at: '2026-10-01T12:00:00Z',
+              },
+            ],
+          }}
+        />
+      );
+
+      expect(screen.getByText('Attachments')).toBeInTheDocument();
+      expect(screen.getByText('drill-plan.pdf')).toBeInTheDocument();
+      expect(screen.queryByText(/can't be attached/i)).not.toBeInTheDocument();
+    });
+
     it('should render submit and cancel buttons', () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} submitLabel="Create Event" />);
 

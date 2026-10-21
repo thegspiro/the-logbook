@@ -2,7 +2,7 @@
  * eventServices — extracted from services/api.ts
  */
 
-import type { AxiosError } from 'axios';
+import type { AxiosError, AxiosRequestConfig } from 'axios';
 import api from './apiClient';
 import type {
   CheckInMonitoringStats,
@@ -37,19 +37,22 @@ export const eventService = {
   /**
    * Get all events with optional filtering
    */
-  async getEvents(params?: {
-    event_type?: string;
-    start_after?: string;
-    start_before?: string;
-    end_after?: string;
-    end_before?: string;
-    include_cancelled?: boolean;
-    include_drafts?: boolean;
-    mandatory_only?: boolean;
-    skip?: number;
-    limit?: number;
-  }): Promise<EventListItem[]> {
-    const response = await api.get<EventListItem[]>('/events', { params });
+  async getEvents(
+    params?: {
+      event_type?: string;
+      start_after?: string;
+      start_before?: string;
+      end_after?: string;
+      end_before?: string;
+      include_cancelled?: boolean;
+      include_drafts?: boolean;
+      mandatory_only?: boolean;
+      skip?: number;
+      limit?: number;
+    },
+    config?: AxiosRequestConfig
+  ): Promise<EventListItem[]> {
+    const response = await api.get<EventListItem[]>('/events', { params, ...config });
     return asArray(response.data);
   },
 
@@ -109,10 +112,17 @@ export const eventService = {
   },
 
   /**
-   * Delete all events in a recurring series
+   * Delete all events in a recurring series. With `fromEventId`, deletes that
+   * occurrence and every later one and keeps the earlier ones; the backend
+   * then ignores `deleteFutureOnly`, which cuts at the current time instead.
    */
-  async deleteEventSeries(parentEventId: string, deleteFutureOnly = false): Promise<void> {
-    await api.delete(`/events/${parentEventId}/series?delete_future_only=${deleteFutureOnly}`);
+  async deleteEventSeries(parentEventId: string, deleteFutureOnly = false, fromEventId?: string): Promise<void> {
+    await api.delete(`/events/${parentEventId}/series`, {
+      params: {
+        delete_future_only: deleteFutureOnly,
+        ...(fromEventId ? { from_event_id: fromEventId } : {}),
+      },
+    });
   },
 
   /**

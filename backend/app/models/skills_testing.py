@@ -234,10 +234,15 @@ class SkillTest(Base):
         nullable=False,
         index=True,
     )
-    examiner_id: Mapped[str] = mapped_column(
+    # SET NULL, not CASCADE: the test is the candidate's record, and the
+    # examiner is only its attribution. Under CASCADE, permanently deleting an
+    # examiner silently deleted every evaluation they ever scored for other
+    # members. NULL reads as "a former member" (Pitfall #2: SET NULL needs
+    # nullable=True).
+    examiner_id: Mapped[Optional[str]] = mapped_column(
         String(36),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Optional pipeline linkage — inherited from the template at creation but
@@ -429,7 +434,7 @@ class SkillTest(Base):
     candidate: Mapped["User"] = relationship(
         "User", foreign_keys=[candidate_id], lazy="select"
     )
-    examiner: Mapped["User"] = relationship(
+    examiner: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[examiner_id], lazy="select"
     )
 

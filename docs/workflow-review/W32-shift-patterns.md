@@ -134,13 +134,18 @@ Covered by `PatternsTab.test.tsx` (fails against the old tab). Re-driven at
 Covered by a new case in `TemplateFormModal.test.tsx` (fails against the old
 form). The existing administrative-access test now queries the per-seat name.
 
-### W32-5 — NIT — A 24/48 preset accepts a 12-hour template without comment — OPEN
+### W32-5 — NIT — A 24/48 preset accepts a 12-hour template without comment — FIXED 2026-10-20
 
 The preset says "On duty for 24 consecutive hours". Built on Day Shift A (7 AM
 to 7 PM), it generated 12-hour shifts every third day, and nothing on the form
 pointed out the mismatch. Left: whether the form should warn, or pick a
 24-hour template for a 24-hour preset, is a design choice. Some departments
 staff a 24/48 as two 12-hour halves.
+
+**Fixed:** presets whose name commits to a length now carry it (`shiftHours`:
+24 for 24/48, 48/96, Kelly and California Swing; 12 for the 12-hour 4/4), and
+the pattern form warns under the template picker when the chosen template's
+`duration_hours` differs. A warning, not a block, for the halves case above.
 
 ### W32-6 — NIT — Patterns can be made from two places — OPEN
 
@@ -151,16 +156,16 @@ them is a restructure, not a repair.
 
 ## Checklist
 
-| Section                 | Result                                                               |
-| ----------------------- | -------------------------------------------------------------------- |
-| 1. The job gets done    | ✅ template → pattern → a month of shifts members can sign up for    |
-| 2. The right people     | ✅ member 403 on writes, Access Denied on the pages                  |
-| 3. Wrong input, failure | ✅ three double-clicks acted once; fixed W32-2 (an unexplained zero) |
-| 4. Browser signals      | ✅ clean `events`                                                    |
-| 5. Coming back to it    | ✅ template, pattern and shifts persist; a re-run adds no duplicates |
-| 6. On a phone           | ✅ both screens at 390×844; fixed W32-3's duplicate "Generate"       |
-| 7. Everyone can use it  | Fixed W32-3, W32-4                                                   |
-| 8. What happens around  | Fixed W32-1 (driver warnings dropped); W32-5, W32-6 open             |
+| Section                 | Result                                                                    |
+| ----------------------- | ------------------------------------------------------------------------- |
+| 1. The job gets done    | ✅ template → pattern → a month of shifts members can sign up for         |
+| 2. The right people     | ✅ member 403 on writes, Access Denied on the pages                       |
+| 3. Wrong input, failure | ✅ three double-clicks acted once; fixed W32-2 (an unexplained zero)      |
+| 4. Browser signals      | ✅ clean `events`                                                         |
+| 5. Coming back to it    | ✅ template, pattern and shifts persist; a re-run adds no duplicates      |
+| 6. On a phone           | ✅ both screens at 390×844; fixed W32-3's duplicate "Generate"            |
+| 7. Everyone can use it  | Fixed W32-3, W32-4                                                        |
+| 8. What happens around  | Fixed W32-1 (driver warnings dropped); W32-5 fixed 2026-10-20; W32-6 open |
 
 ## Completion gate
 

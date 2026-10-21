@@ -98,7 +98,9 @@ describe('ApparatusDetailPage', () => {
 
   it('heads the page with the unit and its verdict reason', async () => {
     renderWithRouter(<ApparatusDetailPage />);
-    expect(await screen.findByRole('heading', { name: 'E-1' })).toBeInTheDocument();
+    // The verdict pill sits inside the heading now, so its name is
+    // "E-1 Needs attention" and the unit is matched as its first word.
+    expect(await screen.findByRole('heading', { name: /^E-1\b/ })).toBeInTheDocument();
     expect(screen.getByText(/1 item failed on the last check/)).toBeInTheDocument();
     expect(screen.getByText('Needs attention')).toBeInTheDocument();
   });
@@ -107,27 +109,27 @@ describe('ApparatusDetailPage', () => {
     // Deliberately not a second readiness path — two of them would eventually
     // disagree, and the board and the detail page would contradict each other.
     renderWithRouter(<ApparatusDetailPage />);
-    await screen.findByRole('heading', { name: 'E-1' });
+    await screen.findByRole('heading', { name: /^E-1\b/ });
     expect(mockGetFleetReadiness).toHaveBeenCalledTimes(1);
   });
 
   it('scopes the inventory tab to this apparatus', async () => {
     renderWithRouter(<ApparatusDetailPage />);
-    await screen.findByRole('heading', { name: 'E-1' });
+    await screen.findByRole('heading', { name: /^E-1\b/ });
     await userEvent.click(screen.getByRole('tab', { name: 'Inventory' }));
     expect(screen.getByText('Inventory for a-1')).toBeInTheDocument();
   });
 
   it('scopes the check log tab to this apparatus', async () => {
     renderWithRouter(<ApparatusDetailPage />);
-    await screen.findByRole('heading', { name: 'E-1' });
+    await screen.findByRole('heading', { name: /^E-1\b/ });
     await userEvent.click(screen.getByRole('tab', { name: 'Check log' }));
     expect(screen.getByText('Check log for a-1')).toBeInTheDocument();
   });
 
   it('loads supply only when the findings tab is opened', async () => {
     renderWithRouter(<ApparatusDetailPage />);
-    await screen.findByRole('heading', { name: 'E-1' });
+    await screen.findByRole('heading', { name: /^E-1\b/ });
     expect(mockGetSupplyExpiringItems).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByRole('tab', { name: /Findings/ }));
@@ -138,7 +140,7 @@ describe('ApparatusDetailPage', () => {
 
   it('badges the findings tab with what is outstanding', async () => {
     renderWithRouter(<ApparatusDetailPage />);
-    await screen.findByRole('heading', { name: 'E-1' });
+    await screen.findByRole('heading', { name: /^E-1\b/ });
     // 1 failed + 0 out of service + 2 expiring
     expect(screen.getByRole('tab', { name: /Findings/ })).toHaveTextContent('3');
   });
@@ -185,7 +187,7 @@ describe('ApparatusDetailPage', () => {
         logWith([entry({ shiftId: 'shift 9', status: 'due' }), entry({ shiftId: 's-2', status: 'passed' })])
       );
       renderWithRouter(<ApparatusDetailPage />);
-      await screen.findByRole('heading', { name: 'E-1' });
+      await screen.findByRole('heading', { name: /^E-1\b/ });
 
       const links = screen.getAllByRole('link', { name: /In my checklists/ });
       expect(links).toHaveLength(1);
@@ -213,7 +215,7 @@ describe('ApparatusDetailPage', () => {
         ])
       );
       renderWithRouter(<ApparatusDetailPage />);
-      await screen.findByRole('heading', { name: 'E-1' });
+      await screen.findByRole('heading', { name: /^E-1\b/ });
       await userEvent.click(screen.getByRole('tab', { name: /Findings/ }));
 
       const radio = rowFor('Portable radio');

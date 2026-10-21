@@ -85,6 +85,7 @@ from app.models.location import Location
 from app.models.notification import NotificationLog
 from app.models.operational_rank import OperationalRank
 from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
     MembershipType,
     Organization,
     Position,
@@ -494,6 +495,46 @@ class CategoryHasItemsError(ValueError):
         super().__init__(
             f"{item_count} {noun} this category. "
             "Choose a category to move them to before deleting it."
+        )
+
+
+class LotReceivedAgainstReorderError(ValueError):
+    """A stock lot is the record of a reorder's receipt and cannot be deleted.
+
+    ``reorder_receipts.inventory_lot_id`` is RESTRICT and NOT NULL: the
+    receipt is how the reorder knows what arrived, so the lot outlives a
+    mistaken count. A ValueError so a caller that does not tell it apart
+    still answers 400; the lot routes catch it first to answer 409.
+    """
+
+    def __init__(self, reorder_label: str) -> None:
+        self.reorder_label = reorder_label
+        super().__init__(
+            f"This lot was received against reorder {reorder_label}, so it "
+            "cannot be deleted. Adjust its quantity to 0 instead."
+        )
+
+
+class StorageAreaNotEmptyError(ValueError):
+    """A storage area still holds items or nested areas.
+
+    Deactivating it would leave its items pointing at an area no list shows
+    (their location reads "--" everywhere) and its nested areas under a parent
+    that has vanished. A ValueError for callers that do not tell it apart; the
+    route catches it first to answer 409.
+    """
+
+    def __init__(self, item_count: int, child_count: int) -> None:
+        self.item_count = item_count
+        self.child_count = child_count
+        parts = []
+        if item_count:
+            parts.append(f"{item_count} item{'' if item_count == 1 else 's'}")
+        if child_count:
+            parts.append(f"{child_count} nested area{'' if child_count == 1 else 's'}")
+        super().__init__(
+            f"This storage area still holds {' and '.join(parts)}. "
+            "Move them to another area first."
         )
 
 
@@ -3691,12 +3732,20 @@ class InventoryService:
         return_condition: Optional[ItemCondition] = None,
         return_notes: Optional[str] = None,
         expected_user_id: Optional[UUID] = None,
+        *,
+        commit: bool = True,
     ) -> Tuple[bool, Optional[str]]:
         """Unassign an item from its current user.
 
         If *expected_user_id* is provided, the operation will fail when the
         item is assigned to a different user — preventing stale-read races
         in batch operations.
+
+        ``commit=False`` leaves the transaction open for a caller that must
+        finish more work atomically with the return (a member's permanent
+        delete), skips the auto-archive check that only makes sense once the
+        return is committed, and re-raises instead of rolling back so the
+        caller's own work is not discarded behind its back.
         """
         try:
             notices = await self._lock_open_return_notices(organization_id, item_id)
@@ -3766,6 +3815,8 @@ class InventoryService:
                 performed_by=returned_by,
             )
 
+            if not commit:
+                return True, None
             await self.db.commit()
 
             # Check if the dropped member should be auto-archived.
@@ -3782,6 +3833,8 @@ class InventoryService:
 
             return True, None
         except Exception as e:
+            if not commit:
+                raise
             await self.db.rollback()
             return False, str(e)
 
@@ -4185,8 +4238,13 @@ class InventoryService:
         return_condition: Optional[ItemCondition] = None,
         return_notes: Optional[str] = None,
         quantity_returned: Optional[int] = None,
+        *,
+        commit: bool = True,
     ) -> Tuple[bool, Optional[str]]:
-        """Return issued units back to the pool."""
+        """Return issued units back to the pool.
+
+        ``commit=False`` behaves as on :meth:`unassign_item`.
+        """
         try:
             # item_id is immutable on an issuance once created, so a plain,
             # unlocked read of it is safe -- it exists only to say which item
@@ -4315,6 +4373,8 @@ class InventoryService:
                 performed_by=returned_by,
             )
 
+            if not commit:
+                return True, None
             await self.db.commit()
 
             # Check if the dropped member should be auto-archived.
@@ -4331,6 +4391,8 @@ class InventoryService:
 
             return True, None
         except Exception as e:
+            if not commit:
+                raise
             await self.db.rollback()
             return False, str(e)
 
@@ -4454,8 +4516,13 @@ class InventoryService:
         checked_in_by: UUID | str,
         return_condition: ItemCondition,
         damage_notes: Optional[str] = None,
+        *,
+        commit: bool = True,
     ) -> Tuple[bool, Optional[str]]:
-        """Check in an item"""
+        """Check in an item.
+
+        ``commit=False`` behaves as on :meth:`unassign_item`.
+        """
         try:
             # item_id is immutable on a checkout once created, so a plain,
             # unlocked read of it is safe -- it exists only to say which item
@@ -4556,6 +4623,8 @@ class InventoryService:
                 performed_by=checked_in_by,
             )
 
+            if not commit:
+                return True, None
             await self.db.commit()
 
             # Check if the dropped member should be auto-archived.
@@ -4572,6 +4641,8 @@ class InventoryService:
 
             return True, None
         except Exception as e:
+            if not commit:
+                raise
             await self.db.rollback()
             return False, str(e)
 
@@ -5697,10 +5768,13 @@ class InventoryService:
 
         if include_user_id:
             query = query.where(
-                or_(User.status == "active", User.id == str(include_user_id))
+                or_(
+                    User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                    User.id == str(include_user_id),
+                )
             )
         else:
-            query = query.where(User.status == "active")
+            query = query.where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
 
         if search:
             pattern = like_pattern(search)
@@ -9506,6 +9580,9 @@ class InventoryService:
 
         ``required_item_types``: the lot's item is re-validated under lock
         (``_items_in_domain_locked``); a miss returns ``False``.
+
+        Raises ``LotReceivedAgainstReorderError`` for a lot a reorder receipt
+        points at.
         """
         lot = await self._get_lot(lot_id, organization_id)
         if not lot:
@@ -9514,22 +9591,92 @@ class InventoryService:
             [lot.inventory_item_id], organization_id, required_item_types
         ):
             return False
+        receipt = (
+            await self.db.execute(
+                select(ReorderRequest.item_name, ReorderRequest.purchase_order_number)
+                .join(
+                    ReorderReceipt,
+                    ReorderReceipt.reorder_request_id == ReorderRequest.id,
+                )
+                .where(ReorderReceipt.inventory_lot_id == lot.id)
+                .limit(1)
+            )
+        ).first()
+        if receipt is not None:
+            item_name, po_number = receipt
+            label = f'"{item_name}"'
+            if po_number:
+                label += f" (PO {po_number})"
+            raise LotReceivedAgainstReorderError(label)
         await self.db.delete(lot)
         await self.db.commit()
         return True
 
+    async def deactivate_storage_area(
+        self, area_id: str, organization_id: str
+    ) -> Optional[StorageArea]:
+        """Deactivate (soft-delete) a storage area, or None if not in the org.
+
+        Raises ``StorageAreaNotEmptyError`` while active items are stored in it
+        or active areas are nested under it — the same two counts the storage
+        areas page shows, so the server refuses exactly what the page does.
+        """
+        area = (
+            await self.db.execute(
+                select(StorageArea)
+                .where(StorageArea.id == area_id)
+                .where(StorageArea.organization_id == organization_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if not area:
+            return None
+
+        item_count = (
+            await self.db.scalar(
+                select(func.count(InventoryItem.id))
+                .where(InventoryItem.organization_id == organization_id)
+                .where(InventoryItem.storage_area_id == area.id)
+                .where(InventoryItem.active.is_(True))
+            )
+            or 0
+        )
+        child_count = (
+            await self.db.scalar(
+                select(func.count(StorageArea.id))
+                .where(StorageArea.organization_id == organization_id)
+                .where(StorageArea.parent_id == area.id)
+                .where(StorageArea.is_active.is_(True))
+            )
+            or 0
+        )
+        if item_count or child_count:
+            raise StorageAreaNotEmptyError(item_count, child_count)
+
+        area.is_active = False
+        await self.db.commit()
+        return area
+
     async def get_lots_for_items(
         self, organization_id: str, item_ids: List[str]
     ) -> Dict[str, List[InventoryLot]]:
-        """Map each item id to its in-stock lots (quantity > 0)."""
+        """Map each item id to its in-stock lots (quantity > 0).
+
+        Read as the replacement stock behind a checklist position, so a
+        medical supply kept on the apparatus only has none
+        (``_shelf_lots_count``): lots left on it from before it was marked
+        would otherwise tell the weekly email a swap is ready.
+        """
         if not item_ids:
             return {}
         result = await self.db.execute(
             select(InventoryLot)
+            .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
             .where(
                 InventoryLot.organization_id == organization_id,
                 InventoryLot.inventory_item_id.in_(item_ids),
                 InventoryLot.quantity > 0,
+                self._shelf_lots_count(organization_id),
             )
             .order_by(
                 InventoryLot.expiration_date.is_(None),
@@ -9540,6 +9687,51 @@ class InventoryService:
         for lot in result.scalars().all():
             by_item.setdefault(lot.inventory_item_id, []).append(lot)
         return by_item
+
+    async def find_lots_by_number(
+        self,
+        organization_id: str,
+        lot_number: str,
+        item_types: Optional[Iterable[ItemType]] = None,
+    ) -> List[Tuple[InventoryLot, str]]:
+        """Stock-room lots whose number contains ``lot_number``, with the item
+        name: the shelf half of the recall lookup.
+
+        Case-insensitive and a substring, because a recall notice and a label
+        rarely agree on case or on a leading prefix. Lots still holding stock,
+        of active items, dated or not; a medical supply kept on the apparatus
+        only contributes none (``_shelf_lots_count``), as everywhere else.
+        """
+        needle = lot_number.strip()
+        if not needle:
+            return []
+        query = (
+            select(InventoryLot, InventoryItem.name)
+            .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
+            .where(
+                InventoryLot.organization_id == organization_id,
+                InventoryItem.active.is_(True),
+                InventoryLot.quantity > 0,
+                InventoryLot.lot_number.ilike(
+                    like_pattern(needle), escape=LIKE_ESCAPE_CHAR
+                ),
+                self._shelf_lots_count(organization_id),
+            )
+        )
+        if item_types:
+            query = query.where(
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                )
+            )
+        result = await self.db.execute(
+            query.order_by(
+                InventoryLot.expiration_date.is_(None),
+                InventoryLot.expiration_date.asc(),
+                InventoryItem.name.asc(),
+            )
+        )
+        return [(row[0], row[1]) for row in result.all()]
 
     async def get_expiring_lots(
         self,
@@ -10605,9 +10797,14 @@ class InventoryService:
         return list(result.scalars().all())
 
     async def get_equipment_kit_by_id(
-        self, kit_id: UUID, organization_id: UUID | str
+        self, kit_id: UUID, organization_id: UUID | str, active_only: bool = False
     ) -> Optional[EquipmentKit]:
-        """Get a kit with its items."""
+        """Get a kit with its items.
+
+        ``active_only`` treats a deleted (deactivated) kit as not found. Reading
+        and editing one stays possible — that is how it is inspected or
+        reactivated — but issuing from it must not be.
+        """
         query = (
             select(EquipmentKit)
             .where(
@@ -10616,6 +10813,8 @@ class InventoryService:
             )
             .options(selectinload(EquipmentKit.line_items))
         )
+        if active_only:
+            query = query.where(EquipmentKit.active.is_(True))
         result = await self.db.execute(query)
         equipment_kit: Optional[EquipmentKit] = result.scalar_one_or_none()
         return equipment_kit
@@ -10701,9 +10900,11 @@ class InventoryService:
         organization_id: UUID | str,
         issued_by: UUID,
     ) -> Tuple[Optional[List[ItemIssuance | ItemAssignment]], Optional[str]]:
-        """Issue all items in a kit to a member."""
+        """Issue all items in a kit to a member. A deleted kit is not found."""
         try:
-            kit = await self.get_equipment_kit_by_id(kit_id, organization_id)
+            kit = await self.get_equipment_kit_by_id(
+                kit_id, organization_id, active_only=True
+            )
             if not kit:
                 return None, "Equipment kit not found"
 
@@ -12358,7 +12559,7 @@ class InventoryService:
         if statuses:
             query = query.where(User.status.in_(statuses))
         else:
-            query = query.where(User.status == UserStatus.ACTIVE.value)
+            query = query.where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
 
         if membership_types:
             query = query.where(User.membership_type.in_(membership_types))

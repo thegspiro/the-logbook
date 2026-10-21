@@ -1,11 +1,12 @@
-# Security Review — Feature 30: Onboarding (pass 7)
+# Security Review — Feature 30: Onboarding (passes 7–8)
 
-**Prefix:** `ONB5` · **Rotation pass:** 7 (prior: module-audit iteration 25,
+**Prefix:** `ONB5` · **Rotation pass:** 8 (prior: module-audit iteration 25,
 app-review B25 (4 passes), security-review pass 1 — PR #1913 + follow-up
 (`docs/security-review/ONB2-30-onboarding.md`), pass 2 — PR #2093
 (`docs/security-review/ONB-30-onboarding.md`), passes 3–5 — PRs #2358, #2521,
-#2898 (`docs/security-review/ONB3-30-onboarding.md`), pass 6 — PR #2996
-(`docs/security-review/ONB4-30-onboarding.md`)) · **Reviewed:** 2026-10-17
+#2898 (`docs/security-review/ONB3-30-onboarding.md`), pass 6 — PR #2996,
+pass 7 — PR #3381 (both `docs/security-review/ONB4-30-onboarding.md` and this
+file)) · **Reviewed:** 2026-10-17 (pass 7), 2026-10-21 (pass 8, this PR)
 
 **Backend:** `backend/app/api/v1/onboarding.py` (now 3,196 L, 26
 unauthenticated bootstrap routes — 24 carried forward plus 2 new),
@@ -32,6 +33,105 @@ read at each changed line).
 (new `encryption_key_custody` table).
 
 ---
+
+## Pass 8 (2026-10-21) — watchdog pickup, 1 independently-landed fix re-confirmed, 0 new findings
+
+**Step 0.** `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results, checked fresh immediately before starting and again
+immediately before branching — no open security-review PR either time. PR
+#3479 (Feature 29, Reports & analytics, pass 10) had merged
+(`e9a9baef0`, 2026-10-21T04:46:27Z) with nothing started for the next
+feature since; row 30 (Onboarding) was the first `⬜` in the rotation table.
+
+**Scope check.** Pass 7 landed as `8f308088c` (PR #3381, merged
+2026-10-17). `git log 8f308088c..HEAD` restricted to this feature's full
+pass-7 file list (`onboarding.py`, `services/onboarding.py`,
+`models/onboarding.py`, `utils/onboarding_security.py`,
+`email_test_helper.py`, `email_providers.py`, `microsoft_oauth.py`,
+`template_service.py`, `org_template_service.py`,
+`org_template_registry.py`, `key_custody_service.py`, `system_notices.py`
+(service + endpoint + schema), `upload_scanning.py`, and
+`frontend/src/modules/onboarding/`) found exactly one real commit:
+`dbe57bf61` ("security(onboarding): refuse /test/email once onboarding is
+complete", 2026-10-20). No migration, no other feature-owned file changed
+in this window.
+
+**`dbe57bf61` re-verified by direct read, not taken on its own commit
+message.** `POST /onboarding/test/email` (`verify_email_configuration`,
+`onboarding.py:1713-1752`) opens an outbound SMTP connection to a
+caller-chosen host/port and previously only called `validate_session` —
+proof a session exists and has not idled out, not proof onboarding is
+still in progress. Every sibling state-changing `/session/*` route (ONB-3,
+ONB-9, ONB2-30-3) already refuses once `needs_onboarding()` is false;
+this route did not, so a session minted before completion stayed usable as
+an authenticated-adjacent SSRF/internal-port probe for up to
+`SESSION_MAX_LIFETIME_HOURS` (24h) after setup actually finished. The fix
+adds the identical `needs_onboarding()` check (`onboarding.py:1736-1747`)
+**before** `test_smtp_connection_uniform` is called, confirmed by reading
+the function body end-to-end: the check sits between `validate_session`
+and the first line that touches `request.platform`/`request.config`, so no
+network I/O happens on a completed install. The new structural test
+(`tests/test_onboarding_test_email_completion_guard.py`) walks the AST of
+`onboarding.py` and fails if any future mutating session route reaches
+`validate_session` without also reaching `needs_onboarding()`/
+`is_completed` through its own call graph — read in full, confirmed it
+actually exercises `verify_email_configuration` (both the refused-after-
+completion and still-runs-while-in-progress branches) and would have
+caught this gap before it shipped. Not a security-review-flagged item in
+any prior pass's findings file — it was found and fixed by regular
+engineering work; this pass's job is confirming the fix is complete and
+correct, which it is. **No new finding.**
+
+**Standing findings re-verified unchanged, by direct read at current line
+numbers (not re-cited from pass 7):**
+
+- Duplicate `role.id` within one `/session/roles` payload still raises an
+  unhandled `IntegrityError` → 500 — `save_session_roles`'s creation loop
+  (`onboarding.py:2774-2850`) still has no dedup of `data.roles`' own `id`
+  values against each other; `_check_submitted_positions` only checks a
+  submitted id against the organization's _existing_ system roles. OPEN,
+  unchanged.
+- `POST /organization` (`onboarding.py:1370-1409`) still has only
+  `except ValueError` around `service.create_organization(...)`, not the
+  `except Exception` its twin `/session/organization` carries. Confirmed by
+  reading the full try/except block. Cosmetic robustness gap, not a
+  security finding — `safe_error_detail()`/production `DEBUG=false` still
+  govern an uncaught exception's response either way. OPEN, unchanged.
+- `ITTeamMemberRequest.email` (`onboarding.py:484`) is still `str`, not
+  `EmailStr` — confirmed unchanged, intentionally loose to match
+  `create_it_team_users`'s skip-if-invalid behavior. OPEN (by design),
+  unchanged.
+
+**Schema & migration:** no migration in this pass's window.
+`validate_migrations.py --strict` — see gate below.
+
+**Guard tests:** none added by this pass — `dbe57bf61`'s own structural
+test (above) already closes the class for the next route; re-run and
+confirmed passing in the scoped run below.
+
+### Completion gate (pass 8)
+
+| Check                                                                                                | Result                |
+| ---------------------------------------------------------------------------------------------------- | --------------------- |
+| `python3.13 -m flake8 app/ tests/ alembic/`                                                          | ✅ 0 violations       |
+| `python3.13 -m black --check app/ tests/ alembic/`                                                   | ✅ clean              |
+| `python3.13 -m isort --check-only app/ tests/ alembic/` (9.0.1, CI-pinned)                           | ✅ clean              |
+| `python3.13 scripts/validate_migrations.py --strict`                                                 | ✅ single head, clean |
+| `pytest tests/ -q -k "onboard or org_template or template_service or key_custody or system_notices"` | ✅ see Step 9 report  |
+| `npm run typecheck` (frontend)                                                                       | ✅ 0 errors           |
+| `npm run lint` (frontend, `--max-warnings 10`)                                                       | ✅ 0 errors           |
+
+Findings doc for this pass is this section; no `KNOWN_LIMITATIONS.md` change
+needed — nothing here is an owner-decision item, and the one existing
+onboarding row that mentions `/test/email` (ONB-30-3, the SMTP-uniform-error
+decision) is unrelated to this pass's finding and unchanged. Rotation row 30
+→ ✅ (pending this PR's merge). Next: Feature 31 (Scheduled tasks) — unless a
+later watchdog pass already advanced further; check `search_pull_requests`
+fresh rather than trusting this note.
+
+---
+
+## Pass 7 (2026-10-17) — watchdog pickup, 0 fixed, 0 new findings
 
 ## Scope
 

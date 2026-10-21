@@ -11,6 +11,7 @@ import { OrgChartNodeModal, type OrgChartNodeDraft } from '../components/OrgChar
 import { OrgChartOutline } from '../components/OrgChartOutline';
 import { useOrgChartStore } from '../store/orgChartStore';
 import { parseLinkValue, type OrgChartNode } from '../types/orgChart';
+import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
 
 /**
  * Governance -> Organizational Chart.
@@ -223,16 +224,17 @@ const OrgChartPage: React.FC = () => {
   return (
     // Wider than the old max-w-4xl: a chain of command is wide before it is
     // deep, and the diagram spends the extra width on boxes rather than margin.
-    <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
-      <header className="space-y-2">
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-          <Network className="h-6 w-6" aria-hidden="true" /> Organizational Chart
-        </h1>
-        <p className="text-theme-text-secondary text-sm leading-6">
-          Who is in charge of what, and who they report to. Leadership maintains this chart of the department&rsquo;s
-          real chain of command — it does not reflect anyone&rsquo;s access or permissions in this application.
-        </p>
-      </header>
+    <div className="mx-auto max-w-7xl space-y-6">
+      <GovernancePageHeader
+        icon={Network}
+        title="Organizational Chart"
+        subtitle={
+          <>
+            Who is in charge of what, and who they report to. Leadership maintains this chart of the department&rsquo;s
+            real chain of command — it does not reflect anyone&rsquo;s access or permissions in this application.
+          </>
+        }
+      />
 
       {error ? (
         <p className="alert-error text-sm" role="alert">

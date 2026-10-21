@@ -128,7 +128,7 @@ export const ShiftTemplatesPage: React.FC = () => {
     if (
       !(await confirm({
         title: 'Delete template',
-        message: `Delete "${template?.name ?? 'this template'}"? Shifts already created from it are kept. This cannot be undone.`,
+        message: `Delete "${template?.name ?? 'this template'}"? If any shift (past or future) or pattern uses it, it is deactivated instead of deleted: those shifts keep it and its equipment checklists, its patterns keep generating from it, and it is no longer offered for new shifts or patterns. Otherwise it is deleted, which cannot be undone.`,
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
@@ -136,8 +136,12 @@ export const ShiftTemplatesPage: React.FC = () => {
       return;
     setDeletingTemplateId(id);
     try {
-      await schedulingService.deleteTemplate(id);
-      toast.success('Template deleted');
+      const outcome = await schedulingService.deleteTemplate(id);
+      toast.success(
+        outcome === 'deactivated'
+          ? `"${template?.name ?? 'The template'}" is still used by shifts or patterns, so it was deactivated instead of deleted.`
+          : 'Template deleted'
+      );
       void loadTemplates();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to delete template'));

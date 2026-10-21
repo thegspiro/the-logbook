@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.utils.check_types import (
     CANONICAL_CHECK_TYPES,
     EXPIRY,
@@ -90,14 +91,14 @@ class CheckTemplateItemCreate(BaseModel):
 
     name: str = Field(..., max_length=200)
     description: Optional[str] = None
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     check_type: str = Field(default="pass_fail", max_length=30)
     is_required: bool = False
-    required_quantity: Optional[int] = None
-    expected_quantity: Optional[int] = None
-    critical_minimum_quantity: Optional[int] = None
+    required_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    expected_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    critical_minimum_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     count_unit: Optional[str] = Field(None, max_length=50)
-    min_level: Optional[float] = None
+    min_level: Optional[float] = Field(None, ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
     lot_number: Optional[str] = Field(None, max_length=100)
@@ -106,7 +107,7 @@ class CheckTemplateItemCreate(BaseModel):
     inventory_item_id: Optional[str] = None
     has_expiration: bool = False
     expiration_date: Optional[date] = None
-    expiration_warning_days: int = 30
+    expiration_warning_days: int = Field(30, ge=INT32_MIN, le=INT32_MAX)
 
     @field_validator("check_type")
     @classmethod
@@ -167,14 +168,14 @@ class CheckTemplateItemUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
     compartment_id: Optional[str] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     check_type: Optional[str] = Field(None, max_length=30)
     is_required: Optional[bool] = None
-    required_quantity: Optional[int] = None
-    expected_quantity: Optional[int] = None
-    critical_minimum_quantity: Optional[int] = None
+    required_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    expected_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    critical_minimum_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     count_unit: Optional[str] = Field(None, max_length=50)
-    min_level: Optional[float] = None
+    min_level: Optional[float] = Field(None, ge=-FLOAT32_MAX, le=FLOAT32_MAX)
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
     lot_number: Optional[str] = Field(None, max_length=100)
@@ -183,7 +184,7 @@ class CheckTemplateItemUpdate(BaseModel):
     inventory_item_id: Optional[str] = None
     has_expiration: Optional[bool] = None
     expiration_date: Optional[date] = None
-    expiration_warning_days: Optional[int] = None
+    expiration_warning_days: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
 
     @field_validator("check_type")
     @classmethod
@@ -287,7 +288,7 @@ class CheckTemplateCompartmentCreate(BaseModel):
 
     name: str = Field(..., max_length=200)
     description: Optional[str] = None
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     image_url: Optional[str] = Field(None, max_length=500)
     is_header: bool = False
     container_type: str = Field("compartment", max_length=50)
@@ -332,7 +333,7 @@ class CheckTemplateCompartmentUpdate(BaseModel):
 
     name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     image_url: Optional[str] = Field(None, max_length=500)
     is_header: Optional[bool] = None
     container_type: Optional[str] = Field(None, max_length=50)
@@ -344,7 +345,7 @@ class CheckTemplateCompartmentUpdate(BaseModel):
 class CheckTemplateCompartmentClone(BaseModel):
     """Position at which to insert a cloned saved compartment."""
 
-    sort_order: int = Field(..., ge=0)
+    sort_order: int = Field(..., ge=0, le=INT32_MAX)
 
 
 class CheckTemplateCompartmentResponse(UTCResponseBase):
@@ -421,7 +422,7 @@ class EquipmentCheckTemplateCreate(BaseModel):
     assigned_positions: Optional[List[str]] = None
     # Creation is a draft operation unless the caller explicitly publishes.
     is_active: bool = False
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     compartments: Optional[List[CheckTemplateCompartmentCreate]] = None
 
 
@@ -436,7 +437,7 @@ class EquipmentCheckTemplateUpdate(BaseModel):
     template_type: Optional[str] = Field(None, max_length=30)
     assigned_positions: Optional[List[str]] = None
     is_active: Optional[bool] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
 
 
 class EquipmentCheckTemplateResponse(UTCResponseBase):
@@ -489,10 +490,12 @@ class CheckItemResultSubmit(BaseModel):
     status: str = Field(
         ..., pattern=r"^(pass|fail|not_applicable|out_of_service|not_checked)$"
     )
-    quantity_found: Optional[int] = Field(None, ge=0)
-    required_quantity: Optional[int] = None
-    critical_minimum_quantity: Optional[int] = None
-    level_reading: Optional[float] = Field(None, allow_inf_nan=False)
+    quantity_found: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    required_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    critical_minimum_quantity: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    level_reading: Optional[float] = Field(
+        None, allow_inf_nan=False, ge=-FLOAT32_MAX, le=FLOAT32_MAX
+    )
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
     lot_number: Optional[str] = Field(None, max_length=100)
@@ -526,7 +529,7 @@ class CheckSealSubmit(BaseModel):
     compartment_name: str
     seal_number: Optional[str] = Field(None, max_length=100)
     intact: bool = True
-    cleared_item_count: int = Field(0, ge=0)
+    cleared_item_count: int = Field(0, ge=0, le=INT32_MAX)
     notes: Optional[str] = None
 
 
@@ -966,7 +969,7 @@ class DeployedLotUpdateRequest(BaseModel):
     same thing.
     """
 
-    quantity: int = Field(..., ge=0)
+    quantity: int = Field(..., ge=0, le=INT32_MAX)
     lot_number: Optional[str] = Field(None, max_length=100)
     expiration_date: Optional[date] = None
 
@@ -1032,13 +1035,13 @@ class ItemUsedRequest(BaseModel):
     note: Optional[str] = Field(None, max_length=500)
     # Omitted for a position that is not counted (a single tool, a pass/fail
     # inspection), where the report itself is the whole message.
-    quantity_used: Optional[int] = Field(None, ge=1)
+    quantity_used: Optional[int] = Field(None, ge=1, le=INT32_MAX)
 
 
 class ItemQuantityRequest(BaseModel):
     """Set the on-truck count outright — a recount, or a hand restock."""
 
-    quantity: int = Field(..., ge=0)
+    quantity: int = Field(..., ge=0, le=INT32_MAX)
 
 
 class ItemRestockStateResponse(BaseModel):
@@ -1107,7 +1110,7 @@ class LotSwapRequest(BaseModel):
 
     inventory_lot_id: str
     # Defaults to one, which is the whole story for a single-unit bracket.
-    quantity: int = Field(1, ge=1)
+    quantity: int = Field(1, ge=1, le=INT32_MAX)
     # A disposition is what separates a replacement from a top-up: it says
     # units are coming *off*, and where they went. A two-of-four restock sends
     # none and retires nothing, so a swap never removes stock by inference.

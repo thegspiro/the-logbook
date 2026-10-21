@@ -37,6 +37,15 @@ from app.utils.org_timezone import (
 )
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
+APPROVED_MEETING_DELETE_REFUSAL = (
+    "An approved meeting cannot be deleted. Its attendance is part of the "
+    "department's record and counts toward membership tier eligibility."
+)
+
+
+class MeetingDeleteRefusedError(Exception):
+    """A meeting that may not be deleted. Answered 409 by the endpoint."""
+
 
 class MeetingsService:
     """Service for meeting minutes management"""
@@ -369,12 +378,22 @@ class MeetingsService:
     async def delete_meeting(
         self, meeting_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
-        """Delete a meeting and all its attendees/action items"""
-        try:
-            meeting = await self.get_meeting_by_id(meeting_id, organization_id)
-            if not meeting:
-                return False, "Meeting not found"
+        """Delete a meeting and all its attendees/action items.
 
+        An approved meeting is refused with ``MeetingDeleteRefusedError``.
+        Its attendees cascade away with it, and attendance counts toward
+        membership tier eligibility (``membership_tier_service``); once the
+        minutes are approved that attendance is the settled record, so
+        deleting the meeting would quietly cost members credit they earned.
+        Meetings have no active/archived flag to fall back on, so this is a
+        refusal rather than a deactivation.
+        """
+        meeting = await self.get_meeting_by_id(meeting_id, organization_id)
+        if not meeting:
+            return False, "Meeting not found"
+        if meeting.status == MeetingStatus.APPROVED:
+            raise MeetingDeleteRefusedError(APPROVED_MEETING_DELETE_REFUSAL)
+        try:
             await self.db.delete(meeting)
             await self.db.commit()
             return True, None

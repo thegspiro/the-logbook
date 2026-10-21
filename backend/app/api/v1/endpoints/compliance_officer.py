@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import require_permission
 from app.core.database import get_db
 from app.core.utils import handle_service_errors
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.services.compliance_officer_service import (
     AnnualComplianceReportService,
     ComplianceAttestationService,
@@ -66,7 +67,7 @@ class AttestationCreate(BaseModel):
 class AnnualReportExportRequest(BaseModel):
     """Request body for exporting the annual compliance report."""
 
-    year: int = Field(..., description="Report year")
+    year: int = Field(..., description="Report year", ge=INT32_MIN, le=INT32_MAX)
     format: str = Field(
         "csv",
         description="Export format (currently only 'csv')",

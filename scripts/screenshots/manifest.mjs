@@ -522,6 +522,45 @@ export function openFirstFromApi(apiPath, routeFor, listKey, match) {
 }
 
 /**
+ * The accepted skills-test result that is held for release: release on
+ * request, accepted, not yet released.
+ *
+ * Found by those three facts rather than by position because the list rows
+ * carry none of them and the weighted sheet's tests hold other states. Returns
+ * the row's id and its candidate's name, so a shot can open the result or find
+ * its row in the Test Records tab.
+ */
+export async function findHeldResult(page) {
+  const held = await page.evaluate(async () => {
+    const api = async (path) => {
+      const response = await fetch(`/api/v1${path}`, {
+        credentials: "include",
+      });
+      return response.ok ? response.json() : null;
+    };
+    const body = await api("/training/skills-testing/tests?limit=100");
+    const rows = Array.isArray(body)
+      ? body
+      : (body?.items ?? body?.tests ?? []);
+    for (const row of rows) {
+      if (!row.validated_at || row.voided_at || row.is_practice) continue;
+      const detail = await api(`/training/skills-testing/tests/${row.id}`);
+      if (
+        detail?.effective_result_release === "on_release" &&
+        !detail.released_at
+      ) {
+        return { id: row.id, candidateName: row.candidate_name };
+      }
+    }
+    return null;
+  });
+  if (!held) {
+    throw new Error("no accepted result is held for release");
+  }
+  return held;
+}
+
+/**
  * Open the first facility's **Rooms** section.
  *
  * The section list is sidebar navigation inside the facility detail page, not a
@@ -8341,8 +8380,12 @@ export const SHOTS = [
     line: 1468,
     anchor:
       "Minutes Settings as a settings administrator: the section list (Attendance,",
-    alt: "Minutes Settings: the section list (Attendance, Signatures, Reminders, Publishing) beside the Attendance section and its Save row",
+    alt: "Minutes Settings: the section tabs (Attendance, Signatures, Reminders, Publishing) above the Attendance section and its Save row",
     route: "/minutes/settings",
+    // The settings column only: the page opens under the administrator's
+    // malware-scanning notice on a stack with scanning off, which is not a
+    // state a department running the app would be shown.
+    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
     expect: "How attendance is listed",
   },
   {
@@ -8367,6 +8410,10 @@ export const SHOTS = [
       "Minutes Settings, Publishing section: the public-copy switch and the",
     alt: "Minutes Settings, Publishing: the public-copy switch and the Executive-session minutes group with its two switches",
     route: "/minutes/settings?tab=publishing",
+    // The settings column only: the page opens under the administrator's
+    // malware-scanning notice on a stack with scanning off, which is not a
+    // state a department running the app would be shown.
+    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
     expect: "Executive-session minutes",
   },
   {
@@ -8377,7 +8424,11 @@ export const SHOTS = [
       "Minutes Settings, Signatures section with the two default slots, Recording",
     alt: "Minutes Settings, Signatures: the Recording Secretary and Presiding Officer slots, each open to anyone who manages minutes",
     route: "/minutes/settings?tab=signatures",
-    expect: "Anyone who manages minutes",
+    // The settings column only: the page opens under the administrator's
+    // malware-scanning notice on a stack with scanning off, which is not a
+    // state a department running the app would be shown.
+    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
+    expect: { selector: "input[value='Recording Secretary']" },
   },
   {
     id: "04-75-minutes-settings-reminders",
@@ -8387,11 +8438,15 @@ export const SHOTS = [
       "Minutes Settings, Reminders section: the email switch, the first-reminder and",
     alt: "Minutes Settings, Reminders: the email switch, the first-reminder and repeat-while-overdue day fields, and the weekly open-items list switch",
     route: "/minutes/settings?tab=reminders",
+    // The settings column only: the page opens under the administrator's
+    // malware-scanning notice on a stack with scanning off, which is not a
+    // state a department running the app would be shown.
+    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
     expect: "Email reminders to assignees",
   },
   {
-    // The Early Summer meeting's minutes are the pending one: its Approval of
-    // Previous Minutes motion is prepared and linked to the circulated Spring
+    // The Facilities meeting's minutes are the pending one: its Approval of
+    // Previous Minutes motion is prepared and linked to the circulated Apparatus
     // minutes, with nothing recorded. The form is filled in but never saved.
     id: "04-76-minutes-prepared-acceptance-motion",
     doc: "04-events-meetings.md",
@@ -8405,7 +8460,7 @@ export const SHOTS = [
         "/minutes-records?limit=100",
         (id) => `/minutes/${id}`,
         "minutes",
-        (m) => m.title === "Minutes: Early Summer Business Meeting",
+        (m) => m.title === "Minutes: Facilities Business Meeting",
       )(page);
       const group = page.getByRole("group", {
         name: "Motion for Approval of Previous Minutes",
@@ -8421,28 +8476,32 @@ export const SHOTS = [
     expect: "The minutes were accepted",
   },
   {
-    // As the administrator, who circulated the Spring minutes: the note names
+    // As the administrator, who circulated the Apparatus minutes: the note names
     // the meeting that accepted them. Adopting is left to a second officer.
     id: "04-77-minutes-accepted-by-later-meeting",
     doc: "04-events-meetings.md",
     line: 1726,
     anchor:
       "Circulated minutes as an officer, with the note saying a later meeting accepted",
-    alt: "Circulated minutes with the note that the Late Spring Business Meeting accepted them as submitted, moved and seconded by named members, and that Adopt Minutes opens already filled in",
+    alt: "Circulated minutes with the note that the Membership Business Meeting accepted them as submitted, moved and seconded by named members, and that Adopt Minutes opens already filled in",
     route: "/minutes",
     prepare: async (page) => {
       await openFirstFromApi(
         "/minutes-records?limit=100",
         (id) => `/minutes/${id}`,
         "minutes",
-        (m) => m.title === "Minutes: Spring Business Meeting",
+        (m) => m.title === "Minutes: Apparatus Business Meeting",
       )(page);
       await page
         .getByText("accepted these minutes as submitted")
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
+    selector: "div:has(> p.alert-info:has-text('accepted these minutes'))",
     expect: "accepted these minutes",
+    // "No suggestions yet" is the Suggestions panel further down the page, not
+    // an empty subject: the shot is the note at the top.
+    allowEmptyState: true,
   },
   {
     // As the Secretary: the administrator circulated these minutes, and the
@@ -8452,7 +8511,7 @@ export const SHOTS = [
     line: 1732,
     anchor:
       "The Adopt these minutes dialog opened by a second officer on those minutes",
-    alt: "The Adopt these minutes dialog filled in from the motion recorded at the Late Spring Business Meeting: the date the body voted, the meeting that accepted them, and the note saying where it came from",
+    alt: "The Adopt these minutes dialog filled in from the motion recorded at the Membership Business Meeting: the date the body voted, the meeting that accepted them, and the note saying where it came from",
     route: "/minutes",
     auth: "secretary",
     prepare: async (page) => {
@@ -8460,7 +8519,7 @@ export const SHOTS = [
         "/minutes-records?limit=100",
         (id) => `/minutes/${id}`,
         "minutes",
-        (m) => m.title === "Minutes: Spring Business Meeting",
+        (m) => m.title === "Minutes: Apparatus Business Meeting",
       )(page);
       await page
         .getByRole("button", { name: "Adopt Minutes" })
@@ -8471,6 +8530,29 @@ export const SHOTS = [
     },
     selector: "[role='dialog']",
     expect: "Filled in from the motion recorded at",
+  },
+  {
+    // Ticked but not saved: saving would switch alerts on for the demo
+    // department, and nothing here should persist. The shot is the panel alone,
+    // so the administrator's malware-scanning notice on a stack with scanning
+    // off is not in the frame.
+    id: "02-121-cert-alert-settings",
+    doc: "02-training.md",
+    line: 2012,
+    anchor:
+      "The Expiry alert emails panel at the top of Training Admin → Overview → Expiring",
+    alt: "The Expiry alert emails panel on the Expiring Certs tab: Email members when a certification is close to expiring ticked, with the two copy options for the expired notice available beneath it",
+    route: "/training/admin?page=dashboard&tab=expiring-certs",
+    prepare: async (page) => {
+      const box = page.getByRole("checkbox", {
+        name: /Email members when a certification/,
+      });
+      await box.waitFor({ timeout: 20_000 });
+      await box.check();
+      await page.waitForTimeout(400);
+    },
+    selector: "section[aria-labelledby='cert-alerts-heading']",
+    expect: "Expiry alert emails",
   },
   {
     id: "04-15-action-items",
@@ -9772,36 +9854,8 @@ export const SHOTS = [
       'The Officer actions card on an accepted result that is held for release, with the "Release to candidate" button',
     alt: "The Officer actions card on an accepted result held for release, with the green Release to candidate button and the line saying what the candidate will see once it is released",
     route: "/training/skills-testing",
-    // The held result is found by what makes it this fixture -- release on
-    // request, accepted, not yet released -- because the list rows carry none of
-    // that and the weighted sheet's tests hold other states.
     prepare: async (page) => {
-      const testId = await page.evaluate(async () => {
-        const api = async (path) => {
-          const response = await fetch(`/api/v1${path}`, {
-            credentials: "include",
-          });
-          return response.ok ? response.json() : null;
-        };
-        const body = await api("/training/skills-testing/tests?limit=100");
-        const rows = Array.isArray(body)
-          ? body
-          : (body?.items ?? body?.tests ?? []);
-        for (const row of rows) {
-          if (!row.validated_at || row.voided_at || row.is_practice) continue;
-          const detail = await api(`/training/skills-testing/tests/${row.id}`);
-          if (
-            detail?.effective_result_release === "on_release" &&
-            !detail.released_at
-          ) {
-            return row.id;
-          }
-        }
-        return null;
-      });
-      if (!testId) {
-        throw new Error("no accepted result is held for release");
-      }
+      const { id: testId } = await findHeldResult(page);
       await page.goto(
         new URL(
           `/training/skills-testing/test/${testId}`,
@@ -9816,6 +9870,68 @@ export const SHOTS = [
     },
     selector: "div.card:has(> p:text-is('Officer actions'))",
     expect: "Release to candidate",
+  },
+  {
+    id: "09-27-release-icon-test-records",
+    doc: "09-skills-testing.md",
+    line: 1265,
+    anchor:
+      "A Test Records row for an accepted result with the release icon beside the void icon",
+    alt: "A Skills Test Records row for an accepted result, with the release icon, a paper plane, beside the void icon at the right of the row",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // One row rather than the page: the icons are 16px, and a page shot renders
+    // the row's controls too small to tell apart. The row is the held result
+    // (see findHeldResult), not whichever happens to be first, and it is marked
+    // for the selector because its candidate's name is not known until run time.
+    selector: "[data-shot-subject]",
+    expect: {
+      selector: "[data-shot-subject] button[aria-label^='Release results to']",
+    },
+    prepare: async (page) => {
+      const { candidateName } = await findHeldResult(page);
+      const release = page.getByRole("button", {
+        name: `Release results to ${candidateName}`,
+      });
+      await release.first().waitFor({ state: "visible", timeout: 15_000 });
+      await release.first().scrollIntoViewIfNeeded();
+      await release.first().evaluate((button) => {
+        button
+          .closest("div[role='button']")
+          ?.setAttribute("data-shot-subject", "");
+      });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "09-28-void-result-dialog",
+    doc: "09-skills-testing.md",
+    line: 1320,
+    anchor:
+      'The "Void test result" dialog opened from the Void result button, with a reason typed in',
+    alt: "The Void test result dialog, saying the record stays in the member's history marked as voided, with an example reason typed in and the amber Void result button enabled",
+    route: "/training/skills-testing",
+    // The reason is typed but the dialog is never confirmed: the held result is
+    // shared with the release shots, and voiding it would take them out of the
+    // seeded data.
+    prepare: async (page) => {
+      const { id: testId } = await findHeldResult(page);
+      await page.goto(
+        new URL(
+          `/training/skills-testing/test/${testId}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      const open = page.getByRole("button", { name: "Void result" });
+      await open.waitFor({ state: "visible", timeout: 15_000 });
+      await open.click();
+      const reason = page.locator("#void-reason-detail");
+      await reason.waitFor({ state: "visible", timeout: 10_000 });
+      await reason.fill("Scored against the wrong candidate");
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-panel']",
+    expect: { selector: "#void-reason-detail" },
   },
   {
     id: "09-09-member-skills-testing",
@@ -18637,7 +18753,7 @@ export const SHOTS = [
     doc: "01-membership.md",
     line: 1703,
     anchor: "The profile-visibility controls on a member's own profile",
-    alt: "My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email, phone and mobile the note that the department's own setting has them off for everyone",
+    alt: 'My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email and mobile, which the department\'s own setting has off for everyone, the note "Shared once the department allows it"',
     route: "/account",
     auth: "member",
     expect: "Only you and leadership",

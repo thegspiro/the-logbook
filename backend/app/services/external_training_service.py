@@ -2197,6 +2197,63 @@ class ExternalTrainingSyncService:
         await self.feed_imported_records_to_pipelines(created)
         return len(created), awaiting_member
 
+    async def import_pending_for_matched_members(
+        self,
+        provider_id: str,
+        organization_id: str,
+        external_user_id: Optional[str] = None,
+        created_by: Optional[str] = None,
+    ) -> Tuple[int, int]:
+        """Credit staged completions whose member is known but that were never
+        imported. Returns (records imported, records that failed).
+
+        Sync only credits rows staged in its own run, so a completion whose
+        member was mapped afterwards — or that is older than the provider's
+        lookback and so never comes back — would otherwise wait forever.
+        ``external_user_id`` narrows the pass to one provider user, which is
+        what mapping a member does.
+        """
+        query = (
+            select(ExternalTrainingImport)
+            .join(User, User.id == ExternalTrainingImport.user_id)
+            .where(ExternalTrainingImport.provider_id == provider_id)
+            .where(ExternalTrainingImport.organization_id == organization_id)
+            .where(ExternalTrainingImport.import_status.in_(["pending", "failed"]))
+            .where(User.organization_id == organization_id)
+            .where(User.deleted_at.is_(None))
+        )
+        if external_user_id:
+            query = query.where(
+                ExternalTrainingImport.external_user_id == external_user_id
+            )
+        pending = (await self.db.execute(query)).scalars().all()
+
+        created: List[TrainingRecord] = []
+        imported = 0
+        failed = 0
+        for import_record in pending:
+            try:
+                async with self.db.begin_nested():
+                    training_record = await self.import_single_record(
+                        import_record, created_by=created_by
+                    )
+            except Exception as exc:
+                logger.exception(
+                    f"Import of pending record {import_record.id} failed: {exc}"
+                )
+                import_record.import_status = "failed"
+                import_record.import_error = str(exc)
+                failed += 1
+                continue
+            if import_record.import_status == "imported":
+                imported += 1
+            else:
+                failed += 1
+            if training_record is not None:
+                created.append(training_record)
+        await self.feed_imported_records_to_pipelines(created)
+        return imported, failed
+
     async def feed_imported_records_to_pipelines(self, records: list) -> None:
         """Advance category-linked pipeline requirements for each imported record.
         A failure on one record is logged and never blocks the rest."""

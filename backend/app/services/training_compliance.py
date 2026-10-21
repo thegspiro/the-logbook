@@ -22,7 +22,7 @@ from app.models.training import (
     TrainingRequirement,
     TrainingStatus,
 )
-from app.models.user import User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.services.training_period import (
     effective_include_current_month,
     resolve_as_of_date,
@@ -1772,7 +1772,7 @@ async def compute_org_compliance_tally(
         .options(selectinload(User.positions))
         .where(
             User.organization_id == org_id,
-            User.status == UserStatus.ACTIVE,
+            User.status.in_(ACTIVE_ACCOUNT_STATUSES),
             User.compliance_exempt.is_(False),
             User.deleted_at.is_(None),
         )
@@ -1888,7 +1888,7 @@ async def grade_org_members(
         .options(selectinload(User.positions))
         .where(
             User.organization_id == org_id,
-            User.status == UserStatus.ACTIVE,
+            User.status.in_(ACTIVE_ACCOUNT_STATUSES),
             User.compliance_exempt.is_(False),
             User.deleted_at.is_(None),
         )
