@@ -519,6 +519,8 @@ class MedicalExpiringStockRow(BaseModel):
     # The shelf lot, or the checklist position the units sit in.
     lot_id: Optional[str] = None
     template_item_id: Optional[str] = None
+    # The apparatus the units are aboard, when the checklist names one.
+    apparatus_id: Optional[str] = None
     lot_number: Optional[str] = None
     expiration_date: Optional[date] = None
     days_until_expiration: Optional[int] = None
