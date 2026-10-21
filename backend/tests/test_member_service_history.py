@@ -206,7 +206,7 @@ class TestEffectiveSeparationAt:
     """The moment the undo-drop window and property reminders count from."""
 
     RECORDED = datetime(2026, 9, 24, 15, 30, tzinfo=timezone.utc)
-    UTC = timezone.utc
+    UTC = ZoneInfo("UTC")
 
     def _at(self, periods, status=UserStatus.DROPPED_VOLUNTARY, tz=UTC):
         return effective_separation_at(self.RECORDED, periods, status, tz)
@@ -252,7 +252,7 @@ class TestEffectiveSeparationAt:
         closed = _stint(None, date(2026, 9, 23), sep="dropped_voluntary")
         naive = self.RECORDED.replace(tzinfo=None)
         assert effective_separation_at(
-            naive, [closed], UserStatus.DROPPED_VOLUNTARY, timezone.utc
+            naive, [closed], UserStatus.DROPPED_VOLUNTARY, self.UTC
         ) == self.RECORDED - timedelta(days=1)
 
 

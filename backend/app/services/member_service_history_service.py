@@ -34,6 +34,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone, tzinfo
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+from zoneinfo import ZoneInfo
 
 from loguru import logger
 from sqlalchemy import select
@@ -142,7 +143,7 @@ def effective_separation_at(
     recorded_at: datetime,
     periods: Sequence[MemberServicePeriod],
     separation_status: UserStatus,
-    tz: tzinfo,
+    tz: ZoneInfo,
 ) -> datetime:
     """When a separation took effect, for the clocks that count from it.
 
