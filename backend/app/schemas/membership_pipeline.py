@@ -8,8 +8,16 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Literal, Optional, Tuple
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
+from app.core.constants import office_label
 from app.models.membership_pipeline import (
     ActionType,
     PipelineStepType,
@@ -148,6 +156,21 @@ class PipelineStepResponse(PipelineStepBase):
     updated_at: datetime
 
     model_config = _response_config
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def approver_labels(self) -> Dict[str, str]:
+        """Display label for each stored ``required_approvers`` value.
+
+        Keyed by the value exactly as stored, so a screen can look a role up
+        without normalizing it first. Labels come from ``OFFICE_CATALOG`` —
+        the same catalog that decides who may sign — so the frontend does not
+        keep a second copy of it.
+        """
+        roles = (self.config or {}).get("required_approvers")
+        if not isinstance(roles, list):
+            return {}
+        return {str(role): office_label(str(role)) for role in roles}
 
 
 ConversionClass = Literal["operational", "administrative", "social"]
