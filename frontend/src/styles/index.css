@@ -1001,16 +1001,21 @@
  * The `data-label` attribute stays on the cell: it is what the desktop table
  * and the rest of the reflow contract expect, and removing it would instead
  * hide the cell (see the `:not([data-label])` rule above).
+ *
+ * Unlayered like the reflow rules above, and scoped through `.rwd-table tbody
+ * td` so it outranks them. It was first written as an `@utility`, which
+ * Tailwind emits into `@layer utilities` — and unlayered CSS outranks every
+ * cascade layer, so the reflow's `display: flex` and `data-label` prefix won
+ * and every marked cell rendered as one more `Label: value` line.
  */
-@utility rwd-table-lead {
-  @media (max-width: 767px) {
+@media (max-width: 767px) {
+  .rwd-table tbody td.rwd-table-lead {
     display: block;
     text-align: left;
     padding-bottom: 0.125rem;
-
-    &::before {
-      content: none;
-    }
+  }
+  .rwd-table tbody td.rwd-table-lead::before {
+    content: none;
   }
 }
 

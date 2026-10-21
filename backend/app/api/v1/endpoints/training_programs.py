@@ -677,6 +677,13 @@ async def instantiate_sample_template(
 async def get_training_programs(
     target_position: str | None = Query(None, description="Filter by target position"),
     is_template: bool | None = Query(None, description="Filter by template status"),
+    include_inactive: bool = Query(
+        False,
+        description=(
+            "Also return deactivated programs, so an officer can find one to "
+            "reactivate"
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -691,6 +698,7 @@ async def get_training_programs(
         organization_id=current_user.organization_id,
         target_position=target_position,
         is_template=is_template,
+        include_inactive=include_inactive,
     )
 
     return programs
@@ -794,10 +802,20 @@ async def update_training_program(
     Update a training program's own fields (name, description, code, structure,
     time limits, target position/roles, template flag, active).
 
+    ``active: true`` on a deactivated program is how it is reactivated, and is
+    audited as ``program_reactivated``. It restores the program to the lists
+    and nothing else: enrollments withdrawn when it was deactivated stay
+    withdrawn.
+
     **Authentication required**
     **Requires permission: training.manage**
     """
     service = TrainingProgramService(db)
+    # Read before the update so the audit can tell a reactivation from an
+    # edit that merely resends ``active: true``. Org-scoped like the update
+    # itself; a miss is left to the update, which answers the 404.
+    before = await service.get_program_by_id(program_id, current_user.organization_id)
+    was_active = before.active if before else None
     program, error = await service.update_training_program(
         program_id=program_id,
         organization_id=current_user.organization_id,
@@ -810,12 +828,16 @@ async def update_training_program(
             else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=code, detail=error)
+    reactivated = was_active is not True and updates.active is True
     await log_audit_event(
         db=db,
         event_type="training_program_updated",
         event_category="training",
         severity="info",
-        event_data={"program_id": str(program_id), "action": "program_updated"},
+        event_data={
+            "program_id": str(program_id),
+            "action": "program_reactivated" if reactivated else "program_updated",
+        },
         user_id=str(current_user.id),
         username=current_user.username,
     )

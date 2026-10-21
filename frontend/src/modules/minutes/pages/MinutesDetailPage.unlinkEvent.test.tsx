@@ -47,6 +47,10 @@ vi.mock('../services/api', () => ({
 }));
 
 vi.mock('../../../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   eventService: {
     getEvent: (...a: unknown[]) => mockGetEvent(...a) as unknown,
     getEvents: vi.fn().mockResolvedValue([]),

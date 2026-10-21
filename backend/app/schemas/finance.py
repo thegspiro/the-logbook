@@ -25,6 +25,7 @@ from app.models.finance import (
     PurchaseRequestPriority,
 )
 from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.utils.external_url import safe_external_url, validate_external_http_url
 
 # applies_to / step_type / approver_type / frequency / expense_type / mapping_type /
@@ -233,7 +234,7 @@ class BudgetCategoryCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     parent_category_id: Optional[str] = None
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     qb_account_name: Optional[str] = Field(None, max_length=200)
     owner_position_id: Optional[str] = None
     # Null inherits the parent category's (app/services/functional_expenses.py).
@@ -253,7 +254,7 @@ class BudgetCategoryUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     parent_category_id: Optional[str] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     is_active: Optional[bool] = None
     qb_account_name: Optional[str] = Field(None, max_length=200)
     # Omitted leaves the owner alone; an explicit null clears it.
@@ -848,7 +849,7 @@ class ApprovalChainStepCreate(BaseModel):
         _enum_check(_APPROVER_TYPES, "approver_type")
     )
 
-    step_order: int = Field(..., ge=1)
+    step_order: int = Field(..., ge=1, le=INT32_MAX)
     name: str = Field(..., min_length=1, max_length=200)
     step_type: str = "approval"
     approver_type: Optional[str] = None
@@ -874,7 +875,7 @@ class ApprovalChainStepUpdate(BaseModel):
         _enum_check(_APPROVER_TYPES, "approver_type")
     )
 
-    step_order: Optional[int] = Field(None, ge=1)
+    step_order: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     step_type: Optional[str] = None
     approver_type: Optional[str] = None
@@ -1757,7 +1758,7 @@ class DuesScheduleCreate(BaseModel):
     amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
     frequency: str
     due_date: UTCDateTime
-    grace_period_days: int = Field(30, ge=0)
+    grace_period_days: int = Field(30, ge=0, le=INT32_MAX)
     late_fee_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
@@ -1785,7 +1786,7 @@ class DuesScheduleUpdate(BaseModel):
     amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
     frequency: Optional[str] = None
     due_date: Optional[UTCDateTime] = None
-    grace_period_days: Optional[int] = Field(None, ge=0)
+    grace_period_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     late_fee_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None

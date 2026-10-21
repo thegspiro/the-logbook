@@ -21,6 +21,7 @@ from app.models.training import CohortMemberStatus as ModelCohortMemberStatus
 from app.models.training import CohortStatus as ModelCohortStatus
 from app.models.training import DateRollPolicy as ModelDateRollPolicy
 from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX
 from app.schemas.enum_validation import validate_enum_value
 
 _response_config = ConfigDict(from_attributes=True)
@@ -60,12 +61,14 @@ class CourseClassBase(BaseModel):
         None, max_length=255, description="Display override; defaults to course name"
     )
     description: Optional[str] = None
-    day_offset: int = Field(0, ge=0, description="Days from the cohort start date")
+    day_offset: int = Field(
+        0, ge=0, description="Days from the cohort start date", le=INT32_MAX
+    )
     start_time: Optional[str] = Field(
         None, description="Local wall-clock start time, HH:MM"
     )
     duration_minutes: int = Field(60, ge=1, le=1440)
-    credit_hours: Optional[float] = Field(None, ge=0)
+    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     instructor_id: Optional[UUID] = None
     instructor: Optional[str] = Field(None, max_length=255)
     location_id: Optional[UUID] = None
@@ -86,7 +89,10 @@ class CourseClassCreate(CourseClassBase):
     """Add a class to a course syllabus"""
 
     sequence: Optional[int] = Field(
-        None, ge=1, description="Position in the syllabus; appended when omitted"
+        None,
+        ge=1,
+        description="Position in the syllabus; appended when omitted",
+        le=INT32_MAX,
     )
 
 
@@ -97,10 +103,10 @@ class CourseClassUpdate(BaseModel):
     section_name: Optional[str] = Field(None, max_length=255)
     title: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = None
-    day_offset: Optional[int] = Field(None, ge=0)
+    day_offset: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     start_time: Optional[str] = None
     duration_minutes: Optional[int] = Field(None, ge=1, le=1440)
-    credit_hours: Optional[float] = Field(None, ge=0)
+    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     instructor_id: Optional[UUID] = None
     instructor: Optional[str] = Field(None, max_length=255)
     location_id: Optional[UUID] = None
@@ -477,7 +483,7 @@ class CohortAdHocClassCreate(BaseModel):
     class_course_id: UUID
     scheduled_start: UTCDateTime
     scheduled_end: UTCDateTime
-    credit_hours: Optional[float] = Field(None, ge=0)
+    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     instructor_id: Optional[UUID] = None
     instructor: Optional[str] = Field(None, max_length=255)
     location_id: Optional[UUID] = None

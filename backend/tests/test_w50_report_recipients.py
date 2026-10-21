@@ -220,7 +220,7 @@ class TestCloseReport:
             new=AsyncMock(return_value=(1, 0)),
         ) as send_report:
             ok, msg = await svc.generate_and_send_election_report(
-                uuid.UUID(election_id), uuid.UUID(org_id), requested=True
+                uuid.UUID(election_id), uuid.UUID(org_id)
             )
             assert ok, msg
         return send_report.call_args.kwargs

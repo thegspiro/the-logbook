@@ -510,6 +510,14 @@ async def change_member_status(
     if new_status in (UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY):
         from app.services.property_return_service import PropertyReturnService
 
+        # The letter and the departure clearance both count the return
+        # deadline from the effective date, so they name the same due day.
+        # This is effective_separation_at's moment for a drop recorded now:
+        # the recording moved back by the days it was back-dated.
+        dropped_at = datetime.now(timezone.utc)
+        if separation_date is not None:
+            dropped_at -= timedelta(days=(today - separation_date).days)
+
         prs = PropertyReturnService(db)
         report_data, html_content = await prs.generate_report(
             user_id=str(user_id),
@@ -519,6 +527,7 @@ async def change_member_status(
             return_deadline_days=request.return_deadline_days,
             custom_instructions=request.custom_instructions,
             reason=request.reason,
+            effective_date=separation_date,
         )
 
         response.property_return_report = {
@@ -553,6 +562,7 @@ async def change_member_status(
                 departure_type=new_status.value,
                 return_deadline_days=request.return_deadline_days,
                 notes=f"Auto-created from status change to {new_status.value}",
+                counted_from=dropped_at,
             )
             if _cl_err:
                 from loguru import logger as _lg

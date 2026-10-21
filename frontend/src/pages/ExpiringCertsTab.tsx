@@ -11,9 +11,13 @@ import { trainingService } from '../services/api';
 import type { ExpiringCertification } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
+import { useAuthStore } from '../stores/authStore';
+import CertAlertSettingsPanel from '../components/training/CertAlertSettingsPanel';
 
 const ExpiringCertsTab: React.FC = () => {
   const tz = useTimezone();
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  const canManage = checkPermission('training.manage');
   const [certs, setCerts] = useState<ExpiringCertification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +83,8 @@ const ExpiringCertsTab: React.FC = () => {
           <option value={365}>1 year</option>
         </select>
       </div>
+
+      {canManage && <CertAlertSettingsPanel />}
 
       {/* Summary Cards */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
