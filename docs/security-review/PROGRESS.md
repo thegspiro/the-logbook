@@ -16,9 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #pending** (branch `claude/security-review-scheduled-tasks`, to be
-filled in by a follow-up commit on this same branch once the PR exists —
-never as a PR of its own). PR #3517 (Feature 30, Onboarding, pass 8) merged
+**PR [#3521](https://github.com/thegspiro/the-logbook/pull/3521)** (branch
+`claude/security-review-scheduled-tasks`). PR #3517 (Feature 30, Onboarding, pass 8) merged
 to `main` with no open PR whose head branch starts with
 `claude/security-review-` (`search_pull_requests`, 0 results, checked once
 before starting and again immediately before branching), so this iteration
