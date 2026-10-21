@@ -17,6 +17,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import type { SkillTemplateListItem, SkillTestListItem } from '../types/skillsTesting';
 import { Breadcrumbs, Pagination } from '../components/ux';
 import { DEFAULT_PAGE_SIZE } from '../constants/config';
+import { attributionName } from '../utils/memberName';
 
 // ── Sub-components ─────────────────────────────────────────────
 
@@ -102,7 +103,7 @@ const TestHistoryCard: React.FC<{
             )}
           </div>
           <p className="text-theme-text-muted text-sm">
-            Examiner: {test.examiner_name}
+            Examiner: {attributionName(test.examiner_name, test.examiner_id)}
             {test.completed_at && <> &middot; {formatDate(test.completed_at, tz)}</>}
           </p>
         </div>

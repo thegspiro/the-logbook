@@ -1104,7 +1104,7 @@ class ShiftCompletionService:
         self,
         organization_id: UUID | str,
         trainee_id: str,
-        officer_id: UUID | str,
+        officer_id: UUID | str | None,
         skills_observed: Optional[list],
         shift_id: Optional[str] = None,
     ) -> List[str]:
@@ -1178,7 +1178,7 @@ class ShiftCompletionService:
                 organization_id=str(organization_id),
                 user_id=trainee_id,
                 skill_evaluation_id=eval_id,
-                evaluator_id=str(officer_id),
+                evaluator_id=str(officer_id) if officer_id else None,
                 status="passed",
                 score=float(score) if score is not None else None,
                 notes=comment or notes or None,
@@ -1190,7 +1190,7 @@ class ShiftCompletionService:
                 organization_id=organization_id,
                 user_id=trainee_id,
                 skill_evaluation_id=eval_id,
-                evaluator_id=str(officer_id),
+                evaluator_id=str(officer_id) if officer_id else None,
                 score=score,
             )
 
@@ -1201,7 +1201,7 @@ class ShiftCompletionService:
         organization_id: UUID | str,
         user_id: str,
         skill_evaluation_id: str,
-        evaluator_id: str,
+        evaluator_id: Optional[str],
         score: Optional[int] = None,
     ) -> None:
         """Update MemberCompetency when a skill is observed."""
@@ -1270,7 +1270,7 @@ class ShiftCompletionService:
         calls_responded: int,
         call_types: Optional[list],
         enrollment_id: Optional[str],
-        officer_id: UUID | str,
+        officer_id: UUID | str | None,
         matched_skill_ids: Optional[List[str]] = None,
         source_id: Optional[str] = None,
     ) -> list:
@@ -1596,15 +1596,22 @@ class ShiftCompletionService:
     async def _trigger_deferred_progress(
         self,
         report: ShiftCompletionReport,
-        officer_id: str,
+        officer_id: Optional[str],
     ) -> None:
-        """Trigger training progress deferred until a report is approved."""
+        """Trigger training progress deferred until a report is approved.
+
+        ``officer_id`` is None when the filing officer's account was
+        permanently deleted before the report was approved. The trainee is
+        still credited; the checkoffs and progress simply carry no evaluator,
+        the same state SET NULL leaves on records approved earlier.
+        """
         org_id = UUID(report.organization_id)
+        officer_uuid = UUID(officer_id) if officer_id else None
 
         matched_skill_ids = await self._create_skill_checkoffs(
             organization_id=org_id,
             trainee_id=report.trainee_id,
-            officer_id=UUID(officer_id),
+            officer_id=officer_uuid,
             skills_observed=report.skills_observed,
             shift_id=report.shift_id,
         )
@@ -1616,7 +1623,7 @@ class ShiftCompletionService:
             calls_responded=report.calls_responded or 0,
             call_types=report.call_types,
             enrollment_id=report.enrollment_id,
-            officer_id=UUID(officer_id),
+            officer_id=officer_uuid,
             matched_skill_ids=matched_skill_ids,
             source_id=str(report.id),
         )
@@ -1903,8 +1910,9 @@ class ShiftCompletionService:
             await self._trigger_deferred_progress(
                 report,
                 # The filing officer observed the work. The reviewer merely
-                # authorizes release and must not become its evaluator.
-                str(report.officer_id),
+                # authorizes release and must not become its evaluator — not
+                # even when the officer's account has since been deleted.
+                str(report.officer_id) if report.officer_id else None,
             )
 
         await self.db.commit()
@@ -1922,7 +1930,7 @@ class ShiftCompletionService:
                 ),
             )
 
-        if review_status == "flagged":
+        if review_status == "flagged" and report.officer_id:
             flag_msg = (
                 f"Your shift report for {report.shift_date}"
                 f" has been flagged for revision."

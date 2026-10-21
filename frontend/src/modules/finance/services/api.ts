@@ -93,6 +93,7 @@ import type {
   QuickBooksChart,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
+import { readDeleteOutcome, type DeleteOutcome } from '../../../utils/deleteOutcome';
 
 const api = createApiClient();
 
@@ -204,8 +205,10 @@ export const budgetCategoryService = {
     return response.data;
   },
 
-  async delete(id: string): Promise<void> {
-    await api.delete(`/finance/budget-categories/${id}`);
+  /** Deletes an unused category; one that lines, requests or approval chains use is deactivated instead. */
+  async delete(id: string): Promise<DeleteOutcome> {
+    const response = await api.delete(`/finance/budget-categories/${id}`);
+    return readDeleteOutcome(response);
   },
 
   /** The categories the caller may set a charge rule on (as owner or Treasurer). */

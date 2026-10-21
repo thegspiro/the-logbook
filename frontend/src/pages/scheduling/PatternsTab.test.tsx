@@ -357,3 +357,29 @@ describe('PatternsTab', () => {
     expect(mockToastError).not.toHaveBeenCalled();
   });
 });
+
+// A template that shifts or patterns use is deactivated rather than deleted.
+// A pattern naming one still shows it; a new pattern is not offered it.
+describe('PatternsTab with a deactivated template', () => {
+  beforeEach(() => {
+    mockGetTemplates.mockReset();
+    mockGetTemplates.mockResolvedValue([{ ...TEMPLATE, is_active: false }]);
+  });
+
+  it('still names it on the pattern that uses it, and asks for inactive ones too', async () => {
+    renderWithRouter(<PatternsTab />);
+
+    expect(await screen.findByText(/Template: Day Shift A/)).toBeInTheDocument();
+    expect(mockGetTemplates).toHaveBeenCalledWith({ active_only: false });
+  });
+
+  it('does not offer it to a new pattern', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<PatternsTab />);
+
+    await user.click(await screen.findByRole('button', { name: 'New Pattern' }));
+    await user.click(screen.getByRole('button', { name: /Manual Setup/ }));
+
+    expect(within(screen.getByLabelText('Shift Template *')).queryByRole('option', { name: /Day Shift A/ })).toBeNull();
+  });
+});
