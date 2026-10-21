@@ -116,7 +116,8 @@ const item = (overrides: Record<string, unknown> = {}) => ({
 });
 
 function assertOrganizationLowStockCount(count: number): void {
-  expect(screen.getByText('Low stock')).toBeInTheDocument();
+  // The tile's own button, not its caption: the Low stock tab carries the same words.
+  expect(screen.getByRole('button', { name: /supplies at or below their reorder point/ })).toBeInTheDocument();
   expect(screen.getByText(String(count))).toBeInTheDocument();
   expect(screen.queryByText(/item\(s\) at or below their reorder point/i)).not.toBeInTheDocument();
 }
@@ -184,18 +185,59 @@ describe('MedicalSuppliesPage', () => {
       expect(await screen.findByText('Oxygen Mask, Non-Rebreather — Pediatric')).toBeInTheDocument();
     });
 
-    it('opens the low-stock list from its tile, and Show all clears it', async () => {
+    it('opens the Low stock tab from its tile, and All supplies clears the filter', async () => {
       renderWithRouter(<MedicalSuppliesPage />);
 
       await userEvent.click(
         await screen.findByRole('button', { name: 'Show 2 supplies at or below their reorder point' })
       );
       await waitFor(() => expect(lastItemsQuery()).toMatchObject({ low_stock: true, skip: 0 }));
-      expect(screen.getByText(/Showing only supplies at or below their reorder point/)).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Low stock' })).toHaveAttribute('aria-selected', 'true');
 
-      await userEvent.click(screen.getByRole('button', { name: 'Show all supplies' }));
+      await userEvent.click(screen.getByRole('tab', { name: 'All supplies' }));
       await waitFor(() => expect(lastItemsQuery()['low_stock']).toBeUndefined());
-      expect(screen.queryByText(/Showing only supplies at or below/)).not.toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'All supplies' })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('lists only the low supplies on the Low stock tab', async () => {
+      mockGetItems.mockImplementation((filters: { low_stock?: boolean }) =>
+        Promise.resolve({
+          items: filters.low_stock ? [item({ name: 'Nasal Cannula', is_low_stock: true })] : [item()],
+          total: 1,
+          skip: 0,
+          limit: 200,
+        })
+      );
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      await userEvent.click(await screen.findByRole('tab', { name: 'Low stock' }));
+
+      expect(await screen.findByText('Nasal Cannula')).toBeInTheDocument();
+      expect(screen.queryByText('4x4 Gauze')).not.toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Low stock supplies' })).toBeInTheDocument();
+    });
+
+    it('opens on the Low stock tab when the link says ?tab=low', async () => {
+      window.history.pushState({}, '', '/medical-supplies?tab=low');
+      try {
+        renderWithRouter(<MedicalSuppliesPage />);
+
+        expect(await screen.findByRole('tab', { name: 'Low stock' })).toHaveAttribute('aria-selected', 'true');
+        await waitFor(() => expect(lastItemsQuery()).toMatchObject({ low_stock: true, skip: 0 }));
+      } finally {
+        window.history.pushState({}, '', '/');
+      }
+    });
+
+    it('opens on Expiring stock when ?tab= names no tab', async () => {
+      window.history.pushState({}, '', '/medical-supplies?tab=bogus');
+      try {
+        renderWithRouter(<MedicalSuppliesPage />);
+
+        expect(await screen.findByRole('tab', { name: 'Expiring stock' })).toHaveAttribute('aria-selected', 'true');
+      } finally {
+        window.history.pushState({}, '', '/');
+      }
     });
 
     it('says nothing is low rather than that the catalog is empty', async () => {
@@ -1450,7 +1492,9 @@ describe('MedicalSuppliesPage', () => {
 
       // Expiring stock has landed while the summary has not.
       expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
-      expect(screen.queryByText('Low stock')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /supplies at or below their reorder point/ })
+      ).not.toBeInTheDocument();
       expect(screen.getByLabelText('Loading the overview')).toBeInTheDocument();
     });
 
