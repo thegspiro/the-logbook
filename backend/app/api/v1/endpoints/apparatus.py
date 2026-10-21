@@ -109,7 +109,10 @@ from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Ap
 )
 from app.schemas.documents import FoldersListResponse
 from app.services import module_documents
-from app.services.apparatus_service import ApparatusService
+from app.services.apparatus_service import (
+    ApparatusService,
+    ApparatusStatusInUseError,
+)
 from app.services.documents_service import DocumentsService
 from app.services.driver_exception_service import DriverExceptionService
 from app.services.evoc_level_service import EvocLevelService
@@ -434,7 +437,8 @@ async def delete_apparatus_status(
     **Authentication required**
     **Permissions required:** apparatus.manage
 
-    **Note:** Cannot delete statuses that are in use by apparatus.
+    **Note:** Cannot delete statuses that are in use by apparatus or that
+    apparatus status history records (409).
     """
     service = ApparatusService(db)
 
@@ -442,6 +446,10 @@ async def delete_apparatus_status(
         deleted = await service.delete_apparatus_status(
             status_id=status_id,
             organization_id=current_user.organization_id,
+        )
+    except ApparatusStatusInUseError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
         )
     except ValueError as e:
         raise HTTPException(

@@ -7,6 +7,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
+import toast from 'react-hot-toast';
 import {
   ClipboardCheck,
   Plus,
@@ -28,6 +29,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import type { SkillTemplateListItem } from '../types/skillsTesting';
 import { FormStatus } from '../constants/enums';
+import { getErrorMessage } from '../utils/errorHandling';
 import { ConfirmDialog } from '../components/ux';
 import { SkillSheetLibraryModal } from '../components/training/SkillSheetLibraryModal';
 
@@ -222,6 +224,8 @@ const SkillsTestingTemplatesTab: React.FC = () => {
       await publishTemplate(publishTarget.id);
       setPublishTarget(null);
       void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to publish template'));
     } finally {
       setBusy(false);
     }
@@ -229,8 +233,12 @@ const SkillsTestingTemplatesTab: React.FC = () => {
 
   const handleDuplicate = useCallback(
     async (id: string) => {
-      const newTemplate = await duplicateTemplate(id);
-      void navigate(`/training/skills-testing/templates/${newTemplate.id}/edit`);
+      try {
+        const newTemplate = await duplicateTemplate(id);
+        void navigate(`/training/skills-testing/templates/${newTemplate.id}/edit`);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to duplicate template'));
+      }
     },
     [duplicateTemplate, navigate]
   );
@@ -241,6 +249,9 @@ const SkillsTestingTemplatesTab: React.FC = () => {
     try {
       await deleteTemplate(archiveTarget.id);
       setArchiveTarget(null);
+    } catch (err: unknown) {
+      // The dialog stays open so the officer can retry or cancel.
+      toast.error(getErrorMessage(err, 'Failed to archive template'));
     } finally {
       setBusy(false);
     }

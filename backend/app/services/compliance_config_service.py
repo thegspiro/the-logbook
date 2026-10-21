@@ -180,8 +180,8 @@ class ComplianceConfigService:
         self,
         profile_id: str,
         organization_id: str,
-    ) -> None:
-        """Delete a compliance profile."""
+    ) -> str:
+        """Delete a compliance profile and return its name for the audit trail."""
         result = await self.db.execute(
             select(ComplianceProfile)
             .join(ComplianceConfig)
@@ -194,8 +194,10 @@ class ComplianceConfigService:
         if not profile:
             raise ValueError("Profile not found")
 
+        name = profile.name
         await self.db.delete(profile)
         await self.db.flush()
+        return name
 
     async def get_available_requirements(
         self,
@@ -520,8 +522,8 @@ class ComplianceReportService:
         self,
         report_id: str,
         organization_id: str,
-    ) -> None:
-        """Delete a stored report."""
+    ) -> str:
+        """Delete a stored report and return its period label for the audit trail."""
         result = await self.db.execute(
             select(ComplianceReport).where(
                 ComplianceReport.id == report_id,
@@ -532,8 +534,10 @@ class ComplianceReportService:
         if not report:
             raise ValueError("Report not found")
 
+        period_label = report.period_label
         await self.db.delete(report)
         await self.db.flush()
+        return period_label
 
     async def email_existing_report(
         self,

@@ -497,6 +497,46 @@ class CategoryHasItemsError(ValueError):
         )
 
 
+class LotReceivedAgainstReorderError(ValueError):
+    """A stock lot is the record of a reorder's receipt and cannot be deleted.
+
+    ``reorder_receipts.inventory_lot_id`` is RESTRICT and NOT NULL: the
+    receipt is how the reorder knows what arrived, so the lot outlives a
+    mistaken count. A ValueError so a caller that does not tell it apart
+    still answers 400; the lot routes catch it first to answer 409.
+    """
+
+    def __init__(self, reorder_label: str) -> None:
+        self.reorder_label = reorder_label
+        super().__init__(
+            f"This lot was received against reorder {reorder_label}, so it "
+            "cannot be deleted. Adjust its quantity to 0 instead."
+        )
+
+
+class StorageAreaNotEmptyError(ValueError):
+    """A storage area still holds items or nested areas.
+
+    Deactivating it would leave its items pointing at an area no list shows
+    (their location reads "--" everywhere) and its nested areas under a parent
+    that has vanished. A ValueError for callers that do not tell it apart; the
+    route catches it first to answer 409.
+    """
+
+    def __init__(self, item_count: int, child_count: int) -> None:
+        self.item_count = item_count
+        self.child_count = child_count
+        parts = []
+        if item_count:
+            parts.append(f"{item_count} item{'' if item_count == 1 else 's'}")
+        if child_count:
+            parts.append(f"{child_count} nested area{'' if child_count == 1 else 's'}")
+        super().__init__(
+            f"This storage area still holds {' and '.join(parts)}. "
+            "Move them to another area first."
+        )
+
+
 def storage_area_paths(areas) -> Dict[str, str]:
     """Map each area id to "Parent > Child", walking ``parent_id``.
 
@@ -9506,6 +9546,9 @@ class InventoryService:
 
         ``required_item_types``: the lot's item is re-validated under lock
         (``_items_in_domain_locked``); a miss returns ``False``.
+
+        Raises ``LotReceivedAgainstReorderError`` for a lot a reorder receipt
+        points at.
         """
         lot = await self._get_lot(lot_id, organization_id)
         if not lot:
@@ -9514,9 +9557,71 @@ class InventoryService:
             [lot.inventory_item_id], organization_id, required_item_types
         ):
             return False
+        receipt = (
+            await self.db.execute(
+                select(ReorderRequest.item_name, ReorderRequest.purchase_order_number)
+                .join(
+                    ReorderReceipt,
+                    ReorderReceipt.reorder_request_id == ReorderRequest.id,
+                )
+                .where(ReorderReceipt.inventory_lot_id == lot.id)
+                .limit(1)
+            )
+        ).first()
+        if receipt is not None:
+            item_name, po_number = receipt
+            label = f'"{item_name}"'
+            if po_number:
+                label += f" (PO {po_number})"
+            raise LotReceivedAgainstReorderError(label)
         await self.db.delete(lot)
         await self.db.commit()
         return True
+
+    async def deactivate_storage_area(
+        self, area_id: str, organization_id: str
+    ) -> Optional[StorageArea]:
+        """Deactivate (soft-delete) a storage area, or None if not in the org.
+
+        Raises ``StorageAreaNotEmptyError`` while active items are stored in it
+        or active areas are nested under it — the same two counts the storage
+        areas page shows, so the server refuses exactly what the page does.
+        """
+        area = (
+            await self.db.execute(
+                select(StorageArea)
+                .where(StorageArea.id == area_id)
+                .where(StorageArea.organization_id == organization_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if not area:
+            return None
+
+        item_count = (
+            await self.db.scalar(
+                select(func.count(InventoryItem.id))
+                .where(InventoryItem.organization_id == organization_id)
+                .where(InventoryItem.storage_area_id == area.id)
+                .where(InventoryItem.active.is_(True))
+            )
+            or 0
+        )
+        child_count = (
+            await self.db.scalar(
+                select(func.count(StorageArea.id))
+                .where(StorageArea.organization_id == organization_id)
+                .where(StorageArea.parent_id == area.id)
+                .where(StorageArea.is_active.is_(True))
+            )
+            or 0
+        )
+        if item_count or child_count:
+            raise StorageAreaNotEmptyError(item_count, child_count)
+
+        area.is_active = False
+        await self.db.commit()
+        return area
 
     async def get_lots_for_items(
         self, organization_id: str, item_ids: List[str]
@@ -10605,9 +10710,14 @@ class InventoryService:
         return list(result.scalars().all())
 
     async def get_equipment_kit_by_id(
-        self, kit_id: UUID, organization_id: UUID | str
+        self, kit_id: UUID, organization_id: UUID | str, active_only: bool = False
     ) -> Optional[EquipmentKit]:
-        """Get a kit with its items."""
+        """Get a kit with its items.
+
+        ``active_only`` treats a deleted (deactivated) kit as not found. Reading
+        and editing one stays possible — that is how it is inspected or
+        reactivated — but issuing from it must not be.
+        """
         query = (
             select(EquipmentKit)
             .where(
@@ -10616,6 +10726,8 @@ class InventoryService:
             )
             .options(selectinload(EquipmentKit.line_items))
         )
+        if active_only:
+            query = query.where(EquipmentKit.active.is_(True))
         result = await self.db.execute(query)
         equipment_kit: Optional[EquipmentKit] = result.scalar_one_or_none()
         return equipment_kit
@@ -10701,9 +10813,11 @@ class InventoryService:
         organization_id: UUID | str,
         issued_by: UUID,
     ) -> Tuple[Optional[List[ItemIssuance | ItemAssignment]], Optional[str]]:
-        """Issue all items in a kit to a member."""
+        """Issue all items in a kit to a member. A deleted kit is not found."""
         try:
-            kit = await self.get_equipment_kit_by_id(kit_id, organization_id)
+            kit = await self.get_equipment_kit_by_id(
+                kit_id, organization_id, active_only=True
+            )
             if not kit:
                 return None, "Equipment kit not found"
 

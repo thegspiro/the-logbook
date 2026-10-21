@@ -17,7 +17,7 @@ from uuid import UUID
 from loguru import logger
 from sqlalchemy import delete, func
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -1808,12 +1808,34 @@ class TrainingProgramService:
 
         # Requirement links on this phase, and the enrollments of this program.
         link_result = await self.db.execute(
-            select(ProgramRequirement.id, ProgramRequirement.requirement_id).where(
-                ProgramRequirement.phase_id == str(phase_id)
-            )
+            select(
+                ProgramRequirement.requirement_id, ProgramRequirement.owns_requirement
+            ).where(ProgramRequirement.phase_id == str(phase_id))
         )
         link_rows = link_result.all()
-        requirement_ids = [str(r[1]) for r in link_rows]
+        phase_requirement_ids = {str(r[0]) for r in link_rows}
+        owned_requirement_ids = {str(r[0]) for r in link_rows if r[1]}
+
+        # A requirement another phase of this same program still links stays
+        # tracked by the program, so its progress rows must survive — dropping
+        # them would silently reset work members have already done. Mirrors the
+        # guard in remove_requirement_from_program.
+        still_linked_ids: set[str] = set()
+        if phase_requirement_ids:
+            sibling_result = await self.db.execute(
+                select(ProgramRequirement.requirement_id).where(
+                    ProgramRequirement.program_id == str(program_id),
+                    ProgramRequirement.requirement_id.in_(phase_requirement_ids),
+                    # A phase-less link (phase_id NULL) still counts; a bare
+                    # `!=` would drop it, since NULL != x is not true in SQL.
+                    or_(
+                        ProgramRequirement.phase_id.is_(None),
+                        ProgramRequirement.phase_id != str(phase_id),
+                    ),
+                )
+            )
+            still_linked_ids = {str(r[0]) for r in sibling_result.all()}
+        requirement_ids = sorted(phase_requirement_ids - still_linked_ids)
 
         enroll_result = await self.db.execute(
             select(ProgramEnrollment.id, ProgramEnrollment.current_phase_id).where(
@@ -1864,6 +1886,27 @@ class TrainingProgramService:
 
         # Delete the phase (cascades its ProgramRequirement links + milestones).
         await self.db.delete(phase)
+        await self.db.flush()
+
+        # A requirement one of this phase's links created, and that nothing
+        # links any longer, is an orphan: remove it so it doesn't linger in the
+        # requirements library. One linked in from the library (owns_requirement
+        # False) belongs to the department and is never deleted here.
+        if owned_requirement_ids:
+            remaining_links = await self.db.execute(
+                select(ProgramRequirement.requirement_id).where(
+                    ProgramRequirement.requirement_id.in_(owned_requirement_ids)
+                )
+            )
+            still_referenced = {str(r[0]) for r in remaining_links.all()}
+            orphaned_ids = owned_requirement_ids - still_referenced
+            if orphaned_ids:
+                await self.db.execute(
+                    delete(TrainingRequirement).where(
+                        TrainingRequirement.id.in_(orphaned_ids)
+                    )
+                )
+
         await self.db.commit()
 
         # Recompute the whole program's enrollments (removed requirements change

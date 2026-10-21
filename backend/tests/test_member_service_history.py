@@ -617,10 +617,15 @@ class TestReplacePeriods:
 
 
 def _caller(org, user_id=None, username="officer"):
+    # An administrator, with positions and a rank as the loaded current user
+    # has them: status changes check the caller holds every permission the
+    # member does.
     return SimpleNamespace(
         id=user_id or str(uuid.uuid4()),
         organization_id=org.id,
         username=username,
+        rank=None,
+        positions=[SimpleNamespace(permissions=["*"])],
     )
 
 

@@ -1320,6 +1320,14 @@ class ElectionService:
         election = result.scalar_one_or_none()
         if not election:
             return False, "Election not found"
+        # The attendance list is part of the record of a finished election:
+        # it decided who could vote on attendance-required items, and the
+        # certified result is read against it.
+        if election.status in (ElectionStatus.CLOSED, ElectionStatus.CANCELLED):
+            return False, (
+                "The election has ended, so its attendance list can no longer "
+                "be changed"
+            )
 
         attendees = copy.deepcopy(election.attendees or [])
         original_count = len(attendees)

@@ -370,7 +370,7 @@ class TestPledgeFkValidation:
         assert pledge is not None
 
     async def test_update_pledge_rejects_foreign_donor(self):
-        pledge = SimpleNamespace(id="p1", organization_id="org-1")
+        pledge = SimpleNamespace(id="p1", organization_id="org-1", campaign_id=None)
         db = _db([_one(pledge), _one(None)])  # pledge fetch, then donor not in org
         with pytest.raises(ValueError, match="Donor not found"):
             await FundraisingService(db).update_pledge(
@@ -389,7 +389,7 @@ class TestFundraisingEventFkValidation:
             )
 
     async def test_update_event_rejects_foreign_campaign(self):
-        event = SimpleNamespace(id="fe1", organization_id="org-1")
+        event = SimpleNamespace(id="fe1", organization_id="org-1", campaign_id=None)
         db = _db([_one(event), _one(None)])  # event fetch, campaign not in org
         with pytest.raises(ValueError, match="Campaign not found"):
             await FundraisingService(db).update_fundraising_event(

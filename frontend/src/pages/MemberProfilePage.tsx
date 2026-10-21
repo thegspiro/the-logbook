@@ -72,6 +72,7 @@ import { UndoDropControl } from '../components/member-profile/UndoDropControl';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { blankToNull } from '../utils/formValues';
 import { displayNameOf, givenName } from '../utils/memberName';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // Types for inventory data
 interface InventoryItem {
@@ -128,6 +129,7 @@ export const MemberProfilePage: React.FC = () => {
   // Photo upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const { confirm } = useConfirm();
 
   // Address edit state
   const [editingAddress, setEditingAddress] = useState(false);
@@ -541,6 +543,15 @@ export const MemberProfilePage: React.FC = () => {
 
   const handlePhotoRemove = async () => {
     if (!userId) return;
+    const confirmed = await confirm({
+      title: 'Remove profile photo?',
+      message: isSelf
+        ? 'Your photo is removed from your profile and the roster. You can upload a new one at any time.'
+        : 'This member’s photo is removed from their profile and the roster. A new one can be uploaded at any time.',
+      confirmLabel: 'Remove photo',
+      cancelLabel: 'Keep it',
+    });
+    if (!confirmed) return;
     try {
       setUploadingPhoto(true);
       setError(null);

@@ -42,7 +42,7 @@ import {
   isAdminOnlyRefusal,
 } from '../components/documents/folderAccess';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
 
 type ViewMode = 'grid' | 'list';
 
@@ -336,8 +336,8 @@ const DocumentsPage: React.FC = () => {
         if (selectedFolder) {
           await fetchDocuments(selectedFolder, debouncedSearch);
         }
-      } catch {
-        setError('Unable to delete document. Check your connection and try again.');
+      } catch (err: unknown) {
+        setError(getErrorDetail(err) ?? 'Unable to delete document. Check your connection and try again.');
       } finally {
         setActionLoading(false);
       }

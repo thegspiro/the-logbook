@@ -724,6 +724,18 @@ async def delete_step(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Step or pipeline not found"
         )
+    # Deleting a stage deletes every applicant's progress record for it, so
+    # the trail has to say who removed it.
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.step_deleted",
+        event_category="membership",
+        severity="warning",
+        event_data={"pipeline_id": str(pipeline_id), "step_id": str(step_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+        organization_id=str(current_user.organization_id),
+    )
 
 
 # ============================================

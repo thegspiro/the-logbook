@@ -86,7 +86,11 @@ class TestConcurrentSeparation:
 
         org_id, officer_id, member_id = await _make_org_officer_member()
         caller = SimpleNamespace(
-            id=officer_id, organization_id=org_id, username="officer"
+            id=officer_id,
+            organization_id=org_id,
+            username="officer",
+            rank=None,
+            positions=[SimpleNamespace(permissions=["*"])],
         )
 
         session_a = database_manager.session_factory()

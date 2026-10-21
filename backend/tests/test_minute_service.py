@@ -591,6 +591,11 @@ class TestDeleteMinutes:
         """delete_minutes succeeds for draft minutes."""
         minutes = _make_minutes(status=MinutesStatus.DRAFT.value)
         service.get_minutes = AsyncMock(return_value=minutes)
+        # Before deleting, the service reads the carried-forward items and the
+        # attachment paths; a draft with neither answers both with nothing.
+        empty = MagicMock()
+        empty.scalars.return_value.all.return_value = []
+        mock_db.execute = AsyncMock(return_value=empty)
 
         result = await service.delete_minutes(minutes.id, org_id)
 
