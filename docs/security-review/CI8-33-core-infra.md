@@ -199,19 +199,20 @@ passes, with its one pre-existing skip because the sandbox database records
 
 **Environment note — `main` currently has forked Alembic heads, unrelated to
 this feature.** At the time of this review, `origin/main`'s migration chain
-has two heads (`33922563bb88`, `75a6edc2ae4a`), left by two independent merge
+had two heads (`33922563bb88`, `75a6edc2ae4a`), left by two independent merge
 revisions from PR #3529 and PR #3531 landing within the same minute; PR #3546
-is open to merge them. This pass touches no migration and introduces no new
-head on its own. To run this pass's DB-backed tests and
-`validate_migrations.py --strict` locally, PR #3546's single new migration
-file (`20261021_2147_e5f9bb066e07_merge_heads.py`, a no-op merge of the two
-forked heads) was temporarily copied into the local `alembic/versions/`
-directory for the schema build and test run only, then removed before
-committing — this PR's diff does not include that file, and does not depend
-on PR #3546 merging first for its own tests to be meaningful, since the fork
-is upstream of both equally. Re-running `validate_migrations.py --strict`
-against `origin/main` as committed (without PR #3546's fix) reproduces the
-2-head failure, as expected and unrelated to this change.
+was already open with the fix. This pass touches no migration of its own and
+introduces no new head.
+
+**Update:** this PR's own `Migration Chain` CI check failed on commit
+`3f36a6ea` for exactly this reason (reproduced identically against `main`
+itself). Rather than wait on #3546, its one-file fix commit
+(`20261021_2147_e5f9bb066e07_merge_heads.py`, a no-op merge of the two forked
+heads — creates nothing, alters nothing) was cherry-picked onto this branch
+at `86b8b5d0` and pushed, per the CI-red rule that a known fix gets ported in
+rather than waited on. `validate_migrations.py --strict` now passes on this
+branch with a single head (`e5f9bb066e07`). It will no-op once #3546 merges
+to `main` first, since the file is identical.
 
 ## Guard tests added
 
