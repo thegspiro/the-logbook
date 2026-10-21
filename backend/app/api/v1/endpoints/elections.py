@@ -3238,7 +3238,7 @@ async def send_election_report(
     current_user: User = Depends(require_permission("elections.manage")),
 ):
     """
-    Send an election report email to the secretary.
+    Email the election report to the officer who requested it.
 
     The report includes election results, ballot recipients, and reasons
     why specific members did not receive ballots.
@@ -3251,7 +3251,7 @@ async def send_election_report(
         success, message = await service.generate_and_send_election_report(
             election_id=election_id,
             organization_id=current_user.organization_id,
-            requested=True,
+            requested_by=current_user.id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
