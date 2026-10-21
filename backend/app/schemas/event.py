@@ -26,6 +26,7 @@ from app.models.event import (
     RSVPStatus,
 )
 from app.schemas.base import UTCDateTime, UTCResponseBase, as_utc
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.schemas.training_session import TrainingSessionAttach
 
 _response_config = ConfigDict(from_attributes=True)
@@ -133,8 +134,8 @@ class EventDefaultsUpdate(BaseModel):
 
     event_type: Optional[str] = Field(None, max_length=100)
     check_in_window_type: Optional[str] = Field(None, max_length=50)
-    check_in_minutes_before: Optional[int] = Field(None, ge=0)
-    check_in_minutes_after: Optional[int] = Field(None, ge=0)
+    check_in_minutes_before: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    check_in_minutes_after: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     require_checkout: Optional[bool] = None
     requires_rsvp: Optional[bool] = None
     allowed_rsvp_statuses: Optional[List[str]] = None
@@ -240,7 +241,7 @@ class EventBase(BaseModel):
     end_datetime: datetime
     requires_rsvp: bool = Field(default=False)
     rsvp_deadline: Optional[datetime] = None
-    max_attendees: Optional[int] = Field(default=None, ge=1)
+    max_attendees: Optional[int] = Field(default=None, ge=1, le=INT32_MAX)
     allowed_rsvp_statuses: Optional[List[str]] = Field(
         default=None,
         description="Allowed RSVP statuses. Defaults to ['going', 'not_going']",
@@ -396,7 +397,7 @@ class EventUpdate(BaseModel):
     end_datetime: Optional[datetime] = None
     requires_rsvp: Optional[bool] = None
     rsvp_deadline: Optional[datetime] = None
-    max_attendees: Optional[int] = Field(None, ge=1)
+    max_attendees: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     allowed_rsvp_statuses: Optional[List[str]] = None
     is_mandatory: Optional[bool] = None
     mandatory_membership_types: Optional[List[str]] = None
@@ -786,7 +787,10 @@ class RSVPOverride(BaseModel):
         None, description="Override check-out time"
     )
     override_duration_minutes: Optional[int] = Field(
-        None, ge=0, description="Override total attendance duration in minutes"
+        None,
+        ge=0,
+        description="Override total attendance duration in minutes",
+        le=INT32_MAX,
     )
 
     @field_validator("override_check_in_at", "override_check_out_at")
@@ -1046,15 +1050,15 @@ class EventTemplateCreate(BaseModel):
     default_location_id: Optional[UUID] = None
     default_location: Optional[str] = Field(None, max_length=300)
     default_location_details: Optional[str] = None
-    default_duration_minutes: Optional[int] = Field(None, ge=1)
+    default_duration_minutes: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     requires_rsvp: bool = False
-    max_attendees: Optional[int] = Field(None, ge=1)
+    max_attendees: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     is_mandatory: bool = False
     allow_guests: bool = False
     attendee_visibility: Optional[str] = Field(None, max_length=20)
     check_in_window_type: Optional[str] = None
-    check_in_minutes_before: Optional[int] = Field(default=60, ge=0)
-    check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
+    check_in_minutes_before: Optional[int] = Field(default=60, ge=0, le=INT32_MAX)
+    check_in_minutes_after: Optional[int] = Field(default=15, ge=0, le=INT32_MAX)
     require_checkout: bool = False
     send_reminders: bool = True
     reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
@@ -1083,15 +1087,15 @@ class EventTemplateUpdate(BaseModel):
     default_location_id: Optional[UUID] = None
     default_location: Optional[str] = Field(None, max_length=300)
     default_location_details: Optional[str] = None
-    default_duration_minutes: Optional[int] = Field(None, ge=1)
+    default_duration_minutes: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     requires_rsvp: Optional[bool] = None
-    max_attendees: Optional[int] = Field(None, ge=1)
+    max_attendees: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     is_mandatory: Optional[bool] = None
     allow_guests: Optional[bool] = None
     attendee_visibility: Optional[str] = Field(None, max_length=20)
     check_in_window_type: Optional[str] = None
-    check_in_minutes_before: Optional[int] = Field(None, ge=0)
-    check_in_minutes_after: Optional[int] = Field(None, ge=0)
+    check_in_minutes_before: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    check_in_minutes_after: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     require_checkout: Optional[bool] = None
     send_reminders: Optional[bool] = None
     reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
@@ -1277,6 +1281,8 @@ class RecurringEventCreate(BaseModel):
     recurrence_week_ordinal: Optional[int] = Field(
         None,
         description="Which occurrence: 1=first, 2=second, ..., 5=fifth, -1=last",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     recurrence_month: Optional[int] = Field(
         None,
@@ -1290,7 +1296,7 @@ class RecurringEventCreate(BaseModel):
     # Event settings (same as EventCreate)
     requires_rsvp: bool = False
     rsvp_deadline: Optional[datetime] = None
-    max_attendees: Optional[int] = Field(None, ge=1)
+    max_attendees: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     is_mandatory: bool = False
     mandatory_membership_types: Optional[List[str]] = None
     allow_guests: bool = False
@@ -1304,8 +1310,8 @@ class RecurringEventCreate(BaseModel):
     reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(default=[24])
     check_in_window_type: Optional[str] = Field(default="flexible")
-    check_in_minutes_before: Optional[int] = Field(default=60, ge=0)
-    check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
+    check_in_minutes_before: Optional[int] = Field(default=60, ge=0, le=INT32_MAX)
+    check_in_minutes_after: Optional[int] = Field(default=15, ge=0, le=INT32_MAX)
     require_checkout: bool = False
     allow_guest_check_in: bool = False
     guest_check_in_creates_prospect: bool = False

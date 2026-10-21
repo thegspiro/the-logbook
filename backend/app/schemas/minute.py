@@ -18,6 +18,7 @@ from pydantic import (
 
 from app.models.minute import MinutesAttachmentCategory, MinutesMeetingType
 from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX
 from app.utils.minutes_attendance import COUNTS_TOWARD_QUORUM, derive_status
 from app.utils.redline import describe_change
 from app.utils.rich_text import MAX_HTML_LENGTH, sanitize_html
@@ -75,7 +76,7 @@ class SectionDocument(BaseModel):
 class SectionEntry(BaseModel):
     """A single content section within minutes or a template"""
 
-    order: int = Field(..., ge=0, description="Display order")
+    order: int = Field(..., ge=0, description="Display order", le=INT32_MAX)
     key: str = Field(
         ..., min_length=1, max_length=100, description="Unique key for the section"
     )
@@ -134,7 +135,7 @@ class SectionEntry(BaseModel):
 class TemplateSectionEntry(BaseModel):
     """A section definition within a template"""
 
-    order: int = Field(..., ge=0)
+    order: int = Field(..., ge=0, le=INT32_MAX)
     key: str = Field(..., min_length=1, max_length=100)
     title: str = Field(..., min_length=1, max_length=200)
     default_content: str = Field(default="", description="Default content to pre-fill")
@@ -343,10 +344,10 @@ class MotionBase(BaseModel):
         description="For the motion that accepts the previous minutes: accepted "
         "as submitted or as revised",
     )
-    votes_for: Optional[int] = Field(None, ge=0)
-    votes_against: Optional[int] = Field(None, ge=0)
-    votes_abstain: Optional[int] = Field(None, ge=0)
-    votes_recused: Optional[int] = Field(None, ge=0)
+    votes_for: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_against: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_abstain: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_recused: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     threshold: Optional[Literal["majority_cast", "majority_present", "two_thirds"]] = (
         Field(
             None,
@@ -376,7 +377,9 @@ class MotionBase(BaseModel):
 class MotionCreate(MotionBase):
     """Schema for creating a motion"""
 
-    order: int = Field(default=0, ge=0, description="Display order within the minutes")
+    order: int = Field(
+        default=0, ge=0, description="Display order within the minutes", le=INT32_MAX
+    )
 
 
 class MotionUpdate(BaseModel):
@@ -389,15 +392,15 @@ class MotionUpdate(BaseModel):
     section_key: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = None
     acceptance: Optional[Literal["as_submitted", "as_revised"]] = None
-    votes_for: Optional[int] = Field(None, ge=0)
-    votes_against: Optional[int] = Field(None, ge=0)
-    votes_abstain: Optional[int] = Field(None, ge=0)
-    votes_recused: Optional[int] = Field(None, ge=0)
+    votes_for: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_against: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_abstain: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_recused: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     threshold: Optional[Literal["majority_cast", "majority_present", "two_thirds"]] = (
         None
     )
     roll_call: Optional[List[RollCallEntry]] = None
-    order: Optional[int] = Field(None, ge=0)
+    order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     election_id: Optional[str] = Field(None, max_length=36)
     ballot_item_id: Optional[str] = Field(None, max_length=100)
 
@@ -582,7 +585,7 @@ class MinutesBase(BaseModel):
     adjourned_at: Optional[UTCDateTime] = None
     attendees: Optional[List[AttendeeEntry]] = None
     quorum_met: Optional[bool] = None
-    quorum_count: Optional[int] = Field(None, ge=0)
+    quorum_count: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     event_id: Optional[str] = Field(None, description="Optional link to an event")
 
 
@@ -631,7 +634,7 @@ class MinutesUpdate(BaseModel):
     adjourned_at: Optional[UTCDateTime] = None
     attendees: Optional[List[AttendeeEntry]] = None
     quorum_met: Optional[bool] = None
-    quorum_count: Optional[int] = Field(None, ge=0)
+    quorum_count: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     event_id: Optional[str] = None
     attendance_listing: Optional[Literal["all", "present_excused", "present"]] = Field(
         None,

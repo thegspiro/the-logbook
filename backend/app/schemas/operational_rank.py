@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.core.permissions import get_rank_default_permissions
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 
 
 class RankCreate(BaseModel):
@@ -33,7 +34,10 @@ class RankCreate(BaseModel):
         None, description="Optional description of this rank"
     )
     sort_order: int = Field(
-        default=0, description="Display ordering (lower = higher rank)"
+        default=0,
+        description="Display ordering (lower = higher rank)",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     is_active: bool = Field(default=True)
     eligible_positions: Optional[List[str]] = Field(
@@ -48,7 +52,7 @@ class RankUpdate(BaseModel):
     rank_code: Optional[str] = Field(None, min_length=1, max_length=100)
     display_name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     is_active: Optional[bool] = None
     eligible_positions: Optional[List[str]] = None
 
@@ -90,7 +94,7 @@ class RankReorderItem(BaseModel):
     """Single item in a reorder request."""
 
     id: UUID
-    sort_order: int
+    sort_order: int = Field(..., ge=INT32_MIN, le=INT32_MAX)
 
 
 #: Upper bound on one reorder request.
