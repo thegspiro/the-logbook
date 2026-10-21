@@ -15,6 +15,7 @@ import {
   MinusCircle,
   MoreHorizontal,
   Truck,
+  Boxes,
   Play,
   X,
 } from 'lucide-react';
@@ -537,7 +538,7 @@ export const MyChecklistsPage: React.FC = () => {
               to="/inventory/checklists/apparatus-inventory"
               className="btn-secondary hidden items-center gap-1.5 sm:inline-flex"
             >
-              <Truck className="h-4 w-4" aria-hidden="true" />
+              <Boxes className="h-4 w-4" aria-hidden="true" />
               Apparatus Inventory
             </Link>
             {canManage && (
@@ -920,7 +921,7 @@ const HeaderMenu: React.FC<{ canManage: boolean }> = ({ canManage }) => {
           to="/inventory/checklists/apparatus-inventory"
           className="text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone flex items-center gap-2 px-3 py-2 text-sm"
         >
-          <Truck className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
+          <Boxes className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
           Apparatus inventory
         </Link>
         {canManage && (

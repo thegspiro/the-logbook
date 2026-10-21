@@ -176,6 +176,7 @@ describe('ImportMembers', () => {
       'secondaryPhone',
       'email',
       'joinDate',
+      'membershipType',
       'rank',
       'role',
       'station',
@@ -215,7 +216,7 @@ describe('ImportMembers', () => {
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(
-        'Importing without 23 optional column(s): middleName, membershipNumber, username, dateOfBirth and 19 more',
+        'Importing without 24 optional column(s): middleName, membershipNumber, username, dateOfBirth and 20 more',
         { icon: '⚠️' }
       );
     });
@@ -282,6 +283,43 @@ describe('ImportMembers', () => {
     await waitFor(() => {
       expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ username: 'jdoe' }));
     });
+  });
+
+  it('sends the membershipType column as the class and status pair', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,membershipType\nJohn,Doe,john@example.com,Probationary');
+
+    await clickImport();
+
+    await waitFor(() => {
+      expect(mockCreateMember).toHaveBeenCalledWith(
+        expect.objectContaining({ member_class: 'operational', member_status: 'probationary' })
+      );
+    });
+  });
+
+  it('sends no membership fields for a blank membershipType, so the member imports as regular', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,membershipType\nJohn,Doe,john@example.com,');
+
+    await clickImport();
+
+    await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+    const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('member_class');
+    expect(payload).not.toHaveProperty('member_status');
+  });
+
+  it('rejects a membershipType it cannot express instead of importing the member as regular', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,membershipType\nJohn,Doe,john@example.com,Senior');
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/membershipType "Senior" is not one of probationary, regular, life or administrative/)
+      ).toBeInTheDocument();
+    });
+    expect(mockCreateMember).not.toHaveBeenCalled();
   });
 
   it('resolves the role column to a role id', async () => {

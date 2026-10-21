@@ -198,7 +198,13 @@ async def get_current_user(
     # Validate token and get user
     auth_service = AuthService(db)
     try:
-        user = await auth_service.get_user_from_token(token)
+        # A background poll says so with this header and then does not count as
+        # activity. The header can only make the caller's own session age
+        # faster, so honouring it cannot be used to extend one.
+        user = await auth_service.get_user_from_token(
+            token,
+            touch_activity=request.headers.get("x-background-request") != "1",
+        )
     except Exception as e:
         if is_transient_db_error(e):
             # Database is temporarily unreachable (e.g. MySQL restart).

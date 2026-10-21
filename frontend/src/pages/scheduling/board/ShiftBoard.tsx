@@ -39,6 +39,7 @@ import PhoneMonth from './PhoneMonth';
 import StandingShiftModal from './StandingShiftModal';
 import { STATUS_STYLES, legendFor } from './statusStyles';
 import { useTablist } from '../../../hooks/useTablist';
+import { BACKGROUND_REQUEST_CONFIG } from '../../../utils/backgroundRequest';
 
 /**
  * How often a visible board re-reads its range.
@@ -198,19 +199,25 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
    * mutated the roster can act on the server's answer rather than on the
    * optimistic copy it wrote a moment ago.
    */
-  const refresh = useCallback(async (): Promise<ShiftRecord[]> => {
-    const [data, offers] = await Promise.all([
-      view === 'week'
-        ? schedulingService.getWeekCalendar(weekStartKey(visibleDate))
-        : schedulingService.getMonthCalendar(visibleDate.getFullYear(), visibleDate.getMonth() + 1),
-      // Non-critical: without it the offer banners simply do not appear, and
-      // the roster below them is still correct.
-      schedulingService.getMySwapRequests('pending').catch(() => [] as SwapRequest[]),
-    ]);
-    setShifts(data);
-    setMyOffers(offers);
-    return data;
-  }, [view, visibleDate]);
+  const refresh = useCallback(
+    async (options?: { background?: boolean }): Promise<ShiftRecord[]> => {
+      // Only the timer's own poll says it is in the background. A handler that
+      // passes this function an event object reads as "not background".
+      const config = options?.background === true ? BACKGROUND_REQUEST_CONFIG : undefined;
+      const [data, offers] = await Promise.all([
+        view === 'week'
+          ? schedulingService.getWeekCalendar(weekStartKey(visibleDate), config)
+          : schedulingService.getMonthCalendar(visibleDate.getFullYear(), visibleDate.getMonth() + 1, config),
+        // Non-critical: without it the offer banners simply do not appear, and
+        // the roster below them is still correct.
+        schedulingService.getMySwapRequests('pending', config).catch(() => [] as SwapRequest[]),
+      ]);
+      setShifts(data);
+      setMyOffers(offers);
+      return data;
+    },
+    [view, visibleDate]
+  );
 
   const fetchShifts = useCallback(async () => {
     setLoading(true);
@@ -293,7 +300,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   useEffect(() => {
     const tick = () => {
       if (document.visibilityState !== 'visible' || !quietRefreshRef.current) return;
-      void refresh().catch(() => {
+      void refresh({ background: true }).catch(() => {
         /* A failed background poll leaves the last good data on screen. */
       });
     };

@@ -84,7 +84,7 @@ from app.models.training import (
     TrainingSubmission,
     TrainingType,
 )
-from app.models.user import Organization, User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User, UserStatus
 from app.schemas.admin_hub import (
     AdminAttentionItem,
     AdminHubSummary,
@@ -323,21 +323,32 @@ _ATTENDED_STATUSES = (
 )
 
 
-def _active_member_criteria():
-    return (User.status == UserStatus.ACTIVE, User.deleted_at.is_(None))
+def _current_member_criteria():
+    """A member who is on the roster today: signs in and takes part.
+
+    Probationary is a current account status, not a former one, so every
+    metric about the department's people counts it. Only the Active tile
+    below keeps the literal status, because the Probationary tile sits
+    beside it and the two are meant to add up.
+    """
+    return (User.status.in_(ACTIVE_ACCOUNT_STATUSES), User.deleted_at.is_(None))
 
 
 async def _members_active(ctx: MetricContext) -> tuple[str, str]:
+    # Literal on purpose: this tile and _members_probationary split the
+    # current roster between them. tests/test_account_status_gates.py
+    # allows this one site.
+    active_only = (User.status == UserStatus.ACTIVE, User.deleted_at.is_(None))
     active = await _scalar(
         ctx.db,
         select(func.count(User.id)).where(
-            User.organization_id == ctx.organization_id, *_active_member_criteria()
+            User.organization_id == ctx.organization_id, *active_only
         ),
     )
     tiers = await _scalar(
         ctx.db,
         select(func.count(func.distinct(User.membership_type))).where(
-            User.organization_id == ctx.organization_id, *_active_member_criteria()
+            User.organization_id == ctx.organization_id, *active_only
         ),
     )
     return _fmt_int(active), f"across {tiers} {_plural(tiers, 'membership type')}"
@@ -394,7 +405,7 @@ async def _members_screening_current(ctx: MetricContext) -> tuple[str, str]:
     active = await _scalar(
         ctx.db,
         select(func.count(User.id)).where(
-            User.organization_id == ctx.organization_id, *_active_member_criteria()
+            User.organization_id == ctx.organization_id, *_current_member_criteria()
         ),
     )
     if active == 0:
@@ -413,7 +424,7 @@ async def _members_screening_current(ctx: MetricContext) -> tuple[str, str]:
                 ScreeningRecord.expiration_date >= ctx.today,
             ),
             User.organization_id == ctx.organization_id,
-            *_active_member_criteria(),
+            *_current_member_criteria(),
         ),
     )
     return f"{round(current * 100 / active)}%", f"{current} of {active} cleared"
@@ -471,7 +482,7 @@ async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
                 _EXPIRED_ALIAS.status != ScreeningStatus.WAIVED,
                 # A lapsed screening for someone off the roster is history, not work.
                 User.organization_id == ctx.organization_id,
-                *_active_member_criteria(),
+                *_current_member_criteria(),
                 ~current_cover,
             )
             .group_by(_EXPIRED_ALIAS.user_id, _EXPIRED_ALIAS.screening_type)
@@ -562,7 +573,7 @@ async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
                 _OVERDUE_ALIAS.scheduled_date < ctx.today,
                 # An appointment somebody off the roster missed is history, not work.
                 User.organization_id == ctx.organization_id,
-                *_active_member_criteria(),
+                *_current_member_criteria(),
                 ~answered,
             )
             .group_by(_OVERDUE_ALIAS.user_id, _OVERDUE_ALIAS.screening_type)
@@ -677,7 +688,7 @@ async def _training_avg_hours(ctx: MetricContext) -> tuple[str, str]:
     active = await _scalar(
         ctx.db,
         select(func.count(User.id)).where(
-            User.organization_id == ctx.organization_id, *_active_member_criteria()
+            User.organization_id == ctx.organization_id, *_current_member_criteria()
         ),
     )
     if active == 0:

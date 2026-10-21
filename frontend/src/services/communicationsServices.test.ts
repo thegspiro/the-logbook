@@ -18,6 +18,7 @@ vi.mock('./apiClient', () => ({
 }));
 
 // Import services AFTER mocks
+import { BACKGROUND_REQUEST_CONFIG } from '../utils/backgroundRequest';
 import {
   notificationsService,
   emailTemplatesService,
@@ -203,8 +204,15 @@ describe('notificationsService', () => {
 
       const result = await notificationsService.getMyUnreadCount();
 
-      expect(mockGet).toHaveBeenCalledWith('/notifications/my/unread-count');
+      expect(mockGet).toHaveBeenCalledWith('/notifications/my/unread-count', undefined);
       expect(result).toEqual(data);
+    });
+
+    it('passes a request config through, so a poll can mark itself as background', async () => {
+      mockGet.mockResolvedValueOnce({ data: { unread_count: 1 } });
+      await notificationsService.getMyUnreadCount(BACKGROUND_REQUEST_CONFIG);
+
+      expect(mockGet).toHaveBeenCalledWith('/notifications/my/unread-count', BACKGROUND_REQUEST_CONFIG);
     });
   });
 

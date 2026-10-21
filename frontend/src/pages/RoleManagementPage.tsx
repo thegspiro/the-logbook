@@ -164,7 +164,12 @@ export const RoleManagementPage: React.FC = () => {
     if (
       !(await confirm({
         title: 'Delete role',
-        message: `Delete the role "${role.name}"? Members assigned to it will lose its permissions.`,
+        message:
+          role.user_count === undefined
+            ? `Delete the role "${role.name}"? Members assigned to it will lose its permissions.`
+            : role.user_count === 0
+              ? `Delete the role "${role.name}"? No members hold it.`
+              : `Delete the role "${role.name}"? ${role.user_count} ${role.user_count === 1 ? 'member holds' : 'members hold'} it and will lose its permissions.`,
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))

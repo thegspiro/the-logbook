@@ -23,7 +23,7 @@ import {
   Users,
   FolderTree,
   Download,
-  Trash2,
+  Power,
   Edit2,
   PlayCircle,
   Upload,
@@ -704,9 +704,10 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
         <button
           onClick={() => onDelete(provider.id)}
           className="bg-theme-surface text-theme-text-primary flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-red-800"
-          aria-label="Delete provider"
+          aria-label="Deactivate provider"
+          title="Deactivate"
         >
-          <Trash2 className="h-4 w-4" aria-hidden="true" />
+          <Power className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -1803,22 +1804,25 @@ const ExternalTrainingPage: React.FC = () => {
     setEditModal({ isOpen: true, provider });
   };
 
+  // The backend only deactivates a provider (it stays listed as Inactive and
+  // its imported records are kept), so the dialog must not promise removal.
   const handleDelete = async (providerId: string) => {
+    const providerName = providers.find((p) => p.id === providerId)?.name || 'this integration';
     const agreed = await confirm({
-      title: 'Delete this integration?',
+      title: `Deactivate ${providerName}?`,
       message:
-        'Every training record imported through it is removed with it. Records logged in The Logbook directly are untouched.',
-      confirmLabel: 'Delete integration',
-      cancelLabel: 'Keep it',
+        'It stops syncing, and no further records are pulled or uploaded through it. Training records already imported through it are kept, and the integration stays listed here as Inactive.',
+      confirmLabel: 'Deactivate integration',
+      cancelLabel: 'Keep it active',
       variant: 'danger',
     });
     if (!agreed) return;
     try {
       await externalTrainingService.deleteProvider(providerId);
       await loadProviders();
-      toast.success('Provider deleted');
+      toast.success('Integration deactivated');
     } catch (err: unknown) {
-      toast.error(`Failed to delete: ${getErrorMessage(err)}`);
+      toast.error(`Failed to deactivate: ${getErrorMessage(err)}`);
     }
   };
 

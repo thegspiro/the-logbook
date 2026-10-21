@@ -727,21 +727,22 @@ file.
 
 **CSV columns.** The template has all of them. The order does not matter.
 
-| Column                                                                           | Notes                                                                        |
-| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `firstName`, `lastName`                                                          | **Required**                                                                 |
-| `email`                                                                          | **Required.** Must be unique in the department                               |
-| `middleName`                                                                     |                                                                              |
-| `membershipNumber`                                                               | Must be unique. Leave blank to have one given when automatic numbering is on |
-| `username`                                                                       | Sign-in name. If blank, it is the part of the email before `@`               |
-| `dateOfBirth`, `joinDate`                                                        | Write dates as `YYYY-MM-DD` or `MM/DD/YYYY`                                  |
-| `street`, `city`, `state`, `zipCode`                                             | Put double quotes around any value that has a comma in it                    |
-| `primaryPhone`, `secondaryPhone`                                                 |                                                                              |
-| `rank`, `station`, `platoon`                                                     |                                                                              |
-| `role`                                                                           | Must match a role name set up under **Roles**                                |
-| `emergencyName1`, `emergencyRelationship1`, `emergencyPhone1`                    | Fill in all three, or leave all three blank                                  |
-| `emergencyEmail1`                                                                |                                                                              |
-| `emergencyName2`, `emergencyRelationship2`, `emergencyPhone2`, `emergencyEmail2` | Optional second contact, same rule                                           |
+| Column                                                                           | Notes                                                                           |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `firstName`, `lastName`                                                          | **Required**                                                                    |
+| `email`                                                                          | **Required.** Must be unique in the department                                  |
+| `middleName`                                                                     |                                                                                 |
+| `membershipNumber`                                                               | Must be unique. Leave blank to have one given when automatic numbering is on    |
+| `username`                                                                       | Sign-in name. If blank, it is the part of the email before `@`                  |
+| `dateOfBirth`, `joinDate`                                                        | Write dates as `YYYY-MM-DD` or `MM/DD/YYYY`                                     |
+| `street`, `city`, `state`, `zipCode`                                             | Put double quotes around any value that has a comma in it                       |
+| `primaryPhone`, `secondaryPhone`                                                 |                                                                                 |
+| `membershipType`                                                                 | `probationary`, `regular`, `life` or `administrative`. Blank imports as regular |
+| `rank`, `station`, `platoon`                                                     |                                                                                 |
+| `role`                                                                           | Must match a role name set up under **Roles**                                   |
+| `emergencyName1`, `emergencyRelationship1`, `emergencyPhone1`                    | Fill in all three, or leave all three blank                                     |
+| `emergencyEmail1`                                                                |                                                                                 |
+| `emergencyName2`, `emergencyRelationship2`, `emergencyPhone2`, `emergencyEmail2` | Optional second contact, same rule                                              |
 
 Only `firstName`, `lastName` and `email` are required. A file with just those
 three columns imports. Older templates called the membership number column
@@ -871,7 +872,7 @@ The Admin Edit page has these sections:
 - **Emergency Contacts:** add, change or remove contacts.
 
 You cannot change status here. Use the status button on the member's profile.
-Positions are given with **Manage Roles** on the member's row in Member
+Positions are given with **Manage Positions** on the member's row in Member
 Management.
 
 ![Admin member edit form with personal, department and access sections](./images/01-07-admin-member-edit.png)
@@ -1026,6 +1027,14 @@ financial trail still makes sense. See
 
 Deletion is also refused if it would remove the department's last
 administrator.
+
+**You cannot act on a member who holds permissions you do not.** Deleting,
+changing the status of, or archiving a member is refused (403) when that member
+holds a permission you lack, so a member manager cannot deactivate or delete the
+System Owner or a more senior officer. The attempt is reported to the security
+log as a privilege-escalation attempt, the same as a password or MFA reset
+refused for the same reason. Administrators with every permission are not
+affected.
 
 ### Anonymizing a Former Member
 
@@ -1788,9 +1797,13 @@ A member gets at most one reminder per check: the latest one they are due. A
 member first found at day 100 gets only the 90-day reminder, never a late
 30-day one. No reminder is ever sent twice.
 
+The 30 and 90 days count from the drop's **Effective date** — the day the
+member left — not the day you recorded it. A drop entered with an effective
+date 35 days back gets its 30-day reminder at the next daily check.
+
 **Who still has property.** The **Former members still holding property**
 panel lists every dropped member with items still out. It shows when they
-were dropped, how many items, their value and which reminders have gone. You
+were dropped (the effective date), how many items, their value and which reminders have gone. You
 find it on the Inventory **Member Equipment** page and on **Members Admin →
 Member Management**. Select a name to open the member's profile.
 

@@ -1708,6 +1708,37 @@ class SchedulingService:
             )
         return result
 
+    async def open_shift_candidate_criteria(
+        self,
+        organization_id: UUID | str,
+        start_date: date,
+        end_date: date,
+        now: Optional[datetime] = None,
+    ) -> list:
+        """The WHERE clauses that make a shift a candidate for an open-shift list.
+
+        The one definition of the population. ``_open_shift_candidates`` and the
+        MCP ``list_open_shifts`` tool both select through it; the tool pages
+        with a keyset cursor and its own cap, so it cannot share the query
+        itself, and when it kept a copy of these clauses the copy missed the
+        has-the-shift-ended filter and kept offering shifts that were over.
+        """
+        now = now or datetime.now(timezone.utc)
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        settings = (org.settings or {}) if org else {}
+        return [
+            Shift.organization_id == str(organization_id),
+            Shift.shift_date >= start_date,
+            Shift.shift_date <= end_date,
+            Shift.is_finalized.is_(False),
+            Shift.status != ShiftStatus.CANCELLED,
+            shift_not_over_criteria(settings, now),
+        ]
+
     async def _open_shift_candidates(
         self,
         organization_id: UUID | str,
@@ -1729,22 +1760,10 @@ class SchedulingService:
         every shift dated today however long ago it ended. A shift that is over
         has no gap left to fill, for a member or for the department.
         """
-        now = now or datetime.now(timezone.utc)
-        org = (
-            await self.db.execute(
-                select(Organization).where(Organization.id == str(organization_id))
-            )
-        ).scalar_one_or_none()
-        settings = (org.settings or {}) if org else {}
-        query = (
-            select(Shift)
-            .where(Shift.organization_id == str(organization_id))
-            .where(Shift.shift_date >= start_date)
-            .where(Shift.shift_date <= end_date)
-            .where(Shift.is_finalized.is_(False))
-            .where(Shift.status != ShiftStatus.CANCELLED)
-            .where(shift_not_over_criteria(settings, now))
+        criteria = await self.open_shift_candidate_criteria(
+            organization_id, start_date, end_date, now=now
         )
+        query = select(Shift).where(*criteria)
         if apparatus_id:
             query = query.where(Shift.apparatus_id == apparatus_id)
         query = query.order_by(Shift.shift_date.asc(), Shift.start_time.asc()).limit(
@@ -2454,11 +2473,24 @@ class SchedulingService:
         Blocks deletion of finalized shifts and shifts that have
         completion reports, since those are the source of truth for
         training requirement tracking.
+
+        Also blocks a shift that has started. Deleting cascades to its
+        attendance, calls and swap requests, so a started shift would take
+        check-in hours with it. This is the same instant ShiftDetailPanel's
+        ``hasStarted`` uses to stop offering Delete; cancelling is the way to
+        withdraw a shift that is under way.
         """
         try:
             shift = await self.get_shift_by_id(shift_id, organization_id)
             if not shift:
                 return False, "Shift not found"
+
+            start = _as_utc(shift.start_time)
+            if start is not None and start <= datetime.now(timezone.utc):
+                return False, (
+                    "Cannot delete a shift that has started; its attendance "
+                    "and calls would be lost."
+                )
 
             if shift.is_finalized:
                 return False, (
@@ -3434,11 +3466,23 @@ class SchedulingService:
     async def delete_shift_call(
         self, call_id: UUID, organization_id: UUID | str
     ) -> Tuple[bool, Optional[str]]:
-        """Delete a shift call record"""
+        """Delete a shift call record.
+
+        Refused once the call's shift is finalized: finalizing snapshots the
+        shift's call count and feeds training tracking, so the record is
+        locked until the shift is reopened, as the update paths are.
+        """
         try:
             call = await self.get_shift_call_by_id(call_id, organization_id)
             if not call:
                 return False, "Shift call not found"
+
+            shift = await self.get_shift_by_id(call.shift_id, organization_id)
+            if shift is not None and shift.is_finalized:
+                return False, (
+                    "Cannot remove a call from a finalized shift. "
+                    "Reopen the shift first."
+                )
 
             await self.db.delete(call)
             await self.db.commit()

@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router';
 import { Breadcrumbs } from '../ux/Breadcrumbs';
 import type { BreadcrumbItem } from '../ux/Breadcrumbs';
 import { ScrollCueRow } from '../ux/ScrollCueRow';
+import { BREADCRUMB_ROUTES, canLinkCrumb } from '../ux/breadcrumbRoutes';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
 import type { OperationsNavItem } from '../layout/operationsNavigation';
@@ -33,7 +34,7 @@ function useOperationsSections() {
   const isAdministrative = typeof membershipType === 'string' && isAdministrativeMember(undefined, membershipType);
   const { isModuleOn } = useEnabledModules();
   const items = visibleOperationsNavItems(operationsNavItems(isModuleOn, isAdministrative), checkPermission);
-  return { pathname, items, active: activeOperationsSection(items, pathname) };
+  return { pathname, items, active: activeOperationsSection(items, pathname), checkPermission };
 }
 
 interface OperationsSectionNavProps {
@@ -108,6 +109,15 @@ interface OperationsPageHeaderProps {
   breadcrumbLabel?: string | undefined;
   /** Crumbs between the section and this page, for a page two levels down. */
   parentCrumbs?: BreadcrumbItem[] | undefined;
+  /**
+   * The administration hub this page is a card of, when the page does not sit
+   * under the hub in the URL — `/inventory/storage-areas` is an Inventory
+   * Administration card but not under `/inventory/admin`. Its crumb follows the
+   * section's, labelled and gated by `BREADCRUMB_ROUTES` like `Breadcrumbs`'
+   * prop of the same name; `breadcrumbRoutes.test.ts` reads the literal to
+   * prove every such card names its hub.
+   */
+  underHub?: string | undefined;
 }
 
 /**
@@ -133,17 +143,19 @@ export const OperationsPageHeader: React.FC<OperationsPageHeaderProps> = ({
   actions,
   breadcrumbLabel,
   parentCrumbs,
+  underHub,
 }) => {
-  const { pathname, items, active } = useOperationsSections();
+  const { pathname, items, active, checkPermission } = useOperationsSections();
   const pageLabel = breadcrumbLabel ?? (typeof title === 'string' ? title : undefined);
+  const hub = underHub && canLinkCrumb(underHub, checkPermission) ? BREADCRUMB_ROUTES[underHub] : undefined;
+  // The hub crumb stands on its own: an officer who opens the hub but not the
+  // section (a storefront manager on Storage Areas) still gets a way back.
+  const leading: BreadcrumbItem[] = [
+    ...(active && pathname !== active.path ? [{ label: active.label, path: active.path }] : []),
+    ...(hub && underHub ? [{ label: hub.label ?? 'Administration', path: underHub }] : []),
+  ];
   const trail: BreadcrumbItem[] =
-    active && pathname !== active.path
-      ? [
-          { label: active.label, path: active.path },
-          ...(parentCrumbs ?? []),
-          ...(pageLabel ? [{ label: pageLabel }] : []),
-        ]
-      : [];
+    leading.length > 0 ? [...leading, ...(parentCrumbs ?? []), ...(pageLabel ? [{ label: pageLabel }] : [])] : [];
 
   return (
     <div>

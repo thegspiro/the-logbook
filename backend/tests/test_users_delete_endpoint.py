@@ -47,6 +47,7 @@ def _member(**kw):
         rank=kw.get("rank"),
         status=kw.get("status", UserStatus.ACTIVE),
         roles=kw.get("roles", []),
+        positions=kw.get("positions", []),
         membership_number=kw.get("membership_number"),
         previous_membership_number=None,
         deleted_at=None,
@@ -162,6 +163,71 @@ class TestDeleteUserSoft:
         assert target.membership_number is None
         assert target.deleted_at is not None
         db.delete.assert_not_awaited()
+
+
+def _position(*permissions):
+    return SimpleNamespace(permissions=list(permissions))
+
+
+class TestDeleteUserPrivilegeCeiling:
+    """A member manager may not delete an account holding permissions they
+    lack — the same ceiling password and MFA resets apply."""
+
+    @pytest.fixture(autouse=True)
+    def _no_blocking_references(self, monkeypatch):
+        monkeypatch.setattr(
+            users_endpoint, "find_hard_delete_blockers", AsyncMock(return_value=[])
+        )
+        monkeypatch.setattr(
+            users_endpoint, "release_user_references", AsyncMock(return_value=0)
+        )
+
+    @pytest.mark.parametrize("hard", [False, True])
+    async def test_refuses_a_more_privileged_member(self, monkeypatch, hard):
+        report = AsyncMock()
+        monkeypatch.setattr(
+            users_endpoint, "report_privilege_escalation_attempt", report
+        )
+        target = _member(positions=[_position("members.manage", "settings.manage")])
+        caller = _member(id="secretary-1", positions=[_position("members.manage")])
+        db = _db(_result(scalar_one=target))
+
+        with pytest.raises(HTTPException) as exc:
+            await users_endpoint.delete_user(
+                user_id=target.id, hard=hard, db=db, current_user=caller
+            )
+
+        assert exc.value.status_code == 403
+        assert "privileges beyond your own" in exc.value.detail
+        report.assert_awaited_once()
+        assert report.await_args.args[2] == f"member-delete:{target.id}"
+        assert target.deleted_at is None
+        db.delete.assert_not_awaited()
+        db.commit.assert_not_awaited()
+
+    async def test_allows_a_member_within_the_callers_permissions(self):
+        target = _member(positions=[_position("events.view")])
+        caller = _member(
+            id="secretary-1", positions=[_position("members.manage", "events.view")]
+        )
+        db = _db(_result(scalar_one=target))
+
+        await users_endpoint.delete_user(
+            user_id=target.id, hard=False, db=db, current_user=caller
+        )
+
+        assert target.deleted_at is not None
+
+    async def test_wildcard_administrator_may_delete_anyone(self):
+        target = _member(positions=[_position("members.manage", "security.manage")])
+        caller = _member(id="owner-1", positions=[_position("*")])
+        db = _db(_result(scalar_one=target))
+
+        await users_endpoint.delete_user(
+            user_id=target.id, hard=False, db=db, current_user=caller
+        )
+
+        assert target.deleted_at is not None
 
 
 class TestAssignUserRoles:

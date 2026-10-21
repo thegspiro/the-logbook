@@ -5,7 +5,7 @@
  * checklist, the fleet board's rule. They used to be hardcoded to zero.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { renderWithRouter } from '../../../test/utils';
 import type { ComplianceReport } from '../types/equipmentCheck';
 
@@ -52,8 +52,9 @@ describe('EquipmentCheckReportsPage compliance tab', () => {
     renderWithRouter(<EquipmentCheckReportsPage />);
 
     expect(await screen.findByText('1 of 3 expected')).toBeInTheDocument();
-    expect(screen.getByText('Missed:')).toBeInTheDocument();
-    expect(screen.getByText('Missed checks')).toBeInTheDocument();
+    // The unit's own missed count, and the department total in the summary.
+    expect(within(screen.getByRole('region', { name: 'Apparatus' })).getByText(/2 missed/)).toBeInTheDocument();
+    expect(within(screen.getByTestId('compliance-summary')).getByText('2 missed')).toBeInTheDocument();
   });
 
   it('shows a plain count when nothing was expected', async () => {
@@ -79,6 +80,6 @@ describe('EquipmentCheckReportsPage compliance tab', () => {
 
     expect(await screen.findByText('No checklist applies')).toBeInTheDocument();
     expect(screen.queryByText(/expected/)).not.toBeInTheDocument();
-    expect(screen.queryByText('Missed:')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Apparatus' })).queryByText(/missed/)).not.toBeInTheDocument();
   });
 });

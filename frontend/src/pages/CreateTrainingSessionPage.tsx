@@ -21,7 +21,6 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { userService, locationsService, trainingSessionService, trainingService } from '../services/api';
-import { schedulingService } from '../modules/scheduling/services/api';
 import { useRanks } from '../hooks/useRanks';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { TrainingLinkageFields } from '../components/training/TrainingLinkageFields';
@@ -87,9 +86,7 @@ const CreateTrainingSessionPage: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [availableCourses, setAvailableCourses] = useState<TrainingCourse[]>([]);
   const [members, setMembers] = useState<User[]>([]);
-  const [apparatusList, setApparatusList] = useState<Array<{ id: string; name: string }>>([]);
   const [instructorId, setInstructorId] = useState('');
-  const [apparatusId, setApparatusId] = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationMode, setLocationMode] = useState<'select' | 'other'>('select');
 
@@ -138,24 +135,25 @@ const CreateTrainingSessionPage: React.FC = () => {
   });
 
   useEffect(() => {
-    // Load available courses, members, apparatus, and locations from API
+    // Load available courses, members, and locations from API
     trainingService
       .getCourses()
-      .then(setAvailableCourses)
+      .then((courses) => {
+        setAvailableCourses(courses);
+        // The setup guide's first step is building the Course Library, so an
+        // officer arriving here usually has the course already. Defaulting to
+        // "create new" invited a duplicate of it. Left alone once the officer
+        // has typed a course or picked one.
+        if (courses.length > 0) {
+          setFormData((prev) => (prev.course_id || prev.course_name ? prev : { ...prev, use_existing_course: true }));
+        }
+      })
       .catch(() => {
         /* non-critical */
       });
     userService
       .getUsers()
       .then(setMembers)
-      .catch(() => {
-        /* non-critical */
-      });
-    schedulingService
-      .getBasicApparatus({ is_active: true })
-      .then((data) => {
-        setApparatusList(data.map((a) => ({ id: a.id, name: a.name || a.unit_number || 'Unknown' })));
-      })
       .catch(() => {
         /* non-critical */
       });
@@ -203,6 +201,11 @@ const CreateTrainingSessionPage: React.FC = () => {
 
     if (!formData.use_existing_course && !formData.course_name) {
       toast.error('Enter a course name or choose an existing course');
+      return;
+    }
+
+    if (formData.use_existing_course && !formData.course_id) {
+      toast.error('Choose a course from the Course Library');
       return;
     }
 
@@ -290,6 +293,30 @@ const CreateTrainingSessionPage: React.FC = () => {
     { number: 3, title: 'Settings', icon: FileText },
     { number: 4, title: 'Review', icon: CheckCircle },
   ];
+
+  // One field for both course modes. With a library course it used to be
+  // hidden, so a course that filled in 0 could not be seen, let alone fixed.
+  const creditHoursField = (
+    <div>
+      <label htmlFor="session-credit-hours" className="text-theme-text-primary mb-2 block text-sm font-semibold">
+        Credit Hours <span className="text-red-700">*</span>
+      </label>
+      <input
+        id="session-credit-hours"
+        type="number"
+        step="0.5"
+        min="0"
+        value={formData.credit_hours}
+        onChange={(e) => updateField('credit_hours', parseFloat(e.target.value) || 0)}
+        placeholder="0"
+        aria-describedby="session-credit-hours-help"
+        className="form-input placeholder-theme-text-muted py-3"
+      />
+      <p id="session-credit-hours-help" className="text-theme-text-muted mt-1 text-xs">
+        The training hours each attendee is credited with.
+      </p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen">
@@ -753,13 +780,13 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </div>
                   <div>
                     <label
-                      htmlFor="session-max-participants"
+                      htmlFor="session-max-attendees"
                       className="text-theme-text-primary mb-2 block text-sm font-semibold"
                     >
                       Max Participants <Optional />
                     </label>
                     <input
-                      id="session-max-participants"
+                      id="session-max-attendees"
                       type="number"
                       value={formData.max_attendees || ''}
                       onChange={(e) => {
@@ -804,7 +831,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                           onChange={() => updateField('use_existing_course', true)}
                           className="focus:ring-theme-focus-ring h-4 w-4 text-blue-600"
                         />
-                        <span className="text-theme-text-secondary text-sm">Use existing course template</span>
+                        <span className="text-theme-text-secondary text-sm">Use a course from the Course Library</span>
                       </label>
                     </fieldset>
                   </div>
@@ -835,7 +862,12 @@ const CreateTrainingSessionPage: React.FC = () => {
                           course_name: course.name,
                           course_code: course.code || '',
                           training_type: course.training_type || prev.training_type,
-                          credit_hours: course.credit_hours ?? prev.credit_hours,
+                          // Credit Hours is what a course is worth; Duration is how
+                          // long it runs. A course saved with only a duration is
+                          // worth its duration, the same fallback a submission uses
+                          // (credit_hours or hours_completed). Without it the
+                          // session saved 0 and every attendee was credited nothing.
+                          credit_hours: course.credit_hours ?? course.duration_hours ?? prev.credit_hours,
                           instructor: course.instructor || prev.instructor,
                           expiration_months: course.expiration_months ?? prev.expiration_months,
                           max_attendees: course.max_participants ?? prev.max_attendees,
@@ -876,6 +908,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         </div>
                       );
                     })()}
+                  {formData.course_id && <div className="mt-4 md:w-1/2">{creditHoursField}</div>}
                 </div>
               ) : (
                 /* New Course Fields */
@@ -937,23 +970,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         <option value="specialty">Specialty</option>
                       </select>
                     </div>
-                    <div>
-                      <label
-                        htmlFor="session-credit-hours"
-                        className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                      >
-                        Credit Hours <span className="text-red-700">*</span>
-                      </label>
-                      <input
-                        id="session-credit-hours"
-                        type="number"
-                        step="0.5"
-                        value={formData.credit_hours}
-                        onChange={(e) => updateField('credit_hours', parseFloat(e.target.value) || 0)}
-                        placeholder="0"
-                        className="form-input placeholder-theme-text-muted py-3"
-                      />
-                    </div>
+                    {creditHoursField}
                   </div>
 
                   <div>
@@ -981,29 +998,6 @@ const CreateTrainingSessionPage: React.FC = () => {
                         </option>
                       ))}
                     </select>
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="session-apparatus"
-                      className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                    >
-                      Apparatus <Optional />
-                    </label>
-                    <select
-                      id="session-apparatus"
-                      value={apparatusId}
-                      onChange={(e) => setApparatusId(e.target.value)}
-                      className="form-input py-3"
-                    >
-                      <option value="">No apparatus</option>
-                      {apparatusList.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-theme-text-muted mt-1 text-xs">Apparatus used during this training session</p>
                   </div>
                 </>
               )}
@@ -1196,8 +1190,12 @@ const CreateTrainingSessionPage: React.FC = () => {
               <div className="bg-theme-input-bg/50 space-y-4 rounded-lg p-6">
                 <ReviewSection title="Event Details">
                   <ReviewItem label="Title" value={formData.title} />
-                  <ReviewItem label="Start" value={formatDateTime(formData.start_datetime, tz)} />
-                  <ReviewItem label="End" value={formatDateTime(formData.end_datetime, tz)} />
+                  {/* The form holds local wall-clock strings; formatDateTime reads
+                      its input as UTC. Converted first, exactly as handleSubmit
+                      does, or the review showed the time shifted by the UTC
+                      offset while the save itself was right. */}
+                  <ReviewItem label="Start" value={formatDateTime(localToUTC(formData.start_datetime, tz), tz)} />
+                  <ReviewItem label="End" value={formatDateTime(localToUTC(formData.end_datetime, tz), tz)} />
                   {(formData.location_id || formData.location) && (
                     <ReviewItem
                       label="Location"
@@ -1234,9 +1232,16 @@ const CreateTrainingSessionPage: React.FC = () => {
                 <ReviewSection title="Training Details">
                   <ReviewItem
                     label="Course"
-                    value={formData.use_existing_course ? 'Using existing course' : formData.course_name || 'N/A'}
+                    value={
+                      formData.use_existing_course
+                        ? selectedCourse?.name || 'None chosen'
+                        : formData.course_name || 'N/A'
+                    }
                   />
-                  <ReviewItem label="Training Type" value={formData.training_type} />
+                  <ReviewItem
+                    label="Training Type"
+                    value={TRAINING_TYPE_LABELS[formData.training_type] ?? formData.training_type}
+                  />
                   <ReviewItem label="Hours" value={`${formData.credit_hours} hours`} />
                   {formData.instructor && <ReviewItem label="Instructor" value={formData.instructor} />}
                   {formData.issues_certification && (
@@ -1328,7 +1333,7 @@ const ReviewSection: React.FC<{ title: string; children: React.ReactNode }> = ({
 const ReviewItem: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="flex justify-between text-sm">
     <span className="text-theme-text-muted">{label}:</span>
-    <span className="text-theme-text-primary font-medium capitalize">{value}</span>
+    <span className="text-theme-text-primary font-medium">{value}</span>
   </div>
 );
 

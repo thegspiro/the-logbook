@@ -1358,6 +1358,13 @@ class MinutesSettingsUpdate(BaseModel):
             "recorded in full. Absent reads as all."
         ),
     )
+    auto_file_election_results: Optional[bool] = Field(
+        None,
+        description=(
+            "File a closed election's result with the minutes of the meeting "
+            "it was held at, without a manager importing it. Absent reads as on."
+        ),
+    )
     executive_library_publishing: Optional[bool] = Field(
         None,
         description=(

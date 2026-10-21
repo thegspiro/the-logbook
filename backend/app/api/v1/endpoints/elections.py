@@ -39,10 +39,8 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit, get_client_ip
-from app.core.utils import generate_uuid, safe_error_detail
+from app.core.utils import safe_error_detail
 from app.models.election import (
-    BallotSendJob,
-    BallotSendJobStatus,
     Candidate,
     Election,
     ElectionStatus,
@@ -133,13 +131,13 @@ from app.services.ballot_send_jobs import (
     QueuedSend,
     ReminderSend,
     announce_nominations_open,
+    enqueue_send,
     ensure_election_open,
     find_active_job,
     get_job,
     job_response,
     perform_ballot_send,
     perform_reminder_send,
-    start_ballot_send_job,
 )
 from app.services.election_service import (
     ElectionService,
@@ -2638,10 +2636,43 @@ async def delete_candidate(
             status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found"
         )
 
-    if await _active_vote_count(db, candidate_id) > 0:
+    # The ballot is set once voting opens; removing a name afterwards would
+    # rewrite the ballot members already voted on.
+    if election.status not in (ElectionStatus.DRAFT, ElectionStatus.NOMINATIONS):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete candidate with existing votes",
+            detail=(
+                "Candidates can only be removed while the election is a draft "
+                "or taking nominations"
+            ),
+        )
+    # Same freeze the manager's Accept / un-Accept respects: Close
+    # Nominations made the slate final until nominations are reopened.
+    if service.slate_frozen(election):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Nominations have closed, so the slate is final: candidates "
+                "can no longer be removed. Reopen nominations to change it."
+            ),
+        )
+    # Every real vote row, voided ones included: the cascade from Candidate
+    # hard-deletes them, which would erase the record of a voided ballot
+    # along with the candidate. Test ballots are rehearsal data and are
+    # ignored here as they are when editing a candidate, so a rehearsal does
+    # not freeze the list.
+    any_votes = await db.execute(
+        select(func.count(Vote.id))
+        .where(Vote.candidate_id == str(candidate_id))
+        .where(Vote.is_test.is_(False))
+    )
+    if (any_votes.scalar() or 0) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cannot delete a candidate with recorded votes, including "
+                "voided ballots"
+            ),
         )
 
     candidate_name = candidate.name
@@ -3164,35 +3195,12 @@ async def _queue_send(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
-    active = await find_active_job(
-        db, election.id, organization_id, kinds=send.guard_kinds
-    )
-    if active is not None:
-        # The abandoned jobs find_active_job just failed are kept either way.
-        await db.commit()
+    job = await enqueue_send(db, election, organization_id, str(current_user.id), send)
+    if job is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=send.in_progress_detail,
         )
-
-    job = BallotSendJob(
-        id=generate_uuid(),
-        organization_id=organization_id,
-        election_id=election.id,
-        requested_by=str(current_user.id),
-        kind=send.kind.value,
-        status=BallotSendJobStatus.QUEUED.value,
-        created_at=datetime.now(timezone.utc),
-    )
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-
-    logger.info(
-        f"Ballot send job queued | job={job.id} kind={job.kind} "
-        f"election={election.id} user={current_user.id}"
-    )
-    start_ballot_send_job(job.id, organization_id, send)
     return job_response(job)
 
 

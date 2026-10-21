@@ -446,10 +446,9 @@ ENABLE_DOCS=false
 # Basic health (used by Docker and load balancers)
 curl http://localhost:3001/health
 
-# Detailed diagnostics: needs a signed-in administrator (settings.manage), so
-# open it in the browser while signed in, or send that session's cookies.
-# Returns an error object when ENVIRONMENT=production.
-curl -b cookies.txt http://localhost:3001/health/detailed
+# Detailed diagnostics (served only when ENVIRONMENT=development; any other
+# value answers 404, the same as an unknown path)
+curl http://localhost:3001/health/detailed
 ```
 
 ---

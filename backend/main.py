@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, FastAPI, Request, Response
+from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.utils import is_body_allowed_for_status_code
@@ -24,7 +24,6 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.routing import Route
 
-from app.api.dependencies import require_permission
 from app.api.public import responses as public_responses
 from app.api.public.branding import router as public_branding_router
 from app.api.public.calendar import router as public_calendar_router
@@ -2527,7 +2526,8 @@ async def health_check():
 
     SEC: Returns only status and ready flag — no version, environment, or
     internal service state that could help attackers fingerprint the system.
-    Use /health/detailed (unauthenticated, non-production only) for diagnostics.
+    Use /health/detailed (unauthenticated, ENVIRONMENT=development only) for
+    diagnostics.
     """
     from fastapi.responses import JSONResponse
 
@@ -2604,21 +2604,18 @@ async def health_check():
     return JSONResponse(content=body, status_code=status_code)
 
 
-@app.get(
-    "/health/detailed",
-    dependencies=[Depends(require_permission("settings.manage"))],
-)
+@app.get("/health/detailed")
 async def health_check_detailed():
     """
-    Detailed health check with system information
+    Detailed health check with system information.
 
-    Requires ``settings.manage``: the response names the version, the
-    environment and the debug / docs switches, which is a fingerprint nobody
-    needs unless they administer the installation. Also refused outright in
-    production. ``/health`` stays public for load balancers.
+    Served only when ENVIRONMENT is "development". It has no auth dependency and
+    reports configuration flags and host load, so staging, which is often
+    reachable from the internet, must not serve it either. Any other value
+    answers 404, the same response as a path that does not exist.
     """
-    if settings.ENVIRONMENT == "production":
-        return {"error": "Detailed health check not available in production"}
+    if settings.ENVIRONMENT != "development":
+        raise StarletteHTTPException(status_code=404)
 
     import psutil
 
@@ -2628,9 +2625,9 @@ async def health_check_detailed():
         "environment": settings.ENVIRONMENT,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "system": {
-            # interval=1 sleeps inside the event loop, so each request stalled
-            # every other request for a second. interval=None reads usage since
-            # the previous call instead (0.0 on the first).
+            # interval=1 sleeps inside the event loop, so each unauthenticated
+            # request stalled every other request for a second. interval=None
+            # reads usage since the previous call instead (0.0 on the first).
             "cpu_percent": psutil.cpu_percent(interval=None),
             "memory_percent": psutil.virtual_memory().percent,
             "disk_percent": psutil.disk_usage("/").percent,

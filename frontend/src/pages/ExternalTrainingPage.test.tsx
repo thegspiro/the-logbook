@@ -699,3 +699,39 @@ describe('ExternalTrainingPage — Import Queue tab', () => {
     expect(await screen.findByText(/pending imports will appear here/)).toBeInTheDocument();
   });
 });
+
+describe('ExternalTrainingPage — deactivating an integration', () => {
+  beforeEach(() => {
+    mockDeleteProvider.mockReset();
+    mockDeleteProvider.mockResolvedValue(undefined);
+  });
+
+  it('says what deactivation does: syncing stops and imported records are kept', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Deactivate provider' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Deactivate Vector Solutions?' });
+    expect(dialog).toHaveTextContent('It stops syncing');
+    expect(dialog).toHaveTextContent('Training records already imported through it are kept');
+    expect(dialog).not.toHaveTextContent(/removed with it/i);
+    expect(screen.getByRole('button', { name: 'Deactivate integration' })).toBeInTheDocument();
+  });
+
+  it('does nothing when the officer keeps it active', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Deactivate provider' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Keep it active' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockDeleteProvider).not.toHaveBeenCalled();
+  });
+
+  it('deactivates the provider once confirmed', async () => {
+    renderWithRouter(<ExternalTrainingPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Deactivate provider' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Deactivate integration' }));
+
+    await waitFor(() => expect(mockDeleteProvider).toHaveBeenCalledWith('prov-1'));
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Integration deactivated'));
+  });
+});

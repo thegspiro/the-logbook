@@ -9,6 +9,7 @@ vi.mock('../../services/electionService', () => ({
 }));
 
 import LiveTurnoutPanel from './LiveTurnoutPanel';
+import { BACKGROUND_REQUEST_CONFIG } from '../../utils/backgroundRequest';
 import type { Election } from '../../types/election';
 
 const election = {
@@ -42,7 +43,8 @@ describe('LiveTurnoutPanel', () => {
     });
     expect(screen.getByText('20')).toBeInTheDocument();
     expect(screen.getByText('60%')).toBeInTheDocument();
-    expect(mockGetStats).toHaveBeenCalledWith('e1');
+    // A panel that refreshes itself on a timer is not evidence anyone is there.
+    expect(mockGetStats).toHaveBeenCalledWith('e1', BACKGROUND_REQUEST_CONFIG);
   });
 
   it('marks quorum as met when turnout reaches the percentage target', async () => {

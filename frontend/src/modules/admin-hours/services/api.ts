@@ -27,14 +27,21 @@ import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
 
+// Derived from the client so this module never imports axios itself.
+type RequestConfig = NonNullable<Parameters<typeof api.get>[1]>;
+
 // =============================================================================
 // Categories
 // =============================================================================
 
 export const adminHoursCategoryService = {
-  async list(params?: { includeInactive?: boolean | undefined }): Promise<AdminHoursCategory[]> {
+  async list(
+    params?: { includeInactive?: boolean | undefined },
+    config?: RequestConfig
+  ): Promise<AdminHoursCategory[]> {
     const response = await api.get<AdminHoursCategory[]>('/admin-hours/categories', {
       params: { include_inactive: params?.includeInactive ?? false },
+      ...config,
     });
     return asArray(response.data);
   },

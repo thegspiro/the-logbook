@@ -8,12 +8,13 @@ const mockListMappings = vi.fn();
 const mockListCategories = vi.fn();
 const mockCreateMapping = vi.fn();
 const mockToastError = vi.fn();
+const mockDeleteMapping = vi.fn();
 
 vi.mock('../../modules/admin-hours/services/api', () => ({
   eventHourMappingService: {
     list: (...args: unknown[]) => mockListMappings(...args) as unknown,
     create: (...args: unknown[]) => mockCreateMapping(...args) as unknown,
-    delete: vi.fn(),
+    delete: (...args: unknown[]) => mockDeleteMapping(...args) as unknown,
   },
   adminHoursCategoryService: {
     list: (...args: unknown[]) => mockListCategories(...args) as unknown,
@@ -26,6 +27,7 @@ vi.mock('react-hot-toast', () => ({
 
 // Import the component AFTER mocks are in place
 import HourTrackingSection from './HourTrackingSection';
+import { ConfirmProvider } from '../../contexts/ConfirmContext';
 
 const settings: EventModuleSettings = {
   enabled_event_types: [],
@@ -110,7 +112,11 @@ const trainingMapping = mapping({
 });
 
 const renderSection = async () => {
-  render(<HourTrackingSection settings={settings} />);
+  render(
+    <ConfirmProvider>
+      <HourTrackingSection settings={settings} />
+    </ConfirmProvider>
+  );
   await screen.findByText('Event Hour Tracking');
 };
 
@@ -214,5 +220,44 @@ describe('HourTrackingSection', () => {
 
     expect(within(groupFor('Business Meeting')).getByText('100% allocated').className).toMatch(/green/);
     expect(screen.queryByText(/Not in effect/)).not.toBeInTheDocument();
+  });
+});
+
+// Removing a mapping changes what every future attendance credits, and was a
+// single unconfirmed tap on a trash icon.
+describe('HourTrackingSection removing a mapping', () => {
+  beforeEach(() => {
+    mockListMappings.mockReset();
+    mockListMappings.mockResolvedValue([mapping({})]);
+    mockListCategories.mockReset();
+    mockListCategories.mockResolvedValue([category]);
+    mockDeleteMapping.mockReset();
+    mockDeleteMapping.mockResolvedValue(undefined);
+    mockToastError.mockReset();
+  });
+
+  it('asks first, saying what stops and what is kept', async () => {
+    const user = userEvent.setup();
+    await renderSection();
+
+    await user.click(await screen.findByRole('button', { name: /^Remove .* mapping to Professional Development$/ }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('will no longer credit admin hours to Professional Development');
+    expect(dialog).toHaveTextContent('Hours already credited stay on members’ records.');
+    expect(mockDeleteMapping).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Remove mapping' }));
+
+    await vi.waitFor(() => expect(mockDeleteMapping).toHaveBeenCalledWith('map-1'));
+  });
+
+  it('does nothing when the officer keeps it', async () => {
+    const user = userEvent.setup();
+    await renderSection();
+
+    await user.click(await screen.findByRole('button', { name: /^Remove .* mapping to Professional Development$/ }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Keep it' }));
+
+    expect(mockDeleteMapping).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
 import type React from 'react';
-import { Building2, ClipboardCheck, Package, ShieldCheck, Stethoscope, Truck } from 'lucide-react';
+import { Boxes, Building2, ClipboardCheck, Package, ShieldCheck, Stethoscope, Truck } from 'lucide-react';
 import { APPARATUS_ENTRY_PERMISSIONS } from '../../modules/apparatus/routes';
 import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
 
@@ -100,7 +100,10 @@ export function operationsNavItems(
           {
             label: 'Apparatus Inventory',
             path: '/inventory/checklists/apparatus-inventory',
-            icon: Truck,
+            // Not Truck, which Apparatus below uses: in the collapsed rail the
+            // two would be indistinguishable, and this row is the stock on a
+            // truck rather than the truck itself.
+            icon: Boxes,
             anyPermission: isAdministrative
               ? APPARATUS_INVENTORY_ADMINISTRATIVE_GRANTS
               : ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],

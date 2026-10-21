@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import { scheduledEmailsService, type ScheduledEmail, type ScheduledEmailCreate } from '../../../services/api';
 import { createFetchAction, handleStoreError } from '../../../utils/storeHelpers';
+import { toAppError } from '../../../utils/errorHandling';
 
 interface ScheduledEmailsState {
   scheduledEmails: ScheduledEmail[];
@@ -52,12 +53,16 @@ export const useScheduledEmailsStore = create<ScheduledEmailsState>((set) => ({
     set({ isSaving: true, error: null });
     try {
       await scheduledEmailsService.cancel(id);
+      // The server keeps the row and marks it cancelled, so the list shows it
+      // as called off rather than letting it vanish.
       set((state) => ({
-        scheduledEmails: state.scheduledEmails.filter((e) => e.id !== id),
+        scheduledEmails: state.scheduledEmails.map((e) => (e.id === id ? { ...e, status: 'cancelled' } : e)),
         isSaving: false,
       }));
     } catch (err: unknown) {
+      const appError = toAppError(err);
       set({ isSaving: false, error: handleStoreError(err, 'Failed to cancel scheduled email') });
+      throw Object.assign(new Error(appError.message), appError);
     }
   },
 
@@ -72,7 +77,9 @@ export const useScheduledEmailsStore = create<ScheduledEmailsState>((set) => ({
         isSaving: false,
       }));
     } catch (err: unknown) {
+      const appError = toAppError(err);
       set({ isSaving: false, error: handleStoreError(err, 'Failed to reschedule email') });
+      throw Object.assign(new Error(appError.message), appError);
     }
   },
 

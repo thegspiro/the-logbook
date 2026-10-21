@@ -54,7 +54,7 @@ from app.models.training import (
     TrainingSubmission,
     TrainingType,
 )
-from app.models.user import User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.schemas.enum_validation import validate_enum_value
 from app.schemas.training import (
     BulkTrainingRecordCreate,
@@ -152,7 +152,7 @@ async def get_training_dashboard_summary(
                 .options(selectinload(User.positions))
                 .where(
                     User.organization_id == org_id,
-                    User.status == UserStatus.ACTIVE,
+                    User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                     User.compliance_exempt == False,  # noqa: E712
                     User.deleted_at.is_(None),
                 )
@@ -3169,7 +3169,7 @@ async def get_compliance_matrix(
         .options(selectinload(User.positions))
         .where(
             User.organization_id == org_id,
-            User.status == UserStatus.ACTIVE,
+            User.status.in_(ACTIVE_ACCOUNT_STATUSES),
             User.compliance_exempt == False,  # noqa: E712
             User.deleted_at.is_(None),
         )
@@ -3384,7 +3384,7 @@ async def get_member_period_status(
         .options(selectinload(User.positions))
         .where(
             User.organization_id == org_id,
-            User.status == UserStatus.ACTIVE,
+            User.status.in_(ACTIVE_ACCOUNT_STATUSES),
             User.deleted_at.is_(None),
         )
         .order_by(User.last_name, User.first_name)

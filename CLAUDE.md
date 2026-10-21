@@ -1598,6 +1598,25 @@ why. That test scans the tree for all three shapes (a re-enabled
 `target === currentTarget` container check), so a new one fails loudly rather
 than shipping.
 
+### 32. A Gate on Account Status Asks "Is This a Current Member", Never `== ACTIVE` _(2026-10-20)_
+
+**Rule:** `UserStatus.PROBATIONARY` is a current account status. The member
+signs in, is scheduled, trains and holds property; an officer sets it from the
+profile and junior members derive to it. A query that means "the members on the
+roster today" filters `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (from
+`app/models/user.py`), and an instance check is `status in
+ACTIVE_ACCOUNT_STATUSES`. The frontend mirror is `isActiveAccount()` in
+`constants/enums.ts`. Forty-odd gates compared `== UserStatus.ACTIVE` and
+silently dropped probationary members from compliance, alerts, quorum, reports
+and pickers; nobody noticed because almost every probationary member still
+carried `active`, which nothing but the profile dialog ever changed.
+
+The literal comparison is allowed only where a Probationary count sits beside
+it and the two are meant to add up (the admin hub's tiles), and such a site is
+named in `ALLOWED` in `tests/test_account_status_gates.py` with that reason.
+That test sweeps `app/` and fails on any other literal `== ACTIVE` against
+`User.status`.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.

@@ -367,18 +367,19 @@ export default function ComplianceRequirementsConfigPage() {
     }
   };
 
-  const handleDeleteProfile = async (profileId: string) => {
+  const handleDeleteProfile = async (profile: ComplianceProfile) => {
     if (
       !(await confirm({
-        title: 'Delete compliance profile',
-        message: 'The profile and the requirements configured on it are removed. Records already filed are unaffected.',
-        confirmLabel: 'Delete',
+        title: `Delete compliance profile "${profile.name}"?`,
+        message:
+          'Members this profile grades fall back to the next profile that matches them, or to the organization-wide thresholds and requirements if none does. Training records already filed are unaffected.',
+        confirmLabel: 'Delete profile',
         cancelLabel: 'Keep it',
       }))
     )
       return;
     try {
-      await complianceConfigService.deleteProfile(profileId);
+      await complianceConfigService.deleteProfile(profile.id);
       toast.success('Profile deleted');
       await loadConfig();
     } catch {
@@ -1084,7 +1085,7 @@ export default function ComplianceRequirementsConfigPage() {
                     <Settings className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => void handleDeleteProfile(profile.id)}
+                    onClick={() => void handleDeleteProfile(profile)}
                     className="btn-icon text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                     title="Delete"
                   >

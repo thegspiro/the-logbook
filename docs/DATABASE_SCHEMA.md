@@ -744,7 +744,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_admin_hub_metric_pref_org_module` (`organization_id`, `module_key`)
-- `ix_admin_hub_metric_preferences_organization_id` (`organization_id`)
 
 **Constraints**
 
@@ -3319,7 +3318,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_facility_documents_facility` (`facility_id`)
 - `idx_facility_documents_org_document` (`organization_id`, `document_id`)
 - `idx_facility_documents_type` (`document_type`)
-- `ix_facility_documents_organization_id` (`organization_id`)
 
 ### `facility_emergency_contacts`
 
@@ -3555,7 +3553,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_facility_photos_facility` (`facility_id`)
 - `idx_facility_photos_org_document` (`organization_id`, `document_id`)
-- `ix_facility_photos_organization_id` (`organization_id`)
 
 ### `facility_rooms`
 

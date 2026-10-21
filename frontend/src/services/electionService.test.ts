@@ -260,7 +260,7 @@ describe('electionService', () => {
 
       const result = await electionService.getStats('el1');
 
-      expect(mockGet).toHaveBeenCalledWith('/elections/el1/stats');
+      expect(mockGet).toHaveBeenCalledWith('/elections/el1/stats', undefined);
       expect(result).toEqual(stats);
     });
   });

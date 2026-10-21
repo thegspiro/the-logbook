@@ -25,7 +25,7 @@ from app.models.event import (
     RecurrencePattern,
     RSVPStatus,
 )
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase, as_utc
 from app.schemas.training_session import TrainingSessionAttach
 
 _response_config = ConfigDict(from_attributes=True)
@@ -315,6 +315,12 @@ class EventBase(BaseModel):
     attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: bool = False
 
+    @field_validator("start_datetime", "end_datetime", "rsvp_deadline")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns, which keep no offset; see as_utc.
+        return as_utc(v)
+
 
 class EventCreate(EventBase):
     """Schema for creating a new event"""
@@ -419,6 +425,12 @@ class EventUpdate(BaseModel):
     # GET returned would 422 on the narrower type.
     attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: Optional[bool] = None
+
+    @field_validator("start_datetime", "end_datetime", "rsvp_deadline")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns, which keep no offset; see as_utc.
+        return as_utc(v)
 
     @model_validator(mode="after")
     def validate_dates(self) -> "EventUpdate":
@@ -572,6 +584,19 @@ class EventResponse(EventBase, UTCResponseBase):
     # scheduled end, because a "window" event keeps accepting check-ins for
     # check_in_minutes_after beyond it.
     check_in_closes_at: Optional[datetime] = None
+    # The rest of the list card's derived fields, so the detail screen answers
+    # the same questions from the same rules instead of a second copy of them:
+    # is check-in open, has this member checked in, and what will it credit.
+    # The window is set wherever the builder runs; the rest are per-caller and
+    # filled by the detail endpoint only.
+    check_in_opens_at: Optional[datetime] = None
+    user_attended: bool = False
+    credited_hours: Optional[float] = None
+    hour_category_label: Optional[str] = None
+    # Whether GET /{id}/attendees will answer this caller, decided by the same
+    # rule that endpoint enforces. Without it the page asked and took a 403 on
+    # every visit to an event whose roster is not shared with members.
+    can_view_attendees: bool = False
 
     model_config = _response_config
 
@@ -764,6 +789,12 @@ class RSVPOverride(BaseModel):
         None, ge=0, description="Override total attendance duration in minutes"
     )
 
+    @field_validator("override_check_in_at", "override_check_out_at")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns and compared by the service; see as_utc.
+        return as_utc(v)
+
 
 class RecordActualTimes(BaseModel):
     """Schema for recording actual event start/end times"""
@@ -774,6 +805,12 @@ class RecordActualTimes(BaseModel):
     actual_end_time: Optional[datetime] = Field(
         None, description="When the event actually ended"
     )
+
+    @field_validator("actual_start_time", "actual_end_time")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns and compared by the service; see as_utc.
+        return as_utc(v)
 
 
 class QRCheckInData(BaseModel):
@@ -1290,6 +1327,15 @@ class RecurringEventCreate(BaseModel):
     # Training details attached to every occurrence; see EventCreate.
     training_details: Optional[TrainingSessionAttach] = None
 
+    @field_validator(
+        "start_datetime", "end_datetime", "recurrence_end_date", "rsvp_deadline"
+    )
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Not an EventBase subclass, so it needs its own; see as_utc. The
+        # service steps the series in the department's zone from these.
+        return as_utc(v)
+
     @model_validator(mode="after")
     def validate_recurrence_fields(self):
         if not self.rolling_recurrence and not self.recurrence_end_date:
@@ -1529,6 +1575,12 @@ class AttendancePetitionCreate(BaseModel):
 
     _strip_reason = field_validator("reason")(_strip_required_text)
 
+    @field_validator("requested_check_in_at", "requested_check_out_at")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns and compared below; see as_utc.
+        return as_utc(v)
+
     @model_validator(mode="after")
     def _times_in_order(self) -> "AttendancePetitionCreate":
         if (
@@ -1543,8 +1595,8 @@ class AttendancePetitionCreate(BaseModel):
 class AttendancePetitionApprove(BaseModel):
     """The reviewer's confirmed times. Required: they decide the credit."""
 
-    check_in_at: datetime
-    check_out_at: datetime
+    check_in_at: UTCDateTime
+    check_out_at: UTCDateTime
     review_note: Optional[str] = Field(None, max_length=1000)
 
     @model_validator(mode="after")

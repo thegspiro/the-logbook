@@ -1,5 +1,17 @@
 # Script currency
 
+## Flagged by the 2026-10-20 → 10-21 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script             | Beat                  | Was                                      | Now                                                                                                                                |
+| ------------------ | --------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **06** (member)    | QR code check-in      | Scan the QR code to check in             | Also **Check In** on the event page itself; **View QR Code** is for managers and organizers only                                   |
+| **06**             | My Training history   | Pending record under "Awaiting approval" | Undated records sit under **No completion date**; each row shows its own status                                                    |
+| **12** (elections) | Paper ballots         | Totals per candidate for every race      | Ranked-choice races are entered ballot by ballot, with a copy count                                                                |
+| **03** (IT)        | Sessions and security | —                                        | Idle refresh and an absolute session cap; a member manager cannot delete, archive or change the status of a more-privileged member |
+
 ## Flagged by the 2026-10-18 → 10-19 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).

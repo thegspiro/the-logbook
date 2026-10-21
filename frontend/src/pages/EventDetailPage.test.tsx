@@ -312,14 +312,38 @@ describe('EventDetailPage', () => {
       });
     });
 
-    it('should show QR code button for active events', async () => {
+    it('should show QR code button for active events to someone who runs them', async () => {
+      mockCheckPermission.mockReturnValue(true);
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
 
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /view qr code/i })).toBeInTheDocument();
       });
+    });
+
+    // The QR page is the code put on display at the event; a member has
+    // nothing to scan it with on their own phone.
+    it('does not offer the display QR code to a member', async () => {
+      mockCheckPermission.mockReturnValue(false);
+      vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { level: 1 });
+      expect(screen.queryByRole('button', { name: /view qr code/i })).not.toBeInTheDocument();
+    });
+
+    it('offers the display QR code to the organizer without events.manage', async () => {
+      mockCheckPermission.mockReturnValue(false);
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, can_manage_organizers: true });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: /view qr code/i })).toBeInTheDocument();
     });
   });
 
@@ -1507,7 +1531,7 @@ describe('EventDetailPage', () => {
     // the manager blocks above left configured.
     beforeEach(() => {
       vi.mocked(eventService.getEvent).mockReset();
-      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, going_count: 2 });
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, going_count: 2, can_view_attendees: true });
       vi.mocked(eventService.getEventAttendees).mockReset();
       vi.mocked(eventService.getEventAttendees).mockResolvedValue([
         { user_id: 'user-1', user_name: 'John Doe', status: 'going' },
@@ -1524,10 +1548,10 @@ describe('EventDetailPage', () => {
       expect(screen.getByRole('heading', { name: /who's going/i })).toBeInTheDocument();
     });
 
-    it('renders nothing when the roster is not shared with members', async () => {
-      // A 403 resolves to an empty list in the service, so the card is simply
-      // absent — a member who may not see the list is not told there is one.
-      vi.mocked(eventService.getEventAttendees).mockResolvedValue([]);
+    it('does not ask for a roster the event does not share', async () => {
+      // The server says whether the roster will answer this member. Asking
+      // anyway took a 403, logged twice, on every visit.
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, going_count: 2, can_view_attendees: false });
 
       renderWithRouter(<EventDetailPage />);
 
@@ -1535,6 +1559,7 @@ describe('EventDetailPage', () => {
         expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
       expect(screen.queryByRole('heading', { name: /who's going/i })).not.toBeInTheDocument();
+      expect(eventService.getEventAttendees).not.toHaveBeenCalled();
     });
 
     it('never renders contact details even if the payload carries them', async () => {
@@ -1582,7 +1607,7 @@ describe('EventDetailPage', () => {
 
       renderWithRouter(<EventDetailPage />);
 
-      await user.click(await screen.findByRole('button', { name: /rsvp now|i'm coming/i }));
+      await user.click(await screen.findByRole('button', { name: /rsvp now|^going$/i }));
       await user.click(await screen.findByRole('button', { name: /submit rsvp/i }));
 
       await waitFor(() => {
@@ -1630,7 +1655,8 @@ describe('EventDetailPage', () => {
 
       renderWithRouter(<EventDetailPage />);
 
-      expect(await screen.findByRole('button', { name: /i'm coming/i })).toBeInTheDocument();
+      // "Going", the word the list card's button uses for the same action.
+      expect(await screen.findByRole('button', { name: /^going$/i })).toBeInTheDocument();
     });
 
     it('still refuses an RSVP on a cancelled event', async () => {
@@ -1898,6 +1924,9 @@ describe('EventDetailPage', () => {
       vi.mocked(eventService.getEventRSVPs).mockReset();
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
       vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      // The QR code is the display copy for whoever runs the event.
+      mockCheckPermission.mockReturnValue(true);
     });
 
     it('offers both on an upcoming event', async () => {
@@ -2108,6 +2137,72 @@ describe('EventDetailPage', () => {
       expect(toast.success).toHaveBeenCalledWith('Added 200 members to the event');
       // The run stops at the refusal rather than repeating it for the last batch.
       expect(eventService.bulkAddAttendees).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('checking in from the event page', () => {
+    const minutesFromNow = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+    const happeningNow = {
+      ...mockEvent,
+      start_datetime: minutesFromNow(-10),
+      end_datetime: minutesFromNow(110),
+      check_in_opens_at: minutesFromNow(-70),
+      check_in_closes_at: minutesFromNow(110),
+    };
+
+    beforeEach(() => {
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEventAttendees).mockReset();
+      vi.mocked(eventService.getEventAttendees).mockResolvedValue([]);
+      mockCheckPermission.mockReset();
+      mockCheckPermission.mockReturnValue(false);
+    });
+
+    it('offers Check In while check-in is open, as the list card does', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(withoutKeys(happeningNow, 'rsvp_deadline'));
+
+      renderWithRouter(<EventDetailPage />);
+
+      const link = await screen.findByRole('link', { name: /check in/i });
+      expect(link).toHaveAttribute('href', `/events/${mockEvent.id}/check-in`);
+    });
+
+    it('says so once the member has checked in, instead of offering it again', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue(
+        withoutKeys({ ...happeningNow, user_attended: true }, 'rsvp_deadline')
+      );
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText(/you're checked in/i)).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /check in/i })).not.toBeInTheDocument();
+    });
+
+    it('does not offer it before check-in opens', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        check_in_opens_at: minutesFromNow(60),
+        check_in_closes_at: minutesFromNow(240),
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByRole('heading', { level: 1 });
+      expect(screen.queryByRole('link', { name: /check in/i })).not.toBeInTheDocument();
+    });
+
+    it('states the credit the list card states', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        credited_hours: 2,
+        hour_category_label: 'Meetings & Governance',
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText(/Meetings & Governance hours/)).toHaveTextContent(
+        /Up to 2(\.0)?\s*Meetings & Governance hours/
+      );
     });
   });
 });

@@ -46,7 +46,12 @@ from app.models.event import (
     RSVPStatus,
 )
 from app.models.notification import NotificationChannel
-from app.models.user import Organization, Position, User, UserStatus
+from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
+    Organization,
+    Position,
+    User,
+)
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
     AnalyticsSummary,
@@ -271,9 +276,21 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         updated_by=event.updated_by,
         created_at=event.created_at,
         updated_at=event.updated_at,
+        check_in_opens_at=EventService._get_check_in_window(event)[0],
         check_in_closes_at=EventService._get_check_in_window(event)[1],
         **extra_fields,
     )
+
+
+def _may_view_attendees(event: Event, org_settings: Any, user: User) -> bool:
+    """Whether ``user`` may read the event's going-list.
+
+    The one rule: ``list_event_attendees`` enforces it and the detail response
+    reports it, so the page asks only when the answer will be yes.
+    """
+    return resolve_attendee_visibility(
+        event, org_settings
+    ) == AttendeeVisibility.MEMBERS or user_has_permission(user, "events.manage")
 
 
 def _display_name(user: Optional[User]) -> Optional[str]:
@@ -1233,6 +1250,23 @@ async def get_event(
     )
     resolved_names = {field: names.get(user_id) for field, user_id in wanted.items()}
 
+    # The list card's per-caller fields, from the same helpers the list uses,
+    # so the detail screen states the credit and the member's check-in exactly
+    # as the card does. The check-in window itself is set by the builder.
+    credited_hours, hour_category_label = await service.resolve_credited_hours(
+        event, current_user.organization_id
+    )
+    # Present by scan or by an officer's override, the list's rule for the same
+    # flag: an override writes override_check_in_at without setting checked_in.
+    user_attended = bool(
+        user_rsvp
+        and (user_rsvp.checked_in or user_rsvp.override_check_in_at is not None)
+    )
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    organization = org_result.scalar_one_or_none()
+
     return _build_event_response(
         event,
         rsvp_count=rsvp_count,
@@ -1244,6 +1278,12 @@ async def get_event(
         organizer_name=resolved_names.get("organizer_name"),
         alternate_organizer_name=resolved_names.get("alternate_organizer_name"),
         can_manage_organizers=can_manage_organizers(event, current_user),
+        user_attended=user_attended,
+        credited_hours=credited_hours,
+        hour_category_label=hour_category_label,
+        can_view_attendees=_may_view_attendees(
+            event, organization.settings if organization else None, current_user
+        ),
         user_rsvp_status=(
             (
                 user_rsvp.status.value
@@ -2004,12 +2044,8 @@ async def list_event_attendees(
         select(Organization).where(Organization.id == current_user.organization_id)
     )
     organization = org_result.scalar_one_or_none()
-    visibility = resolve_attendee_visibility(
-        event, organization.settings if organization else None
-    )
-
-    if visibility != AttendeeVisibility.MEMBERS and not user_has_permission(
-        current_user, "events.manage"
+    if not _may_view_attendees(
+        event, organization.settings if organization else None, current_user
     ):
         raise HTTPException(
             status_code=403,
@@ -2095,7 +2131,7 @@ async def get_eligible_members(
     members_result = await db.execute(
         select(User)
         .where(User.organization_id == str(current_user.organization_id))
-        .where(User.status == UserStatus.ACTIVE)
+        .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
         .where(User.deleted_at.is_(None))
         .order_by(User.last_name, User.first_name)
     )

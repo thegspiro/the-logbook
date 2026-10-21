@@ -923,6 +923,20 @@ class EventService:
             item["credited_hours"] = credited_hours
             item["hour_category_label"] = hour_category_label
 
+    async def resolve_credited_hours(
+        self, event: Event, organization_id: UUID | str
+    ) -> Tuple[Optional[float], Optional[str]]:
+        """One event's credited hours, for the detail screen.
+
+        The list annotates many events against one load of the mappings; this
+        is that same rule for a single event, so the card and the detail page
+        cannot state different credits.
+        """
+        mappings = await AdminHoursService(self.db).get_active_mappings_by_source(
+            str(organization_id)
+        )
+        return self._resolve_credited_hours(event, mappings)
+
     @staticmethod
     def _resolve_credited_hours(
         event: Event,

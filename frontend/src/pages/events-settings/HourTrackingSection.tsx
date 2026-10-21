@@ -7,6 +7,7 @@ import { eventHourMappingService, adminHoursCategoryService } from '../../module
 import type { EventHourMapping, AdminHoursCategory } from '../../modules/admin-hours/types';
 import type { EventModuleSettings, EventCategoryConfig } from '../../types/event';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { useConfirm } from '../../contexts/ConfirmContext';
 
 // Event types whose attendance never earns admin hours: a Training event's
 // attendance is credited to members' training records when it is finalized,
@@ -37,6 +38,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
   const [categories, setCategories] = useState<AdminHoursCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { confirm } = useConfirm();
 
   // New mapping form
   const [newSourceType, setNewSourceType] = useState<'event_type' | 'custom'>('event_type');
@@ -138,7 +140,14 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
     }
   };
 
-  const handleDeleteMapping = async (mappingId: string) => {
+  const handleDeleteMapping = async (mappingId: string, sourceLabel: string, categoryName: string) => {
+    const confirmed = await confirm({
+      title: 'Remove this mapping?',
+      message: `Attendance at ${sourceLabel} events will no longer credit admin hours to ${categoryName}. Hours already credited stay on members’ records.`,
+      confirmLabel: 'Remove mapping',
+      cancelLabel: 'Keep it',
+    });
+    if (!confirmed) return;
     try {
       await eventHourMappingService.delete(mappingId);
       setMappings((prev) => prev.filter((m) => m.id !== mappingId));
@@ -236,7 +245,13 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
                     </div>
                     <button
                       type="button"
-                      onClick={() => void handleDeleteMapping(mapping.id)}
+                      onClick={() =>
+                        void handleDeleteMapping(
+                          mapping.id,
+                          group.sourceLabel,
+                          mapping.adminHoursCategoryName ?? 'this category'
+                        )
+                      }
                       className="btn-icon-sm shrink-0 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                       title="Remove mapping"
                       aria-label={`Remove ${group.sourceLabel} mapping to ${mapping.adminHoursCategoryName ?? 'Unknown Category'}`}

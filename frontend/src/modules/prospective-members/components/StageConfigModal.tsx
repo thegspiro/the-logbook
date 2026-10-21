@@ -674,6 +674,16 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onCl
       const validIds = new Set(allIds);
       finalConfig = { ...emailCfg, section_order: order.filter((id) => validIds.has(id)) };
     }
+    if (stageType === StageTypeConst.MULTI_APPROVAL) {
+      // Save what validate() graded: a padded role matches no holder, and a
+      // blank one is a signer nobody can be, so either would hold the stage
+      // shut. validate() has already refused a list with no non-blank role.
+      const approvalCfg = config as MultiApprovalConfig;
+      finalConfig = {
+        ...approvalCfg,
+        required_approvers: approvalCfg.required_approvers.map((role) => role.trim()).filter(Boolean),
+      };
+    }
 
     const stageData: PipelineStageCreate = {
       name: name.trim(),

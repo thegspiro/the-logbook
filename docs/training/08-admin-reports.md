@@ -656,8 +656,8 @@ that area's full set.
 ### Assigning Positions to Members
 
 1. Open **Administration > Members > Member Management**.
-2. On the member's row, select **Manage Roles**.
-3. Tick or untick positions ("Select the roles to assign to this member").
+2. On the member's row, select **Manage Positions**.
+3. Tick or untick positions ("Select the positions to assign to this member").
 4. Select **Save Changes**.
 
 If a change is refused, the message gives the real reason — for example, that

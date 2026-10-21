@@ -363,6 +363,7 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
       ? mapStepTypeToFrontend(data.current_step.step_type, data.current_step.action_type)
       : undefined,
     current_stage_config: (data.current_step?.config as StageConfig | null) ?? undefined,
+    current_stage_approver_labels: data.current_step?.approver_labels,
     current_stage_required: data.current_step?.required,
     stage_history: stageHistory,
     total_stages: (data.step_progress || []).length,
@@ -786,11 +787,6 @@ export const applicantService = {
     // Backend uses PUT, not PATCH
     const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, payload);
     return mapProspectToApplicant(response.data);
-  },
-
-  async deleteApplicant(applicantId: string): Promise<void> {
-    // Backend doesn't have a delete prospect endpoint; this may 404
-    await api.delete(`/prospective-members/prospects/${applicantId}`);
   },
 
   async checkExisting(email: string, firstName?: string, lastName?: string): Promise<ExistingRecordCheck> {

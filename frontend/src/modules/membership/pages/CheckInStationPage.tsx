@@ -58,6 +58,7 @@ import { signalUserActivity } from '../../../hooks/useIdleTimer';
 import { NfcCheckInDirection, NfcCheckInTarget } from '../../../constants/enums';
 import type { NfcStationCheckInResult } from '../types/idCard';
 import { Breadcrumbs } from '../../../components/ux';
+import { BACKGROUND_REQUEST_CONFIG } from '../../../utils/backgroundRequest';
 
 interface TargetOption {
   id: string;
@@ -138,84 +139,93 @@ const CheckInStationPage: React.FC = () => {
 
   // ---------------------------------------------------------------- targets
 
-  const fetchTargets = useCallback(async (): Promise<TargetOption[]> => {
-    if (targetType === NfcCheckInTarget.SHIFT) {
-      // Yesterday as well as today, because a shift is filed under the date it
-      // *started*. A 24-hour tour that began at 06:00 yesterday is still the
-      // shift running at 02:00 now, and asking only for today's date made the
-      // crew on duty disappear from the station at midnight.
-      //
-      // A day at a time, not a two-day range. The endpoint pages at 100 and
-      // orders by shift_date ascending, so a single widened query lets a busy
-      // yesterday fill the page and hide today's shifts entirely — and raising
-      // the limit only moves that threshold rather than removing it. One
-      // request per day gives each its own page.
-      const today = getTodayLocalDate(tz);
-      const [yesterdayShifts, todayShifts] = await Promise.all(
-        [addCalendarDays(today, -1), today].map((day) =>
-          schedulingService.getShifts({ start_date: day, end_date: day })
-        )
-      );
-      return (
-        [...(yesterdayShifts?.shifts ?? []), ...(todayShifts?.shifts ?? [])]
-          // `is_finalized` is the whole rule, deliberately with no time cutoff
-          // beside it. `member_check_out` has no deadline — it accepts a
-          // checkout until an officer finalizes the shift — so an unfinalized
-          // shift is by definition one somebody may still need to tap out of.
-          // Any clock-based cutoff here invents a rule the server does not have,
-          // and the first attempt at one took the station away from the crew at
-          // exactly the moment they went off duty.
-          .filter((s) => !s.is_finalized)
-          .map((s) => ({
-            id: s.id,
-            label: s.apparatus_unit_number || s.apparatus_name || 'Shift',
-            sublabel: `${formatTime(s.start_time, tz)}${s.end_time ? `–${formatTime(s.end_time, tz)}` : ''}`,
-          }))
-      );
-    }
-    if (targetType === NfcCheckInTarget.EVENT) {
-      // A window rather than "today": a drill that started last night and
-      // a breakfast that starts in three hours are both things somebody
-      // could be standing at a station for. What keeps a finished event out
-      // of the list is the check-in cutoff applied below, not the query —
-      // filtering on start time alone left this morning's drill in it, and
-      // because the list is ordered by start time it could be the *default*,
-      // so an operator could arm the station against an event whose check-in
-      // window shut hours ago and have every tap refused.
-      const now = Date.now();
-      const events = await eventService.getEvents({
-        start_after: new Date(now - EVENT_LOOKBACK_MS).toISOString(),
-        start_before: new Date(now + EVENT_LOOKAHEAD_MS).toISOString(),
-        // The endpoint's maximum. It pages at 100 by default and orders by
-        // start time, so a department that runs a lot in a day could push the
-        // event somebody is standing at the station for off the first page.
-        limit: 500,
-      });
-      return (
-        events
-          .filter((e) => !e.is_cancelled && !e.is_draft)
-          // The exact cutoff, not an approximation of one. `check_in_closes_at`
-          // is computed server-side from the event's window type — a `window`
-          // event runs `check_in_minutes_after` past its end, a flexible or
-          // strict one to its `actual_end_time` — so it is the same boundary
-          // the check-in call itself enforces. Filtering on the scheduled
-          // `end_datetime` instead hid events whose late-arrival period was
-          // still open, and padding that with a fixed grace offered events
-          // whose window had already shut. An event with no cutoff reported is
-          // kept: the server still refuses a tap outside the true window, so
-          // an over-generous list costs a refusal message rather than a wrong
-          // attendance record.
-          .filter((e) => !e.check_in_closes_at || new Date(e.check_in_closes_at).getTime() >= now)
-          .map((e) => ({
-            id: e.id,
-            label: e.title,
-            sublabel: formatTime(e.start_datetime, tz),
-          }))
-      );
-    }
-    const categories = await adminHoursCategoryService.list();
-    return categories.map((c) => ({ id: c.id, label: c.name }));
-  }, [targetType, tz]);
+  const fetchTargets = useCallback(
+    async (options?: { background?: boolean }): Promise<TargetOption[]> => {
+      // The five-minute re-check is a timer, not a person, so it says so; the
+      // first load after choosing a kind of target is the operator's own action.
+      const config = options?.background === true ? BACKGROUND_REQUEST_CONFIG : undefined;
+      if (targetType === NfcCheckInTarget.SHIFT) {
+        // Yesterday as well as today, because a shift is filed under the date it
+        // *started*. A 24-hour tour that began at 06:00 yesterday is still the
+        // shift running at 02:00 now, and asking only for today's date made the
+        // crew on duty disappear from the station at midnight.
+        //
+        // A day at a time, not a two-day range. The endpoint pages at 100 and
+        // orders by shift_date ascending, so a single widened query lets a busy
+        // yesterday fill the page and hide today's shifts entirely — and raising
+        // the limit only moves that threshold rather than removing it. One
+        // request per day gives each its own page.
+        const today = getTodayLocalDate(tz);
+        const [yesterdayShifts, todayShifts] = await Promise.all(
+          [addCalendarDays(today, -1), today].map((day) =>
+            schedulingService.getShifts({ start_date: day, end_date: day }, config)
+          )
+        );
+        return (
+          [...(yesterdayShifts?.shifts ?? []), ...(todayShifts?.shifts ?? [])]
+            // `is_finalized` is the whole rule, deliberately with no time cutoff
+            // beside it. `member_check_out` has no deadline — it accepts a
+            // checkout until an officer finalizes the shift — so an unfinalized
+            // shift is by definition one somebody may still need to tap out of.
+            // Any clock-based cutoff here invents a rule the server does not have,
+            // and the first attempt at one took the station away from the crew at
+            // exactly the moment they went off duty.
+            .filter((s) => !s.is_finalized)
+            .map((s) => ({
+              id: s.id,
+              label: s.apparatus_unit_number || s.apparatus_name || 'Shift',
+              sublabel: `${formatTime(s.start_time, tz)}${s.end_time ? `–${formatTime(s.end_time, tz)}` : ''}`,
+            }))
+        );
+      }
+      if (targetType === NfcCheckInTarget.EVENT) {
+        // A window rather than "today": a drill that started last night and
+        // a breakfast that starts in three hours are both things somebody
+        // could be standing at a station for. What keeps a finished event out
+        // of the list is the check-in cutoff applied below, not the query —
+        // filtering on start time alone left this morning's drill in it, and
+        // because the list is ordered by start time it could be the *default*,
+        // so an operator could arm the station against an event whose check-in
+        // window shut hours ago and have every tap refused.
+        const now = Date.now();
+        const events = await eventService.getEvents(
+          {
+            start_after: new Date(now - EVENT_LOOKBACK_MS).toISOString(),
+            start_before: new Date(now + EVENT_LOOKAHEAD_MS).toISOString(),
+            // The endpoint's maximum. It pages at 100 by default and orders by
+            // start time, so a department that runs a lot in a day could push the
+            // event somebody is standing at the station for off the first page.
+            limit: 500,
+          },
+          config
+        );
+        return (
+          events
+            .filter((e) => !e.is_cancelled && !e.is_draft)
+            // The exact cutoff, not an approximation of one. `check_in_closes_at`
+            // is computed server-side from the event's window type — a `window`
+            // event runs `check_in_minutes_after` past its end, a flexible or
+            // strict one to its `actual_end_time` — so it is the same boundary
+            // the check-in call itself enforces. Filtering on the scheduled
+            // `end_datetime` instead hid events whose late-arrival period was
+            // still open, and padding that with a fixed grace offered events
+            // whose window had already shut. An event with no cutoff reported is
+            // kept: the server still refuses a tap outside the true window, so
+            // an over-generous list costs a refusal message rather than a wrong
+            // attendance record.
+            .filter((e) => !e.check_in_closes_at || new Date(e.check_in_closes_at).getTime() >= now)
+            .map((e) => ({
+              id: e.id,
+              label: e.title,
+              sublabel: formatTime(e.start_datetime, tz),
+            }))
+        );
+      }
+      const categories = await adminHoursCategoryService.list(undefined, config);
+      return categories.map((c) => ({ id: c.id, label: c.name }));
+    },
+    [targetType, tz]
+  );
 
   // Load the list for a newly chosen kind of target, selecting the first.
   useEffect(() => {
@@ -259,7 +269,7 @@ const CheckInStationPage: React.FC = () => {
     if (!stateRef.current.cardsEnabled) return;
     let options: TargetOption[];
     try {
-      options = await fetchTargets();
+      options = await fetchTargets({ background: true });
     } catch {
       // Leave the station on what it has. A failed refresh is not evidence the
       // target ended, and disarming on a dropped request would take a working

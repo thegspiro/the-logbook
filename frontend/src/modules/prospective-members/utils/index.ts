@@ -32,6 +32,27 @@ export function isSafeUrl(url: string): boolean {
   }
 }
 
+/**
+ * How to name a multi-approval stage's approver role on screen.
+ *
+ * The labels come from the backend's office catalog (the step response's
+ * `approver_labels`), which is also what decides who may sign — so this does
+ * not keep a second catalog. A role with no label, from a response that
+ * predates the field or a department's own free-text role, is humanized the
+ * way the backend's own fallback is ("hose_master" -> "Hose Master").
+ */
+export function approverRoleLabel(role: string, labels?: Record<string, string>): string {
+  return (
+    labels?.[role] ||
+    role
+      .trim()
+      .split('_')
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ')
+  );
+}
+
 /** Safe initials extraction that handles empty strings. */
 export function getInitials(firstName: string, lastName: string): string {
   const f = firstName?.trim();
