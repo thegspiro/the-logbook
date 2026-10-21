@@ -139,7 +139,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W73 | Integrations                                                              | admin            | `/integrations`                            | ✅     |
 | W74 | IP security, and a member's access request                                | member → admin   | `/ip-security/my-requests`, `/ip-security` | ✅     |
 | W75 | Audit log, error monitoring and analytics                                 | admin            | `/admin/audit-log`, `/admin/errors`        | ✅     |
-| W76 | Public portal and the public pages                                        | admin, anonymous | `/admin/public-portal`, `/`, `/privacy`    | ⬜     |
+| W76 | Public portal and the public pages                                        | admin, anonymous | `/admin/public-portal`, `/`, `/privacy`    | ✅     |
 | W77 | The testing module and its printed report                                 | admin            | `/testing`                                 | ⬜     |
 | W78 | Platform administration                                                   | admin            | `/admin/platform-analytics`                | ⬜     |
 | W79 | Phone pass: W08, W19, W24, W33, W39 and W70 again at 390×844              | member, officers | as those rows                              | ⬜     |
@@ -218,7 +218,49 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 - **Integrations, a later pass** — the `integration.connected` and
   `integration.disconnected` audit rows carry no IP address (W75).
 
+- **Public portal, a later pass** — public events are only `public_education`
+  events, and their location is the free-text `location` alone, so an event
+  placed at a facility (`location_id`) would publish no location; read from
+  code, not driven (W76).
+
 ## Log
+
+### W76 — Public portal and the public pages — 2026-10-21
+
+Driven as:
+
+- anonymous: the home, privacy and terms pages signed out, and the public API
+  with no key, an unknown key, a live key, a revoked key, and the portal
+  disabled;
+- `admin` at 1280×900 and 390×844: enabling, keys, Data Control, the rate
+  limit, access logs, statistics, revoking and disabling.
+
+Held:
+
+- nothing is published until a field is enabled, and then only that field;
+- members-only events stay private;
+- every refusal answers with its reason;
+- double-clicks act once.
+
+Fixed:
+
+- W76-1 (MED — each Data Control switch moved the list under the pointer,
+  and the next tap enabled the wrong field).
+- W76-2 (MED — the station address was never published when it matched the
+  mailing address).
+- W76-3 (LOW — Disable Portal did not ask).
+- W76-4 (LOW — the access log hid refusal reasons and overstated what it
+  lists).
+- W76-5 (LOW — duplicate switch names, unnamed revoke buttons, a placeholder
+  host).
+
+Flagged: W76-6 (LOW — three statistics fields can be enabled but always
+publish null).
+
+Gate: typecheck and lint are clean; 58 public-portal frontend tests and 154
+backend portal tests pass.
+
+Next: W77.
 
 ### W75 — Audit log, error monitoring and analytics — 2026-10-20
 

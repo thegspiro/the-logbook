@@ -13,10 +13,13 @@ interface CategorySectionProps {
   category: string;
   fields: PublicPortalDataWhitelist[];
   onToggle: (entryId: string, isEnabled: boolean) => Promise<void>;
+  /** Fields whose save is still in flight; their switches are held until it lands. */
+  pending: ReadonlySet<string>;
 }
 
-const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onToggle }) => {
+const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onToggle, pending }) => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const fieldsId = useId();
   const enabledCount = fields.filter((f) => f.is_enabled).length;
   const totalCount = fields.length;
 
@@ -80,7 +83,10 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onT
     <div className="card overflow-hidden">
       {/* Category Header */}
       <button
+        type="button"
         onClick={() => setIsExpanded(!isExpanded)}
+        aria-expanded={isExpanded}
+        aria-controls={fieldsId}
         className="bg-theme-surface-secondary hover:bg-theme-surface-hover flex w-full items-center justify-between px-6 py-4 transition-colors"
       >
         <div className="flex items-center space-x-3">
@@ -117,7 +123,7 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onT
 
       {/* Fields List */}
       {isExpanded && (
-        <div className="divide-theme-surface-border divide-y">
+        <div id={fieldsId} className="divide-theme-surface-border divide-y">
           {fields.map((field) => (
             <div
               key={field.id}
@@ -139,11 +145,15 @@ const CategorySection: React.FC<CategorySectionProps> = ({ category, fields, onT
                   </div>
                   {field.description && <p className="text-theme-text-muted mt-1 text-xs">{field.description}</p>}
                 </div>
-                <label className="relative inline-flex cursor-pointer items-center">
+                {/* Named with the category: "description" exists under both
+                    Events and Organization, and two switches that read the
+                    same cannot be told apart by a screen reader. */}
+                <label className="touch:min-h-11 relative inline-flex cursor-pointer items-center">
                   <input
                     type="checkbox"
                     checked={field.is_enabled}
-                    aria-label={`Enable ${field.field_name}`}
+                    disabled={pending.has(field.id)}
+                    aria-label={`Enable ${formatCategoryName(category)} ${field.field_name}`}
                     onChange={(e) => {
                       void onToggle(field.id, e.target.checked);
                     }}
@@ -205,8 +215,22 @@ export const DataWhitelistTab: React.FC = () => {
   const enabledFields = whitelist.filter((f) => f.is_enabled).length;
   const sensitiveEnabled = whitelist.filter((f) => f.is_enabled && f.is_sensitive).length;
 
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+
   const handleToggle = async (entryId: string, isEnabled: boolean) => {
-    await toggleField(entryId, isEnabled);
+    setPending((prev) => new Set(prev).add(entryId));
+    try {
+      await toggleField(entryId, isEnabled);
+    } catch {
+      // toggleField has already shown the failure as a toast; the switch
+      // keeps the server's state because the list was not re-read.
+    } finally {
+      setPending((prev) => {
+        const next = new Set(prev);
+        next.delete(entryId);
+        return next;
+      });
+    }
   };
 
   if (loading) {
@@ -397,6 +421,7 @@ export const DataWhitelistTab: React.FC = () => {
               category={category}
               fields={fieldsByCategory[category] ?? []}
               onToggle={handleToggle}
+              pending={pending}
             />
           ))}
         </div>

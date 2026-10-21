@@ -5842,6 +5842,25 @@ Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
   The catalog row is seeded per organization, so the last two also need a
   data change for existing installations.
 
+## Public Portal — Three Statistics Fields Can Be Enabled but Always Publish Null (2026-10-21)
+
+Found driving W76 (`docs/workflow-review/W76-public-portal.md`, W76-6).
+
+- **What happens:** Data Control offers `stats.stations`,
+  `stats.total_volunteer_hours` and `stats.total_calls_ytd`. An administrator
+  can switch each on and the list counts it as enabled, but
+  `GET /api/public/v1/organization/stats` hard-codes all three to `null`, so a
+  department website receives nothing for them (CLAUDE.md pitfall 19).
+- **Why it is not simply fixed:** each needs a definition someone must choose.
+  "Stations" could count facilities of one type or every facility; volunteer
+  hours could come from admin hours, events, shifts or training, approved or
+  not; and calls year-to-date would need choosing which of the call-tracking
+  records count.
+- **Decision:** for each field, either define its source (and wire it), or
+  remove it from the catalogue or mark it "not yet available" in Data Control.
+  Removing a catalogue row also needs a data change for existing
+  installations.
+
 ## IP Security — An Admin Can Approve Their Own IP Exception (2026-10-20)
 
 Found driving W74 (`docs/workflow-review/W74-ip-security.md`, W74-5).

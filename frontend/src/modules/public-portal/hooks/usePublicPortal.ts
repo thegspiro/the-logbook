@@ -237,26 +237,35 @@ export const useDataWhitelist = (category?: string) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchWhitelist = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await api.getWhitelist(category);
-      setWhitelist(data);
-    } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Failed to load data fields');
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  }, [category]);
+  // The re-read after a toggle must not raise `loading`: the tab swaps the
+  // whole list for a spinner while it is set, so every switch flipped the page
+  // to a spinner and back, reopened every section and moved the rows under
+  // the pointer — a second tap then landed on a different field (W76-1).
+  const loadWhitelist = useCallback(
+    async (showSpinner: boolean) => {
+      try {
+        if (showSpinner) setLoading(true);
+        setError(null);
+        const data = await api.getWhitelist(category);
+        setWhitelist(data);
+      } catch (err: unknown) {
+        const message = getErrorMessage(err, 'Failed to load data fields');
+        setError(message);
+        toast.error(message);
+      } finally {
+        if (showSpinner) setLoading(false);
+      }
+    },
+    [category]
+  );
+
+  const fetchWhitelist = useCallback(() => loadWhitelist(true), [loadWhitelist]);
 
   const toggleField = useCallback(
     async (entryId: string, isEnabled: boolean) => {
       try {
         await api.updateWhitelistEntry(entryId, isEnabled);
-        await fetchWhitelist(); // Refresh list
+        await loadWhitelist(false);
         toast.success(`Field ${isEnabled ? 'enabled' : 'disabled'}`);
       } catch (err: unknown) {
         const message = getErrorMessage(err, 'Failed to update field');
@@ -264,14 +273,14 @@ export const useDataWhitelist = (category?: string) => {
         throw err;
       }
     },
-    [fetchWhitelist]
+    [loadWhitelist]
   );
 
   const bulkUpdate = useCallback(
     async (updates: Array<{ category: string; field: string; enabled: boolean }>) => {
       try {
         const result = await api.bulkUpdateWhitelist(updates);
-        await fetchWhitelist(); // Refresh list
+        await loadWhitelist(false);
         toast.success(result.message);
       } catch (err: unknown) {
         const message = getErrorMessage(err, 'Failed to update fields');
@@ -279,7 +288,7 @@ export const useDataWhitelist = (category?: string) => {
         throw err;
       }
     },
-    [fetchWhitelist]
+    [loadWhitelist]
   );
 
   useEffect(() => {

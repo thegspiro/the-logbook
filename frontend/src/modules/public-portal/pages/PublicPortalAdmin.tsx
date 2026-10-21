@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import { Globe, Key, FileText, BarChart3, Shield, Settings, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { usePortalConfig } from '../hooks/usePublicPortal';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 import { ConfigurationTab } from '../components/ConfigurationTab';
 import { APIKeysTab } from '../components/APIKeysTab';
 import { AccessLogsTab } from '../components/AccessLogsTab';
@@ -19,6 +20,7 @@ type TabType = 'config' | 'keys' | 'logs' | 'stats' | 'whitelist';
 const PublicPortalAdmin: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('config');
   const { config, loading, toggleEnabled } = usePortalConfig();
+  const { confirm } = useConfirm();
 
   const tabs = [
     {
@@ -55,6 +57,20 @@ const PublicPortalAdmin: React.FC = () => {
 
   const handleToggleEnabled = async () => {
     if (!config) return;
+    // Revoking one key asks first; switching the portal off cuts every key at
+    // once, so it asks too. Turning it on exposes only fields already enabled.
+    if (
+      config.enabled &&
+      !(await confirm({
+        title: 'Disable the public portal?',
+        message:
+          'Every website and app using your API keys stops receiving data immediately, and gets an error until the portal is enabled again. Keys and field choices are kept.',
+        confirmLabel: 'Disable portal',
+        cancelLabel: 'Keep it running',
+      }))
+    ) {
+      return;
+    }
     try {
       await toggleEnabled(!config.enabled);
     } catch (_error) {
@@ -150,7 +166,9 @@ const PublicPortalAdmin: React.FC = () => {
               return (
                 <button
                   key={tab.id}
+                  type="button"
                   onClick={() => setActiveTab(tab.id)}
+                  aria-current={activeTab === tab.id ? 'true' : undefined}
                   className={`flex items-center space-x-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                     activeTab === tab.id
                       ? // The theme-aware token, not a raw blue: `text-blue-600`
