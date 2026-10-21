@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3517](https://github.com/thegspiro/the-logbook/pull/3517)** (branch
+`claude/security-review-onboarding`). PR #3479 (Feature 29, Reports &
+analytics, pass 10) merged to `main` with no open PR whose head branch
+starts with `claude/security-review-` (`search_pull_requests`, 0 results,
+checked once before starting and again immediately before branching), so
+this iteration reviewed Feature 30 (Onboarding), pass 8. **0 fixed by this
+pass itself, 0 new findings** — the one real commit since pass 7's baseline
+(`dbe57bf61`, closing an authenticated-adjacent SSRF/internal-port probe on
+`POST /onboarding/test/email`) was already fixed by independent engineering
+work and re-verified here by direct read; every standing finding
+re-confirmed OPEN/unchanged. See `ONB5-30-onboarding.md`'s **Pass 8**
+section. Rotation row 30 → ✅ (pending this PR's merge); next is Feature 31
+(Scheduled tasks).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29 Reports & analytics pass 10, PR #3479, merged), preserved for history</summary>
+
 **PR [#3479](https://github.com/thegspiro/the-logbook/pull/3479)** (branch
 `claude/security-review-reports-analytics-p10`). This row was last updated
 for PR #3455 (Feature 23, Medical supplies, pass 15); PRs #3456 (Feature
@@ -34,6 +51,8 @@ catalog entry plus a local-date fix) were both read in full and found
 clean; every standing finding re-confirmed unchanged. See
 `RPT6-29-reports-analytics.md`'s **Pass 10** section. Rotation row 29 → ✅
 (pending this PR's merge); next is Feature 30 (Onboarding).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23 Medical supplies pass 15, PR #3455, merged), preserved for history</summary>
