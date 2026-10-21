@@ -19,7 +19,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
 from app.schemas.column_bounds import (
     FLOAT32_MAX,
     INT32_MAX,
@@ -1127,7 +1127,7 @@ class ItemIssuanceResponse(UTCResponseBase):
 class CheckOutRecordBase(BaseModel):
     """Base checkout record schema"""
 
-    expected_return_at: Optional[datetime] = None
+    expected_return_at: Optional[UTCDateTime] = None
     checkout_reason: Optional[FreeText] = None
 
 
@@ -1148,17 +1148,16 @@ class CheckInRequest(BaseModel):
 class CheckoutExtendRequest(BaseModel):
     """Schema for extending a checkout's return date"""
 
-    expected_return_at: datetime
+    expected_return_at: UTCDateTime
 
     @field_validator("expected_return_at")
     @classmethod
     def _return_date_within_bounds(cls, v: datetime) -> datetime:
+        # UTCDateTime has already made v an aware UTC value.
         now = datetime.now(timezone.utc)
-        # All API datetimes are UTC; treat a naive value as UTC for comparison.
-        compare = v if v.tzinfo is not None else v.replace(tzinfo=timezone.utc)
-        if compare <= now:
+        if v <= now:
             raise ValueError("expected_return_at must be in the future")
-        if compare > now + timedelta(days=365):
+        if v > now + timedelta(days=365):
             raise ValueError(
                 "expected_return_at cannot be more than 1 year in the future"
             )
@@ -1999,7 +1998,7 @@ class EquipmentRequestFulfill(BaseModel):
     fulfillment_type: FulfillmentTypeLiteral
     item_id: Optional[UUID] = None
     quantity: Optional[int] = Field(default=None, ge=1, le=INT32_MAX)
-    expected_return_at: Optional[datetime] = None
+    expected_return_at: Optional[UTCDateTime] = None
     override_allowance: bool = False
     substitution_override_reason: Optional[FreeText] = Field(
         default=None,
