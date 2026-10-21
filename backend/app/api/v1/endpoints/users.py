@@ -2184,11 +2184,24 @@ async def update_user_profile(
         "address_zip",
         "address_country",
     }
+    previous_status = (
+        user.status.value if isinstance(user.status, UserStatus) else user.status
+    )
     for field, value in update_data.items():
         if field in ALLOWED_PROFILE_FIELDS and hasattr(user, field):
             setattr(user, field, value)
 
     await db.commit()
+    # A class/status write may have moved the account status at flush (the
+    # membership-drives-status rule); the audit entry below names the move.
+    resulting_status = (
+        user.status.value if isinstance(user.status, UserStatus) else user.status
+    )
+    account_status_change = (
+        {"from": previous_status, "to": resulting_status}
+        if resulting_status != previous_status
+        else None
+    )
 
     # Re-query with eager loading to avoid MissingGreenlet on serialization.
     # The org filter is redundant — the user was resolved in-org above and 404s
@@ -2220,6 +2233,11 @@ async def update_user_profile(
             **(
                 {"preferred_name_change": preferred_name_change}
                 if preferred_name_change
+                else {}
+            ),
+            **(
+                {"account_status_change": account_status_change}
+                if account_status_change
                 else {}
             ),
         },
