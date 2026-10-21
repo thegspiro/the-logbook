@@ -33,7 +33,7 @@ from app.services.email_policy import (
 )
 from app.services.email_service import EmailService, wrap_email_body
 from app.services.email_theme import ACCENT_INDIGO, action
-from app.utils.org_timezone import scheduling_timezone
+from app.utils.org_timezone import stored_calendar_day
 
 
 async def notify_action_item_assignees(
@@ -71,21 +71,14 @@ async def notify_action_item_assignees(
         department_required_kinds(organization),
     )
 
-    tz = scheduling_timezone(organization)
     link = f"{settings.FRONTEND_URL.rstrip('/')}/minutes/{minutes.id}"
     sent_total = 0
     for member in recipients:
         rows = []
         for item in by_assignee[str(member.id)]:
-            due = (
-                f" — due {item.due_date.astimezone(tz).strftime('%b %d, %Y')}"
-                if item.due_date is not None and item.due_date.tzinfo
-                else (
-                    f" — due {item.due_date.strftime('%b %d, %Y')}"
-                    if item.due_date is not None
-                    else ""
-                )
-            )
+            # A due date is a calendar day, not an instant: shown as stored.
+            due_on = stored_calendar_day(item.due_date)
+            due = f" — due {due_on.strftime('%b %d, %Y')}" if due_on else ""
             rows.append(f"<li>{html.escape(item.description)}{html.escape(due)}</li>")
         body = (
             f"<p>You were assigned work at <strong>{html.escape(minutes.title)}"

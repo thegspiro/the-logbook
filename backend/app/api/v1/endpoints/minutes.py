@@ -65,6 +65,7 @@ from app.utils.minutes_attendance import effective_listing
 from app.utils.minutes_search import parse_query
 from app.utils.minutes_settings import (
     load_attendance_listing,
+    load_auto_file_election_results,
     load_minutes_publishing_settings,
     load_minutes_reminder_settings,
     load_signature_slots,
@@ -187,6 +188,9 @@ async def get_minutes_settings(
     )
     return MinutesReminderSettingsResponse(
         attendance_listing=await load_attendance_listing(
+            db, str(current_user.organization_id)
+        ),
+        auto_file_election_results=await load_auto_file_election_results(
             db, str(current_user.organization_id)
         ),
         public_posting=publishing.public_posting,

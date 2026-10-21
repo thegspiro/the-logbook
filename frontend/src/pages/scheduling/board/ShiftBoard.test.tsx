@@ -129,7 +129,7 @@ afterEach(() => {
 describe('ShiftBoard', () => {
   it('loads the visible month once, roster included', async () => {
     renderBoard();
-    await waitFor(() => expect(mockGetMonth).toHaveBeenCalledWith(2026, 8));
+    await waitFor(() => expect(mockGetMonth).toHaveBeenCalledWith(2026, 8, undefined));
     expect(mockGetMonth).toHaveBeenCalledTimes(1);
   });
 

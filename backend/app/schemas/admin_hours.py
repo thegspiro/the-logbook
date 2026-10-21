@@ -5,9 +5,9 @@ Request and response schemas for admin hours endpoints.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
@@ -317,6 +317,19 @@ class EventHourMappingUpdate(BaseModel):
 
     percentage: Optional[int] = Field(None, ge=1, le=100)
     is_active: Optional[bool] = None
+
+    # The service reads None as "not provided", so an explicit null on either NOT
+    # NULL column used to be answered 200 and change nothing. A validator does
+    # not run for a key that was not sent, so omitting a field still leaves it.
+    @field_validator("percentage", "is_active")
+    @classmethod
+    def _cannot_be_cleared(cls, value: Any, info: ValidationInfo) -> Any:
+        if value is None:
+            raise ValueError(
+                f"{info.field_name} cannot be null; leave the field out to keep "
+                "its current value"
+            )
+        return value
 
 
 class EventHourMappingResponse(UTCResponseBase):

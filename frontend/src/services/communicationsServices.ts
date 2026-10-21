@@ -2,6 +2,7 @@
  * communicationsServices — extracted from services/api.ts
  */
 
+import type { AxiosRequestConfig } from 'axios';
 import api from './apiClient';
 import type { NotificationLogScope, Standing } from '../constants/enums';
 import type {
@@ -119,8 +120,8 @@ export const notificationsService = {
     return response.data;
   },
 
-  async getMyUnreadCount(): Promise<{ unread_count: number }> {
-    const response = await api.get<{ unread_count: number }>('/notifications/my/unread-count');
+  async getMyUnreadCount(config?: AxiosRequestConfig): Promise<{ unread_count: number }> {
+    const response = await api.get<{ unread_count: number }>('/notifications/my/unread-count', config);
     return response.data;
   },
 
