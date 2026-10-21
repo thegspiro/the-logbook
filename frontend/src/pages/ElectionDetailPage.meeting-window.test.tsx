@@ -13,6 +13,10 @@ const getElection = vi.fn();
 const updateElection = vi.fn();
 const getMeetings = vi.fn();
 vi.mock('../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   electionService: {
     getElection: (...a: unknown[]) => getElection(...a) as unknown,
     updateElection: (...a: unknown[]) => updateElection(...a) as unknown,
@@ -98,7 +102,8 @@ const meeting = (over: Record<string, unknown> = {}) => ({
 const linkMeeting = async () => {
   window.history.replaceState({}, '', '/elections/e-1');
   renderWithRouter(<ElectionDetailPage />);
-  await screen.findByRole('heading', { name: 'Officer Election', level: 2 });
+  // The title is the page's h1 now, drawn by the shared Governance header.
+  await screen.findByRole('heading', { name: 'Officer Election', level: 1 });
   await userEvent.click(screen.getByRole('button', { name: 'Link a meeting' }));
   await userEvent.selectOptions(
     await screen.findByRole('combobox', { name: 'Linked meeting or event' }),

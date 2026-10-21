@@ -10,6 +10,10 @@ const mockGetRanks = vi.fn();
 let mockCanManage = false;
 
 vi.mock('../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   electionService: {
     getElections: (...args: unknown[]) => mockGetElections(...args) as unknown,
     getSettings: vi.fn().mockResolvedValue({ reminders_enabled: true, auto_open_enabled: true }),
