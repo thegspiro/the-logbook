@@ -2007,6 +2007,8 @@ All three start off. A member who has turned off training reminder emails in
 their own preferences is not emailed unless your department requires those
 emails; they still get the notice in the app.
 
+![The Expiry alert emails panel on the Expiring Certs tab: Email members when a certification is close to expiring ticked, with the two copy options for the expired notice available beneath it](./images/02-121-cert-alert-settings.png)
+
 | Days before expiry | Who is told                               | How                              |
 | ------------------ | ----------------------------------------- | -------------------------------- |
 | 90 days            | Member only                               | In-app + email                   |
