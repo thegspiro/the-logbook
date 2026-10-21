@@ -486,7 +486,14 @@ give access. The form explains each one:
 - **Rank** is "Their title in the chain of command, such as Captain or
   Firefighter. A rank carries a few default permissions of its own."
 - **Position** is "The job they hold here, such as Secretary or Training
-  Officer. Positions decide most of what they can see and do in The Logbook."
+  Officer. Positions decide most of what they can see and do in The Logbook.
+  A rank such as Captain or Firefighter is set in the Rank field, not here."
+
+The position list does not offer Chief, Captain, Firefighter or the other
+ranks. Those are set in the Rank field, and a member holding the rank already
+has the access the matching position would give. The same names still appear
+under **Organization Settings > Role Management**, marked **Mirrors a rank**,
+because that is where the access a rank carries is edited.
 
 **Rank** is greyed out for an Administrative member, with the note
 "Administrative members do not hold an operational rank."
@@ -873,7 +880,9 @@ The Admin Edit page has these sections:
 
 You cannot change status here. Use the status button on the member's profile.
 Positions are given with **Manage Positions** on the member's row in Member
-Management.
+Management. That list leaves out the positions named after a rank; a member
+who was given one before this version still sees it there, marked **Rank**,
+so it can be taken off.
 
 ![Admin member edit form with personal, department and access sections](./images/01-07-admin-member-edit.png)
 

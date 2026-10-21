@@ -2728,6 +2728,29 @@ DEFAULT_POSITIONS: dict[str, dict] = {
 }
 
 
+#: The position slugs that are the system mirror of an operational rank.
+#:
+#: Each of these positions carries the rank registry's own permission list
+#: (the aliasing pitfall #23 describes), so a member who holds the matching
+#: rank gains nothing from also holding the position — and a member who holds
+#: the position without the rank reads as "Firefighter" in one column and
+#: blank in the other. The member screens therefore keep these out of the
+#: position pickers and off the roster chips: a rank is set in the Rank
+#: field, never by assigning a position named after it. The positions screen
+#: still lists them, because that is where their stored grants are edited.
+RANK_MIRRORING_POSITION_SLUGS: frozenset[str] = frozenset(OPERATIONAL_RANKS)
+
+
+def position_mirrors_rank(slug: str | None, is_system: bool | None) -> bool:
+    """Whether a stored position is the system mirror of an operational rank.
+
+    Only a *system* row counts. An EMS-only service is never seeded a
+    ``firefighter`` position, and one it creates itself under that name is its
+    own office, offered wherever its other custom positions are.
+    """
+    return bool(is_system) and slug in RANK_MIRRORING_POSITION_SLUGS
+
+
 def default_positions_for(organization_type: str | None) -> dict[str, dict]:
     """The default positions an agency of this type should be seeded.
 

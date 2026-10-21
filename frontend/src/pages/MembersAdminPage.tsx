@@ -15,7 +15,10 @@
  * use the word "probationary" to mean different things. This page names all
  * four so an officer can tell which one they are looking at:
  * - Positions (the Roles page): the offices held, and the main source of
- *   permissions. Every member holds the base Member position.
+ *   permissions. Every member holds the base Member position. The seeded
+ *   positions that mirror a rank (Chief, Captain, Firefighter, ...) are not
+ *   offered or shown here — a rank is set in the Rank field — except that one
+ *   a member already holds stays in Manage Positions so it can be taken off.
  * - Rank: the operational rank, with a few default permissions of its own.
  * - Membership Type: the class and ladder standing — probationary, active,
  *   life, administrative. No permissions; the tier ladder advances it.
@@ -33,6 +36,7 @@ import { useAuthStore } from '../stores/authStore';
 import toast from 'react-hot-toast';
 import { PASSWORD_CHECKLIST, validatePasswordStrength } from '../utils/passwordValidation';
 import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
+import { mirrorsRank, withoutRankMirrors } from '../utils/positions';
 import { Modal } from '../components/Modal';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { useRanks } from '../hooks/useRanks';
@@ -303,6 +307,14 @@ export const MembersAdminPage: React.FC = () => {
   const isLockedBasePosition = (user: Pick<UserWithRoles, 'status'>, role: Pick<Role, 'slug'>) =>
     role.slug === 'member' && user.status !== UserStatus.ARCHIVED;
 
+  // The seeded mirror of a rank is not something to hand out — the Rank field
+  // is — but one a member already holds stays listed so it can be taken off.
+  // Hidden assignments survive a save untouched: `selectedRoleIds` starts from
+  // every position the member holds, and only the offered ones can be toggled.
+  const offeredPositions = roles.filter(
+    (role) => !mirrorsRank(role) || !!selectedUser?.roles.some((held) => held.id === role.id)
+  );
+
   const handleToggleRole = (roleId: string) => {
     setSelectedRoleIds((prev) => (prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]));
   };
@@ -541,8 +553,10 @@ export const MembersAdminPage: React.FC = () => {
           Each member has a <strong>rank</strong> (their place in the chain of command), a{' '}
           <strong>membership type</strong> (probationary, active, life or administrative, which the Membership Tiers
           ladder advances) and one or more <strong>positions</strong> (the offices held, managed under Roles, which
-          decide what they can do). Every member holds the base Member position. A member&rsquo;s account{' '}
-          <strong>status</strong> &mdash; on leave, retired, dropped &mdash; is changed from their profile.
+          decide what they can do). Every member holds the base Member position. Positions named after a rank &mdash;
+          Chief, Captain, Firefighter &mdash; are not listed here: a rank is set in the Rank field and carries its own
+          access. A member&rsquo;s account <strong>status</strong> &mdash; on leave, retired, dropped &mdash; is changed
+          from their profile.
         </p>
 
         {/* View by Member */}
@@ -630,10 +644,10 @@ export const MembersAdminPage: React.FC = () => {
                     </td>
                     <td data-label="Positions" className="px-6 py-4">
                       <div className="flex flex-wrap justify-end gap-1 md:justify-start">
-                        {user.roles.length === 0 ? (
+                        {withoutRankMirrors(user.roles).length === 0 ? (
                           <span className="text-theme-text-muted text-sm">No positions</span>
                         ) : (
-                          user.roles.map((role) => (
+                          withoutRankMirrors(user.roles).map((role) => (
                             <span
                               key={role.id}
                               className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${
@@ -734,7 +748,7 @@ export const MembersAdminPage: React.FC = () => {
         {/* View by Position */}
         {viewMode === 'by-role' && (
           <div className="space-y-4">
-            {roles.map((role) => {
+            {withoutRankMirrors(roles).map((role) => {
               const usersWithRole = users.filter((user) => user.roles.some((r) => r.id === role.id));
 
               return (
@@ -1147,7 +1161,9 @@ export const MembersAdminPage: React.FC = () => {
             </>
           }
         >
-          <p className="text-theme-text-muted mb-4 text-sm">Select the positions to assign to this member</p>
+          <p className="text-theme-text-muted mb-4 text-sm">
+            Select the positions to assign to this member. A rank is set from the member&rsquo;s profile, not here.
+          </p>
 
           {error && (
             <div
@@ -1159,7 +1175,7 @@ export const MembersAdminPage: React.FC = () => {
           )}
 
           <div className="space-y-2">
-            {roles.map((role) => (
+            {offeredPositions.map((role) => (
               <label
                 key={role.id}
                 className="hover:bg-theme-surface-hover flex cursor-pointer items-start rounded-lg p-3"
@@ -1185,8 +1201,20 @@ export const MembersAdminPage: React.FC = () => {
                         System
                       </span>
                     )}
+                    {mirrorsRank(role) && (
+                      <span className="rounded-sm bg-amber-100 px-2 py-0.5 text-xs text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
+                        Rank
+                      </span>
+                    )}
                   </div>
-                  {role.description && <p className="text-theme-text-muted mt-1 text-xs">{role.description}</p>}
+                  {mirrorsRank(role) ? (
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      Duplicates the {role.name} rank, which already grants this access. Untick to remove it; it is not
+                      offered to members who do not hold it.
+                    </p>
+                  ) : (
+                    role.description && <p className="text-theme-text-muted mt-1 text-xs">{role.description}</p>
+                  )}
                 </div>
               </label>
             ))}

@@ -207,6 +207,37 @@ describe('MemberProfilePage assigned inventory', () => {
   });
 });
 
+describe('MemberProfilePage position badges', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeUserId = TARGET_ID;
+    grantedPermissions = [];
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    getUserWithRoles.mockReset();
+  });
+
+  // The seeded Firefighter position is the rank's twin; the header already
+  // names the rank, so the badge said the same word a second time.
+  it('leaves out the position that mirrors a rank', async () => {
+    getUserWithRoles.mockResolvedValue({
+      ...targetUser,
+      roles: [
+        { id: 'role-member', name: 'Member', slug: 'member', is_system: true, mirrors_rank: false },
+        { id: 'role-firefighter', name: 'Firefighter', slug: 'firefighter', is_system: true, mirrors_rank: true },
+        { id: 'role-secretary', name: 'Secretary', slug: 'secretary', is_system: true, mirrors_rank: false },
+      ],
+    });
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByRole('heading', { name: 'Jane Doe' });
+    expect(screen.getByText('Secretary')).toBeInTheDocument();
+    expect(screen.getByText('Member')).toBeInTheDocument();
+    expect(screen.queryByText('Firefighter')).not.toBeInTheDocument();
+  });
+});
+
 const shareNothing = {
   email: false,
   personal_email: false,

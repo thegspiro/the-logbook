@@ -311,3 +311,24 @@ describe('RoleManagementPage deleting a role', () => {
     expect(roleService.deleteRole).not.toHaveBeenCalled();
   });
 });
+
+describe('RoleManagementPage — positions that mirror a rank', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(roleService.getPermissionsByCategory).mockResolvedValue([]);
+  });
+
+  // The member screens leave these positions out, so this page — where their
+  // stored grants are edited — is where an administrator learns why.
+  it('marks the mirror, and only the mirror', async () => {
+    vi.mocked(roleService.getRoles).mockResolvedValue([
+      memberRole,
+      { ...fixedSystemRole, id: 'captain-role', name: 'Captain', slug: 'captain', mirrors_rank: true },
+    ]);
+    renderWithRouter(<RoleManagementPage />);
+
+    expect(await screen.findByText('Mirrors a rank')).toBeInTheDocument();
+    expect(screen.getAllByText('Mirrors a rank')).toHaveLength(1);
+    expect(screen.getByText(/Carries the Captain rank’s access/)).toBeInTheDocument();
+  });
+});
