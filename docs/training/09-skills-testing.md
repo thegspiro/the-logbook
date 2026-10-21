@@ -1332,6 +1332,12 @@ which is usually where you find that a result should not stand.
 | **Void**   | A completed **official** result that should not stand | The record is **kept**, with your reason (at least 10 characters) and your name. It drops out of the totals, pass rate and average score, and **any requirement the pass completed is given back**. The member sees the reason |
 | **Cancel** | A test **abandoned part-way**, never scored         | Any partial marks are kept and the test is closed out. No reason is required                                                                                                                         |
 
+Choosing **Void result** opens a dialog that names the candidate and the test
+and asks for the reason. The confirm button stays greyed out until the reason
+is at least 10 characters, and the member can read what you write.
+
+![The Void test result dialog, saying the record stays in the member's history marked as voided, with an example reason typed in and the amber Void result button enabled](./images/09-28-void-result-dialog.png)
+
 > **An official result cannot be deleted.** A scored evaluation is a record of
 > what an examiner saw. It is withdrawn, not erased. Void is the action, and
 > the reason and the officer are part of the record.
