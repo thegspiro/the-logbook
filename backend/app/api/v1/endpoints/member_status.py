@@ -44,6 +44,9 @@ from app.services.member_service_history_service import (
     effective_separation_at,
     is_separated,
 )
+from app.services.member_shift_release_service import (
+    release_future_shift_commitments,
+)
 from app.utils.membership import LEGACY_MEMBERSHIP_TYPES, is_administrative
 from app.utils.org_timezone import (
     resolve_org_today,
@@ -481,6 +484,21 @@ async def change_member_status(
         user_id=str(current_user.id),
         username=current_user.username,
     )
+
+    # A status outside ACTIVE_ACCOUNT_STATUSES fails the is_active check that
+    # signing in and scheduling require, so the member cannot work the seats
+    # still ahead of them. Hand those back to the roster. Run on every such
+    # change, not only on leaving active: it is idempotent, and it also sweeps
+    # up anything rostered while the member was already inactive.
+    if new_status not in ACTIVE_ACCOUNT_STATUSES:
+        await release_future_shift_commitments(
+            db,
+            organization_id=str(current_user.organization_id),
+            user_id=str(user_id),
+            reason=f"status_changed:{new_status.value}",
+            performed_by_id=str(current_user.id),
+            performed_by_username=current_user.username,
+        )
 
     response = MemberStatusChangeResponse(
         user_id=str(user_id),
@@ -985,6 +1003,15 @@ async def archive_member(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+    await release_future_shift_commitments(
+        db,
+        organization_id=str(current_user.organization_id),
+        user_id=str(user_id),
+        reason="archived",
+        performed_by_id=str(current_user.id),
+        performed_by_username=current_user.username,
     )
 
     return {

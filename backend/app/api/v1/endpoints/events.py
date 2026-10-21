@@ -1598,13 +1598,18 @@ async def delete_event(
 async def delete_event_series(
     event_id: UUID,
     delete_future_only: bool = False,
+    from_event_id: Optional[UUID] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ):
     """
     Delete all events in a recurring series.
 
-    If delete_future_only is True, only deletes future occurrences.
+    If from_event_id names an occurrence of the series, deletes that
+    occurrence and every later one and keeps the earlier ones ("this and
+    future occurrences"); delete_future_only is then ignored. Otherwise, if
+    delete_future_only is True, only deletes occurrences that have not
+    started yet.
 
     **Authentication required**
     **Requires permission: events.manage**
@@ -1616,6 +1621,7 @@ async def delete_event_series(
             parent_event_id=event_id,
             organization_id=current_user.organization_id,
             delete_future_only=delete_future_only,
+            from_event_id=from_event_id,
         )
 
         if deleted_count == 0:
@@ -1633,6 +1639,7 @@ async def delete_event_series(
                 "parent_event_id": str(event_id),
                 "deleted_count": deleted_count,
                 "future_only": delete_future_only,
+                "from_event_id": str(from_event_id) if from_event_id else None,
             },
             user_id=str(current_user.id),
             username=current_user.username,

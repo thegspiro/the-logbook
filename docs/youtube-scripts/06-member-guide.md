@@ -374,8 +374,8 @@ Chapter 4.]**
 > "Click on any certification to see the details — when you completed it, who
 > recorded it, and any attached documentation like scanned certificates."
 
-**[SCREEN: My Training history with a record badged as awaiting approval at the
-top, above dated records]**
+**[SCREEN: My Training history with a record badged as awaiting approval in the
+**No completion date** group at the top, above dated records]**
 
 > "Something you submitted that's still waiting on an officer shows here too —
 > at the top, even though it has no completion date yet. It used to drop out of

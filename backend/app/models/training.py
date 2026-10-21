@@ -2368,10 +2368,15 @@ class ShiftCompletionReport(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    officer_id: Mapped[str] = mapped_column(
+    # SET NULL, not CASCADE: the report is the trainee's record, and the
+    # filing officer is only its attribution. Under CASCADE, permanently
+    # deleting a field training officer silently deleted every report they had
+    # filed on other members. NULL reads as "a former member" (Pitfall #2:
+    # SET NULL needs nullable=True).
+    officer_id: Mapped[Optional[str]] = mapped_column(
         String(36),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Shift details
@@ -2448,7 +2453,7 @@ class ShiftCompletionReport(Base):
     trainee: Mapped["User"] = relationship(
         "User", foreign_keys=[trainee_id], lazy="joined"
     )
-    officer: Mapped["User"] = relationship(
+    officer: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[officer_id], lazy="joined"
     )
     reviewer: Mapped[Optional["User"]] = relationship(

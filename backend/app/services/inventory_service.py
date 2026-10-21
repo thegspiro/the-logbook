@@ -3732,12 +3732,20 @@ class InventoryService:
         return_condition: Optional[ItemCondition] = None,
         return_notes: Optional[str] = None,
         expected_user_id: Optional[UUID] = None,
+        *,
+        commit: bool = True,
     ) -> Tuple[bool, Optional[str]]:
         """Unassign an item from its current user.
 
         If *expected_user_id* is provided, the operation will fail when the
         item is assigned to a different user — preventing stale-read races
         in batch operations.
+
+        ``commit=False`` leaves the transaction open for a caller that must
+        finish more work atomically with the return (a member's permanent
+        delete), skips the auto-archive check that only makes sense once the
+        return is committed, and re-raises instead of rolling back so the
+        caller's own work is not discarded behind its back.
         """
         try:
             notices = await self._lock_open_return_notices(organization_id, item_id)
@@ -3807,6 +3815,8 @@ class InventoryService:
                 performed_by=returned_by,
             )
 
+            if not commit:
+                return True, None
             await self.db.commit()
 
             # Check if the dropped member should be auto-archived.
@@ -3823,6 +3833,8 @@ class InventoryService:
 
             return True, None
         except Exception as e:
+            if not commit:
+                raise
             await self.db.rollback()
             return False, str(e)
 
@@ -4226,8 +4238,13 @@ class InventoryService:
         return_condition: Optional[ItemCondition] = None,
         return_notes: Optional[str] = None,
         quantity_returned: Optional[int] = None,
+        *,
+        commit: bool = True,
     ) -> Tuple[bool, Optional[str]]:
-        """Return issued units back to the pool."""
+        """Return issued units back to the pool.
+
+        ``commit=False`` behaves as on :meth:`unassign_item`.
+        """
         try:
             # item_id is immutable on an issuance once created, so a plain,
             # unlocked read of it is safe -- it exists only to say which item
@@ -4356,6 +4373,8 @@ class InventoryService:
                 performed_by=returned_by,
             )
 
+            if not commit:
+                return True, None
             await self.db.commit()
 
             # Check if the dropped member should be auto-archived.
@@ -4372,6 +4391,8 @@ class InventoryService:
 
             return True, None
         except Exception as e:
+            if not commit:
+                raise
             await self.db.rollback()
             return False, str(e)
 
@@ -4495,8 +4516,13 @@ class InventoryService:
         checked_in_by: UUID | str,
         return_condition: ItemCondition,
         damage_notes: Optional[str] = None,
+        *,
+        commit: bool = True,
     ) -> Tuple[bool, Optional[str]]:
-        """Check in an item"""
+        """Check in an item.
+
+        ``commit=False`` behaves as on :meth:`unassign_item`.
+        """
         try:
             # item_id is immutable on a checkout once created, so a plain,
             # unlocked read of it is safe -- it exists only to say which item
@@ -4597,6 +4623,8 @@ class InventoryService:
                 performed_by=checked_in_by,
             )
 
+            if not commit:
+                return True, None
             await self.db.commit()
 
             # Check if the dropped member should be auto-archived.
@@ -4613,6 +4641,8 @@ class InventoryService:
 
             return True, None
         except Exception as e:
+            if not commit:
+                raise
             await self.db.rollback()
             return False, str(e)
 

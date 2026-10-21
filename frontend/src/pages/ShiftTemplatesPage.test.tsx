@@ -27,8 +27,13 @@ vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: vi.fn() },
+  default: {
+    success: (...args: unknown[]) => toastSuccess(...args) as unknown,
+    error: (...args: unknown[]) => toastError(...args) as unknown,
+  },
 }));
 
 const buildTemplate = (positions: ShiftTemplateRecord['positions']): Record<string, unknown> => ({
@@ -92,7 +97,56 @@ describe('ShiftTemplatesPage template delete', () => {
     mockGetTemplates.mockReset();
     mockGetTemplates.mockResolvedValue([buildTemplate(['officer'])]);
     mockDeleteTemplate.mockReset();
-    mockDeleteTemplate.mockResolvedValue(undefined);
+    mockDeleteTemplate.mockResolvedValue('deleted');
+    toastSuccess.mockReset();
+    toastError.mockReset();
+  });
+
+  // A template that shifts or patterns use is deactivated rather than deleted
+  // (the shifts keep its checklists); the dialog says so up front.
+  it('says a template in use is deactivated rather than deleted', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Day Shift' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('it is deactivated instead of deleted');
+    expect(dialog).toHaveTextContent('equipment checklists');
+  });
+
+  it('reports a deactivation as one', async () => {
+    mockDeleteTemplate.mockResolvedValue('deactivated');
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Day Shift' }));
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
+    expect(toastSuccess.mock.calls[0]?.[0]).toMatch(/"Day Shift" is still used .* deactivated instead of deleted/);
+  });
+
+  it('reports a deletion as one, and shows the server reason on failure', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftTemplatesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Day Shift' }));
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Template deleted'));
+
+    mockDeleteTemplate.mockRejectedValue({
+      isAxiosError: true,
+      message: 'Request failed with status code 400',
+      response: { status: 400, data: { detail: 'Shift template not found' } },
+    });
+    await user.click(await screen.findByRole('button', { name: 'Delete Day Shift' }));
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(toastError.mock.calls[0]?.[0]).toContain('Shift template not found');
   });
 
   it('asks before deleting, and keeps the template on "Keep it"', async () => {

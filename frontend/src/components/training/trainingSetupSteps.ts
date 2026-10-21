@@ -51,7 +51,7 @@ export const buildSetupSteps = (stats: TrainingDashboardSummary['stats']): Setup
     description:
       'A program is a step-by-step path toward a role, such as probationary firefighter to full member. Enroll members and track their progress in one place.',
     href: '/training/admin?page=setup&tab=pipelines',
-    action: 'Open Pipelines',
+    action: 'Open Programs',
     done: stats.active_programs > 0,
     optional: true,
   },

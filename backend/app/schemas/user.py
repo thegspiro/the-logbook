@@ -777,6 +777,14 @@ class MemberAuditLogEntry(UTCResponseBase):
     model_config = _response_config
 
 
+class DeletionImpactRecord(BaseModel):
+    """Rows in one table that a permanent delete removes with the member."""
+
+    table: str
+    label: str
+    count: int
+
+
 class DeletionImpactResponse(BaseModel):
     """Schema for member deletion impact assessment"""
 
@@ -785,6 +793,15 @@ class DeletionImpactResponse(BaseModel):
     display_name: Optional[str] = None
     status: str
     training_records: int = 0
+    # Individually assigned items plus open pool issuances the member holds.
+    # A permanent delete returns these to stock rather than destroying them.
     inventory_items: int = 0
+    # Items checked out to the member; checked back in on a permanent delete.
+    checked_out_items: int = 0
+    # Documents the member uploaded; kept, with the uploader cleared.
     documents: int = 0
+    # Every table whose rows are deleted with the member, derived from the
+    # models' ON DELETE CASCADE references, largest first.
+    removed_records: List[DeletionImpactRecord] = Field(default_factory=list)
+    # Rows a permanent delete removes outright: the sum of removed_records.
     total_records: int = 0

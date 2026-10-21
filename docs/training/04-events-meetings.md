@@ -362,6 +362,17 @@ in."_
 
 ### For Members (Checking In)
 
+You can also check in from the event page itself. While check-in is open the page
+offers **Check In**; afterwards it reads **You're checked in** and states the hours
+and category credited, as the event card does. **View QR Code** is shown only to
+people who can manage the event or are its organizers, because it opens the page
+meant to be put up at the door. The optional RSVP button on an event that does
+not require a response reads **Going**. The attendee list is requested only when
+your department shares it.
+
+_[Screenshot to create: a member's event detail page with check-in open, showing
+Check In; and one after check-in showing You're checked in.]_
+
 1. Scan the QR code with your phone's camera.
 2. Sign in if you are not already. The self check-in page opens.
 3. Tap **Check In to This Event**. The confirmation reads **You're Checked

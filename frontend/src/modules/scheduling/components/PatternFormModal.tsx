@@ -175,11 +175,15 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
               className="form-input"
             >
               <option value="">No template</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
-                </option>
-              ))}
+              {/* A deactivated template is kept for the shifts and patterns that
+                  use it; it is offered only to a pattern that already names it. */}
+              {templates
+                .filter((t) => t.is_active !== false || t.id === formData.template_id)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
+                  </option>
+                ))}
             </select>
           </div>
 
