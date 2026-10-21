@@ -17,7 +17,7 @@ from pydantic import (
 )
 
 from app.models.minute import MinutesAttachmentCategory, MinutesMeetingType
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
 from app.utils.minutes_attendance import COUNTS_TOWARD_QUORUM, derive_status
 from app.utils.redline import describe_change
 from app.utils.rich_text import MAX_HTML_LENGTH, sanitize_html
@@ -573,13 +573,13 @@ class MinutesBase(BaseModel):
         description="Meeting type: business, special, committee, board, "
         "trustee, executive, annual, other",
     )
-    meeting_date: datetime = Field(..., description="Date and time of the meeting")
+    meeting_date: UTCDateTime = Field(..., description="Date and time of the meeting")
     location: Optional[str] = Field(None, max_length=300)
     called_by: Optional[str] = Field(
         None, max_length=200, description="Person who called the meeting"
     )
-    called_to_order_at: Optional[datetime] = None
-    adjourned_at: Optional[datetime] = None
+    called_to_order_at: Optional[UTCDateTime] = None
+    adjourned_at: Optional[UTCDateTime] = None
     attendees: Optional[List[AttendeeEntry]] = None
     quorum_met: Optional[bool] = None
     quorum_count: Optional[int] = Field(None, ge=0)
@@ -624,11 +624,11 @@ class MinutesUpdate(BaseModel):
 
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     meeting_type: Optional[str] = None
-    meeting_date: Optional[datetime] = None
+    meeting_date: Optional[UTCDateTime] = None
     location: Optional[str] = Field(None, max_length=300)
     called_by: Optional[str] = Field(None, max_length=200)
-    called_to_order_at: Optional[datetime] = None
-    adjourned_at: Optional[datetime] = None
+    called_to_order_at: Optional[UTCDateTime] = None
+    adjourned_at: Optional[UTCDateTime] = None
     attendees: Optional[List[AttendeeEntry]] = None
     quorum_met: Optional[bool] = None
     quorum_count: Optional[int] = Field(None, ge=0)
@@ -671,8 +671,8 @@ class MinutesResponse(UTCResponseBase):
     meeting_date: datetime
     location: Optional[str] = None
     called_by: Optional[str] = None
-    called_to_order_at: Optional[datetime] = None
-    adjourned_at: Optional[datetime] = None
+    called_to_order_at: Optional[UTCDateTime] = None
+    adjourned_at: Optional[UTCDateTime] = None
     attendees: Optional[List[AttendeeEntry]] = None
     # This set's own choice (null = department default) and what is in force.
     attendance_listing: Optional[str] = None
@@ -751,7 +751,7 @@ class AdoptionProposal(BaseModel):
 class MinutesAdopt(BaseModel):
     """What the body did when it adopted the minutes"""
 
-    adopted_on: Optional[datetime] = Field(
+    adopted_on: Optional[UTCDateTime] = Field(
         None, description="When the body voted; defaults to now"
     )
     adopting_minutes_id: Optional[str] = Field(
@@ -1127,8 +1127,8 @@ class ClosedSessionParticipant(BaseModel):
 
     user_id: Optional[str] = Field(None, max_length=36)
     name: str = Field(..., min_length=1, max_length=200)
-    joined_at: Optional[datetime] = None
-    left_at: Optional[datetime] = None
+    joined_at: Optional[UTCDateTime] = None
+    left_at: Optional[UTCDateTime] = None
 
     @model_validator(mode="after")
     def _left_after_joined(self):
@@ -1164,8 +1164,8 @@ def _validate_participants(
 class ClosedSessionBase(BaseModel):
     reason: str = Field(..., min_length=1, max_length=300)
     legal_basis: Optional[str] = Field(None, max_length=300)
-    started_at: datetime
-    ended_at: Optional[datetime] = None
+    started_at: UTCDateTime
+    ended_at: Optional[UTCDateTime] = None
     motion_id: Optional[str] = Field(
         None, max_length=36, description="The motion that moved into closed session"
     )
@@ -1195,8 +1195,8 @@ class ClosedSessionUpdate(BaseModel):
 
     reason: Optional[str] = Field(None, min_length=1, max_length=300)
     legal_basis: Optional[str] = Field(None, max_length=300)
-    started_at: Optional[datetime] = None
-    ended_at: Optional[datetime] = None
+    started_at: Optional[UTCDateTime] = None
+    ended_at: Optional[UTCDateTime] = None
     motion_id: Optional[str] = Field(None, max_length=36)
     participants: Optional[List[ClosedSessionParticipant]] = Field(None, max_length=300)
     summary: Optional[str] = Field(None, max_length=4000)

@@ -24,7 +24,7 @@ from app.models.storefront import (
     StoreProductStatus,
     StoreWindowStatus,
 )
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
 from app.utils.embroidery import (
     DEFAULT_THREAD_COLOR_HEX,
     EmbroideryThreadColor,
@@ -488,8 +488,8 @@ class StoreOrderWindowBase(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    opens_at: Optional[datetime] = None
-    closes_at: Optional[datetime] = None
+    opens_at: Optional[UTCDateTime] = None
+    closes_at: Optional[UTCDateTime] = None
     auto_open: bool = True
     auto_close: bool = True
     expected_delivery_date: Optional[date] = None
@@ -518,8 +518,8 @@ class StoreOrderWindowUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
-    opens_at: Optional[datetime] = None
-    closes_at: Optional[datetime] = None
+    opens_at: Optional[UTCDateTime] = None
+    closes_at: Optional[UTCDateTime] = None
     auto_open: Optional[bool] = None
     auto_close: Optional[bool] = None
     expected_delivery_date: Optional[date] = None
