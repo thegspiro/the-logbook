@@ -163,9 +163,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   const content = children ?? <Outlet />;
 
+  // `no-print`: the shell's footer is chrome, not content. Printed, it put the
+  // copyright and "Powered by" lines under every check-in sticker and shift
+  // report. Scoped to this footer rather than `footer` in the print sheet,
+  // because the printable documents carry <footer>s of their own.
   const footer = (
     <footer
-      className="bg-theme-input-bg/80 border-theme-surface-border mt-auto border-t backdrop-blur-sm"
+      className="no-print bg-theme-input-bg/80 border-theme-surface-border mt-auto border-t backdrop-blur-sm"
       role="contentinfo"
     >
       <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
