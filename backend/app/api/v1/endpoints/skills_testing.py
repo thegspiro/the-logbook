@@ -39,7 +39,7 @@ from app.models.skills_testing import (
     SkillTestStatus,
     SkillTestViewer,
 )
-from app.models.user import User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.schemas.skills_testing import (
     SkillSheetLibraryItem,
     SkillTemplateCreate,
@@ -1021,7 +1021,7 @@ async def search_candidates(
         select(User)
         .where(
             User.organization_id == current_user.organization_id,
-            User.status == UserStatus.ACTIVE,
+            User.status.in_(ACTIVE_ACCOUNT_STATUSES),
             User.deleted_at.is_(None),
             or_(
                 full_name.like(pattern, escape=LIKE_ESCAPE_CHAR),

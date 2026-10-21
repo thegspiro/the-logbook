@@ -85,6 +85,7 @@ from app.models.location import Location
 from app.models.notification import NotificationLog
 from app.models.operational_rank import OperationalRank
 from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
     MembershipType,
     Organization,
     Position,
@@ -5737,10 +5738,13 @@ class InventoryService:
 
         if include_user_id:
             query = query.where(
-                or_(User.status == "active", User.id == str(include_user_id))
+                or_(
+                    User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                    User.id == str(include_user_id),
+                )
             )
         else:
-            query = query.where(User.status == "active")
+            query = query.where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
 
         if search:
             pattern = like_pattern(search)
@@ -12525,7 +12529,7 @@ class InventoryService:
         if statuses:
             query = query.where(User.status.in_(statuses))
         else:
-            query = query.where(User.status == UserStatus.ACTIVE.value)
+            query = query.where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
 
         if membership_types:
             query = query.where(User.membership_type.in_(membership_types))

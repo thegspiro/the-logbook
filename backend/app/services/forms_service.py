@@ -44,7 +44,7 @@ from app.models.forms import (
     IntegrationTarget,
     IntegrationType,
 )
-from app.models.user import Organization, User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
 from app.utils.contact_visibility import ContactPolicy
 from app.utils.model_updates import apply_updates
 from app.utils.org_timezone import (
@@ -3398,7 +3398,7 @@ class FormsService:
         result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
-            .where(User.status == UserStatus.ACTIVE)
+            .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
             .where(or_(*matchers))
             .order_by(User.last_name, User.first_name)
             .limit(limit)

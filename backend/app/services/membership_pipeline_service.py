@@ -51,7 +51,14 @@ from app.models.membership_pipeline import (
     ProspectStepProgress,
     StepProgressStatus,
 )
-from app.models.user import Organization, Role, User, UserStatus, generate_uuid
+from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
+    Organization,
+    Role,
+    User,
+    UserStatus,
+    generate_uuid,
+)
 from app.schemas.membership_pipeline import resolve_conversion_outcome
 from app.services import file_storage_service as file_storage
 from app.services.email_policy import (
@@ -2543,7 +2550,7 @@ class MembershipPipelineService:
             .where(
                 User.id == completed_by,
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
             .options(selectinload(User.positions))
@@ -2665,7 +2672,7 @@ class MembershipPipelineService:
             .where(
                 User.id == user_id,
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
             .options(selectinload(User.positions))
