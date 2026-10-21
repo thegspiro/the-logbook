@@ -3792,6 +3792,49 @@ async def update_basic_apparatus(
     return existing
 
 
+@router.post(
+    "/apparatus/{apparatus_id}/reactivate", response_model=BasicApparatusResponse
+)
+async def reactivate_basic_apparatus(
+    apparatus_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Put a deactivated vehicle back in the vehicle pickers.
+
+    The only way a vehicle becomes inactive is a delete it was in use for, so
+    this is the delete's undo and has its own endpoint rather than an
+    ``is_active`` field on the edit form. Only the flag changes: nothing the
+    deactivation left alone is touched, and nothing is re-added to any shift.
+    Reactivating an active vehicle is a no-op and is not audited.
+    """
+    result = await db.execute(
+        select(BasicApparatus).where(
+            BasicApparatus.id == str(apparatus_id),
+            BasicApparatus.organization_id == str(current_user.organization_id),
+        )
+    )
+    existing = ensure_found(result.scalar_one_or_none(), "Apparatus")
+    if existing.is_active is not True:
+        existing.is_active = True
+        await log_audit_event(
+            db=db,
+            event_type="basic_apparatus_reactivated",
+            event_category="scheduling",
+            severity="INFO",
+            event_data={
+                "organization_id": str(current_user.organization_id),
+                "apparatus_id": str(existing.id),
+                "unit_number": existing.unit_number,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await db.commit()
+        await db.refresh(existing)
+    return existing
+
+
 @router.delete("/apparatus/{apparatus_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_basic_apparatus(
     apparatus_id: UUID,
