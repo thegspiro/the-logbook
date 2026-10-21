@@ -33,6 +33,10 @@ vi.mock('../services/api', () => ({
   },
 }));
 vi.mock('../../../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   eventService: { getEvent: () => Promise.resolve(null), getEvents: () => Promise.resolve([]) },
 }));
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'America/Chicago' }));

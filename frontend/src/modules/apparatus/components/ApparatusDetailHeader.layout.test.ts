@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const source = readFileSync(join(__dirname, 'ApparatusDetailHeader.tsx'), 'utf8');
-const sharedHeader = readFileSync(join(__dirname, '../../../components/operations/OperationsPageHeader.tsx'), 'utf8');
+const sharedHeader = readFileSync(join(__dirname, '../../../components/layout/SectionPageHeader.tsx'), 'utf8');
 
 describe('ApparatusDetailHeader layout', () => {
   // The title row and the action row now belong to the shared Operations
