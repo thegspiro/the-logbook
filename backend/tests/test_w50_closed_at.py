@@ -170,7 +170,7 @@ class TestClosedAtStamp(TestLifecycleSetup):
             assert err is None, err
             send_report.reset_mock()
             ok, msg = await svc.generate_and_send_election_report(
-                uuid.UUID(election_id), uuid.UUID(org_id), requested=True
+                uuid.UUID(election_id), uuid.UUID(org_id)
             )
             assert ok, msg
             kwargs = send_report.call_args.kwargs

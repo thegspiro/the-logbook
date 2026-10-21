@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ExternalLink, FileText, Pencil, Send, Trash2, Undo2 } from 'lucide-react';
+import { ExternalLink, FileText, Pencil, Scale, Send, Trash2, Undo2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { EmptyState } from '../../../components/ux/EmptyState';
@@ -15,6 +15,7 @@ import { RevisionEditorModal } from '../components/RevisionEditorModal';
 import { useLegalDocumentsStore } from '../store/legalDocumentsStore';
 import { LEGAL_DOCUMENT_LABEL, LegalDocumentType, type LegalDocumentState, type LegalRevision } from '../types/legal';
 import { useTablist } from '../../../hooks/useTablist';
+import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
 
 /**
  * Governance -> Legal Documents.
@@ -263,15 +264,18 @@ const LegalDocumentsPage: React.FC = () => {
   if (isLoading && !overview) return <SkeletonPage />;
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <header>
-        <h1 className="text-theme-text-primary text-2xl font-bold">Legal Documents</h1>
-        <p className="text-theme-text-secondary mt-2 max-w-3xl text-sm leading-6">
-          The privacy policy and terms of service on {orgName}&rsquo;s public pages. Read what is published now, and
-          propose wording that matches your bylaws, SOPs, and local law. A proposal is a draft — it changes nothing
-          until it is published.
-        </p>
-      </header>
+    <div className="mx-auto max-w-7xl space-y-6">
+      <GovernancePageHeader
+        icon={Scale}
+        title="Legal Documents"
+        subtitle={
+          <>
+            The privacy policy and terms of service on {orgName}&rsquo;s public pages. Read what is published now, and
+            propose wording that matches your bylaws, SOPs, and local law. A proposal is a draft — it changes nothing
+            until it is published.
+          </>
+        }
+      />
 
       {error ? (
         <p className="alert-danger text-sm" role="alert">

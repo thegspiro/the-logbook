@@ -5,9 +5,7 @@ CRUD endpoints for managing email templates.
 Accessible by admins via the membership module admin area.
 """
 
-import asyncio
 import copy
-import os
 import uuid
 from typing import Any
 
@@ -48,6 +46,7 @@ from app.schemas.email_template import (
     ScheduledEmailUpdate,
 )
 from app.services import email_footers
+from app.services import file_storage_service as file_storage
 from app.services.email_policy import (
     EMAIL_POLICIES,
     OPTIONAL_KINDS,
@@ -904,15 +903,6 @@ async def delete_attachment(
     # other way round, on the reasoning that a stale row breaks the send path.
     # It does — but only until the delete is retried, whereas the orphan the
     # other order leaves is permanent and silent.)
-    def _remove_file(path: str) -> None:
-        # `to_thread`, matching the upload path above: blocking syscalls stay
-        # off the event loop. FileNotFoundError is not an error here — it is
-        # what a retry after a half-completed delete looks like.
-        try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
-
     # Only a path inside this organization's attachment storage is unlinked.
     # Anything else is not this row's file to remove; the row still goes.
     confined = email_attachment_paths.resolve_email_attachment_path(
@@ -925,7 +915,15 @@ async def delete_attachment(
             attachment.id,
         )
     else:
-        await asyncio.to_thread(_remove_file, confined)
+        # A file already missing is what a retry after a half-completed
+        # delete looks like, and counts as removed. Any other failure stops
+        # here, before the row goes (see above).
+        if not await file_storage.delete(confined):
+            raise HTTPException(
+                status_code=500,
+                detail="Could not remove the attachment file; nothing was "
+                "deleted. Please try again.",
+            )
 
     await db.delete(attachment)
     await db.commit()

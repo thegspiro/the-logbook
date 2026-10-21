@@ -136,6 +136,26 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
       every folder still listed. It is the optional "Document folder access"
       email (`EmailKind.DOCUMENT_DUTIES`), which a department can make
       required.
+31. **A department's own S3 bucket** (2026-10-21, owner decisions). The S3
+    (and MinIO-compatible) choice in a department's File Storage settings
+    will decide where that department's new files go. The bucket,
+    credentials and endpoint are the department's, from onboarding, not an
+    installation-wide setting.
+    - Files already on local disk move with a migration command (verified
+      copy, rollback, finalize, as relocation and encryption do). Until it
+      runs, a file with a local reference keeps being served from disk, so
+      switching never breaks a download.
+    - Malware scanning, per-organization separation and encryption at rest
+      apply exactly as on local disk. Files are encrypted before they leave
+      the server.
+    - Tests fake S3 with moto (test-only dependency).
+    - Built in three steps:
+      1. One storage interface (`exists`, `read_bytes`, `plaintext_size`,
+         `delete`, `file_response` in `file_storage_service`) that every
+         caller uses, with the local backend only. Behaviour is unchanged.
+      2. The S3 backend and the per-department settings it reads.
+      3. The migration command, the encryption and rewrap tooling on S3,
+         backups, and docs.
 
 ## Phases
 
@@ -145,7 +165,8 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
 | 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere (on by default)                                 | done (#3011) |
 | 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | done (#3031) |
 | 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | done         |
-| 5     | Every document lives in a folder: no more organization-wide "unfiled" documents                                                                 | this change  |
+| 5     | Every document lives in a folder: no more organization-wide "unfiled" documents                                                                 | done         |
+| 6     | A department's own S3 / MinIO bucket (decision 31), step 1 of 3: one storage interface every caller uses                                        | this change  |
 
 ### Phase 1 — what changed
 

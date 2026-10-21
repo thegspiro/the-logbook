@@ -24,6 +24,7 @@ from app.models.membership_pipeline import (
     ProspectStatus,
 )
 from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 
 # step_type / action_type / status map to strict MySQL ENUM columns, but were
 # typed as free str and inserted raw (create_step/update_step, update_prospect's
@@ -92,7 +93,7 @@ class PipelineStepBase(BaseModel):
     )
     is_first_step: bool = False
     is_final_step: bool = False
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: int = Field(default=0, ge=0, le=INT32_MAX)
     email_template_id: Optional[UUID] = None
     required: bool = True
     config: Optional[Dict[str, Any]] = Field(
@@ -100,7 +101,10 @@ class PipelineStepBase(BaseModel):
         description="Stage-specific configuration (form settings, election config, etc.)",
     )
     inactivity_timeout_days: Optional[int] = Field(
-        None, description="Per-step inactivity timeout override in days"
+        None,
+        description="Per-step inactivity timeout override in days",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     notify_prospect_on_completion: bool = Field(
         default=False,
@@ -138,11 +142,11 @@ class PipelineStepUpdate(BaseModel):
         _enum_validator(_ACTION_TYPES, "action_type")
     )
     is_final_step: Optional[bool] = None
-    sort_order: Optional[int] = Field(None, ge=0)
+    sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     email_template_id: Optional[UUID] = None
     required: Optional[bool] = None
     config: Optional[Dict[str, Any]] = None
-    inactivity_timeout_days: Optional[int] = None
+    inactivity_timeout_days: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     notify_prospect_on_completion: Optional[bool] = None
     public_visible: Optional[bool] = None
 
