@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3521](https://github.com/thegspiro/the-logbook/pull/3521)** (branch
+`claude/security-review-scheduled-tasks`). PR #3517 (Feature 30, Onboarding, pass 8) merged
+to `main` with no open PR whose head branch starts with
+`claude/security-review-` (`search_pull_requests`, 0 results, checked once
+before starting and again immediately before branching), so this iteration
+(a watchdog pickup) reviewed Feature 31 (Scheduled tasks), pass 8. **0 fixed
+by this pass itself, 0 new findings** — two new task runners since pass 7's
+baseline, one already covered by SEC2-28 pass 8 and one (`directory_account_
+departure_check`, delegating to `check_departed_suspensions`) read in full
+and found correctly org-scoped; five riding-along fixes from other features
+re-verified by direct read. See `CRON8-31-scheduled-tasks.md`. Rotation row
+31 → ✅ (pending this PR's merge); next is Feature 32 (Locations & kiosk).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30 Onboarding pass 8, PR #3517, merged), preserved for history</summary>
+
 **PR [#3517](https://github.com/thegspiro/the-logbook/pull/3517)** (branch
 `claude/security-review-onboarding`). PR #3479 (Feature 29, Reports &
 analytics, pass 10) merged to `main` with no open PR whose head branch
@@ -29,6 +45,8 @@ work and re-verified here by direct read; every standing finding
 re-confirmed OPEN/unchanged. See `ONB5-30-onboarding.md`'s **Pass 8**
 section. Rotation row 30 → ✅ (pending this PR's merge); next is Feature 31
 (Scheduled tasks).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29 Reports & analytics pass 10, PR #3479, merged), preserved for history</summary>
@@ -20432,7 +20450,7 @@ iteration's commit" rule.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
@@ -35634,3 +35652,59 @@ pass's finding) is unchanged. Rotation row 30 → ✅ (pending this PR's
 merge). Next: Feature 31 (Scheduled tasks) — re-check `search_pull_requests`
 fresh rather than trusting this note, since a prior watchdog pass may have
 already advanced the rotation further by the time this merges.
+
+### 2026-10-21 — Feature 31 (Scheduled tasks, pass 8) — watchdog pickup, 0 fixed, 0 new findings
+
+**Step 0.** `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results, checked once before starting and again immediately
+before branching — no open security-review PR either time. PR #3517
+(Feature 30, Onboarding, pass 8) had merged 2026-10-21 ~12:10 UTC with
+nothing started for the next feature in the ~2.5 hours since (no new
+`claude/security-review-*` branch, and `ListAgents` found no reachable
+session); row 31 (Scheduled tasks) was confirmed the first `⬜`.
+
+**Scope check.** Pass 7 landed as `320aa866` (PR #3384, merged 2026-10-17).
+`git diff 320aa866..HEAD` restricted to this feature's two owned files found
+`scheduled.py` unchanged and `scheduled_tasks.py` at +118/−21 lines: 2 new
+task runners (`weekly_security_report`, `directory_account_departure_check`)
+plus five unrelated-feature correctness fixes riding through the same file.
+`weekly_security_report` delegates to `security_weekly_report.py`, already
+covered by SEC2-28 pass 8 (merged after that file's last edit) — not
+re-read. `directory_account_departure_check` delegates to
+`DirectoryAccountService.check_departed_suspensions`, added **after**
+INT-27 pass 8 merged, so not yet covered by its owning feature — read in
+full this pass: correctly org-scoped throughout (listing query, the
+org-scoped-and-locked reload before writing, and the audit payload carrying
+no PII). The five riding-along fixes were each re-verified by direct read,
+not taken on their own commit messages: a scheduled-email send/cancel race
+closed with a matching `.with_for_update()` lock on both sides (guarded by
+an existing regression test); `run_notify_expired_passwords` now follows
+Pitfall #32 (`ACTIVE_ACCOUNT_STATUSES`, not `== ACTIVE`); `run_mark_
+overdue_dues` now derives its predicate from the same shared clause the
+dues screens read, closing a Pitfall #29-shaped duplication; two further
+changes (an RSVP-deadline carry-forward on recurring events, a medical-
+supplies compartment-path display change) were confirmed to introduce no
+new org-scoping or escaping surface but belong to other, already-✅
+features. **0 new findings.** CRON4-31-2 and CRON-4 (app-review)
+re-confirmed OPEN/unchanged at their current, undiffed location in
+`scheduled.py`.
+
+**Gate:** `flake8==7.3.0`/`black==26.5.1 --check`/`isort==9.0.1
+--check-only` clean over `app/ tests/ alembic/`; `validate_migrations.py
+--strict` — 634 revisions, single head `1eb43da769b2`; registry check
+`set(SCHEDULE) == set(TASK_RUNNERS)` — 67/67; `pytest tests/ -q -k
+"scheduled_task or cron or scheduler or directory_departure or
+security_weekly_report or mark_overdue_dues or dues_past_due"` — 162
+passed, 1 skipped (full, DB available) and, re-run under `-m "not
+integration and not slow and not docker"` to check for a Pitfall
+#30b-shaped mis-mark, 71 passed, 1 skipped (none found — both new test
+files mark their `db_session`-using classes `integration` individually);
+frontend n/a — no frontend files touched this pass.
+
+Findings doc: [`CRON8-31-scheduled-tasks.md`](./CRON8-31-scheduled-tasks.md).
+No `KNOWN_LIMITATIONS.md` change needed — the one entry this feature owns
+(CRON2-31-13) already reads "✅ Resolved 2026-10-11", re-checked against
+current code rather than taken on its own say-so; CRON-31-7/8 are unchanged
+by this pass. Rotation row 31 → ✅ (pending this PR's merge). Next: Feature
+32 (Locations & kiosk) — re-check `search_pull_requests` fresh rather than
+trusting this note.
