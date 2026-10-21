@@ -284,7 +284,7 @@ export const learningPaths: LearningPath[] = [
           'If the event is happening now, a green Check In button appears in the Needs You band at the top of the Events page. It opens the same check-in page the QR code does.',
           'Otherwise, at the event, find the posted QR code and scan it with your phone camera. Sign in if you are asked to.',
           'On the Event Check-In page, tap Check In to This Event. The confirmation reads You’re Checked In. If you never answered the RSVP, you are recorded as Going.',
-          'Scanning the code a second time does not check you in twice: the page offers Check In to This Event again, and tapping it just shows your original check-in time.',
+          'When you leave, scan the code again. Because you are already checked in, the page opens on Already Checked In with a Check Out of This Event button; tap it and the page confirms You’re Checked Out.',
           'If there is no code, ask whoever is running the event to check you in.',
           'Confirm the event shows you as attended afterwards. On a training event the hours reach your training record when the organizer finalizes attendance, not at the moment you check in.',
         ],

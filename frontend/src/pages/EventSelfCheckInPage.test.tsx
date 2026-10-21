@@ -304,6 +304,89 @@ describe('EventSelfCheckInPage', () => {
     });
   });
 
+  describe('Scanning again after checking in', () => {
+    const checkedInData = {
+      ...mockQRCheckInData,
+      user_checked_in_at: '2026-01-25T18:15:00Z',
+      user_checked_out_at: null,
+    };
+
+    // States its own mocks: an unconsumed one from another block must not decide
+    // what these see.
+    beforeEach(() => {
+      vi.mocked(eventService.getQRCheckInData).mockReset();
+      vi.mocked(eventService.selfCheckIn).mockReset();
+    });
+
+    it('opens on the check-out screen, with no check-in button', async () => {
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(checkedInData);
+
+      renderWithRouter(<EventSelfCheckInPage />);
+
+      expect(await screen.findByText('Already Checked In')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Check Out of This Event' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /check in to this event/i })).not.toBeInTheDocument();
+    });
+
+    it('checks the member out, then shows when they left and for how long', async () => {
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(checkedInData);
+      vi.mocked(eventService.selfCheckIn).mockResolvedValue({
+        ...mockRSVP,
+        checked_out_at: '2026-01-25T20:00:00Z',
+        attendance_duration_minutes: 105,
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventSelfCheckInPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Check Out of This Event' }));
+
+      expect(await screen.findByText("You're Checked Out")).toBeInTheDocument();
+      expect(screen.getByText(/Duration:/)).toBeInTheDocument();
+      expect(eventService.selfCheckIn).toHaveBeenCalledWith('1', true);
+    });
+
+    it('shows the refusal when check-out is not accepted', async () => {
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(checkedInData);
+      vi.mocked(eventService.selfCheckIn).mockRejectedValue(
+        createMockApiError('You have already checked out of this event', 400)
+      );
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventSelfCheckInPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Check Out of This Event' }));
+
+      expect(await screen.findByText('You have already checked out of this event')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Check Out of This Event' })).toBeEnabled();
+    });
+
+    it('tells a member who already left that they are checked out', async () => {
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue({
+        ...checkedInData,
+        user_checked_out_at: '2026-01-25T20:00:00Z',
+      });
+
+      renderWithRouter(<EventSelfCheckInPage />);
+
+      expect(await screen.findByText("You're Checked Out")).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Check Out of This Event' })).not.toBeInTheDocument();
+    });
+
+    it('still offers check-in to a member who has not checked in', async () => {
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue({
+        ...mockQRCheckInData,
+        user_checked_in_at: null,
+        user_checked_out_at: null,
+      });
+
+      renderWithRouter(<EventSelfCheckInPage />);
+
+      expect(await screen.findByRole('button', { name: /check in to this event/i })).toBeInTheDocument();
+      expect(screen.queryByText('Already Checked In')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Failed Check-In Flow', () => {
     it('should display error message when check-in fails', async () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);

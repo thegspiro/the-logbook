@@ -3957,7 +3957,10 @@ class EventService:
         return event, len(rsvps), None
 
     async def get_qr_check_in_data(
-        self, event_id: UUID, organization_id: UUID | str
+        self,
+        event_id: UUID,
+        organization_id: UUID | str,
+        user_id: UUID | str | None = None,
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
         Get QR code check-in data for an event
@@ -3965,6 +3968,10 @@ class EventService:
         Returns check-in URL and validates that the event is within the valid
         check-in window based on the event's check_in_window_type settings
         (same logic as self_check_in).
+
+        ``user_id`` is the member who scanned. When given, the answer carries
+        that member's own check-in and check-out times so the page can offer
+        check-out to someone already checked in; without it both are None.
 
         Returns: (data_dict, error_message)
         """
@@ -4025,6 +4032,21 @@ class EventService:
             )
             training_requires_approval = bool(session_result.scalars().first())
 
+        user_checked_in_at: Optional[datetime] = None
+        user_checked_out_at: Optional[datetime] = None
+        if user_id is not None:
+            own_result = await self.db.execute(
+                select(EventRSVP.checked_in, EventRSVP.checked_in_at)
+                .add_columns(EventRSVP.checked_out_at)
+                .where(EventRSVP.event_id == str(event.id))
+                .where(EventRSVP.user_id == str(user_id))
+                .where(EventRSVP.organization_id == str(organization_id))
+            )
+            own = own_result.first()
+            if own is not None and own.checked_in and own.checked_in_at:
+                user_checked_in_at = own.checked_in_at
+                user_checked_out_at = own.checked_out_at
+
         return {
             "event_id": str(event.id),
             "event_name": event.title,
@@ -4049,6 +4071,16 @@ class EventService:
             "timezone": org_timezone,
             "records_training": records_training,
             "training_requires_approval": training_requires_approval,
+            "user_checked_in_at": (
+                user_checked_in_at.replace(tzinfo=None).isoformat() + "Z"
+                if user_checked_in_at
+                else None
+            ),
+            "user_checked_out_at": (
+                user_checked_out_at.replace(tzinfo=None).isoformat() + "Z"
+                if user_checked_out_at
+                else None
+            ),
         }, None
 
     # A self check-in this far ahead of the scheduled start is worth putting in

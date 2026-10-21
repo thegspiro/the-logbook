@@ -825,6 +825,12 @@ class QRCheckInData(BaseModel):
         ),
     )
 
+    # The scanning member's own record, so the page can offer check-out to
+    # someone who is already checked in. Both are None for a member who has not
+    # checked in, and the checkout time stays None until they leave.
+    user_checked_in_at: Optional[str] = None
+    user_checked_out_at: Optional[str] = None
+
 
 # A name must contain at least one character that is neither whitespace nor a
 # control code. Spelled as an explicit negated class rather than ``\S`` because

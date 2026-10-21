@@ -114,15 +114,12 @@ itself is the real UI; only the data behind it is substituted:
 | `scheduling-not-eligible`   | The eligibility answer replaced with "not cleared"                         |
 | `scheduling-pick-up`        | One open swap from another member                                          |
 
-**No check-out image, and no check-out step.** The check-in page has a
-**Check Out of This Event** prompt, but nothing sets the state that shows it:
-`setShowCheckOutPrompt(true)` is never called in `EventSelfCheckInPage.tsx`, and
-the server answers a repeat scan with the existing record, which the page shows
-as a plain check-in confirmation (workflow review W20 saw the same). The lesson
-therefore does not tell members to tap it. Guide 04 still describes the prompt
-(`04-events-meetings.md`, "For Members (Checking In)" and the edge-case table);
-that wants either the page fixed or the guide corrected, and is left for the
-owner to decide.
+**No check-out image yet.** The check-in page's **Check Out of This Event** prompt
+was unreachable until the fix that returns the scanning member's own check-in and
+check-out times from `qr-check-in-data`; a second scan now opens on **Already
+Checked In** with that button. The Events lesson and guide 04 describe it. A
+screenshot of the check-out screen can be taken by mocking that response, as
+the other mocked states are.
 
 ## How an image ships
 

@@ -92,6 +92,7 @@ describe('learning path content', () => {
       ['events.rsvp', 'RSVP Now', 'pages/EventDetailPage.tsx'],
       ['events.rsvp', 'Submit RSVP', 'components/event-detail/EventRSVPModal.tsx'],
       ['events.checkin', 'Check In to This Event', 'pages/EventSelfCheckInPage.tsx'],
+      ['events.checkin', 'Check Out of This Event', 'pages/EventSelfCheckInPage.tsx'],
       ['training.history', 'Upcoming Expirations & Due Dates', 'pages/MyTrainingPage.tsx'],
       ['training.submit', 'Save Draft', 'pages/SubmitTrainingPage.tsx'],
       ['training.verify', 'Needs Edits', 'components/training/submit/SubmissionStatusBadge.tsx'],
