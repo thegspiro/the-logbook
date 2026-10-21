@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**This PR** (branch `claude/security-review-locations-kiosk`). PR #3521
+**PR [#3530](https://github.com/thegspiro/the-logbook/pull/3530)** (branch `claude/security-review-locations-kiosk`). PR #3521
 (Feature 31, Scheduled tasks, pass 8) merged 2026-10-21, docs-only, so there
 was nothing to record. `list_pull_requests` (state open) returned no PR whose
 head branch starts with `claude/security-review-`, and no remote branch
