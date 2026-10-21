@@ -2,6 +2,7 @@
  * electionService — extracted from services/api.ts
  */
 
+import type { AxiosRequestConfig } from 'axios';
 import api from './apiClient';
 import { BALLOT_SEND_POLL_INTERVAL_MS, BALLOT_SEND_POLL_MAX_FAILURES } from '../constants/config';
 import { BallotSendJobStatus } from '../constants/enums';
@@ -205,8 +206,8 @@ export const electionService = {
   /**
    * Get election statistics
    */
-  async getStats(electionId: string): Promise<ElectionStats> {
-    const response = await api.get<ElectionStats>(`/elections/${electionId}/stats`);
+  async getStats(electionId: string, config?: AxiosRequestConfig): Promise<ElectionStats> {
+    const response = await api.get<ElectionStats>(`/elections/${electionId}/stats`, config);
     return response.data;
   },
 
