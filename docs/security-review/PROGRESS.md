@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3517](https://github.com/thegspiro/the-logbook/pull/3517)** (branch
+`claude/security-review-onboarding`). PR #3479 (Feature 29, Reports &
+analytics, pass 10) merged to `main` with no open PR whose head branch
+starts with `claude/security-review-` (`search_pull_requests`, 0 results,
+checked once before starting and again immediately before branching), so
+this iteration reviewed Feature 30 (Onboarding), pass 8. **0 fixed by this
+pass itself, 0 new findings** — the one real commit since pass 7's baseline
+(`dbe57bf61`, closing an authenticated-adjacent SSRF/internal-port probe on
+`POST /onboarding/test/email`) was already fixed by independent engineering
+work and re-verified here by direct read; every standing finding
+re-confirmed OPEN/unchanged. See `ONB5-30-onboarding.md`'s **Pass 8**
+section. Rotation row 30 → ✅ (pending this PR's merge); next is Feature 31
+(Scheduled tasks).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29 Reports & analytics pass 10, PR #3479, merged), preserved for history</summary>
+
 **PR [#3479](https://github.com/thegspiro/the-logbook/pull/3479)** (branch
 `claude/security-review-reports-analytics-p10`). This row was last updated
 for PR #3455 (Feature 23, Medical supplies, pass 15); PRs #3456 (Feature
@@ -34,6 +51,8 @@ catalog entry plus a local-date fix) were both read in full and found
 clean; every standing finding re-confirmed unchanged. See
 `RPT6-29-reports-analytics.md`'s **Pass 10** section. Rotation row 29 → ✅
 (pending this PR's merge); next is Feature 30 (Onboarding).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 23 Medical supplies pass 15, PR #3455, merged), preserved for history</summary>
@@ -20412,7 +20431,7 @@ iteration's commit" rule.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
@@ -35572,3 +35591,46 @@ Findings doc: [`MSUP-23-medical-supplies.md`](./MSUP-23-medical-supplies.md)'s
 existing rows already carry the accurate owner-accepted status, re-checked
 against current code. Rotation row 23 → ✅ (pending this PR's merge). Next:
 Feature 24 (Meetings & minutes).
+
+### 2026-10-21 — Feature 30 (Onboarding, pass 8) — watchdog pickup, 1 independently-landed fix re-confirmed, 0 new findings
+
+**Step 0.** `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results, checked fresh immediately before starting and again
+immediately before branching — no open security-review PR either time.
+PR #3479 (Feature 29, Reports & analytics, pass 10) had merged
+(`e9a9baef0`, 2026-10-21T04:46:27Z) with nothing started for the next
+feature in the time since; row 30 (Onboarding) was the first `⬜`.
+
+**Scope check.** Pass 7 landed as `8f308088c` (PR #3381, merged
+2026-10-17). `git log 8f308088c..HEAD` restricted to this feature's full
+pass-7 file list found exactly one real commit: `dbe57bf61`
+("security(onboarding): refuse /test/email once onboarding is complete",
+2026-10-20) — a genuine fix, landed by regular engineering work rather than
+through this rotation, closing an authenticated-adjacent SSRF/internal-port
+probe that a session minted before completion could keep using against
+`POST /onboarding/test/email` for up to `SESSION_MAX_LIFETIME_HOURS` after
+setup actually finished. Re-verified by direct read (not taken on the
+commit message): the `needs_onboarding()` check now sits ahead of any SMTP
+connection attempt in `verify_email_configuration`, and the commit's own
+new structural test (`tests/test_onboarding_test_email_completion_guard.py`)
+walks `onboarding.py`'s AST and fails if any future mutating session route
+skips the same check. No migration, no other feature-owned file changed in
+this window. Every standing finding (duplicate `role.id` 500, `POST
+/organization`'s missing `except Exception`, `ITTeamMemberRequest.email`
+being `str`) re-confirmed OPEN/unchanged at current line numbers, not
+re-litigated. **0 new findings.**
+
+**Gate:** `flake8`/`black --check`/`isort --check-only` clean over `app/
+tests/ alembic/` (isort 9.0.1, CI-pinned); `validate_migrations.py
+--strict` — 632 revisions, single head `59449acab7ba`; `pytest tests/ -q -k
+"onboard or org_template or template_service or key_custody or
+system_notices"` — 323 passed, 1 skipped (pre-existing, `pywebpush`);
+frontend `npm run typecheck` — 0 errors; `npm run lint` — 0 errors.
+
+Findings doc: [`ONB5-30-onboarding.md`](./ONB5-30-onboarding.md)'s **Pass 8**
+section. No `KNOWN_LIMITATIONS.md` change needed — nothing this pass found
+is an owner-decision item, and the existing ONB-30-3 row (unrelated to this
+pass's finding) is unchanged. Rotation row 30 → ✅ (pending this PR's
+merge). Next: Feature 31 (Scheduled tasks) — re-check `search_pull_requests`
+fresh rather than trusting this note, since a prior watchdog pass may have
+already advanced the rotation further by the time this merges.
