@@ -13,9 +13,7 @@ deliberate exception is a ``signed_copy`` attachment, which is the signed
 paper evidence of the approval and can only exist after it.
 """
 
-import asyncio
 import copy
-import os
 from datetime import date, datetime, timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 from uuid import UUID
@@ -55,7 +53,6 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
-    stored_file_response,
 )
 from app.services.minute_service import MinuteService
 from app.utils import download_names
@@ -570,7 +567,7 @@ class MinutesRecordService:
             await self.db.commit()
         except Exception:
             await self.db.rollback()
-            await asyncio.to_thread(file_storage.remove_quietly, stored.path)
+            await file_storage.delete_quietly(stored.path)
             raise
         await self.db.refresh(attachment)
         return attachment
@@ -607,12 +604,12 @@ class MinutesRecordService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
             )
-        if not await asyncio.to_thread(os.path.isfile, path):
+        if not await file_storage.exists(path):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
             )
-        return stored_file_response(
-            path=path,
+        return await file_storage.file_response(
+            path,
             filename=download_names.descriptive_filename(
                 local_day,
                 minutes.title,
@@ -641,7 +638,7 @@ class MinutesRecordService:
         await self.db.delete(attachment)
         await self.db.commit()
         if path:
-            await asyncio.to_thread(file_storage.remove_quietly, path)
+            await file_storage.delete_quietly(path)
         return True
 
     # ============================================

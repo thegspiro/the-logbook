@@ -955,10 +955,17 @@ too. A department that chose S3 or SharePoint is keeping its files on the
 application server and has no indication of it — the step offers the options
 without saying they are not yet in effect (CLAUDE.md pitfall #19).
 
+**In progress (2026-10-21): the S3 / MinIO option is being built** (decision
+31 in `docs/FILE_STORAGE_HARDENING.md`), reading each department's own
+settings. The choice is still unread until step 2 lands, and Google Drive and
+OneDrive / SharePoint stay deferred.
+
 What has to exist before any option other than Local Storage does anything:
 
 - a storage interface the upload, download and delete paths all go through —
-  Phase 2 of `docs/FILE_STORAGE_HARDENING.md` builds it with a local backend;
+  Phase 2 of `docs/FILE_STORAGE_HARDENING.md` built the write side, and
+  step 1 of decision 31 (2026-10-21) routes every read, existence check,
+  delete and download through `file_storage_service` as well;
 - one backend per platform: S3 (which also covers MinIO; the compose file's
   `minio` service under the `with-s3` profile has nothing connecting to it
   either), then Google Drive and OneDrive / SharePoint, which need OAuth token
