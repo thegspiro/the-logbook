@@ -2820,6 +2820,13 @@ that use it fail with a message such as _"Row 12: Invalid training_type
 training type or status — which would apply to every row — stops the whole
 import before anything is saved.
 
+**Members see your library's course names.** A row matched to a library course
+keeps the file's own spelling on the record, but the member's **My Training**
+pages and their own training records show the library course's name instead,
+and their history search finds it by either name. Officers still see the
+record's stored name, which is what the record editor saves. A row left
+unmatched shows the name from the file.
+
 ![The historical-import wizard on its Preview step: parsed rows, matched members, and the confirm button](./images/02-02-historical-import-preview.png)
 
 ---
