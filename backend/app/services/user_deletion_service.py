@@ -27,13 +27,17 @@ Deriving both lists from metadata rather than a hand-maintained constant means
 tables added later are covered without editing this file.
 """
 
+import importlib
+from dataclasses import dataclass
 from functools import lru_cache
+from uuid import UUID
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, literal, or_, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.schema import ForeignKey
 
 from app.core.database import Base
+from app.models.inventory import CheckOutRecord, InventoryItem, ItemIssuance
 from app.utils.sql_results import rows_affected
 
 # Referential actions MySQL carries out by itself when the user row goes away.
@@ -54,6 +58,43 @@ def _targets_user_id(foreign_key: ForeignKey) -> bool:
     return target.split(".")[-2:] == [_USER_TABLE, "id"]
 
 
+def _register_all_models() -> None:
+    """
+    Guarantee every model module has registered its table on
+    ``Base.metadata`` before a scan walks it, however this service is reached.
+
+    ``import_module`` rather than a bare ``import app.models``: the package is
+    wanted for its side effect only, and a bare import of an unused name is
+    what flake8's F401 exists to flag.
+    """
+    importlib.import_module("app.models")
+
+
+@lru_cache(maxsize=1)
+def _cascading_references() -> _ReferenceSet:
+    """
+    ``(table_name, column_name)`` of every ``users.id`` reference declared
+    ``ON DELETE CASCADE``: the rows a permanent delete removes outright.
+
+    Read from the models for the same reason as the RESTRICT scan below — a
+    table added later is reported without anyone remembering to list it. A
+    hand-written list is how the deletion preview came to mention training
+    records and inventory while the delete also took RSVPs, attendance, dues,
+    qualifications, service history and consent records with it.
+    """
+    _register_all_models()
+
+    cascading: list[tuple[str, str]] = []
+    for table in Base.metadata.sorted_tables:
+        for column in table.columns:
+            for foreign_key in column.foreign_keys:
+                if not _targets_user_id(foreign_key):
+                    continue
+                if (foreign_key.ondelete or "").strip().upper() == "CASCADE":
+                    cascading.append((table.name, column.name))
+    return tuple(sorted(cascading))
+
+
 @lru_cache(maxsize=1)
 def _classify_references() -> tuple[_ReferenceSet, _ReferenceSet]:
     """
@@ -62,10 +103,7 @@ def _classify_references() -> tuple[_ReferenceSet, _ReferenceSet]:
     Returns ``(clearable, blocking)`` as ``(table_name, column_name)`` pairs:
     *clearable* can be set to NULL before the delete, *blocking* cannot.
     """
-    # Side-effect import: guarantees every model module has registered its
-    # table on Base.metadata before we walk it, however this service is
-    # reached. Nothing from the package is used directly.
-    import app.models  # noqa: F401
+    _register_all_models()
 
     clearable: list[tuple[str, str]] = []
     blocking: list[tuple[str, str]] = []
@@ -151,3 +189,202 @@ async def release_user_references(db: AsyncSession, user_id: str) -> int:
         released += rows_affected(result) or 0
 
     return released
+
+
+# Words a plain underscore-to-space rendering would get wrong in a label.
+_LABEL_WORDS = {
+    "ip": "IP",
+    "mcp": "MCP",
+    "nfc": "NFC",
+    "nfpa": "NFPA",
+    "oauth": "OAuth",
+    "rsvp": "RSVP",
+    "rsvps": "RSVPs",
+}
+
+
+def _label_for_table(table_name: str) -> str:
+    """``event_rsvps`` -> ``Event RSVPs``: a readable name derived, not typed."""
+    words = [_LABEL_WORDS.get(word, word) for word in table_name.split("_")]
+    label = " ".join(words)
+    return label[:1].upper() + label[1:]
+
+
+@dataclass(frozen=True)
+class RemovedRecordCount:
+    """Rows in one table that a permanent delete removes with the member."""
+
+    table: str
+    label: str
+    count: int
+
+
+async def count_records_removed_with_member(
+    db: AsyncSession, user_id: str, organization_id: str
+) -> list[RemovedRecordCount]:
+    """
+    How many rows each ``ON DELETE CASCADE`` reference would take with
+    *user_id*, largest first, omitting tables with none.
+
+    One statement regardless of how many tables reference ``users``: every
+    per-table count is a branch of a single ``UNION ALL``, so the preview
+    costs one round trip and stays bounded as tables are added.
+
+    Org-scoped twice over: the caller has already resolved *user_id* within
+    *organization_id*, and every table that carries ``organization_id`` is
+    additionally filtered on it. Only direct references are counted — a row
+    that cascades from one of these (a requirement's progress under a
+    program enrollment) goes too, and the dialog says so in words.
+    """
+    branches = []
+    for table_name, column_name in _cascading_references():
+        table = Base.metadata.tables[table_name]
+        conditions = [table.c[column_name] == user_id]
+        if "organization_id" in table.c:
+            conditions.append(table.c.organization_id == organization_id)
+        branches.append(
+            select(
+                literal(table_name).label("table_name"),
+                literal(column_name).label("column_name"),
+                func.count().label("row_count"),
+            )
+            .select_from(table)
+            .where(*conditions)
+        )
+    if not branches:
+        return []
+
+    totals: dict[str, int] = {}
+    for table_name, _column_name, row_count in (
+        await db.execute(union_all(*branches))
+    ).all():
+        if row_count:
+            totals[table_name] = totals.get(table_name, 0) + int(row_count)
+
+    removed = [
+        RemovedRecordCount(table=name, label=_label_for_table(name), count=count)
+        for name, count in totals.items()
+    ]
+    return sorted(removed, key=lambda r: (-r.count, r.label))
+
+
+@dataclass
+class InventoryReturnSummary:
+    """What :func:`return_member_inventory` put back."""
+
+    unassigned: int = 0
+    pool_returns: int = 0
+    checked_in: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.unassigned + self.pool_returns + self.checked_in
+
+
+_HARD_DELETE_RETURN_NOTE = "Returned to stock: the member was permanently deleted."
+
+
+async def return_member_inventory(
+    db: AsyncSession, user_id: str, organization_id: str, performed_by: str
+) -> InventoryReturnSummary:
+    """
+    Put everything *user_id* still holds back in stock, inside the caller's
+    transaction.
+
+    The holding rows (``item_assignments``, ``item_issuances``,
+    ``checkout_records``) CASCADE with the member and
+    ``inventory_items.assigned_to_user_id`` is SET NULL, so a bare delete left
+    an individual item reading ``assigned`` to nobody, a checked-out one
+    ``checked_out`` forever, and a pool's ``quantity_issued`` counting units
+    no record accounts for. Each holding goes through the inventory
+    service's own return path — the one a quartermaster's return uses — so
+    status, condition, lots and pool counts move exactly as they would for a
+    real return; no stock arithmetic is repeated here.
+
+    ``commit=False`` keeps all of it in the open transaction: the caller
+    deletes the member and commits once, and a failure anywhere rolls the
+    returns back with the delete. The service methods take their own row
+    locks (item first, then holding), so the unlocked reads below only name
+    candidates; a holding returned concurrently is reported back as already
+    returned and skipped.
+
+    Checked-out gear is checked in at the item's recorded condition: there is
+    no inspection to go by, and inventing a worse one would quarantine
+    serviceable gear.
+    """
+    # Imported here: inventory_service imports half the model layer, and this
+    # module is loaded by the users endpoint on every request path.
+    from app.services.inventory_service import InventoryService
+
+    service = InventoryService(db)
+    org = UUID(str(organization_id))
+    summary = InventoryReturnSummary()
+
+    assigned_ids = (
+        await db.execute(
+            select(InventoryItem.id).where(
+                InventoryItem.assigned_to_user_id == user_id,
+                InventoryItem.organization_id == organization_id,
+            )
+        )
+    ).scalars()
+    for item_id in list(assigned_ids):
+        ok, _ = await service.unassign_item(
+            UUID(str(item_id)),
+            org,
+            returned_by=performed_by,
+            return_notes=_HARD_DELETE_RETURN_NOTE,
+            expected_user_id=UUID(str(user_id)),
+            commit=False,
+        )
+        summary.unassigned += int(ok)
+
+    issuance_ids = (
+        await db.execute(
+            select(ItemIssuance.id).where(
+                ItemIssuance.user_id == user_id,
+                ItemIssuance.organization_id == organization_id,
+                or_(
+                    ItemIssuance.is_returned.is_(False),
+                    ItemIssuance.is_returned.is_(None),
+                ),
+            )
+        )
+    ).scalars()
+    for issuance_id in list(issuance_ids):
+        ok, _ = await service.return_to_pool(
+            UUID(str(issuance_id)),
+            org,
+            returned_by=performed_by,
+            return_notes=_HARD_DELETE_RETURN_NOTE,
+            commit=False,
+        )
+        summary.pool_returns += int(ok)
+
+    checkouts = (
+        await db.execute(
+            select(CheckOutRecord.id, InventoryItem.condition)
+            .join(InventoryItem, InventoryItem.id == CheckOutRecord.item_id)
+            .where(
+                CheckOutRecord.user_id == user_id,
+                CheckOutRecord.organization_id == organization_id,
+                InventoryItem.organization_id == organization_id,
+                or_(
+                    CheckOutRecord.is_returned.is_(False),
+                    CheckOutRecord.is_returned.is_(None),
+                ),
+            )
+        )
+    ).all()
+    for checkout_id, condition in checkouts:
+        ok, _ = await service.checkin_item(
+            UUID(str(checkout_id)),
+            org,
+            checked_in_by=performed_by,
+            return_condition=condition,
+            damage_notes=_HARD_DELETE_RETURN_NOTE,
+            commit=False,
+        )
+        summary.checked_in += int(ok)
+
+    return summary

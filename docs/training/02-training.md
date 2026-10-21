@@ -221,8 +221,10 @@ record for you.
    for the rest.
 3. **Search courses** filters by course name. **Type** filters by training
    type. Both narrow the years and the lists together.
-4. A record **still waiting for approval has no completion date**. It is
-   grouped under **Awaiting approval**, above the years, whatever you filter by.
+4. A record **with no completion date** is grouped under **No completion date**,
+   above the years, whatever you filter by. This includes a record still waiting
+   for approval and a completed record imported without a date; each row shows
+   its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
 
 The top of the tab shows your **all-time** courses and hours and how many years
 are on record. The History tab reads your whole record, however long it is.
@@ -1343,8 +1345,8 @@ Turn it on for a requirement that online or outside training may satisfy —
 HIPAA is the usual example.
 
 **5. Is the record completed?** Only **completed** records count. A record
-waiting for approval is listed under **Awaiting approval** on the member's
-History tab until an officer approves it.
+waiting for approval has no completion date, so it is listed under **No completion
+date** on the member's History tab until an officer approves it.
 
 The member can see most of this themselves. **My Training** shows the
 requirement's progress and, for a window about to open, an **Opens** row. The
@@ -3819,7 +3821,7 @@ Lt. Santos opens **Events > Create Event** and fills in the drill:
 | Event Type           | Training                                              |
 | Recurring            | No                                                    |
 | Date                 | Saturday, June 13, 2026                               |
-| Time                 | 08:30 – 12:30                                         |
+| Time                 | 08:00 – 12:00                                         |
 | Location             | 415 Industrial Pkwy (acquired structure)              |
 | RSVP Required        | Yes                                                   |
 | RSVP Fields          | Dietary restrictions, accessibility needs (for lunch) |
@@ -3884,7 +3886,7 @@ By 08:15, 24 of the 28 have checked in. Two more arrive by 08:20 and scan in.
 phone camera. Lt. Santos opens the event's check-in list on his tablet, finds
 Thompson, and checks him in.
 
-Final attendance at 08:30: 26 present out of 28. FF Garcia called in sick and one other member did not come.
+Final attendance at 08:30: 27 present out of 28. FF Garcia called in sick.
 
 ### Part 4: Drill Execution & Documentation
 
@@ -3903,9 +3905,8 @@ shift reports afterwards.
 
 ### Part 5: Post-Drill Reports (Same Evening)
 
-After the drill, Lt. Santos selects **End Event** at 12:30 and then finalizes the
-event's attendance. Each member is credited the time they were there, so everyone
-who stayed to the end gets the 4 hours of "Structural Firefighting Operations". The three
+After the drill, Lt. Santos finalizes the event's attendance, which credits
+everyone the 4 hours of "Structural Firefighting Operations". The three
 apparatus officers then file shift completion reports for their crews.
 
 Each officer starts from the drill shift. The form fills in the date, hours and
@@ -3931,8 +3932,8 @@ roof ventilation. All 10 get 4 hours.
 | Measure            | Value                              |
 | ------------------ | ---------------------------------- |
 | Reports filed      | 26 (one per trainee present)       |
-| Credit hours each  | 4 (2 for FF Patel)                 |
-| Total hours logged | 102                                |
+| Credit hours each  | 4                                  |
+| Total hours logged | 104                                |
 | Linked course      | Structural Firefighting Operations |
 
 ![The Crew summary table on Scheduling > Shift Reports — one row per crew member with report count, hours, calls and average rating](./images/02-90-crew-summary-table.png)

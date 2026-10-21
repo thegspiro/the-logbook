@@ -576,7 +576,8 @@ class SkillTestResponse(UTCResponseBase):
     organization_id: UUID
     template_id: UUID
     candidate_id: UUID
-    examiner_id: UUID
+    # None once the examiner's account has been permanently deleted.
+    examiner_id: Optional[UUID] = None
     requirement_id: Optional[UUID] = None
     status: str
     result: str
@@ -679,7 +680,8 @@ class SkillTestListResponse(UTCResponseBase):
     template_name: Optional[str] = None
     candidate_id: UUID
     candidate_name: Optional[str] = None
-    examiner_id: UUID
+    # None once the examiner's account has been permanently deleted.
+    examiner_id: Optional[UUID] = None
     examiner_name: Optional[str] = None
     status: str
     result: str

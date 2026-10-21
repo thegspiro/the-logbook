@@ -110,6 +110,7 @@ from app.services.training_record_notices import (
     send_training_record_notice,
     snapshot,
 )
+from app.services.training_requirement_removal import remove_requirement
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_org_waivers, fetch_user_waivers
 from app.services.upload_scanning import reject_if_malicious
@@ -1877,7 +1878,12 @@ async def delete_requirement(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
-    Permanently delete a training requirement.
+    Delete a training requirement.
+
+    A requirement that a pipeline, member progress, a skills or knowledge
+    test, a recertification pathway, a course class, a compliance profile or
+    a waiver still references is deactivated rather than deleted, so those
+    records keep it. Only an unreferenced requirement is deleted.
 
     Requires training officer permissions.
 
@@ -1896,7 +1902,25 @@ async def delete_requirement(
             status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
         )
 
-    await db.delete(requirement)
+    requirement_name = requirement.name
+    deleted = await remove_requirement(db, requirement)
+    await log_audit_event(
+        db=db,
+        event_type=(
+            "training_requirement_deleted"
+            if deleted
+            else "training_requirement_deactivated"
+        ),
+        event_category="training",
+        severity="warning",
+        event_data={
+            "requirement_id": str(requirement_id),
+            "requirement_name": requirement_name,
+            "action": "deleted" if deleted else "deactivated_in_place_of_delete",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     await db.commit()
 
 

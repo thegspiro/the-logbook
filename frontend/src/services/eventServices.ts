@@ -112,10 +112,17 @@ export const eventService = {
   },
 
   /**
-   * Delete all events in a recurring series
+   * Delete all events in a recurring series. With `fromEventId`, deletes that
+   * occurrence and every later one and keeps the earlier ones; the backend
+   * then ignores `deleteFutureOnly`, which cuts at the current time instead.
    */
-  async deleteEventSeries(parentEventId: string, deleteFutureOnly = false): Promise<void> {
-    await api.delete(`/events/${parentEventId}/series?delete_future_only=${deleteFutureOnly}`);
+  async deleteEventSeries(parentEventId: string, deleteFutureOnly = false, fromEventId?: string): Promise<void> {
+    await api.delete(`/events/${parentEventId}/series`, {
+      params: {
+        delete_future_only: deleteFutureOnly,
+        ...(fromEventId ? { from_event_id: fromEventId } : {}),
+      },
+    });
   },
 
   /**

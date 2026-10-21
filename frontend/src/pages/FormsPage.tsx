@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { getErrorMessage } from '@/utils/errorHandling';
+import toast from 'react-hot-toast';
 import {
   FormInput,
   Plus,
@@ -228,23 +229,56 @@ const FormsPage: React.FC = () => {
     }
   };
 
+  // The backend archives a form that has submissions instead of deleting it
+  // (the submissions are the department's record), and deletes one that has
+  // none. The list's submission_count says which this will be.
   const handleDelete = async (form: FormDef) => {
-    const count = form.submission_count ?? 0;
-    const confirmed = await confirm({
-      title: 'Delete this form?',
-      message: (
-        <>
-          <strong>{form.name}</strong> is deleted permanently, and every submission made to it is deleted with it
-          {count > 0 ? ` (${count} submission${count === 1 ? '' : 's'})` : ''}. This cannot be undone. To stop new
-          submissions but keep the ones already made, archive the form instead.
-        </>
-      ),
-      confirmLabel: 'Delete form and submissions',
-      cancelLabel: 'Keep form',
-    });
+    const count = form.submission_count;
+    const submissions = count === undefined ? '' : `${count} submission${count === 1 ? '' : 's'}`;
+    const willArchive = count !== undefined && count > 0;
+    const confirmed = await confirm(
+      count === undefined
+        ? {
+            title: 'Delete this form?',
+            message: (
+              <>
+                If anyone has submitted <strong>{form.name}</strong>, it is archived instead of deleted, so those
+                submissions are kept and it stops taking new ones. Otherwise it is deleted permanently, which cannot be
+                undone.
+              </>
+            ),
+            confirmLabel: 'Delete form',
+            cancelLabel: 'Keep form',
+          }
+        : willArchive
+          ? {
+              title: 'Archive this form?',
+              message: (
+                <>
+                  <strong>{form.name}</strong> has {submissions}, so it is archived instead of deleted: it stops taking
+                  new submissions, and the {submissions} already made are kept.
+                  {form.status === FormStatus.ARCHIVED ? ' It is already archived, so nothing changes.' : ''}
+                </>
+              ),
+              confirmLabel: 'Archive form',
+              cancelLabel: 'Keep form',
+            }
+          : {
+              title: 'Delete this form?',
+              message: (
+                <>
+                  <strong>{form.name}</strong> has no submissions, so it is deleted permanently. This cannot be undone.
+                </>
+              ),
+              confirmLabel: 'Delete form',
+              cancelLabel: 'Keep form',
+            }
+    );
     if (!confirmed) return;
     try {
       await formsService.deleteForm(form.id);
+      if (count === undefined) toast.success('Form deleted, or archived if it had submissions');
+      else toast.success(willArchive ? `Form archived; its ${submissions} are kept` : 'Form deleted');
       await loadData();
     } catch (err: unknown) {
       const message = getErrorMessage(err, 'Failed to delete form');
