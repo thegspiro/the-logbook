@@ -4,30 +4,16 @@ Schemas for shift hours a member worked outside the department's schedule.
 Snake_case on the wire, matching the rest of ``/api/v1/scheduling``.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.external_shift_hours import MAX_EXTERNAL_SHIFT_MINUTES
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCResponseBase, as_utc
 
 _MAX_HOURS = MAX_EXTERNAL_SHIFT_MINUTES / 60
-
-
-def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
-    """Read an offset-less datetime as UTC and convert an aware one to it.
-
-    Mixing the two in one comparison raises ``TypeError``, which Pydantic does
-    not turn into a 422; and the driver stores an aware value by its wall
-    clock, dropping the offset, so it must reach the model already in UTC.
-    """
-    if value is None:
-        return None
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
 
 
 def _check_span(start_at: Optional[datetime], end_at: Optional[datetime]) -> None:
@@ -74,7 +60,7 @@ class ExternalShiftHoursCreate(BaseModel):
     @field_validator("start_at", "end_at")
     @classmethod
     def _utc(cls, value: Optional[datetime]) -> Optional[datetime]:
-        return _as_utc(value)
+        return as_utc(value)
 
     @model_validator(mode="after")
     def _one_way_of_giving_the_shift(self) -> "ExternalShiftHoursCreate":
@@ -111,7 +97,7 @@ class ExternalShiftHoursUpdate(BaseModel):
     @field_validator("start_at", "end_at")
     @classmethod
     def _utc(cls, value: Optional[datetime]) -> Optional[datetime]:
-        return _as_utc(value)
+        return as_utc(value)
 
     @model_validator(mode="after")
     def _times_are_a_valid_pair(self) -> "ExternalShiftHoursUpdate":

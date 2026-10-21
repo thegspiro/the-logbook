@@ -15,7 +15,7 @@ from app.models.membership_pipeline import (
     PipelineStepType,
     ProspectStatus,
 )
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
 
 # step_type / action_type / status map to strict MySQL ENUM columns, but were
 # typed as free str and inserted raw (create_step/update_step, update_prospect's
@@ -1038,7 +1038,7 @@ class InterviewCreate(BaseModel):
         max_length=100,
         description="Role of the interviewer, e.g. Membership Coordinator, Chief",
     )
-    interview_date: Optional[datetime] = None
+    interview_date: Optional[UTCDateTime] = None
     step_id: Optional[UUID] = None
 
 
@@ -1052,7 +1052,7 @@ class InterviewUpdate(BaseModel):
     )
     recommendation_notes: Optional[str] = None
     interviewer_role: Optional[str] = Field(None, max_length=100)
-    interview_date: Optional[datetime] = None
+    interview_date: Optional[UTCDateTime] = None
 
 
 class InterviewResponse(UTCResponseBase):
