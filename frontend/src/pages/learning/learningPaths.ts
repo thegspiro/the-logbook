@@ -297,6 +297,10 @@ export const learningPaths: LearningPath[] = [
             file: 'events-check-in-page.png',
             alt: 'The Event Check-In page reached from the QR code: the event name, type and time, and a green Check In to This Event button.',
           },
+          {
+            file: 'events-check-out.png',
+            alt: 'The check-in page for a member who is already checked in: Already Checked In, the event and the time they checked in, and a Check Out of This Event button.',
+          },
         ],
         success: 'The event lists you as checked in, not merely as having RSVPed.',
       },

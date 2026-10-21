@@ -94,7 +94,7 @@ lessons themselves.
 
 ## Captured
 
-Twenty-five images in `frontend/public/lesson-images/` (about 700 KB), taken as
+Twenty-six images in `frontend/public/lesson-images/` (about 700 KB), taken as
 the ordinary demo member by
 [`scripts/screenshots/learning-center.mjs`](../../scripts/screenshots/learning-center.mjs)
 and attached to a step through its `screenshots` list. Every step now has at
@@ -113,13 +113,13 @@ itself is the real UI; only the data behind it is substituted:
 | `events-waitlist`           | One unanswered event reported as full                                      |
 | `scheduling-not-eligible`   | The eligibility answer replaced with "not cleared"                         |
 | `scheduling-pick-up`        | One open swap from another member                                          |
+| `events-check-out`          | The member's own check-in time added to the real QR data                   |
 
-**No check-out image yet.** The check-in page's **Check Out of This Event** prompt
-was unreachable until the fix that returns the scanning member's own check-in and
+**Check-out.** The check-in page's **Check Out of This Event** prompt was
+unreachable until the fix that returns the scanning member's own check-in and
 check-out times from `qr-check-in-data`; a second scan now opens on **Already
-Checked In** with that button. The Events lesson and guide 04 describe it. A
-screenshot of the check-out screen can be taken by mocking that response, as
-the other mocked states are.
+Checked In** with that button (`events-check-out`, mocked as below). The Events
+lesson and guide 04 describe it.
 
 ## How an image ships
 

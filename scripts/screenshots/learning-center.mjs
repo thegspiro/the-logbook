@@ -317,6 +317,31 @@ const shots = [
         .locator("xpath=ancestor::div[contains(@class,'shadow')][1]"),
   },
   {
+    id: "events-check-out",
+    route: "/events",
+    // A member who is already checked in is the state; the real answer for the
+    // event is returned with that member's own check-in time added.
+    beforeNavigate: async (page) => {
+      await page.route("**/events/*/qr-check-in-data", async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        body.user_checked_in_at = new Date(
+          Date.now() - 3_600_000,
+        ).toISOString();
+        body.user_checked_out_at = null;
+        await route.fulfill({ response, json: body });
+      });
+    },
+    prepare: async (page) => {
+      await page.getByRole("link", { name: "Check In" }).first().click();
+      await page.getByRole("heading", { name: "Already Checked In" }).waitFor();
+    },
+    clip: (page) =>
+      page
+        .getByRole("heading", { name: "Already Checked In" })
+        .locator("xpath=ancestor::div[contains(@class,'shadow')][1]"),
+  },
+  {
     id: "scheduling-not-eligible",
     route: "/scheduling?tab=open-shifts",
     // Every seeded member is cleared for something, so the server's answer for
