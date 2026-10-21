@@ -832,26 +832,34 @@ async def delete_training_program(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
-    Permanently delete a training program and everything under it (phases,
-    requirements, milestones, enrollments, and enrolled members' progress).
-    Irreversible — the UI guards it behind a confirmation.
+    Delete a training program and everything under it (phases, requirements,
+    milestones, enrollments, and enrolled members' progress).
+
+    A program any member has graduated from is deactivated instead, keeping
+    its structure and every enrollment; enrollments still in progress are
+    withdrawn. The UI guards both behind a confirmation that says which.
 
     **Authentication required**
     **Requires permission: training.manage**
     """
     service = TrainingProgramService(db)
-    ok, error = await service.delete_training_program(
+    outcome, error = await service.delete_training_program(
         program_id=program_id,
         organization_id=current_user.organization_id,
     )
-    if not ok:
+    if not outcome:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
     await log_audit_event(
         db=db,
         event_type="training_program_updated",
         event_category="training",
         severity="warning",
-        event_data={"program_id": str(program_id), "action": "program_deleted"},
+        event_data={
+            "program_id": str(program_id),
+            "action": (
+                "program_deactivated" if outcome == "deactivated" else "program_deleted"
+            ),
+        },
         user_id=str(current_user.id),
         username=current_user.username,
     )
