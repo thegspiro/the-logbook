@@ -8,12 +8,16 @@ Runs daily as the ``property_return_reminders`` scheduled task, and on demand
 through ``POST /users/property-return-reminders/process``. Each run sends a
 member at most one reminder: the latest threshold they have passed, if it has
 not been sent already.
+
+The 30 and 90 days count from the drop's effective date -- the day the member
+left, which an officer may have entered weeks after the fact -- not from when
+the drop was recorded (``effective_separation_at``).
 """
 
 from datetime import datetime, timezone
 from decimal import Decimal
 from html import escape
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -29,6 +33,11 @@ from app.services.email_policy import (
     department_required_kinds,
     member_receives_email,
 )
+from app.services.member_service_history_service import (
+    MemberServiceHistoryService,
+    effective_separation_at,
+)
+from app.utils.org_timezone import scheduling_timezone
 
 # Reminder thresholds in days
 REMINDER_THRESHOLDS: List[Dict[str, Any]] = [
@@ -64,6 +73,31 @@ class PropertyReturnReminderService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _effective_drops(
+        self,
+        organization_id: str,
+        members: Sequence[User],
+        org: Optional[Organization],
+    ) -> Dict[str, datetime]:
+        """Each dropped member's effective drop moment, keyed by member id.
+
+        One query for every member's stints rather than one per member: the
+        daily run walks the organization's whole dropped roster.
+        """
+        stints = await MemberServiceHistoryService(self.db).periods_by_user(
+            organization_id, [str(m.id) for m in members]
+        )
+        tz = scheduling_timezone(org)
+        return {
+            str(m.id): effective_separation_at(
+                dropped_at(m),
+                stints.get(str(m.id), []),
+                UserStatus(m.status),
+                tz,
+            )
+            for m in members
+        }
 
     @staticmethod
     def _to_local(dt: datetime, tz_name: str) -> datetime:
@@ -112,9 +146,11 @@ class PropertyReturnReminderService:
         org = org_result.scalar_one_or_none()
         org_name = org.name if org else "Department"
         org_tz = org.timezone if org and org.timezone else "America/New_York"
+        drops = await self._effective_drops(organization_id, dropped_members, org)
 
         for member in dropped_members:
-            days_since_drop = (now - dropped_at(member)).days
+            dropped_on = drops[str(member.id)]
+            days_since_drop = (now - dropped_on).days
 
             # Only the latest threshold the member has passed is considered. A
             # threshold the member has already gone past is superseded, never
@@ -155,6 +191,7 @@ class PropertyReturnReminderService:
                 threshold=threshold,
                 days_since_drop=days_since_drop,
                 items_info=items_info,
+                dropped_on=dropped_on,
             )
             results.append(reminder_result)
 
@@ -196,16 +233,20 @@ class PropertyReturnReminderService:
             .order_by(User.status_changed_at.asc())
         )
         dropped_members = dropped_result.scalars().all()
+        drops = await self._effective_drops(organization_id, dropped_members, org)
 
         overdue_list = []
-        for member in dropped_members:
+        # Oldest effective drop first. The query's status_changed_at order is
+        # the recording order, which a back-dated drop does not follow.
+        for member in sorted(dropped_members, key=lambda m: drops[str(m.id)]):
             items_info = await self._get_outstanding_items(
                 str(member.id), organization_id
             )
             if items_info["count"] == 0:
                 continue
 
-            days_since_drop = (now - dropped_at(member)).days
+            dropped_on = drops[str(member.id)]
+            days_since_drop = (now - dropped_on).days
 
             # Check which reminders have been sent
             reminder_result = await self.db.execute(
@@ -216,7 +257,7 @@ class PropertyReturnReminderService:
             )
             sent_reminders = [r.reminder_type for r in reminder_result.scalars().all()]
 
-            local_drop_date = self._to_local(dropped_at(member), org_tz)
+            local_drop_date = self._to_local(dropped_on, org_tz)
             overdue_list.append(
                 {
                     "user_id": str(member.id),
@@ -314,8 +355,13 @@ class PropertyReturnReminderService:
         threshold: Dict[str, Any],
         days_since_drop: int,
         items_info: Dict[str, Any],
+        dropped_on: Optional[datetime] = None,
     ) -> Dict[str, Any]:
-        """Generate a reminder email and record it."""
+        """Generate a reminder email and record it.
+
+        ``dropped_on`` is the effective drop moment the caller counted
+        ``days_since_drop`` from; without it the recording is used.
+        """
         from app.services.email_template_service import (
             build_items_list_html,
             build_items_list_text,
@@ -324,7 +370,7 @@ class PropertyReturnReminderService:
         reminder_label = threshold["label"]
         reminder_type = threshold["type"]
 
-        local_drop_date = self._to_local(dropped_at(member), org_tz)
+        local_drop_date = self._to_local(dropped_on or dropped_at(member), org_tz)
         drop_date_display = local_drop_date.strftime("%B %d, %Y")
         drop_type_display = (
             member.status.value.replace("_", " ").title()

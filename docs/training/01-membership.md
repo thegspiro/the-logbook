@@ -1789,9 +1789,13 @@ A member gets at most one reminder per check: the latest one they are due. A
 member first found at day 100 gets only the 90-day reminder, never a late
 30-day one. No reminder is ever sent twice.
 
+The 30 and 90 days count from the drop's **Effective date** — the day the
+member left — not the day you recorded it. A drop entered with an effective
+date 35 days back gets its 30-day reminder at the next daily check.
+
 **Who still has property.** The **Former members still holding property**
 panel lists every dropped member with items still out. It shows when they
-were dropped, how many items, their value and which reminders have gone. You
+were dropped (the effective date), how many items, their value and which reminders have gone. You
 find it on the Inventory **Member Equipment** page and on **Members Admin →
 Member Management**. Select a name to open the member's profile.
 

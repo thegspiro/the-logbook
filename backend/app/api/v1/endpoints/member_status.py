@@ -34,11 +34,11 @@ from app.services.admin_continuity_service import (
 )
 from app.services.member_service_history_service import (
     MemberServiceHistoryService,
+    effective_separation_at,
     is_separated,
 )
 from app.utils.membership import LEGACY_MEMBERSHIP_TYPES, is_administrative
 from app.utils.org_timezone import (
-    local_date,
     resolve_org_today,
     resolve_scheduling_timezone,
 )
@@ -442,10 +442,10 @@ async def change_member_status(
             )
 
     # Update the status and record when it changed. status_changed_at stays
-    # the moment of the change even when the separation is back-dated: the
-    # property-return reminder schedule counts from it, and must not open a
-    # return deadline already overdue. The undo-drop window is the exception
-    # -- it counts from the effective date (see _undo_drop_availability).
+    # the moment of the change even when the separation is back-dated; the
+    # clocks that should run from the day the member left -- the undo-drop
+    # window and the property-return reminders -- derive that from the stint
+    # closed above (effective_separation_at).
     member.status = new_status
     member.status_changed_at = datetime.now(timezone.utc)
     member.status_change_reason = request.reason
@@ -690,25 +690,17 @@ async def _undo_drop_availability(
             detail="This drop has no recorded date, so it cannot be undone. "
             "Change the member's status instead.",
         )
-    if changed.tzinfo is None:
-        changed = changed.replace(tzinfo=timezone.utc)
 
     # The window counts from the drop's effective date, the day the member
-    # actually left, not the day an officer recorded it: a drop entered three
-    # weeks late is three weeks old. It keeps the time of day of the recording,
-    # so a drop that was not back-dated keeps exactly the window it always had.
-    # It is never later than the recording, though -- the stint's end can be
-    # edited in the service history afterwards, and that must not stretch the
-    # undo into the backdating tool the week was chosen to prevent.
-    effective = await MemberServiceHistoryService(db).separation_date(
-        member, UserStatus(member.status)
+    # actually left, not the day an officer recorded it (see
+    # effective_separation_at, which the property-return reminders share).
+    history = MemberServiceHistoryService(db)
+    anchor = effective_separation_at(
+        changed,
+        await history.list_periods(member.organization_id, member.id),
+        UserStatus(member.status),
+        await resolve_scheduling_timezone(db, member.organization_id),
     )
-    anchor = changed
-    if effective is not None:
-        tz = await resolve_scheduling_timezone(db, member.organization_id)
-        backdated_days = (local_date(changed, tz) - effective).days
-        if backdated_days > 0:
-            anchor = changed - timedelta(days=backdated_days)
     until = anchor + timedelta(days=UNDO_DROP_WINDOW_DAYS)
     if datetime.now(timezone.utc) > until:
         return UndoDropAvailability(
