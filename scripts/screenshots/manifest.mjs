@@ -8380,8 +8380,12 @@ export const SHOTS = [
     line: 1468,
     anchor:
       "Minutes Settings as a settings administrator: the section list (Attendance,",
-    alt: "Minutes Settings: the section list (Attendance, Signatures, Reminders, Publishing) beside the Attendance section and its Save row",
+    alt: "Minutes Settings: the section tabs (Attendance, Signatures, Reminders, Publishing) above the Attendance section and its Save row",
     route: "/minutes/settings",
+    // The settings column only: the page opens under the administrator's
+    // malware-scanning notice on a stack with scanning off, which is not a
+    // state a department running the app would be shown.
+    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
     expect: "How attendance is listed",
   },
   {
@@ -8406,6 +8410,10 @@ export const SHOTS = [
       "Minutes Settings, Publishing section: the public-copy switch and the",
     alt: "Minutes Settings, Publishing: the public-copy switch and the Executive-session minutes group with its two switches",
     route: "/minutes/settings?tab=publishing",
+    // The settings column only: the page opens under the administrator's
+    // malware-scanning notice on a stack with scanning off, which is not a
+    // state a department running the app would be shown.
+    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
     expect: "Executive-session minutes",
   },
   {
@@ -8416,7 +8424,11 @@ export const SHOTS = [
       "Minutes Settings, Signatures section with the two default slots, Recording",
     alt: "Minutes Settings, Signatures: the Recording Secretary and Presiding Officer slots, each open to anyone who manages minutes",
     route: "/minutes/settings?tab=signatures",
-    expect: "Anyone who manages minutes",
+    // The settings column only: the page opens under the administrator's
+    // malware-scanning notice on a stack with scanning off, which is not a
+    // state a department running the app would be shown.
+    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
+    expect: { selector: "input[value='Recording Secretary']" },
   },
   {
     id: "04-75-minutes-settings-reminders",
@@ -8426,11 +8438,15 @@ export const SHOTS = [
       "Minutes Settings, Reminders section: the email switch, the first-reminder and",
     alt: "Minutes Settings, Reminders: the email switch, the first-reminder and repeat-while-overdue day fields, and the weekly open-items list switch",
     route: "/minutes/settings?tab=reminders",
+    // The settings column only: the page opens under the administrator's
+    // malware-scanning notice on a stack with scanning off, which is not a
+    // state a department running the app would be shown.
+    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
     expect: "Email reminders to assignees",
   },
   {
-    // The Early Summer meeting's minutes are the pending one: its Approval of
-    // Previous Minutes motion is prepared and linked to the circulated Spring
+    // The Facilities meeting's minutes are the pending one: its Approval of
+    // Previous Minutes motion is prepared and linked to the circulated Apparatus
     // minutes, with nothing recorded. The form is filled in but never saved.
     id: "04-76-minutes-prepared-acceptance-motion",
     doc: "04-events-meetings.md",
@@ -8444,7 +8460,7 @@ export const SHOTS = [
         "/minutes-records?limit=100",
         (id) => `/minutes/${id}`,
         "minutes",
-        (m) => m.title === "Minutes: Early Summer Business Meeting",
+        (m) => m.title === "Minutes: Facilities Business Meeting",
       )(page);
       const group = page.getByRole("group", {
         name: "Motion for Approval of Previous Minutes",
@@ -8460,28 +8476,32 @@ export const SHOTS = [
     expect: "The minutes were accepted",
   },
   {
-    // As the administrator, who circulated the Spring minutes: the note names
+    // As the administrator, who circulated the Apparatus minutes: the note names
     // the meeting that accepted them. Adopting is left to a second officer.
     id: "04-77-minutes-accepted-by-later-meeting",
     doc: "04-events-meetings.md",
     line: 1726,
     anchor:
       "Circulated minutes as an officer, with the note saying a later meeting accepted",
-    alt: "Circulated minutes with the note that the Late Spring Business Meeting accepted them as submitted, moved and seconded by named members, and that Adopt Minutes opens already filled in",
+    alt: "Circulated minutes with the note that the Membership Business Meeting accepted them as submitted, moved and seconded by named members, and that Adopt Minutes opens already filled in",
     route: "/minutes",
     prepare: async (page) => {
       await openFirstFromApi(
         "/minutes-records?limit=100",
         (id) => `/minutes/${id}`,
         "minutes",
-        (m) => m.title === "Minutes: Spring Business Meeting",
+        (m) => m.title === "Minutes: Apparatus Business Meeting",
       )(page);
       await page
         .getByText("accepted these minutes as submitted")
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
+    selector: "div:has(> p.alert-info:has-text('accepted these minutes'))",
     expect: "accepted these minutes",
+    // "No suggestions yet" is the Suggestions panel further down the page, not
+    // an empty subject: the shot is the note at the top.
+    allowEmptyState: true,
   },
   {
     // As the Secretary: the administrator circulated these minutes, and the
@@ -8491,7 +8511,7 @@ export const SHOTS = [
     line: 1732,
     anchor:
       "The Adopt these minutes dialog opened by a second officer on those minutes",
-    alt: "The Adopt these minutes dialog filled in from the motion recorded at the Late Spring Business Meeting: the date the body voted, the meeting that accepted them, and the note saying where it came from",
+    alt: "The Adopt these minutes dialog filled in from the motion recorded at the Membership Business Meeting: the date the body voted, the meeting that accepted them, and the note saying where it came from",
     route: "/minutes",
     auth: "secretary",
     prepare: async (page) => {
@@ -8499,7 +8519,7 @@ export const SHOTS = [
         "/minutes-records?limit=100",
         (id) => `/minutes/${id}`,
         "minutes",
-        (m) => m.title === "Minutes: Spring Business Meeting",
+        (m) => m.title === "Minutes: Apparatus Business Meeting",
       )(page);
       await page
         .getByRole("button", { name: "Adopt Minutes" })
