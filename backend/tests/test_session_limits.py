@@ -17,15 +17,19 @@ from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token
 from app.services.auth_service import AuthService, session_end_reason
 
+# The fixed reference for checks that are handed it (session_end_reason).
+# Sessions judged against the real clock are built from the time of the test
+# instead (_live): under a full suite this module is imported minutes before
+# its tests run, which ages a "10 minutes idle" session past the idle limit.
 NOW = datetime.now(timezone.utc)
 
 
-def _session(idle_minutes=1, age_hours=1, **extra):
+def _session(idle_minutes=1, age_hours=1, now=NOW, **extra):
     return SimpleNamespace(
         id="session-1",
         user_id="user-123",
-        last_activity=NOW - timedelta(minutes=idle_minutes),
-        created_at=NOW - timedelta(hours=age_hours),
+        last_activity=now - timedelta(minutes=idle_minutes),
+        created_at=now - timedelta(hours=age_hours),
         **extra,
     )
 
@@ -133,7 +137,10 @@ def _access_db(session):
 
 def _live(**kw):
     token = create_access_token({"sub": "user-123"})
-    return token, _session(token=token, expires_at=NOW + timedelta(minutes=20), **kw)
+    now = datetime.now(timezone.utc)
+    return token, _session(
+        token=token, expires_at=now + timedelta(minutes=20), now=now, **kw
+    )
 
 
 @pytest.mark.unit
@@ -164,7 +171,7 @@ class TestAccessTokenCheck:
         user, _db = await self._check(session, token)
 
         assert user is not None
-        assert session.last_activity > NOW - timedelta(minutes=1)
+        assert session.last_activity > datetime.now(timezone.utc) - timedelta(minutes=1)
 
     async def test_a_background_request_does_not_extend_the_idle_timer(self):
         token, session = _live(idle_minutes=10)
