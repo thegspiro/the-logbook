@@ -179,6 +179,21 @@ def local_date(value: datetime, tz: ZoneInfo) -> date:
     return to_local(value, tz).date()
 
 
+def stored_calendar_day(value: Optional[datetime]) -> Optional[date]:
+    """The calendar day a date-only value was stored as, or None.
+
+    Some date-only fields (a minutes action item's due date) live in a
+    DATETIME column at UTC midnight. They are read in UTC, never converted to
+    the department's zone: west of Greenwich that would turn the 15th into the
+    14th. This matches the frontend's ``formatCalendarDate``.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        value = value.astimezone(timezone.utc)
+    return value.date()
+
+
 def local_and_utc_dates(value: datetime, tz: ZoneInfo) -> List[date]:
     """The department's date of ``value``, then its UTC date if that differs.
 

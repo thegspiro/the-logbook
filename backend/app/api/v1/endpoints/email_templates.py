@@ -28,6 +28,7 @@ from app.models.email_template import (
     ScheduledEmailStatus,
 )
 from app.models.user import Organization, User
+from app.schemas.base import as_utc
 from app.schemas.email_template import (
     EmailAttachmentResponse,
     EmailFooterContactDetails,
@@ -999,7 +1000,9 @@ async def schedule_email(
         cc_emails=body.cc_emails,
         bcc_emails=body.bcc_emails,
         context=body.context,
-        scheduled_at=body.scheduled_at,
+        # The guard above refuses a naive value; an aware one is converted,
+        # because the DATETIME column would keep 18:00-04:00 as 18:00.
+        scheduled_at=as_utc(body.scheduled_at),
         status=ScheduledEmailStatus.PENDING,
         created_by=current_user.id,
     )
@@ -1065,7 +1068,7 @@ async def update_scheduled_email(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="scheduled_at must be in the future",
             )
-        scheduled.scheduled_at = body.scheduled_at
+        scheduled.scheduled_at = as_utc(body.scheduled_at)
         changes.append("rescheduled")
     if body.status == "cancelled":
         scheduled.status = ScheduledEmailStatus.CANCELLED

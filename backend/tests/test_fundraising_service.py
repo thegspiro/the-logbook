@@ -8,7 +8,7 @@ aggregate updates when a donation is recorded (only COMPLETED donations
 roll up). DB mocked; no MySQL.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -25,10 +25,11 @@ def _utc_department(monkeypatch):
     """The service reads the department's zone; answer UTC so the dates the
     fixtures here are built from keep meaning what they say."""
     for module in ("app.services.fundraising_service",):
-        monkeypatch.setattr(
-            f"{module}.resolve_scheduling_timezone",
-            AsyncMock(return_value=ZoneInfo("UTC")),
-        )
+        for helper in ("resolve_scheduling_timezone", "resolve_reporting_timezone"):
+            monkeypatch.setattr(
+                f"{module}.{helper}",
+                AsyncMock(return_value=ZoneInfo("UTC")),
+            )
 
 
 def _one(obj):
@@ -66,7 +67,8 @@ def _donation(amount, donor_id="d1", method="cash", day="2026-01-15"):
         amount=amount,
         donor_id=donor_id,
         payment_method=method,
-        donation_date=datetime.strptime(day, "%Y-%m-%d").date(),
+        # A DATETIME column, read back naive (UTC) from MySQL.
+        donation_date=datetime.strptime(day, "%Y-%m-%d"),
     )
 
 
@@ -512,6 +514,34 @@ class TestListPagination:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class TestFundraisingReportMonthsAreTheDepartments:
+    async def test_an_evening_gift_on_the_last_day_is_filed_under_that_month(
+        self, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.services.fundraising_service.resolve_reporting_timezone",
+            AsyncMock(return_value=ZoneInfo("America/New_York")),
+        )
+        # 2026-11-01T02:00Z is 22:00 on October 31 in New York.
+        donations = [
+            SimpleNamespace(
+                amount=Decimal("50"),
+                donor_id="d1",
+                payment_method="cash",
+                donation_date=datetime(2026, 11, 1, 2, 0),
+            ),
+            SimpleNamespace(
+                amount=Decimal("20"),
+                donor_id="d2",
+                payment_method="cash",
+                donation_date=datetime(2026, 11, 1, 2, 0, tzinfo=timezone.utc),
+            ),
+        ]
+        db = _db([_scalars(donations)])
+        out = await FundraisingService(db).get_fundraising_report("org-1")
+        assert out["monthly_totals"] == [{"month": "2026-10", "total": 70.0}]
 
 
 class TestFundraisingReportIsExact:

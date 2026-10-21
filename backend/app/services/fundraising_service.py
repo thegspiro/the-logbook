@@ -28,9 +28,12 @@ from app.services.restricted_funds import is_charged
 from app.utils.model_updates import apply_updates, reload_updated_at
 from app.utils.org_timezone import (
     local_date,
+    local_range_utc,
     resolve_local_range_utc,
     resolve_org_today,
+    resolve_reporting_timezone,
     resolve_scheduling_timezone,
+    to_local,
 )
 from app.utils.sql_ordering import nulls_last_asc
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
@@ -817,10 +820,10 @@ class FundraisingService:
         )
         # donation_date is a timestamp, displayed in the department's
         # timezone: bound it at the department's midnights, through the whole
-        # end date (GF-24, GF-24a).
-        range_start, range_end = await resolve_local_range_utc(
-            self.db, organization_id, start_date, end_date
-        )
+        # end date (GF-24, GF-24a). The monthly totals below use the same zone,
+        # so a month's bar holds exactly the gifts the range filter counts.
+        tz = await resolve_reporting_timezone(self.db, organization_id)
+        range_start, range_end = local_range_utc(start_date, end_date, tz)
         if range_start:
             query = query.where(Donation.donation_date >= range_start)
         if range_end:
@@ -855,7 +858,9 @@ class FundraisingService:
         # Monthly totals
         monthly_totals: Dict[str, Decimal] = {}
         for d in donations:
-            month_key = d.donation_date.strftime("%Y-%m")
+            # A gift made on the evening of the last day of a month is already
+            # the next month in UTC; file it under the department's month.
+            month_key = to_local(d.donation_date, tz).strftime("%Y-%m")
             monthly_totals[month_key] = monthly_totals.get(
                 month_key, Decimal(0)
             ) + Decimal(d.amount or 0)

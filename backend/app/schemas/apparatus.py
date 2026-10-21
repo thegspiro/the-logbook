@@ -18,7 +18,7 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
 from app.utils.external_url import safe_external_url
 
 # Shared config for response schemas that need camelCase serialization
@@ -1003,7 +1003,7 @@ class ApparatusFuelLogBase(BaseModel):
     """Base fuel log schema"""
 
     apparatus_id: str = Field(..., description="Apparatus ID")
-    fuel_date: datetime
+    fuel_date: UTCDateTime
     fuel_type: FuelTypeEnum
     gallons: Decimal = Field(..., gt=0)
     price_per_gallon: Optional[Decimal] = Field(None, ge=0)
@@ -1404,7 +1404,7 @@ class ApparatusPhotoBase(BaseModel):
 
     title: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
-    taken_at: Optional[datetime] = None
+    taken_at: Optional[UTCDateTime] = None
     photo_type: Optional[str] = Field(
         None, max_length=50, description="exterior, interior, damage, detail"
     )
