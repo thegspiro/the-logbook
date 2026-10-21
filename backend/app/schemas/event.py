@@ -584,6 +584,19 @@ class EventResponse(EventBase, UTCResponseBase):
     # scheduled end, because a "window" event keeps accepting check-ins for
     # check_in_minutes_after beyond it.
     check_in_closes_at: Optional[datetime] = None
+    # The rest of the list card's derived fields, so the detail screen answers
+    # the same questions from the same rules instead of a second copy of them:
+    # is check-in open, has this member checked in, and what will it credit.
+    # The window is set wherever the builder runs; the rest are per-caller and
+    # filled by the detail endpoint only.
+    check_in_opens_at: Optional[datetime] = None
+    user_attended: bool = False
+    credited_hours: Optional[float] = None
+    hour_category_label: Optional[str] = None
+    # Whether GET /{id}/attendees will answer this caller, decided by the same
+    # rule that endpoint enforces. Without it the page asked and took a 403 on
+    # every visit to an event whose roster is not shared with members.
+    can_view_attendees: bool = False
 
     model_config = _response_config
 
