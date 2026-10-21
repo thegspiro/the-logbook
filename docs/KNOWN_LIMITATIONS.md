@@ -2242,8 +2242,8 @@ not be set through `PATCH /elections/{id}` at all.
 2026-10-05 answer for **Send Report Email** was to trim the guide, but the
 build had already overtaken it: **Send Report** under **Email Results Report**
 on a closed election's **Results & Publishing** panel (`PublishResultsPanel`,
-`POST /elections/{id}/send-report`) emails the results report to the election
-secretary, so the guide now describes the button rather than being trimmed —
+`POST /elections/{id}/send-report`) emails the results report to the officer
+who presses it (since 2026-10-21; it went to the election's creator before), so the guide now describes the button rather than being trimmed —
 resolved. The election-side link control also exists: the **Linked Meeting**
 field on `ElectionDetailPage` offers **Link a meeting** / **(change)** on a
 draft election, opening a picker of upcoming events and minutes records. There
