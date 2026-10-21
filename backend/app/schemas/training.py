@@ -1184,6 +1184,13 @@ class BulkImportRequest(BaseModel):
     default_category_id: Optional[UUID] = None
 
 
+class ImportMatchedResponse(BaseModel):
+    """Result of importing every pending record whose member is known"""
+
+    imported: int
+    failed: int
+
+
 class BulkImportResponse(BaseModel):
     """Response after bulk import"""
 

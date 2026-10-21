@@ -46,6 +46,7 @@ import type {
   BulkEnrollmentResponse,
   BulkImportRequest,
   BulkImportResponse,
+  ImportMatchedResponse,
   BulkTrainingRecordCreate,
   BulkTrainingRecordResult,
   ComplianceSummary,
@@ -697,6 +698,16 @@ export const externalTrainingService = {
     const response = await api.post<BulkImportResponse>(
       `/training/external/providers/${providerId}/imports/bulk`,
       request
+    );
+    return response.data;
+  },
+
+  /**
+   * Import every pending record whose member is already mapped
+   */
+  async importMatched(providerId: string): Promise<ImportMatchedResponse> {
+    const response = await api.post<ImportMatchedResponse>(
+      `/training/external/providers/${providerId}/imports/import-matched`
     );
     return response.data;
   },
