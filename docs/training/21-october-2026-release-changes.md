@@ -255,3 +255,25 @@ Screenshots to create or replace are in
 | Saved reports; Department pulse Customize; Legal Documents Load more                          | [08 — Admin & Reports](./08-admin-reports.md)                                    |
 | Grant lifecycle and overspend; anonymous donors hidden                                        | [12 — Grants & Fundraising](./12-grants-fundraising.md)                          |
 | Claude (MCP) Settings button and connection walkthrough; Salesforce client credentials        | [16 — Integrations](./16-integrations.md)                                        |
+
+---
+
+# October 20–21, 2026 workflow updates
+
+Index for the latest window. Audit:
+[`docs/CHANGE_AUDIT_2026-10.md`](../CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).
+Screenshots to create or replace are in
+[SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md); nothing has been re-captured.
+
+| Topic                                                                                              | Now in                                                                                                         |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Check in from the event page; View QR Code only for managers and organizers                        | [04 — Events & Meetings](./04-events-meetings.md)                                                              |
+| My Training history: "Awaiting approval" group is now "No completion date"                         | [02 — Training](./02-training.md)                                                                              |
+| Delete, status change and archive refused for a member with permissions you lack                   | [01 — Membership](./01-membership.md) (When Deletion Is Refused)                                               |
+| Ranked-choice paper ballots entered ballot by ballot and counted individually                      | [14 — Elections](./14-elections.md) (Paper Ballots & Attestation)                                              |
+| Approver offices named in the applicant drawer                                                     | [15 — Prospective Members](./15-prospective-members.md)                                                        |
+| Shift calendar feed: disconnecting stops the link for every subscriber                             | [03 — Scheduling](./03-scheduling.md)                                                                          |
+| Roster names rank, membership type and positions apart; checklist presets use Present              | [01 — Membership](./01-membership.md), [03 — Scheduling](./03-scheduling.md) (already written with the change) |
+| Minutes: closed election's result filed automatically; Medical Supplies lot recall and truck links | [04](./04-events-meetings.md), [05](./05-inventory.md) (written with the change)                               |
+| Session lifetime, probationary members as current, Pillow / follow-redirects bumps                 | Operator-facing: [`UPGRADING.md`](../UPGRADING.md), wiki Security pages                                        |
+| Create Training Session no longer shows an apparatus picker (it was never saved)                   | Nothing in a guide named it                                                                                    |

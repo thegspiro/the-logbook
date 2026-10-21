@@ -5,7 +5,7 @@ import { enumLabel } from '../../../utils/displayValue';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formCoercions } from '../../../utils/formValues';
 import { X, Truck, Users, Plus, Minus, Copy, PartyPopper, Check, ClipboardCheck } from 'lucide-react';
-import type { ApparatusOption } from '../services/api';
+import { schedulingService, type ApparatusOption } from '../services/api';
 import { useEnabledModules } from '../../../hooks/useEnabledModules';
 import { equipmentCheckService } from '../../inventory/services/equipmentCheckApi';
 import type { EquipmentCheckTemplate } from '../../inventory/types/equipmentCheck';
@@ -85,6 +85,38 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
     const stated = parseFloat(next.duration_hours);
     setRunsMultipleDays(!isNaN(stated) && span !== null && stated - span > 0.01);
   }, [initialData, isOpen]);
+
+  /**
+   * A vehicle deactivated because templates or shifts still name it is missing
+   * from `apparatusOptions`, which lists active vehicles only. Left out, the
+   * select showed a blank while the stored id went back on every save. It stays
+   * as one extra option on the template that already names it — by name when it
+   * is one of the department's basic vehicles — and is offered to nothing else.
+   */
+  const storedApparatusId = initialData?.apparatus_id ?? '';
+  const storedApparatusMissing =
+    apparatusSource !== 'default' &&
+    storedApparatusId !== '' &&
+    !apparatusOptions.some((o) => o.id === storedApparatusId);
+  const [retiredApparatusLabel, setRetiredApparatusLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRetiredApparatusLabel(null);
+    if (!isOpen || !storedApparatusMissing || apparatusSource !== 'basic') return;
+    let cancelled = false;
+    void schedulingService
+      .getBasicApparatus({ is_active: false })
+      .then((rows) => {
+        const row = rows.find((r) => r.id === storedApparatusId);
+        if (!cancelled && row) setRetiredApparatusLabel(`${row.unit_number} — ${row.name}`);
+      })
+      .catch(() => {
+        // The generic label below still keeps the stored vehicle selected.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, storedApparatusMissing, apparatusSource, storedApparatusId]);
 
   const effectiveDuration = runsMultipleDays ? parseFloat(formData.duration_hours) : (spanHours ?? NaN);
 
@@ -447,6 +479,11 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                           {o.apparatus_type ? ` (${enumLabel(o.apparatus_type)})` : ''}
                         </option>
                       ))}
+                  {storedApparatusMissing && (
+                    <option value={storedApparatusId}>
+                      {retiredApparatusLabel ?? 'A vehicle no longer in service'} (inactive)
+                    </option>
+                  )}
                 </select>
                 <p className="text-theme-text-muted mt-1 text-xs">
                   {apparatusSource === 'default'

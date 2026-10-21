@@ -11,7 +11,7 @@
  * Only the editing surface moved.
  *
  * Each control saves on its own, immediately, so there is no Save footer to
- * forget: the two toggles save on change, and the two number fields commit on
+ * forget: the two switches save on change, and the two number fields commit on
  * blur (see ``commitCheckinBound``).
  *
  * The save sends **only** ``checklist_timing``. The organization settings
@@ -22,8 +22,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router';
-import { ArrowLeft, ClipboardCheck, Loader2 } from 'lucide-react';
+import { ClipboardCheck, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { organizationService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -144,129 +143,176 @@ export const ChecklistSettingsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-      <Breadcrumbs />
+      {/* compactOnPhone collapses the four-deep trail to one "← Equipment
+          Checklists" link below 640px, which is also why there is no separate
+          Back link: on a phone it repeated the trail above it word for word. */}
+      <Breadcrumbs compactOnPhone />
 
-      {/* mobile-touch-target, not a bare inline-flex: at text-sm this link is
-          about 20px tall, which is under the 44px minimum the presentation
-          ratchet enforces. justify-start keeps it left-aligned — the utility
-          centers by default, which would float it away from the page edge. */}
-      <Link
-        to="/inventory/admin/checklists"
-        className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target mb-4 justify-start gap-2 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to Equipment Checklists
-      </Link>
-
-      <header className="mb-6">
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-          <ClipboardCheck className="h-5 w-5" /> Checklist Settings
+      <header className="mb-4 sm:mb-6">
+        <h1 className="text-theme-text-primary flex items-center gap-2 text-xl font-bold sm:text-2xl">
+          <ClipboardCheck className="h-5 w-5 shrink-0" aria-hidden="true" /> Checklist Settings
         </h1>
-        <p className="text-theme-text-secondary mt-1 text-sm">
+        <p className="text-theme-text-secondary mt-1 text-sm sm:hidden">
+          When crews are prompted, and how long they have to check in.
+        </p>
+        <p className="text-theme-text-secondary mt-1 text-sm max-sm:hidden">
           When crews are prompted to run their checklists, and how long they have to check in. Which checklists a crew
           gets is decided by the apparatus or the shift template, not here.
         </p>
       </header>
 
-      <section className="card mb-6 p-5">
-        <h2 className="text-theme-text-primary text-sm font-semibold">When crews are prompted</h2>
-        <p className="text-theme-text-muted mt-1 mb-4 text-xs">
+      <section className="card mb-4 p-4 sm:mb-6 sm:p-5" aria-labelledby="prompted-heading">
+        <h2 id="prompted-heading" className="text-theme-text-primary text-sm font-semibold">
+          When crews are prompted
+        </h2>
+        <p className="text-theme-text-muted mt-1 text-xs">
           Turning one off stops the prompt and its reminders. It does not delete anything — checklists already completed
           stay, and the checklists themselves remain available.
         </p>
 
-        <div className="space-y-3">
-          <label className="flex cursor-pointer items-center gap-3">
-            <input
-              type="checkbox"
-              checked={timing.start_of_shift_enabled}
-              onChange={(e) => updateTiming('start_of_shift_enabled', e.target.checked)}
-              disabled={saving}
-              className="form-checkbox"
-            />
-            <div>
-              <span className="text-theme-text-primary text-sm font-medium">Start-of-shift checklists</span>
-              <p className="text-theme-text-muted text-xs">
-                Members are prompted to complete equipment checks when their shift begins.
-              </p>
-            </div>
-          </label>
-
-          <label className="flex cursor-pointer items-center gap-3">
-            <input
-              type="checkbox"
-              checked={timing.end_of_shift_enabled}
-              onChange={(e) => updateTiming('end_of_shift_enabled', e.target.checked)}
-              disabled={saving}
-              className="form-checkbox"
-            />
-            <div>
-              <span className="text-theme-text-primary text-sm font-medium">End-of-shift checklists</span>
-              <p className="text-theme-text-muted text-xs">
-                Members are reminded to complete equipment checks before their shift ends.
-              </p>
-            </div>
-          </label>
+        <div className="divide-theme-surface-border mt-2 divide-y">
+          <SwitchRow
+            id="start-of-shift"
+            label="Start-of-shift checklists"
+            description="Members are prompted to complete equipment checks when their shift begins."
+            checked={timing.start_of_shift_enabled}
+            disabled={saving}
+            onChange={(checked) => updateTiming('start_of_shift_enabled', checked)}
+          />
+          <SwitchRow
+            id="end-of-shift"
+            label="End-of-shift checklists"
+            description="Members are reminded to complete equipment checks before their shift ends."
+            checked={timing.end_of_shift_enabled}
+            disabled={saving}
+            onChange={(checked) => updateTiming('end_of_shift_enabled', checked)}
+          />
         </div>
       </section>
 
-      <section className="card p-5">
-        <h2 className="text-theme-text-primary text-sm font-semibold">When members can check in</h2>
-        <p className="text-theme-text-muted mt-1 mb-3 text-xs">
+      <section className="card p-4 sm:p-5" aria-labelledby="checkin-heading">
+        <h2 id="checkin-heading" className="text-theme-text-primary text-sm font-semibold">
+          When members can check in
+        </h2>
+        <p className="text-theme-text-muted mt-1 text-xs">
           Outside this window the Check In button is switched off and says why. Widen it if your crews are held over on
           long call-backs; a shift that has been closed out is always shut regardless.
         </p>
         {/* Held as text while being edited so the box can be cleared and
             retyped, and committed on blur or Enter rather than per keystroke. */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label htmlFor="checkin-opens" className="form-label">
-              Opens before the start
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="checkin-opens"
-                type="number"
-                min={CHECKIN_BOUNDS.checkin_opens_hours_before.min}
-                max={CHECKIN_BOUNDS.checkin_opens_hours_before.max}
-                value={opensDraft}
-                onChange={(e) => setOpensDraft(e.target.value)}
-                onBlur={() => commitCheckinBound('checkin_opens_hours_before', opensDraft, setOpensDraft)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') e.currentTarget.blur();
-                }}
-                disabled={saving}
-                className="form-input w-24"
-              />
-              <span className="text-theme-text-muted text-xs">hours early</span>
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="checkin-closes" className="form-label">
-              Closes after the end
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="checkin-closes"
-                type="number"
-                min={CHECKIN_BOUNDS.checkin_closes_hours_after.min}
-                max={CHECKIN_BOUNDS.checkin_closes_hours_after.max}
-                value={closesDraft}
-                onChange={(e) => setClosesDraft(e.target.value)}
-                onBlur={() => commitCheckinBound('checkin_closes_hours_after', closesDraft, setClosesDraft)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') e.currentTarget.blur();
-                }}
-                disabled={saving}
-                className="form-input w-24"
-              />
-              <span className="text-theme-text-muted text-xs">hours late</span>
-            </div>
-          </div>
+        <div className="divide-theme-surface-border mt-2 divide-y">
+          <HoursRow
+            id="checkin-opens"
+            label="Opens before the start"
+            unit="hours early"
+            value={opensDraft}
+            disabled={saving}
+            onChange={setOpensDraft}
+            onCommit={() => commitCheckinBound('checkin_opens_hours_before', opensDraft, setOpensDraft)}
+          />
+          <HoursRow
+            id="checkin-closes"
+            label="Closes after the end"
+            unit="hours late"
+            value={closesDraft}
+            disabled={saving}
+            onChange={setClosesDraft}
+            onCommit={() => commitCheckinBound('checkin_closes_hours_after', closesDraft, setClosesDraft)}
+          />
         </div>
       </section>
     </div>
   );
 };
+
+interface SwitchRowProps {
+  id: string;
+  label: string;
+  description: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+}
+
+/**
+ * One on/off setting, laid out the way a phone's own settings screen is: the
+ * words on the left, the switch on the right. The whole row is the button, so
+ * the tap target is the text as well as the 44px track beside it.
+ */
+const SwitchRow: React.FC<SwitchRowProps> = ({ id, label, description, checked, disabled, onChange }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    aria-labelledby={`${id}-label`}
+    aria-describedby={`${id}-description`}
+    disabled={disabled}
+    onClick={() => onChange(!checked)}
+    className="flex min-h-[44px] w-full items-center justify-between gap-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    <span className="min-w-0">
+      <span id={`${id}-label`} className="text-theme-text-primary block text-sm font-medium">
+        {label}
+      </span>
+      <span id={`${id}-description`} className="text-theme-text-muted block text-xs">
+        {description}
+      </span>
+    </span>
+    <span aria-hidden="true" className={`toggle-track-sm ${checked ? 'bg-blue-600' : 'bg-theme-surface-border'}`}>
+      <span className={`toggle-knob-sm ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+    </span>
+  </button>
+);
+
+interface HoursRowProps {
+  id: string;
+  label: string;
+  unit: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onCommit: () => void;
+}
+
+/**
+ * A whole-hours field on one row: the label on the left, "[ 2 ] hours early" on
+ * the right.
+ *
+ * `type="text"` with `inputMode="numeric"`, not `type="number"`: iOS answers a
+ * number input with the full keyboard on its symbols page, and only a numeric
+ * inputmode gets the digit pad. Nothing is lost by dropping min/max — they never
+ * stopped `onChange`; the bounds are enforced by the clamp in
+ * `commitCheckinBound`, which also turns anything that is not a number back into
+ * the saved value.
+ */
+const HoursRow: React.FC<HoursRowProps> = ({ id, label, unit, value, disabled, onChange, onCommit }) => (
+  <div className="flex min-h-[44px] items-center justify-between gap-4 py-3">
+    <label htmlFor={id} className="text-theme-text-primary text-sm font-medium">
+      {label}
+    </label>
+    <span className="flex shrink-0 items-center gap-2">
+      <input
+        id={id}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        enterKeyHint="done"
+        autoComplete="off"
+        aria-describedby={`${id}-unit`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onCommit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+        disabled={disabled}
+        className="form-input w-20 text-center"
+      />
+      <span id={`${id}-unit`} className="text-theme-text-muted w-[4.5rem] text-xs">
+        {unit}
+      </span>
+    </span>
+  </div>
+);
 
 export default ChecklistSettingsPage;

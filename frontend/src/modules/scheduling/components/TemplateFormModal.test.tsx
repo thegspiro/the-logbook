@@ -14,6 +14,17 @@ vi.mock('../../inventory/services/equipmentCheckApi', () => ({
   },
 }));
 
+const mockGetBasicApparatus = vi.fn();
+vi.mock('../services/api', async () => {
+  const actual = await vi.importActual<typeof import('../services/api')>('../services/api');
+  return {
+    ...actual,
+    schedulingService: {
+      getBasicApparatus: (...a: unknown[]) => mockGetBasicApparatus(...a) as unknown,
+    },
+  };
+});
+
 const mockIsModuleOn = vi.fn((_key: string) => true);
 vi.mock('../../../hooks/useEnabledModules', () => ({
   useEnabledModules: () => ({
@@ -38,6 +49,8 @@ beforeEach(() => {
   mockGetEquipmentCheckTemplates.mockResolvedValue(CHECKLISTS);
   mockIsModuleOn.mockReset();
   mockIsModuleOn.mockImplementation(() => true);
+  mockGetBasicApparatus.mockReset();
+  mockGetBasicApparatus.mockResolvedValue([]);
 });
 
 describe('TemplateFormModal equipment checklists', () => {
@@ -357,5 +370,56 @@ describe('TemplateFormModal clearing fields on edit', () => {
     expect(payload.description).toBeUndefined();
     expect(payload.apparatus_type).toBeUndefined();
     expect(payload.apparatus_id).toBeUndefined();
+  });
+});
+
+// A vehicle that templates or shifts still name is deactivated rather than
+// deleted, so it drops out of `apparatusOptions` (active vehicles only). The
+// select used to show a blank while the stale id went back on save.
+describe('TemplateFormModal with a deactivated vehicle', () => {
+  const active = [
+    { id: 'app-1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine', source: 'basic' as const },
+  ];
+  const onSubmit = vi.fn<(data: Record<string, unknown>) => Promise<void>>();
+
+  beforeEach(() => {
+    onSubmit.mockReset();
+    onSubmit.mockResolvedValue(undefined);
+    mockGetBasicApparatus.mockResolvedValue([
+      { id: 'app-old', unit_number: 'E9', name: 'Old Engine', apparatus_type: 'engine', is_active: false },
+    ]);
+  });
+
+  const renderWith = (apparatusId: string) =>
+    renderWithRouter(
+      <TemplateFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        title="Edit Template"
+        apparatusOptions={active}
+        apparatusSource="basic"
+        initialData={{ ...emptyTemplateForm, name: 'Day Shift', apparatus_type: 'engine', apparatus_id: apparatusId }}
+      />
+    );
+
+  it('keeps the stored vehicle selected and named, and saves it unchanged', async () => {
+    const user = userEvent.setup();
+    renderWith('app-old');
+
+    expect(await screen.findByRole('option', { name: 'E9 — Old Engine (inactive)' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Vehicle/)).toHaveValue('app-old');
+    expect(mockGetBasicApparatus).toHaveBeenCalledWith({ is_active: false });
+
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ apparatus_id: 'app-old' }));
+  });
+
+  it('offers no inactive vehicle to a template that does not already name one', () => {
+    renderWith('app-1');
+
+    expect(screen.queryByRole('option', { name: /inactive/ })).not.toBeInTheDocument();
+    expect(mockGetBasicApparatus).not.toHaveBeenCalled();
   });
 });

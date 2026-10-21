@@ -1320,6 +1320,14 @@ class ElectionService:
         election = result.scalar_one_or_none()
         if not election:
             return False, "Election not found"
+        # The attendance list is part of the record of a finished election:
+        # it decided who could vote on attendance-required items, and the
+        # certified result is read against it.
+        if election.status in (ElectionStatus.CLOSED, ElectionStatus.CANCELLED):
+            return False, (
+                "The election has ended, so its attendance list can no longer "
+                "be changed"
+            )
 
         attendees = copy.deepcopy(election.attendees or [])
         original_count = len(attendees)
@@ -4216,16 +4224,24 @@ class ElectionService:
         first, last = row
         return f"{first or ''} {last or ''}".strip() or None
 
+    @staticmethod
+    def _org_zone(organization) -> ZoneInfo:
+        """The organization's timezone, UTC when unset or unknown."""
+        try:
+            return ZoneInfo((organization.timezone if organization else None) or "UTC")
+        except Exception:
+            return ZoneInfo("UTC")
+
     async def _org_local_time(self, organization, dt) -> str:
         """Format an aware datetime in the organization's timezone."""
-        from zoneinfo import ZoneInfo
-
-        try:
-            tz = ZoneInfo((organization.timezone if organization else None) or "UTC")
-        except Exception:
-            tz = ZoneInfo("UTC")
-        local = self._ensure_utc(dt).astimezone(tz)
+        local = self._ensure_utc(dt).astimezone(self._org_zone(organization))
         return f"{local:%Y-%m-%d %H:%M %Z}"
+
+    def _org_local_date(self, organization, dt) -> str:
+        """The calendar date of *dt* in the organization's timezone, written
+        out ("October 21, 2026") for a printed page."""
+        local = self._ensure_utc(dt).astimezone(self._org_zone(organization))
+        return f"{local:%B} {local.day}, {local.year}"
 
     async def announce_nominations_open(
         self,
@@ -6000,12 +6016,20 @@ class ElectionService:
                 }
             )
 
+        # The day the ballot is cast on: the meeting's, when the vote is held
+        # at one, else the day voting opens.
+        ballot_day = election.meeting_date or election.start_date
         data = {
             "election": {
                 "title": election.title,
                 "voting_method": election.voting_method,
                 "max_votes_per_position": election.max_votes_per_position or 1,
                 "allow_write_ins": bool(election.allow_write_ins),
+                "date_display": (
+                    self._org_local_date(organization, ballot_day)
+                    if ballot_day
+                    else None
+                ),
             },
             "positions": positions,
             "approval_items": [
@@ -6129,10 +6153,10 @@ class ElectionService:
         safe_title = re.sub(r"[^A-Za-z0-9_-]+", "_", election.title)[:60]
         return buf, None, f"certified_results_{safe_title}.pdf"
 
-    async def _send_ballots_after_auto_open(
+    async def _queue_ballots_after_auto_open(
         self, election: Election, organization_id: UUID
     ) -> None:
-        """Mail the ballots an automatic open used to leave unsent (W50-72).
+        """Queue the ballots an automatic open used to leave unsent (W50-72).
 
         Owner decision (2026-10-08): the scheduled open sends ballots as the
         election's creator — the ballot mail's reply-to and contact are
@@ -6142,27 +6166,70 @@ class ElectionService:
         fails, or reaches nobody, leaves the election open (voting has
         started and the open is not rolled back) and alerts the members who
         can manage elections to send the ballots themselves.
+
+        The send is queued as a background job rather than run here. Inline,
+        a department-sized send held up every other election's scheduled
+        open and close behind it, and could outlast the scheduler's claim so
+        that a second worker took over mid-send. As a job it also falls under
+        the one-send-at-a-time guard the buttons use.
         """
-        base_ballot_url = f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
-        # Read before the send: a failed send rolls the session back, which
-        # expires the loaded election.
+        from app.services.ballot_send_jobs import (
+            AutoOpenBallotSend,
+            queue_automatic_send,
+        )
+
         election_id = str(election.id)
         title = election.title
         creator = str(election.created_by) if election.created_by else None
-        sent = failed = skipped = 0
-        raised = False
         try:
-            sent, failed, skipped, _details, _ids = await self.send_ballot_emails(
-                UUID(election_id),
-                organization_id,
-                base_ballot_url=base_ballot_url,
+            job = await queue_automatic_send(
+                self.db,
+                election_id,
+                str(organization_id),
+                requested_by=creator,
+                send=AutoOpenBallotSend(
+                    base_ballot_url=f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
+                ),
             )
         except Exception as e:
             await self.db.rollback()
-            raised = True
             logger.error(
-                f"Auto-open ballot send failed | election={election_id} error={e}"
+                f"Auto-open ballot send could not be queued | "
+                f"election={election_id} error={e}"
             )
+            await self.record_auto_open_send_outcome(
+                election_id,
+                title,
+                creator,
+                organization_id,
+                sent=0,
+                failed=0,
+                skipped=0,
+                raised=True,
+            )
+            return
+        if job is None:
+            # A secretary's own ballot send is already going out; it covers
+            # what this one would have sent.
+            logger.info(
+                f"Auto-open ballot send skipped: a send is already in progress "
+                f"| election={election_id}"
+            )
+
+    async def record_auto_open_send_outcome(
+        self,
+        election_id: str,
+        title: str,
+        creator: Optional[str],
+        organization_id: UUID | str,
+        *,
+        sent: int,
+        failed: int,
+        skipped: int,
+        raised: bool,
+    ) -> None:
+        """Audit an automatic open's ballot send, and alert the managers when
+        it failed for anyone or reached nobody."""
         if not raised and sent > 0 and failed == 0:
             await self._audit(
                 "ballots_auto_sent",
@@ -6192,11 +6259,65 @@ class ElectionService:
             election_id, title, organization_id, sent=sent, failed=failed, raised=raised
         )
 
+    async def record_auto_reminder_failure(
+        self,
+        election_id: str,
+        title: str,
+        organization_id: UUID | str,
+        *,
+        sent: int,
+        failed: int,
+        raised: bool,
+        alert: bool,
+    ) -> None:
+        """Audit an automatic reminder that did not reach everyone, and when
+        ``alert`` is set, email the managers.
+
+        The caller decides ``alert``: a reminder that delivered nothing is
+        retried by every lifecycle tick until one gets through, and an alert
+        per tick would mail the managers every fifteen minutes through an
+        outage.
+        """
+        await self._audit(
+            "election_auto_reminder_failed",
+            {
+                "election_id": election_id,
+                "title": title,
+                "sent": sent,
+                "failed": failed,
+                "raised": raised,
+            },
+            severity="warning",
+        )
+        if not alert:
+            return
+        if raised:
+            what = "the reminder emails could not be sent"
+        elif sent == 0:
+            what = f"all {failed} reminder email(s) failed to send"
+        else:
+            what = f"{failed} of {sent + failed} reminder email(s) failed to send"
+        import html as html_mod
+
+        safe_title = html_mod.escape(title)
+        await self._email_election_managers(
+            election_id,
+            organization_id,
+            subject=f"Action needed: reminders for {title} were not all sent",
+            page_title=f"Reminders not sent: {safe_title}",
+            body_html=(
+                f"<p>The automatic reminder for <strong>{safe_title}</strong> "
+                f"went out before voting closes, but {html_mod.escape(what)}.</p>"
+                "<p>Open the election and use <strong>Remind Non-Voters</strong> "
+                "so the members who have not voted get their reminder.</p>"
+            ),
+        )
+
     async def _alert_managers_ballots_not_sent(
         self,
         election_id: str,
         election_title: str,
-        organization_id: UUID,
+        organization_id: UUID | str,
         *,
         sent: int,
         failed: int,
@@ -6205,9 +6326,43 @@ class ElectionService:
         """Email every active member who can manage elections that an
         automatic open did not get the ballots out (W50-72). Best-effort;
         returns the number of managers emailed."""
-        try:
-            import html as html_mod
+        import html as html_mod
 
+        if raised:
+            what = "the ballot emails could not be sent"
+        elif sent == 0 and failed == 0:
+            what = "no ballot emails were sent — no eligible recipient was found"
+        elif sent == 0:
+            what = f"all {failed} ballot email(s) failed to send"
+        else:
+            what = f"{failed} of {sent + failed} ballot email(s) failed to send"
+        title = html_mod.escape(election_title)
+        return await self._email_election_managers(
+            election_id,
+            organization_id,
+            subject=f"Action needed: ballots for {election_title} were not sent",
+            page_title=f"Ballots not sent: {title}",
+            body_html=(
+                f"<p><strong>{title}</strong> opened automatically at its start "
+                f"time, but {html_mod.escape(what)}.</p>"
+                "<p>The election is open and voting has started. Open the "
+                "election and use <strong>Send Ballot Emails</strong> so members "
+                "receive their ballots.</p>"
+            ),
+        )
+
+    async def _email_election_managers(
+        self,
+        election_id: str,
+        organization_id: UUID | str,
+        *,
+        subject: str,
+        page_title: str,
+        body_html: str,
+    ) -> int:
+        """Email every active member who can manage elections and takes
+        election-admin mail. Best-effort; returns the number emailed."""
+        try:
             from app.api.dependencies import user_has_permission
             from app.services.email_service import wrap_email_body
 
@@ -6241,34 +6396,16 @@ class ElectionService:
             ]
             if not managers:
                 logger.warning(
-                    f"Auto-open ballot send failed and no manager can be "
-                    f"emailed | election={election_id}"
+                    f"No election manager can be emailed: {subject} | "
+                    f"election={election_id}"
                 )
                 return 0
-            if raised:
-                what = "the ballot emails could not be sent"
-            elif sent == 0 and failed == 0:
-                what = "no ballot emails were sent — no eligible recipient was found"
-            elif sent == 0:
-                what = f"all {failed} ballot email(s) failed to send"
-            else:
-                what = f"{failed} of {sent + failed} ballot email(s) failed to send"
-            title = html_mod.escape(election_title)
-            body_html = (
-                f"<p><strong>{title}</strong> opened automatically at its start "
-                f"time, but {html_mod.escape(what)}.</p>"
-                "<p>The election is open and voting has started. Open the "
-                "election and use <strong>Send Ballot Emails</strong> so members "
-                "receive their ballots.</p>"
-            )
             html_body = wrap_email_body(
-                organization,
-                title=f"Ballots not sent: {title}",
-                body_html=body_html,
+                organization, title=page_title, body_html=body_html
             )
             await EmailService(organization).send_email(
                 to_emails=[m.email for m in managers],
-                subject=f"Action needed: ballots for {election_title} were not sent",
+                subject=subject,
                 html_body=html_body,
                 db=self.db,
                 template_type="custom",
@@ -6276,8 +6413,8 @@ class ElectionService:
             return len(managers)
         except Exception as e:
             logger.error(
-                f"Manager alert for unsent ballots failed | "
-                f"election={election_id} error={e}"
+                f"Election manager alert failed | election={election_id} "
+                f"subject={subject!r} error={e}"
             )
             return 0
 
@@ -6372,7 +6509,7 @@ class ElectionService:
                         "election_auto_opened",
                         {"election_id": str(election.id), "title": election.title},
                     )
-                    await self._send_ballots_after_auto_open(opened, organization_id)
+                    await self._queue_ballots_after_auto_open(opened, organization_id)
                 continue
 
             if election.status != ElectionStatus.OPEN:
@@ -6401,25 +6538,34 @@ class ElectionService:
                 and end
                 and now >= end - timedelta(hours=election.reminder_hours_before_close)
             ):
+                # Queued, not sent here, for the reasons on
+                # _queue_ballots_after_auto_open. reminder_sent_at is stamped
+                # when the job delivers, so until then each tick reaches this
+                # branch again and the in-progress guard turns it away.
+                from app.services.ballot_send_jobs import (
+                    AutoReminderSend,
+                    queue_automatic_send,
+                )
+
                 try:
-                    reminded, _failed, _skipped, _details = (
-                        await self.remind_non_voters(
-                            UUID(str(election.id)),
-                            organization_id,
-                            base_ballot_url=(
-                                f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
-                            ),
-                        )
-                    )
-                    actions += 1
-                    logger.info(
-                        f"Auto-reminder sent | election={election.id} "
-                        f"reminded={reminded}"
-                    )
+                    await self.ensure_reminder_allowed(election, organization_id)
                 except ValueError as e:
                     logger.warning(
                         f"Auto-reminder skipped | election={election.id} reason={e}"
                     )
+                    continue
+                job = await queue_automatic_send(
+                    self.db,
+                    str(election.id),
+                    str(organization_id),
+                    requested_by=None,
+                    send=AutoReminderSend(
+                        base_ballot_url=f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
+                    ),
+                )
+                if job is not None:
+                    actions += 1
+                    logger.info(f"Auto-reminder queued | election={election.id}")
 
         return actions
 
@@ -6793,6 +6939,16 @@ class ElectionService:
             user_id=str(closed_by) if closed_by else None,
         )
 
+        # The certified result goes into the minutes of the meeting it was held
+        # at. After the close has committed, and never allowed to fail it.
+        from app.services.minutes_election_filing import file_closed_election
+
+        await file_closed_election(
+            self.db, election, str(closed_by) if closed_by else None
+        )
+        # A failed filing rolls the session back, which expires the row.
+        await self.db.refresh(election)
+
         # Paper-ballot batches that never received their required officer
         # attestations stay excluded from the certified results — flag them
         # so the discrepancy is visible in the audit trail.
@@ -6890,7 +7046,8 @@ class ElectionService:
                 f"election={election_id} error={e}"
             )
 
-        # Fire-and-forget: send election report to secretary
+        # A failed report must not undo the close; generate_and_send_election_report
+        # logs and audits its own failures.
         try:
             await self.generate_and_send_election_report(
                 election_id=election_id,
@@ -8872,15 +9029,17 @@ class ElectionService:
         self,
         election_id: UUID,
         organization_id: UUID | str,
-        requested: bool = False,
+        requested_by: Optional[UUID | str] = None,
     ) -> Tuple[bool, str]:
         """
-        Generate and send an election report email to the secretary (election
-        creator) and any leadership members.
+        Generate and send the election report email.
 
-        *requested* is True when an officer pressed "Send report": that send
-        goes out regardless of the creator's email choices. The automatic send
-        when an election closes follows them (``EmailKind.ELECTION_ADMIN``).
+        *requested_by* is the officer who pressed "Send report": the report
+        goes to that officer alone, regardless of their email choices, since
+        they asked for it. The automatic send when an election closes goes to
+        the election's creator and every leadership member who are still
+        current members and receive ``EmailKind.ELECTION_ADMIN`` mail — see
+        :meth:`_election_report_recipients`.
 
         The report includes:
         - Election results (per-position winners, vote counts, percentages)
@@ -8968,31 +9127,25 @@ class ElectionService:
             election
         )
 
-        # Determine report recipients (election creator + leadership)
-        to_emails = []
-        recipient_name = "Secretary"
-        if election.created_by:
-            creator_result = await self.db.execute(
-                select(User).where(User.id == election.created_by)
+        recipients = await self._election_report_recipients(
+            election, organization, organization_id, requested_by
+        )
+        if not recipients:
+            reason = (
+                "You have no email address on your profile"
+                if requested_by
+                else "No current member can receive the election report"
             )
-            creator = creator_result.scalar_one_or_none()
-            if (
-                creator
-                and creator.email
-                and (
-                    requested
-                    or member_receives_email(
-                        creator.notification_preferences,
-                        EmailKind.ELECTION_ADMIN,
-                        department_required_kinds(organization),
-                    )
-                )
-            ):
-                to_emails.append(creator.email)
-                recipient_name = creator.full_name or "Secretary"
-
-        if not to_emails:
-            return False, "No recipient found for election report"
+            logger.error(
+                f"Election report not sent | election={election_id} " f"reason={reason}"
+            )
+            await self._audit(
+                "election_report_not_sent",
+                {"election_id": str(election_id), "reason": reason},
+                user_id=str(requested_by) if requested_by else None,
+                organization_id=str(organization_id),
+            )
+            return False, reason
 
         # Format dates using org timezone
         org_tz = getattr(organization, "timezone", None) or "America/New_York"
@@ -9008,44 +9161,111 @@ class ElectionService:
                 dt = dt.replace(tzinfo=timezone.utc)
             return dt.astimezone(tz).strftime("%B %d, %Y at %I:%M %p")
 
+        closed_by = await self.closed_by_name(election) or "Automatic close"
         email_service = EmailService(organization)
-        success_count, failure_count = await email_service.send_election_report(
-            to_emails=to_emails,
-            recipient_name=recipient_name,
-            election_title=election.title,
-            election_type=election.election_type or "General",
-            start_date=_fmt_dt(election.start_date),
-            end_date=_fmt_dt(election.end_date),
-            closed_at=_fmt_dt(election.closed_at or election.end_date),
-            closed_by=await self.closed_by_name(election) or "Automatic close",
-            total_eligible_voters=total_eligible,
-            total_votes_cast=total_votes,
-            voter_turnout_percentage=turnout,
-            quorum_status=quorum_status,
-            quorum_detail=quorum_detail,
-            results_html=results_html,
-            results_text=results_text,
-            ballot_recipients_html=ballot_recipients_html,
-            ballot_recipients_text=ballot_recipients_text,
-            ballot_recipients_count=ballot_recipients_count,
-            skipped_voters_html=skipped_html,
-            skipped_voters_text=skipped_text,
-            skipped_voters_count=skipped_count,
-            db=self.db,
-            organization_id=str(organization_id),
-        )
+        # One message per recipient, so each is addressed by name and no
+        # recipient sees who else received the voter lists.
+        delivered: List[str] = []
+        for recipient in recipients:
+            success_count, _failures = await email_service.send_election_report(
+                to_emails=[recipient.email],
+                recipient_name=recipient.full_name or "Secretary",
+                election_title=election.title,
+                election_type=election.election_type or "General",
+                start_date=_fmt_dt(election.start_date),
+                end_date=_fmt_dt(election.end_date),
+                closed_at=_fmt_dt(election.closed_at or election.end_date),
+                closed_by=closed_by,
+                total_eligible_voters=total_eligible,
+                total_votes_cast=total_votes,
+                voter_turnout_percentage=turnout,
+                quorum_status=quorum_status,
+                quorum_detail=quorum_detail,
+                results_html=results_html,
+                results_text=results_text,
+                ballot_recipients_html=ballot_recipients_html,
+                ballot_recipients_text=ballot_recipients_text,
+                ballot_recipients_count=ballot_recipients_count,
+                skipped_voters_html=skipped_html,
+                skipped_voters_text=skipped_text,
+                skipped_voters_count=skipped_count,
+                db=self.db,
+                organization_id=str(organization_id),
+            )
+            if success_count > 0:
+                delivered.append(recipient.email)
 
-        if success_count > 0:
+        if delivered:
             logger.info(
-                f"Election report sent | election={election_id} " f"to={to_emails}"
+                f"Election report sent | election={election_id} "
+                f"sent={len(delivered)} unsent={len(recipients) - len(delivered)}"
             )
-            return True, f"Election report sent to {', '.join(to_emails)}"
-        else:
-            logger.error(
-                f"Failed to send election report | election={election_id} "
-                f"failures={failure_count}"
+            message = f"Election report sent to {', '.join(delivered)}"
+            if len(delivered) < len(recipients):
+                message += (
+                    f"; {len(recipients) - len(delivered)} recipient(s) could "
+                    "not be reached"
+                )
+            return True, message
+        logger.error(
+            f"Failed to send election report | election={election_id} "
+            f"recipients={len(recipients)}"
+        )
+        return False, "Failed to send election report email"
+
+    async def _election_report_recipients(
+        self,
+        election: Election,
+        organization: Organization,
+        organization_id: UUID | str,
+        requested_by: Optional[UUID | str],
+    ) -> List[User]:
+        """The members the election report goes to, each one at most once.
+
+        Only current members qualify (``User.is_active``): the report carries
+        the results and the list of who did and did not get a ballot, so a
+        creator who has since left the department must not receive it.
+        """
+        if requested_by:
+            requester = (
+                await self.db.execute(
+                    select(User)
+                    .where(User.id == str(requested_by))
+                    .where(User.organization_id == str(organization_id))
+                    .where(User.is_active)
+                )
+            ).scalar_one_or_none()
+            return [requester] if requester and requester.email else []
+
+        members = (
+            (
+                await self.db.execute(
+                    select(User)
+                    .where(User.organization_id == str(organization_id))
+                    .where(User.is_active)
+                    .options(selectinload(User.roles))
+                )
             )
-            return False, "Failed to send election report email"
+            .scalars()
+            .all()
+        )
+        candidates = [
+            member
+            for member in members
+            if member.email
+            and (
+                (election.created_by and str(member.id) == str(election.created_by))
+                or any(role.slug in LEADERSHIP_ROLE_SLUGS for role in member.roles)
+            )
+        ]
+        # The creator first, so the report is addressed to the secretary who
+        # ran the election before the rest of leadership.
+        candidates.sort(key=lambda m: str(m.id) != str(election.created_by or ""))
+        return recipients_for(
+            candidates,
+            EmailKind.ELECTION_ADMIN,
+            department_required_kinds(organization),
+        )
 
     # ------------------------------------------------------------------
     # Pre-meeting package (secretary meeting prep)

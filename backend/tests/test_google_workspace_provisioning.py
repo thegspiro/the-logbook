@@ -939,8 +939,15 @@ async def _member_with_account(db_session, status=DirectoryAccountStatus.CREATED
     )
     db_session.add(officer)
     await db_session.commit()
+    # An administrator: member deletion checks that the caller holds every
+    # permission the member does, so the caller carries positions and a rank
+    # the way the loaded current user does.
     caller = SimpleNamespace(
-        id=officer.id, organization_id=org.id, username=officer.username
+        id=officer.id,
+        organization_id=org.id,
+        username=officer.username,
+        rank=None,
+        positions=[SimpleNamespace(permissions=["*"])],
     )
     return org, str(result["user_id"]), caller
 
@@ -1042,6 +1049,10 @@ class TestSuspension:
         org, user_id, caller = await _member_with_account(db_session)
         fake = FakeDirectory()
         with patch(f"{SERVICE}.directory_for", return_value=fake):
+            # The transferred applicant starts on probation (membership type
+            # drives status), and probationary cannot go straight to retired;
+            # every step below is an allowed transition and none is a drop.
+            await _change_status(db_session, user_id, caller, "active")
             await _change_status(db_session, user_id, caller, "retired")
             await _change_status(db_session, user_id, caller, "active")
             await _change_status(db_session, user_id, caller, "leave")

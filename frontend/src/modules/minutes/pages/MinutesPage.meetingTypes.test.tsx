@@ -17,6 +17,10 @@ vi.mock('react-router', async () => {
 });
 
 vi.mock('../../../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   meetingsService: {
     getMeetings: (...a: unknown[]) => mockGetMeetings(...a) as unknown,
     getSummary: (...a: unknown[]) => mockGetSummary(...a) as unknown,

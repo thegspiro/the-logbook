@@ -19,6 +19,7 @@ from app.models.forms import (
     IntegrationType,
 )
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -90,10 +91,10 @@ class FormFieldBase(BaseModel):
     help_text: Optional[str] = None
     default_value: Optional[str] = None
     required: bool = False
-    min_length: Optional[int] = Field(None, ge=0)
-    max_length: Optional[int] = Field(None, ge=1)
-    min_value: Optional[int] = None
-    max_value: Optional[int] = None
+    min_length: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    max_length: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    min_value: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    max_value: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     validation_pattern: Optional[str] = Field(None, max_length=500)
     options: Optional[List[FormFieldOption]] = None
     # Conditional visibility — show this field only when a condition is met
@@ -103,7 +104,7 @@ class FormFieldBase(BaseModel):
         pattern="^(equals|not_equals|contains|not_empty|is_empty|at_least|at_most)$",
     )
     condition_value: Optional[str] = Field(None, max_length=500)
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: int = Field(default=0, ge=0, le=INT32_MAX)
     width: str = Field(default="full", pattern="^(full|half|third)$")
 
 
@@ -130,10 +131,10 @@ class FormFieldUpdate(BaseModel):
     help_text: Optional[str] = None
     default_value: Optional[str] = None
     required: Optional[bool] = None
-    min_length: Optional[int] = Field(None, ge=0)
-    max_length: Optional[int] = Field(None, ge=1)
-    min_value: Optional[int] = None
-    max_value: Optional[int] = None
+    min_length: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    max_length: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    min_value: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
+    max_value: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     validation_pattern: Optional[str] = Field(None, max_length=500)
     options: Optional[List[FormFieldOption]] = None
     condition_field_id: Optional[str] = None
@@ -142,7 +143,7 @@ class FormFieldUpdate(BaseModel):
         pattern="^(equals|not_equals|contains|not_empty|is_empty|at_least|at_most)$",
     )
     condition_value: Optional[str] = Field(None, max_length=500)
-    sort_order: Optional[int] = Field(None, ge=0)
+    sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     width: Optional[str] = None
 
     _check_required = field_validator("required")(_reject_null)

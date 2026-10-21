@@ -167,6 +167,18 @@ export const UserStatus = {
 } as const;
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
 
+/**
+ * Statuses whose holder is a current member: signs in, is scheduled, trains.
+ * Mirrors `ACTIVE_ACCOUNT_STATUSES` in `backend/app/models/user.py`. A
+ * probationary member is on the roster today, not a former one, so a list of
+ * who takes part asks `isActiveAccount`, never `status === UserStatus.ACTIVE`.
+ */
+export const ACTIVE_ACCOUNT_STATUSES: readonly UserStatus[] = [UserStatus.ACTIVE, UserStatus.PROBATIONARY];
+
+export function isActiveAccount(status: string | null | undefined): boolean {
+  return !!status && (ACTIVE_ACCOUNT_STATUSES as readonly string[]).includes(status);
+}
+
 /** Statuses in which a member is away from the department (time not counted as service). */
 export const SEPARATED_STATUSES: readonly UserStatus[] = [
   UserStatus.DROPPED_VOLUNTARY,

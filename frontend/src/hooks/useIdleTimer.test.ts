@@ -38,6 +38,78 @@ async function armTimers() {
 }
 
 describe('useIdleTimer', () => {
+  describe('reporting real input to the server', () => {
+    // The server counts only requests a person caused, and a person typing a
+    // long report makes none. Without a heartbeat the server would end that
+    // session while the browser's own timer still called it active.
+    const HEARTBEAT_MS = 2 * 60 * 1000;
+
+    it('sends a request on real input', async () => {
+      renderHook(() => useIdleTimer());
+      await armTimers();
+      mockGetSessionSettings.mockClear();
+
+      document.dispatchEvent(new Event('keydown'));
+
+      expect(mockGetSessionSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not send one per keystroke', async () => {
+      renderHook(() => useIdleTimer());
+      await armTimers();
+      mockGetSessionSettings.mockClear();
+
+      document.dispatchEvent(new Event('keydown'));
+      document.dispatchEvent(new Event('keydown'));
+      document.dispatchEvent(new Event('mousedown'));
+
+      expect(mockGetSessionSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends another once the interval has passed', async () => {
+      renderHook(() => useIdleTimer());
+      await armTimers();
+      mockGetSessionSettings.mockClear();
+
+      document.dispatchEvent(new Event('keydown'));
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_MS + 1000);
+      document.dispatchEvent(new Event('keydown'));
+
+      expect(mockGetSessionSettings).toHaveBeenCalledTimes(2);
+    });
+
+    it('also reports input the DOM does not see, such as an NFC tap', async () => {
+      renderHook(() => useIdleTimer());
+      await armTimers();
+      mockGetSessionSettings.mockClear();
+
+      signalUserActivity();
+
+      expect(mockGetSessionSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends nothing while nobody is there', async () => {
+      renderHook(() => useIdleTimer());
+      await armTimers();
+      mockGetSessionSettings.mockClear();
+
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+
+      expect(mockGetSessionSettings).not.toHaveBeenCalled();
+    });
+
+    it('does not sign the member out when the heartbeat fails', async () => {
+      renderHook(() => useIdleTimer());
+      await armTimers();
+      mockGetSessionSettings.mockRejectedValue(new Error('offline'));
+
+      document.dispatchEvent(new Event('keydown'));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockLogout).not.toHaveBeenCalled();
+    });
+  });
+
   it('logs out after the configured idle period', async () => {
     renderHook(() => useIdleTimer());
     await armTimers();

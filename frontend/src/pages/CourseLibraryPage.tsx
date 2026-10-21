@@ -290,7 +290,11 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
                 placeholder="e.g., 40"
                 min={0}
                 step={0.5}
+                aria-describedby="course-duration-hours-help"
               />
+              <p id="course-duration-hours-help" className="text-theme-text-muted mt-1 text-xs">
+                How long the class runs.
+              </p>
             </div>
             <div>
               <label htmlFor="course-credit-hours" className="text-theme-text-secondary mb-1 block text-sm font-medium">
@@ -305,7 +309,12 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
                 placeholder="e.g., 40"
                 min={0}
                 step={0.5}
+                aria-describedby="course-credit-hours-help"
               />
+              <p id="course-credit-hours-help" className="text-theme-text-muted mt-1 text-xs">
+                The training hours a member is credited with. Left blank, a session from this course credits its
+                duration.
+              </p>
             </div>
           </div>
 

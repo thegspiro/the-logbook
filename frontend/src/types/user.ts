@@ -592,14 +592,28 @@ export interface ConsentRoster {
   members: ConsentRosterMember[];
 }
 
+/** Rows in one table that a permanent delete removes with the member. */
+export interface DeletionImpactRecord {
+  table: string;
+  label: string;
+  count: number;
+}
+
 export interface DeletionImpact {
   user_id: string;
   full_name?: string;
   display_name?: string;
   status: UserStatus;
   training_records: number;
+  /** Assigned items and pool issuances still held; returned to stock on a permanent delete. */
   inventory_items: number;
+  /** Items checked out to the member; checked back in on a permanent delete. */
+  checked_out_items?: number;
+  /** Uploaded documents; kept, with the uploader cleared. */
   documents: number;
+  /** Every table whose rows go with the member, largest first, derived server-side from the schema. */
+  removed_records?: DeletionImpactRecord[];
+  /** Rows a permanent delete removes outright — the sum of removed_records. */
   total_records: number;
 }
 

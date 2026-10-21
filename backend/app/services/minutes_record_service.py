@@ -13,9 +13,7 @@ deliberate exception is a ``signed_copy`` attachment, which is the signed
 paper evidence of the approval and can only exist after it.
 """
 
-import asyncio
 import copy
-import os
 from datetime import date, datetime, timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 from uuid import UUID
@@ -55,7 +53,6 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
-    stored_file_response,
 )
 from app.services.minute_service import MinuteService
 from app.utils import download_names
@@ -393,7 +390,7 @@ class MinutesRecordService:
         minutes_id: str,
         organization_id: UUID | str,
         election_id: str,
-        captured_by: UUID | str,
+        captured_by: UUID | str | None,
     ) -> Optional[MinutesElectionResult]:
         """Freeze a closed election's result into the minutes."""
         from app.services.election_service import ElectionService
@@ -456,7 +453,7 @@ class MinutesRecordService:
             election_closed_at=election.closed_at,
             snapshot=results.model_dump(mode="json"),
             is_addendum=is_addendum,
-            captured_by=str(captured_by),
+            captured_by=str(captured_by) if captured_by else None,
         )
         self.db.add(row)
         await self.db.commit()
@@ -570,7 +567,7 @@ class MinutesRecordService:
             await self.db.commit()
         except Exception:
             await self.db.rollback()
-            await asyncio.to_thread(file_storage.remove_quietly, stored.path)
+            await file_storage.delete_quietly(stored.path)
             raise
         await self.db.refresh(attachment)
         return attachment
@@ -607,12 +604,12 @@ class MinutesRecordService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
             )
-        if not await asyncio.to_thread(os.path.isfile, path):
+        if not await file_storage.exists(path):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
             )
-        return stored_file_response(
-            path=path,
+        return await file_storage.file_response(
+            path,
             filename=download_names.descriptive_filename(
                 local_day,
                 minutes.title,
@@ -641,7 +638,7 @@ class MinutesRecordService:
         await self.db.delete(attachment)
         await self.db.commit()
         if path:
-            await asyncio.to_thread(file_storage.remove_quietly, path)
+            await file_storage.delete_quietly(path)
         return True
 
     # ============================================

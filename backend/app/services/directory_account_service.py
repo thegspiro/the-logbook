@@ -198,6 +198,18 @@ def credentials_text(
     )
 
 
+# The audit event (after the provider's prefix) recording an account found
+# active again after its member left; the daily attention email reads it.
+ACTIVE_AFTER_DEPARTURE_EVENT = "account_active_after_departure"
+
+
+def active_after_departure_message(info: DirectoryProviderInfo) -> str:
+    return (
+        f"The account was turned back on in {info.admin_console} after the "
+        "member left. The Logbook is suspending it again."
+    )
+
+
 def account_in_use_message(info: DirectoryProviderInfo) -> str:
     return (
         f"The {info.vendor} account at that address is still recorded for "
@@ -983,6 +995,96 @@ class DirectoryAccountService:
             return None  # a record was written for this member meanwhile
         logger.info(f"Linked new member {user_id} to their {info.product} account")
         return row
+
+    async def check_departed_suspensions(self, organization_id: str) -> list[str]:
+        """Suspend again any departed member's account found active.
+
+        A suspension The Logbook applied (or found in place) can be lifted in
+        the directory's own admin console, and nothing else notices: the sweep
+        only revisits records still unsettled. One read-only listing of the
+        domain is compared with every departed member whose suspension is
+        settled; an account found active again is audit-logged as such and
+        suspended once more, through the same path as a departure, so a
+        failure is retried by the sweep and shown on the attention list.
+        Accounts the directory API cannot change, and accounts no longer in
+        the directory, are left alone. Returns the members found active.
+        """
+        info = await self.connected_provider(organization_id)
+        if info is None:
+            return []
+        integration = await self._active_integration(organization_id, info)
+        if integration is None:
+            return []
+        rows = (
+            await self.db.execute(
+                select(DirectoryAccountProvision, User)
+                .join(User, User.id == DirectoryAccountProvision.user_id)
+                .where(
+                    DirectoryAccountProvision.organization_id == str(organization_id),
+                    User.organization_id == str(organization_id),
+                    DirectoryAccountProvision.provider == info.provider,
+                    DirectoryAccountProvision.status.in_(SUSPENDABLE_STATUSES),
+                    DirectoryAccountProvision.suspension_wanted.is_(True),
+                    DirectoryAccountProvision.suspension_settled.is_(True),
+                    DirectoryAccountProvision.managed_on_premises.isnot(True),
+                )
+            )
+        ).all()
+        departed = [row for row, member in rows if member_has_departed(member)]
+        if not departed:
+            return []  # nothing to compare: no listing call
+        domain = str((integration.config or {}).get("domain", "")).lower()
+        try:
+            accounts = await directory_for(integration).list_users(domain)
+        except DirectoryError as exc:
+            logger.warning(
+                f"{info.product} departure check for {organization_id} could not "
+                f"list accounts: {type(exc).__name__}"
+            )
+            return []
+        by_id = {a.id: a for a in accounts if a.id}
+        by_address = {
+            address.lower(): a for a in accounts for address in a.addresses if address
+        }
+        now = datetime.now(timezone.utc)
+        found: list[str] = []
+        for row in departed:
+            # A record that knows its account's id is matched by the id alone:
+            # the address may since belong to a different, newer account.
+            account = (
+                by_id.get(row.external_user_id)
+                if row.external_user_id
+                else by_address.get((row.primary_email or "").lower())
+            )
+            if account is None or account.suspended:
+                continue
+            # Staged exactly as a departure stages it, with the suspension no
+            # longer counted as ours: the reconcile below then asks the
+            # directory again rather than trusting the record.
+            row.suspended_by_logbook = False
+            row.suspended_at = None
+            row.suspension_settled = False
+            row.suspension_requested_at = now
+            row.suspension_error = active_after_departure_message(info)
+            found.append(str(row.user_id))
+        if not found:
+            return []
+        await self.db.commit()
+        from app.core.audit import log_audit_event
+
+        for user_id in found:
+            await log_audit_event(
+                self.db,
+                f"{info.audit_prefix}.{ACTIVE_AFTER_DEPARTURE_EVENT}",
+                "integrations",
+                "warning",
+                {"target_user_id": user_id},
+                organization_id=str(organization_id),
+            )
+        await self.db.commit()
+        for user_id in found:
+            await self.reconcile_suspension(user_id, organization_id)
+        return found
 
     async def attention_items(
         self, organization_id: str, now: Optional[datetime] = None

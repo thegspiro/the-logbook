@@ -113,6 +113,18 @@ export interface Event {
   /** When self check-in closes, as the backend's check-in window defines it.
    * Later than end_datetime for a "window" event with minutes after. */
   check_in_closes_at?: string | null;
+  /** When self check-in opens, from the same window as check_in_closes_at. */
+  check_in_opens_at?: string | null;
+
+  /** The list card's per-caller fields, computed by the same helpers on the
+   * detail endpoint: has this member checked in (by scan or an officer's
+   * override), and what the event would credit. See EventListItem. */
+  user_attended?: boolean;
+  credited_hours?: number | null;
+  hour_category_label?: string | null;
+  /** Whether GET /events/{id}/attendees will answer this caller. The page asks
+   * for the roster only when it will. */
+  can_view_attendees?: boolean;
 }
 
 /** A member's request to be marked present at an event that is over. */

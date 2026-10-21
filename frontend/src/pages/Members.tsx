@@ -33,7 +33,7 @@ import { SortableHeader } from '../components/ux/SortableHeader';
 import { sortItems } from '../utils/sortItems';
 import type { SortDirection } from '../components/ux/SortableHeader';
 import type { MemberStats } from '../types/member';
-import { UserStatus } from '../constants/enums';
+import { UserStatus, isActiveAccount } from '../constants/enums';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { displayNameOf } from '../utils/memberName';
 
@@ -127,7 +127,7 @@ const Members: React.FC = () => {
       // Calculate stats from real data
       const calculatedStats: MemberStats = {
         total: users.filter((u) => u.status !== UserStatus.ARCHIVED).length,
-        active: users.filter((u) => u.status === UserStatus.ACTIVE).length,
+        active: users.filter((u) => isActiveAccount(u.status)).length,
         inactive: users.filter((u) => u.status === UserStatus.INACTIVE).length,
         onLeave: users.filter((u) => u.status === UserStatus.LEAVE).length,
         retired: users.filter((u) => u.status === UserStatus.RETIRED).length,
@@ -208,9 +208,13 @@ const Members: React.FC = () => {
         (member.membership_number && member.membership_number.toLowerCase().includes(searchLower)) ||
         (member.email && member.email.toLowerCase().includes(searchLower));
 
+      // "Active" is the account filter, and a probationary account is a
+      // current one: the backend counts both the same way, and the dashboard
+      // tile links here with ?status=active expecting the same roster.
       const matchesFilter =
         filterStatus === 'all' ||
         (filterStatus === CURRENT_MEMBERS_FILTER && member.status !== UserStatus.ARCHIVED) ||
+        (filterStatus === UserStatus.ACTIVE && isActiveAccount(member.status)) ||
         member.status === filterStatus;
 
       return matchesSearch && matchesFilter;

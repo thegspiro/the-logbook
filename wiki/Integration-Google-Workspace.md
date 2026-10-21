@@ -167,6 +167,26 @@ account is retried at most every 15 minutes), and the member's profile shows
 account record with the member, so its outcome is written to the audit log
 instead. No account is ever created for a member who has left.
 
+### An account turned back on after the member left
+
+A suspension can be lifted in the Admin console, and nothing in The Logbook
+would otherwise notice. Each morning at 7:28 the
+`directory_account_departure_check` scheduled task lists the domain's accounts
+once (read-only) and compares them with every member who has left and whose
+suspension is settled. An account found active again is suspended once more,
+through the same path as a departure, so a failure is retried by
+`google_workspace_suspension_sync` and shown under **N need attention**. Each
+one is written to the audit log
+(`google_workspace.account_active_after_departure`), and the administrators'
+email at 7:35 names every member found that way in the last day, even when
+nothing else is overdue.
+
+There is no exemption: while a member is recorded as having left, their account
+is suspended again every morning. To give a departed member's account back
+(to export a mailbox, say), undo the drop or reactivate the member in The
+Logbook. Accounts no longer in the directory, and records whose account
+id no longer matches one, are left alone.
+
 ---
 
 ## Accounts Needing Attention
@@ -197,7 +217,8 @@ something that keeps failing does not keep it out of the email.
 Anything waiting over a day is also emailed to every active member holding
 `admin.access`, once each morning while it lasts
 (`google_workspace_attention_digest`, 7:35). The email leads with departed
-members whose account still works. It is filed under **Membership and store
+members whose account was found turned back on that morning, then those whose
+account still works. It is filed under **Membership and store
 administration** in each member's email preferences, so an administrator can
 turn it off for themselves.
 

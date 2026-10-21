@@ -18,7 +18,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import ensure_found, handle_service_errors
+from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.user import Organization, User
 from app.schemas.event import QRCheckInData
 from app.schemas.location import (
@@ -30,7 +30,7 @@ from app.schemas.location import (
     LocationUpdate,
 )
 from app.services.event_service import EventService
-from app.services.location_service import LocationService
+from app.services.location_service import LocationInUseError, LocationService
 from app.utils.nfc_integration import nfc_id_cards_enabled
 
 router = APIRouter()
@@ -226,16 +226,21 @@ async def delete_location(
     **Authentication required**
     **Permissions required:** locations.delete or locations.manage
 
-    **Note:** Cannot delete locations that have associated events.
-    Consider deactivating instead.
+    **Note:** A location that events, event templates or apparatus still
+    reference is deactivated rather than deleted, so those records keep it.
     """
     service = LocationService(db)
 
     async with handle_service_errors("Failed to delete location"):
-        deleted = await service.delete_location(
-            location_id=location_id,
-            organization_id=current_user.organization_id,
-        )
+        try:
+            deleted = await service.delete_location(
+                location_id=location_id,
+                organization_id=current_user.organization_id,
+            )
+        except LocationInUseError as e:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+            )
 
     if not deleted:
         raise HTTPException(

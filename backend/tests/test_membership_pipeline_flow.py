@@ -1049,14 +1049,18 @@ class TestTransferToMembership:
         assert result["success"] is True
         assert "user_id" in result
 
-        # Verify the new User row exists in the database
+        # Verify the new User row exists in the database. The default
+        # operational outcome converts the applicant as a probationary
+        # member, and membership type drives the account status (owner
+        # decision 2026-10-20), so the account starts on probation too.
         user_row = await db_session.execute(
-            text("SELECT id, status FROM users WHERE id = :uid"),
+            text("SELECT id, status, membership_type FROM users WHERE id = :uid"),
             {"uid": result["user_id"]},
         )
         row = user_row.fetchone()
         assert row is not None
-        assert row[1] == "active"
+        assert row[2] == "probationary"
+        assert row[1] == "probationary"
 
     async def test_transfer_preserves_data(
         self, db_session: AsyncSession, setup_org_and_admin

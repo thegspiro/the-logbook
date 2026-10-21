@@ -53,8 +53,12 @@ def _user():
 @pytest.fixture
 def removed_paths(monkeypatch):
     removed = []
-    monkeypatch.setattr(events_endpoint.os.path, "exists", lambda p: True)
-    monkeypatch.setattr(events_endpoint.os, "remove", removed.append)
+
+    async def record(ref):
+        if ref:
+            removed.append(ref)
+
+    monkeypatch.setattr(events_endpoint.file_storage, "delete_quietly", record)
     return removed
 
 

@@ -53,6 +53,7 @@ import { SettingsLayout, type SettingsSection } from '../components/settings/Set
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 import { AdminMetricsSettings } from '../components/admin';
 import { asArray } from '../utils/asArray';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -91,6 +92,7 @@ interface EventsSettingsTabProps {
 
 const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved }) => {
   const navigate = useNavigate();
+  const { confirm } = useConfirm();
   const [activeSection, setActiveSection] = useState<SectionKey>('visibility');
   const [settings, setSettings] = useState<EventModuleSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -526,6 +528,16 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
+    const templateName = emailTemplates.find((t) => t.id === templateId)?.name || 'this template';
+    const agreed = await confirm({
+      title: `Delete email template "${templateName}"?`,
+      message:
+        'The template is removed permanently, and any automatic send that uses it stops. Emails already sent are unaffected.',
+      confirmLabel: 'Delete template',
+      cancelLabel: 'Keep it',
+      variant: 'danger',
+    });
+    if (!agreed) return;
     try {
       await eventRequestService.deleteEmailTemplate(templateId);
       setEmailTemplates((prev) => prev.filter((t) => t.id !== templateId));

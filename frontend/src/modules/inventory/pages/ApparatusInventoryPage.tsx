@@ -29,7 +29,7 @@ import {
   PackageCheck,
   PackageX,
   Repeat,
-  Truck,
+  Boxes,
   Undo2,
   X,
 } from 'lucide-react';
@@ -506,7 +506,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
       ) : (
         <>
           <OperationsPageHeader
-            icon={Truck}
+            icon={Boxes}
             title="Apparatus Inventory"
             subtitle="Record what you used when you use it, and put fresh stock in the bracket. No check required."
           />

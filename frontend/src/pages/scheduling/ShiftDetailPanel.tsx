@@ -92,6 +92,7 @@ import { CrewBoardSlot } from './CrewBoardSlot';
 import { ShiftCallsSection } from './ShiftCallsSection';
 import { ShiftCloseoutWizard } from './ShiftCloseoutWizard';
 import { displayNameOf } from '../../utils/memberName';
+import { useConfirm } from '../../contexts/ConfirmContext';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
@@ -280,6 +281,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
   // UI visibility toggles
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { confirm } = useConfirm();
   const [showFinalizeChecklist, setShowFinalizeChecklist] = useState(false);
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [showBulkAssign, setShowBulkAssign] = useState(false);
@@ -616,6 +618,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
 
   const handleWithdraw = async () => {
     if (pending.withdrawing) return;
+    if (
+      !(await confirm({
+        title: 'Withdraw from shift',
+        message:
+          'Withdraw from this shift? Your seat opens for someone else to claim, and getting it back means signing up again while signup is open.',
+        confirmLabel: 'Withdraw',
+        cancelLabel: 'Stay on shift',
+      }))
+    )
+      return;
     setPendingFlag('withdrawing', true);
     try {
       await schedulingService.withdrawSignup(shift.id);
@@ -1408,14 +1420,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         <Pencil className="h-4 w-4" aria-hidden="true" />
                         Edit
                       </button>
-                      <button
-                        onClick={() => setShowDeleteConfirm(true)}
-                        className="text-theme-text-muted mobile-touch-target gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors hover:bg-red-500/10 hover:text-red-500"
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        Delete
-                      </button>
                     </>
+                  )}
+                  {/* Narrower than Edit on purpose: `delete_shift` refuses a
+                      shift that has started, because deleting cascades to its
+                      attendance and calls. `hasStarted` is that same instant;
+                      `isPast` would keep Delete on a crew already checked in. */}
+                  {canManage && !hasStarted && !shift.is_finalized && !isCancelled && (
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="text-theme-text-muted mobile-touch-target gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors hover:bg-red-500/10 hover:text-red-500"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      Delete
+                    </button>
                   )}
                   {/* Outside the manage block on purpose: the endpoint authorizes
                   scheduling.view as well as scheduling.manage, so gating the
@@ -1542,7 +1560,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               {showDeleteConfirm && (
                 <div className="space-y-3 rounded-lg border border-red-500/20 bg-red-500/10 p-4">
                   <p className="text-sm text-red-700 dark:text-red-300">
-                    Delete this shift? Its assignments are removed too, and this cannot be undone.
+                    Delete this shift? Its assignments, attendance records, logged calls and swap requests are removed
+                    with it, and this cannot be undone.
                   </p>
                   <div className="flex items-center justify-end gap-2">
                     <button

@@ -1,25 +1,15 @@
-import type React from 'react';
-import { Building2, ClipboardCheck, Package, ShieldCheck, Stethoscope, Truck } from 'lucide-react';
+import type { SectionNavItem } from './sectionNavigation';
+import { activeSection, visibleSectionNavItems } from './sectionNavigation';
+import { Boxes, Building2, ClipboardCheck, Package, ShieldCheck, Stethoscope, Truck } from 'lucide-react';
 import { APPARATUS_ENTRY_PERMISSIONS } from '../../modules/apparatus/routes';
 import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
 
 /**
  * The Operations destinations, in one list for the side navigation, the top
- * navigation and the section tab bar every Operations page draws under its
- * header. Three hand-kept copies of these gates is how a row ends up offered in
- * one place and hidden in another; one list cannot disagree with itself.
- *
- * Every gate must stay a subset of its route's own gate: `ProtectedRoute`
- * answers a permission failure with a full-page Access Denied, so a row the
- * route will refuse is a link to a dead end.
+ * navigation and the section strip every Operations page draws at its top.
+ * See `SectionNavItem` for the rule every gate here must keep.
  */
-export interface OperationsNavItem {
-  label: string;
-  path: string;
-  icon: React.ElementType;
-  permission?: string;
-  anyPermission?: string[];
-}
+export type OperationsNavItem = SectionNavItem;
 
 /**
  * What opens the crew rows below to an administrative member.
@@ -100,7 +90,10 @@ export function operationsNavItems(
           {
             label: 'Apparatus Inventory',
             path: '/inventory/checklists/apparatus-inventory',
-            icon: Truck,
+            // Not Truck, which Apparatus below uses: in the collapsed rail the
+            // two would be indistinguishable, and this row is the stock on a
+            // truck rather than the truck itself.
+            icon: Boxes,
             anyPermission: isAdministrative
               ? APPARATUS_INVENTORY_ADMINISTRATIVE_GRANTS
               : ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
@@ -129,36 +122,7 @@ export function operationsNavItems(
 }
 
 /** The rows a viewer's grants open. */
-export function visibleOperationsNavItems(
-  items: OperationsNavItem[],
-  checkPermission: (permission: string) => boolean
-): OperationsNavItem[] {
-  return items.filter(
-    (item) =>
-      (!item.permission || checkPermission(item.permission)) &&
-      (!item.anyPermission || item.anyPermission.some((p) => checkPermission(p)))
-  );
-}
+export const visibleOperationsNavItems = visibleSectionNavItems<OperationsNavItem>;
 
-function matchLength(pathname: string, prefix: string): number {
-  return pathname === prefix || pathname.startsWith(`${prefix}/`) ? prefix.length : -1;
-}
-
-/**
- * The section a URL belongs to: the longest matching prefix, so
- * `/inventory/checklists/my` is My Checklists and not Fleet Readiness, and
- * Fleet Readiness is not Inventory. `undefined` when nothing matches — the tab
- * bar then shows no selection rather than guessing.
- */
-export function activeOperationsSection(items: OperationsNavItem[], pathname: string): OperationsNavItem | undefined {
-  let best: OperationsNavItem | undefined;
-  let bestLength = -1;
-  for (const item of items) {
-    const length = matchLength(pathname, item.path);
-    if (length > bestLength) {
-      best = item;
-      bestLength = length;
-    }
-  }
-  return best;
-}
+/** The section a URL belongs to; see `activeSection`. */
+export const activeOperationsSection = activeSection<OperationsNavItem>;

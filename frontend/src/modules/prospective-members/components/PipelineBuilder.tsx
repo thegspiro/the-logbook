@@ -13,6 +13,7 @@ import { pipelineService } from '../services/api';
 import { StageConfigModal } from './StageConfigModal';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 interface PipelineBuilderProps {
   pipeline: Pipeline;
@@ -26,7 +27,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPi
   const [isSaving, setIsSaving] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const { confirm } = useConfirm();
 
   useEffect(() => {
     setStages(pipeline.stages);
@@ -66,7 +67,34 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPi
     }
   };
 
-  const handleDeleteStage = async (stageId: string) => {
+  const handleDeleteStage = async (stage: PipelineStage) => {
+    // The count is a courtesy: if the stats cannot be read, the warning about
+    // progress records still stands on its own.
+    let onStage: number | null;
+    try {
+      const stats = await pipelineService.getPipelineStats(pipeline.id);
+      onStage = stats.by_stage.find((s) => s.stage_id === stage.id)?.count ?? 0;
+    } catch {
+      onStage = null;
+    }
+    const index = stages.findIndex((s) => s.id === stage.id);
+    const movedTo =
+      stages.length === 1
+        ? 'Anyone on this stage is left on no stage.'
+        : `Anyone on this stage is moved to the ${index === stages.length - 1 ? 'previous' : 'next'} stage.`;
+    const occupancy =
+      onStage === null
+        ? movedTo
+        : `${onStage} active applicant${onStage === 1 ? ' is' : 's are'} on this stage now. ${movedTo}`;
+    const confirmed = await confirm({
+      title: `Delete the “${stage.name}” stage?`,
+      message: `${occupancy} Every applicant’s progress record for this stage — including ones who already completed it — is deleted. This can’t be undone.`,
+      confirmLabel: 'Delete stage',
+      cancelLabel: 'Keep it',
+    });
+    if (!confirmed) return;
+
+    const stageId = stage.id;
     try {
       await pipelineService.deleteStage(pipeline.id, stageId);
       const updated = stages.filter((s) => s.id !== stageId);
@@ -247,33 +275,16 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPi
                   >
                     <Edit2 className="h-4 w-4" />
                   </button>
-                  {deleteConfirmId === stage.id ? (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setDeleteConfirmId(null)}
-                        className="text-theme-text-muted hover:text-theme-text-primary px-1.5 py-0.5 text-xs transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => {
-                          void handleDeleteStage(stage.id);
-                          setDeleteConfirmId(null);
-                        }}
-                        className="px-1.5 py-0.5 text-xs font-medium text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setDeleteConfirmId(stage.id)}
-                      className="text-theme-text-muted p-1.5 transition-colors hover:text-red-700 dark:hover:text-red-400"
-                      title="Delete stage"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      void handleDeleteStage(stage);
+                    }}
+                    className="text-theme-text-muted p-1.5 transition-colors hover:text-red-700 dark:hover:text-red-400"
+                    title="Delete stage"
+                    aria-label={`Delete stage ${stage.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
             );

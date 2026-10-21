@@ -18,6 +18,7 @@ const mockUpdateRequirement = vi.fn();
 const mockCreateRequirement = vi.fn();
 const mockPreviewProgramImport = vi.fn();
 const mockImportProgram = vi.fn();
+const mockUpdateProgram = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -30,6 +31,7 @@ vi.mock('../services/api', () => ({
     previewRegistry: (...args: unknown[]) => mockPreviewRegistry(...args) as unknown,
     previewProgramImport: (...args: unknown[]) => mockPreviewProgramImport(...args) as unknown,
     importProgram: (...args: unknown[]) => mockImportProgram(...args) as unknown,
+    updateProgram: (...args: unknown[]) => mockUpdateProgram(...args) as unknown,
   },
   trainingService: {
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
@@ -95,6 +97,7 @@ const serviceMocks = [
   mockCreateRequirement,
   mockPreviewProgramImport,
   mockImportProgram,
+  mockUpdateProgram,
 ];
 
 describe('TrainingProgramsPage', () => {
@@ -617,6 +620,101 @@ describe('TrainingProgramsPage', () => {
 
       await waitFor(() => expect(toast.error).toHaveBeenCalled());
       expect(mockPreviewProgramImport).not.toHaveBeenCalled();
+    });
+  });
+
+  // Deleting a pipeline someone graduated from deactivates it, which drops it
+  // from the list. "Show inactive" brings it back into view with a badge and
+  // a Reactivate action that names it and says withdrawn members stay out.
+  describe('reactivating an inactive pipeline', () => {
+    const active = {
+      id: 'prog-1',
+      name: 'Probationary Firefighter',
+      structure_type: 'sequential',
+      active: true,
+      is_template: false,
+      version: 1,
+      enrolled_count: 3,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const inactive = { ...active, id: 'prog-2', name: 'Recruit School 2024', active: false, enrolled_count: 0 };
+
+    beforeEach(() => {
+      mockHasPermission = true;
+      mockGetPrograms.mockReset();
+      mockGetPrograms.mockImplementation((params?: { include_inactive?: boolean }) =>
+        Promise.resolve(params?.include_inactive ? [active, inactive] : [active])
+      );
+      mockUpdateProgram.mockReset();
+      mockUpdateProgram.mockResolvedValue({ ...inactive, active: true });
+    });
+
+    const showInactive = async () => {
+      renderWithRouter(<TrainingProgramsPage />);
+      await screen.findByText('Probationary Firefighter');
+      expect(screen.queryByText('Recruit School 2024')).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Show inactive' }));
+      await screen.findByText('Recruit School 2024');
+    };
+
+    it('lists inactive pipelines with a badge only when asked', async () => {
+      await showInactive();
+
+      expect(mockGetPrograms).toHaveBeenLastCalledWith({ is_template: false, include_inactive: true });
+      expect(screen.getAllByText('Inactive')).toHaveLength(1);
+      expect(screen.getByRole('button', { name: 'Reactivate Recruit School 2024' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Reactivate Probationary Firefighter' })).not.toBeInTheDocument();
+    });
+
+    it('confirms, reactivates, reports it and reloads the list', async () => {
+      await showInactive();
+      const callsBefore = mockGetPrograms.mock.calls.length;
+
+      await userEvent.click(screen.getByRole('button', { name: 'Reactivate Recruit School 2024' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toHaveTextContent('Reactivate "Recruit School 2024"?');
+      expect(dialog).toHaveTextContent('Members who were withdrawn when it was deactivated are not re-enrolled');
+      expect(mockUpdateProgram).not.toHaveBeenCalled();
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Reactivate' }));
+
+      await waitFor(() => expect(mockUpdateProgram).toHaveBeenCalledWith('prog-2', { active: true }));
+      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Recruit School 2024 reactivated'));
+      await waitFor(() => expect(mockGetPrograms.mock.calls.length).toBeGreaterThan(callsBefore));
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it('changes nothing when the officer leaves it inactive', async () => {
+      await showInactive();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Reactivate Recruit School 2024' }));
+      const dialog = await screen.findByRole('dialog');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Leave inactive' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(mockUpdateProgram).not.toHaveBeenCalled();
+    });
+
+    it("shows the server's reason when reactivation fails", async () => {
+      mockUpdateProgram.mockRejectedValue(new Error('Training program not found'));
+      await showInactive();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Reactivate Recruit School 2024' }));
+      const dialog = await screen.findByRole('dialog');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Reactivate' }));
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Training program not found'));
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('offers neither the toggle nor the action without training.manage', async () => {
+      mockHasPermission = false;
+      renderWithRouter(<TrainingProgramsPage />);
+      await screen.findByText('Probationary Firefighter');
+
+      expect(screen.queryByRole('checkbox', { name: 'Show inactive' })).not.toBeInTheDocument();
+      expect(mockGetPrograms).toHaveBeenCalledWith({ is_template: false });
     });
   });
 });

@@ -35,7 +35,7 @@ from app.models.training import (
     TrainingType,
     XAPIStatement,
 )
-from app.models.user import Position, User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Position, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     load_credited_shift_dates,
@@ -474,7 +474,7 @@ class CompetencyService:
             select(User)
             .where(
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
             .order_by(User.last_name, User.first_name)
@@ -1154,7 +1154,7 @@ class ReportExportService:
             select(User)
             .options(selectinload(User.positions))
             .where(User.organization_id == organization_id)
-            .where(User.status == UserStatus.ACTIVE)
+            .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
             .where(User.compliance_exempt.is_(False))
             .where(User.deleted_at.is_(None))
         )
@@ -1333,7 +1333,7 @@ class ReportExportService:
             .options(selectinload(User.positions))
             .where(
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )
@@ -1458,7 +1458,7 @@ class ReportExportService:
             select(User)
             .options(selectinload(User.positions))
             .where(User.organization_id == organization_id)
-            .where(User.status == UserStatus.ACTIVE)
+            .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
             .where(User.compliance_exempt.is_(False))
             .where(User.deleted_at.is_(None))
         )
@@ -1728,7 +1728,7 @@ class ReportExportService:
         users_result = await self.db.execute(
             select(User)
             .where(User.organization_id == organization_id)
-            .where(User.status == UserStatus.ACTIVE)
+            .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
             .where(User.deleted_at.is_(None))
             .order_by(User.last_name, User.first_name)
         )
@@ -1912,7 +1912,7 @@ class ReportExportService:
         users_result = await self.db.execute(
             select(User)
             .where(User.organization_id == organization_id)
-            .where(User.status == UserStatus.ACTIVE)
+            .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
             .where(User.deleted_at.is_(None))
             .order_by(User.last_name, User.first_name)
         )
@@ -2003,7 +2003,7 @@ class ReportExportService:
         users_result = await self.db.execute(
             select(User)
             .where(User.organization_id == organization_id)
-            .where(User.status == UserStatus.ACTIVE)
+            .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
             .where(User.deleted_at.is_(None))
         )
         user_map = {str(u.id): u for u in users_result.scalars().all()}

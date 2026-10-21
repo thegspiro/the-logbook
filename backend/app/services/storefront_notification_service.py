@@ -70,7 +70,7 @@ from app.models.storefront import (
     StorePaymentStatus,
     StoreSettings,
 )
-from app.models.user import Organization, User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
 from app.services.email_policy import (
     EmailKind,
     department_required_kinds,
@@ -180,7 +180,7 @@ class StorefrontNotificationService:
         result = await self.db.execute(
             select(User.email).where(
                 User.organization_id == str(organization_id),
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
                 User.email.isnot(None),
             )

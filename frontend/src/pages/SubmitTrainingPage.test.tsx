@@ -13,6 +13,8 @@ const mockUploadAttachment = vi.fn();
 const mockSubmitDraft = vi.fn();
 const mockCreateWithAttachment = vi.fn();
 const mockGetCrewContext = vi.fn();
+const mockDeleteAttachment = vi.fn();
+const mockGetAttachments = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingSubmissionService: {
@@ -25,8 +27,8 @@ vi.mock('../services/api', () => ({
     updateSubmission: vi.fn(),
     submitDraft: (...args: unknown[]) => mockSubmitDraft(...args) as unknown,
     deleteSubmission: vi.fn(),
-    deleteAttachment: vi.fn(),
-    getAttachments: vi.fn(),
+    deleteAttachment: (...args: unknown[]) => mockDeleteAttachment(...args) as unknown,
+    getAttachments: (...args: unknown[]) => mockGetAttachments(...args) as unknown,
     getAttachmentDownloadUrl: (id: string, index: number) =>
       `/api/v1/training/submissions/${id}/attachments/${index}/download`,
   },
@@ -131,6 +133,58 @@ describe('SubmitTrainingPage', () => {
       },
       { id: 'requirement-archived', name: 'Archived Certification', active: false, requirement_type: 'certification' },
     ]);
+  });
+
+  describe('removing a stored attachment', () => {
+    beforeEach(() => {
+      mockDeleteAttachment.mockReset();
+      mockDeleteAttachment.mockResolvedValue({ submission_id: 'sub-1', attachments: [] });
+      mockGetAttachments.mockReset();
+      mockGetAttachments.mockResolvedValue([]);
+      mockGetMySubmissions.mockReset();
+      mockGetMySubmissions.mockResolvedValue([
+        {
+          id: 'sub-1',
+          course_name: 'Wildland S130',
+          training_type: 'continuing_education',
+          completion_date: '2026-03-12',
+          hours_completed: 4,
+          status: 'pending_review',
+          attachments: [{ index: 0, file_name: 'certificate.pdf' }],
+          submitted_at: '2026-03-12T12:00:00Z',
+          updated_at: '2026-03-12T12:00:00Z',
+        },
+      ]);
+    });
+
+    const openEdit = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderWithRouter(<SubmitTrainingPage />);
+      await user.click(await screen.findByRole('button', { name: 'Edit Wildland S130' }));
+      await user.click(await screen.findByRole('button', { name: 'Remove certificate.pdf' }));
+    };
+
+    it('asks before removing, and keeps the file on cancel', async () => {
+      const user = userEvent.setup();
+      await openEdit(user);
+
+      const dialog = await screen.findByRole('dialog', { name: 'Remove "certificate.pdf"?' });
+      expect(dialog).toHaveTextContent('deleted from this submission right away');
+      await user.click(screen.getByRole('button', { name: 'Keep it' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(mockDeleteAttachment).not.toHaveBeenCalled();
+      expect(screen.getByText('certificate.pdf')).toBeInTheDocument();
+    });
+
+    it('removes the file once confirmed', async () => {
+      const user = userEvent.setup();
+      await openEdit(user);
+
+      await user.click(await screen.findByRole('button', { name: 'Remove file' }));
+
+      await waitFor(() => expect(mockDeleteAttachment).toHaveBeenCalledWith('sub-1', 0));
+      await waitFor(() => expect(screen.queryByText('certificate.pdf')).not.toBeInTheDocument());
+    });
   });
 
   describe('crew training', () => {

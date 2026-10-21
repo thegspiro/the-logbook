@@ -14,6 +14,7 @@ import { formatDateTime } from '../../../utils/dateFormatting';
 import { ApplicantStatus } from '../../../constants/enums';
 import { eventService } from '../../../services/eventServices';
 import type { EventListItem } from '../../../types/event';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 
 interface LinkedEventsSectionProps {
   applicant: Applicant;
@@ -27,6 +28,7 @@ const LinkedEventsSection: React.FC<LinkedEventsSectionProps> = ({ applicant, tz
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
   const [isLoadingUpcoming, setIsLoadingUpcoming] = useState(false);
   const [eventSearchQuery, setEventSearchQuery] = useState('');
+  const { confirm } = useConfirm();
 
   useEffect(() => {
     if (!applicant.id) {
@@ -75,7 +77,14 @@ const LinkedEventsSection: React.FC<LinkedEventsSectionProps> = ({ applicant, tz
   );
 
   const handleUnlinkEvent = useCallback(
-    async (linkId: string) => {
+    async (linkId: string, eventTitle: string) => {
+      const confirmed = await confirm({
+        title: 'Unlink this event?',
+        message: `${eventTitle} will no longer be listed on this applicant’s record. The event itself, and any attendance recorded at it, are not changed.`,
+        confirmLabel: 'Unlink event',
+        cancelLabel: 'Keep it',
+      });
+      if (!confirmed) return;
       try {
         await eventLinkService.unlinkEvent(applicant.id, linkId);
         setLinkedEvents((prev) => prev.filter((l) => l.id !== linkId));
@@ -84,7 +93,7 @@ const LinkedEventsSection: React.FC<LinkedEventsSectionProps> = ({ applicant, tz
         toast.error('Failed to unlink event');
       }
     },
-    [applicant.id]
+    [applicant.id, confirm]
   );
 
   return (
@@ -222,7 +231,7 @@ const LinkedEventsSection: React.FC<LinkedEventsSectionProps> = ({ applicant, tz
               {applicant.status === ApplicantStatus.ACTIVE && (
                 <button
                   onClick={() => {
-                    void handleUnlinkEvent(link.id);
+                    void handleUnlinkEvent(link.id, link.event_title ?? 'This event');
                   }}
                   className="text-theme-text-muted shrink-0 transition-colors hover:text-red-500"
                   title="Unlink event"

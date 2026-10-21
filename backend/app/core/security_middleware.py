@@ -1289,8 +1289,10 @@ class _ExceptionCache:
 
     Only requests the country check would block reach the lookup, but a
     blocked address hammering the API would otherwise cost a query each time.
-    Entries live ``TTL_SECONDS``, so an approval or a revocation takes effect
-    within that; past ``MAX_ENTRIES`` the oldest entry is dropped.
+    Entries live ``TTL_SECONDS``, so an approval takes effect within that; a
+    revocation clears the cache in every worker at once (see
+    ``invalidate_ip_exception_cache``). Past ``MAX_ENTRIES`` the oldest entry
+    is dropped.
     """
 
     TTL_SECONDS = 60.0
@@ -1320,6 +1322,17 @@ class _ExceptionCache:
 
 
 _exception_cache = _ExceptionCache()
+
+
+def invalidate_ip_exception_cache() -> None:
+    """Forget every cached exception answer in this worker.
+
+    Called when an exception is revoked, so the address is looked up again on
+    its next request instead of riding a cached "allowed" for up to
+    ``TTL_SECONDS``. Other workers are reached through
+    ``geoip_sync.publish_ip_exception_invalidation``.
+    """
+    _exception_cache.clear()
 
 
 async def _has_ip_exception(client_ip: str) -> bool:

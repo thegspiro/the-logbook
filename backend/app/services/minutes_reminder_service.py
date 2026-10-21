@@ -57,7 +57,11 @@ from app.utils.minutes_settings import (
     MinutesReminderSettings,
     load_minutes_reminder_settings,
 )
-from app.utils.org_timezone import org_today, scheduling_timezone
+from app.utils.org_timezone import (
+    org_today,
+    scheduling_timezone,
+    stored_calendar_day,
+)
 
 # An item this far past due is no longer chased by email. A backlog of old open
 # items would otherwise mail a member about work from years ago the first time
@@ -80,17 +84,8 @@ _CELL = "padding:6px 12px;border-bottom:1px solid #eee;"
 
 
 def due_day(item: ActionItem) -> Optional[date]:
-    """The calendar day an item is due, or None.
-
-    A due date is a calendar day stored at UTC midnight, so it is read in UTC;
-    converting it to the department's zone would turn the 15th into the 14th.
-    """
-    value = item.due_date
-    if value is None:
-        return None
-    if value.tzinfo is not None:
-        value = value.astimezone(timezone.utc)
-    return value.date()
+    """The calendar day an item is due, or None (see ``stored_calendar_day``)."""
+    return stored_calendar_day(item.due_date)
 
 
 def classify(

@@ -1462,6 +1462,9 @@ class TestApprovalChainService:
                     },
                 ],
             )
+            # Routed, as submit_purchase_request leaves it: only a request
+            # awaiting approval is listed.
+            pr.status = PurchaseRequestStatus.PENDING_APPROVAL
             await service.create_approval_records(
                 chain,
                 ApprovalEntityType.PURCHASE_REQUEST,
@@ -1561,6 +1564,9 @@ class TestApprovalChainService:
                 },
             ],
         )
+        # Routed, as submit_purchase_request leaves them: a step is approvable
+        # only while its request is awaiting approval.
+        pr_a.status = PurchaseRequestStatus.PENDING_APPROVAL
         a_records = await service.create_approval_records(
             one_step,
             ApprovalEntityType.PURCHASE_REQUEST,
@@ -1606,6 +1612,7 @@ class TestApprovalChainService:
                 },
             ],
         )
+        pr_b.status = PurchaseRequestStatus.PENDING_APPROVAL
         b_records = await service.create_approval_records(
             two_step,
             ApprovalEntityType.PURCHASE_REQUEST,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 
@@ -8,6 +8,7 @@ const storeState = {
   apparatus: [],
   templatesLoaded: true,
   platoonsEnabled: false,
+  settingsLoaded: false,
   loadInitialData: vi.fn(),
 };
 
@@ -37,6 +38,7 @@ describe('SchedulingSettingsPage', () => {
     // `vi.clearAllMocks()` (CLAUDE.md pitfall #28).
     storeState.loadInitialData.mockReset();
     storeState.platoonsEnabled = false;
+    storeState.settingsLoaded = false;
     window.history.replaceState({}, '', '/scheduling/admin/settings/general');
   });
 
@@ -109,15 +111,46 @@ describe('SchedulingSettingsPage', () => {
     expect(screen.getByText('section:notifications')).toBeInTheDocument();
   });
 
-  // Not a redirect: platoonsEnabled arrives a beat after mount, and sending the
-  // user away would bounce them off the section they asked for before the
+  // Not a redirect yet: platoonsEnabled arrives a beat after mount, and sending
+  // the user away would bounce them off the section they asked for before the
   // setting that permits it has loaded.
-  it('falls back to General for a section the department has turned off', () => {
+  it('falls back to General without leaving the URL while settings load', () => {
     window.history.replaceState({}, '', '/scheduling/admin/settings/platoons');
 
     renderWithRouter(<SchedulingSettingsPage section="platoons" />);
 
     expect(screen.getByText('section:general')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/scheduling/admin/settings/platoons');
+  });
+
+  it('moves to General and says why once settings show platoons are off', async () => {
+    storeState.settingsLoaded = true;
+    window.history.replaceState({}, '', '/scheduling/admin/settings/platoons');
+
+    renderWithRouter(<SchedulingSettingsPage section="platoons" />);
+
+    await waitFor(() => expect(window.location.pathname).toBe('/scheduling/admin/settings/general'));
+    expect(screen.getByRole('status')).toHaveTextContent(/Platoon scheduling is turned off/);
+  });
+
+  it('stays on Platoons when the department has them on', () => {
+    storeState.settingsLoaded = true;
+    storeState.platoonsEnabled = true;
+    window.history.replaceState({}, '', '/scheduling/admin/settings/platoons');
+
+    renderWithRouter(<SchedulingSettingsPage section="platoons" />);
+
+    expect(screen.getByText('section:platoons')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/scheduling/admin/settings/platoons');
+    expect(screen.queryByText(/Platoon scheduling is turned off/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing about platoons on an ordinary visit to General', () => {
+    storeState.settingsLoaded = true;
+
+    renderWithRouter(<SchedulingSettingsPage section="general" />);
+
+    expect(screen.queryByText(/Platoon scheduling is turned off/)).not.toBeInTheDocument();
   });
 
   it('hides Platoons until platoon scheduling is enabled', () => {

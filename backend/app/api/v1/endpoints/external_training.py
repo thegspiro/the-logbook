@@ -54,6 +54,7 @@ from app.schemas.training import (
     ExternalTrainingSyncLogResponse,
     ExternalUserMappingResponse,
     ExternalUserMappingUpdate,
+    ImportMatchedResponse,
     ImportRecordRequest,
     ReportUploadResponse,
     SyncRequest,
@@ -1367,6 +1368,20 @@ async def update_user_mapping(
                     status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
                 )
         await _apply_user_mapping(db, mapping, internal_user_id, current_user.id)
+        if internal_user_id:
+            # Attaching the member is not enough: the member's training page
+            # shows training records, which exist only once the staged
+            # completions are imported.
+            service = ExternalTrainingSyncService(db)
+            try:
+                await service.import_pending_for_matched_members(
+                    mapping.provider_id,
+                    str(current_user.organization_id),
+                    external_user_id=mapping.external_user_id,
+                    created_by=str(current_user.id),
+                )
+            finally:
+                await service.close()
 
     if mapping_update.is_mapped is not None:
         mapping.is_mapped = mapping_update.is_mapped
@@ -1554,6 +1569,67 @@ async def import_single_record(
     )
 
     return ext_import
+
+
+@router.post(
+    "/providers/{provider_id}/imports/import-matched",
+    response_model=ImportMatchedResponse,
+)
+async def import_matched_records(
+    provider_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Import every pending record whose member is already known.
+
+    Repairs completions stranded by a member being mapped after the records
+    were staged. Records with no member stay pending.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    provider = (
+        await db.execute(
+            select(ExternalTrainingProvider.id)
+            .where(ExternalTrainingProvider.id == str(provider_id))
+            .where(
+                ExternalTrainingProvider.organization_id
+                == str(current_user.organization_id)
+            )
+        )
+    ).scalar_one_or_none()
+    if provider is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found"
+        )
+
+    service = ExternalTrainingSyncService(db)
+    try:
+        imported, failed = await service.import_pending_for_matched_members(
+            str(provider_id),
+            str(current_user.organization_id),
+            created_by=str(current_user.id),
+        )
+    finally:
+        await service.close()
+
+    await log_audit_event(
+        db=db,
+        event_type="external_training_import_matched",
+        event_category="training",
+        severity="info",
+        event_data={
+            "provider_id": str(provider_id),
+            "imported": imported,
+            "failed": failed,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+
+    return ImportMatchedResponse(imported=imported, failed=failed)
 
 
 @router.post("/providers/{provider_id}/imports/bulk", response_model=BulkImportResponse)

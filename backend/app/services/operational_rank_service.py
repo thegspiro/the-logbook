@@ -4,15 +4,21 @@ Operational Rank Service
 Business logic for per-organization operational rank management.
 """
 
-from typing import Dict, List, Optional
+import copy
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
+from app.core.audit import log_audit_event
 from app.core.permissions import is_seeded_for, label_for
+from app.models.inventory import InventoryImpactPlan
 from app.models.operational_rank import OperationalRank
+from app.models.org_chart import OrgChartNode
+from app.models.training import TrainingRequirement
 from app.models.user import Organization, User, UserStatus
 from app.schemas.operational_rank import RankCreate, RankUpdate
 from app.utils.member_names import format_display_name
@@ -144,6 +150,23 @@ def default_ranks_for(organization_type: Optional[str]) -> List[tuple]:
     ]
 
 
+def _renamed_code_list(value: Any, old_code: str, new_code: str) -> Optional[List[Any]]:
+    """``value`` with ``old_code`` replaced by ``new_code``, or ``None`` if the
+    list does not name ``old_code`` (or is not a list at all).
+
+    The replacement keeps the list's order and does not add a second copy when
+    the list already names ``new_code``.
+    """
+    if not isinstance(value, list) or old_code not in value:
+        return None
+    renamed: List[Any] = []
+    for item in value:
+        item = new_code if item == old_code else item
+        if item not in renamed:
+            renamed.append(item)
+    return renamed
+
+
 class OperationalRankService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -253,13 +276,15 @@ class OperationalRankService:
         self,
         rank_id: UUID,
         organization_id: str,
+        for_update: bool = False,
     ) -> Optional[OperationalRank]:
-        result = await self.db.execute(
-            select(OperationalRank).where(
-                OperationalRank.id == str(rank_id),
-                OperationalRank.organization_id == organization_id,
-            )
+        query = select(OperationalRank).where(
+            OperationalRank.id == str(rank_id),
+            OperationalRank.organization_id == organization_id,
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         operational_rank: Optional[OperationalRank] = result.scalar_one_or_none()
         return operational_rank
 
@@ -292,8 +317,15 @@ class OperationalRankService:
         rank_id: UUID,
         data: RankUpdate,
         organization_id: str,
+        actor_id: Optional[str] = None,
+        actor_username: Optional[str] = None,
+        ip_address: Optional[str] = None,
     ) -> Optional[OperationalRank]:
-        rank = await self.get_rank(rank_id, organization_id)
+        # Locked: a code change rewrites every reference to the old code, and
+        # two renames of the same rank (or a rename racing a delete) deciding
+        # from the same snapshot would move the references to whichever code
+        # lost the race.
+        rank = await self.get_rank(rank_id, organization_id, for_update=True)
         if not rank:
             return None
 
@@ -301,12 +333,9 @@ class OperationalRankService:
 
         old_rank_code = rank.rank_code
         new_rank_code = update_data.get("rank_code")
+        renaming = new_rank_code is not None and new_rank_code != old_rank_code
 
-        # A rank code is also the denormalized key stored on every member.  A
-        # rename therefore has to move those references in the same database
-        # transaction as the rank row; otherwise members briefly (or, after a
-        # failure, permanently) lose their permissions and shift eligibility.
-        if new_rank_code is not None and new_rank_code != old_rank_code:
+        if renaming:
             dup = await self.db.execute(
                 select(OperationalRank).where(
                     OperationalRank.organization_id == organization_id,
@@ -320,14 +349,25 @@ class OperationalRankService:
                 )
 
         try:
-            if new_rank_code is not None and new_rank_code != old_rank_code:
-                await self.db.execute(
-                    update(User)
-                    .where(
-                        User.organization_id == organization_id,
-                        User.rank == old_rank_code,
-                    )
-                    .values(rank=new_rank_code)
+            if renaming:
+                moved = await self._move_rank_references(
+                    organization_id, old_rank_code, str(new_rank_code)
+                )
+                await log_audit_event(
+                    db=self.db,
+                    event_type="operational_rank.code_renamed",
+                    event_category="administration",
+                    severity="warning",
+                    event_data={
+                        "rank_id": str(rank.id),
+                        "old_rank_code": old_rank_code,
+                        "new_rank_code": new_rank_code,
+                        "references_updated": moved,
+                    },
+                    user_id=actor_id,
+                    username=actor_username,
+                    ip_address=ip_address,
+                    organization_id=organization_id,
                 )
 
             for field, value in update_data.items():
@@ -341,6 +381,105 @@ class OperationalRankService:
             await self.db.rollback()
             raise
         return rank
+
+    async def _move_rank_references(
+        self, organization_id: str, old_code: str, new_code: str
+    ) -> Dict[str, int]:
+        """Point every stored reference to ``old_code`` at ``new_code``.
+
+        A rank is referenced by its code, never by id and never through a
+        foreign key, so nothing in the database follows a rename on its own.
+        Each store below is one whose readers match the code exactly; a value
+        left behind resolves to nothing — a member with no permissions or
+        seats, an org chart seat with no holders, a training requirement that
+        grades nobody, a saved plan that selects no one. All of it happens in
+        the caller's transaction, so the rename and its references commit or
+        roll back together.
+
+        Deliberately NOT rewritten: ``training_records.rank_at_completion``
+        (a snapshot of what the member held at the time, i.e. history), audit
+        rows, and the onboarding copies of the IT contact list.
+
+        Returns how many rows were updated in each store, for the audit entry.
+        """
+        moved: Dict[str, int] = {}
+
+        # The member's rank. Covers inactive and soft-deleted members too, the
+        # same population delete_rank counts: they are references that may be
+        # restored, and a restored member must come back holding a real rank.
+        members = await self.db.execute(
+            update(User)
+            .where(
+                User.organization_id == organization_id,
+                User.rank == old_code,
+            )
+            .values(rank=new_code)
+        )
+        moved["members"] = int(getattr(members, "rowcount", 0) or 0)
+
+        # Org chart seats name their rank by code, like User.rank.
+        seats = await self.db.execute(
+            update(OrgChartNode)
+            .where(
+                OrgChartNode.organization_id == organization_id,
+                OrgChartNode.rank_code == old_code,
+            )
+            .values(rank_code=new_code)
+        )
+        moved["org_chart_seats"] = int(getattr(seats, "rowcount", 0) or 0)
+
+        # JSON lists of codes, matched in Python: the column is unvalidated
+        # JSON, and the readers test membership exactly (`rank in
+        # required_roles`, `User.rank.in_(filters["ranks"])`).
+        requirements = (
+            (
+                await self.db.execute(
+                    select(TrainingRequirement)
+                    .where(
+                        TrainingRequirement.organization_id == organization_id,
+                        TrainingRequirement.required_roles.isnot(None),
+                    )
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        moved["training_requirements"] = 0
+        for requirement in requirements:
+            renamed = _renamed_code_list(requirement.required_roles, old_code, new_code)
+            if renamed is not None:
+                requirement.required_roles = renamed
+                flag_modified(requirement, "required_roles")
+                moved["training_requirements"] += 1
+
+        plans = (
+            (
+                await self.db.execute(
+                    select(InventoryImpactPlan)
+                    .where(InventoryImpactPlan.organization_id == organization_id)
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        moved["impact_plans"] = 0
+        for plan in plans:
+            if not isinstance(plan.filters, dict):
+                continue
+            renamed = _renamed_code_list(plan.filters.get("ranks"), old_code, new_code)
+            if renamed is not None:
+                # Deep copy (CLAUDE.md pitfall 12): mutating the list in place
+                # would leave SQLAlchemy comparing the column to itself.
+                filters = copy.deepcopy(plan.filters)
+                filters["ranks"] = renamed
+                plan.filters = filters
+                flag_modified(plan, "filters")
+                moved["impact_plans"] += 1
+
+        await self.db.flush()
+        return moved
 
     async def delete_rank(
         self,
@@ -365,6 +504,30 @@ class OperationalRankService:
             raise ValueError(
                 f"Cannot delete rank '{rank.display_name}' while it is assigned "
                 f"to {member_count} {noun}. Reassign those members first."
+            )
+
+        # A seat names its rank by code, with no foreign key, so a deleted rank
+        # would leave the seat pointing at nothing and showing no holders.
+        seats = (
+            (
+                await self.db.execute(
+                    select(OrgChartNode.title)
+                    .where(
+                        OrgChartNode.organization_id == organization_id,
+                        OrgChartNode.rank_code == rank.rank_code,
+                    )
+                    .order_by(OrgChartNode.title)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if seats:
+            named = ", ".join(f"'{title}'" for title in seats)
+            raise ValueError(
+                f"Cannot delete rank '{rank.display_name}' while org chart seats "
+                f"use it: {named}. Link those seats to another rank or position "
+                "first."
             )
 
         try:
