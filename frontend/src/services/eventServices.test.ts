@@ -106,6 +106,38 @@ describe('eventService', () => {
     });
   });
 
+  // --- deleteEventSeries ---
+  describe('deleteEventSeries', () => {
+    beforeEach(() => {
+      mockDelete.mockReset();
+      mockDelete.mockResolvedValue({});
+    });
+
+    it('should DELETE the whole series by default', async () => {
+      await eventService.deleteEventSeries('p1');
+
+      expect(mockDelete).toHaveBeenCalledWith('/events/p1/series', {
+        params: { delete_future_only: false },
+      });
+    });
+
+    it('should keep the time-based future-only flag', async () => {
+      await eventService.deleteEventSeries('p1', true);
+
+      expect(mockDelete).toHaveBeenCalledWith('/events/p1/series', {
+        params: { delete_future_only: true },
+      });
+    });
+
+    it('should send the chosen occurrence as the cutoff for this and future', async () => {
+      await eventService.deleteEventSeries('p1', false, 'e3');
+
+      expect(mockDelete).toHaveBeenCalledWith('/events/p1/series', {
+        params: { delete_future_only: false, from_event_id: 'e3' },
+      });
+    });
+  });
+
   // --- duplicateEvent ---
   describe('duplicateEvent', () => {
     it('should POST to /events/:id/duplicate', async () => {

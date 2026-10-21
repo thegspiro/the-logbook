@@ -7,6 +7,7 @@
 import { AxiosError, type AxiosRequestConfig } from 'axios';
 import { createApiClient } from '../../../utils/createApiClient';
 import { asArray, expectArray } from '../../../utils/asArray';
+import { readDeleteOutcome, type DeleteOutcome } from '../../../utils/deleteOutcome';
 import type {
   Assignment,
   SwapRequest as SchedulingSwapRequest,
@@ -1216,8 +1217,10 @@ export const schedulingService = {
     const response = await api.patch<ShiftTemplateRecord>(`/scheduling/templates/${templateId}`, data);
     return response.data;
   },
-  async deleteTemplate(templateId: string): Promise<void> {
-    await api.delete(`/scheduling/templates/${templateId}`);
+  /** Deletes an unused template; one a shift or pattern names is deactivated instead. */
+  async deleteTemplate(templateId: string): Promise<DeleteOutcome> {
+    const response = await api.delete(`/scheduling/templates/${templateId}`);
+    return readDeleteOutcome(response);
   },
 
   // Patterns
@@ -1272,8 +1275,10 @@ export const schedulingService = {
     const response = await api.patch<BasicApparatusRecord>(`/scheduling/apparatus/${apparatusId}`, data);
     return normalizeApparatus(response.data);
   },
-  async deleteBasicApparatus(apparatusId: string): Promise<void> {
-    await api.delete(`/scheduling/apparatus/${apparatusId}`);
+  /** Deletes an unused vehicle; one that templates, shifts or call records name is deactivated instead. */
+  async deleteBasicApparatus(apparatusId: string): Promise<DeleteOutcome> {
+    const response = await api.delete(`/scheduling/apparatus/${apparatusId}`);
+    return readDeleteOutcome(response);
   },
 
   // --- Apparatus Options (unified vehicle picker for templates) ---

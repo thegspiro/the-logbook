@@ -81,6 +81,7 @@ import { isOwnedByCurrentMember } from '../../utils/offlineQueueOwner';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { EmptyState } from '../../components/ux/EmptyState';
+import { attributionName } from '../../utils/memberName';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'department' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -1267,9 +1268,9 @@ export const ShiftReportsTab: React.FC = () => {
                 </span>
                 {report.performance_rating && renderRating(report.performance_rating)}
                 {/* In "Written by me" every report's author is the viewer. */}
-                {report.officer_name && viewMode !== 'filed-by-me' && (
+                {(report.officer_name || !report.officer_id) && viewMode !== 'filed-by-me' && (
                   <span className="text-theme-text-muted flex items-center gap-1 text-xs">
-                    <UserIcon className="h-3 w-3" /> {report.officer_name}
+                    <UserIcon className="h-3 w-3" /> {attributionName(report.officer_name, report.officer_id)}
                   </span>
                 )}
                 {report.reviewer_name && (
@@ -2498,7 +2499,7 @@ export const ShiftReportsTab: React.FC = () => {
                   let oldestDays = 0;
                   const now = Date.now();
                   for (const r of reports) {
-                    const name = r.officer_name || 'Unknown';
+                    const name = attributionName(r.officer_name, r.officer_id);
                     byOfficer.set(name, (byOfficer.get(name) ?? 0) + 1);
                     const age = Math.floor((now - new Date(r.created_at).getTime()) / 86400000);
                     if (age > oldestDays) oldestDays = age;
@@ -2734,9 +2735,9 @@ export const ShiftReportsTab: React.FC = () => {
                           tz
                         )}
                       </span>
-                      {reviewReport.officer_name && (
+                      {(reviewReport.officer_name || !reviewReport.officer_id) && (
                         <span className="text-theme-text-muted flex items-center gap-1">
-                          Filed by {reviewReport.officer_name}
+                          Filed by {attributionName(reviewReport.officer_name, reviewReport.officer_id)}
                         </span>
                       )}
                     </div>

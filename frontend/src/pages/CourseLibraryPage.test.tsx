@@ -200,6 +200,17 @@ describe('CourseLibraryPage course form', () => {
     }
   });
 
+  it('says how Duration and Credit Hours differ', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: 'Edit Fire Officer I' }));
+
+    expect(screen.getByLabelText(/^Duration \(hours\)$/)).toHaveAccessibleDescription('How long the class runs.');
+    expect(screen.getByLabelText(/^Credit Hours$/)).toHaveAccessibleDescription(
+      'The training hours a member is credited with. Left blank, a session from this course credits its duration.'
+    );
+  });
+
   it('sends a cleared field as null on an edit, so the clear is saved', async () => {
     const user = userEvent.setup();
     await renderPage();

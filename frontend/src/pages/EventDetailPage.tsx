@@ -76,7 +76,7 @@ import EventCheckInModal from '../components/event-detail/EventCheckInModal';
 import EventRecordTimesModal from '../components/event-detail/EventRecordTimesModal';
 import EventOverrideAttendanceModal from '../components/event-detail/EventOverrideAttendanceModal';
 import EventEndConfirmModal from '../components/event-detail/EventEndConfirmModal';
-import EventDeleteConfirmModal from '../components/event-detail/EventDeleteConfirmModal';
+import EventDeleteConfirmModal, { type EventDeleteScope } from '../components/event-detail/EventDeleteConfirmModal';
 import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplateModal';
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
@@ -662,15 +662,19 @@ export const EventDetailPage: React.FC = () => {
 
   // handleSendNotification is now in notifications.handleSendNotification
 
-  const handleDeleteEvent = async (scope: 'single' | 'series') => {
+  const handleDeleteEvent = async (scope: EventDeleteScope) => {
     if (!eventId || !event) return;
 
     try {
       setSubmitting(true);
-      if (scope === 'series' && (event.is_recurring || event.recurrence_parent_id)) {
-        const parentId = event.recurrence_parent_id || eventId;
+      const inSeries = !!(event.is_recurring || event.recurrence_parent_id);
+      const parentId = event.recurrence_parent_id || eventId;
+      if (scope === 'series' && inSeries) {
         await eventService.deleteEventSeries(parentId);
         toast.success('All events in the series deleted');
+      } else if (scope === 'future' && inSeries) {
+        await eventService.deleteEventSeries(parentId, false, eventId);
+        toast.success('This and future events in the series deleted');
       } else {
         await eventService.deleteEvent(eventId);
         toast.success('Event deleted');

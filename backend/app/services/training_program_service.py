@@ -116,6 +116,12 @@ OFFICER_PROGRESS_NOTE_KEYS = (
 # the day an annual requirement's window rolled over.
 _LIVE_ENROLLMENT_STATUSES = (EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
 
+# Recorded on enrollments still in progress when their program is deactivated
+# in place of a delete (see delete_training_program).
+PROGRAM_DEACTIVATED_WITHDRAWAL_REASON = (
+    "Withdrawn automatically: the pipeline was deactivated."
+)
+
 LINKED_PROGRESS_REFUSAL = (
     "This requirement is the department's own and reads the member's "
     "compliance record, as the compliance screens do. Record the training "
@@ -1331,22 +1337,60 @@ class TrainingProgramService:
         self,
         program_id: UUID,
         organization_id: UUID | str,
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> Tuple[Optional[str], Optional[str]]:
         """
-        Permanently delete a program and everything under it — phases,
-        requirement links, milestones, enrollments, and enrolled members'
-        progress. Also removes the program-specific requirements it owns once
-        they're no longer referenced anywhere. Explicit ordered deletes (rather
-        than ORM cascade) keep this deterministic on the async session.
+        Delete a program, or deactivate it when members have graduated from it.
 
-        This is irreversible; the UI guards it behind a typed/confirmed warning.
-        Returns (ok, error_message).
+        A program with any COMPLETED enrollment is deactivated
+        (``active=False``) instead: a delete would erase those graduates'
+        enrollments and progress, which are the department's record that they
+        finished it. Its structure and every enrollment are kept. Enrollments
+        still in progress (ACTIVE / ON_HOLD) are withdrawn the same way
+        ``withdraw_enrollment`` withdraws one — status WITHDRAWN, record kept —
+        because nobody can finish a pipeline that has left every list, and an
+        open enrollment in it would keep raising deadline warnings.
+
+        Otherwise the program is permanently deleted with everything under it —
+        phases, requirement links, milestones, enrollments, and enrolled
+        members' progress — along with the program-specific requirements it
+        owns once they're no longer referenced anywhere. Explicit ordered
+        deletes (rather than ORM cascade) keep this deterministic on the async
+        session.
+
+        Returns ``("deleted" | "deactivated", None)`` on success and
+        ``(None, error_message)`` otherwise.
         """
         program = await self.get_program_by_id(program_id, organization_id)
         if not program:
-            return False, "Training program not found"
+            return None, "Training program not found"
 
         pid = str(program_id)
+
+        graduated = await self.db.execute(
+            select(ProgramEnrollment.id)
+            .where(
+                ProgramEnrollment.program_id == pid,
+                ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
+            )
+            .limit(1)
+        )
+        if graduated.scalar_one_or_none() is not None:
+            program.active = False
+            await self.db.execute(
+                update(ProgramEnrollment)
+                .where(
+                    ProgramEnrollment.program_id == pid,
+                    ProgramEnrollment.status.in_(_LIVE_ENROLLMENT_STATUSES),
+                )
+                .values(
+                    status=EnrollmentStatus.WITHDRAWN,
+                    withdrawn_at=datetime.now(timezone.utc),
+                    withdrawal_reason=PROGRAM_DEACTIVATED_WITHDRAWAL_REASON,
+                )
+                .execution_options(synchronize_session=False)
+            )
+            await self.db.commit()
+            return "deactivated", None
 
         enroll_rows = await self.db.execute(
             select(ProgramEnrollment.id).where(ProgramEnrollment.program_id == pid)
@@ -1411,7 +1455,7 @@ class TrainingProgramService:
 
         await self.db.execute(delete(TrainingProgram).where(TrainingProgram.id == pid))
         await self.db.commit()
-        return True, None
+        return "deleted", None
 
     @staticmethod
     def _target_field_changed(field: str, stored: Any, new: Any) -> bool:
@@ -4624,6 +4668,10 @@ class TrainingProgramService:
         program = await self._get_program_for_enrollment(enrollment)
         if not program or not getattr(program, "recert_enabled", False):
             return False
+        # A deactivated program is kept for its graduates' history; resetting
+        # their enrollments would erase the very record it was kept for.
+        if getattr(program, "active", True) is False:
+            return False
 
         await self._perform_enrollment_reset(enrollment, program, today=today)
         await self.db.commit()
@@ -4762,6 +4810,8 @@ class TrainingProgramService:
             .where(
                 TrainingProgram.organization_id == str(organization_id),
                 TrainingProgram.recert_enabled.is_(True),
+                # Deactivated programs are kept for their graduates' history.
+                TrainingProgram.active.is_(True),
                 ProgramEnrollment.status.in_(self._RECERTABLE_STATUSES),
                 ProgramEnrollment.next_recert_reset_at.isnot(None),
                 ProgramEnrollment.next_recert_reset_at <= today,
