@@ -112,10 +112,10 @@ const CertAlertSettingsPanel: React.FC = () => {
             </span>
           </label>
 
-          <label className="flex items-start gap-3">
+          <label className="mobile-touch-row gap-3">
             <input
               type="checkbox"
-              className="form-checkbox mt-0.5"
+              className="form-checkbox shrink-0"
               checked={draft.cc_chief_on_escalation}
               disabled={saving || !draft.enabled}
               onChange={(e) => set({ cc_chief_on_escalation: e.target.checked })}
@@ -123,10 +123,10 @@ const CertAlertSettingsPanel: React.FC = () => {
             <span className="text-theme-text-primary text-sm">Copy the chief officers on the expired notice</span>
           </label>
 
-          <label className="flex items-start gap-3">
+          <label className="mobile-touch-row gap-3">
             <input
               type="checkbox"
-              className="form-checkbox mt-0.5"
+              className="form-checkbox shrink-0"
               checked={draft.include_personal_email_on_final}
               disabled={saving || !draft.enabled}
               onChange={(e) => set({ include_personal_email_on_final: e.target.checked })}
