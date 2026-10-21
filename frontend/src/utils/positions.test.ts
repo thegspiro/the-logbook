@@ -5,7 +5,7 @@ describe('positions', () => {
   const member = { id: 'member', mirrors_rank: false };
   const firefighter = { id: 'firefighter', mirrors_rank: true };
   // A fixture, or a response cached before the flag shipped.
-  const unflagged = { id: 'secretary' };
+  const unflagged = { id: 'secretary', mirrors_rank: undefined };
 
   it('reads the server flag and nothing else', () => {
     expect(mirrorsRank(member)).toBe(false);
