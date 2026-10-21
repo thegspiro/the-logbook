@@ -32,6 +32,7 @@ import {
   RotateCcw,
   EyeOff,
   Lock,
+  ArchiveRestore,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -1315,6 +1316,10 @@ const PipelineDetailPage: React.FC = () => {
     after?: () => void;
   } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  // `confirm` above is this page's own dialog state; reactivation goes through
+  // the shared promise-based dialog instead.
+  const { confirm: askConfirm } = useConfirm();
+  const [isReactivating, setIsReactivating] = useState(false);
 
   useEffect(() => {
     if (programId) void loadProgram();
@@ -1562,6 +1567,33 @@ const PipelineDetailPage: React.FC = () => {
     });
   };
 
+  // A deactivated pipeline is reached from the list's "Show inactive" view.
+  // Reactivating restores the flag only: the backend leaves enrollments it
+  // withdrew on deactivation withdrawn, so the dialog says so.
+  const handleReactivateProgram = async () => {
+    if (!program || !programId) return;
+    const confirmed = await askConfirm({
+      title: 'Reactivate pipeline',
+      message:
+        `Reactivate "${program.name}"? It returns to the pipeline list and members can be enrolled in it again. ` +
+        `Members who were withdrawn when it was deactivated are not re-enrolled; enroll them again if they should continue.`,
+      confirmLabel: 'Reactivate',
+      cancelLabel: 'Leave inactive',
+      variant: 'info',
+    });
+    if (!confirmed) return;
+    setIsReactivating(true);
+    try {
+      await trainingProgramService.updateProgram(programId, { active: true });
+      toast.success(`${program.name} reactivated`);
+      await loadProgram();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reactivate pipeline'));
+    } finally {
+      setIsReactivating(false);
+    }
+  };
+
   // Toggle whether a linked requirement is required to complete its phase.
   // Enrolled members' progress is recomputed server-side, so refresh nothing
   // else here — the overview is structural, not per-member.
@@ -1650,6 +1682,7 @@ const PipelineDetailPage: React.FC = () => {
                     Template
                   </span>
                 )}
+                {!program.active && <span className="badge bg-theme-surface text-theme-text-secondary">Inactive</span>}
               </div>
               {program.description && (
                 <p className="text-theme-text-muted mb-3 max-w-2xl text-sm">{program.description}</p>
@@ -1697,6 +1730,21 @@ const PipelineDetailPage: React.FC = () => {
               <Printer className="h-4 w-4" />
               <span>Print</span>
             </button>
+            {canManage && !program.active && (
+              <button
+                type="button"
+                onClick={() => void handleReactivateProgram()}
+                disabled={isReactivating}
+                className="btn-secondary btn-sm"
+              >
+                {isReactivating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+                )}
+                <span>Reactivate</span>
+              </button>
+            )}
             {canManage && (
               <button
                 onClick={() => setShowEditProgram(true)}

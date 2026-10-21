@@ -777,7 +777,12 @@ export const trainingProgramService = {
   /**
    * Get all training programs
    */
-  async getPrograms(params?: { target_position?: string; is_template?: boolean }): Promise<TrainingProgram[]> {
+  async getPrograms(params?: {
+    target_position?: string;
+    is_template?: boolean;
+    /** Also return deactivated programs (`active: false`). */
+    include_inactive?: boolean;
+  }): Promise<TrainingProgram[]> {
     const response = await api.get<TrainingProgram[]>('/training/programs/programs', { params });
     return asArray(response.data);
   },
