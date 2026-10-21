@@ -528,6 +528,8 @@ export const DonorsPage: React.FC = () => {
                           <Mail className="h-3.5 w-3.5 shrink-0" />
                           {donor.email}
                         </span>
+                      ) : donor.contactHidden ? (
+                        <span className="text-theme-text-muted text-xs">Managers only</span>
                       ) : (
                         '--'
                       )}

@@ -868,6 +868,9 @@ class DonorResponse(DonorBase):
     first_donation_date: Optional[date] = None
     last_donation_date: Optional[date] = None
     active: bool = True
+    # True when the caller holds only fundraising.view and the contact details
+    # were left out, so a screen can say why they are blank (GF-9).
+    contact_hidden: bool = False
     created_at: datetime
     updated_at: datetime
 
