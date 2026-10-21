@@ -83,6 +83,9 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
     }
   };
 
+  const removedRecords = impact?.removed_records ?? [];
+  const checkedOutItems = impact?.checked_out_items ?? 0;
+
   const isConfirmNameValid = confirmName.trim().toLowerCase() === memberDisplayName.trim().toLowerCase();
 
   if (!member) return null;
@@ -193,9 +196,10 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
 
               {/* Explanation */}
               <p className="text-theme-text-secondary text-sm">
-                This member will be deactivated and removed from the member list. Their records are preserved, but a
-                deactivated member cannot be restored from the app. If they may return, change their status on their
-                profile instead &mdash; a dropped or archived member can be reactivated later.
+                This member will be deactivated and removed from the member list, and taken off any shifts that have not
+                started yet (their standing shifts end). Their records are preserved, but a deactivated member cannot be
+                restored from the app. If they may return, change their status on their profile instead &mdash; a
+                dropped or archived member can be reactivated later.
               </p>
 
               {/* Action Button */}
@@ -241,8 +245,8 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
                       This action is PERMANENT and cannot be undone.
                     </p>
                     <p className="mt-1 text-sm text-red-700 dark:text-red-400/80">
-                      Training history and inventory assignments will be permanently deleted. Uploaded documents are
-                      kept, but will no longer show an uploader.
+                      Every record that belongs to this member is deleted, listed below, along with anything filed under
+                      those records.
                     </p>
                   </div>
                 </div>
@@ -250,23 +254,44 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
 
               {/* Impact Details */}
               <div className="bg-theme-surface-secondary rounded-lg p-3">
-                <p className="text-theme-text-muted mb-2 text-xs font-medium uppercase">Records affected</p>
-                <ul className="text-theme-text-secondary space-y-1 text-sm">
-                  <li className="flex justify-between">
-                    <span>Training records</span>
-                    <span className="text-theme-text-primary font-medium">{impact.training_records}</span>
-                  </li>
-                  <li className="flex justify-between">
-                    <span>Inventory items</span>
-                    <span className="text-theme-text-primary font-medium">{impact.inventory_items}</span>
-                  </li>
-                  <li className="flex justify-between">
-                    <span>Documents (uploader cleared)</span>
-                    <span className="text-theme-text-primary font-medium">{impact.documents}</span>
-                  </li>
-                  <li className="border-theme-surface-border mt-1 flex justify-between border-t pt-1">
-                    <span className="font-medium">Total</span>
-                    <span className="font-medium text-red-700 dark:text-red-400">{impact.total_records}</span>
+                <p className="text-theme-text-muted mb-2 text-xs font-medium uppercase">Permanently deleted</p>
+                {removedRecords.length === 0 ? (
+                  <p className="text-theme-text-secondary text-sm">No records besides the member&apos;s account.</p>
+                ) : (
+                  <ul className="text-theme-text-secondary space-y-1 text-sm" aria-label="Records permanently deleted">
+                    {removedRecords.map((record) => (
+                      <li key={record.table} className="flex justify-between gap-4">
+                        <span>{record.label}</span>
+                        <span className="text-theme-text-primary font-medium">{record.count}</span>
+                      </li>
+                    ))}
+                    <li className="border-theme-surface-border mt-1 flex justify-between border-t pt-1">
+                      <span className="font-medium">Total</span>
+                      <span className="font-medium text-red-700 dark:text-red-400">{impact.total_records}</span>
+                    </li>
+                  </ul>
+                )}
+              </div>
+
+              {/* What is kept */}
+              <div className="bg-theme-surface-secondary rounded-lg p-3">
+                <p className="text-theme-text-muted mb-2 text-xs font-medium uppercase">Kept</p>
+                <ul className="text-theme-text-secondary list-disc space-y-1 pl-5 text-sm">
+                  {impact.inventory_items + checkedOutItems > 0 && (
+                    <li>
+                      {impact.inventory_items + checkedOutItems} inventory item
+                      {impact.inventory_items + checkedOutItems !== 1 ? 's' : ''} they hold will be returned to stock.
+                    </li>
+                  )}
+                  {impact.documents > 0 && (
+                    <li>
+                      {impact.documents} uploaded document{impact.documents !== 1 ? 's' : ''} will stay, with no
+                      uploader shown.
+                    </li>
+                  )}
+                  <li>
+                    Records belonging to other members &mdash; skill tests they examined, shift reports they filed,
+                    approvals and sign-offs &mdash; are kept and will show &ldquo;Former member&rdquo; in their place.
                   </li>
                 </ul>
               </div>

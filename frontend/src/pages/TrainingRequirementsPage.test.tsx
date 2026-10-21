@@ -8,6 +8,7 @@ import TrainingRequirementsPage from './TrainingRequirementsPage';
 const mockGetRequirements = vi.fn();
 const mockGetCategories = vi.fn();
 const mockCreateRequirement = vi.fn();
+const mockDeleteRequirement = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingService: {
@@ -15,7 +16,7 @@ vi.mock('../services/api', () => ({
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
     createRequirement: (...args: unknown[]) => mockCreateRequirement(...args) as unknown,
     updateRequirement: vi.fn(),
-    deleteRequirement: vi.fn(),
+    deleteRequirement: (...args: unknown[]) => mockDeleteRequirement(...args) as unknown,
     getCourses: vi.fn().mockResolvedValue([]),
   },
   trainingProgramService: {
@@ -330,5 +331,79 @@ describe('TrainingRequirementsPage duplicate', () => {
         recency_days: 90,
       })
     );
+  });
+});
+
+describe('TrainingRequirementsPage delete', () => {
+  // An in-use requirement is deactivated rather than deleted (the backend
+  // decides, and answers 204 either way), so the dialog names both outcomes
+  // and the toast reports the one that happened.
+  const requirement = {
+    id: 'req-del',
+    name: 'Annual SCBA',
+    requirement_type: 'hours',
+    source: 'department',
+    training_type: 'certification',
+    required_hours: 4,
+    frequency: 'annual',
+    applies_to_all: true,
+    active: true,
+    due_date_type: 'calendar_period',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    mockGetRequirements.mockReset();
+    mockGetRequirements.mockResolvedValue([requirement]);
+    mockGetCategories.mockReset();
+    mockGetCategories.mockResolvedValue([]);
+    mockDeleteRequirement.mockReset();
+    mockDeleteRequirement.mockResolvedValue(undefined);
+    vi.mocked(toast.success).mockReset();
+  });
+
+  it('says an in-use requirement is deactivated instead, and Keep it deletes nothing', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Annual SCBA' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete requirement' });
+    expect(dialog).toHaveTextContent('it is deactivated instead of deleted, so those records keep it');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Keep it' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockDeleteRequirement).not.toHaveBeenCalled();
+  });
+
+  it('reports a deactivation when the requirement survives the delete', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Annual SCBA' }));
+    mockGetRequirements.mockResolvedValue([{ ...requirement, active: false }]);
+    const dialog = await screen.findByRole('dialog', { name: 'Delete requirement' });
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith(
+        '"Annual SCBA" is still in use, so it was deactivated instead of deleted'
+      )
+    );
+    expect(mockDeleteRequirement).toHaveBeenCalledWith('req-del');
+    expect(await screen.findByText('Inactive')).toBeInTheDocument();
+  });
+
+  it('reports a delete when the requirement is gone', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Annual SCBA' }));
+    mockGetRequirements.mockResolvedValue([]);
+    const dialog = await screen.findByRole('dialog', { name: 'Delete requirement' });
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Requirement deleted'));
+    expect(screen.queryByRole('button', { name: 'Delete Annual SCBA' })).not.toBeInTheDocument();
   });
 });

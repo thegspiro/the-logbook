@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { displayNameOf, formatLegalName, formatMemberName, givenName } from './memberName';
+import {
+  attributionName,
+  displayNameOf,
+  FORMER_MEMBER_LABEL,
+  formatLegalName,
+  formatMemberName,
+  givenName,
+} from './memberName';
 
 describe('memberName', () => {
   const terry = { first_name: 'John', last_name: 'Heather', preferred_name: 'Terry' };
@@ -41,5 +48,21 @@ describe('displayNameOf', () => {
   it('falls back to full_name for payloads with no parts', () => {
     expect(displayNameOf({ full_name: 'John Heather' })).toBe('John Heather');
     expect(displayNameOf({})).toBe('');
+  });
+});
+
+describe('attributionName', () => {
+  it('shows the name when there is one', () => {
+    expect(attributionName('Jane Smith', 'u1')).toBe('Jane Smith');
+  });
+
+  it('reads a cleared reference as a former member', () => {
+    expect(attributionName(null, null)).toBe(FORMER_MEMBER_LABEL);
+    expect(attributionName(undefined, null, '—')).toBe(FORMER_MEMBER_LABEL);
+  });
+
+  it('falls back when the member exists but the name did not load', () => {
+    expect(attributionName(null, 'u1')).toBe('Unknown');
+    expect(attributionName('', 'u1', '—')).toBe('—');
   });
 });

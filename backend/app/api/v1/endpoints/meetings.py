@@ -34,7 +34,7 @@ from app.services.agenda_document_access import (
     has_linked_documents,
     narrow_documents,
 )
-from app.services.meetings_service import MeetingsService
+from app.services.meetings_service import MeetingDeleteRefusedError, MeetingsService
 
 router = APIRouter()
 
@@ -217,11 +217,18 @@ async def delete_meeting(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("meetings.manage")),
 ):
-    """Delete a meeting and all its attendees/action items"""
+    """Delete a meeting and all its attendees/action items.
+
+    An approved meeting is refused with 409: its attendance is part of the
+    department's record.
+    """
     service = MeetingsService(db)
-    success, error = await service.delete_meeting(
-        meeting_id, current_user.organization_id
-    )
+    try:
+        success, error = await service.delete_meeting(
+            meeting_id, current_user.organization_id
+        )
+    except MeetingDeleteRefusedError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     if not success:
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))

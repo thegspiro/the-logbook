@@ -97,11 +97,15 @@ const TrainingRequirementsPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (requirement: TrainingRequirement) => {
     if (
       !(await confirm({
         title: 'Delete requirement',
-        message: 'Permanently delete this requirement? This cannot be undone.',
+        message:
+          `Delete "${requirement.name}"? If a pipeline, member progress, a skills or knowledge test, ` +
+          'a recertification pathway, a course class, a compliance profile or a waiver still uses it, ' +
+          'it is deactivated instead of deleted, so those records keep it. Otherwise it is deleted, ' +
+          'which cannot be undone.',
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
@@ -109,11 +113,26 @@ const TrainingRequirementsPage: React.FC = () => {
       return;
 
     try {
-      await trainingService.deleteRequirement(id);
-      setRequirements(requirements.filter((r) => r.id !== id));
-      toast.success('Requirement permanently deleted');
+      await trainingService.deleteRequirement(requirement.id);
     } catch (_error) {
       toast.error('Failed to delete requirement');
+      return;
+    }
+
+    // The endpoint answers 204 either way, as the locations endpoint it
+    // follows does; whether the row survived (deactivated) is what says
+    // which of the two happened.
+    try {
+      const fresh = await trainingService.getRequirements({ active_only: false });
+      setRequirements(fresh);
+      toast.success(
+        fresh.some((r) => r.id === requirement.id)
+          ? `"${requirement.name}" is still in use, so it was deactivated instead of deleted`
+          : 'Requirement deleted'
+      );
+    } catch (_error) {
+      toast.success('Requirement deleted, or deactivated if it was still in use');
+      void fetchData();
     }
   };
 
@@ -349,7 +368,7 @@ const TrainingRequirementsPage: React.FC = () => {
                   setShowCreateModal(true);
                 }}
                 onDelete={() => {
-                  void handleDelete(requirement.id);
+                  void handleDelete(requirement);
                 }}
                 onDuplicate={() => {
                   void handleDuplicate(requirement);

@@ -250,18 +250,22 @@ export default function ApparatusBasicPage() {
     if (
       !(await confirm({
         title: 'Delete apparatus',
-        message: `Delete "${apparatus.name}" (${apparatus.unit_number})? This cannot be undone.`,
+        message: `Delete "${apparatus.name}" (${apparatus.unit_number})? If shift templates, shifts, equipment checks or call records name it, it is deactivated instead of deleted: those records keep it, and it is no longer offered for new templates. Otherwise it is deleted, which cannot be undone.`,
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
     )
       return;
     try {
-      await schedulingService.deleteBasicApparatus(apparatus.id);
-      toast.success('Apparatus deleted');
+      const outcome = await schedulingService.deleteBasicApparatus(apparatus.id);
+      toast.success(
+        outcome === 'deactivated'
+          ? `${apparatus.name} is still named by templates, shifts or call records, so it was deactivated instead of deleted.`
+          : 'Apparatus deleted'
+      );
       void loadApparatus();
-    } catch {
-      toast.error('Failed to delete apparatus');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete apparatus'));
     }
   };
 
