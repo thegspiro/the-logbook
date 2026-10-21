@@ -199,7 +199,8 @@ class ShiftCompletionReportResponse(UTCResponseBase):
     shift_id: Optional[str] = None
     shift_date: date
     trainee_id: str
-    officer_id: str
+    # None once the filing officer's account has been permanently deleted.
+    officer_id: Optional[str] = None
     trainee_name: Optional[str] = None
     officer_name: Optional[str] = None
     # Which shift the report covers: the apparatus, e.g. "B-5 — Brush 5", and

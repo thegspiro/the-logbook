@@ -898,19 +898,26 @@ class FormsService:
 
     async def delete_form(
         self, form_id: UUID, organization_id: UUID | str
-    ) -> Tuple[bool, Optional[str]]:
-        """Delete a form and all its fields/submissions.
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """Delete a form, or archive it when members have already submitted it.
 
-        Blocks deletion if the form is actively referenced by a
-        membership pipeline step — deleting it would silently break
-        the pipeline.
+        A form with submissions is archived rather than deleted: the cascade
+        would otherwise take every submission with it, and those are the
+        department's record of what members filed. Only a form nobody has
+        submitted is hard-deleted (with its fields).
+
+        Blocks both if the form is actively referenced by a membership
+        pipeline step — removing it would silently break the pipeline.
+
+        Returns ``("deleted" | "archived", None)`` on success and
+        ``(None, error_message)`` otherwise.
         """
         try:
             from app.models.membership_pipeline import MembershipPipelineStep
 
             form = await self.get_form_by_id(form_id, organization_id)
             if not form:
-                return False, "Form not found"
+                return None, "Form not found"
 
             # Check whether any pipeline step references this form.
             step_result = await self.db.execute(
@@ -927,18 +934,29 @@ class FormsService:
             referencing_steps = step_result.all()
             if referencing_steps:
                 step_names = ", ".join(s.name or s.id for s in referencing_steps)
-                return False, (
+                return None, (
                     f"This form cannot be deleted because it is used by "
                     f"pipeline step(s): {step_names}. Remove the form "
                     f"reference from those steps first."
                 )
 
+            submission_count = await self.db.scalar(
+                select(func.count(FormSubmission.id)).where(
+                    FormSubmission.form_id == str(form.id),
+                    FormSubmission.organization_id == str(organization_id),
+                )
+            )
+            if submission_count:
+                form.status = FormStatus.ARCHIVED
+                await self.db.commit()
+                return "archived", None
+
             await self.db.delete(form)
             await self.db.commit()
-            return True, None
+            return "deleted", None
         except Exception as e:
             await self.db.rollback()
-            return False, safe_error_detail(e)
+            return None, safe_error_detail(e)
 
     async def publish_form(
         self, form_id: UUID, organization_id: UUID | str

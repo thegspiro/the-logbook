@@ -9,7 +9,15 @@ import copy
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Response,
+    status,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -145,6 +153,7 @@ from app.services.scheduling_widget_service import (
 )
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftService
+from app.utils.delete_outcome import set_delete_outcome
 from app.utils.hours import hours_from_minutes
 from app.utils.org_timezone import resolve_org_today
 from app.utils.outreach_roles import normalize_staffing_roles
@@ -2118,18 +2127,25 @@ async def update_template(
 @router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_template(
     template_id: UUID,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.manage")),
 ):
-    """Delete a shift template"""
+    """Delete a shift template, or deactivate it while it is in use.
+
+    A template any shift (any date) or pattern names is deactivated instead,
+    so those keep their template and its equipment checklists. 204 either
+    way; ``X-Delete-Outcome`` says which happened.
+    """
     service = SchedulingService(db)
-    success, error = await service.delete_template(
+    deleted, error = await service.remove_template(
         template_id, current_user.organization_id
     )
-    if not success:
+    if deleted is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to delete template.", error)
         )
+    set_delete_outcome(response, deleted)
 
 
 # ============================================
@@ -3779,10 +3795,16 @@ async def update_basic_apparatus(
 @router.delete("/apparatus/{apparatus_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_basic_apparatus(
     apparatus_id: UUID,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.manage")),
 ):
-    """Delete a basic apparatus entry"""
+    """Delete a basic apparatus entry, or deactivate it while it is in use.
+
+    A vehicle any shift template, shift, pre-work session, equipment check or
+    call response names is deactivated instead, so those records still
+    resolve it. 204 either way; ``X-Delete-Outcome`` says which happened.
+    """
     result = await db.execute(
         select(BasicApparatus).where(
             BasicApparatus.id == str(apparatus_id),
@@ -3790,8 +3812,10 @@ async def delete_basic_apparatus(
         )
     )
     existing = ensure_found(result.scalar_one_or_none(), "Apparatus")
-    await db.delete(existing)
-    await db.commit()
+    deleted = await SchedulingService(db).remove_basic_apparatus(
+        existing, str(current_user.organization_id)
+    )
+    set_delete_outcome(response, deleted)
 
 
 # ============================================

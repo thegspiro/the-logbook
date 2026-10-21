@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import toast from 'react-hot-toast';
 import { renderWithRouter } from '../test/utils';
 import PipelineDetailPage from './PipelineDetailPage';
 
@@ -652,16 +653,44 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     await waitFor(() => expect(mockDeleteProgramPhase).toHaveBeenCalledWith('prog-1', 'ph-1'));
   });
 
-  it('hard-deletes the pipeline after a warning and navigates away', async () => {
+  it('hard-deletes a pipeline nobody has graduated from after a warning and navigates away', async () => {
+    const success = vi.spyOn(toast, 'success');
     renderWithRouter(<PipelineDetailPage />);
 
     await userEvent.click(await screen.findByRole('button', { name: /^Delete$/ }));
     // A warning dialog appears; confirm the destructive action.
     const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Permanently delete "Recruit Pipeline"?');
+    expect(dialog).toHaveTextContent('1 enrolled member — their progress will be permanently deleted');
+    // Decided from every enrollment, not the Enrollments tab's status filter.
+    expect(mockGetProgramEnrollments).toHaveBeenLastCalledWith('prog-1');
     await userEvent.click(within(dialog).getByRole('button', { name: /Delete pipeline/i }));
 
     await waitFor(() => expect(mockDeleteProgram).toHaveBeenCalledWith('prog-1'));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/training/programs'));
+    expect(success).toHaveBeenCalledWith('Pipeline deleted');
+    success.mockRestore();
+  });
+
+  it('says a pipeline with graduates is deactivated instead, and who is withdrawn', async () => {
+    mockGetProgramEnrollments.mockResolvedValue([
+      enrollment,
+      { ...enrollment, id: 'enr-2', user_id: 'user-8', user_name: 'Sam Graduate', status: 'completed' },
+    ]);
+    const success = vi.spyOn(toast, 'success');
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Delete$/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Deactivate pipeline' });
+    expect(dialog).toHaveTextContent('"Recruit Pipeline" has 1 graduate, so it is deactivated instead of deleted');
+    expect(dialog).toHaveTextContent('The 1 member still in progress will be withdrawn from it.');
+    expect(dialog).not.toHaveTextContent('Permanently delete');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Deactivate pipeline' }));
+
+    await waitFor(() => expect(mockDeleteProgram).toHaveBeenCalledWith('prog-1'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/training/programs'));
+    expect(success).toHaveBeenCalledWith('Pipeline deactivated');
+    success.mockRestore();
   });
 
   it('shows a member in another program as eligible with an advisory', async () => {

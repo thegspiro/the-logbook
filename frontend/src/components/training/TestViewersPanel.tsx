@@ -35,7 +35,8 @@ interface TestViewersPanelProps {
   candidateId: string;
   /** Excluded too: the examiner always sees what they themselves recorded, so
    *  a grant would be a no-op the officer could not tell had done nothing. */
-  examinerId: string;
+  /** Null once the examiner's account has been permanently deleted. */
+  examinerId: string | null;
 }
 
 export const TestViewersPanel: React.FC<TestViewersPanelProps> = ({ testId, candidateId, examinerId }) => {

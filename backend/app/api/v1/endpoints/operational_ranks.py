@@ -261,6 +261,9 @@ async def update_rank(
             rank_id=rank_id,
             data=data,
             organization_id=current_user.organization_id,
+            actor_id=str(current_user.id),
+            actor_username=current_user.username,
+            ip_address=get_client_ip(request),
         )
 
     ensure_found(rank, "Rank")
