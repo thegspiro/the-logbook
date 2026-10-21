@@ -17,7 +17,7 @@ separation; filing it anywhere a plain ``documents.view`` holder can read
 publishes both to the whole department.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from html import escape
 from typing import Any, Dict, List, Optional, Tuple
@@ -57,6 +57,7 @@ class PropertyReturnService:
         return_deadline_days: int = 14,
         custom_instructions: Optional[str] = None,
         reason: Optional[str] = None,
+        effective_date: Optional[date] = None,
     ) -> Tuple[Dict[str, Any], str]:
         """
         Generate a property-return report for a dropped member.
@@ -69,6 +70,9 @@ class PropertyReturnService:
             return_deadline_days: Days the member has to return property.
             custom_instructions: Optional extra paragraph added to the letter.
             reason: Reason for the status change (included in the notification).
+            effective_date: The day the member left, on the department's
+                calendar. The letter states it as the effective date and counts
+                the return deadline from it; defaults to today.
 
         Returns:
             Tuple of (report_data dict, html_content string).
@@ -221,8 +225,13 @@ class PropertyReturnService:
 
         # The effective date and deadline are printed in a notice emailed to
         # the member, so "today" is the department's day, not the server's.
-        today = datetime.now(org_tz).date()
-        return_deadline = today + timedelta(days=return_deadline_days)
+        # The letter says the deadline runs "from the effective date of
+        # separation", so a back-dated drop counts from the day the member left
+        # -- which can put the deadline in the past when the drop was entered
+        # late; the owner chose that (2026-10-21) over a deadline the letter
+        # would otherwise misdate.
+        effective = effective_date or datetime.now(org_tz).date()
+        return_deadline = effective + timedelta(days=return_deadline_days)
 
         report_data = {
             "member_id": user_id,
@@ -240,7 +249,7 @@ class PropertyReturnService:
                 else "Involuntary Separation"
             ),
             "reason": reason,
-            "effective_date": today.strftime("%B %d, %Y"),
+            "effective_date": effective.strftime("%B %d, %Y"),
             "return_deadline": return_deadline.strftime("%B %d, %Y"),
             "return_deadline_days": return_deadline_days,
             "items": items,

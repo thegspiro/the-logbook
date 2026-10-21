@@ -55,11 +55,16 @@ class DepartureClearanceService:
         departure_type: Optional[str] = None,
         return_deadline_days: int = 14,
         notes: Optional[str] = None,
+        counted_from: Optional[datetime] = None,
     ) -> Tuple[Optional[DepartureClearance], Optional[str]]:
         """
         Create a departure clearance for a member, snapshotting every
         outstanding item (permanent assignments, active checkouts,
         unreturned pool issuances) into clearance line items.
+
+        The return deadline is ``return_deadline_days`` after ``counted_from``
+        -- the drop's effective moment when a drop opens the clearance, so its
+        "gear due" date matches the property return letter -- or after now.
 
         Returns (clearance, None) on success or (None, error_message).
         """
@@ -87,7 +92,9 @@ class DepartureClearanceService:
                     "An open departure clearance already exists for this member",
                 )
 
-            deadline = datetime.now(timezone.utc) + timedelta(days=return_deadline_days)
+            deadline = (counted_from or datetime.now(timezone.utc)) + timedelta(
+                days=return_deadline_days
+            )
 
             clearance = DepartureClearance(
                 organization_id=organization_id,
