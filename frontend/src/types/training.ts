@@ -1711,6 +1711,11 @@ export interface BulkImportRequest {
   default_category_id?: string;
 }
 
+export interface ImportMatchedResponse {
+  imported: number;
+  failed: number;
+}
+
 export interface BulkImportResponse {
   total: number;
   imported: number;
@@ -2091,6 +2096,16 @@ export interface OfficerShiftAnalytics {
   status_counts: Record<string, number>;
   trainees: OfficerAnalyticsTrainee[];
   monthly: MonthlyShiftData[];
+}
+
+// ============================================
+// Certification expiry alerts
+// ============================================
+
+export interface CertAlertSettings {
+  enabled: boolean;
+  cc_chief_on_escalation: boolean;
+  include_personal_email_on_final: boolean;
 }
 
 // ============================================

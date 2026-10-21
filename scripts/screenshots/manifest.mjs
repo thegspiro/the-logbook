@@ -8537,6 +8537,29 @@ export const SHOTS = [
     expect: "Filled in from the motion recorded at",
   },
   {
+    // Ticked but not saved: saving would switch alerts on for the demo
+    // department, and nothing here should persist. The shot is the panel alone,
+    // so the administrator's malware-scanning notice on a stack with scanning
+    // off is not in the frame.
+    id: "02-121-cert-alert-settings",
+    doc: "02-training.md",
+    line: 2012,
+    anchor:
+      "The Expiry alert emails panel at the top of Training Admin → Overview → Expiring",
+    alt: "The Expiry alert emails panel on the Expiring Certs tab: Email members when a certification is close to expiring ticked, with the two copy options for the expired notice available beneath it",
+    route: "/training/admin?page=dashboard&tab=expiring-certs",
+    prepare: async (page) => {
+      const box = page.getByRole("checkbox", {
+        name: /Email members when a certification/,
+      });
+      await box.waitFor({ timeout: 20_000 });
+      await box.check();
+      await page.waitForTimeout(400);
+    },
+    selector: "section[aria-labelledby='cert-alerts-heading']",
+    expect: "Expiry alert emails",
+  },
+  {
     id: "04-15-action-items",
     doc: "04-events-meetings.md",
     line: 454,
@@ -9883,6 +9906,37 @@ export const SHOTS = [
       });
       await page.waitForTimeout(400);
     },
+  },
+  {
+    id: "09-28-void-result-dialog",
+    doc: "09-skills-testing.md",
+    line: 1320,
+    anchor:
+      'The "Void test result" dialog opened from the Void result button, with a reason typed in',
+    alt: "The Void test result dialog, saying the record stays in the member's history marked as voided, with an example reason typed in and the amber Void result button enabled",
+    route: "/training/skills-testing",
+    // The reason is typed but the dialog is never confirmed: the held result is
+    // shared with the release shots, and voiding it would take them out of the
+    // seeded data.
+    prepare: async (page) => {
+      const { id: testId } = await findHeldResult(page);
+      await page.goto(
+        new URL(
+          `/training/skills-testing/test/${testId}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      const open = page.getByRole("button", { name: "Void result" });
+      await open.waitFor({ state: "visible", timeout: 15_000 });
+      await open.click();
+      const reason = page.locator("#void-reason-detail");
+      await reason.waitFor({ state: "visible", timeout: 10_000 });
+      await reason.fill("Scored against the wrong candidate");
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-panel']",
+    expect: { selector: "#void-reason-detail" },
   },
   {
     id: "09-09-member-skills-testing",

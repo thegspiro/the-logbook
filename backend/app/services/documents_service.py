@@ -9,8 +9,6 @@ interface used by the documents API endpoint (using direct returns
 and HTTPException-style error handling rather than tuple returns).
 """
 
-import asyncio
-import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
@@ -1368,9 +1366,7 @@ class DocumentsService:
                     f"upload storage for deleted folder {folder_id}"
                 )
                 continue
-            try:
-                await asyncio.to_thread(os.remove, confined)
-            except OSError:
+            if not await file_storage.delete(confined):
                 logger.warning(
                     "Could not remove backing file for a document in deleted "
                     f"folder {folder_id}: {file_path}"
@@ -1899,14 +1895,11 @@ class DocumentsService:
                 f"Not removing backing file for deleted document {document_id}: "
                 "stored path is outside the organization's upload storage"
             )
-        elif confined:
-            try:
-                await asyncio.to_thread(os.remove, confined)
-            except OSError:
-                logger.warning(
-                    f"Could not remove backing file for deleted document "
-                    f"{document_id}: {file_path}"
-                )
+        elif confined and not await file_storage.delete(confined):
+            logger.warning(
+                f"Could not remove backing file for deleted document "
+                f"{document_id}: {file_path}"
+            )
         return True
 
     # ============================================

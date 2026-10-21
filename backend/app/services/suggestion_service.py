@@ -204,13 +204,6 @@ def _display_name(user: Optional[User]) -> Optional[str]:
     return user.display_name or user.username or None
 
 
-def _remove_quietly(path: str) -> None:
-    try:
-        os.remove(path)
-    except OSError:
-        pass
-
-
 async def assert_position_not_sole_box_reviewer(
     db: AsyncSession, organization_id: str, position_id: str
 ) -> None:
@@ -353,7 +346,7 @@ class SuggestionService:
         await self.db.delete(box)
         await self.db.commit()
         for path in paths:
-            _remove_quietly(path)
+            await file_storage.delete_quietly(path)
         return count
 
     async def create_box(
@@ -937,7 +930,7 @@ class SuggestionService:
         except Exception:
             await self.db.rollback()
             for path in written:
-                await asyncio.to_thread(_remove_quietly, path)
+                await file_storage.delete_quietly(path)
             raise
         return suggestion, key
 

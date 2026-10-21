@@ -1603,6 +1603,25 @@ interface ImportQueuePanelProps {
 const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers, refreshKey, onOpenMappings }) => {
   const [summaries, setSummaries] = useState<Record<string, ProviderImportSummary>>({});
   const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [importingProvider, setImportingProvider] = useState<string | null>(null);
+
+  const handleImportMatched = async (providerId: string) => {
+    setImportingProvider(providerId);
+    try {
+      const result = await externalTrainingService.importMatched(providerId);
+      if (result.failed > 0) {
+        toast.error(`Imported ${result.imported} records; ${result.failed} failed. See the Failed list for details.`);
+      } else {
+        toast.success(`Imported ${result.imported} records`);
+      }
+      setReloadKey((key) => key + 1);
+    } catch (err: unknown) {
+      toast.error(`Import failed: ${getErrorMessage(err)}`);
+    } finally {
+      setImportingProvider(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1636,7 +1655,7 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers, refreshK
     return () => {
       cancelled = true;
     };
-  }, [providers, refreshKey]);
+  }, [providers, refreshKey, reloadKey]);
 
   if (loading) {
     return (
@@ -1670,14 +1689,25 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers, refreshK
               <h2 id={`import-queue-${provider.id}`} className="text-theme-text-primary text-lg font-semibold">
                 {provider.name}
               </h2>
-              <button
-                onClick={() => onOpenMappings(provider.id)}
-                aria-label={`Open mappings for ${provider.name}`}
-                className="btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
-              >
-                <FolderTree className="h-4 w-4" aria-hidden="true" />
-                Open mappings
-              </button>
+              <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+                <button
+                  onClick={() => void handleImportMatched(provider.id)}
+                  disabled={importingProvider === provider.id}
+                  aria-label={`Import matching pending records for ${provider.name}`}
+                  className="btn-primary flex shrink-0 items-center gap-2"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  {importingProvider === provider.id ? 'Importing...' : 'Import matching pending records'}
+                </button>
+                <button
+                  onClick={() => onOpenMappings(provider.id)}
+                  aria-label={`Open mappings for ${provider.name}`}
+                  className="btn-primary flex shrink-0 items-center gap-2"
+                >
+                  <FolderTree className="h-4 w-4" aria-hidden="true" />
+                  Open mappings
+                </button>
+              </div>
             </div>
             {summary.failedToLoad && (
               <p className="alert-warning mb-4 text-sm" role="alert">

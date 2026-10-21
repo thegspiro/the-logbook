@@ -20,6 +20,7 @@ const mockUploadReport = vi.fn();
 const mockGetCourseMappings = vi.fn();
 const mockUpdateCourseMapping = vi.fn();
 const mockGetCourses = vi.fn();
+const mockImportMatched = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 
@@ -37,6 +38,7 @@ vi.mock('../services/api', () => ({
     getImportedRecords: (...a: unknown[]) => mockGetImportedRecords(...a) as unknown,
     getCategoryMappings: (...a: unknown[]) => mockGetCategoryMappings(...a) as unknown,
     getUserMappings: (...a: unknown[]) => mockGetUserMappings(...a) as unknown,
+    importMatched: (...a: unknown[]) => mockImportMatched(...a) as unknown,
     updateCategoryMapping: (...a: unknown[]) => mockUpdateCategoryMapping(...a) as unknown,
     updateUserMapping: (...a: unknown[]) => mockUpdateUserMapping(...a) as unknown,
     deleteProvider: (...a: unknown[]) => mockDeleteProvider(...a) as unknown,
@@ -690,6 +692,52 @@ describe('ExternalTrainingPage — Import Queue tab', () => {
 
     expect(await screen.findByText('Course b')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Some imports for this provider could not be loaded');
+  });
+
+  describe('importing matching pending records', () => {
+    beforeEach(() => {
+      mockImportMatched.mockReset();
+      mockImportMatched.mockResolvedValue({ imported: 12, failed: 0 });
+    });
+
+    it('imports for the provider, reports the count and reloads the queue', async () => {
+      await openQueue();
+      await screen.findByText('Course a');
+      mockGetImportedRecords.mockClear();
+
+      await userEvent.click(
+        screen.getByRole('button', { name: /Import matching pending records for Vector Solutions/ })
+      );
+
+      await waitFor(() => expect(mockImportMatched).toHaveBeenCalledWith('prov-1'));
+      expect(mockToastSuccess).toHaveBeenCalledWith('Imported 12 records');
+      await waitFor(() =>
+        expect(mockGetImportedRecords).toHaveBeenCalledWith('prov-1', { status: 'pending', limit: 200 })
+      );
+    });
+
+    it('flags failures instead of reporting plain success', async () => {
+      mockImportMatched.mockResolvedValue({ imported: 3, failed: 2 });
+      await openQueue();
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: /Import matching pending records for Vector Solutions/ })
+      );
+
+      await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('2 failed')));
+      expect(mockToastSuccess).not.toHaveBeenCalled();
+    });
+
+    it('shows an error toast when the request fails', async () => {
+      mockImportMatched.mockRejectedValue(new Error('boom'));
+      await openQueue();
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: /Import matching pending records for Vector Solutions/ })
+      );
+
+      await waitFor(() => expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('Import failed')));
+    });
   });
 
   it('keeps the explanatory empty state when there are no providers', async () => {
