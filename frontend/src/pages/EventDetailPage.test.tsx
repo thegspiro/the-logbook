@@ -37,6 +37,7 @@ vi.mock('../services/api', () => ({
     createOrUpdateRSVP: vi.fn(),
     cancelEvent: vi.fn(),
     deleteEvent: vi.fn(),
+    deleteEventSeries: vi.fn(),
     duplicateEvent: vi.fn(),
     checkInAttendee: vi.fn(),
     recordActualTimes: vi.fn(),
@@ -898,6 +899,68 @@ describe('EventDetailPage', () => {
       await waitFor(() => {
         expect(eventService.deleteEvent).toHaveBeenCalledWith('evt-1');
         expect(mockNavigate).toHaveBeenCalledWith('/events');
+      });
+    });
+
+    describe('on an occurrence of a recurring series', () => {
+      const occurrence: Event = { ...mockEvent, is_recurring: true, recurrence_parent_id: 'parent-1' };
+
+      beforeEach(() => {
+        vi.mocked(eventService.getEvent).mockReset();
+        vi.mocked(eventService.getEvent).mockResolvedValue(occurrence);
+        vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+        vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+        vi.mocked(eventService.deleteEventSeries).mockReset();
+        vi.mocked(eventService.deleteEventSeries).mockResolvedValue(undefined);
+        vi.mocked(eventService.deleteEvent).mockReset();
+        vi.mocked(eventService.deleteEvent).mockResolvedValue(undefined);
+      });
+
+      const openDeleteDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+        renderWithRouter(<EventDetailPage />);
+        await waitFor(() => {
+          expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
+        });
+        await user.click(screen.getByRole('button', { name: /more/i }));
+        await user.click(screen.getByRole('button', { name: /delete event/i }));
+        await screen.findByRole('radio', { name: /delete only this event/i });
+      };
+
+      it('offers this and future occurrences between this one and the whole series', async () => {
+        const user = userEvent.setup();
+        await openDeleteDialog(user);
+
+        const radios = within(screen.getByRole('dialog', { name: 'Delete Event' })).getAllByRole('radio');
+        expect(radios).toHaveLength(3);
+        expect(radios[0]).toHaveAccessibleName('Delete only this event');
+        expect(radios[1]).toHaveAccessibleName('Delete this and future events in this series (keep earlier events)');
+        expect(radios[2]).toHaveAccessibleName('Delete all events in this series');
+      });
+
+      it('deletes from this occurrence on, naming it as the cutoff', async () => {
+        const user = userEvent.setup();
+        await openDeleteDialog(user);
+
+        await user.click(screen.getByRole('radio', { name: /this and future events/i }));
+        await user.click(screen.getByRole('button', { name: /delete this and future/i }));
+
+        await waitFor(() => {
+          expect(eventService.deleteEventSeries).toHaveBeenCalledWith('parent-1', false, 'evt-1');
+          expect(mockNavigate).toHaveBeenCalledWith('/events');
+        });
+        expect(eventService.deleteEvent).not.toHaveBeenCalled();
+      });
+
+      it('still deletes the whole series without a cutoff', async () => {
+        const user = userEvent.setup();
+        await openDeleteDialog(user);
+
+        await user.click(screen.getByRole('radio', { name: /delete all events in this series/i }));
+        await user.click(screen.getByRole('button', { name: /delete entire series/i }));
+
+        await waitFor(() => {
+          expect(eventService.deleteEventSeries).toHaveBeenCalledWith('parent-1');
+        });
       });
     });
 

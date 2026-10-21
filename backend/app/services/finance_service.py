@@ -57,6 +57,7 @@ from app.models.finance import (
     BudgetCategory,
     BudgetCategoryChargePosition,
     BudgetPlanningStage,
+    BudgetRequest,
     ChargeAccess,
     CheckRequest,
     CheckRequestStatus,
@@ -1384,12 +1385,54 @@ class FinanceService:
                 self.db, Position, owner_position_id, org_id, label="Owner position"
             )
 
-    async def delete_budget_category(self, cat_id: str, org_id: str) -> None:
+    async def budget_category_in_use(self, cat_id: str, org_id: str) -> bool:
+        """True when deleting the category would destroy or rewrite history.
+
+        A budget line in any fiscal year cascades away with its category, and
+        with it the budget link on every purchase request, expense line, check
+        request and budget request charged to it — so a line is enough on its
+        own; the requests behind it need no separate look. An approval chain
+        naming the category would fall to NULL, which ``pick_approval_chain``
+        reads as "any category": a category-specific chain would silently
+        start routing every request in the department. A proposal for a new
+        line would lose the category it asked for.
+        """
+        references = (
+            select(Budget.id).where(
+                Budget.category_id == cat_id, Budget.organization_id == org_id
+            ),
+            select(ApprovalChain.id).where(
+                ApprovalChain.budget_category_id == cat_id,
+                ApprovalChain.organization_id == org_id,
+            ),
+            select(BudgetRequest.id).where(
+                BudgetRequest.category_id == cat_id,
+                BudgetRequest.organization_id == org_id,
+            ),
+        )
+        for query in references:
+            if await self.db.scalar(query.limit(1)) is not None:
+                return True
+        return False
+
+    async def delete_budget_category(self, cat_id: str, org_id: str) -> bool:
+        """Delete an unused category; deactivate one that is in use.
+
+        Returns True when the row was deleted and False when it was
+        deactivated instead (``budget_category_in_use``). A deactivated
+        category keeps every line, request and chain that names it, and drops
+        out of the pickers that start new budget lines and proposals.
+        """
         cat = await self.get_budget_category(cat_id, org_id)
         if not cat:
             raise ValueError("Budget category not found")
+        if await self.budget_category_in_use(cat.id, org_id):
+            cat.is_active = False
+            await self.db.flush()
+            return False
         await self.db.delete(cat)
         await self.db.flush()
+        return True
 
     # ========================================
     # Budgets
@@ -1839,6 +1882,16 @@ class FinanceService:
             and Decimal(kwargs.get("amount_budgeted") or 0) != 0
         ):
             raise ValueError(_NEW_LINE_AT_ZERO_MESSAGE)
+        category_id = kwargs.get("category_id")
+        category = (
+            await self.get_budget_category(category_id, org_id) if category_id else None
+        )
+        if category is not None and not category.is_active:
+            # Deactivated rather than deleted because lines elsewhere still
+            # use it (delete_budget_category); it is not offered for new ones.
+            raise ValueError(
+                "This budget category is inactive. Choose an active category."
+            )
         budget = Budget(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(budget)
         await self.db.flush()

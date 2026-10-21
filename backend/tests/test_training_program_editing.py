@@ -11,7 +11,11 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 from app.api.v1.endpoints import training_programs as training_program_endpoints
-from app.models.training import RequirementProgressStatus, RequirementType
+from app.models.training import (
+    EnrollmentStatus,
+    RequirementProgressStatus,
+    RequirementType,
+)
 from app.schemas.training_program import (
     ProgramMilestoneUpdate,
     ProgramPhaseUpdate,
@@ -133,13 +137,14 @@ class TestDeleteProgram:
         svc = TrainingProgramService(RecordingSession([]))
         svc.get_program_by_id = AsyncMock(return_value=None)
         ok, error = await svc.delete_training_program(uuid4(), uuid4())
-        assert ok is False
+        assert ok is None
         assert error == "Training program not found"
 
     async def test_deletes_everything_and_orphan_requirement(self):
         req_id = str(uuid4())
         db = RecordingSession(
             [
+                _one(None),  # no graduates -> hard delete
                 _rows([(str(uuid4()),)]),  # enrollment ids
                 _rows([(req_id,)]),  # requirement ids on links
                 MagicMock(),  # delete RequirementProgress
@@ -157,7 +162,7 @@ class TestDeleteProgram:
 
         ok, error = await svc.delete_training_program(uuid4(), uuid4())
 
-        assert ok is True
+        assert ok == "deleted"
         assert error is None
         # RequirementProgress, Enrollment, Milestone, ProgramRequirement, Phase,
         # orphan TrainingRequirement, Program = 7 deletes.
@@ -167,6 +172,7 @@ class TestDeleteProgram:
     async def test_preserves_requirements_the_program_does_not_own(self):
         db = RecordingSession(
             [
+                _one(None),  # no graduates -> hard delete
                 _rows([]),  # enrollment ids
                 _rows([]),  # no owned requirement links
                 MagicMock(),  # delete ProgramEnrollment
@@ -181,12 +187,46 @@ class TestDeleteProgram:
 
         ok, error = await svc.delete_training_program(uuid4(), uuid4())
 
-        assert ok is True
+        assert ok == "deleted"
         assert error is None
-        assert "program_requirements.owns_requirement IS true" in str(db.statements[1])
+        assert "program_requirements.owns_requirement IS true" in str(db.statements[2])
         # Enrollment, milestone, link, phase, and program only; the department's
         # non-owned TrainingRequirement is not considered for deletion.
         assert db.stmt_types().count("Delete") == 5
+        db.commit.assert_awaited_once()
+
+    async def test_program_with_graduates_is_deactivated_not_deleted(self):
+        db = RecordingSession(
+            [
+                _one(str(uuid4())),  # a COMPLETED enrollment exists
+                MagicMock(),  # withdraw in-progress enrollments
+            ]
+        )
+        program = SimpleNamespace(id="p", active=True)
+        svc = TrainingProgramService(db)
+        svc.get_program_by_id = AsyncMock(return_value=program)
+
+        ok, error = await svc.delete_training_program(uuid4(), uuid4())
+
+        assert ok == "deactivated"
+        assert error is None
+        assert program.active is False
+        # Nothing is deleted: graduates' enrollments and progress are history.
+        assert "Delete" not in db.stmt_types()
+        assert db.statements[0].compile().params["status_1"] == (
+            EnrollmentStatus.COMPLETED
+        )
+        # Only enrollments still in progress are withdrawn; the graduates'
+        # COMPLETED rows are left exactly as they are.
+        withdraw = db.statements[1]
+        assert type(withdraw).__name__ == "Update"
+        params = withdraw.compile().params
+        assert params["status"] == EnrollmentStatus.WITHDRAWN
+        assert params["status_1"] == [
+            EnrollmentStatus.ACTIVE,
+            EnrollmentStatus.ON_HOLD,
+        ]
+        assert params["withdrawal_reason"]
         db.commit.assert_awaited_once()
 
 
