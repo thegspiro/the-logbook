@@ -58,6 +58,7 @@ import { signalUserActivity } from '../../../hooks/useIdleTimer';
 import { NfcCheckInDirection, NfcCheckInTarget } from '../../../constants/enums';
 import type { NfcStationCheckInResult } from '../types/idCard';
 import { Breadcrumbs } from '../../../components/ux';
+import { KioskSessionCard } from '../../../components/KioskSessionCard';
 import { BACKGROUND_REQUEST_CONFIG } from '../../../utils/backgroundRequest';
 
 interface TargetOption {
@@ -489,6 +490,8 @@ const CheckInStationPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4">
       {header}
+
+      <KioskSessionCard />
 
       <div className="card space-y-4 p-4 sm:p-6">
         <div>

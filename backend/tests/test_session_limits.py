@@ -15,19 +15,25 @@ import pytest
 from app.api.dependencies import get_current_user
 from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token
-from app.services.auth_service import AuthService, session_end_reason
+from app.services.auth_service import (
+    AuthService,
+    session_end_reason,
+    session_ends_at,
+)
 
 NOW = datetime.now(timezone.utc)
 
 
 def _session(idle_minutes=1, age_hours=1, **extra):
-    return SimpleNamespace(
-        id="session-1",
-        user_id="user-123",
-        last_activity=NOW - timedelta(minutes=idle_minutes),
-        created_at=NOW - timedelta(hours=age_hours),
-        **extra,
-    )
+    fields = {
+        "id": "session-1",
+        "user_id": "user-123",
+        "is_kiosk": False,
+        "last_activity": NOW - timedelta(minutes=idle_minutes),
+        "created_at": NOW - timedelta(hours=age_hours),
+    }
+    fields.update(extra)
+    return SimpleNamespace(**fields)
 
 
 @pytest.mark.unit
@@ -291,3 +297,281 @@ class TestIdleExpiryDoesNotSignTheMemberOutEverywhere:
         )
         assert remaining == [laptop_access]
         assert await service.get_user_from_token(laptop_access) is not None
+
+
+def _kiosk_db(session, *, extra_users=1):
+    found = MagicMock()
+    found.scalar_one_or_none.return_value = session
+    user = MagicMock(id="user-123")
+    user.is_active = True
+    user_found = MagicMock()
+    user_found.scalar_one_or_none.return_value = user
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=[found] + [user_found] * (extra_users + 1))
+    db.delete = AsyncMock()
+    db.flush = AsyncMock()
+    db.commit = AsyncMock()
+    return db
+
+
+def _kiosk_permission(held):
+    return patch(
+        "app.api.dependencies.user_has_permission",
+        return_value=held,
+    )
+
+
+@pytest.mark.unit
+class TestKioskLimits:
+    def test_the_kiosk_defaults_are_seven_days_and_twelve_hours_idle(self):
+        fields = type(settings).model_fields
+        assert fields["SESSION_KIOSK_ABSOLUTE_MAX_HOURS"].default == 168
+        assert fields["SESSION_KIOSK_IDLE_TIMEOUT_MINUTES"].default == 720
+
+    def test_a_kiosk_session_outlives_the_standard_idle_limit(self):
+        idle = settings.HIPAA_SESSION_TIMEOUT_MINUTES + 60
+        stale = _session(idle_minutes=idle)
+        assert session_end_reason(stale, NOW) == "idle"
+        assert session_end_reason(stale, NOW, kiosk=True) is None
+
+    def test_a_kiosk_session_outlives_the_standard_cap(self):
+        old = settings.SESSION_ABSOLUTE_MAX_HOURS + 24
+        aged = _session(age_hours=old)
+        assert session_end_reason(aged, NOW) == "absolute"
+        assert session_end_reason(aged, NOW, kiosk=True) is None
+
+    def test_a_kiosk_session_still_ends_at_its_own_cap(self):
+        past = _session(age_hours=settings.SESSION_KIOSK_ABSOLUTE_MAX_HOURS + 1)
+        assert session_end_reason(past, NOW, kiosk=True) == "absolute"
+
+    def test_a_kiosk_session_still_ends_at_its_own_idle_limit(self):
+        idle = _session(idle_minutes=settings.SESSION_KIOSK_IDLE_TIMEOUT_MINUTES + 1)
+        assert session_end_reason(idle, NOW, kiosk=True) == "idle"
+
+    def test_session_ends_at_follows_the_applicable_cap(self):
+        session = _session(age_hours=2)
+        standard = session_ends_at(session, False)
+        kiosk = session_ends_at(session, True)
+        assert standard == session.created_at + timedelta(
+            hours=settings.SESSION_ABSOLUTE_MAX_HOURS
+        )
+        assert kiosk == session.created_at + timedelta(
+            hours=settings.SESSION_KIOSK_ABSOLUTE_MAX_HOURS
+        )
+
+    def test_session_ends_at_is_none_when_the_cap_is_off(self):
+        with patch.object(settings, "SESSION_ABSOLUTE_MAX_HOURS", 0):
+            assert session_ends_at(_session(), False) is None
+
+    async def test_an_unflagged_session_never_looks_up_the_user(self):
+        db = MagicMock()
+        db.execute = AsyncMock()
+        assert await AuthService(db).holds_kiosk_session(_session()) is False
+        db.execute.assert_not_awaited()
+
+    async def test_the_flag_counts_while_the_permission_is_held(self):
+        db = _kiosk_db(None)
+        db.execute = AsyncMock(
+            return_value=MagicMock(
+                scalar_one_or_none=MagicMock(return_value=MagicMock())
+            )
+        )
+        with _kiosk_permission(True):
+            assert (
+                await AuthService(db).holds_kiosk_session(_session(is_kiosk=True))
+                is True
+            )
+
+    async def test_the_flag_is_ignored_once_the_permission_is_revoked(self):
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(
+                scalar_one_or_none=MagicMock(return_value=MagicMock())
+            )
+        )
+        with _kiosk_permission(False):
+            assert (
+                await AuthService(db).holds_kiosk_session(_session(is_kiosk=True))
+                is False
+            )
+
+    async def test_a_deleted_user_does_not_hold_it(self):
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
+        assert (
+            await AuthService(db).holds_kiosk_session(_session(is_kiosk=True)) is False
+        )
+
+    async def test_a_kiosk_session_past_the_standard_limit_still_authenticates(self):
+        idle = settings.HIPAA_SESSION_TIMEOUT_MINUTES + 60
+        token, session = _live(idle_minutes=idle, is_kiosk=True)
+        db = _kiosk_db(session)
+        with _kiosk_permission(True):
+            user = await AuthService(db).get_user_from_token(token)
+        assert user is not None
+
+    async def test_a_revoked_kiosk_session_past_the_standard_limit_is_rejected(self):
+        idle = settings.HIPAA_SESSION_TIMEOUT_MINUTES + 60
+        token, session = _live(idle_minutes=idle, is_kiosk=True)
+        db = _kiosk_db(session)
+        with _kiosk_permission(False):
+            user = await AuthService(db).get_user_from_token(token)
+        assert user is None
+        db.delete.assert_not_awaited()
+
+    async def test_refresh_keeps_a_kiosk_session_past_the_standard_cap(self):
+        token = create_refresh_token({"sub": "user-123"})
+        session = _session(age_hours=settings.SESSION_ABSOLUTE_MAX_HOURS + 24)
+        session.is_kiosk = True
+        session.refresh_token = token
+        db = _kiosk_db(session)
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=session)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=MagicMock())),
+                MagicMock(
+                    scalar_one_or_none=MagicMock(
+                        return_value=MagicMock(
+                            id="user-123",
+                            username="station",
+                            organization_id="org-1",
+                            is_active=True,
+                        )
+                    )
+                ),
+                MagicMock(rowcount=1),
+            ]
+        )
+        with (
+            _kiosk_permission(True),
+            patch("app.services.auth_service.rows_affected", return_value=1),
+        ):
+            access, refresh = await AuthService(db).refresh_access_token(token)
+        assert access
+        assert refresh
+        db.delete.assert_not_awaited()
+
+
+def _request(token=None):
+    headers = {"authorization": f"Bearer {token}"} if token else {}
+    return SimpleNamespace(
+        headers=headers,
+        client=SimpleNamespace(host="203.0.113.9"),
+        state=SimpleNamespace(),
+    )
+
+
+@pytest.mark.unit
+class TestKioskEndpoints:
+    async def test_enabling_flags_only_the_callers_own_session_and_audits_it(self):
+        from app.api.v1.endpoints import auth as auth_endpoints
+
+        session = _session(is_kiosk=False, id="s-1")
+        user = SimpleNamespace(id="user-123", username="station")
+        db = MagicMock()
+        db.commit = AsyncMock()
+        with (
+            patch.object(
+                AuthService, "get_session_for_token", AsyncMock(return_value=session)
+            ),
+            patch.object(auth_endpoints, "log_audit_event", AsyncMock()) as audit,
+        ):
+            body = await auth_endpoints._set_session_kiosk(
+                _request("tok"), user, None, db, True
+            )
+
+        assert session.is_kiosk is True
+        assert body["is_kiosk"] is True
+        assert body["session_timeout_minutes"] == (
+            settings.SESSION_KIOSK_IDLE_TIMEOUT_MINUTES
+        )
+        assert audit.await_args.kwargs["event_type"] == "kiosk_session_enabled"
+        assert audit.await_args.kwargs["user_id"] == "user-123"
+        db.commit.assert_awaited_once()
+
+    async def test_a_session_owned_by_someone_else_is_refused(self):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints import auth as auth_endpoints
+
+        session = _session(is_kiosk=False, user_id="someone-else")
+        user = SimpleNamespace(id="user-123", username="station")
+        db = MagicMock()
+        db.commit = AsyncMock()
+        with patch.object(
+            AuthService, "get_session_for_token", AsyncMock(return_value=session)
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await auth_endpoints._set_session_kiosk(
+                    _request("tok"), user, None, db, True
+                )
+        assert exc.value.status_code == 400
+        assert session.is_kiosk is False
+        db.commit.assert_not_awaited()
+
+    async def test_disabling_returns_the_standard_limits(self):
+        from app.api.v1.endpoints import auth as auth_endpoints
+
+        session = _session(is_kiosk=True)
+        user = SimpleNamespace(id="user-123", username="station")
+        db = MagicMock()
+        db.commit = AsyncMock()
+        with (
+            patch.object(
+                AuthService, "get_session_for_token", AsyncMock(return_value=session)
+            ),
+            patch.object(auth_endpoints, "log_audit_event", AsyncMock()) as audit,
+        ):
+            body = await auth_endpoints._set_session_kiosk(
+                _request("tok"), user, None, db, False
+            )
+
+        assert session.is_kiosk is False
+        assert body["session_timeout_minutes"] == settings.HIPAA_SESSION_TIMEOUT_MINUTES
+        assert audit.await_args.kwargs["event_type"] == "kiosk_session_disabled"
+
+    async def test_session_settings_report_the_kiosk_limits_for_a_kiosk_session(self):
+        from app.api.v1.endpoints import auth as auth_endpoints
+
+        session = _session(is_kiosk=True, age_hours=3)
+        user = MagicMock()
+        with (
+            patch.object(
+                AuthService, "get_session_for_token", AsyncMock(return_value=session)
+            ),
+            patch.object(
+                AuthService, "holds_kiosk_session", AsyncMock(return_value=True)
+            ),
+            patch.object(auth_endpoints, "user_has_permission", return_value=True),
+        ):
+            body = await auth_endpoints.get_session_settings(
+                _request("tok"), user, None, MagicMock()
+            )
+
+        assert body["is_kiosk"] is True
+        assert body["kiosk_available"] is True
+        assert body["session_timeout_minutes"] == (
+            settings.SESSION_KIOSK_IDLE_TIMEOUT_MINUTES
+        )
+        assert (
+            body["session_ends_at"]
+            == (
+                session.created_at
+                + timedelta(hours=settings.SESSION_KIOSK_ABSOLUTE_MAX_HOURS)
+            ).isoformat()
+        )
+
+    async def test_session_settings_without_a_session_report_the_standard_limits(self):
+        from app.api.v1.endpoints import auth as auth_endpoints
+
+        with patch.object(auth_endpoints, "user_has_permission", return_value=False):
+            body = await auth_endpoints.get_session_settings(
+                _request(), MagicMock(), None, MagicMock()
+            )
+
+        assert body["is_kiosk"] is False
+        assert body["kiosk_available"] is False
+        assert body["session_ends_at"] is None
+        assert body["session_timeout_minutes"] == settings.HIPAA_SESSION_TIMEOUT_MINUTES

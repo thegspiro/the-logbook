@@ -270,6 +270,10 @@ class Settings(BaseSettings):
     # time alone does not end a session that keeps refreshing, so without this a
     # stolen cookie that keeps being used never has to sign in again.
     SESSION_ABSOLUTE_MAX_HOURS: int = Field(default=12, ge=0)
+    # Limits for a session its owner marked as a station kiosk (requires the
+    # security.kiosk_session permission). 0 disables the limit.
+    SESSION_KIOSK_ABSOLUTE_MAX_HOURS: int = Field(default=168, ge=0)
+    SESSION_KIOSK_IDLE_TIMEOUT_MINUTES: int = Field(default=720, ge=0)
     HIPAA_PASSWORD_HISTORY_COUNT: int = (
         12  # Previous passwords remembered (§164.312(d))
     )

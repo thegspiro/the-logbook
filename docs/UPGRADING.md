@@ -504,6 +504,25 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Station kiosks can stay signed in for a week (2026-10-21)
+
+Adds a migration (`sessions.is_kiosk`, additive, applied by the normal startup) and one
+permission, `security.kiosk_session`, **seeded to no position and no rank**. Nothing
+changes for anyone until a department grants it.
+
+- A member holding it sees a "Kiosk session" card on the Check-In Station and the
+  inventory kiosk and can switch their own session to a 12-hour idle timeout and a
+  7-day lifetime. They can switch it back at any time, and enabling it is audited.
+  Change the limits with `SESSION_KIOSK_IDLE_TIMEOUT_MINUTES` (default `720`) and
+  `SESSION_KIOSK_ABSOLUTE_MAX_HOURS` (default `168`); `0` turns a limit off.
+- The kiosk limits apply only while the member still holds the permission. The `*` and
+  `security.*` wildcards grant it, so an administrator already can.
+- **Sign a station in with a dedicated account** holding only that station's
+  permissions plus `security.kiosk_session`, not a chief's own account: a session left
+  on a shared tablet carries every permission of whoever signed in.
+- Every session now shows a toast five minutes before its lifetime ends, so a member
+  can save work.
+
 ### Sessions now end after 12 hours, and idle sessions no longer sign you out everywhere (2026-10-20)
 
 Three changes to how a session ends. None blocks a restart and none needs a migration.
@@ -512,9 +531,9 @@ Three changes to how a session ends. None blocks a restart and none needs a migr
   active it is, and the member signs in again. Before, a session that kept refreshing
   never had to. Change it with `SESSION_ABSOLUTE_MAX_HOURS` (`0` turns it off). **A
   wall-mounted Check-In Station or inventory kiosk left signed in will ask for a
-  sign-in at least once every 12 hours.** A longer limit for kiosk accounts is planned
-  as a separate change; until it lands, raise `SESSION_ABSOLUTE_MAX_HOURS` if a
-  station must stay up longer.
+  sign-in at least once every 12 hours.** Members with the new
+  `security.kiosk_session` permission can give a station its own longer limits; see
+  the kiosk entry above.
 - **Idle sessions are refused on refresh, and no longer revoke the member's other
   sessions.** Coming back to a tab after more than 15 minutes (but before the access
   cookie lapsed) used to be read as a stolen refresh token, and signed the member

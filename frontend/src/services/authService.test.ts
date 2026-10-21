@@ -3,11 +3,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock apiClient BEFORE importing the service
 const mockGet = vi.fn();
 const mockPost = vi.fn();
+const mockDelete = vi.fn();
 
 vi.mock('./apiClient', () => ({
   default: {
     get: (...args: unknown[]) => mockGet(...args) as unknown,
     post: (...args: unknown[]) => mockPost(...args) as unknown,
+    delete: (...args: unknown[]) => mockDelete(...args) as unknown,
     defaults: { baseURL: '/api/v1' },
   },
 }));
@@ -266,6 +268,28 @@ describe('authService', () => {
       const result = await authService.getSessionSettings();
 
       expect(result.session_timeout_minutes).toBeUndefined();
+    });
+  });
+
+  // ── setKioskSession ────────────────────────────────────────────────
+  describe('setKioskSession', () => {
+    const result = { is_kiosk: true, session_timeout_minutes: 720, session_ends_at: null };
+
+    it('POSTs to /auth/session/kiosk to turn it on', async () => {
+      mockPost.mockResolvedValue({ data: result });
+
+      await expect(authService.setKioskSession(true)).resolves.toEqual(result);
+
+      expect(mockPost).toHaveBeenCalledWith('/auth/session/kiosk');
+      expect(mockDelete).not.toHaveBeenCalled();
+    });
+
+    it('DELETEs /auth/session/kiosk to turn it off', async () => {
+      mockDelete.mockResolvedValue({ data: { ...result, is_kiosk: false } });
+
+      await authService.setKioskSession(false);
+
+      expect(mockDelete).toHaveBeenCalledWith('/auth/session/kiosk');
     });
   });
 });

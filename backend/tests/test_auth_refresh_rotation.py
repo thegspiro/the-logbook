@@ -77,7 +77,9 @@ async def test_refresh_user_lookup_requires_active_organization():
     token = create_refresh_token({"sub": "user-123"})
 
     session_result = MagicMock()
-    session_result.scalar_one_or_none.return_value = MagicMock(refresh_token=token)
+    session_result.scalar_one_or_none.return_value = MagicMock(
+        refresh_token=token, is_kiosk=False
+    )
     # The active-org join filters the user row out for a deactivated org.
     user_result = MagicMock()
     user_result.scalar_one_or_none.return_value = None
@@ -101,7 +103,7 @@ async def test_refresh_user_lookup_requires_active_organization():
 def _live_session_mocks(token: str, rowcount: int) -> MagicMock:
     session_result = MagicMock()
     session_result.scalar_one_or_none.return_value = MagicMock(
-        id="session-1", refresh_token=token
+        id="session-1", refresh_token=token, is_kiosk=False
     )
     user = MagicMock(id="user-123", username="member", organization_id="org-1")
     user.is_active = True
