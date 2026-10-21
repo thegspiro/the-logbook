@@ -518,6 +518,21 @@ the queue to `inventory.manage_medical` for medical items would need
 domain-pinned reorder routes on `/medical-supplies` and a page to show them —
 reopen this if the department moves medical purchasing to the EMS officer.
 
+## Locations — Deleting One Clears Its Location From Eight Kinds of Records (2026-10-21)
+
+Found by the pass-8 security review of Locations & Kiosk
+([`LOC8-32-locations-kiosk.md`](./security-review/LOC8-32-locations-kiosk.md),
+LOC8-2). Deleting a location that events, event templates or apparatus still
+reference deactivates it instead, so those records keep it
+(`LocationService.remove_location`). Eight other kinds of record reference a
+location with `ON DELETE SET NULL`, so a location that only they reference is
+hard-deleted and each of them silently loses its location.
+
+| Records                                                                         | Status        | Detail                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `training_records`, `course_classes`, `course_cohorts`, `course_cohort_classes` | Open decision | Where a class or training record took place may be part of the history the record exists to keep. Adding these columns to `_RESTRICTING_LOCATION_REFERENCES` makes such a location deactivate instead; `tests/test_location_restrict_references.py` then needs the same list. |
+| `meetings`, `event_requests`, `inventory_items`, `storage_areas`                | Open decision | An item or storage area with no location is an ordinary state, so clearing it may be the right outcome here. A meeting or request is closer to an event, which is already protected, so it is worth deciding deliberately.                                                    |
+
 ## Room Kiosk Badge Check-In — A Copied Card Works With Nobody Watching (2026-10-03)
 
 **Accepted by the owner on 2026-10-02.** A room with **Badge check-in** on
