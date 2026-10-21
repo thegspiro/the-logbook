@@ -1778,7 +1778,9 @@ When you drop a member, The Logbook automatically:
 1. **Creates a property return report** listing everything issued to them.
    It is saved in **Documents**, in the leadership-only **Member
    Separations** folder. It is kept out of Reports because it names the
-   member, the reason they left and their home address.
+   member, the reason they left and their home address. The report gives the
+   drop's **Effective date** and a return deadline counted from it, so a drop
+   entered late can show a deadline that has already passed.
 2. **Emails the report** to the member, and to anyone your drop-notification
    settings copy in.
 3. **Opens a departure clearance** to track what is still out.

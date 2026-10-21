@@ -44,6 +44,9 @@ from app.services.member_service_history_service import (
     effective_separation_at,
     is_separated,
 )
+from app.services.member_shift_release_service import (
+    release_future_shift_commitments,
+)
 from app.utils.membership import LEGACY_MEMBERSHIP_TYPES, is_administrative
 from app.utils.org_timezone import (
     resolve_org_today,
@@ -482,6 +485,21 @@ async def change_member_status(
         username=current_user.username,
     )
 
+    # A status outside ACTIVE_ACCOUNT_STATUSES fails the is_active check that
+    # signing in and scheduling require, so the member cannot work the seats
+    # still ahead of them. Hand those back to the roster. Run on every such
+    # change, not only on leaving active: it is idempotent, and it also sweeps
+    # up anything rostered while the member was already inactive.
+    if new_status not in ACTIVE_ACCOUNT_STATUSES:
+        await release_future_shift_commitments(
+            db,
+            organization_id=str(current_user.organization_id),
+            user_id=str(user_id),
+            reason=f"status_changed:{new_status.value}",
+            performed_by_id=str(current_user.id),
+            performed_by_username=current_user.username,
+        )
+
     response = MemberStatusChangeResponse(
         user_id=str(user_id),
         previous_status=previous_status,
@@ -492,6 +510,14 @@ async def change_member_status(
     if new_status in (UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY):
         from app.services.property_return_service import PropertyReturnService
 
+        # The letter and the departure clearance both count the return
+        # deadline from the effective date, so they name the same due day.
+        # This is effective_separation_at's moment for a drop recorded now:
+        # the recording moved back by the days it was back-dated.
+        dropped_at = datetime.now(timezone.utc)
+        if separation_date is not None:
+            dropped_at -= timedelta(days=(today - separation_date).days)
+
         prs = PropertyReturnService(db)
         report_data, html_content = await prs.generate_report(
             user_id=str(user_id),
@@ -501,6 +527,7 @@ async def change_member_status(
             return_deadline_days=request.return_deadline_days,
             custom_instructions=request.custom_instructions,
             reason=request.reason,
+            effective_date=separation_date,
         )
 
         response.property_return_report = {
@@ -535,6 +562,7 @@ async def change_member_status(
                 departure_type=new_status.value,
                 return_deadline_days=request.return_deadline_days,
                 notes=f"Auto-created from status change to {new_status.value}",
+                counted_from=dropped_at,
             )
             if _cl_err:
                 from loguru import logger as _lg
@@ -985,6 +1013,15 @@ async def archive_member(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+    await release_future_shift_commitments(
+        db,
+        organization_id=str(current_user.organization_id),
+        user_id=str(user_id),
+        reason="archived",
+        performed_by_id=str(current_user.id),
+        performed_by_username=current_user.username,
     )
 
     return {

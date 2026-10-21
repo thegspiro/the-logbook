@@ -25,6 +25,8 @@ import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electio
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
+import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
+import { Vote } from 'lucide-react';
 
 interface PositionSuggestion {
   key: string;
@@ -362,70 +364,72 @@ export const ElectionsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
-            <div className="text-theme-text-muted">Loading elections...</div>
-          </div>
+      <div className="mx-auto max-w-7xl">
+        <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
+          <div className="text-theme-text-muted">Loading elections...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">Elections</h1>
-              <p className="text-theme-text-muted mt-1 text-sm">
-                {canManage ? 'Create elections, send ballots and publish results' : 'See elections and their results'}
-              </p>
-            </div>
-            <HelpLink
-              topic="elections"
-              tooltip="Create and manage department elections. Set up voting methods, add candidates, configure ballots, and track results. Supports ranked choice, plurality, and approval voting."
-            />
-          </div>
-          {canManage && (
-            <div className="flex items-center gap-2">
-              <Link
-                to="/elections/settings"
-                className="hover:bg-theme-surface-secondary text-theme-text-muted rounded-md p-2"
-                aria-label="Election settings"
-                title="Election Settings"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-              </Link>
-              <button onClick={() => setShowCreateModal(true)} className="btn-info inline-flex items-center rounded-md">
-                <svg
-                  className="mr-2 -ml-1 h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Create Election
-              </button>
-            </div>
-          )}
-        </div>
+    <div className="mx-auto max-w-7xl">
+      <div>
+        <GovernancePageHeader
+          icon={Vote}
+          title="Elections"
+          subtitle={
+            canManage ? 'Create elections, send ballots and publish results' : 'See elections and their results'
+          }
+          actions={
+            <>
+              <HelpLink
+                topic="elections"
+                tooltip="Create and manage department elections. Set up voting methods, add candidates, configure ballots, and track results. Supports ranked choice, plurality, and approval voting."
+              />
+              {canManage && (
+                <>
+                  <Link
+                    to="/elections/settings"
+                    className="hover:bg-theme-surface-secondary text-theme-text-muted rounded-md p-2"
+                    aria-label="Election settings"
+                    title="Election Settings"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
+                  </Link>
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="btn-primary inline-flex items-center rounded-md"
+                  >
+                    <svg
+                      className="mr-2 -ml-1 h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Create Election
+                  </button>
+                </>
+              )}
+            </>
+          }
+        />
 
         {error && (
           <div

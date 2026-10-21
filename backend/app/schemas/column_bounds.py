@@ -13,5 +13,16 @@ from decimal import Decimal
 
 INT32_MIN = -(2**31)  # Integer
 INT32_MAX = 2**31 - 1  # Integer
-MONEY_MAX = Decimal("99999999.99")  # Numeric(10, 2)
+
+
+def decimal_max(precision: int, scale: int) -> Decimal:
+    """The largest magnitude a ``Numeric(precision, scale)`` column holds.
+
+    ``Numeric(12, 2)`` holds up to 9999999999.99, so ``decimal_max(12, 2)``
+    is that figure and ``-decimal_max(12, 2)`` the lowest value.
+    """
+    return Decimal(10) ** (precision - scale) - Decimal(1).scaleb(-scale)
+
+
+MONEY_MAX = decimal_max(10, 2)  # Numeric(10, 2): the most common money column
 FLOAT32_MAX = 3.4e38  # MySQL FLOAT is single precision

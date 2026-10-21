@@ -23,7 +23,6 @@ import { useConnectedIntegrations } from '../../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idCards';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
-import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
@@ -31,6 +30,7 @@ import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { fitNavItems } from './topNavigationOverflow';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
+import { governanceNavItems } from './governanceNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 
@@ -155,7 +155,6 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const ThemeIcon = themeIcon;
 
   const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission, { checkInStationOn: isNfcCardsOn });
-  const canReviewLegalDocuments = LEGAL_DOCUMENTS_PERMISSIONS.some((p) => checkPermission(p));
 
   // Build the divider sentinel used between Admin sub-groups
   const DIV: SubNavItem = { label: '', path: '', isDivider: true };
@@ -220,17 +219,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     {
       label: 'Governance',
       path: '/governance/org-chart',
-      subItems: [
-        { label: 'Org Chart', path: '/governance/org-chart' },
-        ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections' }] : []),
-        ...(isModuleOn('minutes')
-          ? [
-              { label: 'Minutes', path: '/minutes' },
-              { label: 'Action Items', path: '/action-items' },
-            ]
-          : []),
-        ...(canReviewLegalDocuments ? [{ label: 'Legal Documents', path: '/governance/legal' }] : []),
-      ],
+      // One list with SideNavigation and the section strip on every
+      // Governance page; see governanceNavigation.ts.
+      subItems: governanceNavItems(isModuleOn).map(({ label, path, permission, anyPermission }) => ({
+        label,
+        path,
+        ...(permission ? { permission } : {}),
+        ...(anyPermission ? { anyPermission } : {}),
+      })),
     },
     // See SideNavigation: the group is every member's way to their own requests.
     ...(isModuleOn('finance')

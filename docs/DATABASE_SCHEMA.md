@@ -8150,7 +8150,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | no | FK, IDX |  | → `skill_templates.id` ON DELETE CASCADE |
 | `candidate_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `examiner_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `examiner_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `requirement_id` | VARCHAR(36) | yes | FK, IDX |  | → `training_requirements.id` ON DELETE SET NULL |
 | `status` | VARCHAR(20) | yes |  | `'draft'` |  |
 | `result` | VARCHAR(20) | yes |  | `'incomplete'` |  |
@@ -9753,7 +9753,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `shift_id` | VARCHAR(36) | yes | FK |  | → `shifts.id` ON DELETE SET NULL |
 | `shift_date` | DATE | no |  |  |  |
 | `trainee_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `officer_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `officer_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `hours_on_shift` | FLOAT | no |  |  |  |
 | `calls_responded` | INTEGER | yes |  | `0` |  |
 | `call_types` | JSON | yes |  |  |  |
@@ -11352,7 +11352,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_assignments` | `training_evaluator_id` | SET NULL | yes |
 | `shift_assignments` | `user_id` | CASCADE | no |
 | `shift_attendance` | `user_id` | CASCADE | no |
-| `shift_completion_reports` | `officer_id` | CASCADE | no |
+| `shift_completion_reports` | `officer_id` | SET NULL | yes |
 | `shift_completion_reports` | `reviewed_by` | SET NULL | yes |
 | `shift_completion_reports` | `trainee_id` | CASCADE | no |
 | `shift_equipment_checks` | `checked_by` | SET NULL | yes |
@@ -11379,7 +11379,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_test_viewers` | `granted_by` | SET NULL | yes |
 | `skill_test_viewers` | `user_id` | CASCADE | no |
 | `skill_tests` | `candidate_id` | CASCADE | no |
-| `skill_tests` | `examiner_id` | CASCADE | no |
+| `skill_tests` | `examiner_id` | SET NULL | yes |
 | `skill_tests` | `released_by` | SET NULL | yes |
 | `skill_tests` | `returned_by` | SET NULL | yes |
 | `skill_tests` | `validated_by` | SET NULL | yes |

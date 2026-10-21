@@ -283,13 +283,16 @@ async def delete_form(
     current_user: User = Depends(require_permission("forms.manage")),
 ):
     """
-    Delete a form and all its fields/submissions
+    Delete a form and its fields
+
+    A form that members have already submitted is archived instead, so its
+    submissions are kept; only a form with no submissions is deleted.
 
     **Authentication required**
     **Requires permission: forms.manage**
     """
     service = FormsService(db)
-    success, error = await service.delete_form(
+    outcome, error = await service.delete_form(
         form_id=form_id,
         organization_id=current_user.organization_id,
     )
@@ -300,12 +303,16 @@ async def delete_form(
             detail=error,
         )
 
+    archived = outcome == "archived"
     await log_audit_event(
         db=db,
-        event_type="form_deleted",
+        event_type="form_archived" if archived else "form_deleted",
         event_category="forms",
         severity="info",
-        event_data={"form_id": str(form_id)},
+        event_data={
+            "form_id": str(form_id),
+            "action": "archived_in_place_of_delete" if archived else "deleted",
+        },
         user_id=str(current_user.id),
         username=current_user.username,
     )

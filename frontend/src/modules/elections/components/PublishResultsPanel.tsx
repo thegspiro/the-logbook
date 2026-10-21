@@ -4,7 +4,7 @@
  * Streamlined secretary interface for publishing election results.
  * Provides clear visual feedback about result availability (closing the
  * election releases them) and the ability to email the results report to
- * the election secretary.
+ * the officer viewing the panel.
  */
 
 import React, { useState } from 'react';
@@ -29,8 +29,8 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
   const handleSendReport = async () => {
     try {
       setSendingReport(true);
-      await electionService.sendReport(electionId);
-      toast.success('Results report sent');
+      const result = await electionService.sendReport(electionId);
+      toast.success(result.message || 'Results report sent');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to send results report'));
     } finally {
@@ -114,7 +114,7 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
               <Mail className="text-theme-text-muted h-5 w-5" />
               <div>
                 <p className="text-theme-text-primary text-sm font-medium">Email Results Report</p>
-                <p className="text-theme-text-muted text-xs">Email the results report to the election secretary</p>
+                <p className="text-theme-text-muted text-xs">Email the results report to yourself</p>
               </div>
             </div>
             <button

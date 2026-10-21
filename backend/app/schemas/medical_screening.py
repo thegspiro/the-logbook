@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models.medical_screening import ScreeningStatus, ScreeningType
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 
 _SCREENING_TYPES = {e.value for e in ScreeningType}
 _SCREENING_STATUSES = {e.value for e in ScreeningStatus}
@@ -61,14 +62,20 @@ class ScreeningRequirementBase(BaseModel):
     )
     description: Optional[str] = None
     frequency_months: Optional[int] = Field(
-        None, description="Recurrence in months. NULL = one-time."
+        None,
+        description="Recurrence in months. NULL = one-time.",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     applies_to_roles: Optional[List[str]] = Field(
         None, description="Role names this requirement applies to."
     )
     is_active: bool = True
     grace_period_days: int = Field(
-        default=30, ge=0, description="Days past due before non-compliant."
+        default=30,
+        ge=0,
+        description="Days past due before non-compliant.",
+        le=INT32_MAX,
     )
 
 
@@ -87,10 +94,10 @@ class ScreeningRequirementUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     screening_type: Optional[str] = None
     description: Optional[str] = None
-    frequency_months: Optional[int] = None
+    frequency_months: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     applies_to_roles: Optional[List[str]] = None
     is_active: Optional[bool] = None
-    grace_period_days: Optional[int] = Field(None, ge=0)
+    grace_period_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
     @field_validator("screening_type")
     @classmethod

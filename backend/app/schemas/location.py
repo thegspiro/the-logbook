@@ -11,6 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX
 
 
 class LocationBase(BaseModel):
@@ -40,7 +41,9 @@ class LocationBase(BaseModel):
     room_number: Optional[str] = Field(
         None, max_length=50, description="Room number or identifier"
     )
-    capacity: Optional[int] = Field(None, ge=1, description="Maximum occupancy")
+    capacity: Optional[int] = Field(
+        None, ge=1, description="Maximum occupancy", le=INT32_MAX
+    )
     facility_id: Optional[UUID] = Field(
         None, description="Link to Facility when Facilities module is enabled"
     )
@@ -67,7 +70,7 @@ class LocationUpdate(BaseModel):
     building: Optional[str] = Field(None, max_length=100)
     floor: Optional[str] = Field(None, max_length=20)
     room_number: Optional[str] = Field(None, max_length=50)
-    capacity: Optional[int] = Field(None, ge=1)
+    capacity: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     facility_id: Optional[UUID] = None
     is_active: Optional[bool] = None
 

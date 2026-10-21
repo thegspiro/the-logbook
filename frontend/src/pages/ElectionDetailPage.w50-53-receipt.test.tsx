@@ -23,6 +23,10 @@ const getElection = vi.fn();
 const getMemberBallot = vi.fn();
 const submitMemberBallot = vi.fn();
 vi.mock('../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   electionService: {
     getElection: (...a: unknown[]) => getElection(...a) as unknown,
     getMemberBallot: (...a: unknown[]) => getMemberBallot(...a) as unknown,
@@ -150,7 +154,8 @@ describe('ElectionDetailPage in-app vote receipt (W50-53)', () => {
   it('keeps the receipt on screen through the refetch that follows a vote', async () => {
     window.history.replaceState({}, '', '/elections/e-1?tab=voting');
     renderWithRouter(<ElectionDetailPage />);
-    await screen.findByRole('heading', { name: 'Officer Election', level: 2 });
+    // The title is the page's h1 now, drawn by the shared Governance header.
+    await screen.findByRole('heading', { name: 'Officer Election', level: 1 });
 
     const user = userEvent.setup();
     await user.click(await screen.findByRole('radio', { name: /Pat Lee/ }));

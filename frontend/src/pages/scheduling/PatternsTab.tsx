@@ -178,7 +178,9 @@ export const PatternsTab: React.FC = () => {
     try {
       const [patternsData, templatesData] = await Promise.all([
         schedulingService.getPatterns(),
-        schedulingService.getTemplates(),
+        // Deactivated templates too: a pattern that names one still shows its
+        // name. The pickers below offer only `activeTemplates`.
+        schedulingService.getTemplates({ active_only: false }),
       ]);
       setPatterns(patternsData);
       setTemplates(templatesData);

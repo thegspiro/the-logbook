@@ -13,6 +13,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -30,16 +31,16 @@ class RecertificationPathwayBase(BaseModel):
     renewal_type: str = Field(
         "hours", pattern=r"^(hours|courses|assessment|combination)$"
     )
-    required_hours: Optional[float] = Field(None, ge=0)
+    required_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     required_courses: Optional[List[str]] = None
     category_hour_requirements: Optional[List[Dict[str, Any]]] = None
     requires_assessment: bool = False
     assessment_course_id: Optional[UUID] = None
     renewal_window_days: int = Field(90, ge=1, le=365)
     grace_period_days: int = Field(0, ge=0, le=365)
-    max_lapse_days: Optional[int] = Field(None, ge=0)
+    max_lapse_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     prerequisite_pathway_ids: Optional[List[str]] = None
-    new_expiration_months: Optional[int] = Field(None, ge=1)
+    new_expiration_months: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     auto_create_record: bool = True
 
 
@@ -56,16 +57,16 @@ class RecertificationPathwayUpdate(BaseModel):
     renewal_type: Optional[str] = Field(
         None, pattern=r"^(hours|courses|assessment|combination)$"
     )
-    required_hours: Optional[float] = Field(None, ge=0)
+    required_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     required_courses: Optional[List[str]] = None
     category_hour_requirements: Optional[List[Dict[str, Any]]] = None
     requires_assessment: Optional[bool] = None
     assessment_course_id: Optional[UUID] = None
     renewal_window_days: Optional[int] = Field(None, ge=1, le=365)
     grace_period_days: Optional[int] = Field(None, ge=0, le=365)
-    max_lapse_days: Optional[int] = Field(None, ge=0)
+    max_lapse_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     prerequisite_pathway_ids: Optional[List[str]] = None
-    new_expiration_months: Optional[int] = Field(None, ge=1)
+    new_expiration_months: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     auto_create_record: Optional[bool] = None
     active: Optional[bool] = None
 
@@ -404,7 +405,7 @@ class MultiAgencyTrainingBase(BaseModel):
         default_factory=list
     )
     lead_agency: Optional[str] = Field(None, max_length=255)
-    total_participants: Optional[int] = Field(None, ge=0)
+    total_participants: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     ics_position_assignments: Optional[List[Dict[str, Any]]] = None
     nims_compliant: bool = False
     after_action_report: Optional[str] = None
@@ -428,7 +429,7 @@ class MultiAgencyTrainingUpdate(BaseModel):
     description: Optional[str] = None
     participating_organizations: Optional[List[ParticipatingOrganization]] = None
     lead_agency: Optional[str] = Field(None, max_length=255)
-    total_participants: Optional[int] = Field(None, ge=0)
+    total_participants: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     ics_position_assignments: Optional[List[Dict[str, Any]]] = None
     nims_compliant: Optional[bool] = None
     after_action_report: Optional[str] = None

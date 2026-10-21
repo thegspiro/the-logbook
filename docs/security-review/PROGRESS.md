@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3530](https://github.com/thegspiro/the-logbook/pull/3530)** (branch `claude/security-review-locations-kiosk`). PR #3521
+(Feature 31, Scheduled tasks, pass 8) merged 2026-10-21, docs-only, so there
+was nothing to record. `list_pull_requests` (state open) returned no PR whose
+head branch starts with `claude/security-review-`, and no remote branch
+existed for Feature 32, so this iteration reviewed Feature 32 (Locations &
+kiosk), pass 8: **1 fixed (LOC8-1, a guard test), 1 flagged (LOC8-2), 0
+defects in the changed code.** Three commits since pass 7's baseline
+`48382eeeb` changed the feature (delete-or-deactivate for a referenced
+location, probationary members in the admin-hub metrics, a redundant index
+drop) and were read in full. LOC8-2, a hard delete that nulls the location on
+eight kinds of record, is an owner decision and is mirrored into
+`KNOWN_LIMITATIONS.md`. Rotation row 32 is now ✅ (pending this PR's merge);
+next is Feature 33 (Core infrastructure).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 31 Scheduled tasks pass 8, PR #3521, before it merged), preserved for history</summary>
+
 **PR [#3521](https://github.com/thegspiro/the-logbook/pull/3521)** (branch
 `claude/security-review-scheduled-tasks`). PR #3517 (Feature 30, Onboarding, pass 8) merged
 to `main` with no open PR whose head branch starts with
@@ -28,6 +45,8 @@ departure_check`, delegating to `check_departed_suspensions`) read in full
 and found correctly org-scoped; five riding-along fixes from other features
 re-verified by direct read. See `CRON8-31-scheduled-tasks.md`. Rotation row
 31 → ✅ (pending this PR's merge); next is Feature 32 (Locations & kiosk).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30 Onboarding pass 8, PR #3517, merged), preserved for history</summary>
@@ -20451,7 +20470,7 @@ iteration's commit" rule.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
@@ -20461,6 +20480,43 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-21 — Feature 32 (Locations & kiosk, pass 8) — 1 fixed (LOC8-1 guard test), 1 flagged (LOC8-2); 0 defects in three changed commits
+
+`list_pull_requests` (state open) returned no `claude/security-review-*` PR
+and no branch existed for Feature 32; PR #3521 (Feature 31, pass 8) had merged,
+docs-only. Row 32 was the first `⬜`.
+
+**Delta.** Baseline `48382eeeb` (pass 7). Three commits dated 2026-10-20:
+`925051877` (a location referenced by events, event templates or apparatus is
+deactivated instead of deleted, with a 409 backstop), `8a57d0699` (probationary
+members count in the admin-hub metrics) and `08fff8048` (a redundant index on
+`admin_hub_metric_preferences` dropped). All changed hunks were read in full.
+The delete path is org-scoped before it acts, the unfiltered reference count
+is internal only, and `facilities_service.delete_room`, the other caller, loads
+the room and its linked location in-org. The remaining scope files are
+byte-identical to the baseline.
+
+**LOC8-1 (LOW, FIXED).** The list of foreign keys that block a location delete
+was kept by hand, with only a comment as protection. It is exact today (5 of 13
+foreign keys to `locations.id` block, all listed), and
+`tests/test_location_restrict_references.py` now derives it from the model
+metadata so a forgotten reference fails a test instead of producing a delete
+that returns a conflict no retry can clear.
+
+**LOC8-2 (LOW, FLAGGED).** Eight other foreign keys to `locations.id` are
+`ON DELETE SET NULL`, so hard-deleting a location nothing blocking references
+clears the location on `training_records`, `meetings`, `inventory_items`,
+`storage_areas`, `event_requests` and three course tables. Whether any of
+those should deactivate instead is a product decision; mirrored into
+`KNOWN_LIMITATIONS.md`.
+
+**Gate.** flake8, black and isort clean at CI's pins; migration validation
+passed (single head `2794794bda6e`); 810 scoped backend tests passed, 1
+skipped; mypy ratchet 0; frontend typecheck and lint exit 0. The first scoped
+run showed 2 failures in `test_live_schema_drift.py` because the sandbox
+database was three migrations behind head; they pass once it is migrated and
+are not a code defect. Findings file: `LOC8-32-locations-kiosk.md`.
 
 ### 2026-10-20 — Feature 29 (Reports & analytics, pass 10) — 0 fixed, 0 new findings
 

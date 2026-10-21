@@ -1,11 +1,23 @@
 import React, { useState } from 'react';
 import { Modal } from '../Modal';
 
+/**
+ * Which occurrences of a recurring event a delete reaches. `future` is this
+ * occurrence and every later one in the series; earlier ones are kept.
+ */
+export type EventDeleteScope = 'single' | 'future' | 'series';
+
+const CONFIRM_LABELS: Record<EventDeleteScope, string> = {
+  single: 'Delete Permanently',
+  future: 'Delete This and Future',
+  series: 'Delete Entire Series',
+};
+
 interface EventDeleteConfirmModalProps {
   eventTitle: string;
   isRecurring: boolean;
   submitting: boolean;
-  onConfirm: (scope: 'single' | 'series') => void;
+  onConfirm: (scope: EventDeleteScope) => void;
   onClose: () => void;
 }
 
@@ -16,7 +28,7 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
   onConfirm,
   onClose,
 }) => {
-  const [deleteScope, setDeleteScope] = useState<'single' | 'series'>('single');
+  const [deleteScope, setDeleteScope] = useState<EventDeleteScope>('single');
 
   return (
     <Modal
@@ -33,7 +45,7 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
             onClick={() => onConfirm(deleteScope)}
             className="btn-primary inline-flex w-full justify-center rounded-md text-base font-medium sm:ml-3 sm:w-auto sm:text-sm"
           >
-            {submitting ? 'Deleting...' : deleteScope === 'series' ? 'Delete Entire Series' : 'Delete Permanently'}
+            {submitting ? 'Deleting...' : CONFIRM_LABELS[deleteScope]}
           </button>
           <button
             type="button"
@@ -80,6 +92,19 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
                     className="text-primary-600 focus:ring-theme-focus-ring"
                   />
                   <span className="text-theme-text-primary text-sm">Delete only this event</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name="deleteScope"
+                    value="future"
+                    checked={deleteScope === 'future'}
+                    onChange={() => setDeleteScope('future')}
+                    className="text-primary-600 focus:ring-theme-focus-ring"
+                  />
+                  <span className="text-theme-text-primary text-sm">
+                    Delete this and future events in this series (keep earlier events)
+                  </span>
                 </label>
                 <label className="flex cursor-pointer items-center gap-2">
                   <input

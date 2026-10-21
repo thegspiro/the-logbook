@@ -11,6 +11,7 @@ the rows, not of the Python.
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -885,6 +886,72 @@ class TestStatusChangeWritesStints:
         if changed.tzinfo is None:
             changed = changed.replace(tzinfo=timezone.utc)
         assert changed >= before.replace(microsecond=0)
+
+    async def test_a_back_dated_drop_dates_its_return_letter_from_there(
+        self, db_session, monkeypatch
+    ):
+        from app.api.v1.endpoints.member_status import (
+            MemberStatusChangeRequest,
+            change_member_status,
+        )
+        from app.services.departure_clearance_service import (
+            DepartureClearanceService,
+        )
+        from app.services.property_return_service import PropertyReturnService
+
+        letter, clearance = {}, {}
+
+        async def write_letter(_self, **kwargs):
+            letter.update(kwargs)
+            report = {
+                "member_name": "Test",
+                "drop_type_display": "Voluntary Separation",
+                "item_count": 0,
+                "total_value": 0,
+                "return_deadline": "",
+            }
+            return report, "<p></p>"
+
+        async def open_clearance(_self, **kwargs):
+            clearance.update(kwargs)
+            return None, "not under test"
+
+        # The letter and the clearance are what this is about; the document
+        # store and the email are stubbed out of the way.
+        monkeypatch.setattr(PropertyReturnService, "generate_report", write_letter)
+        monkeypatch.setattr(
+            PropertyReturnService, "save_as_document", AsyncMock(return_value=None)
+        )
+        monkeypatch.setattr(
+            DepartureClearanceService, "initiate_clearance", open_clearance
+        )
+        org = await _org(db_session)
+        officer = await _user(db_session, org, hire_date=date(2000, 1, 1))
+        member = await _user(db_session, org, hire_date=date(2012, 1, 1))
+        left_on = org_today(org) - timedelta(days=21)
+        before = datetime.now(timezone.utc)
+
+        await change_member_status(
+            member.id,
+            MemberStatusChangeRequest(
+                new_status="dropped_voluntary",
+                separation_date=left_on,
+                return_deadline_days=30,
+                send_property_return_email=False,
+            ),
+            BackgroundTasks(),
+            db=db_session,
+            current_user=_caller(org, officer.id),
+        )
+
+        assert letter["effective_date"] == left_on
+        assert letter["return_deadline_days"] == 30
+        # The clearance's deadline runs from the same day: 21 days back, at
+        # the time of the drop (the org is on UTC, so the day is the date).
+        counted_from = clearance["counted_from"]
+        assert counted_from.date() == left_on
+        assert before - timedelta(days=21) <= counted_from
+        assert clearance["return_deadline_days"] == 30
 
     async def test_a_future_effective_date_is_refused(self, db_session):
         from app.api.v1.endpoints.member_status import (

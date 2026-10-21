@@ -67,6 +67,7 @@ import type {
   SkillTestStatus,
   SkillTestUpdate,
 } from '../types/skillsTesting';
+import { attributionName } from '../utils/memberName';
 
 /** The evaluation is still live: the clock may run and the server accepts writes. */
 function isTestLive(status: SkillTestStatus | undefined): boolean {
@@ -2156,7 +2157,9 @@ export const ActiveSkillTestPage: React.FC = () => {
                 <ClipboardCheck className="text-theme-text-muted h-3 w-3" />
                 <p className="text-theme-text-muted text-xs">Examiner</p>
               </div>
-              <p className="text-theme-text-primary text-sm font-medium">{currentTest.examiner_name}</p>
+              <p className="text-theme-text-primary text-sm font-medium">
+                {attributionName(currentTest.examiner_name, currentTest.examiner_id)}
+              </p>
             </div>
             {currentTest.elapsed_seconds != null && (
               <div className="card p-3">

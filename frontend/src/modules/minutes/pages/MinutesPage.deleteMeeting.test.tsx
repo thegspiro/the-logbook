@@ -2,6 +2,10 @@
  * A refused meeting delete says why. The page used to answer every failure,
  * including the server refusing a meeting it will not delete, with "Check
  * your connection", which sent the clerk looking for a network problem.
+ *
+ * Deleting a meeting removes its attendance, which counts toward membership
+ * tiers, so the confirmation says so; an approved meeting is refused by the
+ * server (409) and the page does not offer to delete one.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -16,6 +20,10 @@ const mockGetStats = vi.fn();
 const mockGetOutlines = vi.fn();
 
 vi.mock('../../../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   meetingsService: {
     getMeetings: (...a: unknown[]) => mockGetMeetings(...a) as unknown,
     getSummary: (...a: unknown[]) => mockGetSummary(...a) as unknown,
@@ -29,6 +37,14 @@ vi.mock('../services/api', () => ({
     getStats: (...a: unknown[]) => mockGetStats(...a) as unknown,
     getOutlines: (...a: unknown[]) => mockGetOutlines(...a) as unknown,
   },
+}));
+
+const toastError = vi.fn();
+vi.mock('react-hot-toast', () => ({
+  default: Object.assign(vi.fn(), {
+    success: vi.fn(),
+    error: (...a: unknown[]) => toastError(...a) as unknown,
+  }),
 }));
 
 vi.mock('../../../stores/authStore', () => {
@@ -57,6 +73,7 @@ const meeting = {
 };
 
 const REFUSAL = 'An approved meeting cannot be deleted';
+const approved = { ...meeting, id: 'meet-2', title: 'September Business Meeting', status: 'approved' };
 
 describe('MinutesPage meeting delete', () => {
   beforeEach(() => {
@@ -75,12 +92,34 @@ describe('MinutesPage meeting delete', () => {
     mockGetStats.mockResolvedValue({ total: 0, this_month: 0, open_action_items: 0, pending_approval: 0 });
     mockGetOutlines.mockReset();
     mockGetOutlines.mockResolvedValue([]);
+    toastError.mockReset();
     mockDeleteMeeting.mockReset();
     mockDeleteMeeting.mockRejectedValue({
       isAxiosError: true,
-      message: 'Request failed with status code 400',
-      response: { status: 400, data: { detail: REFUSAL } },
+      message: 'Request failed with status code 409',
+      response: { status: 409, data: { detail: REFUSAL } },
     });
+  });
+
+  it('says the attendance record goes with the meeting', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MinutesPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete October Business Meeting' }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByText(/Delete "October Business Meeting"\?/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/attendance record is removed with it/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/membership tier/)).toBeInTheDocument();
+  });
+
+  it('does not offer to delete an approved meeting', async () => {
+    mockGetMeetings.mockResolvedValue({ meetings: [meeting, approved] });
+    renderWithRouter(<MinutesPage />);
+
+    expect(await screen.findByRole('button', { name: 'Delete October Business Meeting' })).toBeInTheDocument();
+    expect(screen.getByText('September Business Meeting')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete September Business Meeting' })).not.toBeInTheDocument();
   });
 
   it('Keep it deletes nothing', async () => {
@@ -103,7 +142,7 @@ describe('MinutesPage meeting delete', () => {
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
-    expect(await screen.findByText(REFUSAL)).toBeInTheDocument();
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(REFUSAL));
     expect(mockDeleteMeeting).toHaveBeenCalledWith('meet-1');
     expect(screen.queryByText(/Check your connection/)).not.toBeInTheDocument();
   });
