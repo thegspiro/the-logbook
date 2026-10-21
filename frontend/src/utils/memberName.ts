@@ -44,3 +44,19 @@ export interface MemberNameFields extends MemberNameParts {
  */
 export const displayNameOf = (member: MemberNameFields): string =>
   member.display_name?.trim() || formatMemberName(member) || member.full_name?.trim() || '';
+
+/** Shown where a record's author was permanently deleted and the reference was cleared. */
+export const FORMER_MEMBER_LABEL = 'Former member';
+
+/**
+ * The name to show for a record's author (an examiner, a filing officer).
+ *
+ * A permanent member delete clears these attributions to null rather than
+ * deleting the other member's record, so a null id with no name is a former
+ * member, not missing data; `fallback` covers a name that merely failed to load.
+ */
+export const attributionName = (
+  name: string | null | undefined,
+  id: string | null | undefined,
+  fallback = 'Unknown'
+): string => name || (id ? fallback : FORMER_MEMBER_LABEL);
