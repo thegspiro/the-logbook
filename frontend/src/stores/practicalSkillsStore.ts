@@ -14,10 +14,11 @@ import { useAuthStore } from './authStore';
  * They read it from here so one request answers all of them, and so saving
  * the setting updates the navigation without a reload.
  *
- * `method` is null until the answer is known. Like a module flag this is not
- * an access control — the server enforces nothing on it beyond what a
- * shift report records — so an unknown answer shows both rather than
- * hiding a system the department may be running.
+ * `method` is null until the answer is known. Hiding a screen is not where
+ * the setting is enforced — the server refuses to open a new skills test, and
+ * a shift report records no sign-off, for the department that turned each
+ * off — so an unknown answer here shows both rather than hiding a system the
+ * department may be running.
  */
 interface PracticalSkillsState {
   method: PracticalSkillsMethod | null;
