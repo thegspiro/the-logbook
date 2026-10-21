@@ -376,6 +376,13 @@ takes Low from the server (`is_low_stock`).
   Compartment › Jump Bag", from the overview's new `compartment_path`), and an
   apparatus-only supply never counts as having replacement stock ready
   (`get_lots_for_items` applies `_shelf_lots_count`).
+- **Swap and restock live in Inventory**: a truck row in the Expiring tab or the
+  lot lookup links to that apparatus's inventory
+  (`/inventory/checklists/apparatus-inventory?apparatus=`, from the row's new
+  `apparatus_id`), where the swap is; the header links the supply worklist
+  (`/inventory/admin/checklists/supply`). Each link shows only to a viewer that
+  route admits, with the Inventory module on. A checklist written for an
+  apparatus type names no vehicle, so its rows carry no link.
 - **Apparatus only** (`inventory_items.apparatus_only`, default false; migration
   `0bbf263a5ff0`, guarded, downgrade drops the column): the shelf counts as 0,
   the list shows "N on M apparatus", the lots dialog has no stock-lot controls,

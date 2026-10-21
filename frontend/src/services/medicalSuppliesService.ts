@@ -77,6 +77,8 @@ export interface MedicalExpiringStockRow {
   item_size?: string | null;
   lot_id?: string | null;
   template_item_id?: string | null;
+  /** The apparatus the units are aboard, when the checklist names one. */
+  apparatus_id?: string | null;
   lot_number?: string | null;
   expiration_date?: string | null;
   days_until_expiration?: number | null;

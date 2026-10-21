@@ -196,6 +196,7 @@ async def dept(db_session):
         rope=str(rope.id),
         medic2=str(medic2.id),
         rope_line=str(rope_line.id),
+        medic1_rig=str(rigs["Medic 1"].id),
     )
 
 
@@ -806,3 +807,34 @@ class TestTheWeeklyEmailsReplacementStock:
         ]
         assert medic1
         assert medic1[0]["compartment_path"] == ["Main Compartment", "Jump Bag"]
+
+
+class TestTruckRowsNameTheirApparatus:
+    async def test_a_truck_row_carries_its_apparatus_id(self, db_session, dept):
+        rows = await ms.list_expiring_medical_stock(
+            days_ahead=30,
+            db=db_session,
+            current_user=SimpleNamespace(id=dept.user_id, organization_id=dept.org_id),
+        )
+
+        aboard = [r for r in rows if r.location == "apparatus"]
+        assert aboard
+        assert {r.apparatus_id for r in aboard} == {dept.medic1_rig}
+        # A shelf lot is on no apparatus.
+        assert {r.apparatus_id for r in rows if r.location == "shelf"} == {None}
+
+    async def test_a_template_for_an_apparatus_type_names_none(self, db_session, dept):
+        await db_session.execute(
+            EquipmentCheckTemplate.__table__.update()
+            .where(EquipmentCheckTemplate.organization_id == dept.org_id)
+            .values(apparatus_id=None, apparatus_type="ambulance")
+        )
+        await db_session.commit()
+
+        rows = await EquipmentCheckService(db_session).apparatus_expiring_stock(
+            dept.org_id, list(MEDICAL_ITEM_TYPES), days_ahead=30, today=dept.today
+        )
+
+        assert rows
+        assert {r["apparatus_id"] for r in rows} == {None}
+        assert all(r["where"].startswith("Any ambulance") for r in rows)

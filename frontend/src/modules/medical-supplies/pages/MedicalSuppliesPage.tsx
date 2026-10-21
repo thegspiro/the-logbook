@@ -16,6 +16,7 @@ import {
   Archive,
   ArrowUpDown,
   CalendarClock,
+  ClipboardList,
   Layers,
   PackagePlus,
   Pencil,
@@ -35,6 +36,7 @@ import type { InventoryCategory, InventoryItem } from '../../../services/eventSe
 import { useAuthStore } from '../../../stores/authStore';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useEnabledModules } from '../../../hooks/useEnabledModules';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
@@ -237,6 +239,20 @@ const MedicalSuppliesPage: React.FC = () => {
   // manager-only — a medical-only supply officer would be sent to Access
   // Denied by a sentence that was only ever an aside.
   const canManageGear = checkPermission('inventory.manage');
+  // Swapping and restocking truck stock already live in Inventory: the
+  // per-apparatus inventory (swap) and the supply worklist (restock). Links
+  // to them are offered only to a viewer those routes admit, with the same
+  // grants their ProtectedRoutes ask for, so none of them leads to Access
+  // Denied.
+  const { isModuleOn } = useEnabledModules();
+  const inventoryOn = isModuleOn('inventory');
+  const canOpenApparatusInventory =
+    inventoryOn &&
+    (checkPermission('inventory.check_submit') ||
+      checkPermission('inventory.check_view') ||
+      checkPermission('inventory.view'));
+  const canOpenSupplyWorklist =
+    inventoryOn && (checkPermission('inventory.check_view') || checkPermission('inventory.manage'));
   const tz = useTimezone();
 
   const [tab, setTab] = useState<Tab>('expiring');
@@ -723,6 +739,17 @@ const MedicalSuppliesPage: React.FC = () => {
               >
                 <RefreshCw className="h-4 w-4" />
               </button>
+              {canOpenSupplyWorklist && (
+                // What every truck needs swapped or topped up, grouped by
+                // apparatus, with the stock on hand to do it.
+                <Link
+                  to="/inventory/admin/checklists/supply"
+                  className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium whitespace-nowrap"
+                >
+                  <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                  Restock worklist
+                </Link>
+              )}
               {canManage && (
                 <>
                   {/* Labelled, not an icon alone: a supply needs a category
@@ -897,7 +924,7 @@ const MedicalSuppliesPage: React.FC = () => {
           <SkeletonCard />
         ) : tab === 'expiring' ? (
           <section aria-label="Expiring stock">
-            {!noSuppliesYet && <LotRecallSearch />}
+            {!noSuppliesYet && <LotRecallSearch linkToApparatus={canOpenApparatusInventory} />}
             {loaded.expiring && expiring.length === 0 && noSuppliesYet ? (
               // "Nothing expiring" over an empty catalog reads as an all-clear
               // for stock nobody has entered (CLAUDE.md pitfall #29: an empty set
@@ -910,7 +937,7 @@ const MedicalSuppliesPage: React.FC = () => {
                 description={`Nothing on the shelves or the apparatus expires within ${EXPIRY_WINDOW_DAYS} days.`}
               />
             ) : (
-              <StockRowsTable rows={expiring} />
+              <StockRowsTable rows={expiring} linkToApparatus={canOpenApparatusInventory} />
             )}
           </section>
         ) : (

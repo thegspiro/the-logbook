@@ -43,6 +43,15 @@ vi.mock('../../../stores/authStore', () => {
   };
 });
 
+const mockIsModuleOn = vi.fn();
+vi.mock('../../../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({
+    enabledModules: null,
+    isModuleOn: (key: string) => mockIsModuleOn(key) as boolean,
+    isLoading: false,
+  }),
+}));
+
 vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
@@ -129,8 +138,10 @@ describe('MedicalSuppliesPage', () => {
       mockGetItemLots,
       mockGetStorageOptions,
       mockGetItemPlacements,
+      mockIsModuleOn,
     ].forEach((mock) => mock.mockReset());
     mockCheckPermission.mockReturnValue(false);
+    mockIsModuleOn.mockReturnValue(true);
     mockGetSummary.mockResolvedValue(summary);
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
     mockGetCategories.mockResolvedValue([]);
@@ -236,6 +247,76 @@ describe('MedicalSuppliesPage', () => {
       expect(screen.getByRole('cell', { name: /Expired 10d ago/ })).toHaveClass('text-red-700');
       expect(screen.getByRole('cell', { name: /411d left/ })).toHaveClass('text-theme-text-secondary');
       expect(screen.getByRole('row', { name: /Shears/ })).toHaveTextContent('—');
+    });
+
+    describe('links to the swap and restock pages in Inventory', () => {
+      const truckRow = expiringLot({
+        key: 'deployed:9',
+        location: 'apparatus',
+        lot_id: null,
+        template_item_id: 'ti-1',
+        apparatus_id: 'app-1',
+        where: 'Medic 1 › Main Compartment › Jump Bag',
+      });
+
+      it('offers a truck row the apparatus inventory to a viewer who can open it', async () => {
+        mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.check_submit');
+        mockGetExpiringStock.mockResolvedValue([truckRow, expiringLot()]);
+        renderWithRouter(<MedicalSuppliesPage />);
+
+        const link = await screen.findByRole('link', { name: 'Swap or restock 4x4 Gauze on the apparatus' });
+        expect(link).toHaveAttribute('href', '/inventory/checklists/apparatus-inventory?apparatus=app-1');
+        // The shelf row has no truck to open.
+        expect(screen.getAllByRole('link', { name: /Swap or restock/ })).toHaveLength(1);
+      });
+
+      it('offers nothing without a grant the apparatus inventory admits', async () => {
+        mockGetExpiringStock.mockResolvedValue([truckRow]);
+        renderWithRouter(<MedicalSuppliesPage />);
+
+        await screen.findByRole('row', { name: /Jump Bag/ });
+        expect(screen.queryByRole('link', { name: /Swap or restock/ })).not.toBeInTheDocument();
+      });
+
+      it('offers nothing for a checklist written for an apparatus type', async () => {
+        mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.check_submit');
+        mockGetExpiringStock.mockResolvedValue([
+          { ...truckRow, apparatus_id: null, where: 'Any Ambulance › Jump Bag' },
+        ]);
+        renderWithRouter(<MedicalSuppliesPage />);
+
+        await screen.findByRole('row', { name: /Any Ambulance/ });
+        expect(screen.queryByRole('link', { name: /Swap or restock/ })).not.toBeInTheDocument();
+      });
+
+      it('links the restock worklist for a viewer of it', async () => {
+        mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.check_view');
+        renderWithRouter(<MedicalSuppliesPage />);
+
+        expect(await screen.findByRole('link', { name: 'Restock worklist' })).toHaveAttribute(
+          'href',
+          '/inventory/admin/checklists/supply'
+        );
+      });
+
+      it('hides both when the Inventory module is off', async () => {
+        mockCheckPermission.mockReturnValue(true);
+        mockIsModuleOn.mockImplementation((key: unknown) => key !== 'inventory');
+        mockGetExpiringStock.mockResolvedValue([truckRow]);
+        renderWithRouter(<MedicalSuppliesPage />);
+
+        await screen.findByRole('row', { name: /Jump Bag/ });
+        expect(screen.queryByRole('link', { name: 'Restock worklist' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: /Swap or restock/ })).not.toBeInTheDocument();
+      });
+
+      it('hides the worklist from a crew member who cannot open it', async () => {
+        mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.check_submit');
+        renderWithRouter(<MedicalSuppliesPage />);
+
+        await screen.findByRole('heading', { name: /Medical Supplies/i });
+        expect(screen.queryByRole('link', { name: 'Restock worklist' })).not.toBeInTheDocument();
+      });
     });
 
     it('offers the lot lookup on the Expiring tab', async () => {

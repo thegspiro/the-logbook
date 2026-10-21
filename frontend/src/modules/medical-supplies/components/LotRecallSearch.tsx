@@ -23,7 +23,12 @@ interface Result {
   rows: MedicalExpiringStockRow[];
 }
 
-export const LotRecallSearch: React.FC = () => {
+interface LotRecallSearchProps {
+  /** Passed to the results table: link truck rows to that apparatus's inventory. */
+  linkToApparatus?: boolean;
+}
+
+export const LotRecallSearch: React.FC<LotRecallSearchProps> = ({ linkToApparatus = false }) => {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +104,7 @@ export const LotRecallSearch: React.FC = () => {
                 {result.rows.length === 1 ? '' : 's'} with a lot number containing{' '}
                 <span className="font-mono">{result.query}</span>.
               </p>
-              <StockRowsTable rows={result.rows} />
+              <StockRowsTable rows={result.rows} linkToApparatus={linkToApparatus} />
             </>
           )}
         </div>

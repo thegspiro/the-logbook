@@ -6,6 +6,7 @@
  */
 
 import React from 'react';
+import { Link } from 'react-router';
 import { Package, Truck } from 'lucide-react';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
@@ -14,11 +15,16 @@ import type { MedicalExpiringStockRow } from '../types';
 
 interface StockRowsTableProps {
   rows: MedicalExpiringStockRow[];
+  /**
+   * Offer a link from a truck row to that apparatus's inventory, where the
+   * swap and restock already live. Only for a viewer who can open that page.
+   */
+  linkToApparatus?: boolean;
 }
 
 const headClass = 'text-theme-text-muted px-4 py-3 text-xs font-semibold uppercase';
 
-export const StockRowsTable: React.FC<StockRowsTableProps> = ({ rows }) => {
+export const StockRowsTable: React.FC<StockRowsTableProps> = ({ rows, linkToApparatus = false }) => {
   const tz = useTimezone();
   return (
     <div className="card overflow-x-auto p-0">
@@ -48,6 +54,15 @@ export const StockRowsTable: React.FC<StockRowsTableProps> = ({ rows }) => {
                   )}
                   <span>{lot.where || (lot.location === 'apparatus' ? 'On an apparatus' : 'In storage')}</span>
                 </span>
+                {linkToApparatus && lot.location === 'apparatus' && lot.apparatus_id && (
+                  <Link
+                    to={`/inventory/checklists/apparatus-inventory?apparatus=${encodeURIComponent(lot.apparatus_id)}`}
+                    className="touch-target-phone mt-0.5 block text-xs font-medium underline"
+                    aria-label={`Swap or restock ${lot.item_name ?? 'this supply'} on the apparatus`}
+                  >
+                    Swap or restock
+                  </Link>
+                )}
               </td>
               <td data-label="Lot" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
                 {lot.lot_number || '—'}

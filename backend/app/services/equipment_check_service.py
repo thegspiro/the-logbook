@@ -4424,6 +4424,10 @@ class EquipmentCheckService:
             )
             base = {
                 "location": "apparatus",
+                # The vehicle, when the template names one, so a reader can
+                # open that truck's inventory; a template for an apparatus
+                # *type* has none.
+                "apparatus_id": str(app_id) if app_id else None,
                 "inventory_item_id": str(item.inventory_item_id),
                 "item_name": item_name,
                 "item_size": item_size,
