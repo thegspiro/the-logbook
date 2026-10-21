@@ -16,6 +16,7 @@ Designed to be triggered by a daily cron job / scheduled task.
 Can also be triggered manually by training officers.
 """
 
+import copy
 import html as _html
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
@@ -44,6 +45,14 @@ from app.services.email_service import EmailService, wrap_email_body
 from app.services.email_theme import ACCENT_AMBER, ACCENT_RED
 from app.services.notifications_service import NotificationsService
 from app.utils.org_timezone import org_today, resolve_org_today
+
+# The three switches a department sets on ``cert_alert_config``. The other keys
+# (the officer position slugs) stay hand-edited and are carried through untouched.
+ALERT_SWITCHES = (
+    "enabled",
+    "cc_chief_on_escalation",
+    "include_personal_email_on_final",
+)
 
 # Alert tiers: (days_before, field_name, cc_officers)
 ALERT_TIERS = [
@@ -103,6 +112,46 @@ class CertAlertService:
             return {"enabled": False}
         config: Dict = (org.settings or {}).get("cert_alert_config", {"enabled": False})
         return config
+
+    async def get_alert_settings(self, organization_id: UUID | str) -> Dict[str, bool]:
+        """The three alert switches as the sender reads them.
+
+        Anything but a stored truthy value reads as off, which is what
+        ``process_alerts`` does too, so a malformed ``cert_alert_config`` shows
+        as off here rather than raising.
+        """
+        config = await self.get_alert_config(organization_id)
+        if not isinstance(config, dict):
+            config = {}
+        return {name: bool(config.get(name)) for name in ALERT_SWITCHES}
+
+    async def update_alert_settings(
+        self, organization_id: UUID | str, updates: Dict[str, bool]
+    ) -> Optional[Dict[str, bool]]:
+        """Write the given switches and leave every other key as it was.
+
+        Returns the settings as they now read, or ``None`` when the
+        organization does not exist.
+        """
+        result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org = result.scalar_one_or_none()
+        if not org:
+            return None
+
+        # Deep copy: a shallow copy shares the nested dict with SQLAlchemy's
+        # committed state, and the UPDATE is then skipped as "no change".
+        settings = copy.deepcopy(org.settings or {})
+        stored = settings.get("cert_alert_config")
+        config = stored if isinstance(stored, dict) else {}
+        for name in ALERT_SWITCHES:
+            if name in updates:
+                config[name] = bool(updates[name])
+        settings["cert_alert_config"] = config
+        org.settings = settings
+        await self.db.commit()
+        return {name: bool(config.get(name)) for name in ALERT_SWITCHES}
 
     async def get_expiring_certifications(
         self,

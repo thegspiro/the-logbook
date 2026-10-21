@@ -1987,9 +1987,25 @@ profile and printed record all follow this rule.
 
 ### Automated Certification Alerts
 
-Once certification alerts are switched on for the department, The Logbook sends
-them automatically as certifications get close to expiry. There is no button to
-send them by hand.
+**Who can do this:** training managers (`training.manage`).
+
+The Logbook emails members automatically as their certifications get close to
+expiry, and gives them a notice in the app each time. There is no button to send
+them by hand.
+
+**They are off until you turn them on.** Open **Training Admin → Overview →
+Expiring Certs**. At the top, **Expiry alert emails** has a switch,
+**Email members when a certification is close to expiring**. Tick it and select
+**Save**; nothing is sent for a department that has not. Two more choices apply
+to the notice sent once a certification has expired, and they are available
+only while the switch is on:
+
+- **Copy the chief officers on the expired notice**
+- **Also send the expired notice to the member's personal email address**
+
+All three start off. A member who has turned off training reminder emails in
+their own preferences is not emailed unless your department requires those
+emails; they still get the notice in the app.
 
 | Days before expiry | Who is told                               | How                              |
 | ------------------ | ----------------------------------------- | -------------------------------- |
@@ -2001,8 +2017,8 @@ send them by hand.
 
 Each stage is sent only once per certification. An expired certification is
 escalated to the training and compliance officers. The chief officers are
-copied, and the member's personal email address is added, only if the
-department has turned those options on.
+copied, and the member's personal email address is added, only if you ticked
+those two choices above.
 
 ---
 
@@ -3729,7 +3745,7 @@ Phase 3 is now 100% complete, and Alex moves on to Phase 4.
 
 **Edge case — certification expiring soon:** Alex's CPR/AED card expires in
 September. It appears on **Expiring Certs**, and on her list of upcoming
-expirations. If your department has certification alerts turned on, Alex gets an in-app and email alert at 90 days before expiry. Her
+expirations. If your department has turned on **Email members when a certification is close to expiring**, Alex gets an in-app and email alert at 90 days before expiry. Her
 compliance card shows yellow.
 
 ### Part 5: Phase 4 — Live Fire & Graduation (August – September)
