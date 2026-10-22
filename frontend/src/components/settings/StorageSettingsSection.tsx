@@ -1,6 +1,7 @@
 import React from 'react';
 import { Loader2, Cloud, Database, HardDrive, Info, Eye, EyeOff } from 'lucide-react';
 import type { FileStorageSettings } from '../../types/user';
+import StorageLocationPanel from './StorageLocationPanel';
 
 interface StorageSettingsSectionProps {
   storageSettings: FileStorageSettings;
@@ -30,9 +31,12 @@ const StorageSettingsSection: React.FC<StorageSettingsSectionProps> = ({
       <div className="border-theme-accent-blue/20 bg-theme-accent-blue-muted flex items-start gap-3 rounded-lg border p-4">
         <Info className="text-theme-accent-blue mt-0.5 h-5 w-5 shrink-0" />
         <p className="text-theme-text-secondary text-sm">
-          First set during onboarding. Changing the storage platform may require migrating existing files.
+          First set during onboarding. Choosing Amazon S3 takes effect only after the connection test below passes with
+          the settings you saved.
         </p>
       </div>
+
+      <StorageLocationPanel savingStorage={savingStorage} />
 
       {/* Platform selection */}
       <div>

@@ -109,7 +109,7 @@ _(2026-10-18)_ An empty week or month looks up the first shift after it and offe
 Monday is scheduled. An officer's button reads **Create a shift** once any shift
 exists, and creating one moves the board to that shift's date.
 
-_[Screenshot to create: an empty week showing Go to the next shift.]_
+<!-- Screenshot needed: an empty week showing Go to the next shift. -->
 
 If you refresh the page, or send someone a copied link, it opens on the same
 week or month you were looking at, not on today.
@@ -2357,7 +2357,11 @@ Both take you to My Checklists with that shift's checks at the top.
 
 On a phone the list is compact: one row per checklist under a heading for each
 day (**Today**, **Tomorrow**, then the date). A day that has passed and still
-holds an unfiled check is marked overdue. **Unscheduled checklist** sits beside
+holds an unfiled check is marked overdue, and you can still start that check
+from it. A missed check stays on your list for seven days, which also keeps an
+overnight shift's end-of-shift check reachable after midnight; after that it
+drops off your list, though the fleet board and compliance report still count
+it. **Unscheduled checklist** sits beside
 the title (shortened to **Unscheduled**), and **Apparatus Inventory** and
 **Manage Templates** fold into a **⋯** menu. Completed checklists are grouped
 by the day checked. The **All / Start / End** filter is gone; every row carries
@@ -2699,7 +2703,7 @@ nothing matching drops out. There is **no Save button**: every tap already
 saves on its own, and a line under the list reads **Saving…**, then **All
 changes saved**, or **Last change didn't save** if it failed (tap again).
 
-_[Screenshot needed: Apparatus Inventory on a phone with a filter chip selected and the pinned location heading; REPLACE `03-95-apparatus-inventory.png`.]_
+<!-- Screenshot needed: Apparatus Inventory on a phone with a filter chip selected and the pinned location heading; REPLACE `03-95-apparatus-inventory.png`. -->
 
 The lot number shown is **the lot the date belongs to** — the one expiring
 soonest — not the last one put aboard.
@@ -3097,6 +3101,16 @@ same tabs.
 
 Select **New Template** to create one, or select a template to edit it.
 
+**Deleting a template or a basic vehicle.** A shift template used by any shift
+or pattern, and a basic apparatus named by any template, shift, pre-work
+session, equipment check or call, is **deactivated** rather than deleted, so
+existing shifts keep their checklists and templates keep saving. Inactive
+records are hidden from pickers for new records. Unused ones are deleted. The
+confirmation and toast say which happened. On the basic apparatus list, anyone
+with scheduling manage rights can turn on **Show inactive** and select
+**Reactivate**; reactivating changes only the flag and re-adds nothing to
+shifts.
+
 | Field                                                                | What it does                                                                                                                                             |
 | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Name**                                                             | Required, for example "Day Shift A"                                                                                                                      |
@@ -3205,7 +3219,7 @@ details list the shifts per weekday.
 from it. Daily, weekly and custom-date patterns have no cycle, so for them the date
 only bounds when automatic generation begins.
 
-_[Screenshot needed: Manual Setup, Weekly, with Separate day and night shifts ticked and Saturday set to both; and the pattern list showing the glyphs.]_
+<!-- Screenshot needed: Manual Setup, Weekly, with Separate day and night shifts ticked and Saturday set to both; and the pattern list showing the glyphs. -->
 
 Select **Create Pattern** to save it.
 

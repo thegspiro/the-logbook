@@ -72,10 +72,10 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({
                   complianceSummary.compliance_status === 'not_applicable'
                     ? 'bg-theme-surface-secondary text-theme-text-muted'
                     : complianceSummary.compliance_status === 'green'
-                      ? 'bg-green-500/20 text-green-700 dark:text-green-400'
+                      ? 'bg-green-500/20 text-green-800 dark:text-green-400'
                       : complianceSummary.compliance_status === 'yellow'
-                        ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
-                        : 'bg-red-500/20 text-red-700 dark:text-red-400'
+                        ? 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-400'
+                        : 'bg-red-500/20 text-red-800 dark:text-red-400'
                 }`}
               >
                 {complianceSummary.compliance_label}

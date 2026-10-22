@@ -1240,6 +1240,7 @@ async def list_donors(
             skip=pagination.skip,
             limit=pagination.limit,
             search_anonymous=can_see_identity,
+            search_contact=can_see_identity,
         )
         return [present_donor(d, can_see_identity) for d in donors]
     except ValueError as e:

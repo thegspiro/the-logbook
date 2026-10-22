@@ -43,9 +43,11 @@ from app.models.document import Document
 from app.models.email_template import EmailAttachment, EmailTemplate
 from app.models.event import Event
 from app.models.membership_pipeline import ProspectDocument, ProspectiveMember
+from app.models.minute import MinutesAttachment
 from app.models.suggestion import SuggestionAttachment
 from app.models.training import TrainingRecord, TrainingSubmission
 from app.services import file_storage_service as file_storage
+from app.services import s3_storage
 from app.services.file_storage_service import StorageArea
 
 MANIFEST_VERSION = 1
@@ -98,7 +100,7 @@ class RelocationReport:
         }
 
 
-def _real(path: str) -> str:
+def real_path(path: str) -> str:
     """Real path of a stored value, anchoring a relative one the way
     ``file_storage.resolve`` does (only pre-2026-10-08 email attachments were
     stored relative)."""
@@ -119,7 +121,7 @@ def _is_current_layout(path: str, organization_id: str, area: StorageArea) -> bo
     current = os.path.realpath(
         os.path.join(file_storage.UPLOADS_ROOT, organization_id, area.value)
     )
-    return _real(path).startswith(current + os.sep)
+    return real_path(path).startswith(current + os.sep)
 
 
 def _is_flat_in_area(real: str, ref: Reference) -> bool:
@@ -182,7 +184,11 @@ def _json_paths(value: Any) -> list[str]:
     ]
 
 
-async def _collect(db: AsyncSession, organization_id: Optional[str]) -> list[Reference]:
+async def collect_references(
+    db: AsyncSession, organization_id: Optional[str]
+) -> list[Reference]:
+    """Every stored file reference, in every table that holds one. Also the
+    list ``s3_migration`` moves into a department's bucket."""
     refs: list[Reference] = []
 
     def scoped(query, column):
@@ -345,10 +351,35 @@ async def _collect(db: AsyncSession, organization_id: Optional[str]) -> list[Ref
                 row.storage_path,
             )
         )
+    # Minutes attachments were born under the org-first layout, so relocation
+    # always finds them current; they are listed for the bucket migration.
+    for row in (
+        await db.execute(
+            scoped(
+                select(
+                    MinutesAttachment.id,
+                    MinutesAttachment.organization_id,
+                    MinutesAttachment.minutes_id,
+                    MinutesAttachment.file_path,
+                ),
+                MinutesAttachment.organization_id,
+            )
+        )
+    ).all():
+        refs.append(
+            Reference(
+                "minutes_attachments",
+                str(row.id),
+                str(row.organization_id),
+                StorageArea.MINUTES_ATTACHMENTS,
+                str(row.minutes_id),
+                row.file_path,
+            )
+        )
     return refs
 
 
-def _candidate_areas(ref: Reference) -> tuple[StorageArea, ...]:
+def candidate_areas(ref: Reference) -> tuple[StorageArea, ...]:
     # A training record can hold an approved self-report certificate, which
     # lives in the self-reports tree; that tree is nested in the records one,
     # so it is checked first.
@@ -362,15 +393,20 @@ def plan(refs: list[Reference]) -> RelocationReport:
     report = RelocationReport()
     planned: dict[str, Move] = {}
     for ref in refs:
+        if s3_storage.is_ref(ref.path):
+            # In the department's bucket: written under the org-first layout,
+            # so there is nothing to relocate.
+            report.already_current += 1
+            continue
         real = file_storage.resolve(
-            ref.path, ref.organization_id, *_candidate_areas(ref)
+            ref.path, ref.organization_id, *candidate_areas(ref)
         )
         if real is None:
             report.outside_storage.append(ref.path)
             continue
         if real in planned:
             continue
-        area = _legacy_area_for(ref.path, ref.organization_id, _candidate_areas(ref))
+        area = _legacy_area_for(ref.path, ref.organization_id, candidate_areas(ref))
         if area is None:
             if not _is_flat_in_area(real, ref):
                 report.already_current += 1
@@ -400,14 +436,16 @@ def plan(refs: list[Reference]) -> RelocationReport:
 # ---------------------------------------------------------------------------
 
 
-def _rewrite_json(value: Any, mapping: dict[str, str]) -> tuple[Any, bool]:
+def _rewrite_json(
+    value: Any, mapping: dict[str, str], key: Callable[[str], str]
+) -> tuple[Any, bool]:
     if not isinstance(value, list):
         return value, False
     updated = copy.deepcopy(value)
     changed = False
     for item in updated:
         if isinstance(item, dict) and isinstance(item.get("file_path"), str):
-            new = mapping.get(_real(item["file_path"]))
+            new = mapping.get(key(item["file_path"]))
             if new and new != item["file_path"]:
                 item["file_path"] = new
                 changed = True
@@ -424,13 +462,19 @@ _SCALAR_TABLES: dict[str, tuple[type[Any], str]] = {
     "prospect_documents": (ProspectDocument, "file_path"),
     "suggestion_attachments": (SuggestionAttachment, "file_path"),
     "email_attachments": (EmailAttachment, "storage_path"),
+    "minutes_attachments": (MinutesAttachment, "file_path"),
 }
 
 
-async def _rewrite_rows(
-    db: AsyncSession, rows: Iterable[tuple[str, str]], mapping: dict[str, str]
+async def rewrite_rows(
+    db: AsyncSession,
+    rows: Iterable[tuple[str, str]],
+    mapping: dict[str, str],
+    key: Callable[[str], str] = real_path,
 ) -> int:
-    """Rewrite each (table, row_id) through *mapping* (real old path -> new).
+    """Rewrite each (table, row_id) through *mapping* (``key(old)`` -> new).
+    *key* normalizes a stored value before the lookup: its real path by
+    default, the reference itself for one that is not a local path.
 
     Each row is re-read under a row lock and rewritten from its current
     value, so an attachment added since the scan is kept rather than
@@ -448,14 +492,14 @@ async def _rewrite_rows(
             continue
         current = getattr(row, column)
         if table in _JSON_TABLES:
-            new_value, changed = _rewrite_json(current, mapping)
+            new_value, changed = _rewrite_json(current, mapping, key)
             if changed:
                 setattr(row, column, new_value)
                 flag_modified(row, column)
         else:
             if not isinstance(current, str):
                 continue
-            new_value = mapping.get(_real(current))
+            new_value = mapping.get(key(current))
             changed = bool(new_value) and new_value != current
             if changed:
                 setattr(row, column, new_value)
@@ -476,7 +520,7 @@ async def apply(
     organization_id: Optional[str] = None,
     dry_run: bool = True,
 ) -> RelocationReport:
-    refs = await _collect(db, organization_id)
+    refs = await collect_references(db, organization_id)
     report = plan(refs)
     if dry_run or not report.moves:
         return report
@@ -500,7 +544,7 @@ async def apply(
         manifest_directory(), f"relocation-{stamp}-{uuid.uuid4().hex[:8]}.json"
     )
     rows = sorted(
-        {(ref.table, ref.row_id) for ref in refs if _real(ref.path) in mapping}
+        {(ref.table, ref.row_id) for ref in refs if real_path(ref.path) in mapping}
     )
     with open(manifest_path, "w", encoding="utf-8") as handle:
         json.dump(
@@ -516,7 +560,7 @@ async def apply(
             indent=2,
         )
     report.manifest_path = manifest_path
-    report.rows_updated = await _rewrite_rows(db, rows, mapping)
+    report.rows_updated = await rewrite_rows(db, rows, mapping)
     return report
 
 
@@ -535,9 +579,9 @@ async def rollback(db: AsyncSession, manifest_path: str) -> dict[str, int]:
             "This relocation was finalized: the old files are gone, so there is "
             "nothing to roll back to."
         )
-    mapping = {_real(m["new_path"]): m["old_path"] for m in data["moves"]}
+    mapping = {real_path(m["new_path"]): m["old_path"] for m in data["moves"]}
     rows = [tuple(row) for row in data["rows"]]
-    updated = await _rewrite_rows(db, rows, mapping)
+    updated = await rewrite_rows(db, rows, mapping)
     removed = 0
     for move in data["moves"]:
         if os.path.isfile(move["old_path"]) and os.path.isfile(move["new_path"]):

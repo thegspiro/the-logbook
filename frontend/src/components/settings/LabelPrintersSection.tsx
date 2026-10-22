@@ -113,7 +113,7 @@ const isRecognisedPrinter = (status: PrinterStatus) =>
 const PrinterStatusLine: React.FC<{ status: PrinterStatus }> = ({ status }) => {
   if (!isRecognisedPrinter(status)) {
     return (
-      <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+      <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         {status.responded
           ? 'Something answered, but it did not identify itself as this kind of printer — check the address and the printer language.'
@@ -133,7 +133,7 @@ const PrinterStatusLine: React.FC<{ status: PrinterStatus }> = ({ status }) => {
     Boolean
   );
   return (
-    <p className="mt-1.5 flex items-start gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+    <p className="mt-1.5 flex items-start gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
       <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       {details.length > 0 ? details.join(' · ') : 'Printer responded'}
       {status.warnings.length > 0 ? ` — ${status.warnings.join(', ')}` : ''}
@@ -412,7 +412,7 @@ const LabelPrintersSection: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-theme-text-primary font-medium">{printer.name}</span>
                   {printer.is_default && (
-                    <span className="badge bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Default</span>
+                    <span className="badge bg-emerald-500/10 text-emerald-800 dark:text-emerald-400">Default</span>
                   )}
                   {!printer.is_active && (
                     <span className="badge bg-theme-surface-secondary text-theme-text-muted">Disabled</span>

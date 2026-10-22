@@ -32,7 +32,8 @@ The container is ``intranet-backend`` in the standard compose file and
 ``logbook-backend`` on Unraid.
 
 After rotating ENCRYPTION_KEY (docs/KEY_ROTATION.md), move files to the new
-key so the old one can leave ENCRYPTION_KEYS_LEGACY:
+key so the old one can leave ENCRYPTION_KEYS_LEGACY. This covers the uploads
+volume and the files in departments' own S3 buckets:
 
     docker exec -it intranet-backend python scripts/encrypt_uploads.py --rewrap
     docker exec -it intranet-backend python scripts/encrypt_uploads.py \\
@@ -45,6 +46,7 @@ Exit codes:
 """
 
 import argparse
+import asyncio
 import json
 import os
 import shlex
@@ -78,6 +80,20 @@ def next_steps(manifest_path: str) -> str:
     )
 
 
+async def _rewrap_buckets(*, dry_run: bool) -> dict:
+    """Objects in departments' own buckets are found through the rows that
+    reference them, so this part needs the database."""
+    from app.core.database import async_session_factory, database_manager
+    from app.services import s3_migration
+
+    await database_manager.connect()
+    try:
+        async with async_session_factory() as db:
+            return await s3_migration.rewrap_bucket_objects(db, dry_run=dry_run)
+    finally:
+        await database_manager.disconnect()
+
+
 def _run(args: argparse.Namespace) -> int:
     if args.finalize:
         result = upload_encryption.finalize(args.finalize)
@@ -89,10 +105,20 @@ def _run(args: argparse.Namespace) -> int:
         return 1 if result["originals_missing"] else 0
     if args.rewrap:
         result = upload_encryption.rewrap_all(dry_run=not args.apply)
-        print(json.dumps(result, indent=2))
-        if not args.apply and result["under_a_retired_key"]:
+        buckets = asyncio.run(_rewrap_buckets(dry_run=not args.apply))
+        print(json.dumps({"uploads_volume": result, "buckets": buckets}, indent=2))
+        waiting = result.get("under_a_retired_key") or buckets.get(
+            "bucket_objects_under_a_retired_key"
+        )
+        if not args.apply and waiting:
             print("Dry run: nothing was changed. Re-run with --rewrap --apply.")
-        return 1 if result.get("failed") else 0
+        return (
+            1
+            if result.get("failed")
+            or buckets.get("failed")
+            or buckets.get("bucket_unreachable")
+            else 0
+        )
 
     report = upload_encryption.apply(dry_run=not args.apply)
     print(json.dumps(report.summary(), indent=2))

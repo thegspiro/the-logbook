@@ -162,7 +162,7 @@ export const EventNotificationPanel: React.FC<EventNotificationPanelProps> = ({
               {lastNotification.type.replace(/_/g, ' ')} to {lastNotification.target.replace(/_/g, ' ')} (
               {lastNotification.recipients} recipient{lastNotification.recipients !== 1 ? 's' : ''})
             </p>
-            <p className="mt-0.5 text-xs text-green-600 dark:text-green-500">
+            <p className="mt-0.5 text-xs text-green-700 dark:text-green-500">
               {formatDateTime(lastNotification.sentAt, timezone)}
             </p>
           </div>

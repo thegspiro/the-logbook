@@ -106,9 +106,15 @@ export const SubjectCompliancePanel: React.FC<SubjectCompliancePanelProps> = ({ 
                   <li key={item.requirement_id} className="flex flex-wrap items-start justify-between gap-2 py-2">
                     <div className="flex items-start gap-2">
                       {state.tone === 'met' ? (
-                        <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600" aria-hidden="true" />
+                        <CheckCircle
+                          className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-600"
+                          aria-hidden="true"
+                        />
                       ) : state.tone === 'soon' ? (
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+                        <AlertTriangle
+                          className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-600"
+                          aria-hidden="true"
+                        />
                       ) : (
                         <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden="true" />
                       )}

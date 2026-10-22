@@ -177,7 +177,7 @@ export default function MaintenanceSection({ facilityId, canEdit, canDelete }: P
                         }}
                         title="Mark completed"
                         aria-label="Mark completed"
-                        className="rounded-lg p-1.5 text-emerald-600 transition-colors hover:bg-emerald-500/10"
+                        className="rounded-lg p-1.5 text-emerald-700 transition-colors hover:bg-emerald-500/10 dark:text-emerald-600"
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
                       </button>

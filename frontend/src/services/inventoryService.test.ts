@@ -758,6 +758,36 @@ describe('inventoryService', () => {
       expect(mockPost).toHaveBeenCalledWith('/inventory/kits/k1/issue/u1');
       expect(result).toEqual(response);
     });
+
+    it('should send the size selections as the body when given', async () => {
+      mockPost.mockResolvedValueOnce({ data: { message: 'ok', items_issued: 1 } });
+
+      await inventoryService.issueKitToMember('k1', 'u1', { 'line-1': 'item-xl' });
+
+      expect(mockPost).toHaveBeenCalledWith('/inventory/kits/k1/issue/u1', {
+        selections: { 'line-1': 'item-xl' },
+      });
+    });
+  });
+
+  describe('getKitIssuePlan', () => {
+    it('should GET the plan for the member', async () => {
+      mockGet.mockResolvedValueOnce({ data: { kit_id: 'k1', user_id: 'u1', lines: [] } });
+
+      await inventoryService.getKitIssuePlan('k1', 'u1');
+
+      expect(mockGet).toHaveBeenCalledWith('/inventory/kits/k1/issue-plan', { params: { user_id: 'u1' } });
+    });
+  });
+
+  describe('getKitProductOptions', () => {
+    it('should GET /inventory/kits/product-options', async () => {
+      mockGet.mockResolvedValueOnce({ data: [] });
+
+      await inventoryService.getKitProductOptions();
+
+      expect(mockGet).toHaveBeenCalledWith('/inventory/kits/product-options');
+    });
   });
 
   // ── Reorder Requests ────────────────────────────────────────────────

@@ -127,6 +127,19 @@ _install_patch_leak_guard()
 
 
 @pytest.fixture(autouse=True)
+def _fresh_file_storage_view():
+    """Read each department's storage settings afresh in every test. The view
+    is cached per process by organization id, and fixtures reuse ids, so a
+    bucket one test configured would otherwise decide where the next test's
+    uploads go."""
+    from app.services import file_storage_service
+
+    file_storage_service.forget_org_storage()
+    yield
+    file_storage_service.forget_org_storage()
+
+
+@pytest.fixture(autouse=True)
 def _fail_the_test_that_leaks_a_patch():
     """Make a leaked patch fail its own test instead of a later, innocent one.
 

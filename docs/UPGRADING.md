@@ -504,6 +504,86 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Moving a department's existing files into its bucket, and key rotation on S3 (2026-10-22)
+
+Nothing runs on upgrade. Three operator commands, all inside the backend
+container (`intranet-backend`, or `logbook-backend` on Unraid):
+
+- **`python scripts/migrate_uploads_to_s3.py`** moves the files a department
+  stored on the `uploads` volume before it switched to its own bucket. A dry
+  run by default; `--apply` copies, verifies and repoints them and keeps the
+  disk copies; `--rollback MANIFEST` undoes it; `--finalize MANIFEST` deletes
+  the disk copies once each bucket copy verifies again. `--org ID` limits it
+  to one department, which must already have passed **Test and switch to
+  S3**. A file still in a module's pre-2026-10 folder is reported: run
+  `scripts/relocate_uploads.py` first.
+- **`python scripts/encrypt_uploads.py --rewrap`** now covers objects in
+  departments' buckets as well as the volume (`docs/KEY_ROTATION.md`). A
+  bucket object is downloaded and re-uploaded whole, so a large bucket takes
+  as long as moving its data. Keep a retired key in `ENCRYPTION_KEYS_LEGACY`
+  until both counts read zero.
+- **`scripts/backup.sh`** now lists the buckets holding department files,
+  under a warning that they are not in the archive. It never downloads them;
+  `docs/BACKUP.md` says how to back them up.
+
+`scripts/relocate_uploads.py` no longer reports a file in a department's
+bucket as missing on disk. It counts it as already in the new layout.
+
+### A department can keep its files in its own S3 or MinIO bucket (2026-10-22)
+
+The Amazon S3 choice under **Organization Settings > Storage** (and in
+onboarding) now does something. Until this version it was saved and ignored,
+and every file went to the `uploads` volume whatever a department picked.
+
+**Nothing moves on upgrade.** A department that chose S3 earlier keeps
+uploading to the `uploads` volume until an administrator presses **Test and
+switch to S3** on that screen. The test writes, reads back and deletes a small
+object with the saved settings, and only then are new uploads sent to the
+bucket. Editing those settings afterwards sends uploads back to the volume
+until the test passes again, and the screen says so. Files already stored stay
+where they are and keep working either way. `scripts/migrate_uploads_to_s3.py`
+moves them into the bucket (see the next entry up).
+
+What an operator needs to know:
+
+- **Objects are encrypted before upload** with the installation's file key,
+  exactly like files on the volume. Back up that key: without it nothing in the
+  bucket can be read.
+- **A bucket that cannot be reached refuses uploads and downloads with a 503
+  (`LB-UPLD-006`)** rather than storing the file somewhere else.
+- **A private or plain-HTTP endpoint is refused unless you set
+  `S3_ALLOW_PRIVATE_ENDPOINT=true`.** That includes the bundled MinIO
+  (`with-s3` profile, `http://minio:9000`). A department administrator types the
+  endpoint, so the default stays closed. Cloud-metadata addresses are refused
+  either way. The variable is in all three compose files' `environment:` blocks.
+- **Backups:** `scripts/backup.sh` copies only the `uploads` volume. Back
+  up a department's bucket with the provider's own tooling (versioning or
+  replication on AWS, `mc mirror` on MinIO); see `docs/BACKUP.md`.
+- **Anonymous suggestions:** a department on S3 stores suggestion screenshots in
+  its bucket too, and the bucket records each object's exact upload time. On
+  the volume that time is truncated to noon of the day so an anonymous
+  submission cannot be matched to a login. Whoever can list the bucket or read
+  its access logs can see the exact time (owner decision, 2026-10-22).
+
+### Station kiosks can stay signed in for a week (2026-10-21)
+
+Adds a migration (`sessions.is_kiosk`, additive, applied by the normal startup) and one
+permission, `security.kiosk_session`, **seeded to no position and no rank**. Nothing
+changes for anyone until a department grants it.
+
+- A member holding it sees a "Kiosk session" card on the Check-In Station and the
+  inventory kiosk and can switch their own session to a 12-hour idle timeout and a
+  7-day lifetime. They can switch it back at any time, and enabling it is audited.
+  Change the limits with `SESSION_KIOSK_IDLE_TIMEOUT_MINUTES` (default `720`) and
+  `SESSION_KIOSK_ABSOLUTE_MAX_HOURS` (default `168`); `0` turns a limit off.
+- The kiosk limits apply only while the member still holds the permission. The `*` and
+  `security.*` wildcards grant it, so an administrator already can.
+- **Sign a station in with a dedicated account** holding only that station's
+  permissions plus `security.kiosk_session`, not a chief's own account: a session left
+  on a shared tablet carries every permission of whoever signed in.
+- Every session now shows a toast five minutes before its lifetime ends, so a member
+  can save work.
+
 ### Sessions now end after 12 hours, and idle sessions no longer sign you out everywhere (2026-10-20)
 
 Three changes to how a session ends. None blocks a restart and none needs a migration.
@@ -512,9 +592,9 @@ Three changes to how a session ends. None blocks a restart and none needs a migr
   active it is, and the member signs in again. Before, a session that kept refreshing
   never had to. Change it with `SESSION_ABSOLUTE_MAX_HOURS` (`0` turns it off). **A
   wall-mounted Check-In Station or inventory kiosk left signed in will ask for a
-  sign-in at least once every 12 hours.** A longer limit for kiosk accounts is planned
-  as a separate change; until it lands, raise `SESSION_ABSOLUTE_MAX_HOURS` if a
-  station must stay up longer.
+  sign-in at least once every 12 hours.** Members with the new
+  `security.kiosk_session` permission can give a station its own longer limits; see
+  the kiosk entry above.
 - **Idle sessions are refused on refresh, and no longer revoke the member's other
   sessions.** Coming back to a tab after more than 15 minutes (but before the access
   cookie lapsed) used to be read as a stolen refresh token, and signed the member
@@ -528,6 +608,46 @@ Three changes to how a session ends. None blocks a restart and none needs a migr
 
 A reverse proxy that strips unknown request headers needs nothing: the header only
 shortens the sender's own session.
+
+### Positions named after a rank leave the member pickers (2026-10-21)
+
+Onboarding seeds Chief, Deputy Chief, Assistant Chief, Captain, Lieutenant,
+Engineer, Firefighter and EMT as **positions** as well as ranks, because those
+positions carry the rank's own permission list. Add Member therefore offered
+"Firefighter" in the position dropdown beside "Firefighter" in the rank
+dropdown, and the roster could show the same word in both columns, or in
+neither.
+
+From this version those positions are not offered or shown on the member
+screens: the Add Member position dropdown, the roster's Positions column, the
+profile's position badges, Member Management's View by Position, and the
+positions a member can be given in Manage Positions. A rank is set in the Rank
+field, and a member holding the rank already has the access the position would
+give. Nothing is removed from the database:
+
+- A member who already holds one of these positions keeps it and its access.
+  It stays listed in that member's Manage Positions dialog, marked **Rank**,
+  so an officer can untick it.
+- **Organization Settings > Role Management** still lists every one of them,
+  marked **Mirrors a rank**, because that is where the access a rank carries is
+  edited.
+- **The member importer rejects a rank name in the `role` column.** A CSV row
+  whose `role` reads `Firefighter` (or any other rank name) is reported with
+  `role "Firefighter" is a rank — put it in the rank column instead` and not
+  imported; before this version it assigned the position. Move the value to
+  the `rank` column.
+
+To list the members who hold one of these positions:
+
+```sql
+SELECT u.id, u.username, u.rank, p.slug AS position
+FROM user_positions up
+JOIN positions p ON p.id = up.position_id
+JOIN users u ON u.id = up.user_id
+WHERE p.is_system = 1
+  AND p.slug IN ('fire_chief', 'deputy_chief', 'assistant_chief', 'captain',
+                 'lieutenant', 'engineer', 'firefighter', 'emt');
+```
 
 ### Account status follows membership type for probationary members (2026-10-21)
 

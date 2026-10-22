@@ -204,6 +204,24 @@ export interface FileStorageSettings {
 }
 
 /**
+ * Where the department's new files go, as the server decided it
+ * (`GET /organization/settings/file-storage/status`). Saving S3 settings does
+ * not move uploads to the bucket: a connection test has to pass with exactly
+ * those settings first, and editing them afterwards sends uploads back to the
+ * server's disk until the test is run again.
+ */
+export interface FileStorageStatus {
+  platform: string;
+  new_files_go_to: 'local' | 's3';
+  bucket: string | null;
+  endpoint_url: string | null;
+  activated_at: string | null;
+  changed_since_test: boolean;
+  s3_problem: string | null;
+  private_endpoints_allowed: boolean;
+}
+
+/**
  * How the application presents itself to every member of the department.
  *
  * `navigationLayout` is a department-wide decision. Setup has always asked for

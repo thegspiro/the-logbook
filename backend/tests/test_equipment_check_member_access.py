@@ -33,7 +33,10 @@ from app.models.training import (
     ShiftEquipmentCheck,
     ShiftPosition,
 )
-from app.services.equipment_check_service import EquipmentCheckService
+from app.services.equipment_check_service import (
+    MY_CHECKLISTS_OVERDUE_DAYS,
+    EquipmentCheckService,
+)
 
 # Every endpoint the member's own checklist page calls, and the permissions it
 # has to accept for that page to function.
@@ -262,6 +265,85 @@ class TestMyChecklistsFeed:
             await svc.get_my_checklists(user_id, org_id)
 
         assert seen == [str(listed_shift.id)]
+
+
+class TestMyChecklistsMissedDays:
+    """A passed day stays on the list while it holds an unfiled check, for
+    MY_CHECKLISTS_OVERDUE_DAYS. Without it the page's overdue marker could never
+    appear, and an overnight shift's end-of-shift check vanished at midnight."""
+
+    async def _feed(self, db_session, org_id, user_id, shifts_filed):
+        """Seat the member on each shift and report, per shift, whether its one
+        checklist is filed; return the shift ids the feed lists."""
+        svc = EquipmentCheckService(db_session)
+        filed = {}
+        for shift, is_filed in shifts_filed:
+            db_session.add(shift)
+            db_session.add(
+                _assignment(
+                    org_id,
+                    shift.id,
+                    user_id,
+                    ShiftPosition.DRIVER,
+                    AssignmentStatus.CONFIRMED,
+                )
+            )
+            filed[str(shift.id)] = is_filed
+        await db_session.flush()
+
+        async def one_checklist(
+            shift, organization_id, user_position, existing_checks=None
+        ):
+            return [
+                {
+                    "template": object(),
+                    "is_completed": filed[str(shift.id)],
+                    "check": None,
+                }
+            ]
+
+        with patch.object(svc, "_checklists_for_shift", side_effect=one_checklist):
+            rows = await svc.get_my_checklists(user_id, org_id)
+        return [str(r["shift_id"]) for r in rows]
+
+    async def test_a_recent_unfiled_check_is_listed(self, db_session, org_and_member):
+        org_id, user_id = org_and_member
+        missed = _shift(org_id, days_ahead=-3)
+
+        listed = await self._feed(db_session, org_id, user_id, [(missed, False)])
+
+        assert listed == [str(missed.id)]
+
+    async def test_a_filed_check_on_a_passed_day_drops_off(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        done = _shift(org_id, days_ahead=-3)
+
+        listed = await self._feed(db_session, org_id, user_id, [(done, True)])
+
+        assert listed == []
+
+    async def test_a_filed_check_today_or_later_stays_listed(
+        self, db_session, org_and_member
+    ):
+        """Unchanged: the page shows "Submitted for this shift" for these."""
+        org_id, user_id = org_and_member
+        upcoming = _shift(org_id, days_ahead=2)
+
+        listed = await self._feed(db_session, org_id, user_id, [(upcoming, True)])
+
+        assert listed == [str(upcoming.id)]
+
+    async def test_a_miss_older_than_the_window_drops_off(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        stale = _shift(org_id, days_ahead=-(MY_CHECKLISTS_OVERDUE_DAYS + 3))
+
+        listed = await self._feed(db_session, org_id, user_id, [(stale, False)])
+
+        assert listed == []
 
 
 class TestIncompleteCheckResume:

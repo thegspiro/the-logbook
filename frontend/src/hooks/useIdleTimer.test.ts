@@ -17,7 +17,8 @@ vi.mock('../stores/authStore', () => ({
   useAuthStore: (selector: (s: unknown) => unknown) => selector({ logout: mockLogout, isAuthenticated: true }),
 }));
 
-import { useIdleTimer, signalUserActivity, USER_ACTIVITY_EVENT } from './useIdleTimer';
+import toast from 'react-hot-toast';
+import { useIdleTimer, signalUserActivity, signalSessionSettingsChanged, USER_ACTIVITY_EVENT } from './useIdleTimer';
 
 const TIMEOUT_MINUTES = 15;
 const TIMEOUT_MS = TIMEOUT_MINUTES * 60 * 1000;
@@ -181,6 +182,59 @@ describe('useIdleTimer', () => {
 
     await vi.advanceTimersByTimeAsync(TIMEOUT_MS + 1000);
 
+    expect(mockLogout).not.toHaveBeenCalled();
+  });
+
+  describe('the session lifetime warning', () => {
+    const FIVE_MINUTES_MS = 5 * 60 * 1000;
+
+    function warnings() {
+      return vi
+        .mocked(toast)
+        .mock.calls.filter(([, opts]) => (opts as { id?: string } | undefined)?.id === 'session-cap-warning');
+    }
+
+    it('warns five minutes before the lifetime ends, and not before', async () => {
+      const endsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      mockGetSessionSettings.mockResolvedValue({
+        session_timeout_minutes: 24 * 60,
+        session_ends_at: endsAt,
+      });
+      renderHook(() => useIdleTimer());
+      await armTimers();
+
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000 - FIVE_MINUTES_MS - 1000);
+      expect(warnings()).toHaveLength(0);
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(warnings()).toHaveLength(1);
+    });
+
+    it('does not warn when the lifetime cap is off', async () => {
+      mockGetSessionSettings.mockResolvedValue({
+        session_timeout_minutes: 24 * 60,
+        session_ends_at: null,
+      });
+      renderHook(() => useIdleTimer());
+      await armTimers();
+
+      await vi.advanceTimersByTimeAsync(10 * 60 * 60 * 1000);
+      expect(warnings()).toHaveLength(0);
+    });
+  });
+
+  it('re-reads the limits when told the session type changed', async () => {
+    renderHook(() => useIdleTimer());
+    await armTimers();
+    mockGetSessionSettings.mockClear();
+    mockGetSessionSettings.mockResolvedValue({ session_timeout_minutes: 720 });
+
+    signalSessionSettingsChanged();
+    await armTimers();
+
+    expect(mockGetSessionSettings).toHaveBeenCalledTimes(1);
+    // The old 15-minute timer must not sign the kiosk out.
+    await vi.advanceTimersByTimeAsync(TIMEOUT_MS + 1000);
     expect(mockLogout).not.toHaveBeenCalled();
   });
 });

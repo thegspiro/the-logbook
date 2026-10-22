@@ -345,7 +345,11 @@ themselves, the label goes away.
   address hidden in the copy line, which a provider with a recipient cap could
   refuse whole). It goes out just after nominations open, so a failed email never
   stops nominations opening, and it is skipped if nominations were closed again
-  in the meantime.
+  in the meantime. The **Nominations** tab shows election managers how it went:
+  _"Emailing members that nominations are open…"_ while it sends, then how many
+  members were emailed and how many could not be reached. If anyone was missed,
+  the election managers are also emailed, so the missed members can be told
+  another way.
 - Only candidates who **accepted** reach the ballot.
 - **Members see pending nominations only while nominations are open**, so
   nominees can find and answer theirs. After closing, members see accepted
@@ -523,8 +527,7 @@ The package contains:
    until it finishes). If some addresses could not be reached, an error message
    lists them so you can send again to just those people.
 
-_[Screenshot to create: the Email Pre-Meeting Package window while the send runs,
-and the error message naming the addresses that were not reached.]_
+<!-- Screenshot needed: the Email Pre-Meeting Package window while the send runs, and the error message naming the addresses that were not reached. -->
 
 ### Or just download it
 
@@ -840,8 +843,7 @@ identically. Submitting totals for a ranked race is refused. Each paper ballot
 counts as its own ballot in the runoff (before this fix a stack of thirty was
 counted as one).
 
-_[Screenshot to create: Record Paper Ballots on a ranked-choice race, showing
-the rank menus and the copy count.]_
+<!-- Screenshot needed: Record Paper Ballots on a ranked-choice race, showing the rank menus and the copy count. -->
 
 ![Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
 

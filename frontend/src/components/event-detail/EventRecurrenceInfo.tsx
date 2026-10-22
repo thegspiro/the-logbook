@@ -110,7 +110,7 @@ export const EventRecurrenceInfo: React.FC<EventRecurrenceInfoProps> = ({
                 )}
                 {se.is_cancelled && <span className="text-xs text-red-500">Cancelled</span>}
                 {!se.is_cancelled && isUpcoming && (
-                  <span className="text-xs text-green-600 dark:text-green-400">Upcoming</span>
+                  <span className="text-xs text-green-700 dark:text-green-400">Upcoming</span>
                 )}
               </div>
             );

@@ -600,3 +600,32 @@ describe('AddMember', { timeout: 20_000 }, () => {
     });
   });
 });
+
+describe('AddMember — the position dropdown', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPreviewNextMembershipId.mockResolvedValue({ enabled: false, next_id: null });
+    mockGetLocations.mockResolvedValue([]);
+    mockGetWelcomeEmailAvailability.mockReset();
+    mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+    mockConnected.clear();
+  });
+
+  // The seeded Firefighter position sat in this dropdown beside the
+  // Firefighter rank in the one above it, and the two did not agree.
+  it('leaves out the positions that mirror a rank, and says where a rank goes', async () => {
+    mockGetRoles.mockResolvedValue([
+      { id: 'role-member', name: 'Member', slug: 'member', mirrors_rank: false },
+      { id: 'role-firefighter', name: 'Firefighter', slug: 'firefighter', mirrors_rank: true },
+      { id: 'role-secretary', name: 'Secretary', slug: 'secretary', mirrors_rank: false },
+    ]);
+    renderWithRouter(<AddMember />);
+    await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+    const position = screen.getByRole('combobox', { name: 'Position' });
+    await waitFor(() => expect(within(position).getByRole('option', { name: 'Secretary' })).toBeInTheDocument());
+    expect(within(position).getByRole('option', { name: 'Member' })).toBeInTheDocument();
+    expect(within(position).queryByRole('option', { name: 'Firefighter' })).not.toBeInTheDocument();
+    expect(position).toHaveAccessibleDescription(/A rank such as Captain or Firefighter is set in the Rank field/);
+  });
+});

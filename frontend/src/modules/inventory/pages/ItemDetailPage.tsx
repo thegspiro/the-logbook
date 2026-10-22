@@ -132,14 +132,17 @@ interface CardProps {
   title: string;
   icon?: React.ReactNode;
   children: React.ReactNode;
+  /** Buttons and notes that are not term/description pairs, so cannot live in the <dl>. */
+  actions?: React.ReactNode;
 }
-const Card: React.FC<CardProps> = ({ title, icon, children }) => (
+const Card: React.FC<CardProps> = ({ title, icon, children, actions }) => (
   <div className="card-secondary p-4">
     <h3 className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-semibold">
       {icon}
       {title}
     </h3>
     <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">{children}</dl>
+    {actions}
   </div>
 );
 
@@ -547,8 +550,31 @@ const ItemDetailPage: React.FC = () => {
 
         {/* Assignment — individual items */}
         {item.tracking_type === 'individual' && (
-          <Card title="Assignment" icon={<User className="h-4 w-4" />}>
-            {item.assigned_to_user_id ? (
+          <Card
+            title="Assignment"
+            icon={<User className="h-4 w-4" />}
+            actions={
+              item.assigned_to_user_id ? (
+                canManage && (
+                  <div className="mt-3">
+                    <button onClick={() => void handleUnassign()} className="btn-secondary btn-sm">
+                      Unassign
+                    </button>
+                  </div>
+                )
+              ) : (
+                <div>
+                  <p className="text-theme-text-muted mb-2 text-sm">Not currently assigned</p>
+                  {canManage && (
+                    <button onClick={() => setShowAssignModal(true)} className="btn-info btn-sm">
+                      Assign Item
+                    </button>
+                  )}
+                </div>
+              )
+            }
+          >
+            {item.assigned_to_user_id && (
               <>
                 <Field
                   label="Assigned To"
@@ -562,23 +588,7 @@ const ItemDetailPage: React.FC = () => {
                   }
                 />
                 <Field label="Assigned Date" value={formatDate(item.assigned_date, tz)} />
-                {canManage && (
-                  <div className="col-span-full mt-1">
-                    <button onClick={() => void handleUnassign()} className="btn-secondary btn-sm">
-                      Unassign
-                    </button>
-                  </div>
-                )}
               </>
-            ) : (
-              <div className="col-span-full">
-                <p className="text-theme-text-muted mb-2 text-sm">Not currently assigned</p>
-                {canManage && (
-                  <button onClick={() => setShowAssignModal(true)} className="btn-info btn-sm">
-                    Assign Item
-                  </button>
-                )}
-              </div>
             )}
           </Card>
         )}
@@ -824,7 +834,7 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId, ca
               <p className="text-theme-text-primary text-sm font-medium">
                 {rec.maintenance_type.replace('_', ' ')}{' '}
                 {rec.passed != null && (
-                  <span className={rec.passed ? 'text-green-600' : 'text-red-600'}>
+                  <span className={rec.passed ? 'text-green-700 dark:text-green-600' : 'text-red-600'}>
                     ({rec.passed ? 'Passed' : 'Failed'})
                   </span>
                 )}
@@ -878,11 +888,11 @@ const ExposuresTab: React.FC<ExposuresTabProps> = ({ records, tz, canManage, onA
             )}
             {rec.description && <p className="text-theme-text-muted mt-0.5 text-xs">{rec.description}</p>}
             <div className="mt-1 flex gap-3 text-xs">
-              <span className={rec.decon_required ? 'text-orange-600' : 'text-theme-text-muted'}>
+              <span className={rec.decon_required ? 'text-orange-700 dark:text-orange-600' : 'text-theme-text-muted'}>
                 Decon: {rec.decon_required ? 'Required' : 'Not required'}
               </span>
               {rec.decon_required && (
-                <span className={rec.decon_completed ? 'text-green-600' : 'text-red-600'}>
+                <span className={rec.decon_completed ? 'text-green-700 dark:text-green-600' : 'text-red-600'}>
                   {rec.decon_completed ? `Completed ${formatDate(rec.decon_completed_date, tz)}` : 'Pending'}
                 </span>
               )}

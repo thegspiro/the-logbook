@@ -46,11 +46,11 @@ type Mode = 'month' | 'range';
 const STATUS_META: Record<MemberComplianceStatusColor, { label: string; cls: string }> = {
   green: {
     label: 'Compliant',
-    cls: 'bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30',
+    cls: 'bg-green-500/15 text-green-800 dark:text-green-400 border-green-500/30',
   },
   yellow: {
     label: 'At Risk',
-    cls: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30',
+    cls: 'bg-yellow-500/15 text-yellow-800 dark:text-yellow-400 border-yellow-500/30',
   },
   red: {
     label: 'Behind',
@@ -222,13 +222,13 @@ const MemberTrainingStatusPage: React.FC = () => {
           <div className="border-theme-surface-border inline-flex overflow-hidden rounded-lg border">
             <button
               onClick={() => setMode('month')}
-              className={`touch-target-phone px-3 py-1.5 text-sm ${mode === 'month' ? 'bg-red-600/20 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`touch-target-phone px-3 py-1.5 text-sm ${mode === 'month' ? 'bg-red-600/20 text-red-800 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               Month
             </button>
             <button
               onClick={() => setMode('range')}
-              className={`touch-target-phone px-3 py-1.5 text-sm ${mode === 'range' ? 'bg-red-600/20 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+              className={`touch-target-phone px-3 py-1.5 text-sm ${mode === 'range' ? 'bg-red-600/20 text-red-800 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
             >
               Custom range
             </button>

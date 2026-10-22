@@ -484,13 +484,13 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged, sto
                 </div>
                 <div>
                   <p className="text-theme-text-muted text-xs">Collected</p>
-                  <p className="text-lg font-semibold text-green-600 dark:text-green-400">
+                  <p className="text-lg font-semibold text-green-700 dark:text-green-400">
                     {formatCurrency(Number(summary.collected))}
                   </p>
                 </div>
                 <div>
                   <p className="text-theme-text-muted text-xs">Outstanding</p>
-                  <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">
+                  <p className="text-lg font-semibold text-amber-700 dark:text-amber-400">
                     {formatCurrency(Number(summary.outstanding))}
                   </p>
                 </div>

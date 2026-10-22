@@ -77,6 +77,8 @@ import type {
   ItemVariantGroupCreate,
   EquipmentKit,
   EquipmentKitCreate,
+  KitProductOption,
+  KitIssuePlan,
   MemberSizePreferences,
   MemberSizePreferencesCreate,
   ImpactPlannerOptions,
@@ -1453,10 +1455,31 @@ export const inventoryService = {
     return response.data;
   },
 
-  async issueKitToMember(kitId: string, userId: string): Promise<{ message: string; items_issued: number }> {
-    const response = await api.post<{ message: string; items_issued: number }>(
-      `/inventory/kits/${kitId}/issue/${userId}`
-    );
+  async getKitProductOptions(): Promise<KitProductOption[]> {
+    const response = await api.get<KitProductOption[]>('/inventory/kits/product-options');
+    return asArray(response.data);
+  },
+
+  async getKitIssuePlan(kitId: string, userId: string): Promise<KitIssuePlan> {
+    const response = await api.get<KitIssuePlan>(`/inventory/kits/${kitId}/issue-plan`, {
+      params: { user_id: userId },
+    });
+    return response.data;
+  },
+
+  /**
+   * `selections` maps a kit line id to the inventory row chosen for it — the
+   * quartermaster's size override. Lines left out use the member's size.
+   */
+  async issueKitToMember(
+    kitId: string,
+    userId: string,
+    selections?: Record<string, string>
+  ): Promise<{ message: string; items_issued: number }> {
+    const url = `/inventory/kits/${kitId}/issue/${userId}`;
+    const response = selections
+      ? await api.post<{ message: string; items_issued: number }>(url, { selections })
+      : await api.post<{ message: string; items_issued: number }>(url);
     return response.data;
   },
 

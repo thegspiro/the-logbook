@@ -45,7 +45,7 @@ import { ElectionStatus, VoteType, BallotItemType, VictoryCondition as VC } from
 // ─── Type color/icon/label maps ─────────────────────────────────
 
 const BALLOT_TYPE_COLORS: Record<string, string> = {
-  membership_approval: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30',
+  membership_approval: 'text-emerald-800 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30',
   officer_election: 'text-purple-700 dark:text-purple-400 bg-purple-500/10 border border-purple-500/30',
   general_vote: 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border border-blue-500/30',
 };
@@ -242,7 +242,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
 
           {/* From application badge */}
           {item.prospect_package_id && (
-            <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+            <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-400">
               <UserPlus className="h-3 w-3" />
               Application
             </span>
@@ -312,12 +312,12 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
               {getVoterTypeLabel(item.eligible_voter_types)}
             </span>
             {item.require_attendance && (
-              <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-400">
+              <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-800 dark:text-amber-400">
                 Attendance Req.
               </span>
             )}
             {victoryLabel ? (
-              <span className="rounded-md bg-green-500/10 px-2 py-0.5 text-[11px] text-green-700 dark:text-green-400">
+              <span className="rounded-md bg-green-500/10 px-2 py-0.5 text-[11px] text-green-800 dark:text-green-400">
                 {victoryLabel}
               </span>
             ) : (
@@ -847,10 +847,10 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
   return (
     <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
       {/* ── Header ── */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-theme-text-primary text-lg font-medium">Ballot Items ({ballotItems.length})</h3>
         {!isLocked && (
-          <div className="relative flex gap-2" ref={templateRef}>
+          <div className="relative flex flex-wrap gap-2" ref={templateRef}>
             {ballotItems.length > 0 && (
               <button
                 type="button"
@@ -982,7 +982,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                                   {getVoterTypeLabel(template.eligible_voter_types)}
                                 </span>
                                 {template.require_attendance && (
-                                  <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-400">
+                                  <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-800 dark:text-amber-400">
                                     Attendance
                                   </span>
                                 )}
@@ -1029,7 +1029,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                                 ))}
                               </select>
                               {availablePositions.length === 0 && (
-                                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                                   All positions already have ballot items.
                                 </p>
                               )}
@@ -1331,7 +1331,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, electi
                           ))}
                         </select>
                         {availablePositions.length === 0 && (
-                          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                          <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                             All positions already have ballot items.
                           </p>
                         )}

@@ -290,7 +290,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
               return (
                 <div className="flex items-center gap-3">
                   <h4 className="text-theme-text-primary font-medium">Results</h4>
-                  <span className="rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">
+                  <span className="rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
                     {successCount} returned
                   </span>
                   {failCount > 0 && (
@@ -316,7 +316,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                   >
                     <div className="flex items-center gap-2">
                       {r.success ? (
-                        <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        <Check className="h-4 w-4 text-green-700 dark:text-green-400" />
                       ) : (
                         <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
                       )}
@@ -358,7 +358,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
                     <div className="flex gap-2">
                       <button
                         onClick={selectAll}
-                        className="text-xs font-medium text-emerald-600 hover:text-emerald-700"
+                        className="text-xs font-medium text-emerald-700 hover:text-emerald-700 dark:text-emerald-600"
                       >
                         Select All
                       </button>

@@ -115,7 +115,7 @@ const MemberRow: React.FC<{
               </span>
             )}
             {member.is_attending && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:text-emerald-400">
                 Present
               </span>
             )}
@@ -150,7 +150,7 @@ const MemberRow: React.FC<{
             </span>
           ) : member.will_receive_ballot ? (
             <CheckCircle2
-              className="mx-auto h-5 w-5 text-green-600 dark:text-green-400"
+              className="mx-auto h-5 w-5 text-green-700 dark:text-green-400"
               role="img"
               aria-label="Will receive ballot"
             />
@@ -326,7 +326,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
               <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
                 <div className="rounded-lg bg-green-500/10 p-3 text-center">
                   <div className="text-2xl font-bold text-green-700 dark:text-green-400">{roster.total_eligible}</div>
-                  <div className="text-xs font-medium text-green-600 dark:text-green-500">
+                  <div className="text-xs font-medium text-green-700 dark:text-green-500">
                     {roster.total_ballots_sent > 0 ? 'Eligible' : 'Will Receive Ballot'}
                   </div>
                 </div>
@@ -365,7 +365,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
               {/* Ineligible members warning */}
               {roster.total_ineligible > 0 && (
                 <div className="mx-4 mb-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
                   <p className="text-xs text-amber-700 dark:text-amber-300">
                     <span className="font-semibold">{roster.total_ineligible} member(s)</span> will not receive a
                     ballot. Expand a row to see why, or add a voter override on the{' '}

@@ -1,5 +1,19 @@
 # Script currency
 
+## Flagged by the 2026-10-21 → 10-22 changes
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).
+Rows are **Open**; nothing was re-recorded.
+
+| Script                 | Beat                               | Was                                     | Now                                                                                                        |
+| ---------------------- | ---------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **05 / 09** (training) | Deleting a requirement or pipeline | Delete erases progress                  | An in-use one is deactivated; pipelines can be reactivated                                                 |
+| **05** (training)      | Target Solutions                   | Mapping matched future completions only | Mapping imports the member's waiting records; **Import matching pending records**                          |
+| **03** (IT)            | Member delete                      | Records by the member lose their link   | Others' records keep an empty owner shown as **Former member**; held gear returned; future shifts released |
+| **03**                 | Status                             | Type and status independent             | Probationary type sets Probationary status                                                                 |
+| **07** (secretary)     | Deleting events                    | Series delete removes everything        | **Delete this and future events**; an approved meeting cannot be deleted                                   |
+| **04** (finance)       | Budget categories                  | Delete cascades through budget lines    | In-use category is deactivated                                                                             |
+
 ## Flagged by the 2026-10-20 → 10-21 changes
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).

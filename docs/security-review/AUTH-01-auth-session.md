@@ -1,9 +1,146 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), pass 10 (this PR)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8, watchdog pickup), 2026-10-14 (pass 9, watchdog pickup), 2026-10-18 (pass 10, watchdog pickup), 2026-10-22 (pass 11, watchdog pickup) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4), #2536 (pass 5), #2593 (pass 6), #2924 (pass 7 — the header's own "this PR" placeholder was never filled in after merge; corrected here the way pass 7 corrected pass 6's), #3096 (pass 8, corrected here the same way), #3210 (pass 9, corrected here the same way), #3397 (pass 10, corrected here the same way), pass 11 (this PR)
 
 Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 11 (2026-10-22, watchdog pickup) — 0 fixed, 0 new findings; all changed code already correct
+
+Watchdog pickup: no `claude/security-review-*` PR was open
+(`search_pull_requests`), and the dedicated `/loop 30m /security-review`
+session was not reachable (`ListAgents`). PR #3555 (Feature 00,
+Cross-cutting baseline, pass 11) had already merged clean, closing out
+rotation lap "pass 9" (every row ✅); the table was reset to ⬜ for pass 10
+and Feature 00 reviewed in that same iteration (see `PROGRESS.md` and
+`SEC-00-cross-cutting-baseline.md`'s own Pass 11 section). Rotation row 01
+was the next `⬜`.
+
+**Baseline:** `ccb4b805` (PR #3397's merge, pass 10). **Head:** current
+`main`. 611 commits between them (373 non-merge) — another shallow pass:
+`git diff --stat` across all twelve scoped files (nine backend, three
+frontend) is non-empty in exactly three — `auth_service.py` (+75/-31),
+`dependencies.py` (+7/-1) and `consent_service.py` (+2/-2). The other nine
+(`auth.py`, `mfa_service.py`, `oauth_service.py`, `security.py`,
+`suspicious_ip.py`, `schemas/auth.py`, `authStore.ts`, `apiClient.ts`,
+`authService.ts`) are byte-identical to pass 10.
+
+### The three changed files, reviewed
+
+- **`auth_service.py` — session idle timeout gains an absolute-lifetime
+  twin, and the logic moves into a shared helper.** `session_end_reason
+(session, now)` (module-level, new) returns `"idle"`, `"absolute"` or
+  `None`, reading `HIPAA_SESSION_TIMEOUT_MINUTES` and the new
+  `SESSION_ABSOLUTE_MAX_HOURS` (both 0-means-off, both measured from
+  server-written timestamps — `last_activity`/`created_at` — so a client
+  cannot lengthen either). It replaces the idle-only check that used to be
+  inlined in `get_user_from_token`, and is now also called from
+  `refresh_access_token`, which previously had **no** session-lifetime
+  check of its own — a session that aged out on the access-token path could
+  still be refreshed indefinitely as long as the refresh token kept getting
+  rotated before its own 7-day expiry. Traced both call sites for a
+  regression:
+  - `get_user_from_token`: on `ended`, the function now returns `None`
+    **without** deleting the session row (the prior idle-only code did
+    delete it). The docstring's own rationale checks out: the browser's
+    next move after a 401 is a refresh-token attempt, and
+    `refresh_access_token` requires the row to exist to answer "sign in
+    again" rather than "replay detected, revoke everything" — deleting the
+    row here would have made every idle timeout look like token theft to
+    the refresh path. Confirmed `refresh_access_token`'s "no session
+    found" branch (which does revoke every session) is a genuinely
+    different condition (refresh token not found at all, i.e. already
+    rotated/replayed) from "session found but ended" (handled separately,
+    just above it, by a plain delete + `(None, None)`) — the two can't be
+    confused by a real client, since a legitimate idle session still has
+    its row and its still-valid-shaped refresh token.
+  - `refresh_access_token`: on `ended`, deletes the session and commits,
+    same as the access-token path's old behavior — closing the gap
+    described above. Ordering confirmed correct: this check runs after the
+    session is found by refresh token (so it can't be reached by a
+    genuinely replayed/unknown token, which hits the revoke-all branch
+    first) and before the user/organization lookup, so an ended session
+    can't incidentally succeed a refresh by having an inactive organization
+    masked as "just refuse".
+  - `touch_activity` (the new parameter on `get_user_from_token`, default
+    `True`) only skips the `session.last_activity` **write** when `False`
+    — every other check (token decode, session lookup, `ended`, user
+    lookup) is unconditional before it, so a caller passing `False` can
+    only ever make its own session's idle clock run for real while
+    appearing to do nothing, never bypass or extend anything. (This is the
+    server half of `frontend/src/utils/backgroundRequest.ts`'s
+    `BACKGROUND_REQUEST_CONFIG`, wired in `dependencies.py` below — already
+    audited end-to-end during this same pass's sibling reviews, Feature 34
+    Frontend shared pass 10 and Feature 00 Cross-cutting baseline pass 11;
+    re-confirmed here by direct read rather than re-cited blindly, since
+    `dependencies.py` is this feature's own file.)
+  - `created_at` is now stamped in Python (`datetime.now(timezone.utc)`) at
+    session-creation time, matching the existing comment one line above it
+    for `last_activity`: MySQL's own `now()`/`func.now()` follows the DB
+    session's timezone, which pass 8 (Core infrastructure) already fixed
+    at the connection level (`init_command: SET time_zone = '+00:00'`) —
+    this is the same defensive belt-and-suspenders pattern as
+    `last_reset_user`'s reset in pass 10, not a sign the connection-level
+    fix is being second-guessed.
+- **`dependencies.py` — `get_current_user`** passes
+  `touch_activity=request.headers.get("x-background-request") != "1"` into
+  `get_user_from_token`. Covered above.
+- **`consent_service.py` — `get_consent_status_rollup`** (name approximate;
+  the audience-listing method for a staff consent view) now filters
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` instead of `User.status ==
+UserStatus.ACTIVE`, closing a CLAUDE.md Pitfall #32 instance: a
+  probationary member was previously dropped from this roster (and so
+  silently excluded from `include_inactive=False` consent-audience views)
+  despite being a current member who can hold a consent decision like
+  anyone else. Already landed by other engineering work (the repo-wide
+  Pitfall #32 sweep); re-verified by direct read rather than taken on the
+  commit message — confirmed no second, un-migrated literal `==
+UserStatus.ACTIVE` survives elsewhere in this file.
+
+### Route inventory — re-enumerated
+
+Still 28 routes, unchanged from pass 10 — confirmed by `grep -c
+"^@router\.\(get\|post\|put\|patch\|delete\)" auth.py` (28) and
+`check_route_permissions.py --strict` (273 routes repo-wide, 0 errors/0
+warnings). `auth.py` itself has 0 diff this pass, so no route's decorator
+or dependency could have changed.
+
+### Standing items — reconfirmed unchanged from pass 10
+
+AUTH-15, AUTH-17, AUTH-21 and AUTH-22 are all already closed (pass 8's and
+pass 10's fixes), and `docs/KNOWN_LIMITATIONS.md` carries no entry for any
+of them — reconfirmed by grep. No open AUTH finding exists to re-verify
+this pass.
+
+### No duplicate session-lifetime logic
+
+`grep -rn "HIPAA_SESSION_TIMEOUT_MINUTES\|SESSION_ABSOLUTE_MAX_HOURS"
+app/`: the only reader of either setting outside `core/config.py` is
+`session_end_reason` itself, plus one read-only report of
+`HIPAA_SESSION_TIMEOUT_MINUTES` in `auth.py` (a settings-echo endpoint the
+frontend uses to display the configured timeout, not to enforce it) — no
+second implementation of the idle/absolute decision exists to drift from
+this one (Pitfall #29).
+
+### Completion gate (pass 11)
+
+| Check                                                                                                                                                                                                                                                                  | Result                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                          | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                   | ✅ clean (2555 files)                                                       |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                              | ✅ clean                                                                    |
+| `validate_migrations.py --strict`                                                                                                                                                                                                                                      | ✅ single head `e5f9bb066e07`, 639 revisions                                |
+| `check_route_permissions.py --strict`                                                                                                                                                                                                                                  | ✅ 273 routes, 0 errors/0 warnings                                          |
+| scoped backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission or authentik or password or security_notification"`)                                                                                                         | ✅ 1205 passed, 2 skipped (environment-only — `pywebpush`, Docker registry) |
+| standing guards (`endpoint_auth_coverage`, `org_scoping_ratchet`, `capacity_locking`, `like_escaping`, `mfa_verification_consumes`, `auth_lockout_race`, `auth_gate_remediation_paths`, `auth_refresh_rotation`, `password_expiry_gate`, `sign_in_audit`) run directly | ✅ 118 passed                                                               |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                     | ✅ 0 errors                                                                 |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                          | ✅ 0 errors, 0 warnings                                                     |
+
+No frontend source file is in this pass's diff.
+
+Rotation row 01 moves to `✅`.
 
 ---
 

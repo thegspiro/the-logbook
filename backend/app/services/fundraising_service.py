@@ -193,10 +193,15 @@ class FundraisingService:
         skip: int = 0,
         limit: int = 100,
         search_anonymous: bool = True,
+        search_contact: bool = True,
     ) -> List[Donor]:
         """``search_anonymous=False`` keeps anonymous donors out of search
         matches (GF-8): a caller who is shown such a donor without its name
-        must not be able to confirm the name by searching for it."""
+        must not be able to confirm the name by searching for it.
+
+        ``search_contact=False`` leaves the email out of what a search matches
+        (GF-9), for the same reason: a caller who is not shown an address must
+        not be able to confirm one by typing it."""
         query = select(Donor).where(
             Donor.organization_id == organization_id,
             Donor.active.is_(True),
@@ -205,12 +210,14 @@ class FundraisingService:
             query = query.where(Donor.donor_type == donor_type)
         if search:
             pattern = like_pattern(search)
-            query = query.where(
+            matches = (
                 (Donor.first_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
                 | (Donor.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
-                | (Donor.email.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
                 | (Donor.company_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
             )
+            if search_contact:
+                matches = matches | Donor.email.ilike(pattern, escape=LIKE_ESCAPE_CHAR)
+            query = query.where(matches)
             if not search_anonymous:
                 query = query.where(Donor.is_anonymous.is_(False))
         # Tie-broken by id: identical name pairs are common (family
