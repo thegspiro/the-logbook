@@ -2357,7 +2357,11 @@ Both take you to My Checklists with that shift's checks at the top.
 
 On a phone the list is compact: one row per checklist under a heading for each
 day (**Today**, **Tomorrow**, then the date). A day that has passed and still
-holds an unfiled check is marked overdue. **Unscheduled checklist** sits beside
+holds an unfiled check is marked overdue, and you can still start that check
+from it. A missed check stays on your list for seven days, which also keeps an
+overnight shift's end-of-shift check reachable after midnight; after that it
+drops off your list, though the fleet board and compliance report still count
+it. **Unscheduled checklist** sits beside
 the title (shortened to **Unscheduled**), and **Apparatus Inventory** and
 **Manage Templates** fold into a **⋯** menu. Completed checklists are grouped
 by the day checked. The **All / Start / End** filter is gone; every row carries
