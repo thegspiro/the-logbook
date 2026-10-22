@@ -3056,6 +3056,22 @@ in-progress guard, because both mint fresh tokens. The synchronous
 `POST /elections/{id}/remind-non-voters` is kept for API callers and now also
 answers `409` while a send is running.
 
+## Elections — A Rolled-Back Election Leaves Its Filed Result in Circulated Minutes (2026-10-22)
+
+Closing an election files its result with its meeting's minutes
+automatically (`auto_file_election_results`, on by default). When those minutes
+are already circulated or adopted, the result is a permanent addendum.
+`rollback_election` reopens a closed election but does not touch that filing,
+so after a rollback the minutes keep the old tally, the next close files
+nothing (a result is filed once per minutes and election), and the addendum
+cannot be removed. Found by the pass-11 security review (ELEC-49).
+
+**Needs an owner decision:** on a rollback, supersede the addendum with a
+dated correction, annotate it as withdrawn, or refuse a rollback once the
+result sits in adopted minutes. Until then, a manager who must roll back an
+election whose result is in adopted minutes should record the correction in
+the next meeting's minutes.
+
 ## Elections — Broadcast Election Emails Go One Message Per Member (2026-10-18)
 
 The nominations-open announcement and the pre-meeting package used to go out as
