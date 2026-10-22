@@ -8226,9 +8226,10 @@ export const SHOTS = [
     // picturing the wrong audience — and the placeholder says "within Training
     // Admin" in as many words.
     route: "/training/admin?tab=templates",
-    // Clipped to the hub's body: the Needs Attention queue and the section
-    // cards above it fill the first screen, and a viewport shot ends there.
-    selector: '[role="tabpanel"]',
+    // The whole page, unlike 09-01's clip to the template table: this
+    // caption is about where the section sits, and the Needs Attention queue
+    // and section cards above it fill the first screen.
+    fullPage: true,
   },
   {
     id: "02-66-compliance-thresholds",
@@ -10932,6 +10933,9 @@ export const SHOTS = [
     alt: "Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below",
     route: "/inventory/checklists/my",
     auth: "member",
+    // "No expiration recorded" is another item's lot line further down the
+    // check, not the state of the controls this pictures.
+    allowEmptyState: true,
     prepare: async (page) => {
       await clickByName("Unscheduled checklist")(page);
       await clickByName("Medic 3 Supply Check")(page);
@@ -10957,9 +10961,10 @@ export const SHOTS = [
         );
         if (heading) heading.scrollIntoView({ block: "start" });
         // `block: "start"` puts the heading under the sticky app bar and the
-        // check's own header; back off far enough that the item's name and its
+        // check's own header, and the compartment's sticky header now sits
+        // between them too; back off far enough that the item's name and its
         // quantity stepper are both in frame.
-        window.scrollBy(0, -190);
+        window.scrollBy(0, -250);
       });
       await page.waitForTimeout(500);
     },
