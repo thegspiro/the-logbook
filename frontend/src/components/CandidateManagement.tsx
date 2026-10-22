@@ -542,7 +542,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                               </span>
                             )}
                             {!candidate.accepted && (
-                              <span className="rounded-sm bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-700 dark:text-yellow-300">
+                              <span className="rounded-sm bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-800 dark:text-yellow-300">
                                 {slateFrozen ? 'Not accepted before nominations closed' : 'Pending'}
                               </span>
                             )}
@@ -574,8 +574,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                               } ${candidate.name}`}
                               className={`rounded px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
                                 candidate.accepted
-                                  ? 'bg-green-500/20 text-green-700 hover:bg-green-500/30 dark:text-green-300'
-                                  : 'bg-yellow-500/20 text-yellow-700 hover:bg-yellow-500/30 dark:text-yellow-300'
+                                  ? 'bg-green-500/20 text-green-800 hover:bg-green-500/30 dark:text-green-300'
+                                  : 'bg-yellow-500/20 text-yellow-800 hover:bg-yellow-500/30 dark:text-yellow-300'
                               }`}
                             >
                               {candidate.accepted
@@ -598,7 +598,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electi
                                 void handleDelete(candidate.id, candidate.name);
                               }}
                               aria-label={`Remove ${candidate.name}`}
-                              className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-700 hover:bg-red-500/30 dark:text-red-300"
+                              className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-800 hover:bg-red-500/30 dark:text-red-300"
                             >
                               Remove
                             </button>

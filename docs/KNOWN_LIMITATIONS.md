@@ -497,12 +497,12 @@ numbers a column cannot hold, duplicate identifiers, a tracking-mode change
 under a live assignment, the assign URL/body mismatch, category loops) is fixed;
 these were left because each is a policy choice or needs a schema change.
 
-| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ----------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.                                                                                                                                                                                                                                                          |
-| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                                                                                                                                                                                                                                                                  |
-| Same overflow class outside inventory                 | Open          | The inventory, medical-supplies and equipment-check request schemas are bounded to their columns and `tests/test_request_numeric_bounds.py` fails on a new unbounded field there. Measured 2026-10-20 across the whole API: 488 unbounded numeric request fields in 214 schemas in 22 other route groups (training 124, apparatus 86, facilities 54, grants 53, finance 31, events 27, store 22, elections 17). Each still reports a 1264 overflow as a generic error. Add a router to `_ROUTERS` in that test to list its fields. |
-| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                                                                                                                                                                                                                                                             |
+| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.                                                                                                                                                                                                                                                                                                                                                                        |
+| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                                                                                                                                                                                                                                                                                                                                                                                |
+| Numeric request fields with no column behind them     | Open          | Every numeric request field that is stored in a column is now bounded to that column's range, across the whole API, and `tests/test_request_numeric_bounds.py` walks the live routes and fails on a new unbounded one (`tests/request_bound_columns.py` maps each field to its column). 51 fields are listed there as deliberately unbounded because no column limits them: values kept inside JSON columns, values only compared against another value, transient inputs, and values a service validates itself. Those need an owner-chosen business limit (for example `CohortShiftRequest.days`) rather than one invented from a column type. |
+| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 ## Medical Supplies — Automatic Reorders Land in a Queue the EMS Officer Cannot Open (2026-10-11)
 
@@ -517,6 +517,21 @@ quartermaster, and the email tells the medical officer what was filed. Opening
 the queue to `inventory.manage_medical` for medical items would need
 domain-pinned reorder routes on `/medical-supplies` and a page to show them —
 reopen this if the department moves medical purchasing to the EMS officer.
+
+## Locations — Deleting One Clears Its Location From Eight Kinds of Records (2026-10-21)
+
+Found by the pass-8 security review of Locations & Kiosk
+([`LOC8-32-locations-kiosk.md`](./security-review/LOC8-32-locations-kiosk.md),
+LOC8-2). Deleting a location that events, event templates or apparatus still
+reference deactivates it instead, so those records keep it
+(`LocationService.remove_location`). Eight other kinds of record reference a
+location with `ON DELETE SET NULL`, so a location that only they reference is
+hard-deleted and each of them silently loses its location.
+
+| Records                                                                         | Status        | Detail                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `training_records`, `course_classes`, `course_cohorts`, `course_cohort_classes` | Open decision | Where a class or training record took place may be part of the history the record exists to keep. Adding these columns to `_RESTRICTING_LOCATION_REFERENCES` makes such a location deactivate instead; `tests/test_location_restrict_references.py` then needs the same list. |
+| `meetings`, `event_requests`, `inventory_items`, `storage_areas`                | Open decision | An item or storage area with no location is an ordinary state, so clearing it may be the right outcome here. A meeting or request is closer to an event, which is already protected, so it is worth deciding deliberately.                                                    |
 
 ## Room Kiosk Badge Check-In — A Copied Card Works With Nobody Watching (2026-10-03)
 
@@ -955,10 +970,17 @@ too. A department that chose S3 or SharePoint is keeping its files on the
 application server and has no indication of it — the step offers the options
 without saying they are not yet in effect (CLAUDE.md pitfall #19).
 
+**In progress (2026-10-21): the S3 / MinIO option is being built** (decision
+31 in `docs/FILE_STORAGE_HARDENING.md`), reading each department's own
+settings. The choice is still unread until step 2 lands, and Google Drive and
+OneDrive / SharePoint stay deferred.
+
 What has to exist before any option other than Local Storage does anything:
 
 - a storage interface the upload, download and delete paths all go through —
-  Phase 2 of `docs/FILE_STORAGE_HARDENING.md` builds it with a local backend;
+  Phase 2 of `docs/FILE_STORAGE_HARDENING.md` built the write side, and
+  step 1 of decision 31 (2026-10-21) routes every read, existence check,
+  delete and download through `file_storage_service` as well;
 - one backend per platform: S3 (which also covers MinIO; the compose file's
   `minio` service under the `with-s3` profile has nothing connecting to it
   either), then Google Drive and OneDrive / SharePoint, which need OAuth token
@@ -2220,8 +2242,8 @@ not be set through `PATCH /elections/{id}` at all.
 2026-10-05 answer for **Send Report Email** was to trim the guide, but the
 build had already overtaken it: **Send Report** under **Email Results Report**
 on a closed election's **Results & Publishing** panel (`PublishResultsPanel`,
-`POST /elections/{id}/send-report`) emails the results report to the election
-secretary, so the guide now describes the button rather than being trimmed —
+`POST /elections/{id}/send-report`) emails the results report to the officer
+who presses it (since 2026-10-21; it went to the election's creator before), so the guide now describes the button rather than being trimmed —
 resolved. The election-side link control also exists: the **Linked Meeting**
 field on `ElectionDetailPage` offers **Link a meeting** / **(change)** on a
 draft election, opening a picker of upcoming events and minutes records. There
@@ -2661,6 +2683,10 @@ not make that call.
 analytics dashboard and the per-event QR check-in analytics cover the need, and
 no per-event analytics panel is built.
 
+**Correction (2026-10-20, app-review B16):** the per-event QR check-in analytics
+cover the need only if something feeds them, and nothing does — see RPT2-3 below.
+The acceptance above stands for the department-wide dashboard.
+
 ## Events — Series RSVP Never Shows the Training Phase-Gate Warning (2026-09-04, security review EV-23)
 
 > ✅ **Resolved (2026-10-11), as the owner chose: list every ahead-of-phase
@@ -3028,15 +3054,22 @@ send each address its own message and record each address's outcome.
   is not counted. A package send has its own one-at-a-time guard and does not
   wait on a ballot send. `POST /elections/{id}/send-package` keeps the
   synchronous path for API callers.
-- **Nominations-open announcement:** sent after the open-nominations response,
-  in its own session. It skips sending if nominations have closed again by
+- **Nominations-open announcement:** queued by the open-nominations endpoint
+  as a `ballot_send_jobs` row of `kind = 'announcement'`, with its own
+  one-at-a-time guard. It skips sending if nominations have closed again by
   then.
+
+**Fixed 2026-10-21: the announcement's outcome is shown.** It used to run as
+a FastAPI background task whose outcome only reached the log and the audit
+table. The election response now carries the latest announcement job
+(`nominations_announcement`, election managers only), and the Nominations tab
+shows "Emailing members…", then how many members were emailed and how many
+could not be reached. A miss, or a send that fails outright, writes a
+`nominations_announcement_failed` audit row and emails the election managers.
+A restart mid-send reads as interrupted after 30 minutes, like any other job.
 
 What remains:
 
-- **The announcement's outcome is only logged.** It was best-effort before
-  and still is: nobody is shown which members it missed, and a restart while
-  it runs stops it partway with no record beyond the log.
 - **A package job interrupted by a restart** has the same limits as an
   interrupted ballot job (see the entry above): it reads as failed after 30
   minutes, and some recipients may already have the package.
@@ -6365,6 +6398,30 @@ Found driving W73 (`docs/workflow-review/W73-integrations.md`, W73-5).
 
   The catalog row is seeded per organization, so the last two also need a
   data change for existing installations.
+
+## RPT2-3 — The QR Check-In Analytics Dashboard Has A Reader And No Writer (2026-10-20)
+
+`/events/:id/analytics` (and the admin route) render `GET /analytics/metrics`, which counts
+`qr_scan`, `check_in_success` and `check_in_failure` rows in `analytics_events`. Nothing
+writes them. `POST /analytics/track` is the only writer in the repository; its only client
+method, `analyticsService.trackEvent`, is reached through `trackQRScan`, `trackCheckInSuccess`,
+`trackCheckInFailure`, `trackQRView` and `trackQRPrint`, and no page or component calls any of
+the five. `self_check_in` and `check_in_attendee` do not write an event either. The screen
+therefore reads zero scans, zero check-ins and an empty error breakdown, which looks like a
+department that has not used QR check-in rather than a feed that was never connected.
+
+**Why not fixed.** Which moments count as a "scan", a "success" and a "failure", and whether
+they are recorded by the browser or by the server, is a metric definition. **Owner decision:**
+
+1. **Record server-side** — `self_check_in` / `check_in_attendee` write the success and
+   failure events (with a bounded reason) and the QR page's load writes the scan. Reliable
+   and not forgeable by a member, at the cost of a write on the check-in path.
+2. **Wire the client calls** — call the five existing methods from the QR and check-in pages.
+   Smallest change, but a member's browser decides what is counted.
+3. **Retire the page** — remove the dashboard and the three analytics routes.
+
+Related: the accepted entry _"Events — There Is No Per-Event Analytics Panel"_ above rests on
+this dashboard covering the need. See `docs/app-review/reports-analytics.md` → Pass 5.
 
 ## Process
 

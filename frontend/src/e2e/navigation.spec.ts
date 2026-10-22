@@ -106,22 +106,32 @@ test.describe('Navigation', () => {
   });
 
   test.describe('Unknown Routes (404 handling)', () => {
-    test('should redirect unknown routes away from the unknown path', async ({ page }) => {
-      // App.tsx ends with <Route path="*" element={<Navigate to="/" replace />} />,
-      // and "/" then resolves by auth state.
+    test('should send a signed-out visitor to sign in rather than show the app', async ({ page }) => {
+      // The catch-all sits inside the signed-in layout, so an unknown address is
+      // gated like any other page and only shown the 404 after signing in.
       await page.goto('/this-route-does-not-exist-12345');
 
-      await expect(page).not.toHaveURL(/this-route-does-not-exist-12345/, {
-        timeout: 10000,
-      });
+      await expect(page).toHaveURL(/\/login/, { timeout: 10000 });
     });
 
-    test('should redirect unknown routes for authenticated users', async ({ page }) => {
+    test('should say the page was not found, at the same address, for a signed-in user', async ({ page }) => {
       await signIn(page);
 
       await page.goto('/nonexistent-page-xyz');
 
-      await expect(page).not.toHaveURL(/nonexistent-page-xyz/, { timeout: 10000 });
+      await expect(page).toHaveURL(/nonexistent-page-xyz/);
+      await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible({
+        timeout: 10000,
+      });
+    });
+
+    test('should offer a way back to the dashboard', async ({ page }) => {
+      await signIn(page);
+      await page.goto('/nonexistent-page-xyz');
+
+      await page.getByRole('button', { name: 'Go to the dashboard' }).click();
+
+      await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
     });
   });
 });

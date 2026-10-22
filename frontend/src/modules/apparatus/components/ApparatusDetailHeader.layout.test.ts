@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const source = readFileSync(join(__dirname, 'ApparatusDetailHeader.tsx'), 'utf8');
-const sharedHeader = readFileSync(join(__dirname, '../../../components/operations/OperationsPageHeader.tsx'), 'utf8');
+const sharedHeader = readFileSync(join(__dirname, '../../../components/layout/SectionPageHeader.tsx'), 'utf8');
 
 describe('ApparatusDetailHeader layout', () => {
   // The title row and the action row now belong to the shared Operations
@@ -22,7 +22,9 @@ describe('ApparatusDetailHeader layout', () => {
   it('draws through the shared header, whose title and action rows wrap', () => {
     expect(source).toContain('<OperationsPageHeader');
     expect(sharedHeader).toContain('flex flex-col gap-4 sm:flex-row');
-    expect(sharedHeader).toContain('className="flex flex-wrap items-center gap-2 sm:justify-end"');
+    expect(sharedHeader).toContain(
+      'className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-[0_1_auto] sm:justify-end"'
+    );
   });
 
   it('lets the unit number and its badges wrap', () => {

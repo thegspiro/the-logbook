@@ -207,6 +207,37 @@ describe('MemberProfilePage assigned inventory', () => {
   });
 });
 
+describe('MemberProfilePage position badges', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routeUserId = TARGET_ID;
+    grantedPermissions = [];
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    getEnabledModules.mockResolvedValue({ enabled_modules: [] });
+    getUserWithRoles.mockReset();
+  });
+
+  // The seeded Firefighter position is the rank's twin; the header already
+  // names the rank, so the badge said the same word a second time.
+  it('leaves out the position that mirrors a rank', async () => {
+    getUserWithRoles.mockResolvedValue({
+      ...targetUser,
+      roles: [
+        { id: 'role-member', name: 'Member', slug: 'member', is_system: true, mirrors_rank: false },
+        { id: 'role-firefighter', name: 'Firefighter', slug: 'firefighter', is_system: true, mirrors_rank: true },
+        { id: 'role-secretary', name: 'Secretary', slug: 'secretary', is_system: true, mirrors_rank: false },
+      ],
+    });
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByRole('heading', { name: 'Jane Doe' });
+    expect(screen.getByText('Secretary')).toBeInTheDocument();
+    expect(screen.getByText('Member')).toBeInTheDocument();
+    expect(screen.queryByText('Firefighter')).not.toBeInTheDocument();
+  });
+});
+
 const shareNothing = {
   email: false,
   personal_email: false,
@@ -480,6 +511,30 @@ describe('MemberProfilePage membership and privacy', () => {
     expect(screen.getByText('Visible to members')).toBeInTheDocument();
     expect(screen.getByText('Only you and leadership')).toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  // Members review B: the chip read a bare lowercase "active" with only a
+  // tooltip saying it was a control, and the dialog it opened was a styled
+  // div — no dialog role, no name, and Escape did nothing.
+  it('labels the status chip with the status and what pressing it does', async () => {
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    const chip = await screen.findByRole('button', { name: 'Change status, currently Active' });
+    expect(chip).toHaveTextContent('Status: Active');
+    expect(chip).toHaveTextContent('Change');
+  });
+
+  it('opens the status change as a named dialog that Escape closes', async () => {
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Change status, currently Active' }));
+    const dialog = screen.getByRole('dialog', { name: 'Change Member Status' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Change Member Status' })).not.toBeInTheDocument();
   });
 
   it('does not offer Archived as an ordinary status change', async () => {

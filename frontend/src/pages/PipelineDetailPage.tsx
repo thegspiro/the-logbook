@@ -32,6 +32,7 @@ import {
   RotateCcw,
   EyeOff,
   Lock,
+  ArchiveRestore,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -104,7 +105,7 @@ const StructureBadge: React.FC<{ type: ProgramStructureType }> = ({ type }) => {
   const colors: Record<ProgramStructureType, string> = {
     phases: 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
     sequential: 'bg-purple-500/10 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400',
-    flexible: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+    flexible: 'bg-green-500/10 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   };
 
   return (
@@ -125,7 +126,7 @@ const PositionBadge: React.FC<{ position: string }> = ({ position }) => {
   };
 
   return (
-    <span className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-700 dark:text-red-400">
+    <span className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-800 dark:text-red-400">
       {labels[position] || position}
     </span>
   );
@@ -134,12 +135,12 @@ const PositionBadge: React.FC<{ position: string }> = ({ position }) => {
 const ReqTypeBadge: React.FC<{ type: string }> = ({ type }) => {
   const colors: Record<string, string> = {
     hours: 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-    courses: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+    courses: 'bg-green-500/10 text-green-800 dark:bg-green-500/20 dark:text-green-400',
     skills_evaluation: 'bg-purple-500/10 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400',
     knowledge_test: 'bg-indigo-500/10 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400',
-    checklist: 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
+    checklist: 'bg-yellow-500/10 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
     certification: 'bg-pink-500/10 text-pink-700 dark:bg-pink-500/20 dark:text-pink-400',
-    shifts: 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+    shifts: 'bg-orange-500/10 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
     calls: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
   };
 
@@ -203,8 +204,8 @@ const RequirementList: React.FC<{
           <div key={pr.id} className="bg-theme-surface-secondary flex items-start justify-between gap-2 rounded-lg p-3">
             <div className="flex min-w-0 items-start space-x-3">
               <CheckCircle2 className="text-theme-text-muted mt-0.5 h-5 w-5" />
-              <div>
-                <div className="mb-1 flex items-center space-x-2">
+              <div className="min-w-0">
+                <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="text-theme-text-primary text-sm font-medium">
                     {pr.requirement?.name || `Requirement ${pr.requirement_id.slice(0, 8)}`}
                   </span>
@@ -219,7 +220,7 @@ const RequirementList: React.FC<{
                           ? 'Required to finish — click to make optional'
                           : 'Optional — click to make it required to finish'
                       }
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                      className={`inline-flex min-h-6 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
                         pr.is_required
                           ? 'bg-red-500/15 text-red-700 hover:bg-red-500/25 dark:text-red-400'
                           : 'bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover'
@@ -241,9 +242,9 @@ const RequirementList: React.FC<{
                           ? 'Must be finished before the other items in this stage — click to unlock them'
                           : 'Click to make members finish this before the other items in this stage'
                       }
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                      className={`inline-flex min-h-6 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
                         pr.is_prerequisite
-                          ? 'bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:text-amber-400'
+                          ? 'bg-amber-500/15 text-amber-800 hover:bg-amber-500/25 dark:text-amber-400'
                           : 'bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover'
                       }`}
                     >
@@ -810,7 +811,7 @@ const RequirementProgressRow: React.FC<{
                 {!item.member_visible && (
                   <span
                     title="Officer-only — the member does not see this step"
-                    className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-400"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-800 dark:text-amber-400"
                   >
                     <EyeOff className="h-3 w-3" aria-hidden="true" /> Officer only
                   </span>
@@ -1215,7 +1216,7 @@ const EnrollmentProgressModal: React.FC<{
                     )}
                     {complete && (
                       <CheckCircle2
-                        className="h-4 w-4 text-green-600 dark:text-green-400"
+                        className="h-4 w-4 text-green-700 dark:text-green-400"
                         aria-label="Phase complete"
                       />
                     )}
@@ -1315,6 +1316,10 @@ const PipelineDetailPage: React.FC = () => {
     after?: () => void;
   } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  // `confirm` above is this page's own dialog state; reactivation goes through
+  // the shared promise-based dialog instead.
+  const { confirm: askConfirm } = useConfirm();
+  const [isReactivating, setIsReactivating] = useState(false);
 
   useEffect(() => {
     if (programId) void loadProgram();
@@ -1562,6 +1567,33 @@ const PipelineDetailPage: React.FC = () => {
     });
   };
 
+  // A deactivated pipeline is reached from the list's "Show inactive" view.
+  // Reactivating restores the flag only: the backend leaves enrollments it
+  // withdrew on deactivation withdrawn, so the dialog says so.
+  const handleReactivateProgram = async () => {
+    if (!program || !programId) return;
+    const confirmed = await askConfirm({
+      title: 'Reactivate pipeline',
+      message:
+        `Reactivate "${program.name}"? It returns to the pipeline list and members can be enrolled in it again. ` +
+        `Members who were withdrawn when it was deactivated are not re-enrolled; enroll them again if they should continue.`,
+      confirmLabel: 'Reactivate',
+      cancelLabel: 'Leave inactive',
+      variant: 'info',
+    });
+    if (!confirmed) return;
+    setIsReactivating(true);
+    try {
+      await trainingProgramService.updateProgram(programId, { active: true });
+      toast.success(`${program.name} reactivated`);
+      await loadProgram();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reactivate pipeline'));
+    } finally {
+      setIsReactivating(false);
+    }
+  };
+
   // Toggle whether a linked requirement is required to complete its phase.
   // Enrolled members' progress is recomputed server-side, so refresh nothing
   // else here — the overview is structural, not per-member.
@@ -1646,10 +1678,11 @@ const PipelineDetailPage: React.FC = () => {
               <div className="mb-2 flex items-center space-x-3">
                 <h1 className="text-theme-text-primary text-2xl font-bold">{program.name}</h1>
                 {program.is_template && (
-                  <span className="rounded-sm bg-green-500/20 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">
+                  <span className="rounded-sm bg-green-500/20 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
                     Template
                   </span>
                 )}
+                {!program.active && <span className="badge bg-theme-surface text-theme-text-secondary">Inactive</span>}
               </div>
               {program.description && (
                 <p className="text-theme-text-muted mb-3 max-w-2xl text-sm">{program.description}</p>
@@ -1697,6 +1730,21 @@ const PipelineDetailPage: React.FC = () => {
               <Printer className="h-4 w-4" />
               <span>Print</span>
             </button>
+            {canManage && !program.active && (
+              <button
+                type="button"
+                onClick={() => void handleReactivateProgram()}
+                disabled={isReactivating}
+                className="btn-secondary btn-sm"
+              >
+                {isReactivating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+                )}
+                <span>Reactivate</span>
+              </button>
+            )}
             {canManage && (
               <button
                 onClick={() => setShowEditProgram(true)}
@@ -1985,7 +2033,7 @@ const PipelineDetailPage: React.FC = () => {
             <div className="card p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-theme-text-primary flex items-center gap-2 font-medium">
-                  <Flag className="h-4 w-4 text-yellow-600 dark:text-yellow-400" /> Milestones
+                  <Flag className="h-4 w-4 text-yellow-700 dark:text-yellow-400" /> Milestones
                 </h3>
                 {canManage && (
                   <button

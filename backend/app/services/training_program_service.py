@@ -1219,14 +1219,18 @@ class TrainingProgramService:
         organization_id: UUID | str,
         target_position: Optional[str] = None,
         is_template: Optional[bool] = None,
+        include_inactive: bool = False,
     ) -> List[TrainingProgram]:
         """
-        Get training programs with optional filters
+        Get training programs with optional filters. Deactivated programs are
+        left out unless *include_inactive*, which the list screen asks for so
+        an officer can reactivate one.
         """
         query = select(TrainingProgram).where(
             TrainingProgram.organization_id == organization_id,
-            TrainingProgram.active.is_(True),
         )
+        if not include_inactive:
+            query = query.where(TrainingProgram.active.is_(True))
 
         if target_position:
             query = query.where(TrainingProgram.target_position == target_position)
@@ -1316,6 +1320,10 @@ class TrainingProgramService:
             if prereq_error:
                 return None, prereq_error
             data["prerequisite_program_ids"] = list(prerequisite_ids) or None
+        # Null would hide the program from every list (they match
+        # ``active IS TRUE``) without being a deactivation anyone can undo.
+        if "active" in data and data["active"] is None:
+            return None, "Choose whether the program is active"
         if (
             "allows_concurrent_enrollment" in data
             and data["allows_concurrent_enrollment"] is None

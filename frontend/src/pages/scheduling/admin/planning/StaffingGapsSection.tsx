@@ -299,7 +299,7 @@ const StaffingGapsSection: React.FC = () => {
                     {gap.shift.shift_officer_name ? ` · ${gap.shift.shift_officer_name}` : ''}
                   </p>
                 </div>
-                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-800 dark:text-amber-400">
                   <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                   {gap.openSeats} of {gap.capacity} open
                 </span>

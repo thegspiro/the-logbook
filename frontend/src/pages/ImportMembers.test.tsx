@@ -878,3 +878,51 @@ describe('ImportMembers', () => {
     });
   });
 });
+
+describe('ImportMembers — a role column naming a rank', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUsers.mockResolvedValue([]);
+    mockGetWelcomeEmailAvailability.mockReset();
+    mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+  });
+
+  // "Firefighter" in the role column used to assign the seeded position that
+  // mirrors the rank, which put the word on the roster as a position and left
+  // the rank column blank.
+  it('reports the row and points at the rank column instead of assigning the mirror', async () => {
+    mockGetRoles.mockResolvedValue([
+      { id: 'role-1', name: 'Member', mirrors_rank: false },
+      { id: 'role-2', name: 'Firefighter', mirrors_rank: true },
+    ]);
+
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,role\nJohn,Doe,john@example.com,Firefighter');
+
+    await clickImport();
+
+    await waitFor(() => {
+      expect(screen.getByText(/role "Firefighter" is a rank — put it in the rank column instead/)).toBeInTheDocument();
+    });
+    expect(mockCreateMember).not.toHaveBeenCalled();
+  });
+
+  it('still resolves an ordinary role beside it', async () => {
+    mockGetRoles.mockResolvedValue([
+      { id: 'role-1', name: 'Member', mirrors_rank: false },
+      { id: 'role-2', name: 'Firefighter', mirrors_rank: true },
+    ]);
+    mockCreateMember.mockResolvedValue({ id: 'u1' });
+
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,role,rank\nJohn,Doe,john@example.com,Member,Firefighter');
+
+    await clickImport();
+
+    await waitFor(() => {
+      expect(mockCreateMember).toHaveBeenCalledWith(
+        expect.objectContaining({ role_ids: ['role-1'], rank: 'Firefighter' })
+      );
+    });
+  });
+});

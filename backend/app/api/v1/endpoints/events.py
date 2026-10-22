@@ -5,7 +5,6 @@ Endpoints for event management including events, RSVPs, and attendance tracking.
 """
 
 import copy
-import os
 import uuid as uuid_lib
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
@@ -96,6 +95,7 @@ from app.schemas.event import (
     VisibleEventTypesResponse,
 )
 from app.schemas.organization import MembershipTierSettings
+from app.services import file_storage_service as file_storage
 from app.services.documents_service import DocumentsService
 from app.services.event_organizer_service import (
     FALLBACK_POSITIONS_SETTING,
@@ -116,7 +116,6 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
-    stored_file_response,
 )
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.integration_services.notification_dispatch import (
@@ -127,7 +126,6 @@ from app.services.notifications_service import NotificationsService
 from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.contact_visibility import load_contact_policy
-from app.utils.event_attachments import is_path_in_org
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -3169,16 +3167,18 @@ async def download_event_attachment(
     # injected file_path that points at another organization's subdirectory —
     # and the generic event create/update payloads can carry attachment
     # dictionaries. Same fix, and same reasoning, as DOC-24 in documents.py.
-    resolved_path = os.path.realpath(file_path)
-    if not is_path_in_org(file_path, current_user.organization_id):
+    resolved_path = file_storage.resolve(
+        file_path, current_user.organization_id, StorageArea.EVENT_ATTACHMENTS
+    )
+    if resolved_path is None:
         logger.warning(
             f"Blocked out-of-org event attachment read for event {event_id}: "
-            f"{file_path} resolved to {resolved_path}, outside the upload "
-            f"subtree of org {current_user.organization_id}"
+            f"{file_path} is outside the upload subtree of org "
+            f"{current_user.organization_id}"
         )
         raise HTTPException(status_code=403, detail="Access denied")
 
-    if not os.path.exists(resolved_path):
+    if not await file_storage.exists(resolved_path):
         raise HTTPException(status_code=404, detail="Attachment file not found on disk")
 
     # The attachments column is also writable through the generic event
@@ -3193,8 +3193,8 @@ async def download_event_attachment(
     )
     extension = download_names.stored_extension(resolved_path)
     tz = await resolve_scheduling_timezone(db, current_user.organization_id)
-    return stored_file_response(
-        path=resolved_path,
+    return await file_storage.file_response(
+        resolved_path,
         filename=download_names.descriptive_filename(
             download_names.local_day(event.start_datetime, tz),
             event.title,
@@ -3262,14 +3262,10 @@ async def delete_event_attachment(
         # path was tampered with — a root-level check would let an injected
         # path delete another tenant's file. The metadata row is removed
         # regardless.
-        resolved_path = os.path.realpath(file_path)
-        try:
-            if is_path_in_org(
-                file_path, current_user.organization_id
-            ) and os.path.exists(resolved_path):
-                os.remove(resolved_path)
-        except OSError as e:
-            logger.warning(f"Failed to remove attachment file {file_path}: {e}")
+        confined = file_storage.resolve(
+            file_path, current_user.organization_id, StorageArea.EVENT_ATTACHMENTS
+        )
+        await file_storage.delete_quietly(confined)
 
     # Remove from attachments list
     event.attachments = [a for a in attachments if a.get("id") != attachment_id]

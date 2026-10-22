@@ -29,12 +29,15 @@ import { ProxyVotingManagement } from '../components/ProxyVotingManagement';
 import { EligibilityRoster } from '../modules/elections/components/EligibilityRoster';
 import { RunoffChain } from '../modules/elections/components/RunoffChain';
 import { PublishResultsPanel } from '../modules/elections/components/PublishResultsPanel';
+import { NominationsAnnouncementStatus } from '../modules/elections/components/NominationsAnnouncementStatus';
 import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWorkflowTabs';
 import { useAuthStore } from '../stores/authStore';
 import { ElectionBallot } from '../components/ElectionBallot';
 import { ElectionStatus, VotingMethod } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Breadcrumbs, PromptDialog } from '../components/ux';
+import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
+import { Vote } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
@@ -1054,22 +1057,19 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  // Explicit items rather than a generated trail: the URL is /elections/:id, and
-  // the generator skips the id, which would leave a single "Elections" crumb —
-  // and a one-crumb generated trail renders nothing at all. Defined once so it
-  // reaches the loading and not-found branches too; before this they offered no
-  // route away from the page whatsoever, not even the "Back to Elections" link
-  // the loaded branch carries.
+  // The loading and not-found branches have no record to head, so they keep an
+  // explicit trail as their way out; the loaded branch's trail comes from the
+  // Governance header. Explicit rather than generated: the URL is
+  // /elections/:id, and the generator skips the id, which would leave a single
+  // "Elections" crumb — and a one-crumb generated trail renders nothing at all.
   const trail = [{ label: 'Elections', path: '/elections' }, { label: election?.title || 'Election' }];
 
   if (loading) {
     return (
-      <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <Breadcrumbs items={trail} />
-          <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
-            <div className="text-theme-text-muted">Loading election...</div>
-          </div>
+      <div className="mx-auto max-w-7xl">
+        <Breadcrumbs items={trail} />
+        <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
+          <div className="text-theme-text-muted">Loading election...</div>
         </div>
       </div>
     );
@@ -1077,12 +1077,10 @@ export const ElectionDetailPage: React.FC = () => {
 
   if (error || !election) {
     return (
-      <div className="min-h-screen">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <Breadcrumbs items={trail} />
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
-            <p className="text-sm text-red-700 dark:text-red-300">{error || 'Election not found'}</p>
-          </div>
+      <div className="mx-auto max-w-7xl">
+        <Breadcrumbs items={trail} />
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
+          <p className="text-sm text-red-700 dark:text-red-300">{error || 'Election not found'}</p>
         </div>
       </div>
     );
@@ -1118,37 +1116,37 @@ export const ElectionDetailPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs items={trail} />
-
-        {/* Header */}
-        <div className="mb-6">
-          <div className="mb-2 flex items-center">
-            <Link to="/elections" className="mr-2 text-blue-600 hover:text-blue-700">
-              &larr; Back to Elections
-            </Link>
-          </div>
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <h2 className="text-theme-text-primary min-w-0 text-2xl font-bold break-words">{election.title}</h2>
-                {election.is_runoff && (
-                  <span className="rounded-sm bg-purple-100 px-2 py-1 text-xs font-semibold text-purple-800 dark:bg-purple-500/20 dark:text-purple-400">
-                    Runoff Round {election.runoff_round}
-                  </span>
-                )}
-              </div>
-              {election.is_runoff && election.parent_election_id && (
-                <Link
-                  to={`/elections/${election.parent_election_id}`}
-                  className="text-sm text-blue-600 hover:text-blue-700"
-                >
-                  &larr; View original election
-                </Link>
+    <div className="mx-auto max-w-7xl">
+      <div>
+        <GovernancePageHeader
+          icon={Vote}
+          breadcrumbLabel={election.title}
+          title={
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 break-words">{election.title}</span>
+              {election.is_runoff && (
+                <span className="rounded-sm bg-purple-100 px-2 py-1 text-xs font-semibold text-purple-800 dark:bg-purple-500/20 dark:text-purple-400">
+                  Runoff Round {election.runoff_round}
+                </span>
               )}
-              {election.description && <p className="text-theme-text-secondary mt-2">{election.description}</p>}
-            </div>
+            </span>
+          }
+          subtitle={
+            election.is_runoff || election.description ? (
+              <>
+                {election.is_runoff && election.parent_election_id && (
+                  <Link
+                    to={`/elections/${election.parent_election_id}`}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    &larr; View original election
+                  </Link>
+                )}
+                {election.description && <p className="text-theme-text-secondary mt-2">{election.description}</p>}
+              </>
+            ) : undefined
+          }
+          actions={
             <span
               className={`inline-flex shrink-0 rounded-full px-3 py-1 text-sm leading-5 font-semibold ${getStatusBadgeClass(
                 election.status
@@ -1156,8 +1154,8 @@ export const ElectionDetailPage: React.FC = () => {
             >
               {election.status}
             </span>
-          </div>
-        </div>
+          }
+        />
 
         {/* Election Lifecycle Stepper */}
         {election.status !== ElectionStatus.CANCELLED && (
@@ -1213,7 +1211,7 @@ export const ElectionDetailPage: React.FC = () => {
                         >
                           {step.label}
                         </div>
-                        <div className="text-theme-text-muted text-xs">{step.description}</div>
+                        <div className="text-theme-text-muted sr-only text-xs lg:not-sr-only">{step.description}</div>
                       </div>
                     </div>
                   </React.Fragment>
@@ -1294,7 +1292,7 @@ export const ElectionDetailPage: React.FC = () => {
                       <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
                         Every ballot link already sent was invalidated because the ballot changed
                       </h3>
-                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                         The links in the ballot emails sent{' '}
                         {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} showed the old
                         ballot, so they no longer work.{' '}
@@ -1308,7 +1306,7 @@ export const ElectionDetailPage: React.FC = () => {
                       <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300">
                         Every ballot link already sent was invalidated by the rollback
                       </h3>
-                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                         Reopening regenerated the anonymity salt, so the links in the ballot emails sent{' '}
                         {election.email_sent_at ? formatDateTime(election.email_sent_at, tz) : 'earlier'} no longer
                         work. Resend ballots so members can vote.
@@ -1334,7 +1332,7 @@ export const ElectionDetailPage: React.FC = () => {
                   {lastSkippedDetails.length} member(s) skipped when sending{' '}
                   {lastSkippedSource === 'reminders' ? 'reminders' : 'ballots'}
                 </h3>
-                <p className="mt-1 mb-2 text-xs text-amber-600 dark:text-amber-400">
+                <p className="mt-1 mb-2 text-xs text-amber-700 dark:text-amber-400">
                   These members were not sent a {lastSkippedSource === 'reminders' ? 'reminder' : 'ballot'}, for the
                   reason shown. To let one of them vote, add a voter override on the Overrides tab.
                 </p>
@@ -1342,7 +1340,7 @@ export const ElectionDetailPage: React.FC = () => {
                   {lastSkippedDetails.map((d, i) => (
                     <li key={i} className="flex gap-2">
                       <span className="shrink-0 font-medium">{d.name}:</span>
-                      <span className="text-amber-600 dark:text-amber-400">{d.reason}</span>
+                      <span className="text-amber-700 dark:text-amber-400">{d.reason}</span>
                     </li>
                   ))}
                 </ul>
@@ -1350,7 +1348,7 @@ export const ElectionDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setLastSkippedDetails([])}
-                className="ml-4 shrink-0 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200"
+                className="ml-4 shrink-0 text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200"
                 aria-label="Dismiss skipped voters banner"
               >
                 &times;
@@ -1788,7 +1786,7 @@ export const ElectionDetailPage: React.FC = () => {
                     {election.status === ElectionStatus.OPEN && election.email_sent && (
                       <span className="text-theme-text-muted inline-flex items-center gap-1 text-xs">
                         <svg
-                          className="h-4 w-4 text-green-600"
+                          className="h-4 w-4 text-green-700 dark:text-green-600"
                           fill="currentColor"
                           viewBox="0 0 20 20"
                           aria-hidden="true"
@@ -1949,7 +1947,16 @@ export const ElectionDetailPage: React.FC = () => {
 
               {/* Tab: Nominations */}
               {activeTab === 'nominations' && election.status !== ElectionStatus.CANCELLED && (
-                <div className="mb-6">
+                <div className="mb-6 space-y-4">
+                  {canManage && election.nominations_announcement && (
+                    <NominationsAnnouncementStatus
+                      electionId={electionId}
+                      announcement={election.nominations_announcement}
+                      onFinished={() => {
+                        void fetchElection();
+                      }}
+                    />
+                  )}
                   <NominationsPanel
                     electionId={electionId}
                     election={election}
@@ -2422,7 +2429,7 @@ export const ElectionDetailPage: React.FC = () => {
                                           entry.severity === 'critical'
                                             ? 'bg-red-500/10 text-red-700 dark:text-red-400'
                                             : entry.severity === 'warning'
-                                              ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
+                                              ? 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400'
                                               : 'bg-theme-surface-secondary text-theme-text-muted'
                                         }`}
                                       >

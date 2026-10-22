@@ -47,12 +47,12 @@ const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; ic
   draft: { label: 'Draft', color: 'bg-theme-surface-secondary text-theme-text-secondary', icon: FileText },
   pending_review: {
     label: 'Pending Review',
-    color: 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
+    color: 'bg-yellow-500/10 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
     icon: Clock,
   },
   approved: {
     label: 'Approved',
-    color: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+    color: 'bg-green-500/10 text-green-800 dark:bg-green-500/20 dark:text-green-400',
     icon: CheckCircle2,
   },
   rejected: {
@@ -62,7 +62,7 @@ const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; ic
   },
   revision_requested: {
     label: 'Revision Requested',
-    color: 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+    color: 'bg-orange-500/10 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
     icon: RotateCcw,
   },
 };
@@ -1226,7 +1226,7 @@ const ReviewSubmissionsPage: React.FC = () => {
         <h2 className="sr-only">Review Submissions</h2>
         {pendingCount > 0 && (
           <div className="mb-6 flex justify-end">
-            <div className="flex shrink-0 items-center space-x-2 rounded-lg bg-yellow-500/20 px-3 py-1.5 whitespace-nowrap text-yellow-700 dark:text-yellow-400">
+            <div className="flex shrink-0 items-center space-x-2 rounded-lg bg-yellow-500/20 px-3 py-1.5 whitespace-nowrap text-yellow-800 dark:text-yellow-400">
               <AlertCircle className="h-4 w-4" />
               <span className="text-sm font-medium">{pendingCount} pending</span>
             </div>

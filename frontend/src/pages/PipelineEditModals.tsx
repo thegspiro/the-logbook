@@ -778,7 +778,7 @@ export const RequirementFormModal: React.FC<{
 
       {editingShared && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
           <p className="text-theme-text-secondary text-sm">
             This is a department requirement linked into the program. Changes here apply everywhere it is used — only
             &ldquo;Required to complete the phase&rdquo; and the &ldquo;In this program&rdquo; settings are specific to
@@ -914,7 +914,7 @@ export const RequirementFormModal: React.FC<{
           {linksCourses && <RecencyWindowField idPrefix="rq" value={recencyDays} onChange={setRecencyDays} />}
           {(type === 'hours' || type === 'courses') && (
             <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
               <div className="space-y-2">
                 <p className="text-theme-text-secondary text-sm">
                   {allowsExternal ? (

@@ -1,7 +1,8 @@
 # Application Review — Reports & Analytics (Tier B)
 
 **Prefix:** `RPT2` · **Iteration:** B16 · **Reviewed:** 2026-08-06 (pass 1),
-2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4)
+2026-08-08 (pass 2), 2026-08-09 (pass 3), 2026-08-09 (pass 4),
+2026-10-20 (pass 5)
 
 **Backend:** `endpoints/reports.py` (7), `analytics.py` (3), `platform_analytics.py`
 (1), `services/reports_service.py` (1,952 L)
@@ -9,6 +10,113 @@
 **Prior audit:** `docs/module-audit/reports-analytics.md` (iteration 16) — RPT-1
 (HIGH cross-org leak) and RPT-2 (500 on bad filter) fixed; RPT-3 (PII at
 `reports.view`), RPT-4 (org-id typing), RPT-5 (aggregate correctness) left open.
+
+---
+
+## Pass 5 (2026-10-20) — one member could take the analytics dashboard down for the whole organization (2 fixed, 1 flagged)
+
+Lens for this pass: the update-payload discipline of B4–B15 driven through the real
+handlers, then — because the null probe came back clean — the other direction: what a
+client-supplied value does when it is _read back_. The module has one update route
+(`PATCH /reports/saved/{id}`) and three analytics routes; the 2,439-line report service
+and the schedule helper were scanned for dead names and read at the saved-report paths.
+
+**Saved-report `PATCH` (clean).** A real change saves and answers 200 (a rename; a schedule
+switched on and then off, which sets and clears `next_run_date`), and `null` for every field
+of `SavedReportUpdate` behaves: the two NOT NULL columns (`name`, `is_scheduled`) answer 400
+and keep their value, and the nullable ones are accepted. The handler commits and refreshes
+before it responds, so the GF2-1 shape (a flushed row returned with an expired `updated_at`)
+is not present. No code change; the nine cases are kept as a regression file.
+
+### RPT2-1 — MEDIUM — a non-string `error_reason` in one stored event broke `/analytics/metrics` for everyone — ✅ FIXED
+
+`POST /analytics/track` is open to any authenticated member and stores a client-supplied
+`metadata` dict. `GET /analytics/metrics` builds its failure breakdown by using
+`metadata["error_reason"]` (or `["reason"]`) as a dictionary key. A dict or list is
+unhashable, so the line raised `TypeError`; the bad row is stored, so **every later
+`/metrics` call for the organization answered 500** — for every holder of `analytics.view`,
+on every event filter, until someone deleted the row by hand. Reproduced over HTTP: a
+`check_in_failure` event with `{"error_reason": {"a": 1}}` (and again with a list), then
+`GET /analytics/metrics` → 500. A very long string was not an error but was echoed into the
+response as a key, up to 500 times.
+
+**Fixed** with `_failure_reason(metadata)`: the reason is used only if it is a non-empty
+string, is cut to 100 characters, and is otherwise counted as `unknown`. Strings behave as
+before (`error_reason`, then `reason`).
+
+### RPT2-2 — LOW/MED — `/analytics/track` stored metadata of any size — ✅ FIXED
+
+The request body limit is 60 MB (`MAX_REQUEST_BODY_SIZE`), and the route had no bound of its
+own, so one member could store a row that size, repeatedly, and `/analytics/export` returns up
+to 1,000 rows including their metadata. **Fixed** with a validator on `AnalyticsEventCreate`
+that answers 422 for metadata over 4,096 bytes serialized; the client posts a handful of short
+keys (device, timestamp, an error type and message). There is still no per-caller rate limit
+on the route: one is not added because members check in from a shared station network, where a
+per-IP limit would drop legitimate events silently (the client discards failures), and a
+per-user one is a design call. Noted, not built.
+
+Tests: `tests/test_analytics_endpoints_integration.py` (8) and
+`tests/test_saved_report_update_endpoints_integration.py` (9). With the endpoint change
+stashed, 4 of the 8 analytics cases fail (dict, list, long reason, oversized metadata); the
+other 13 pass either way. 0 of the 17 are selected under the unit job's marker expression.
+
+### RPT2-3 — MEDIUM — nothing in the application writes an analytics event, so the dashboard reads zeros — 🚩 FLAGGED (owner decision)
+
+`/analytics/metrics` and `/analytics/export` read the `analytics_events` table, and the
+`AnalyticsDashboardPage` (per-event at `/events/:id/analytics`, and the admin route) renders
+them. The only writer in the repository is `POST /analytics/track`, whose only client is
+`analyticsService.trackEvent`, which is reached through `trackQRScan`, `trackCheckInSuccess`,
+`trackCheckInFailure`, `trackQRView` and `trackQRPrint` — **and none of those five is called
+by any page or component** (searched `frontend/src` excluding tests). The server never
+creates an `AnalyticsEvent` itself either: `self_check_in` and `check_in_attendee` do not
+write one. So on an installation where nobody has called the API by hand, the screen reports
+zero scans, zero check-ins and an empty error breakdown, which is indistinguishable from a
+department that simply has not used QR check-in.
+
+This is the CLAUDE.md #19 shape in reverse: a reader with no writer. Mirrored to
+`docs/KNOWN_LIMITATIONS.md` (RPT2-3) with the options (emit server-side from the check-in
+handlers, wire the five client calls, or retire the page), and a correction is added under
+the existing accepted entry _"Events — There Is No Per-Event Analytics Panel"_, which says
+the per-event QR check-in analytics "cover the need" on the assumption that they are fed.
+Not fixed here: which events to count, and where, is a metric definition.
+
+### Observation, not changed
+
+A failed check-in whose metadata is empty or missing is skipped by the breakdown rather than
+counted as `unknown`, and the sample is the latest 500 failures, so the breakdown need not sum
+to `failed_check_ins`. Harmless today, since no failure events exist (RPT2-3).
+
+### Verified good ✅ (this pass)
+
+- **Nothing unreferenced.** The AST scan (counting `tests/`, `scripts/`, `alembic/`) over the
+  three endpoint files, the report and schedule services, the model and the schema found no
+  unused name or method, and no `noqa` / `TODO`.
+- **Gating.** `reports.manage` on saved-report create / update / delete, `reports.view` on
+  list / run / generate, the PII gate (`_enforce_report_pii_permission`) on save, update, run
+  and generate; `analytics.view` on metrics and export; `settings.manage` on platform
+  analytics. `/track` is open to any member by design.
+- **Org scoping.** Every by-id read of a saved report filters `organization_id`; every
+  analytics query filters it, including the time-to-check-in self-join.
+
+### Not read (scope, stated plainly)
+
+The report generators inside `reports_service.py` (the roster, training, attendance, compliance
+and department-overview builders) were left to their dedicated suites, which pass; the
+scheduled-delivery task was covered by `test_saved_report_delivery.py`; `platform_analytics.py`
+was read for its gate only; the `modules/reports` frontend was not read.
+
+### Completion gate (pass 5)
+
+| Check                                                           | Result                                                             |
+| --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `flake8 app/ tests/`                                            | ✅ exit 0, no output                                               |
+| `black --check app/ tests/`                                     | ✅ 1857 files unchanged                                            |
+| `isort --check` (changed files)                                 | ✅                                                                 |
+| `mypy app/api/v1/endpoints/analytics.py`                        | ✅ no issues                                                       |
+| Related backend suites (14 files incl. the org-scoping ratchet) | ✅ 180 passed                                                      |
+| New files                                                       | ✅ 17 pass; 4 fail without the fix; 0 under the unit job's markers |
+| `check_route_permissions.py --strict`                           | ✅ 0 errors, 0 warnings                                            |
+| Frontend                                                        | n/a — no frontend change                                           |
 
 ---
 

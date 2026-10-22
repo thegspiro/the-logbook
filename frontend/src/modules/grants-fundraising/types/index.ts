@@ -249,7 +249,7 @@ export const APPLICATION_STATUS_COLORS: Record<string, string> = {
   under_review: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
   awarded: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+  active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
   reporting: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
   closed: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
@@ -273,7 +273,7 @@ export const COMPLIANCE_STATUS_COLORS: Record<string, string> = {
 export const PRIORITY_COLORS: Record<string, string> = {
   low: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400',
   medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-  high: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+  high: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
   critical: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 

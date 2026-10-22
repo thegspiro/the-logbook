@@ -74,7 +74,7 @@ export const BallotItemCard: React.FC<BallotItemCardProps> = ({
                   name={`item-${item.id}`}
                   checked={choice?.choice === BallotChoice.APPROVE}
                   onChange={() => onChoice(item.id, BallotChoice.APPROVE)}
-                  className="focus:ring-theme-focus-ring h-4 w-4 text-green-600"
+                  className="focus:ring-theme-focus-ring h-4 w-4 text-green-700 dark:text-green-600"
                 />
                 <span className="text-theme-text-primary font-medium">Approve</span>
               </label>

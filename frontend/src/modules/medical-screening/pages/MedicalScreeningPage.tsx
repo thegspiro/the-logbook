@@ -191,7 +191,7 @@ export const MedicalScreeningPage: React.FC = () => {
       {expiringWithin30.length > 0 && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
             <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
               {expiringWithin30.length} screening{expiringWithin30.length === 1 ? '' : 's'} expiring in the next 30 days
             </span>

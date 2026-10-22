@@ -59,6 +59,8 @@ from app.schemas.enum_validation import validate_enum_value
 from app.schemas.training import (
     BulkTrainingRecordCreate,
     BulkTrainingRecordResult,
+    CertAlertSettings,
+    CertAlertSettingsUpdate,
     ComplianceSummary,
     DuplicateWarning,
     HistoricalImportConfirmRequest,
@@ -100,6 +102,10 @@ from app.services.training_compliance import (
     member_join_date,
     requirement_applies_to_user,
     tally_standing,
+)
+from app.services.training_course_names import (
+    library_course_names,
+    member_course_name,
 )
 from app.services.training_record_notices import (
     CHANGED,
@@ -746,7 +752,24 @@ async def list_records(
     )
 
     result = await db.execute(query)
-    return result.scalars().all()
+    records = result.scalars().all()
+    if is_officer:
+        # Officers get the stored name: the record edit form sends it back on
+        # save, so a display name here would overwrite it.
+        return records
+    names = await library_course_names(
+        db, str(current_user.organization_id), (r.course_id for r in records)
+    )
+    # Copies, never the ORM rows: assigning to a loaded record would let the
+    # session flush the display name into the stored one.
+    return [
+        TrainingRecordResponse.model_validate(r).model_copy(
+            update={
+                "course_name": member_course_name(r.course_id, r.course_name, names)
+            }
+        )
+        for r in records
+    ]
 
 
 @router.post(
@@ -2205,6 +2228,67 @@ async def get_competency_matrix(
 # ============================================
 # Certification Expiration Alert Processing
 # ============================================
+
+
+@router.get("/certifications/alert-settings", response_model=CertAlertSettings)
+async def get_certification_alert_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Read the department's certification expiry alert switches.
+
+    Alerts are off until a training manager turns them on, so a department that
+    has never opened this reads all three as off.
+
+    Requires `training.manage` permission.
+    """
+    from app.services.cert_alert_service import CertAlertService
+
+    service = CertAlertService(db)
+    return await service.get_alert_settings(current_user.organization_id)
+
+
+@router.put("/certifications/alert-settings", response_model=CertAlertSettings)
+async def update_certification_alert_settings(
+    updates: CertAlertSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Turn certification expiry alerts on or off, and choose who else is copied.
+
+    - `enabled`: members are emailed (and notified in the app) at 90, 60, 30
+      and 7 days before a certification expires, and again once it has.
+    - `cc_chief_on_escalation`: the chief officers are copied on the expired
+      notice.
+    - `include_personal_email_on_final`: the expired notice also goes to the
+      member's personal address.
+
+    Only the switches sent are changed; the officer position lists kept in the
+    same setting are left as they are.
+
+    Requires `training.manage` permission.
+    """
+    from app.services.cert_alert_service import CertAlertService
+
+    changes = updates.model_dump(exclude_unset=True)
+    service = CertAlertService(db)
+    settings = await service.update_alert_settings(
+        current_user.organization_id, changes
+    )
+    if settings is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    await log_audit_event(
+        db=db,
+        event_type="cert_alert_settings_updated",
+        event_category="training",
+        severity="info",
+        event_data={"changes": changes, "settings": settings},
+        user_id=str(current_user.id),
+    )
+    return settings
 
 
 @router.post("/certifications/process-alerts")

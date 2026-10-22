@@ -4256,54 +4256,55 @@ class ElectionService:
         per-message cap, and a refused address is counted rather than hidden
         inside one BCC'd message the mail server partly accepted. At about a
         second per member that outlasts a request, so the open-nominations
-        endpoint runs this after its response.
+        endpoint queues this as a background job
+        (``ballot_send_jobs.NominationsAnnouncementSend``), whose row the
+        election page reads.
 
         Returns the recipient and unreached counts (also audited as
-        ``nominations_announced``), or None when nothing was sent.
-        Best-effort: any failure is logged, never raised — an email outage
-        must not block the phase transition.
+        ``nominations_announced``), or None when nominations are no longer
+        open, so nothing was sent. A failure of the send itself raises, for
+        the job to record; it never undoes the phase transition, which
+        committed before the job was queued.
         """
-        try:
-            import html as html_mod
+        import html as html_mod
 
-            from app.services.email_service import EmailService, wrap_email_body
+        from app.services.email_service import EmailService, wrap_email_body
 
-            election_result = await self.db.execute(
-                select(Election)
-                .where(Election.id == str(election_id))
-                .where(Election.organization_id == str(organization_id))
+        election_result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+        )
+        election = election_result.scalar_one_or_none()
+        # Nominations can be closed again before this runs; an
+        # announcement for a phase already over would mislead.
+        if not election or election.status != ElectionStatus.NOMINATIONS:
+            return None
+
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        organization = org_result.scalar_one_or_none()
+        if not organization:
+            return None
+
+        members_result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == str(organization_id))
+            .where(User.is_active)
+        )
+        members = members_result.scalars().all()
+        member_emails = [
+            m.email
+            for m in recipients_for(
+                members,
+                EmailKind.ELECTION_NOTICES,
+                department_required_kinds(organization),
             )
-            election = election_result.scalar_one_or_none()
-            # Nominations can be closed again before this runs; an
-            # announcement for a phase already over would mislead.
-            if not election or election.status != ElectionStatus.NOMINATIONS:
-                return None
-
-            org_result = await self.db.execute(
-                select(Organization).where(Organization.id == str(organization_id))
-            )
-            organization = org_result.scalar_one_or_none()
-            if not organization:
-                return None
-
-            members_result = await self.db.execute(
-                select(User)
-                .where(User.organization_id == str(organization_id))
-                .where(User.is_active)
-            )
-            members = members_result.scalars().all()
-            member_emails = [
-                m.email
-                for m in recipients_for(
-                    members,
-                    EmailKind.ELECTION_NOTICES,
-                    department_required_kinds(organization),
-                )
-                if m.email
-            ]
-            if not member_emails:
-                return None
-
+            if m.email
+        ]
+        sent = 0
+        if member_emails:
             deadline_line = ""
             if election.nomination_deadline:
                 deadline_local = await self._org_local_time(
@@ -4342,31 +4343,25 @@ class ElectionService:
                 results_out=outcomes,
             )
             sent = sum(1 for ok in outcomes if ok)
-            log = logger.info if sent == len(member_emails) else logger.warning
-            log(
-                f"Nominations-open announcement | election={election_id} "
-                f"sent={sent} unsent={len(member_emails) - sent}"
-            )
-            # This runs after nominations_opened was audited, so the delivery
-            # count is recorded as its own event rather than on that one.
-            announcement = {
-                "recipient_count": len(member_emails),
-                "unreached_count": len(member_emails) - sent,
-            }
-            await self._audit(
-                "nominations_announced",
-                {"election_id": str(election_id), **announcement},
-                user_id=acting_user_id,
-                organization_id=str(organization_id),
-            )
-            await self.db.commit()
-            return announcement
-        except Exception as e:
-            logger.warning(
-                f"Nominations-open announcement failed | "
-                f"election={election_id} error={e}"
-            )
-            return None
+        log = logger.info if sent == len(member_emails) else logger.warning
+        log(
+            f"Nominations-open announcement | election={election_id} "
+            f"sent={sent} unsent={len(member_emails) - sent}"
+        )
+        # This runs after nominations_opened was audited, so the delivery
+        # count is recorded as its own event rather than on that one.
+        announcement = {
+            "recipient_count": len(member_emails),
+            "unreached_count": len(member_emails) - sent,
+        }
+        await self._audit(
+            "nominations_announced",
+            {"election_id": str(election_id), **announcement},
+            user_id=acting_user_id,
+            organization_id=str(organization_id),
+        )
+        await self.db.commit()
+        return announcement
 
     async def _notify_proxy_delegator(
         self, election, organization_id: UUID | str, delegating_user, proxy_user
@@ -6288,6 +6283,7 @@ class ElectionService:
                 "raised": raised,
             },
             severity="warning",
+            organization_id=str(organization_id),
         )
         if not alert:
             return
@@ -6310,6 +6306,59 @@ class ElectionService:
                 f"went out before voting closes, but {html_mod.escape(what)}.</p>"
                 "<p>Open the election and use <strong>Remind Non-Voters</strong> "
                 "so the members who have not voted get their reminder.</p>"
+            ),
+        )
+
+    async def record_announcement_failure(
+        self,
+        election_id: str,
+        title: str,
+        organization_id: UUID | str,
+        acting_user_id: Optional[str],
+        *,
+        sent: int,
+        unreached: int,
+        raised: bool,
+    ) -> None:
+        """Audit a nominations-open announcement that did not reach every
+        member, and email the managers so someone can tell the rest."""
+        await self._audit(
+            "nominations_announcement_failed",
+            {
+                "election_id": election_id,
+                "title": title,
+                "sent": sent,
+                "unreached": unreached,
+                "raised": raised,
+            },
+            severity="warning",
+            user_id=acting_user_id,
+            organization_id=str(organization_id),
+        )
+        if raised:
+            what = "the announcement emails could not be sent"
+        elif sent == 0:
+            what = f"all {unreached} announcement email(s) failed to send"
+        else:
+            what = (
+                f"{unreached} of {sent + unreached} announcement email(s) "
+                "failed to send"
+            )
+        safe_title = html.escape(title)
+        await self._email_election_managers(
+            election_id,
+            organization_id,
+            subject=(
+                f"Action needed: the nominations announcement for {title} "
+                "did not reach everyone"
+            ),
+            page_title=f"Nominations announcement not sent: {safe_title}",
+            body_html=(
+                f"<p>Nominations are open for <strong>{safe_title}</strong>, "
+                f"but {html.escape(what)}.</p>"
+                "<p>Members who missed the email may not know they can "
+                "nominate. Let them know another way, or close and reopen "
+                "nominations to send the announcement again.</p>"
             ),
         )
 
@@ -7046,7 +7095,8 @@ class ElectionService:
                 f"election={election_id} error={e}"
             )
 
-        # Fire-and-forget: send election report to secretary
+        # A failed report must not undo the close; generate_and_send_election_report
+        # logs and audits its own failures.
         try:
             await self.generate_and_send_election_report(
                 election_id=election_id,
@@ -9028,15 +9078,17 @@ class ElectionService:
         self,
         election_id: UUID,
         organization_id: UUID | str,
-        requested: bool = False,
+        requested_by: Optional[UUID | str] = None,
     ) -> Tuple[bool, str]:
         """
-        Generate and send an election report email to the secretary (election
-        creator) and any leadership members.
+        Generate and send the election report email.
 
-        *requested* is True when an officer pressed "Send report": that send
-        goes out regardless of the creator's email choices. The automatic send
-        when an election closes follows them (``EmailKind.ELECTION_ADMIN``).
+        *requested_by* is the officer who pressed "Send report": the report
+        goes to that officer alone, regardless of their email choices, since
+        they asked for it. The automatic send when an election closes goes to
+        the election's creator and every leadership member who are still
+        current members and receive ``EmailKind.ELECTION_ADMIN`` mail — see
+        :meth:`_election_report_recipients`.
 
         The report includes:
         - Election results (per-position winners, vote counts, percentages)
@@ -9124,31 +9176,25 @@ class ElectionService:
             election
         )
 
-        # Determine report recipients (election creator + leadership)
-        to_emails = []
-        recipient_name = "Secretary"
-        if election.created_by:
-            creator_result = await self.db.execute(
-                select(User).where(User.id == election.created_by)
+        recipients = await self._election_report_recipients(
+            election, organization, organization_id, requested_by
+        )
+        if not recipients:
+            reason = (
+                "You have no email address on your profile"
+                if requested_by
+                else "No current member can receive the election report"
             )
-            creator = creator_result.scalar_one_or_none()
-            if (
-                creator
-                and creator.email
-                and (
-                    requested
-                    or member_receives_email(
-                        creator.notification_preferences,
-                        EmailKind.ELECTION_ADMIN,
-                        department_required_kinds(organization),
-                    )
-                )
-            ):
-                to_emails.append(creator.email)
-                recipient_name = creator.full_name or "Secretary"
-
-        if not to_emails:
-            return False, "No recipient found for election report"
+            logger.error(
+                f"Election report not sent | election={election_id} " f"reason={reason}"
+            )
+            await self._audit(
+                "election_report_not_sent",
+                {"election_id": str(election_id), "reason": reason},
+                user_id=str(requested_by) if requested_by else None,
+                organization_id=str(organization_id),
+            )
+            return False, reason
 
         # Format dates using org timezone
         org_tz = getattr(organization, "timezone", None) or "America/New_York"
@@ -9164,44 +9210,111 @@ class ElectionService:
                 dt = dt.replace(tzinfo=timezone.utc)
             return dt.astimezone(tz).strftime("%B %d, %Y at %I:%M %p")
 
+        closed_by = await self.closed_by_name(election) or "Automatic close"
         email_service = EmailService(organization)
-        success_count, failure_count = await email_service.send_election_report(
-            to_emails=to_emails,
-            recipient_name=recipient_name,
-            election_title=election.title,
-            election_type=election.election_type or "General",
-            start_date=_fmt_dt(election.start_date),
-            end_date=_fmt_dt(election.end_date),
-            closed_at=_fmt_dt(election.closed_at or election.end_date),
-            closed_by=await self.closed_by_name(election) or "Automatic close",
-            total_eligible_voters=total_eligible,
-            total_votes_cast=total_votes,
-            voter_turnout_percentage=turnout,
-            quorum_status=quorum_status,
-            quorum_detail=quorum_detail,
-            results_html=results_html,
-            results_text=results_text,
-            ballot_recipients_html=ballot_recipients_html,
-            ballot_recipients_text=ballot_recipients_text,
-            ballot_recipients_count=ballot_recipients_count,
-            skipped_voters_html=skipped_html,
-            skipped_voters_text=skipped_text,
-            skipped_voters_count=skipped_count,
-            db=self.db,
-            organization_id=str(organization_id),
-        )
+        # One message per recipient, so each is addressed by name and no
+        # recipient sees who else received the voter lists.
+        delivered: List[str] = []
+        for recipient in recipients:
+            success_count, _failures = await email_service.send_election_report(
+                to_emails=[recipient.email],
+                recipient_name=recipient.full_name or "Secretary",
+                election_title=election.title,
+                election_type=election.election_type or "General",
+                start_date=_fmt_dt(election.start_date),
+                end_date=_fmt_dt(election.end_date),
+                closed_at=_fmt_dt(election.closed_at or election.end_date),
+                closed_by=closed_by,
+                total_eligible_voters=total_eligible,
+                total_votes_cast=total_votes,
+                voter_turnout_percentage=turnout,
+                quorum_status=quorum_status,
+                quorum_detail=quorum_detail,
+                results_html=results_html,
+                results_text=results_text,
+                ballot_recipients_html=ballot_recipients_html,
+                ballot_recipients_text=ballot_recipients_text,
+                ballot_recipients_count=ballot_recipients_count,
+                skipped_voters_html=skipped_html,
+                skipped_voters_text=skipped_text,
+                skipped_voters_count=skipped_count,
+                db=self.db,
+                organization_id=str(organization_id),
+            )
+            if success_count > 0:
+                delivered.append(recipient.email)
 
-        if success_count > 0:
+        if delivered:
             logger.info(
-                f"Election report sent | election={election_id} " f"to={to_emails}"
+                f"Election report sent | election={election_id} "
+                f"sent={len(delivered)} unsent={len(recipients) - len(delivered)}"
             )
-            return True, f"Election report sent to {', '.join(to_emails)}"
-        else:
-            logger.error(
-                f"Failed to send election report | election={election_id} "
-                f"failures={failure_count}"
+            message = f"Election report sent to {', '.join(delivered)}"
+            if len(delivered) < len(recipients):
+                message += (
+                    f"; {len(recipients) - len(delivered)} recipient(s) could "
+                    "not be reached"
+                )
+            return True, message
+        logger.error(
+            f"Failed to send election report | election={election_id} "
+            f"recipients={len(recipients)}"
+        )
+        return False, "Failed to send election report email"
+
+    async def _election_report_recipients(
+        self,
+        election: Election,
+        organization: Organization,
+        organization_id: UUID | str,
+        requested_by: Optional[UUID | str],
+    ) -> List[User]:
+        """The members the election report goes to, each one at most once.
+
+        Only current members qualify (``User.is_active``): the report carries
+        the results and the list of who did and did not get a ballot, so a
+        creator who has since left the department must not receive it.
+        """
+        if requested_by:
+            requester = (
+                await self.db.execute(
+                    select(User)
+                    .where(User.id == str(requested_by))
+                    .where(User.organization_id == str(organization_id))
+                    .where(User.is_active)
+                )
+            ).scalar_one_or_none()
+            return [requester] if requester and requester.email else []
+
+        members = (
+            (
+                await self.db.execute(
+                    select(User)
+                    .where(User.organization_id == str(organization_id))
+                    .where(User.is_active)
+                    .options(selectinload(User.roles))
+                )
             )
-            return False, "Failed to send election report email"
+            .scalars()
+            .all()
+        )
+        candidates = [
+            member
+            for member in members
+            if member.email
+            and (
+                (election.created_by and str(member.id) == str(election.created_by))
+                or any(role.slug in LEADERSHIP_ROLE_SLUGS for role in member.roles)
+            )
+        ]
+        # The creator first, so the report is addressed to the secretary who
+        # ran the election before the rest of leadership.
+        candidates.sort(key=lambda m: str(m.id) != str(election.created_by or ""))
+        return recipients_for(
+            candidates,
+            EmailKind.ELECTION_ADMIN,
+            department_required_kinds(organization),
+        )
 
     # ------------------------------------------------------------------
     # Pre-meeting package (secretary meeting prep)

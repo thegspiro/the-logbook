@@ -1012,3 +1012,77 @@ describe('PipelineDetailPage — enrollment rules', () => {
     expect(screen.getByText('Allowed')).toBeInTheDocument();
   });
 });
+
+// An inactive pipeline is opened from the list's "Show inactive" view. The
+// header marks it and offers Reactivate, which restores the flag only: the
+// dialog says withdrawn members are not re-enrolled.
+describe('PipelineDetailPage — reactivating an inactive pipeline', () => {
+  const inactiveProgram = { ...program, active: false };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockGetProgram.mockReset();
+    mockGetProgram.mockResolvedValueOnce(inactiveProgram).mockResolvedValue(program);
+    mockGetProgramPhases.mockReset();
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockReset();
+    mockGetProgramRequirements.mockResolvedValue([]);
+    mockGetProgramEnrollments.mockReset();
+    mockGetProgramEnrollments.mockResolvedValue([]);
+    mockUpdateProgram.mockReset();
+    mockUpdateProgram.mockResolvedValue(program);
+  });
+
+  const openReactivate = async () => {
+    renderWithRouter(<PipelineDetailPage />);
+    expect(await screen.findByText('Inactive')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Reactivate' }));
+    return screen.findByRole('dialog');
+  };
+
+  it('confirms, reactivates, reports it and reloads the pipeline', async () => {
+    const success = vi.spyOn(toast, 'success');
+    const dialog = await openReactivate();
+    expect(dialog).toHaveTextContent('Reactivate "Recruit Pipeline"?');
+    expect(dialog).toHaveTextContent('Members who were withdrawn when it was deactivated are not re-enrolled');
+    expect(mockUpdateProgram).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Reactivate' }));
+
+    await waitFor(() => expect(mockUpdateProgram).toHaveBeenCalledWith('prog-1', { active: true }));
+    await waitFor(() => expect(success).toHaveBeenCalledWith('Recruit Pipeline reactivated'));
+    await waitFor(() => expect(screen.queryByText('Inactive')).not.toBeInTheDocument());
+    expect(mockGetProgram).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the server's reason when reactivation fails", async () => {
+    const success = vi.spyOn(toast, 'success');
+    const error = vi.spyOn(toast, 'error');
+    mockUpdateProgram.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 404'), {
+        isAxiosError: true,
+        response: { status: 404, data: { detail: 'Training program not found' } },
+      })
+    );
+    const dialog = await openReactivate();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Reactivate' }));
+
+    await waitFor(() => expect(error).toHaveBeenCalledWith('Training program not found'));
+    expect(success).not.toHaveBeenCalled();
+  });
+
+  it('is not offered without training.manage, nor on an active pipeline', async () => {
+    mockHasPermission = false;
+    const { unmount } = renderWithRouter(<PipelineDetailPage />);
+    expect(await screen.findByText('Inactive')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reactivate' })).not.toBeInTheDocument();
+    unmount();
+
+    mockHasPermission = true;
+    renderWithRouter(<PipelineDetailPage />);
+    expect(await screen.findByText('Recruit Pipeline')).toBeInTheDocument();
+    expect(screen.queryByText('Inactive')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reactivate' })).not.toBeInTheDocument();
+  });
+});

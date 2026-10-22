@@ -11,9 +11,13 @@ import { trainingService } from '../services/api';
 import type { ExpiringCertification } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
+import { useAuthStore } from '../stores/authStore';
+import CertAlertSettingsPanel from '../components/training/CertAlertSettingsPanel';
 
 const ExpiringCertsTab: React.FC = () => {
   const tz = useTimezone();
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  const canManage = checkPermission('training.manage');
   const [certs, setCerts] = useState<ExpiringCertification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,8 +43,8 @@ const ExpiringCertsTab: React.FC = () => {
   const getUrgencyClass = (days: number) => {
     if (days < 0) return 'text-red-700 dark:text-red-400 bg-red-500/10 border-red-500/20';
     if (days <= 7) return 'text-red-700 dark:text-red-400 bg-red-500/10 border-red-500/20';
-    if (days <= 30) return 'text-orange-700 dark:text-orange-400 bg-orange-500/10 border-orange-500/20';
-    if (days <= 60) return 'text-yellow-700 dark:text-yellow-400 bg-yellow-500/10 border-yellow-500/20';
+    if (days <= 30) return 'text-orange-800 dark:text-orange-400 bg-orange-500/10 border-orange-500/20';
+    if (days <= 60) return 'text-yellow-800 dark:text-yellow-400 bg-yellow-500/10 border-yellow-500/20';
     return 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/20';
   };
 
@@ -79,6 +83,8 @@ const ExpiringCertsTab: React.FC = () => {
           <option value={365}>1 year</option>
         </select>
       </div>
+
+      {canManage && <CertAlertSettingsPanel />}
 
       {/* Summary Cards */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">

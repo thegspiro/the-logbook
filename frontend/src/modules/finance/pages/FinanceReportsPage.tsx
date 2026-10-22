@@ -277,7 +277,12 @@ const BudgetVsActual: React.FC<{ years: FiscalYear[]; fiscalYearId: string; onYe
         ) : (
           data && (
             <>
-              <div className="overflow-x-auto print:overflow-visible">
+              <div
+                className="overflow-x-auto print:overflow-visible"
+                tabIndex={0}
+                role="region"
+                aria-label="Budget lines"
+              >
                 <table className="rwd-table w-full">
                   <thead className="border-theme-surface-border border-b text-left">
                     <tr>
@@ -394,7 +399,12 @@ const AmendmentLog: React.FC<{ years: FiscalYear[]; fiscalYearId: string; onYear
         ) : (
           data && (
             <>
-              <div className="overflow-x-auto print:overflow-visible">
+              <div
+                className="overflow-x-auto print:overflow-visible"
+                tabIndex={0}
+                role="region"
+                aria-label="Budget amendments"
+              >
                 <table className="rwd-table w-full">
                   <thead className="border-theme-surface-border border-b text-left">
                     <tr>
@@ -540,7 +550,12 @@ const PaymentsRegister: React.FC = () => {
           <EmptyState headingLevel={3} title="No payments" description="Nothing was paid in this period." />
         ) : (
           data && (
-            <div className="overflow-x-auto print:overflow-visible">
+            <div
+              className="overflow-x-auto print:overflow-visible"
+              tabIndex={0}
+              role="region"
+              aria-label="Transactions"
+            >
               <table className="rwd-table w-full">
                 <thead className="border-theme-surface-border border-b text-left">
                   <tr>
@@ -635,7 +650,12 @@ const FunctionalExpenses: React.FC = () => {
                 classification in Finance settings, or classify the payments themselves.
               </p>
             )}
-            <div className="overflow-x-auto print:overflow-visible">
+            <div
+              className="overflow-x-auto print:overflow-visible"
+              tabIndex={0}
+              role="region"
+              aria-label="Spending by budget category"
+            >
               <table className="w-full">
                 <thead className="border-theme-surface-border border-b text-left">
                   <tr>
@@ -725,7 +745,7 @@ const FundBalances: React.FC = () => {
           />
         ) : (
           <>
-            <div className="overflow-x-auto print:overflow-visible">
+            <div className="overflow-x-auto print:overflow-visible" tabIndex={0} role="region" aria-label="Funds">
               <table className="w-full">
                 <thead className="border-theme-surface-border border-b text-left">
                   <tr>
@@ -808,7 +828,12 @@ const Advances: React.FC = () => {
           />
         ) : (
           <>
-            <div className="overflow-x-auto print:overflow-visible">
+            <div
+              className="overflow-x-auto print:overflow-visible"
+              tabIndex={0}
+              role="region"
+              aria-label="Cash advances"
+            >
               <table className="rwd-table w-full">
                 <thead className="border-theme-surface-border border-b text-left">
                   <tr>
@@ -918,7 +943,12 @@ const LateSubstantiation: React.FC = () => {
         ) : (
           data && (
             <>
-              <div className="overflow-x-auto print:overflow-visible">
+              <div
+                className="overflow-x-auto print:overflow-visible"
+                tabIndex={0}
+                role="region"
+                aria-label="Reimbursements paid"
+              >
                 <table className="rwd-table w-full">
                   <thead className="border-theme-surface-border border-b text-left">
                     <tr>

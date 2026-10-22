@@ -11,8 +11,8 @@ import { useDeepLinkedRecord } from '../hooks/useDeepLinkedRecord';
 import toast from 'react-hot-toast';
 
 const STATUS_BADGES: Record<string, string> = {
-  requested: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
-  received: 'bg-green-500/10 text-green-700 dark:text-green-400',
+  requested: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
+  received: 'bg-green-500/10 text-green-800 dark:text-green-400',
   denied: 'bg-red-500/10 text-red-700 dark:text-red-400',
   completed: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
 };
@@ -144,7 +144,7 @@ const ReturnRequestsPanel: React.FC = () => {
       {/* Header with count */}
       {pendingCount > 0 && (
         <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
-          <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+          <Clock className="h-4 w-4 text-yellow-700 dark:text-yellow-400" />
           <span className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
             {pendingCount} return request{pendingCount !== 1 ? 's' : ''} awaiting review
           </span>

@@ -780,7 +780,7 @@ const SchedulingPage: React.FC = () => {
                                   <span
                                     className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                                       tmpl.category === 'specialty'
-                                        ? 'bg-orange-500/10 text-orange-700 dark:text-orange-400'
+                                        ? 'bg-orange-500/10 text-orange-800 dark:text-orange-400'
                                         : 'bg-purple-500/10 text-purple-700 dark:text-purple-400'
                                     }`}
                                   >

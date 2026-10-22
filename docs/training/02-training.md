@@ -1989,9 +1989,27 @@ profile and printed record all follow this rule.
 
 ### Automated Certification Alerts
 
-Once certification alerts are switched on for the department, The Logbook sends
-them automatically as certifications get close to expiry. There is no button to
-send them by hand.
+**Who can do this:** training managers (`training.manage`).
+
+The Logbook emails members automatically as their certifications get close to
+expiry, and gives them a notice in the app each time. There is no button to send
+them by hand.
+
+**They are off until you turn them on.** Open **Training Admin → Overview →
+Expiring Certs**. At the top, **Expiry alert emails** has a switch,
+**Email members when a certification is close to expiring**. Tick it and select
+**Save**; nothing is sent for a department that has not. Two more choices apply
+to the notice sent once a certification has expired, and they are available
+only while the switch is on:
+
+- **Copy the chief officers on the expired notice**
+- **Also send the expired notice to the member's personal email address**
+
+All three start off. A member who has turned off training reminder emails in
+their own preferences is not emailed unless your department requires those
+emails; they still get the notice in the app.
+
+![The Expiry alert emails panel on the Expiring Certs tab: Email members when a certification is close to expiring ticked, with the two copy options for the expired notice available beneath it](./images/02-121-cert-alert-settings.png)
 
 | Days before expiry | Who is told                               | How                              |
 | ------------------ | ----------------------------------------- | -------------------------------- |
@@ -2003,8 +2021,8 @@ send them by hand.
 
 Each stage is sent only once per certification. An expired certification is
 escalated to the training and compliance officers. The chief officers are
-copied, and the member's personal email address is added, only if the
-department has turned those options on.
+copied, and the member's personal email address is added, only if you ticked
+those two choices above.
 
 ---
 
@@ -2820,6 +2838,13 @@ that use it fail with a message such as _"Row 12: Invalid training_type
 training type or status — which would apply to every row — stops the whole
 import before anything is saved.
 
+**Members see your library's course names.** A row matched to a library course
+keeps the file's own spelling on the record, but the member's **My Training**
+pages and their own training records show the library course's name instead,
+and their history search finds it by either name. Officers still see the
+record's stored name, which is what the record editor saves. A row left
+unmatched shows the name from the file.
+
 ![The historical-import wizard on its Preview step: parsed rows, matched members, and the confirm button](./images/02-02-historical-import-preview.png)
 
 ---
@@ -3307,7 +3332,7 @@ shown across the top. **Next** moves forward and **Previous** goes back. Steps
 ![The recurrence block with Monthly (by weekday) chosen and its ordinal and weekday pickers](./images/02-83-session-recurrence.png)
 
 5. Set the location, RSVP and participant limits, then select **Next**.
-6. On **Training Info**, choose **Use existing course template** and pick a
+6. On **Training Info**, choose **Use a course from the Course Library** and pick a
    **course**. The form fills in the training type, credit hours, instructor,
    expiry months and maximum participants from the course, and shows a preview
    card of what it took. The other choice, **Create new course for this
@@ -3389,6 +3414,14 @@ recorded and shows it again if you switch back. The Training Administration
 page's skills-test approval row and its tests-passed figure follow the choice.
 So does the **Evaluations** card on the Training Administration home: it
 describes only what the area holds under your method.
+
+**Under shift report sign-offs, no new skills test can be started**, practice
+runs included. A link or bookmark to a Skills Testing page opens a short
+explanation instead of the page. A test that was already under way when you
+switched can still be scored and finished, and results already on file can
+still be validated, released or voided. Members find their own past results on
+**My Training** under **Past skills test results**; the section appears only for
+a member who has some.
 
 Under Skills Testing, the **Shift Reports** settings still let you edit the
 **Observable Skills** list (**Feedback Defaults**) and the per-apparatus lists
@@ -3731,7 +3764,7 @@ Phase 3 is now 100% complete, and Alex moves on to Phase 4.
 
 **Edge case — certification expiring soon:** Alex's CPR/AED card expires in
 September. It appears on **Expiring Certs**, and on her list of upcoming
-expirations. If your department has certification alerts turned on, Alex gets an in-app and email alert at 90 days before expiry. Her
+expirations. If your department has turned on **Email members when a certification is close to expiring**, Alex gets an in-app and email alert at 90 days before expiry. Her
 compliance card shows yellow.
 
 ### Part 5: Phase 4 — Live Fire & Graduation (August – September)
