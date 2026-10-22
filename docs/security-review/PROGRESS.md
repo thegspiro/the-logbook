@@ -16,8 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #(opening)** — Feature 01 (Auth & session lifecycle), pass 11, a
-watchdog pickup. PR #3555 (Feature 00, Cross-cutting baseline, pass 11)
+**PR [#3556](https://github.com/thegspiro/the-logbook/pull/3556)** (branch
+`claude/security-review-auth-session-p11`) — Feature 01 (Auth & session
+lifecycle), pass 11, a watchdog pickup. PR #3555 (Feature 00, Cross-cutting
+baseline, pass 11)
 merged 2026-10-22, closing out rotation row 00. It touched only
 `PROGRESS.md` and `SEC-00-cross-cutting-baseline.md` (a findings file; 0
 fixes that pass), so per the skill's "docs-only PR is not a recordable
