@@ -2134,10 +2134,7 @@ email means the scheduler or mail is broken, not that the week was calm.
   nothing. After an upgrade the first report waits for the next scheduled day and
   hour.
 
-_[Screenshot to create: Organization Settings → Authentication → Security Report,
-with the weekday and hour pickers, the recipient line and "Last sent". Capture
-once with the IT Manager position held and once with the administrator fallback
-notice showing.]_
+<!-- Screenshot needed: Organization Settings → Authentication → Security Report, with the weekday and hour pickers, the recipient line and "Last sent". Capture once with the IT Manager position held and once with the administrator fallback notice showing. -->
 
 ### Too many sign-in attempts
 

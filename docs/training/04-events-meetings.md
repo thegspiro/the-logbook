@@ -370,8 +370,7 @@ meant to be put up at the door. The optional RSVP button on an event that does
 not require a response reads **Going**. The attendee list is requested only when
 your department shares it.
 
-_[Screenshot to create: a member's event detail page with check-in open, showing
-Check In; and one after check-in showing You're checked in.]_
+<!-- Screenshot needed: a member's event detail page with check-in open, showing Check In; and one after check-in showing You're checked in. -->
 
 1. Scan the QR code with your phone's camera.
 2. Sign in if you are not already. The self check-in page opens.
@@ -1577,9 +1576,7 @@ with no agenda items behaves as before.
   take this up**. It stays in the record and prints as _Not taken up_ instead of
   vanishing.
 
-_[Screenshots to create: the Agenda dialog on a meeting with three items, one
-with a prepared motion and a linked document; the Sync from the agenda dialog
-with one new and one changed item; a section marked Not taken up.]_
+<!-- Screenshot needed: the Agenda dialog on a meeting with three items, one with a prepared motion and a linked document; the Sync from the agenda dialog with one new and one changed item; a section marked Not taken up. -->
 
 **Linked events.** Minutes can be linked to an event, and **Unlink** removes
 the link for good.
@@ -1665,7 +1662,7 @@ selector that overrides the default for that one set of minutes (leave it on
 PDF, the library copy and the public copy; the public copy leaves out counts that
 are not listed rather than showing zero. Nothing changes until someone sets it.
 
-_[Screenshot to create: the roll panel's per-minutes selector on a draft.]_
+<!-- Screenshot needed: the roll panel's per-minutes selector on a draft. -->
 
 ### Publishing adopted minutes (library and public page)
 
@@ -1691,8 +1688,7 @@ for confirmation.
 
 ![Minutes Settings, Publishing: the public-copy switch and the Executive-session minutes group with its two switches](./images/04-73-minutes-settings-publishing.png)
 
-_[Screenshot to create: the publishing status note on adopted minutes; the public
-minutes page at phone and desktop widths.]_
+<!-- Screenshot needed: the publishing status note on adopted minutes; the public minutes page at phone and desktop widths. -->
 
 ### Circulating and adopting minutes
 
@@ -1786,8 +1782,7 @@ is a place a password could be guessed from a signed-in session.
 
 ![Minutes Settings, Signatures: the Recording Secretary and Presiding Officer slots, each open to anyone who manages minutes](./images/04-74-minutes-settings-signatures.png)
 
-_[Screenshots to create: the Sign dialog (name and password); the Signatures
-panel on adopted minutes with one slot signed and one open.]_
+<!-- Screenshot needed: the Sign dialog (name and password); the Signatures panel on adopted minutes with one slot signed and one open. -->
 
 **Outlines (the standard order of business).** **Minutes > Outlines**
 (`minutes.manage`) edits the department's standard sections for each meeting

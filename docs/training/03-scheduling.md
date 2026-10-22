@@ -109,7 +109,7 @@ _(2026-10-18)_ An empty week or month looks up the first shift after it and offe
 Monday is scheduled. An officer's button reads **Create a shift** once any shift
 exists, and creating one moves the board to that shift's date.
 
-_[Screenshot to create: an empty week showing Go to the next shift.]_
+<!-- Screenshot needed: an empty week showing Go to the next shift. -->
 
 If you refresh the page, or send someone a copied link, it opens on the same
 week or month you were looking at, not on today.
@@ -2703,7 +2703,7 @@ nothing matching drops out. There is **no Save button**: every tap already
 saves on its own, and a line under the list reads **Saving…**, then **All
 changes saved**, or **Last change didn't save** if it failed (tap again).
 
-_[Screenshot needed: Apparatus Inventory on a phone with a filter chip selected and the pinned location heading; REPLACE `03-95-apparatus-inventory.png`.]_
+<!-- Screenshot needed: Apparatus Inventory on a phone with a filter chip selected and the pinned location heading; REPLACE `03-95-apparatus-inventory.png`. -->
 
 The lot number shown is **the lot the date belongs to** — the one expiring
 soonest — not the last one put aboard.
@@ -3219,7 +3219,7 @@ details list the shifts per weekday.
 from it. Daily, weekly and custom-date patterns have no cycle, so for them the date
 only bounds when automatic generation begins.
 
-_[Screenshot needed: Manual Setup, Weekly, with Separate day and night shifts ticked and Saturday set to both; and the pattern list showing the glyphs.]_
+<!-- Screenshot needed: Manual Setup, Weekly, with Separate day and night shifts ticked and Saturday set to both; and the pattern list showing the glyphs. -->
 
 Select **Create Pattern** to save it.
 
