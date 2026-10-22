@@ -37,6 +37,7 @@ import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
 import { formatCalendarDate, formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
+import { withoutRankMirrors } from '../utils/positions';
 import { isAdministrativeMember, membershipTypeLabel } from '../utils/membership';
 import type { UserWithRoles } from '../types/role';
 import type {
@@ -880,7 +881,7 @@ export const MemberProfilePage: React.FC = () => {
                     {user.membership_number && <> · #{user.membership_number}</>}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {(user.roles || []).map((role) => (
+                    {withoutRankMirrors(user.roles || []).map((role) => (
                       <span
                         key={role.id}
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
