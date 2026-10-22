@@ -139,7 +139,7 @@ const FooterCard: React.FC<FooterCardProps> = ({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {isDefault ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-1 text-xs text-green-700 dark:text-green-400">
+            <span className="inline-flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-1 text-xs text-green-800 dark:text-green-400">
               <Check className="h-3 w-3" />
               Default
             </span>

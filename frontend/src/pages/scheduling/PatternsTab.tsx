@@ -893,7 +893,7 @@ export const PatternsTab: React.FC = () => {
                         ))}
                       </select>
                       {activeTemplates.length === 0 && (
-                        <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                        <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
                           No templates found. Create one in the Templates tab first.
                         </p>
                       )}
@@ -1217,7 +1217,7 @@ export const PatternsTab: React.FC = () => {
                           {cyclePattern.map((entry, i) => {
                             let cls = 'bg-theme-surface-hover text-theme-text-muted';
                             if (entry === 'on') cls = 'bg-violet-500/20 text-violet-600 dark:text-violet-400';
-                            else if (entry === 'day') cls = 'bg-amber-500/20 text-amber-700 dark:text-amber-400';
+                            else if (entry === 'day') cls = 'bg-amber-500/20 text-amber-800 dark:text-amber-400';
                             else if (entry === 'night') cls = 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400';
                             return (
                               <span key={i} className={`rounded-sm px-2 py-1 text-[10px] font-semibold ${cls}`}>

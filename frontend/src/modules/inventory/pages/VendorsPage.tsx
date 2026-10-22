@@ -1148,7 +1148,7 @@ export const VendorsPage: React.FC = () => {
             <p className="text-theme-text-muted text-xs">Active Vendors</p>
           </div>
           <div className="card-secondary p-3 text-center">
-            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.preferred}</p>
+            <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{stats.preferred}</p>
             <p className="text-theme-text-muted text-xs">Preferred</p>
           </div>
           <div className="card-secondary p-3 text-center">
@@ -1159,7 +1159,7 @@ export const VendorsPage: React.FC = () => {
 
         {canManage && unlinked.length > 0 && (
           <div className="mb-4 flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 sm:flex-row sm:items-center">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
             <p className="text-xs text-amber-700 dark:text-amber-300">
               {unlinked.length} supplier name{unlinked.length === 1 ? '' : 's'} not on the list — named by{' '}
               {unlinkedTotals.items} item{unlinkedTotals.items === 1 ? '' : 's'} and {unlinkedTotals.reorders} reorder

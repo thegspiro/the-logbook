@@ -800,7 +800,7 @@ const PositionSetup: React.FC = () => {
                   <p className="text-theme-alert-info-title mb-1 font-semibold">How Permissions Work</p>
                   <p className="text-theme-text-secondary text-sm">
                     Each position has <strong className="text-theme-alert-success-text">View</strong> (see content) and{' '}
-                    <strong className="text-theme-alert-warning-icon">Manage</strong> (create/edit/delete) permissions
+                    <strong className="text-theme-alert-warning-title">Manage</strong> (create/edit/delete) permissions
                     per module. Select a position under Selected Positions &amp; Permissions to change them.
                   </p>
                 </div>

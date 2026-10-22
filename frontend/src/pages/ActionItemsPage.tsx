@@ -40,7 +40,7 @@ const STATUS_BADGES: Record<string, string> = {
 const PRIORITY_BADGES: Record<string, string> = {
   low: 'bg-theme-surface-secondary text-theme-text-secondary',
   medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-  high: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+  high: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
   urgent: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 

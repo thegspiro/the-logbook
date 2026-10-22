@@ -213,7 +213,7 @@ const FinanceDashboardPage: React.FC = () => {
         <KpiCard
           label="Total Budgeted"
           value={formatCurrencyWhole(totalBudgeted)}
-          icon={<DollarSign className="h-5 w-5 text-green-600" />}
+          icon={<DollarSign className="h-5 w-5 text-green-700 dark:text-green-600" />}
           iconBgClass="bg-green-100 dark:bg-green-500/20"
           linkTo="/finance/budgets"
         />
@@ -227,7 +227,7 @@ const FinanceDashboardPage: React.FC = () => {
         <KpiCard
           label="Pending Approvals"
           value={String(dashboard?.pendingApprovalsCount ?? 0)}
-          icon={<Clock className="h-5 w-5 text-yellow-600" />}
+          icon={<Clock className="h-5 w-5 text-yellow-700 dark:text-yellow-600" />}
           iconBgClass="bg-yellow-100 dark:bg-yellow-500/20"
           {...(canApprove ? { linkTo: '/finance/approvals' } : {})}
         />

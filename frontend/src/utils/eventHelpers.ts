@@ -87,9 +87,9 @@ export const getExpirationStatus = (expirationDate: string): { status: string; c
     return { status: `${daysUntilExpiry} days`, color: 'text-red-600 bg-red-50' };
   }
   if (daysUntilExpiry <= 60) {
-    return { status: `${daysUntilExpiry} days`, color: 'text-yellow-600 bg-yellow-50' };
+    return { status: `${daysUntilExpiry} days`, color: 'text-yellow-700 dark:text-yellow-600 bg-yellow-50' };
   }
-  return { status: `${daysUntilExpiry} days`, color: 'text-green-600 bg-green-50' };
+  return { status: `${daysUntilExpiry} days`, color: 'text-green-700 dark:text-green-600 bg-green-50' };
 };
 
 /**

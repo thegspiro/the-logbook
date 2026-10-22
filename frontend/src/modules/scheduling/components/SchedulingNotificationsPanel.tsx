@@ -518,7 +518,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                 onChange={(e) => {
                   void saveReminderSettings({ ...reminderSettings, enabled: e.target.checked });
                 }}
-                className="border-theme-surface-border h-4 w-4 rounded text-green-600 focus:ring-green-500"
+                className="border-theme-surface-border h-4 w-4 rounded text-green-700 focus:ring-green-500 dark:text-green-600"
               />
               <span className="text-theme-text-primary text-sm">Enable start-of-shift reminders</span>
             </label>
@@ -566,7 +566,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                     onChange={(e) => {
                       void saveReminderSettings({ ...reminderSettings, send_email: e.target.checked });
                     }}
-                    className="border-theme-surface-border h-4 w-4 rounded text-green-600 focus:ring-green-500"
+                    className="border-theme-surface-border h-4 w-4 rounded text-green-700 focus:ring-green-500 dark:text-green-600"
                   />
                   <span className="text-theme-text-secondary text-sm">Also send email notification</span>
                 </label>

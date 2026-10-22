@@ -1,5 +1,5 @@
 import { useEffect, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
+import { BrowserRouter, Routes, Route } from 'react-router';
 import { Toaster } from 'react-hot-toast';
 
 // Security initialization
@@ -83,6 +83,7 @@ const PublicMinutesPage = lazyWithRetry(() => import('./pages/PublicMinutesPage'
 // Public legal pages (privacy policy / terms of service)
 const LegalPage = lazyWithRetry(() => import('./pages/legal/LegalPage'));
 const LearningCenterPage = lazyWithRetry(() => import('./pages/learning/LearningCenterPage'));
+const NotFoundPage = lazyWithRetry(() => import('./pages/NotFoundPage'));
 const LearningPathPage = lazyWithRetry(() => import('./pages/learning/LearningPathPage'));
 
 /**
@@ -176,6 +177,11 @@ function App() {
                     {getAdminRoutes()}
                     {getPublicPortalRoutes()}
                     {getSettingsRoutes()}
+
+                    {/* Anything above that matched nothing. Inside the layout so a
+                        signed-in user keeps the navigation, and a signed-out one is
+                        sent to sign in first. */}
+                    <Route path="*" element={<NotFoundPage />} />
                   </Route>
 
                   {/* ============================================
@@ -205,9 +211,6 @@ function App() {
                   <Route path="/public/minutes/:copyId" element={<PublicMinutesPage />} />
                   {/* Public external-approver page (token-authenticated) */}
                   <Route path="/finance/approvals/:token" element={<FinanceApprovalPage />} />
-
-                  {/* Catch all - redirect to welcome */}
-                  <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Suspense>
 

@@ -84,6 +84,9 @@ const CompliancePrintPage: React.FC = () => {
   const headerCell: React.CSSProperties = {
     ...cellStyle,
     fontWeight: 600,
+    // The sheet is always paper-white; without this a <th> inherits the dark
+    // theme's white heading colour and disappears into #f5f5f5.
+    color: '#111',
     backgroundColor: '#f5f5f5',
     fontSize: '7.5pt',
     textTransform: 'uppercase',
@@ -148,68 +151,76 @@ const CompliancePrintPage: React.FC = () => {
             </tbody>
           </table>
 
-          {/* Member Matrix */}
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={headerCell}>Member</th>
-                <th style={{ ...headerCell, textAlign: 'center' }}>Completion</th>
-                {requirements.map((r) => (
-                  <th
-                    key={r.id}
-                    style={{
-                      ...headerCell,
-                      textAlign: 'center',
-                      fontSize: '6.5pt',
-                      maxWidth: '60pt',
-                      // Wrapped, not truncated: paper has no tooltip to recover
-                      // "ANNUAL HAZMA…".
-                      whiteSpace: 'normal',
-                      overflowWrap: 'anywhere',
-                    }}
-                    title={r.name}
-                  >
-                    {r.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {members
-                // Not-applicable members (no percentage) print last.
-                .sort((a, b) => (a.completion_pct ?? 101) - (b.completion_pct ?? 101))
-                .map((m) => (
-                  <tr key={m.user_id}>
-                    <td style={cellStyle}>{m.member_name}</td>
-                    <td
+          {/* Member Matrix. Scrolls sideways on a screen narrower than the matrix;
+              on paper it prints at full width. */}
+          <div
+            className="overflow-x-auto print:overflow-visible"
+            tabIndex={0}
+            role="region"
+            aria-label="Member compliance matrix"
+          >
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={headerCell}>Member</th>
+                  <th style={{ ...headerCell, textAlign: 'center' }}>Completion</th>
+                  {requirements.map((r) => (
+                    <th
+                      key={r.id}
                       style={{
-                        ...cellStyle,
+                        ...headerCell,
                         textAlign: 'center',
-                        fontWeight: 600,
-                        color:
-                          m.completion_pct === null
-                            ? '#555'
-                            : m.completion_pct >= 100
-                              ? '#166534'
-                              : m.completion_pct > 0
-                                ? '#92400e'
-                                : '#991b1b',
+                        fontSize: '6.5pt',
+                        maxWidth: '60pt',
+                        // Wrapped, not truncated: paper has no tooltip to recover
+                        // "ANNUAL HAZMA…".
+                        whiteSpace: 'normal',
+                        overflowWrap: 'anywhere',
                       }}
+                      title={r.name}
                     >
-                      {m.completion_pct === null ? 'N/A' : `${Math.round(m.completion_pct)}%`}
-                    </td>
-                    {requirements.map((req) => {
-                      const memberReq = m.requirements.find((r) => r.requirement_id === req.id);
-                      return (
-                        <td key={req.id} style={{ ...cellStyle, textAlign: 'center', fontSize: '8pt' }}>
-                          {cellMark(memberReq?.status)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-            </tbody>
-          </table>
+                      {r.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {members
+                  // Not-applicable members (no percentage) print last.
+                  .sort((a, b) => (a.completion_pct ?? 101) - (b.completion_pct ?? 101))
+                  .map((m) => (
+                    <tr key={m.user_id}>
+                      <td style={cellStyle}>{m.member_name}</td>
+                      <td
+                        style={{
+                          ...cellStyle,
+                          textAlign: 'center',
+                          fontWeight: 600,
+                          color:
+                            m.completion_pct === null
+                              ? '#555'
+                              : m.completion_pct >= 100
+                                ? '#166534'
+                                : m.completion_pct > 0
+                                  ? '#92400e'
+                                  : '#991b1b',
+                        }}
+                      >
+                        {m.completion_pct === null ? 'N/A' : `${Math.round(m.completion_pct)}%`}
+                      </td>
+                      {requirements.map((req) => {
+                        const memberReq = m.requirements.find((r) => r.requirement_id === req.id);
+                        return (
+                          <td key={req.id} style={{ ...cellStyle, textAlign: 'center', fontSize: '8pt' }}>
+                            {cellMark(memberReq?.status)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
           <p style={{ margin: '4pt 0 0', fontSize: '7.5pt', color: '#555' }}>
             ✓ met · ◐ in progress · ✗ not started · Exp expired · Due existing member, before their catch-up deadline ·
             — does not apply to this member
@@ -234,7 +245,7 @@ const CompliancePrintPage: React.FC = () => {
                         Training Officer
                       </p>
                       <div style={{ borderBottom: '1px solid #999', marginBottom: '4pt' }} />
-                      <p style={{ margin: 0, fontSize: '8pt', color: '#999' }}>Signature / Date</p>
+                      <p style={{ margin: 0, fontSize: '8pt', color: '#555' }}>Signature / Date</p>
                     </td>
                     <td style={{ width: '50%', paddingLeft: '20pt', verticalAlign: 'bottom' }}>
                       <p
@@ -249,7 +260,7 @@ const CompliancePrintPage: React.FC = () => {
                         Chief / Department Head
                       </p>
                       <div style={{ borderBottom: '1px solid #999', marginBottom: '4pt' }} />
-                      <p style={{ margin: 0, fontSize: '8pt', color: '#999' }}>Signature / Date</p>
+                      <p style={{ margin: 0, fontSize: '8pt', color: '#555' }}>Signature / Date</p>
                     </td>
                   </tr>
                 </tbody>
@@ -266,7 +277,7 @@ const CompliancePrintPage: React.FC = () => {
               display: 'flex',
               justifyContent: 'space-between',
               fontSize: '7pt',
-              color: '#aaa',
+              color: '#666',
             }}
           >
             <span>The Logbook — Training Compliance Report</span>

@@ -246,7 +246,7 @@ export const ApparatusDetailPage: React.FC = () => {
               >
                 {tab.label}
                 {count > 0 && (
-                  <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                  <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-400">
                     {count}
                   </span>
                 )}
@@ -327,7 +327,7 @@ export const ApparatusDetailPage: React.FC = () => {
                         </p>
                       </div>
                       {count > 1 && (
-                        <span className="shrink-0 rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 tabular-nums dark:text-amber-400">
+                        <span className="shrink-0 rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 tabular-nums dark:text-amber-400">
                           {count}&times;
                         </span>
                       )}
@@ -359,12 +359,12 @@ export const ApparatusDetailPage: React.FC = () => {
                           Expired
                         </span>
                       ) : item.daysUntilExpiration !== undefined && item.daysUntilExpiration !== null ? (
-                        <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                        <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-400">
                           {item.daysUntilExpiration} d
                         </span>
                       ) : null}
                       {item.restockNeeded && (
-                        <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                        <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-400">
                           Needs restock
                         </span>
                       )}

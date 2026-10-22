@@ -74,7 +74,7 @@ const PasswordOutcome: React.FC<{ delivery: PasswordDelivery; welcomeEmailSent: 
   return (
     <div
       role="alert"
-      className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400"
+      className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-400"
     >
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
       <p>
@@ -104,7 +104,7 @@ const GoogleOutcome: React.FC<{ outcome: ConvertGoogleAccountOutcome }> = ({ out
   return (
     <div
       role="alert"
-      className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400"
+      className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-400"
     >
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
       <p>
@@ -752,7 +752,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
                 </div>
 
                 {/* Warning */}
-                <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                   <p>
                     This will create a new member account and mark this applicant as converted. This action cannot be

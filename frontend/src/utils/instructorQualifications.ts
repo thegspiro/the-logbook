@@ -5,8 +5,8 @@ export type QualificationStanding = 'expired' | 'inactive' | 'verified' | 'pendi
 export const QUALIFICATION_STANDING: Record<QualificationStanding, { label: string; className: string }> = {
   expired: { label: 'Expired', className: 'bg-red-500/10 text-red-700 dark:text-red-400' },
   inactive: { label: 'Inactive', className: 'bg-theme-surface-secondary text-theme-text-secondary' },
-  verified: { label: 'Verified', className: 'bg-green-500/10 text-green-700 dark:text-green-400' },
-  pending: { label: 'Pending', className: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' },
+  verified: { label: 'Verified', className: 'bg-green-500/10 text-green-800 dark:text-green-400' },
+  pending: { label: 'Pending', className: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400' },
 };
 
 /**

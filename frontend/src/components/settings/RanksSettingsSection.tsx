@@ -267,7 +267,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                         void onMoveRank(idx, 'up');
                       }}
                       disabled={idx === 0}
-                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone inline-flex items-center justify-center p-0.5 disabled:cursor-not-allowed disabled:opacity-20 md:pointer-fine:min-h-6 md:pointer-fine:min-w-6"
                       aria-label="Move up"
                     >
                       <ChevronUp className="h-3.5 w-3.5" />
@@ -278,7 +278,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                         void onMoveRank(idx, 'down');
                       }}
                       disabled={idx === ranks.length - 1}
-                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone inline-flex items-center justify-center p-0.5 disabled:cursor-not-allowed disabled:opacity-20 md:pointer-fine:min-h-6 md:pointer-fine:min-w-6"
                       aria-label="Move down"
                     >
                       <ChevronDown className="h-3.5 w-3.5" />
@@ -418,7 +418,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
                 {rankValidationIssues.length} active member{rankValidationIssues.length !== 1 ? 's' : ''} with
                 unrecognized rank{rankValidationIssues.length !== 1 ? 's' : ''}
               </p>
@@ -431,7 +431,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                   <li key={issue.member_id} className="flex items-center gap-2 text-sm">
                     <span className="text-theme-text-primary font-medium">{issue.member_name}</span>
                     <span className="text-theme-text-muted text-xs">&mdash;</span>
-                    <code className="bg-theme-surface-secondary rounded-sm px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-400">
+                    <code className="bg-theme-surface-secondary rounded-sm px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-400">
                       {issue.rank_code}
                     </code>
                   </li>

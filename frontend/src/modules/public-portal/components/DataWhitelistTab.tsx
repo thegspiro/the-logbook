@@ -296,7 +296,12 @@ export const DataWhitelistTab: React.FC = () => {
               </p>
             </div>
             <div className="rounded-lg bg-green-100 p-3 dark:bg-green-500/20">
-              <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="h-6 w-6 text-green-700 dark:text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -323,7 +328,7 @@ export const DataWhitelistTab: React.FC = () => {
               className={`rounded-lg p-3 ${sensitiveEnabled > 0 ? 'bg-yellow-100 dark:bg-yellow-500/20' : 'bg-theme-surface-secondary'}`}
             >
               <svg
-                className={`h-6 w-6 ${sensitiveEnabled > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-theme-text-secondary'}`}
+                className={`h-6 w-6 ${sensitiveEnabled > 0 ? 'text-yellow-700 dark:text-yellow-400' : 'text-theme-text-secondary'}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"

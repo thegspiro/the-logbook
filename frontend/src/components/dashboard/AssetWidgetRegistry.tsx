@@ -40,7 +40,7 @@ export const AssetWidgetRegistry: React.FC<{ widgets: AssetWidgetData[] }> = ({ 
                   <Icon className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <span
-                  className={`text-2xl font-bold tabular-nums ${widget.severity === 'danger' && widget.count ? 'text-red-600 dark:text-red-400' : widget.severity === 'warning' && widget.count ? 'text-amber-600 dark:text-amber-400' : 'text-theme-text-primary'}`}
+                  className={`text-2xl font-bold tabular-nums ${widget.severity === 'danger' && widget.count ? 'text-red-600 dark:text-red-400' : widget.severity === 'warning' && widget.count ? 'text-amber-700 dark:text-amber-400' : 'text-theme-text-primary'}`}
                 >
                   {widget.count}
                 </span>

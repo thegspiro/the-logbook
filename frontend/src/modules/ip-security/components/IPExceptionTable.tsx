@@ -105,7 +105,7 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
                       <>
                         <button
                           onClick={() => onApprove?.(exc.id)}
-                          className="rounded-lg p-1.5 text-green-600 transition-colors hover:bg-green-500/10"
+                          className="rounded-lg p-1.5 text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-600"
                           title="Approve"
                         >
                           <Check className="h-4 w-4" />
@@ -122,7 +122,7 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
                     {exc.approvalStatus === IPExceptionApprovalStatus.APPROVED && (
                       <button
                         onClick={() => onRevoke?.(exc.id)}
-                        className="rounded-lg p-1.5 text-orange-600 transition-colors hover:bg-orange-500/10"
+                        className="rounded-lg p-1.5 text-orange-700 transition-colors hover:bg-orange-500/10 dark:text-orange-600"
                         title="Revoke"
                       >
                         <Ban className="h-4 w-4" />

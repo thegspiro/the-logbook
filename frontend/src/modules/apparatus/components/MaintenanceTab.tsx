@@ -102,10 +102,10 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                       <span
                         className={`rounded px-2 py-1 text-xs ${
                           record.isCompleted
-                            ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                            ? 'bg-green-500/10 text-green-800 dark:text-green-400'
                             : record.isOverdue
                               ? 'bg-red-500/10 text-red-700 dark:text-red-400'
-                              : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
+                              : 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400'
                         }`}
                       >
                         {record.isCompleted ? 'Completed' : record.isOverdue ? 'Overdue' : 'Pending'}

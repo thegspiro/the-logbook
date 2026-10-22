@@ -1558,7 +1558,10 @@ export const EventDetailPage: React.FC = () => {
                       {event.custom_fields.issues_certification && (
                         <div className="sm:col-span-2">
                           <div className="flex items-center rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-500/30 dark:bg-green-500/10">
-                            <CheckCircle className="mr-2 h-5 w-5 text-green-600" aria-hidden="true" />
+                            <CheckCircle
+                              className="mr-2 h-5 w-5 text-green-700 dark:text-green-600"
+                              aria-hidden="true"
+                            />
                             <span className="text-sm font-medium text-green-800 dark:text-green-400">
                               This training issues a certification upon completion
                             </span>
@@ -1704,7 +1707,7 @@ export const EventDetailPage: React.FC = () => {
                        spot would be a promise the server will never keep.
                        Arises when an organizer lowers the cap below a party
                        that had already queued. */
-                    <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
+                    <p className="mt-3 text-sm text-amber-700 dark:text-amber-400">
                       Your party is larger than this event can hold, so it can&apos;t move off the waitlist. Reduce your
                       guest count or contact the event organizer.
                     </p>
@@ -1793,7 +1796,7 @@ export const EventDetailPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-secondary text-sm">Going</span>
-                    <span className="text-sm font-medium text-green-600">{stats.going_count}</span>
+                    <span className="text-sm font-medium text-green-700 dark:text-green-600">{stats.going_count}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-secondary text-sm">Not Going</span>
@@ -1801,7 +1804,9 @@ export const EventDetailPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-secondary text-sm">Maybe</span>
-                    <span className="text-sm font-medium text-yellow-600">{stats.maybe_count}</span>
+                    <span className="text-sm font-medium text-yellow-700 dark:text-yellow-600">
+                      {stats.maybe_count}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-secondary text-sm">Checked In</span>

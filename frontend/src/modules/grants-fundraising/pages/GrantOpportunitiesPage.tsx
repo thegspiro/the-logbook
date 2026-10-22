@@ -116,7 +116,7 @@ function getDeadlineUrgency(
   if (daysLeft <= 30) {
     return {
       label: `${daysLeft}d left`,
-      color: 'text-yellow-600 dark:text-yellow-400',
+      color: 'text-yellow-700 dark:text-yellow-400',
       isUrgent: false,
     };
   }
@@ -310,7 +310,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
 
                   {/* Award Range */}
                   <div className="mb-2 flex items-center gap-2 text-sm">
-                    <DollarSign className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+                    <DollarSign className="h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
                     <span className="text-theme-text-primary">
                       {opp.typicalAwardMin != null && opp.typicalAwardMax != null
                         ? `${formatCurrencyWhole(opp.typicalAwardMin)} - ${formatCurrencyWhole(opp.typicalAwardMax)}`

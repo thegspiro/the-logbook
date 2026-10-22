@@ -100,7 +100,7 @@ export const ChecklistItemsEditor: React.FC<Props> = ({ idPrefix, items, onChang
                 className={`mobile-touch-target rounded-md border px-2 py-1 text-xs ${
                   item.member_visible
                     ? 'border-theme-surface-border text-theme-text-muted'
-                    : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                    : 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400'
                 }`}
               >
                 {item.member_visible ? (

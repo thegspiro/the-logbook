@@ -158,7 +158,7 @@ export const PURCHASE_REQUEST_STATUS_COLORS: Record<string, string> = {
   denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
   ordered: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
   received: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
-  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
   cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
@@ -168,7 +168,7 @@ export const EXPENSE_REPORT_STATUS_COLORS: Record<string, string> = {
   pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
   approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
   cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };
 
@@ -178,7 +178,7 @@ export const CHECK_REQUEST_STATUS_COLORS: Record<string, string> = {
   pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
   approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  issued: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+  issued: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
   voided: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
   cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
 };

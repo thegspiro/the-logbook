@@ -460,9 +460,9 @@ const FormsPage: React.FC = () => {
   const statusColor = (s: string) => {
     switch (s) {
       case FormStatus.PUBLISHED:
-        return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30';
+        return 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/30';
       case FormStatus.DRAFT:
-        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
+        return 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/30';
       case FormStatus.ARCHIVED:
         return 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
       default:
@@ -701,7 +701,7 @@ const FormsPage: React.FC = () => {
                             {capitalize(form.status)}
                           </span>
                           {form.status === FormStatus.PUBLISHED && (
-                            <span className="inline-flex items-center space-x-1 rounded-sm border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">
+                            <span className="inline-flex items-center space-x-1 rounded-sm border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
                               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
                               <span>Accepting submissions</span>
                             </span>
@@ -716,7 +716,7 @@ const FormsPage: React.FC = () => {
                             {capitalize(form.category)}
                           </span>
                           {form.is_public && (
-                            <span className="inline-flex items-center space-x-1 rounded-sm border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700 dark:text-cyan-400">
+                            <span className="inline-flex items-center space-x-1 rounded-sm border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
                               <Globe className="h-3 w-3" aria-hidden="true" />
                               <span>Public</span>
                             </span>
@@ -732,7 +732,7 @@ const FormsPage: React.FC = () => {
                     {form.is_public && form.status !== FormStatus.PUBLISHED && (
                       <div className="mb-3 flex items-center gap-2 rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-3 py-2">
                         <AlertTriangle
-                          className="h-4 w-4 shrink-0 text-yellow-600 dark:text-yellow-400"
+                          className="h-4 w-4 shrink-0 text-yellow-700 dark:text-yellow-400"
                           aria-hidden="true"
                         />
                         <span className="text-xs text-yellow-700 dark:text-yellow-300">
@@ -836,7 +836,7 @@ const FormsPage: React.FC = () => {
                       {canManage && (
                         <button
                           onClick={() => handleShareForm(form)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-700 transition-colors hover:bg-cyan-500/20 dark:text-cyan-400"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-800 transition-colors hover:bg-cyan-500/20 dark:text-cyan-400"
                         >
                           <Globe className="h-3.5 w-3.5" aria-hidden="true" />
                           Share
@@ -847,7 +847,7 @@ const FormsPage: React.FC = () => {
                           onClick={() => {
                             void handleOpenIntegrationModal(form.id);
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500/10 px-3 py-1.5 text-xs font-medium text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500/10 px-3 py-1.5 text-xs font-medium text-orange-800 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
                         >
                           <Plug className="h-3.5 w-3.5" aria-hidden="true" />
                           Integrations
@@ -858,7 +858,7 @@ const FormsPage: React.FC = () => {
                           onClick={() => {
                             void handleArchive(form.id);
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-yellow-500/10 px-3 py-1.5 text-xs font-medium text-yellow-700 transition-colors hover:bg-yellow-500/20 dark:text-yellow-400"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-yellow-500/10 px-3 py-1.5 text-xs font-medium text-yellow-800 transition-colors hover:bg-yellow-500/20 dark:text-yellow-400"
                         >
                           <Archive className="h-3.5 w-3.5" aria-hidden="true" />
                           Archive
@@ -895,7 +895,7 @@ const FormsPage: React.FC = () => {
                       <h3 className="text-theme-text-primary font-semibold">{template.name}</h3>
                       <div className="flex items-center space-x-1">
                         {template.isPublic && (
-                          <span className="rounded-sm border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700 dark:text-cyan-400">
+                          <span className="rounded-sm border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
                             Public
                           </span>
                         )}
@@ -922,7 +922,7 @@ const FormsPage: React.FC = () => {
                               void handleUseTemplate(template);
                             }}
                             disabled={creating}
-                            className="flex items-center space-x-1 rounded-sm bg-red-600/20 px-3 py-1 text-xs text-red-700 transition-colors hover:bg-red-600/30 disabled:opacity-50 dark:text-red-400"
+                            className="flex items-center space-x-1 rounded-sm bg-red-600/20 px-3 py-1 text-xs text-red-800 transition-colors hover:bg-red-600/30 disabled:opacity-50 dark:text-red-400"
                           >
                             <Copy className="h-3 w-3" aria-hidden="true" />
                             <span>{creating ? 'Creating...' : 'Use Template'}</span>
@@ -1245,7 +1245,7 @@ const FormsPage: React.FC = () => {
                         id="is_public"
                         checked={formData.is_public}
                         onChange={(e) => setFormData({ ...formData, is_public: e.target.checked })}
-                        className="h-4 w-4 rounded-sm text-cyan-600"
+                        className="h-4 w-4 rounded-sm text-cyan-700 dark:text-cyan-600"
                       />
                       <label htmlFor="is_public" className="cursor-pointer text-sm">
                         <span className="font-medium text-cyan-700 dark:text-cyan-300">Public Form</span>
@@ -1401,7 +1401,7 @@ const FormsPage: React.FC = () => {
                                 />
                                 <button
                                   onClick={() => copyPublicUrl(form.public_slug ?? '')}
-                                  className="rounded-lg bg-cyan-600/20 px-3 py-2 text-cyan-700 transition-colors hover:bg-cyan-600/30 dark:text-cyan-400"
+                                  className="rounded-lg bg-cyan-600/20 px-3 py-2 text-cyan-800 transition-colors hover:bg-cyan-600/30 dark:text-cyan-400"
                                   aria-label="Copy public URL"
                                 >
                                   {copiedSlug === form.public_slug ? (
@@ -1414,7 +1414,7 @@ const FormsPage: React.FC = () => {
                                   href={getPublicUrl(form.public_slug)}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="rounded-lg bg-cyan-600/20 px-3 py-2 text-cyan-700 transition-colors hover:bg-cyan-600/30 dark:text-cyan-400"
+                                  className="rounded-lg bg-cyan-600/20 px-3 py-2 text-cyan-800 transition-colors hover:bg-cyan-600/30 dark:text-cyan-400"
                                   aria-label="Open public URL in new tab"
                                 >
                                   <ExternalLink className="h-4 w-4" aria-hidden="true" />
@@ -1471,7 +1471,7 @@ const FormsPage: React.FC = () => {
                                     img.src =
                                       'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
                                   }}
-                                  className="flex items-center space-x-1 rounded-lg bg-cyan-600/20 px-3 py-1.5 text-sm text-cyan-700 transition-colors hover:bg-cyan-600/30 dark:text-cyan-400"
+                                  className="flex items-center space-x-1 rounded-lg bg-cyan-600/20 px-3 py-1.5 text-sm text-cyan-800 transition-colors hover:bg-cyan-600/30 dark:text-cyan-400"
                                   aria-label="Download QR code as PNG"
                                 >
                                   <Download className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1489,7 +1489,7 @@ const FormsPage: React.FC = () => {
                                     a.click();
                                     URL.revokeObjectURL(a.href);
                                   }}
-                                  className="flex items-center space-x-1 rounded-lg bg-cyan-600/20 px-3 py-1.5 text-sm text-cyan-700 transition-colors hover:bg-cyan-600/30 dark:text-cyan-400"
+                                  className="flex items-center space-x-1 rounded-lg bg-cyan-600/20 px-3 py-1.5 text-sm text-cyan-800 transition-colors hover:bg-cyan-600/30 dark:text-cyan-400"
                                   aria-label="Download QR code as SVG"
                                 >
                                   <Download className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1777,7 +1777,7 @@ const FormsPage: React.FC = () => {
                         onClick={() => {
                           void handleAddIntegration();
                         }}
-                        className="flex w-full items-center justify-center space-x-2 rounded-lg bg-orange-600/20 px-4 py-2 text-orange-700 transition-colors hover:bg-orange-600/30 disabled:cursor-not-allowed disabled:opacity-50 dark:text-orange-400"
+                        className="flex w-full items-center justify-center space-x-2 rounded-lg bg-orange-600/20 px-4 py-2 text-orange-800 transition-colors hover:bg-orange-600/30 disabled:cursor-not-allowed disabled:opacity-50 dark:text-orange-400"
                       >
                         <Plus className="h-4 w-4" aria-hidden="true" />
                         <span>Add Integration</span>

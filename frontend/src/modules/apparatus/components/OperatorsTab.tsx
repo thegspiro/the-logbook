@@ -119,7 +119,7 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
                   <span
                     className={`rounded px-2 py-1 text-xs ${
                       op.isActive
-                        ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                        ? 'bg-green-500/10 text-green-800 dark:text-green-400'
                         : 'bg-theme-surface-secondary text-theme-text-muted'
                     }`}
                   >
