@@ -2810,6 +2810,64 @@ class EquipmentKitDetailResponse(EquipmentKitResponse):
     model_config = _response_config
 
 
+class KitProductVariantResponse(BaseModel):
+    """One size/colour/style of a product a kit line can hand out."""
+
+    item_id: str
+    # Every row of this variant, so a line stored against any one of them is
+    # recognised as this variant (several serialized units share one).
+    item_ids: List[str] = []
+    label: str
+    size_label: Optional[str] = None
+    available: int = 0
+
+
+class KitProductOptionResponse(BaseModel):
+    """A catalog product, sizes collapsed, as the kit editor offers it."""
+
+    key: str
+    name: str
+    category_id: Optional[str] = None
+    category_name: Optional[str] = None
+    has_sizes: bool = False
+    variants: List[KitProductVariantResponse] = []
+
+
+class KitIssuePlanLine(BaseModel):
+    """One kit line as it would be issued to a specific member."""
+
+    line_id: str
+    item_name: str
+    quantity: int
+    optional: bool = False
+    size_selectable: bool = False
+    # False when the line names no catalog item, or its item is gone.
+    issuable: bool = True
+    # The member's recorded size for this kind of garment, if any.
+    member_size: Optional[str] = None
+    # The row that would be issued; None means a size must be chosen.
+    selected_item_id: Optional[str] = None
+    variants: List[KitProductVariantResponse] = []
+
+
+class KitIssuePlanResponse(BaseModel):
+    """Every line of a kit, sized for the member it is about to be issued to."""
+
+    kit_id: str
+    user_id: str
+    lines: List[KitIssuePlanLine] = []
+
+
+class KitIssueRequest(BaseModel):
+    """Optional quartermaster size choices when issuing a kit.
+
+    Maps a kit line id to the inventory row chosen for it. Lines left out use
+    the member's recorded size.
+    """
+
+    selections: Dict[UUID, UUID] = Field(default_factory=dict)
+
+
 # ============================================
 # Member Size Preferences Schemas
 # ============================================
