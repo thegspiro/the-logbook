@@ -16,6 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+_None._ PR #3547 (Feature 33, Core infrastructure, pass 8,
+`claude/security-review-core-infrastructure-p8`) merged 2026-10-22T00:47:05Z
+— not docs-only (ported the `main` Alembic merge-heads fix plus its findings
+file), so it has its own Log entry below. Rotation row 33 is ✅. Next is
+Feature 34 (Frontend shared).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33 Core infrastructure pass 8, PR #3547, merged), preserved for history</summary>
+
 **PR [#3547](https://github.com/thegspiro/the-logbook/pull/3547)** (branch `claude/security-review-core-infrastructure-p8`).
 PR #3530 (Feature 32, Locations & kiosk, pass 8) had merged 2026-10-21
 (`claude/security-review-locations-kiosk`, not docs-only — see the Log entry
@@ -34,6 +43,8 @@ already landed by ordinary engineering work (one commit, `54fe07cd`, closing
 the `/health/detailed` IP-block bypass, pre-dates this pass) and each has its
 own guard test, all re-confirmed passing. See `CI8-33-core-infra.md`. Rotation
 row 33 → ✅ (pending this PR's merge); next is Feature 34 (Frontend shared).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32 Locations & kiosk pass 8, PR #3530, merged), preserved for history</summary>
@@ -20496,7 +20507,7 @@ iteration's commit" rule.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -20504,6 +20515,18 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-22 — PR #3547 merged (Feature 33, Core infrastructure, pass 8)
+
+Merged 2026-10-22T00:47:05Z. Not docs-only — ported `20261021_2147_
+e5f9bb066e07_merge_heads.py` from PR #3546 to join `main`'s two forked
+Alembic heads, plus the `CI8-33-core-infra.md` findings file — so it gets
+this record rather than a silent clear. 0 fixed by the pass itself, 0 new
+findings (see the superseded note under **Open PR** above for the full
+pass-8 account). Rotation row 33 is ✅. Picked up this iteration (a
+watchdog pickup — `ListAgents` found no reachable session) via Step 0:
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results.
 
 ### 2026-10-21 — Feature 33 (Core infrastructure, pass 8) — watchdog pickup, 0 fixed, 0 new findings
 
