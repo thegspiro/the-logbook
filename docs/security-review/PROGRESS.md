@@ -16,23 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #(opening)** — Feature 00 (Cross-cutting baseline), pass 11, a watchdog
-pickup. PR #3551 (Feature 34, Frontend shared, pass 10) merged
-2026-10-22T02:48Z. It touched only `PROGRESS.md` and
-`FE10-34-frontend-shared.md`, so per the skill's "docs-only PR is not a
-recordable event" rule it gets no Log entry — only this row's clearing.
-`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
-returned 0 results, and that PR's merge closed out the rotation's lap: every
-row was ✅. Per Step 1, the table below is reset to ⬜ for rotation pass 10
-and this iteration continues into Feature 00 in the same turn, per the
-"rides along in the first feature PR of the next pass, together with the
-reset" rule — see `SEC-00-cross-cutting-baseline.md`'s **Pass 11** section
-for the review itself. (Note: this row previously said the reset would be
-"for pass 11" — that mislabeled the _rotation's_ pass counter using
-Frontend-shared's own file-numbering offset; the rotation's own counter was
-at "reset to ⬜ for pass 9" after pass 8 completed, so the lap that just
-closed is rotation pass 9 and this reset opens rotation pass 10. Corrected
-here.)
+**PR [#3555](https://github.com/thegspiro/the-logbook/pull/3555)** (branch
+`claude/security-review-cross-cutting-baseline-p11`) — Feature 00
+(Cross-cutting baseline), pass 11, a watchdog pickup. PR #3551 (Feature 34,
+Frontend shared, pass 10) merged 2026-10-22T02:48Z. It touched only
+`PROGRESS.md` and `FE10-34-frontend-shared.md`, so per the skill's
+"docs-only PR is not a recordable event" rule it gets no Log entry — only
+this row's clearing. `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 results, and that
+PR's merge closed out the rotation's lap: every row was ✅. Per Step 1, the
+table below is reset to ⬜ for rotation pass 10 and this iteration continued
+into Feature 00 in the same turn, per the "rides along in the first feature
+PR of the next pass, together with the reset" rule: delta re-swept all 13
+established sweep classes against 614 commits (375 non-merge) since the
+pass-10 baseline — **0 fixes, 0 new findings.** See
+`SEC-00-cross-cutting-baseline.md`'s **Pass 11** section. Rotation row 00 →
+✅ (pending this PR's merge); next is Feature 01 (Auth & session lifecycle).
+(Note: this row previously said the reset would be "for pass 11" — that
+mislabeled the _rotation's_ pass counter using Frontend-shared's own
+file-numbering offset; the rotation's own counter was at "reset to ⬜ for
+pass 9" after pass 8 completed, so the lap that closed is rotation pass 9
+and this reset opened rotation pass 10. Corrected here.)
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 34 Frontend shared pass 10, PR #3551, before it merged), preserved for history</summary>
