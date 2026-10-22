@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3558](https://github.com/thegspiro/the-logbook/pull/3558)** (branch
+`claude/security-review-public-surface-webhooks-p11`) — Feature 03 (Public
+surface & webhooks), pass 11, a watchdog pickup. PR #3557 (Feature 02,
+Permissions & roles, pass 11) merged 2026-10-22, not docs-only — see
+`PERM-02-permissions-roles.md`'s **Pass 11** section and its own Log entry
+below — so only this row's clearing rides along here. `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 results, checked
+once before starting and again immediately before branching, and
+`ListAgents` found no other reachable session. Row 03 was confirmed the next
+`⬜` by reading the rotation table directly. This iteration reviewed Feature
+03, pass 11: **0 fixed, 0 new findings.** See
+`PUB-03-public-surface-webhooks.md`'s **Pass 11** section. Rotation row 03
+→ ✅ (pending this PR's merge); next is Feature 04 (Storefront & payments).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02 Permissions & roles pass 11, PR #3557, before it merged), preserved for history</summary>
+
 **PR [#3557](https://github.com/thegspiro/the-logbook/pull/3557)** (branch
 `claude/security-review-permissions-roles-p11`) — Feature 02 (Permissions &
 roles), pass 11, a watchdog pickup. PR #3556 (Feature 01, Auth & session
@@ -29,6 +46,8 @@ once before starting and again immediately before branching, and
 02, pass 11: **0 fixed, 0 new findings.** See `PERM-02-permissions-roles.md`'s
 **Pass 11** section. Rotation row 02 → ✅ (pending this PR's merge); next is
 Feature 03 (Public surface & webhooks).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01 Auth & session lifecycle pass 11, PR #3556, before it merged), preserved for history</summary>
@@ -20556,7 +20575,7 @@ this iteration's commit" rule.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
@@ -20595,6 +20614,35 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-22 — Feature 03 (Public surface & webhooks, pass 11) — watchdog pickup, 0 fixed, 0 new findings
+
+PR #3557 (Feature 02, Permissions & roles, pass 11) merged 2026-10-22, not
+docs-only — see its own Log entry just below for the record — so this
+iteration only clears the `Open PR` row. This iteration (a watchdog
+pickup — `search_pull_requests` returned 0 open security-review PRs and
+`ListAgents` found no reachable session) reviewed Feature 03, pass 11:
+**0 fixed, 0 new findings.** Delta against the pass-10 baseline (PR #3399)
+touched exactly one file: a new `backend/app/api/public/minutes.py` (169 L,
+2 routes) — a public, read-only minutes page. Read in full against all
+seven checklist dimensions along with its collaborators
+(`app/utils/minutes_public.py`, `minutes_publishing_service.py`): both routes
+are rate-limited (60/min per IP) ahead of any query; organization resolution
+follows this feature's established single-org-deployment rule
+(`_the_organization`, same shape as `legal.py`/`branding.py`), and both
+service lookups additionally filter `organization_id` directly in the query;
+the response is built by `narrow_for_public`'s explicit allowlist (counts
+instead of the attendance roll, no individual votes, no closed-session
+attendee list, no voter-level election detail, attachments/library links
+dropped) rather than redacting a richer record, and HTML section content is
+re-sanitized on the way out even though it was already cleaned on write.
+Schema: the one FK with `ondelete="SET NULL"` (`posted_by`) is correctly
+`nullable=True`; the backing table predates this pass (migration
+`89723c04ae94`, 2026-10-17, Feature 24's own work). Every other file in this
+feature's scope — both webhook receivers, `public_portal_security.py`, the
+remaining 13 `api/public/` files — is byte-identical to pass 10. See
+`PUB-03-public-surface-webhooks.md`'s **Pass 11** section. Rotation row 03 →
+✅ (pending this PR's merge); next is Feature 04 (Storefront & payments).
 
 ### 2026-10-22 — Feature 02 (Permissions & roles, pass 11) — watchdog pickup, 0 fixed, 0 new findings
 
