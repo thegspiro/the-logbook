@@ -36,9 +36,12 @@ const routeToPageFile = (): Map<string, string> => {
     if (exported && file) exportToFile.set(exported, `${file}.tsx`);
   }
 
-  // `<Route path="/onboarding/start" element={<OrganizationSetup />} />`
+  // `<Route path="/onboarding/start" element={gated(<OrganizationSetup />)} />`,
+  // or the bare `element={<SetupComplete />}` for the routes outside the gate.
   const map = new Map<string, string>();
-  for (const [, routePath, element] of routes.matchAll(/<Route path="([^"]+)" element=\{<(\w+) \/>\}/g)) {
+  for (const [, routePath, element] of routes.matchAll(
+    /<Route path="([^"]+)" element=\{(?:gated\()?<(\w+) \/>\)?\}/g
+  )) {
     const file = element ? exportToFile.get(element) : undefined;
     if (routePath && file) map.set(routePath, file);
   }

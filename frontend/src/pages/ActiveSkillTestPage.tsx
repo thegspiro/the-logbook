@@ -214,7 +214,7 @@ const ScoreCriterion: React.FC<{
     ? 'text-theme-text-muted'
     : isCritical
       ? isPassing
-        ? 'text-green-600'
+        ? 'text-green-700 dark:text-green-600'
         : 'text-red-600'
       : 'text-blue-600 dark:text-blue-400';
 
@@ -276,7 +276,7 @@ const ScoreCriterion: React.FC<{
           {!scored && <p className="text-theme-text-muted text-xs">Drag the slider to score this step.</p>}
           <div className="text-theme-text-muted flex justify-between text-xs">
             <span>0</span>
-            {isCritical && <span className="text-yellow-600">Pass: {passingScore}</span>}
+            {isCritical && <span className="text-yellow-700 dark:text-yellow-600">Pass: {passingScore}</span>}
             <span>{maxScore}</span>
           </div>
         </div>
@@ -666,7 +666,7 @@ const SectionView: React.FC<{
           <span className="text-theme-text-muted text-xs">
             {scoredCount} of {scorable.length} steps scored
           </span>
-          {passedCount > 0 && <span className="text-xs text-green-600">{passedCount} passed</span>}
+          {passedCount > 0 && <span className="text-xs text-green-700 dark:text-green-600">{passedCount} passed</span>}
           {failedCount > 0 && <span className="text-xs text-red-600">{failedCount} failed</span>}
         </div>
         {hasCritical && requireAllCritical && (
@@ -898,10 +898,10 @@ const SectionTallyBadges: React.FC<{ tally: SectionTally; showStatements?: boole
     {tally.deducted > 0 && (
       <span className="font-bold text-red-600 dark:text-red-400">&minus;{tally.deducted} pts</span>
     )}
-    {tally.passed > 0 && <span className="font-medium text-green-600">{tally.passed} passed</span>}
+    {tally.passed > 0 && <span className="font-medium text-green-700 dark:text-green-600">{tally.passed} passed</span>}
     {tally.failed > 0 && <span className="font-medium text-red-600">{tally.failed} failed</span>}
     {tally.notScored > 0 && (
-      <span className="font-medium text-amber-600 dark:text-amber-400">{tally.notScored} not scored</span>
+      <span className="font-medium text-amber-700 dark:text-amber-400">{tally.notScored} not scored</span>
     )}
     {/* Reported even though it moves no number: a step out of the point pool
         is the one tally a reader cannot reconcile from the marks alone. */}
@@ -2111,7 +2111,7 @@ export const ActiveSkillTestPage: React.FC = () => {
               <Ban className="h-10 w-10 shrink-0 text-amber-500" />
               <div className="flex-1">
                 <p className="text-lg font-bold text-amber-700 dark:text-amber-300">Voided</p>
-                <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
                   This result was withdrawn and counts toward nothing
                   {currentTest.overall_score != null
                     ? ` (recorded ${currentTest.result === 'pass' ? 'pass' : 'fail'}, ${formatScore(currentTest.overall_score)})`
@@ -2177,7 +2177,7 @@ export const ActiveSkillTestPage: React.FC = () => {
                     must not take it as evidence of a time limit being met.
                     Same marking as the printed scorecard and the CSV export. */}
                 {currentTest.timing_verified === false && (
-                  <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                  <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                     Not verified — scoring was resumed, so the clock carried on from the last save rather than running
                     continuously.
                   </p>

@@ -73,6 +73,12 @@ from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 _REPLACEMENT_DATE = "_replacement_date"
 _REPLACEMENT_LOT = "_replacement_lot"
 
+# Calendar days a missed check stays on the member's own list. Seven was chosen
+# to sit with the fleet board's seven-date strip (DEFAULT_STRIP_DATES), though
+# that one counts duty dates; past it the miss leaves the member's list, while
+# the board and the compliance report go on counting it.
+MY_CHECKLISTS_OVERDUE_DAYS = 7
+
 
 class EquipmentCheckConflictError(ValueError):
     """A completed shift/template check already owns this submission slot."""
@@ -2917,8 +2923,17 @@ class EquipmentCheckService:
         user_id: str,
         organization_id: str,
     ) -> List[Dict[str, Any]]:
-        """Get pending + recently completed checklists for a user."""
+        """Get a user's checklists: today and later, plus missed recent ones.
+
+        A shift dated within the last ``MY_CHECKLISTS_OVERDUE_DAYS`` stays on
+        the list only while one of its checks is unfiled. That is what lets My
+        Checklists mark a passed day overdue and the fleet board rank it first,
+        and it keeps an overnight shift's end-of-shift check reachable after
+        midnight. Older misses drop off the member's list; the fleet board and
+        the compliance report still count them.
+        """
         today = await resolve_org_today(self.db, organization_id)
+        earliest = today - timedelta(days=MY_CHECKLISTS_OVERDUE_DAYS)
         # Get user's active shift assignments with shift data. Same status
         # filter as the submit guard in submit_check: a declined/cancelled
         # assignment can't submit a check, so listing its checklists here
@@ -2929,7 +2944,7 @@ class EquipmentCheckService:
             .where(
                 ShiftAssignment.user_id == user_id,
                 Shift.organization_id == organization_id,
-                Shift.shift_date >= today,
+                Shift.shift_date >= earliest,
                 ShiftAssignment.assignment_status.in_(
                     [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED]
                 ),
@@ -2973,7 +2988,10 @@ class EquipmentCheckService:
                 existing_checks=checks_by_shift.get(str(assignment.shift_id), {}),
             )
             apparatus_name = apparatus_map.get(shift.apparatus_id or "", "")
+            is_past = shift.shift_date < today
             for cl in shift_checklists:
+                if is_past and cl["is_completed"]:
+                    continue
                 cl["shift_id"] = assignment.shift_id
                 cl["shift_date"] = shift.shift_date
                 cl["apparatus_name"] = apparatus_name

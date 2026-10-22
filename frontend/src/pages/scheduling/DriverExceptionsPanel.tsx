@@ -31,8 +31,8 @@ import { useConfirm } from '../../contexts/ConfirmContext';
 import { EmptyState } from '../../components/ux/EmptyState';
 
 const STATUS_STYLES: Record<string, string> = {
-  pending: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-  approved: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+  pending: 'bg-amber-500/15 text-amber-800 dark:text-amber-400',
+  approved: 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-400',
   denied: 'bg-theme-surface-secondary text-theme-text-muted',
   revoked: 'bg-red-500/15 text-red-700 dark:text-red-400',
 };
@@ -443,7 +443,7 @@ const DriverExceptionsPanel: React.FC = () => {
                   <p className="text-theme-text-secondary mt-1.5 text-sm">{exception.justification}</p>
 
                   {exception.restrictions && (
-                    <p className="mt-1.5 inline-flex items-start gap-1.5 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-xs text-amber-700 dark:text-amber-400">
+                    <p className="mt-1.5 inline-flex items-start gap-1.5 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-xs text-amber-800 dark:text-amber-400">
                       <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
                       {exception.restrictions}
                     </p>

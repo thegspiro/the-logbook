@@ -486,7 +486,14 @@ give access. The form explains each one:
 - **Rank** is "Their title in the chain of command, such as Captain or
   Firefighter. A rank carries a few default permissions of its own."
 - **Position** is "The job they hold here, such as Secretary or Training
-  Officer. Positions decide most of what they can see and do in The Logbook."
+  Officer. Positions decide most of what they can see and do in The Logbook.
+  A rank such as Captain or Firefighter is set in the Rank field, not here."
+
+The position list does not offer Chief, Captain, Firefighter or the other
+ranks. Those are set in the Rank field, and a member holding the rank already
+has the access the matching position would give. The same names still appear
+under **Organization Settings > Role Management**, marked **Mirrors a rank**,
+because that is where the access a rank carries is edited.
 
 **Rank** is greyed out for an Administrative member, with the note
 "Administrative members do not hold an operational rank."
@@ -873,7 +880,9 @@ The Admin Edit page has these sections:
 
 You cannot change status here. Use the status button on the member's profile.
 Positions are given with **Manage Positions** on the member's row in Member
-Management.
+Management. That list leaves out the positions named after a rank; a member
+who was given one before this version still sees it there, marked **Rank**,
+so it can be taken off.
 
 ![Admin member edit form with personal, department and access sections](./images/01-07-admin-member-edit.png)
 
@@ -953,6 +962,11 @@ profile once per visit.
 
 ## Deleting Members
 
+> **Roster tips.** On **Members** (table and card views) each name links to the
+> member's profile. Row actions carry the member's name ("Delete Jordan Avery",
+> "Reset password for Jordan Avery"), so a screen reader announces whose row
+> each button belongs to.
+
 **Who can do this:** officers who can manage members.
 
 To permanently delete a member:
@@ -986,7 +1000,18 @@ There is no delete button on the profile or the Admin Edit page.
 **What is kept, with the member's name removed:** records the member
 **created, approved, issued or uploaded**, such as documents and approvals.
 The record stays; only the link to the member is cleared. Uploaded documents
-are kept.
+are kept. This includes other members' records the deleted member signed:
+the examiner on a skills test and the officer on a shift report now show
+**Former member** instead of a name.
+
+**Gear and shifts.** Any gear the member still holds is returned to stock in
+the same step, so item status and pool counts stay right. The **Records
+affected** list counts every record the delete removes.
+
+**Leaving the active statuses also frees their shifts.** Deactivating,
+archiving, or changing a member to a status outside the active ones takes them
+off shifts that have not started and ends their standing claims, and records an
+audit event. Past and in-progress shifts are untouched.
 
 > **Important.** Deletion is permanent and cannot be undone. If you may need
 > the member's records later, change their status to **Dropped** or
@@ -1670,14 +1695,25 @@ You change a member's account status from their profile page.
 ### Changing a Member's Status
 
 1. Open the member's profile.
-2. Select the **status badge** next to the member's name, or the pencil next
-   to **Status** in the Membership panel. Both open the **Change Member
-   Status** dialog.
+2. Select the **status chip** next to the member's name (it reads, for
+   example, "Status: Active · Change"), or the pencil next to **Status** in the
+   Membership panel. Both open the **Change Member Status** dialog. It is a
+   true dialog: **Esc** closes it (not while it is saving), and keyboard focus
+   stays inside it.
 3. Choose the new status under **New Status**: Active, Inactive, Suspended,
    Probationary, Leave, Retired, Dropped Voluntary or Dropped Involuntary.
 4. Optionally enter a **Reason**.
 5. Select **Update Status**. The button stays greyed out until you pick a
    status different from the current one.
+
+**Membership type and status move together for two statuses.** Setting a
+member's **Membership Type** to **Probationary** puts an Active account on
+**Probationary**, and any other type (including a custom tier and the monthly
+tier advance) moves a Probationary account back to **Active**. Inactive,
+Suspended, Leave, Retired, Dropped and Archived are never touched. The status
+history records the move with the reason "Follows membership type". A status
+you set by hand in this dialog holds until the membership type is next
+changed.
 
 **Archived is not in the list.** A dropped member is archived automatically
 once their property is returned and their departure clearance is completed.

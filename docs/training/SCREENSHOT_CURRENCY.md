@@ -1,5 +1,24 @@
 # Screenshot currency
 
+## Queued by the October 21 – 22 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 05 | Kit editor with a sized line on **Member's size**; the issue review listing resolved sizes | Create; re-check `05-27-equipment-kit-modal.png` and `05-95-kit-issue-confirm.png` |
+| 01 | Members roster with linked names; profile **Status: Active · Change** chip and Change Status dialog | Re-check `01-29-status-change-modal.png` and the roster shots |
+| 01 | Remove Member dialog, Permanently Delete tab, with the itemized Records affected list | Re-check `01-24-delete-member-modal.png` |
+| 04 | Delete Event dialog with **Delete this and future events in this series** | Replace `04-39-delete-event-series.png` |
+| 02 | Programs list with **Show inactive**, an Inactive badge and **Reactivate**; requirement delete outcome toast | Create |
+| 03 | Basic apparatus list with **Show inactive** and **Reactivate** | Create |
+| 02 | Import Queue with **Import matching pending records** | Create (provider needs a resolvable API host) |
+| 11 | Delete category confirmation that reads as deactivation | Check `11-` category shots for the old destructive wording |
+| 09 | Skills test templates on a phone (cards) | Create |
+| 05 | Checklist settings on a phone: switch rows, compact top | Re-check |
+| 14, 04 | Governance pages (Org Chart, Legal Documents, Elections, Minutes, Attendance) with the shared section header | Re-check any full-page shot |
+
 ## Queued by the October 20 – 21 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).
@@ -389,7 +408,7 @@ row.
 | Medical Supplies **Lots** dialog                    | **CURRENT** 2026-10-17, covered by `05-89`                  | The Lots button opens the same dialog: Where it is, then Stock lots with the edit and delete controls and the Add lot form                                                                                                                                                                                                                                                       |
 | Medical categories page                             | **CURRENT** 2026-10-17 as `05-91-medical-categories`        | Cards read "Show N supplies"; Airway & Oxygen opened to its supplies                                                                                                                                                                                                                                                                                                             |
 | Catalog Links, after **Link matches automatically** | **CURRENT** 2026-10-17 as `05-92-catalog-links-auto-linked` | The shot runs a real pass and undoes every link afterwards; the next seed also restores the Rescue 7 lines                                                                                                                                                                                                                                                                       |
-| My Checklists on a phone                            | **NOT POSSIBLE** as described                               | The placeholder asks for the overdue marker, and the member's list never contains a past day: `get_my_checklists` returns shifts dated today or later only, so the marker the page draws for a past day with an unfiled check is never reached. The day headings and the **⋯** menu render; the placeholder is left open until the guide's overdue sentence or the query changes |
+| My Checklists on a phone                            | **NOT POSSIBLE** as described                               | The placeholder asks for the overdue marker, and the member's list never contains a past day: `get_my_checklists` returns shifts dated today or later only, so the marker the page draws for a past day with an unfiled check is never reached. The day headings and the **⋯** menu render; the placeholder is left open until the guide's overdue sentence or the query changes. **Update 2026-10-22:** the query changed — it now also returns a shift from the last seven days while a check on it is unfiled — so the shot can be taken with a member seated on a shift two or three days back whose checklist was never filed |
 | Check form with a count at its minimum              | **CURRENT** 2026-10-17                                      | Checked: no captured image shows a **CRITICAL — below minimum** warning (`03-70` and `03-72` show counts at par with no critical minimum set), so none pictures the old behaviour                                                                                                                                                                                                |
 | Google Workspace card (16)                          | **NOT POSSIBLE** in the demo                                | **Link existing members** appears only on a connected card, and both connecting and its preview call Google with a real service account key                                                                                                                                                                                                                                      |
 | Documents admin-only folder confirmation (07)       | **CURRENT** 2026-10-17 as `07-25-folder-admin-only-confirm` | Manage folder on Forms & Templates with Specific positions set to Historian, a position nobody holds; never confirmed                                                                                                                                                                                                                                                            |

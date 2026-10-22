@@ -240,6 +240,7 @@ export const BallotSendJobKind = {
   BALLOTS: 'ballots',
   REMINDER: 'reminder',
   PACKAGE: 'package',
+  ANNOUNCEMENT: 'announcement',
 } as const;
 export type BallotSendJobKind = (typeof BallotSendJobKind)[keyof typeof BallotSendJobKind];
 
@@ -621,16 +622,16 @@ export const ASSIGNMENT_STATUS_COLORS: Record<string, string> = {
   assigned: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
   confirmed: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  pending: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
   cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
   no_show: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
   // Synthetic status for past shifts derived from attendance records when no
   // ShiftAssignment row exists (e.g. walk-on attendance).
-  completed: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
+  completed: 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border-emerald-500/20',
 };
 
 export const REQUEST_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  pending: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
   approved: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   denied: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
   cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
@@ -638,7 +639,7 @@ export const REQUEST_STATUS_COLORS: Record<string, string> = {
 
 /** Shift history import: a draft under review, or committed to the schedule. */
 export const HISTORY_IMPORT_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  draft: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
   committed: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
 };
 
@@ -652,8 +653,8 @@ export const HISTORY_IMPORT_RESOLUTION_COLORS: Record<string, string> = {
   mapped: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
   create: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
   conflict: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-  ambiguous: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
-  unmatched: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  ambiguous: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
+  unmatched: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
 };
 
 // ============================================
@@ -697,11 +698,11 @@ export const IPExceptionApprovalStatus = {
 export type IPExceptionApprovalStatus = (typeof IPExceptionApprovalStatus)[keyof typeof IPExceptionApprovalStatus];
 
 export const IP_EXCEPTION_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  pending: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
   approved: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   rejected: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
   expired: 'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20',
-  revoked: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  revoked: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/20',
 };
 
 // ============================================
@@ -726,8 +727,8 @@ export const IP_EXCEPTION_USE_CASE_LABELS: Record<string, string> = {
 
 export const COUNTRY_RISK_LEVEL_COLORS: Record<string, string> = {
   low: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-  medium: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
-  high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
+  medium: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
+  high: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/20',
   critical: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
 };
 
@@ -911,7 +912,7 @@ export const CONSENT_STATUS_LABELS: Record<ConsentStatus, string> = {
 export const CONSENT_STATUS_COLORS: Record<ConsentStatus, string> = {
   granted: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
   declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-  not_answered: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
+  not_answered: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/20',
 };
 
 // ============================================

@@ -339,9 +339,9 @@ export const SchedulingReportsPage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-7xl p-6">
+    <div>
       {/* No heading here. This renders only inside SchedulingAdminReportsPage,
-          which supplies the page chrome — trail, back link, icon and the <h1>
+          which supplies the page chrome and its padding — trail, back link, icon and the <h1>
           naming this page. A second identical "Scheduling Reports" heading is a
           duplicate landmark to a screen reader and a repeated title to everyone
           else. */}
@@ -455,7 +455,7 @@ export const SchedulingReportsPage: React.FC = () => {
           ) : memberHoursReport ? (
             <div>
               {/* Summary Stats */}
-              <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard
                   label="Total Members"
                   value={memberHoursReport.total_members}
@@ -495,7 +495,7 @@ export const SchedulingReportsPage: React.FC = () => {
                   <p className="text-theme-text-muted">No data for this period</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Member hours">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
@@ -624,7 +624,7 @@ export const SchedulingReportsPage: React.FC = () => {
           ) : (
             <div>
               {/* Summary Stats */}
-              <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard
                   label="Total Days"
                   value={coverageData.length}
@@ -648,7 +648,7 @@ export const SchedulingReportsPage: React.FC = () => {
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Daily coverage">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
@@ -676,7 +676,7 @@ export const SchedulingReportsPage: React.FC = () => {
                         <td className="text-theme-text-primary px-4 py-3 text-right">{row.total_shifts}</td>
                         <td className="text-theme-text-secondary px-4 py-3 text-right">{row.total_assigned}</td>
                         <td className="px-4 py-3 text-right">
-                          <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                          <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                             {row.total_confirmed}
                           </span>
                         </td>
@@ -773,7 +773,7 @@ export const SchedulingReportsPage: React.FC = () => {
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Call volume">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
@@ -873,7 +873,7 @@ export const SchedulingReportsPage: React.FC = () => {
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Member availability">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
@@ -915,7 +915,7 @@ export const SchedulingReportsPage: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 text-right">
                           {(member.time_off_days || 0) > 0 ? (
-                            <span className="inline-flex items-center rounded-sm bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
+                            <span className="inline-flex items-center rounded-sm bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                               {member.time_off_days}
                             </span>
                           ) : (
@@ -923,7 +923,7 @@ export const SchedulingReportsPage: React.FC = () => {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                          <span className="inline-flex items-center rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                             {member.available_dates?.length || 0}
                           </span>
                         </td>
@@ -1012,7 +1012,7 @@ export const SchedulingReportsPage: React.FC = () => {
                   three requirements is three checks. The payload carries no
                   distinct-member count, and the labels say what is summed
                   rather than claiming people. */}
-              <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard
                   label="Requirements"
                   value={complianceData.length}
@@ -1026,7 +1026,7 @@ export const SchedulingReportsPage: React.FC = () => {
                 <StatCard
                   label="Checks Met"
                   value={complianceData.reduce((sum, r) => sum + r.compliant_count, 0)}
-                  icon={<CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" aria-hidden="true" />}
+                  icon={<CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-400" aria-hidden="true" />}
                 />
                 <StatCard
                   label="Checks Not Met"
@@ -1142,7 +1142,12 @@ export const SchedulingReportsPage: React.FC = () => {
 
                       {/* Expanded member list */}
                       {isExpanded && (
-                        <div className="border-theme-surface-border overflow-x-auto border-t">
+                        <div
+                          className="border-theme-surface-border overflow-x-auto border-t"
+                          tabIndex={0}
+                          role="region"
+                          aria-label="Member shift compliance"
+                        >
                           {filteredMembers.length === 0 ? (
                             <div className="text-theme-text-muted p-4 text-center text-sm">
                               {complianceFilter === 'non-compliant' ? 'All members are compliant!' : 'No members found'}
@@ -1232,7 +1237,7 @@ export const SchedulingReportsPage: React.FC = () => {
                                     </td>
                                     <td className="px-4 py-2 text-center">
                                       {member.compliant ? (
-                                        <span className="inline-flex items-center gap-1 rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                                        <span className="inline-flex items-center gap-1 rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                                           <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
                                           Compliant
                                         </span>

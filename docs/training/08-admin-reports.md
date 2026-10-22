@@ -418,6 +418,11 @@ the one they need.
 reorder it, remove ranks you do not have, add your own, and set which shift
 seats each rank may fill — including a seat your department invented.
 
+Renaming a rank's **code** moves every place that stored the old one: members,
+org-chart seats, a training requirement's required ranks and inventory
+impact-plan rank filters, in one step, with an audit entry naming both codes.
+Historical records (rank at completion, audit data) keep what was recorded.
+
 > A rank says where someone sits and which seats they can fill. What they can
 > **do** comes from their position. A rank you add yourself is marked **No
 > default permissions** for that reason: those members need a position too.
@@ -666,6 +671,12 @@ the position carries more access than you hold.
 > **The Member position stays on.** Every current member holds **Member**. Its
 > box stays ticked and cannot be removed. It can only be removed from
 > an archived member.
+
+> **Ranks are not positions.** The list leaves out Chief, Captain,
+> Firefighter and the other ranks; a rank is set from the member's profile
+> and carries its own access. A member given one of those positions before
+> this version still sees it in the list, marked **Rank**, so it can be
+> unticked.
 
 > **What if a member's menus have not changed after you changed their
 > positions?** The Logbook applies new permissions at once, but the member's

@@ -369,7 +369,7 @@ export const CohortDetailPage: React.FC = () => {
                       <span className="text-theme-text-primary font-medium">{item.title}</span>
                       <span className={`badge ${COHORT_CLASS_STATUS_COLORS[item.status] ?? ''}`}>{item.status}</span>
                       {!item.event_id && !cancelled && (
-                        <span className="badge bg-amber-500/20 text-amber-700 dark:text-amber-400">No event</span>
+                        <span className="badge bg-amber-500/20 text-amber-800 dark:text-amber-400">No event</span>
                       )}
                     </div>
 

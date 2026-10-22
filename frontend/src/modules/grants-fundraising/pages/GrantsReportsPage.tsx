@@ -294,19 +294,19 @@ const GrantsReportsPage: React.FC = () => {
                 <KpiCard
                   label="Total Awarded"
                   value={formatCurrencyWhole(grantReport.totalAwarded)}
-                  icon={<DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />}
+                  icon={<DollarSign className="h-5 w-5 text-green-700 dark:text-green-400" />}
                   color="bg-green-100 dark:bg-green-900/30"
                 />
                 <KpiCard
                   label="Total Spent"
                   value={formatCurrencyWhole(grantReport.totalSpent)}
-                  icon={<BarChart3 className="h-5 w-5 text-orange-600 dark:text-orange-400" />}
+                  icon={<BarChart3 className="h-5 w-5 text-orange-700 dark:text-orange-400" />}
                   color="bg-orange-100 dark:bg-orange-900/30"
                 />
                 <KpiCard
                   label="Success Rate"
                   value={`${grantReport.successRate}%`}
-                  icon={<TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
+                  icon={<TrendingUp className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />}
                   color="bg-emerald-100 dark:bg-emerald-900/30"
                 />
                 <KpiCard
@@ -394,7 +394,7 @@ const GrantsReportsPage: React.FC = () => {
                 <KpiCard
                   label="Total Raised"
                   value={formatCurrencyWhole(fundraisingReport.totalDonations)}
-                  icon={<DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />}
+                  icon={<DollarSign className="h-5 w-5 text-green-700 dark:text-green-400" />}
                   color="bg-green-100 dark:bg-green-900/30"
                 />
                 <KpiCard

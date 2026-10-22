@@ -634,7 +634,7 @@ const OnboardingCheck: React.FC = () => {
                         </div>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-theme-alert-warning-icon mb-1 text-base font-semibold">
+                        <h3 className="text-theme-alert-warning-title mb-1 text-base font-semibold">
                           {phaseDetails.title}
                         </h3>
                         <p className="text-theme-text-secondary mb-1 text-sm">
@@ -649,13 +649,13 @@ const OnboardingCheck: React.FC = () => {
                       <div className="card-secondary mt-3 p-3">
                         <div className="text-theme-text-muted mb-2 flex items-center justify-between text-xs">
                           <span className="font-medium">Database Migrations</span>
-                          <span className="text-theme-alert-warning-icon font-semibold">
+                          <span className="text-theme-alert-warning-title font-semibold">
                             {startupInfo.migrations.completed}/{startupInfo.migrations.total}
                           </span>
                         </div>
                         {startupInfo.migrations.completed === 0 && startupInfo.migrations.total > 0 && (
                           <div className="text-theme-text-muted mb-2 space-y-1 text-xs">
-                            <p className="text-theme-alert-warning-icon font-medium">
+                            <p className="text-theme-alert-warning-title font-medium">
                               Running {startupInfo.migrations.total} database migrations...
                             </p>
                             <p className="text-theme-text-muted">

@@ -229,9 +229,9 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {c.accepted ? (
-                    <span className="badge bg-green-500/10 text-green-700 dark:text-green-300">Accepted</span>
+                    <span className="badge bg-green-500/10 text-green-800 dark:text-green-300">Accepted</span>
                   ) : (
-                    <span className="badge bg-amber-500/10 text-amber-700 dark:text-amber-300">Pending</span>
+                    <span className="badge bg-amber-500/10 text-amber-800 dark:text-amber-300">Pending</span>
                   )}
                   {!c.accepted && currentUserId && c.user_id === currentUserId && (
                     <>

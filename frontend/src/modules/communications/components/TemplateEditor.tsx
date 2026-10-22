@@ -353,7 +353,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                     key={v.name}
                     onClick={() => insertVariable(v)}
                     title={v.description}
-                    className="inline-flex items-center rounded-sm border border-red-500/30 bg-red-500/10 px-2.5 py-1 font-mono text-xs text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
+                    className="inline-flex items-center rounded-sm border border-red-500/30 bg-red-500/10 px-2.5 py-1 font-mono text-xs text-red-700 transition-colors hover:bg-red-500/20 dark:text-red-400"
                   >
                     {`{{${v.name}}}`}
                   </button>

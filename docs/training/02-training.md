@@ -672,9 +672,16 @@ step**. Its steps are:
 > 50 characters. It appears on printed program pages and travels with
 > the program when it is exported and shared with other departments.
 
-**Deleting a pipeline** — **Delete pipeline** on its page — permanently removes
-its phases, milestones, enrollments and every enrolled member's progress. It
-cannot be undone. Requirements created inside the pipeline go with it, unless
+**Deleting a pipeline** — **Delete pipeline** on its page — depends on whether
+anyone has graduated. A pipeline with graduates is **deactivated**: completed
+enrollments are kept, in-progress enrollments are withdrawn, and recertification
+resets skip it so graduates' records stay. A pipeline nobody has graduated from
+is deleted, with its phases, milestones, enrollments and every enrolled
+member's progress, and that cannot be undone. The confirmation and the toast say
+which happened. To bring a deactivated pipeline back, turn on **Show inactive**
+on the Programs list (training managers only) and select **Reactivate**, or use
+**Reactivate** on the pipeline's own page. Reactivating changes only the flag:
+withdrawn enrollments stay withdrawn. Requirements created inside the pipeline go with it, unless
 another program uses them. A requirement the pipeline only linked from the
 library is not deleted. It stays in Training Requirements.
 
@@ -1092,6 +1099,12 @@ officer planning a session for one phase should say so in its description.
 
 Open **Training Admin → Curriculum → Requirements** to manage the department's
 training requirements.
+
+**Deleting a requirement.** A requirement that anything references (a
+pipeline, member progress, tests, sessions, waivers or compliance profiles) is
+**deactivated** instead of deleted, so members' progress is not erased. An
+unused requirement is deleted. The confirmation and the toast say which
+happened.
 
 ### Requirement Types
 
@@ -2677,6 +2690,12 @@ The page has four tabs:
 - **All Mappings** — per provider, how many categories, users and courses are
   matched and unmatched, with the names of the unmatched ones.
 
+**Mapping a user credits their history.** When you match an external user to a
+member, that member's pending and failed records are imported at once, so their
+training page fills in and older records outside the provider's lookback are
+not left under Import Queue. **Import matching pending records** on a provider's
+Import Queue imports every pending record whose member is already known.
+
 **Import Queue** and **All Mappings** each have an **Open mappings** button
 that opens the same matching window as the provider card. Both stay empty until
 a sync has run.
@@ -3332,7 +3351,7 @@ shown across the top. **Next** moves forward and **Previous** goes back. Steps
 ![The recurrence block with Monthly (by weekday) chosen and its ordinal and weekday pickers](./images/02-83-session-recurrence.png)
 
 5. Set the location, RSVP and participant limits, then select **Next**.
-6. On **Training Info**, choose **Use existing course template** and pick a
+6. On **Training Info**, choose **Use a course from the Course Library** and pick a
    **course**. The form fills in the training type, credit hours, instructor,
    expiry months and maximum participants from the course, and shows a preview
    card of what it took. The other choice, **Create new course for this

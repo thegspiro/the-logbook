@@ -504,6 +504,42 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### A department can keep its files in its own S3 or MinIO bucket (2026-10-22)
+
+The Amazon S3 choice under **Organization Settings > Storage** (and in
+onboarding) now does something. Until this version it was saved and ignored,
+and every file went to the `uploads` volume whatever a department picked.
+
+**Nothing moves on upgrade.** A department that chose S3 earlier keeps
+uploading to the `uploads` volume until an administrator presses **Test and
+switch to S3** on that screen. The test writes, reads back and deletes a small
+object with the saved settings, and only then are new uploads sent to the
+bucket. Editing those settings afterwards sends uploads back to the volume
+until the test passes again, and the screen says so. Files already stored stay
+where they are and keep working either way. Moving existing files into a bucket
+is a later release (step 3 of decision 31 in `docs/FILE_STORAGE_HARDENING.md`).
+
+What an operator needs to know:
+
+- **Objects are encrypted before upload** with the installation's file key,
+  exactly like files on the volume. Back up that key: without it nothing in the
+  bucket can be read.
+- **A bucket that cannot be reached refuses uploads and downloads with a 503
+  (`LB-UPLD-006`)** rather than storing the file somewhere else.
+- **A private or plain-HTTP endpoint is refused unless you set
+  `S3_ALLOW_PRIVATE_ENDPOINT=true`.** That includes the bundled MinIO
+  (`with-s3` profile, `http://minio:9000`). A department administrator types the
+  endpoint, so the default stays closed. Cloud-metadata addresses are refused
+  either way. The variable is in all three compose files' `environment:` blocks.
+- **Backups:** `scripts/backup.sh` still copies only the `uploads` volume. Back
+  up a department's bucket with the provider's own tooling (versioning or
+  replication on AWS, `mc mirror` on MinIO) until step 3 adds it.
+- **Anonymous suggestions:** a department on S3 stores suggestion screenshots in
+  its bucket too, and the bucket records each object's exact upload time. On
+  the volume that time is truncated to noon of the day so an anonymous
+  submission cannot be matched to a login. Whoever can list the bucket or read
+  its access logs can see the exact time (owner decision, 2026-10-22).
+
 ### Sessions now end after 12 hours, and idle sessions no longer sign you out everywhere (2026-10-20)
 
 Three changes to how a session ends. None blocks a restart and none needs a migration.
@@ -528,6 +564,46 @@ Three changes to how a session ends. None blocks a restart and none needs a migr
 
 A reverse proxy that strips unknown request headers needs nothing: the header only
 shortens the sender's own session.
+
+### Positions named after a rank leave the member pickers (2026-10-21)
+
+Onboarding seeds Chief, Deputy Chief, Assistant Chief, Captain, Lieutenant,
+Engineer, Firefighter and EMT as **positions** as well as ranks, because those
+positions carry the rank's own permission list. Add Member therefore offered
+"Firefighter" in the position dropdown beside "Firefighter" in the rank
+dropdown, and the roster could show the same word in both columns, or in
+neither.
+
+From this version those positions are not offered or shown on the member
+screens: the Add Member position dropdown, the roster's Positions column, the
+profile's position badges, Member Management's View by Position, and the
+positions a member can be given in Manage Positions. A rank is set in the Rank
+field, and a member holding the rank already has the access the position would
+give. Nothing is removed from the database:
+
+- A member who already holds one of these positions keeps it and its access.
+  It stays listed in that member's Manage Positions dialog, marked **Rank**,
+  so an officer can untick it.
+- **Organization Settings > Role Management** still lists every one of them,
+  marked **Mirrors a rank**, because that is where the access a rank carries is
+  edited.
+- **The member importer rejects a rank name in the `role` column.** A CSV row
+  whose `role` reads `Firefighter` (or any other rank name) is reported with
+  `role "Firefighter" is a rank — put it in the rank column instead` and not
+  imported; before this version it assigned the position. Move the value to
+  the `rank` column.
+
+To list the members who hold one of these positions:
+
+```sql
+SELECT u.id, u.username, u.rank, p.slug AS position
+FROM user_positions up
+JOIN positions p ON p.id = up.position_id
+JOIN users u ON u.id = up.user_id
+WHERE p.is_system = 1
+  AND p.slug IN ('fire_chief', 'deputy_chief', 'assistant_chief', 'captain',
+                 'lieutenant', 'engineer', 'firefighter', 'emt');
+```
 
 ### Account status follows membership type for probationary members (2026-10-21)
 

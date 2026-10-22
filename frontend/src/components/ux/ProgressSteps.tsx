@@ -42,7 +42,7 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({ steps, currentStep
                 >
                   {isComplete ? <Check className="h-4 w-4" /> : index + 1}
                 </div>
-                <div className="hidden min-w-0 md:block">
+                <div className="hidden min-w-0 xl:block">
                   <p
                     className={`text-sm font-medium ${isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}
                   >

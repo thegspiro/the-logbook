@@ -10,6 +10,7 @@ import { DialogPanel } from '../components/ux/DialogPanel';
 import { roleService } from '../services/api';
 import type { Role, PermissionCategory } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
+import { mirrorsRank } from '../utils/positions';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 
@@ -266,8 +267,19 @@ export const RoleManagementPage: React.FC = () => {
                           Same name as another position
                         </span>
                       )}
+                      {mirrorsRank(role) && (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
+                          Mirrors a rank
+                        </span>
+                      )}
                       <span className="text-theme-text-muted text-sm">Priority: {role.priority}</span>
                     </div>
+                    {mirrorsRank(role) && (
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        Carries the {role.name} rank&rsquo;s access, which members get from their Rank field. It is not
+                        offered where positions are assigned; edit its permissions here.
+                      </p>
+                    )}
                     {sharedNameKeys.has(role.name.trim().toLowerCase()) && (
                       <p className="text-theme-text-muted mt-1 text-xs">
                         Internal name <code>{role.slug}</code>. Rename one of these so they can be told apart where

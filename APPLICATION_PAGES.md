@@ -77,6 +77,15 @@ Complete reference of all pages in the application, organized by module.
 | `/onboarding/apparatus`                | Apparatus Setup          | Create the department's apparatus                                                              |
 | `/onboarding/complete`                 | Setup Complete           | Confirmation / hand-off into the app                                                           |
 
+> **Setup steps close once setup is finished** _(2026-10-20)_. Every row above
+> except `/onboarding` and `/onboarding/complete` sits behind `OnboardingGate`,
+> which asks `GET /onboarding/status` once and sends a visitor to `/login` when
+> setup is already done, instead of showing a form the backend would refuse to
+> save (`LB-ONBD-001`). A failed or rate-limited status call lets the step render
+> as before (the backend remains the authority). `/onboarding/complete` stays
+> open because the last step of a first run lands there just after setup is
+> marked finished.
+
 > **Completed setup cannot be replayed** _(2026-08-08)_. Once onboarding is
 > finished, the station and apparatus setup endpoints refuse further writes, so a
 > retained link cannot be used to add stations or apparatus after the fact.
@@ -1599,6 +1608,16 @@ reviewable in one place.
 | ------------------- | --------------------- | ------------- |
 | `/account`          | User Account Settings | Authenticated |
 | `/settings/account` | Redirect → `/account` | Authenticated |
+
+## Unknown Addresses _(2026-10-20)_
+
+An address that matches no route shows **Page not found** (`NotFoundPage`)
+inside the signed-in layout: it names the path that matched nothing (never the
+query string or fragment, which can carry a token) and offers **Go to the
+dashboard** and **Go back**. A signed-out visitor is sent to sign in first, as
+before, and sees it afterwards. This used to redirect silently to the
+dashboard, which made a bookmark to a removed page look like the app had ignored
+the click.
 
 ## Settings & Administration
 

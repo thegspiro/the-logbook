@@ -60,7 +60,7 @@ const PRESENTATION: Record<EventUrgency, UrgencyPresentation | null> = {
     accentClass: '',
     stripClass: 'bg-theme-surface-secondary text-theme-text-secondary',
     labelClass: RESOLVED_LABEL,
-    iconClass: 'text-green-600 dark:text-green-400',
+    iconClass: 'text-green-700 dark:text-green-400',
     icon: CheckCircle2,
     label: "You're going",
   },

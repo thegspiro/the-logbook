@@ -49,6 +49,7 @@ const UNCACHEABLE_PREFIXES = [
   '/apparatus/evoc-check/', // GET /evoc-check/{apparatus_id}/{user_id}: a named member's driving eligibility
   '/inventory/reorder-requests', // requester_name on the list and the detail (PII)
   '/operational-ranks/validate', // resolves member_name for each rank being validated (PII)
+  '/organization/settings/file-storage/status', // where uploads go right now: a stale answer hides the result of a connection test or a settings save
   '/suggestions', // suggestion boxes: complaints, anonymous submissions and follow-up threads — never cached, and a cached thread would hide a reply
   '/testing-checklist', // shared testing run: another tester's mark can land at any moment, and a stale one reads as a lost result
   '/training/waivers', // medical/health waivers (PHI)
@@ -160,6 +161,7 @@ const UNCACHEABLE_SUBSTRINGS = [
   // their free-text reasons (PII), and a pending/decided state that a 30s-stale
   // copy would misreport right after the organizer acts on it.
   '/eligible-members', // returns member first/last name + email (PII)
+  '/issue-plan', // kit issue preview: embeds the member's recorded garment sizes (PII)
   '/external-attendees', // external attendee PII
   '/check-in-monitoring', // live attendee/location check-in data (PII)
   // The PII sub-resources of an inventory item (five below). Substrings rather

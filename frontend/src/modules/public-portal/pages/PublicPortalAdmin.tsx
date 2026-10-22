@@ -124,7 +124,7 @@ const PublicPortalAdmin: React.FC = () => {
             {!config?.enabled && (
               <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
                 <div className="flex">
-                  <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-600" />
+                  <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-600" />
                   <div className="ml-3">
                     <p className="text-sm text-yellow-800 dark:text-yellow-400">
                       The portal is disabled. External websites can't read any of your data until you enable it, create

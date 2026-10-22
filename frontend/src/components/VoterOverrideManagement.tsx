@@ -189,7 +189,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                 placeholder="Reason for granting voting eligibility override..."
               />
               {reason.trim().length > 0 && reason.trim().length < 10 && (
-                <p className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+                <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-400">
                   {10 - reason.trim().length} more character{10 - reason.trim().length !== 1 ? 's' : ''} needed
                 </p>
               )}
@@ -277,7 +277,7 @@ export const VoterOverrideManagement: React.FC<VoterOverrideManagementProps> = (
                         type="button"
                         onClick={() => setConfirmingRemoveId(override.user_id)}
                         aria-label={`Remove override for ${override.member_name || override.user_id}`}
-                        className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-700 hover:bg-red-500/30 dark:text-red-300"
+                        className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-800 hover:bg-red-500/30 dark:text-red-300"
                       >
                         Remove
                       </button>

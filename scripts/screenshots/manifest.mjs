@@ -1404,6 +1404,63 @@ async function apiFromPage(page, method, path, body) {
   );
 }
 
+// Practical skills default to Skills Testing, which greys out the shift
+// report's Skills Observed section and marks the Apparatus Skills panel as not
+// in effect. The shots picturing those working switch the department to shift
+// sign-offs for their own length, and their cleanup puts the setting back --
+// held here because a cleanup receives only its page.
+let practicalSkillsRestore = null;
+
+function withShiftSignoffs(prepare) {
+  return async (page) => {
+    const config = await apiFromPage(
+      page,
+      "GET",
+      "/training/module-config/config",
+    );
+    const method = config.body?.practical_skills_method;
+    if (config.status !== 200 || !method) {
+      throw new Error(
+        "could not read the training module's practical skills method",
+      );
+    }
+    if (method !== "shift_signoffs") {
+      const switched = await apiFromPage(
+        page,
+        "PUT",
+        "/training/module-config/config",
+        { practical_skills_method: "shift_signoffs" },
+      );
+      if (switched.status !== 200) {
+        throw new Error(
+          `switching to shift sign-offs returned ${switched.status}`,
+        );
+      }
+      practicalSkillsRestore = method;
+      // The screen read the setting when it mounted.
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(2_000);
+    }
+    if (prepare) await prepare(page);
+  };
+}
+
+async function restorePracticalSkills(page) {
+  if (!practicalSkillsRestore) return;
+  const restored = await apiFromPage(
+    page,
+    "PUT",
+    "/training/module-config/config",
+    { practical_skills_method: practicalSkillsRestore },
+  );
+  if (restored.status !== 200) {
+    throw new Error(
+      `restoring the practical skills method returned ${restored.status}`,
+    );
+  }
+  practicalSkillsRestore = null;
+}
+
 /** The administrator's id and the Chief position's, for the sign-off shots. */
 async function adminAndChiefIds(page) {
   const me = await apiFromPage(page, "GET", "/auth/me");
@@ -2040,12 +2097,13 @@ async function openBatchReportForm(page) {
       .click({ timeout: 15_000 });
     await page.waitForTimeout(400);
   }
+  // Each score button is named for its skill ("Aerial placement: score 4
+  // (Proficient)"), so no row has to be located first.
   for (const [skill, score] of scored) {
-    const row = page
-      .locator("div")
-      .filter({ has: page.getByRole("button", { name: `\u2713 ${skill}` }) })
-      .last();
-    await row.getByRole("button", { name: score, exact: true }).first().click();
+    await page
+      .getByRole("button", { name: new RegExp(`^${skill}: score ${score} `) })
+      .first()
+      .click({ timeout: 15_000 });
     await page.waitForTimeout(300);
   }
   // One task, to show the row the "+ Add" control appends pre-filled from the
@@ -3429,7 +3487,8 @@ export const SHOTS = [
     anchor: "Screenshot of the batch report creation form",
     alt: "The batch shift-report form — shared hours and calls, the whole crew, and one trainee's evaluation open",
     route: "/scheduling?tab=shift-reports",
-    prepare: openBatchReportForm,
+    prepare: withShiftSignoffs(openBatchReportForm),
+    cleanup: restorePracticalSkills,
     fullPage: true,
   },
   {
@@ -3439,7 +3498,8 @@ export const SHOTS = [
     anchor: "Screenshot of the skills section in the evaluation panel",
     alt: "Skills Observed — three skills scored 1-5, each showing the department's label for the score chosen",
     route: "/scheduling?tab=shift-reports",
-    prepare: openBatchReportForm,
+    prepare: withShiftSignoffs(openBatchReportForm),
+    cleanup: restorePracticalSkills,
     // Clipped to the block: the score rows are small, and a full-page frame of
     // the form renders them at a size the caption cannot rescue.
     selector: "div:has(> label:text-is('Skills Observed'))",
@@ -4462,11 +4522,16 @@ export const SHOTS = [
     route: "/training/admin?tab=sessions",
     prepare: async (page) => {
       await openSessionTrainingInfo(page);
-      // Step 2 defaults to "Create new course for this training", which has
-      // no picker and no preview card — the section is about the other branch.
+      // Step 2 has defaulted to "Create new course for this training", which
+      // has no picker and no preview card — the section is about the other
+      // branch. Checked rather than clicked: the form now opens on the library
+      // branch once the department has courses, and the label was renamed
+      // from "Use existing course template".
       await page
-        .getByText("Use existing course template", { exact: true })
-        .click({ timeout: 15_000 });
+        .getByRole("radio", {
+          name: /^Use (existing course template|a course from the Course Library)$/,
+        })
+        .check({ timeout: 15_000 });
       await page.waitForTimeout(500);
       const picker = page
         .locator("select")
@@ -6029,7 +6094,8 @@ export const SHOTS = [
     // sidebar whose accessible name carries the description too. Anchoring
     // the regex at the start matches both; `$` matched only the hidden
     // phone copy and timed out.
-    prepare: clickByName(/^Form Sections/),
+    prepare: withShiftSignoffs(clickByName(/^Form Sections/)),
+    cleanup: restorePracticalSkills,
     fullPage: true,
   },
   {
@@ -6043,7 +6109,8 @@ export const SHOTS = [
     // The panel opens on the first apparatus type alphabetically (Ambulance),
     // which is as good an illustration as any — every type carries its own
     // skills and tasks.
-    prepare: clickByName(/^Apparatus Skills/),
+    prepare: withShiftSignoffs(clickByName(/^Apparatus Skills/)),
+    cleanup: restorePracticalSkills,
     fullPage: true,
   },
   {
@@ -8091,6 +8158,9 @@ export const SHOTS = [
       "Screenshot of the External Training Integrations page showing a saved provider card with",
     alt: "The Integrations tab with a saved provider — its platform, last sync, auto-sync interval and sync actions",
     route: "/training/admin?page=setup&tab=integrations",
+    // Clipped to the hub's body: the Needs Attention queue and the section
+    // cards above it fill the first screen, and a viewport shot ends there.
+    selector: '[role="tabpanel"]',
   },
   {
     id: "02-45-training-programs",
@@ -8156,6 +8226,10 @@ export const SHOTS = [
     // picturing the wrong audience — and the placeholder says "within Training
     // Admin" in as many words.
     route: "/training/admin?tab=templates",
+    // The whole page, unlike 09-01's clip to the template table: this
+    // caption is about where the section sits, and the Needs Attention queue
+    // and section cards above it fill the first screen.
+    fullPage: true,
   },
   {
     id: "02-66-compliance-thresholds",
@@ -9752,6 +9826,9 @@ export const SHOTS = [
     // about, and kept capturing cleanly while picturing the wrong page. The
     // officer-facing library lives under the Training Admin hub.
     route: "/training/admin?tab=templates",
+    // Clipped to the hub's body: the Needs Attention queue and the section
+    // cards above it fill the first screen, and a viewport shot ends there.
+    selector: '[role="tabpanel"]',
   },
   {
     id: "09-02-create-template",
@@ -10157,7 +10234,7 @@ export const SHOTS = [
         // moved into the bottom bar, so the phone header carries no hamburger
         // and matching the old name alone timed out with the button on screen.
         .getByRole("button", {
-          name: /Open (full navigation|main|navigation) menu/,
+          name: /open (full navigation|main|navigation) menu/i,
         })
         .first()
         .click({ timeout: 20_000 });
@@ -10293,7 +10370,7 @@ export const SHOTS = [
     route: "/finance/purchase-requests/new",
     // "No budget linked" is the Budget picker's first option, not an empty page.
     allowEmptyState: true,
-    expect: "Saved as a draft. Submit it for approval from the next page.",
+    expect: "New Purchase Request",
     fullPage: true,
   },
   {
@@ -10435,10 +10512,12 @@ export const SHOTS = [
     expect: "Override reason",
     // Opened and photographed, never submitted.
     prepare: async (page) => {
+      // Whichever request is waiting on the Captain position: which ones are
+      // depends on how far the seeded chains have advanced, and the expense
+      // report this used to name now sits at the treasurer's own step.
       await page
-        .getByRole("button", {
-          name: "Approve FDIC Conference Expenses as approvals admin",
-        })
+        .getByRole("button", { name: /^Approve .+ as approvals admin$/ })
+        .first()
         .click({ timeout: 15_000 });
       await page.getByText("Override reason").first().waitFor();
       await page.waitForTimeout(400);
@@ -10854,19 +10933,19 @@ export const SHOTS = [
     alt: "Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below",
     route: "/inventory/checklists/my",
     auth: "member",
+    // "No expiration recorded" is another item's lot line further down the
+    // check, not the state of the controls this pictures.
+    allowEmptyState: true,
     prepare: async (page) => {
       await clickByName("Unscheduled checklist")(page);
       await clickByName("Medic 3 Supply Check")(page);
       await page.waitForSelector("text=Trauma Bag", { timeout: 20_000 });
 
       // The photo button lives inside the note panel, so the note has to be
-      // open for it to exist at all. `:near` rather than an index: the Note
-      // buttons are identical and unlabelled, and an index would move the
-      // moment the seeded template gains an item.
+      // open for it to exist at all. The note toggle is an icon button named
+      // for its item, so no index or proximity match is needed.
       await page
-        .locator(
-          'button:has-text("Note"):near(:text-is("Nitrile Gloves — Large"), 160)',
-        )
+        .getByRole("button", { name: "Add a note for Nitrile Gloves — Large" })
         .first()
         .click({ timeout: 15_000 });
       await page.getByLabel("Upload photo for Nitrile Gloves — Large").waitFor({
@@ -10882,9 +10961,10 @@ export const SHOTS = [
         );
         if (heading) heading.scrollIntoView({ block: "start" });
         // `block: "start"` puts the heading under the sticky app bar and the
-        // check's own header; back off far enough that the item's name and its
+        // check's own header, and the compartment's sticky header now sits
+        // between them too; back off far enough that the item's name and its
         // quantity stepper are both in frame.
-        window.scrollBy(0, -190);
+        window.scrollBy(0, -250);
       });
       await page.waitForTimeout(500);
     },
@@ -11752,7 +11832,8 @@ export const SHOTS = [
     anchor: "choosing which optional sections appear on the report form",
     alt: "Shift Reports settings Form Sections, toggling which parts of the report form appear",
     route: "/scheduling/admin/settings/shift-reports",
-    prepare: clickSettingsSection("Form Sections"),
+    prepare: withShiftSignoffs(clickSettingsSection("Form Sections")),
+    cleanup: restorePracticalSkills,
     fullPage: true,
   },
   {
@@ -11762,7 +11843,8 @@ export const SHOTS = [
     anchor: "per-apparatus skills/tasks selector",
     alt: "Shift Reports settings Apparatus Skills, showing the skills and tasks tracked for Engine",
     route: "/scheduling/admin/settings/shift-reports",
-    prepare: async (page) => {
+    cleanup: restorePracticalSkills,
+    prepare: withShiftSignoffs(async (page) => {
       await clickSettingsSection("Apparatus Skills")(page);
       // The section opens on the first apparatus type alphabetically
       // (Ambulance). The guide walks through Engine, so pick that one. The
@@ -11773,7 +11855,7 @@ export const SHOTS = [
         .getByRole("button", { name: /^engine( \(\d+\))?$/i })
         .first()
         .click({ timeout: 10_000 });
-    },
+    }),
     fullPage: true,
   },
   {
@@ -12201,7 +12283,7 @@ export const SHOTS = [
   },
   {
     id: "03-25-equipment-checks-tab",
-    expect: "Equipment & Readiness",
+    expect: "Fleet Readiness",
     doc: "03-scheduling.md",
     line: 1329,
     anchor: "Screenshot of Fleet Readiness showing a list of apparatus with",
@@ -12910,6 +12992,9 @@ export const SHOTS = [
       "Screenshot of the side navigation panel showing the 'Notifications' link with a",
     alt: "Sidebar navigation with the unread notification badge",
     route: "/dashboard",
+    // Tall enough that the navigation does not scroll: Notifications sits
+    // below Finance and Grants & Fundraising, past the fold of a 900px frame.
+    viewport: { width: 1440, height: 1500 },
     selector: "aside, nav",
   },
   {
@@ -14230,15 +14315,16 @@ export const SHOTS = [
       // to none — the guide pictures it set.
       const evoc = page.locator('select[name="requiredEvocLevelId"]');
       await evoc.waitFor({ timeout: 10_000 });
-      // Options read "Level 2 — Intermediate" and their values are seeded ids,
-      // so match on the visible text rather than naming either.
+      // A new organization is given its levels by the product ("EVOC 3 -
+      // Engine / Pumper"), and an older seed named its own ("Intermediate").
+      // Values are seeded ids, so match on the visible text, accepting either.
       const value = await evoc.evaluate(
         (el) =>
           Array.from(el.options).find((option) =>
-            /intermediate/i.test(option.text),
+            /intermediate|engine/i.test(option.text),
           )?.value ?? "",
       );
-      if (!value) throw new Error("no Intermediate EVOC level defined");
+      if (!value) throw new Error("no engine-grade EVOC level defined");
       await evoc.selectOption(value);
     },
     fullPage: true,
@@ -14318,10 +14404,11 @@ export const SHOTS = [
       const evocValue = await evoc.evaluate(
         (el) =>
           Array.from(el.options).find((option) =>
-            /intermediate/i.test(option.text),
+            /intermediate|engine/i.test(option.text),
           )?.value ?? "",
       );
-      if (!evocValue) throw new Error("no Intermediate EVOC level defined");
+      // Same level-name tolerance as 06-21.
+      if (!evocValue) throw new Error("no engine-grade EVOC level defined");
       await evoc.selectOption(evocValue);
 
       await page
@@ -15318,13 +15405,13 @@ export const SHOTS = [
         .click({ timeout: 20_000 });
       await page.waitForTimeout(1500);
       const group = page
-        .locator("div:has(> h3:text-is('Skills-Test Results'))")
+        .locator("div:has(> h4:text-is('Skills-Test Results'))")
         .last();
       await group.waitFor({ timeout: 20_000 });
       await group.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(600);
     },
-    selector: "div:has(> h3:text-is('Skills-Test Results'))",
+    selector: "div:has(> h4:text-is('Skills-Test Results'))",
   },
   {
     id: "09-19-failed-test-result",
@@ -15357,7 +15444,9 @@ export const SHOTS = [
         );
         if (!response.ok) return null;
         const body = await response.json();
-        const rows = Array.isArray(body) ? body : (body.tests ?? []);
+        const rows = Array.isArray(body)
+          ? body
+          : (body.items ?? body.tests ?? []);
         const wanted = rows.find((row) => row.status === "in_progress");
         return wanted ? wanted.id : null;
       });
@@ -15962,7 +16051,7 @@ export const SHOTS = [
         waitUntil: "domcontentloaded",
       });
     },
-    selector: 'div.bg-theme-surface:has(> h2:has-text("Linked Elections"))',
+    selector: 'div.card:has(> h2:has-text("Linked Elections"))',
   },
   {
     id: "04-11-event-notifications",
@@ -15980,7 +16069,7 @@ export const SHOTS = [
     ),
     // Clipped: the panel sits below a 21-row attendance list, which 04-10
     // already pictures in full.
-    selector: 'div.bg-theme-surface:has(> h2:has-text("Notifications"))',
+    selector: 'div.card:has(> h2:has-text("Notifications"))',
   },
   {
     id: "08-36-template-search",
@@ -16284,12 +16373,13 @@ export const SHOTS = [
     alt: "Store Admin's Orders tab narrowed to paid orders, the list showing only the two the status filter matches",
     route: "/inventory/admin/store",
     prepare: async (page) => {
-      // Scoped to the tab strip. A bare name match also hits the Overview's
-      // recent-order rows, and clicking one of those opens the order modal over
-      // the list -- which is what the first capture of this shot contained.
+      // The hub's section card, by role. A bare name match also hits the
+      // Overview's recent-order rows, and clicking one of those opens the
+      // order modal over the list -- which is what the first capture of this
+      // shot contained. The sections were a `.tab-scroll` strip until the
+      // store joined the card-tab admin hubs.
       await page
-        .locator(".tab-scroll button")
-        .filter({ hasText: "Orders" })
+        .getByRole("tab", { name: /^Orders\b/ })
         .first()
         .click({ timeout: 10_000 });
       const status = page.locator("#order-status-filter");
@@ -17335,7 +17425,12 @@ export const SHOTS = [
       await page
         .getByRole("button", { name: /^Next$/ })
         .click({ timeout: 20_000 });
-      await page.getByText(/Use existing course template/).click();
+      // Renamed from "Use existing course template"; see 02-80.
+      await page
+        .getByRole("radio", {
+          name: /^Use (existing course template|a course from the Course Library)$/,
+        })
+        .check({ timeout: 15_000 });
       // Located by its own placeholder option, not by label: the "Select
       // Course" label on this wizard carries no `htmlFor` and the select no
       // `id`, so it has no accessible name to match on.
@@ -17379,9 +17474,10 @@ export const SHOTS = [
     // could not be calculated" above a caption about linking a session: true
     // of this database (the seeded members hold three records against 26
     // requirements) and nothing to do with the marker.
-    // Matched on the h1's inner <span>: the heading also holds an icon, and a
-    // `text-is` on the h1 itself does not match through it.
-    selector: "main:has(h1 > span:text-is('Create Training Session'))",
+    // Clipped to the step itself: the page's own title is screen-reader only
+    // now that the wizard renders inside the hub, so there is no visible
+    // heading to frame on above it.
+    selector: "div.space-y-6:has(> h2:text-is('Training Information'))",
     allowEmptyState:
       '"No category" is the unselected first <option> of the category select, ' +
       "not a state this form is in -- the control reads Driver/Operator " +
@@ -17914,8 +18010,9 @@ export const SHOTS = [
     alt: "The sidebar as an officer, clipped to the navigation: Operations expanded to My Issued Gear, Inventory, Medical Supplies, My Checklists, Fleet Readiness, Apparatus Inventory, Apparatus and Facilities, and below it the Administration section with Scheduling Admin and Inventory Admin",
     route: "/dashboard",
     // Tall enough that the whole navigation fits without its own scroll, so
-    // Operations and Administration share one frame.
-    viewport: { width: 1440, height: 1700 },
+    // Operations and Administration share one frame. Raised from 1700 when
+    // the Finance and Grants & Fundraising groups lengthened the list.
+    viewport: { width: 1440, height: 2100 },
     selector: "nav#side-navigation",
     expect: { selector: 'nav#side-navigation :text-is("Fleet Readiness")' },
     prepare: async (page) => {
@@ -18146,9 +18243,14 @@ export const SHOTS = [
     viewport: { width: 390, height: 844 },
     expect: { selector: '[role="dialog"]' },
     // A phone shows the week as a strip of days, and Shift details only
-    // appears in the day panel under the one tapped.
+    // appears in the day sheet a tap on one opens. The board opens with today
+    // selected, and today carries shifts (see 03-102); tapping a named date
+    // pinned this to the week it was written in.
     prepare: async (page) => {
-      await clickByName(/Thursday, September 24/)(page);
+      await page
+        .getByRole("gridcell", { selected: true })
+        .first()
+        .click({ timeout: 15_000 });
       await page.waitForTimeout(800);
       await clickByName(/^Shift details$/)(page);
       await page
@@ -18157,6 +18259,9 @@ export const SHOTS = [
         .waitFor({ timeout: 10_000 });
       await page.waitForTimeout(800);
     },
+    // As in 03-102: "No calls logged for this shift" is true of today's
+    // shift and sits below the crew board, which is the subject.
+    allowEmptyState: true,
   },
   {
     id: "03-104-my-shifts-hours",
@@ -18545,12 +18650,11 @@ export const SHOTS = [
     // Opened and never saved: Connect is not pressed, so the integration stays
     // available and every switch shows the shipped default.
     prepare: async (page) => {
-      const card = page
-        .locator("div")
-        .filter({ hasText: /^Claude \(MCP\)/ })
-        .filter({ has: page.getByRole("button", { name: /^Connect$/ }) })
-        .last();
-      await card.getByRole("button", { name: /^Connect$/ }).click();
+      // The card's button is named for its integration, so it is reached
+      // directly rather than through a card matched on its text.
+      await page
+        .getByRole("button", { name: "Connect Claude (MCP)", exact: true })
+        .click();
       await page
         .locator('.modal-panel:has-text("Connect Claude (MCP)")')
         .first()
@@ -18585,12 +18689,11 @@ export const SHOTS = [
     // Opened and never saved, like 16-08: the box is ticked in the browser
     // only, so nothing persists.
     prepare: async (page) => {
-      const card = page
-        .locator("div")
-        .filter({ hasText: /^Claude \(MCP\)/ })
-        .filter({ has: page.getByRole("button", { name: /^Connect$/ }) })
-        .last();
-      await card.getByRole("button", { name: /^Connect$/ }).click();
+      // The card's button is named for its integration, so it is reached
+      // directly rather than through a card matched on its text.
+      await page
+        .getByRole("button", { name: "Connect Claude (MCP)", exact: true })
+        .click();
       const modal = page
         .locator('.modal-panel:has-text("Connect Claude (MCP)")')
         .first();
@@ -19615,6 +19718,10 @@ export const SHOTS = [
     // edited. The backup list is therefore served from a fixture; the rest of
     // the screen is the live template.
     beforeNavigate: async (page) => {
+      // The demo backend's link address is localhost, which the template
+      // editor flags in a notice above it; served the demo's public address
+      // like 08-99, so the notice is not pictured where it is not the subject.
+      await mockLinkDomain(GUIDE08_PUBLIC_LINK_DOMAIN)(page);
       await page.route("**/api/v1/email-templates/*/backups", (route) =>
         route.fulfill({
           status: 200,

@@ -1359,16 +1359,28 @@ cancelled.
 ### Deleting an event or a series
 
 1. On the event's page, select **More → Delete Event**.
-2. On a recurring event, choose **Delete only this event** or **Delete all
-   events in this series**.
+2. On a recurring event, choose **Delete only this event**, **Delete this
+   and future events in this series**, or **Delete all events in this
+   series**.
 3. The dialog reads "Permanently delete "…"? Its RSVPs and attendance records
    are deleted too. You can't undo this." Select **Delete Event** (or **Delete
    Entire Series**), or **Keep Event** to back out.
 
-> **What if I want to keep the history?** Deleting a series removes every
-> occurrence, past ones included — there is no "delete future occurrences
-> only". To keep the record, use **Cancel Entire Series** instead: cancelled
-> events stay on the calendar with their attendance.
+> **What if I want to keep the history?** **Delete all events** removes every
+> occurrence, past ones included. To keep the past, choose **Delete this and
+> future events in this series** from the first occurrence you want gone: earlier
+> events, with their attendance, stay, and the series is ended at its last
+> remaining occurrence with rolling extension off, so the deleted ones are not
+> created again. Only the occurrences being deleted are checked for finalized
+> attendance. To keep every event on the calendar, use **Cancel Entire Series**
+> instead.
+
+> **Deleting the first event of a series no longer loses the series.** The
+> earliest surviving occurrence takes over the recurrence settings, so a later
+> **Delete all events in this series** still removes every remaining occurrence.
+
+> **An approved meeting cannot be deleted.** Its attendance is part of the
+> membership record.
 
 > **What if the event has minutes?** An event with linked records, such as
 > meeting minutes, cannot be deleted: "Cannot delete event because it has
