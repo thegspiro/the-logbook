@@ -139,6 +139,7 @@ from app.schemas.facilities import (  # Facility Type; Facility Status; Main Fac
 from app.services import module_documents
 from app.services.documents_service import DocumentsService
 from app.services.facilities_service import FacilitiesService
+from app.services.location_service import LocationInUseError
 from app.services.module_documents import IMAGE_FILE_RULES
 
 router = APIRouter()
@@ -2848,15 +2849,23 @@ async def delete_facility_room(
     """
     Delete a facility room
 
+    Its linked location is deleted too, unless events, event templates or
+    apparatus still reference it; then it is deactivated and kept.
+
     **Authentication required**
     **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
-    deleted = await service.delete_room(
-        room_id=room_id,
-        organization_id=current_user.organization_id,
-    )
+    try:
+        deleted = await service.delete_room(
+            room_id=room_id,
+            organization_id=current_user.organization_id,
+        )
+    except LocationInUseError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
 
     if not deleted:
         raise HTTPException(

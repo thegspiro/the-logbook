@@ -136,6 +136,34 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
       every folder still listed. It is the optional "Document folder access"
       email (`EmailKind.DOCUMENT_DUTIES`), which a department can make
       required.
+31. **A department's own S3 bucket** (2026-10-21, owner decisions). The S3
+    (and MinIO-compatible) choice in a department's File Storage settings
+    will decide where that department's new files go. The bucket,
+    credentials and endpoint are the department's, from onboarding, not an
+    installation-wide setting.
+    - Files already on local disk move with a migration command (verified
+      copy, rollback, finalize, as relocation and encryption do). Until it
+      runs, a file with a local reference keeps being served from disk, so
+      switching never breaks a download.
+    - Malware scanning, per-organization separation and encryption at rest
+      apply exactly as on local disk. Files are encrypted before they leave
+      the server.
+    - Tests fake S3 with moto (test-only dependency).
+    - Built in three steps:
+      1. One storage interface (`exists`, `read_bytes`, `plaintext_size`,
+         `delete`, `file_response` in `file_storage_service`) that every
+         caller uses, with the local backend only. Behaviour is unchanged.
+      2. The S3 backend and the per-department settings it reads.
+      3. The migration command, the encryption and rewrap tooling on S3,
+         backups, and docs.
+    - Step 2 decisions (2026-10-22): a department's uploads move to its
+      bucket only after **Test and switch to S3** passes with the saved
+      settings, and go back to local disk if those settings are edited
+      afterwards; an unreachable bucket **refuses** the upload (503,
+      `LB-UPLD-006`) rather than writing to disk; the endpoint must be public
+      HTTPS unless the operator sets `S3_ALLOW_PRIVATE_ENDPOINT`; and
+      anonymous suggestion screenshots go to the bucket too, accepting that
+      the bucket records their exact upload time.
 
 ## Phases
 
@@ -145,7 +173,9 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
 | 2     | One storage service: org-first layout, descriptive names, size caps and malware scan everywhere (on by default)                                 | done (#3011) |
 | 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | done (#3031) |
 | 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | done         |
-| 5     | Every document lives in a folder: no more organization-wide "unfiled" documents                                                                 | this change  |
+| 5     | Every document lives in a folder: no more organization-wide "unfiled" documents                                                                 | done         |
+| 6     | A department's own S3 / MinIO bucket (decision 31), step 1 of 3: one storage interface every caller uses                                        | done (#3537) |
+| 7     | Decision 31, step 2 of 3: the S3 backend, each department's settings, the connection test that switches it                                      | this change  |
 
 ### Phase 1 — what changed
 
@@ -323,6 +353,25 @@ form's "No folder" choice reads "General Documents (default)".
 
 This revision also joins the two Alembic heads `3f3bd6f3c7e4` and
 `990e288940bc`, published with the same parent.
+
+### Phase 7 — a department's own bucket (2026-10-22)
+
+| Piece                 | Where                                                                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Talking to a bucket   | `app/services/s3_storage.py`, the only module that imports boto3 (`tests/test_storage_operations.py`)                                                           |
+| A stored reference    | `s3://<bucket>/<org>/<area>/<record>/<uuid><ext>`; `resolve()` confines it by its leading key segments, as it confines a path by directory                      |
+| Where a new file goes | `file_storage.write_file`: the bucket when the platform is S3 **and** the saved settings' keyed fingerprint matches the last passed test; otherwise the volume  |
+| The connection test   | `POST /organization/settings/file-storage/s3/activate` (write, read back, delete a probe; re-checked under the row lock); `.../s3/deactivate` goes back to disk |
+| What the screen shows | `GET /organization/settings/file-storage/status`, rendered by `StorageLocationPanel`                                                                            |
+| Bucket down           | 503 `LB-UPLD-006` on upload, download and existence checks; a delete reports failure as on disk                                                                 |
+| Endpoint check        | `assert_outbound_url_safe` each time a department's client is built; private or plain HTTP only with `S3_ALLOW_PRIVATE_ENDPOINT`                                |
+| Settings cache        | Per worker, 30 s, 256 departments; cleared in the worker that saves. Another worker follows within 30 s                                                         |
+
+Encrypted before upload with the same format and key as the volume, so the
+bucket's operator never holds plaintext. Not in this step, and recorded in
+`docs/KNOWN_LIMITATIONS.md`: moving existing files into a bucket, key rotation
+(`rewrap`) and the plain-file notice for objects in a bucket, and backing a
+bucket up (step 3).
 
 ### Found in passing, not in this change
 

@@ -23,6 +23,10 @@ const startBallotSendJob = vi.fn();
 const waitForBallotSendJob = vi.fn();
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   electionService: {
     getElection: (...a: unknown[]) => getElection(...a) as unknown,
     rollbackElection: (...a: unknown[]) => rollbackElection(...a) as unknown,

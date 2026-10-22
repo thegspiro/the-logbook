@@ -4,6 +4,27 @@
 
 This document describes the complete onboarding flow for The Logbook application, including all navigation paths, button actions, and API endpoints.
 
+## Once Setup Is Finished
+
+The setup steps are for a department that is not set up yet. The routes are
+wrapped in `OnboardingGate` (`modules/onboarding/components/OnboardingGate.tsx`),
+which asks `GET /api/v1/onboarding/status` once per page load and redirects to
+`/login` when `needs_onboarding` is false, so a visitor who deep-links to
+`/onboarding/start` is not shown a form the backend would refuse to save
+(`LB-ONBD-001`).
+
+- **Fails open.** If the status call errors or is rate limited the step renders
+  as it always did, and the answer is not remembered. The backend is the
+  authority; a first-run install must never be locked out of its own setup by a
+  failed check.
+- **One question per session.** A definite answer is kept in memory
+  (`utils/onboardingGateState.ts`), so the thirteen steps do not each hit the
+  rate-limited status endpoint. A successful `completeOnboarding()` records
+  "closed" so a Back press after the last step does not show a stale form.
+- **`/onboarding` and `/onboarding/complete` are outside the gate.** The first
+  already does this check; the second is where the last step of a first run
+  lands just after setup has been marked finished.
+
 ## Onboarding Flow Diagram
 
 The order below is the single source of truth in

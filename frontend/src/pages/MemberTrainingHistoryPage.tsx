@@ -248,11 +248,11 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400';
+        return 'bg-green-500/10 text-green-800 dark:bg-green-500/20 dark:text-green-400';
       case 'in_progress':
         return 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400';
       case 'scheduled':
-        return 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400';
+        return 'bg-yellow-500/10 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400';
       case 'failed':
         return 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400';
       case 'cancelled':
@@ -640,7 +640,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                           {!training.voided_at &&
                             !isCertificationExpired(training.expiration_date, tz) &&
                             isCertificationExpiringSoon(training.expiration_date, tz) && (
-                              <span className="inline-flex w-fit rounded-full bg-yellow-500/10 px-2 py-1 text-xs font-medium text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
+                              <span className="inline-flex w-fit rounded-full bg-yellow-500/10 px-2 py-1 text-xs font-medium text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
                                 expiring soon
                               </span>
                             )}

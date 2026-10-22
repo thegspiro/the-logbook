@@ -522,6 +522,45 @@ export function openFirstFromApi(apiPath, routeFor, listKey, match) {
 }
 
 /**
+ * The accepted skills-test result that is held for release: release on
+ * request, accepted, not yet released.
+ *
+ * Found by those three facts rather than by position because the list rows
+ * carry none of them and the weighted sheet's tests hold other states. Returns
+ * the row's id and its candidate's name, so a shot can open the result or find
+ * its row in the Test Records tab.
+ */
+export async function findHeldResult(page) {
+  const held = await page.evaluate(async () => {
+    const api = async (path) => {
+      const response = await fetch(`/api/v1${path}`, {
+        credentials: "include",
+      });
+      return response.ok ? response.json() : null;
+    };
+    const body = await api("/training/skills-testing/tests?limit=100");
+    const rows = Array.isArray(body)
+      ? body
+      : (body?.items ?? body?.tests ?? []);
+    for (const row of rows) {
+      if (!row.validated_at || row.voided_at || row.is_practice) continue;
+      const detail = await api(`/training/skills-testing/tests/${row.id}`);
+      if (
+        detail?.effective_result_release === "on_release" &&
+        !detail.released_at
+      ) {
+        return { id: row.id, candidateName: row.candidate_name };
+      }
+    }
+    return null;
+  });
+  if (!held) {
+    throw new Error("no accepted result is held for release");
+  }
+  return held;
+}
+
+/**
  * Open the first facility's **Rooms** section.
  *
  * The section list is sidebar navigation inside the facility detail page, not a
@@ -1365,6 +1404,63 @@ async function apiFromPage(page, method, path, body) {
   );
 }
 
+// Practical skills default to Skills Testing, which greys out the shift
+// report's Skills Observed section and marks the Apparatus Skills panel as not
+// in effect. The shots picturing those working switch the department to shift
+// sign-offs for their own length, and their cleanup puts the setting back --
+// held here because a cleanup receives only its page.
+let practicalSkillsRestore = null;
+
+function withShiftSignoffs(prepare) {
+  return async (page) => {
+    const config = await apiFromPage(
+      page,
+      "GET",
+      "/training/module-config/config",
+    );
+    const method = config.body?.practical_skills_method;
+    if (config.status !== 200 || !method) {
+      throw new Error(
+        "could not read the training module's practical skills method",
+      );
+    }
+    if (method !== "shift_signoffs") {
+      const switched = await apiFromPage(
+        page,
+        "PUT",
+        "/training/module-config/config",
+        { practical_skills_method: "shift_signoffs" },
+      );
+      if (switched.status !== 200) {
+        throw new Error(
+          `switching to shift sign-offs returned ${switched.status}`,
+        );
+      }
+      practicalSkillsRestore = method;
+      // The screen read the setting when it mounted.
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(2_000);
+    }
+    if (prepare) await prepare(page);
+  };
+}
+
+async function restorePracticalSkills(page) {
+  if (!practicalSkillsRestore) return;
+  const restored = await apiFromPage(
+    page,
+    "PUT",
+    "/training/module-config/config",
+    { practical_skills_method: practicalSkillsRestore },
+  );
+  if (restored.status !== 200) {
+    throw new Error(
+      `restoring the practical skills method returned ${restored.status}`,
+    );
+  }
+  practicalSkillsRestore = null;
+}
+
 /** The administrator's id and the Chief position's, for the sign-off shots. */
 async function adminAndChiefIds(page) {
   const me = await apiFromPage(page, "GET", "/auth/me");
@@ -2001,12 +2097,13 @@ async function openBatchReportForm(page) {
       .click({ timeout: 15_000 });
     await page.waitForTimeout(400);
   }
+  // Each score button is named for its skill ("Aerial placement: score 4
+  // (Proficient)"), so no row has to be located first.
   for (const [skill, score] of scored) {
-    const row = page
-      .locator("div")
-      .filter({ has: page.getByRole("button", { name: `\u2713 ${skill}` }) })
-      .last();
-    await row.getByRole("button", { name: score, exact: true }).first().click();
+    await page
+      .getByRole("button", { name: new RegExp(`^${skill}: score ${score} `) })
+      .first()
+      .click({ timeout: 15_000 });
     await page.waitForTimeout(300);
   }
   // One task, to show the row the "+ Add" control appends pre-filled from the
@@ -3390,7 +3487,8 @@ export const SHOTS = [
     anchor: "Screenshot of the batch report creation form",
     alt: "The batch shift-report form — shared hours and calls, the whole crew, and one trainee's evaluation open",
     route: "/scheduling?tab=shift-reports",
-    prepare: openBatchReportForm,
+    prepare: withShiftSignoffs(openBatchReportForm),
+    cleanup: restorePracticalSkills,
     fullPage: true,
   },
   {
@@ -3400,7 +3498,8 @@ export const SHOTS = [
     anchor: "Screenshot of the skills section in the evaluation panel",
     alt: "Skills Observed — three skills scored 1-5, each showing the department's label for the score chosen",
     route: "/scheduling?tab=shift-reports",
-    prepare: openBatchReportForm,
+    prepare: withShiftSignoffs(openBatchReportForm),
+    cleanup: restorePracticalSkills,
     // Clipped to the block: the score rows are small, and a full-page frame of
     // the form renders them at a size the caption cannot rescue.
     selector: "div:has(> label:text-is('Skills Observed'))",
@@ -4423,11 +4522,16 @@ export const SHOTS = [
     route: "/training/admin?tab=sessions",
     prepare: async (page) => {
       await openSessionTrainingInfo(page);
-      // Step 2 defaults to "Create new course for this training", which has
-      // no picker and no preview card — the section is about the other branch.
+      // Step 2 has defaulted to "Create new course for this training", which
+      // has no picker and no preview card — the section is about the other
+      // branch. Checked rather than clicked: the form now opens on the library
+      // branch once the department has courses, and the label was renamed
+      // from "Use existing course template".
       await page
-        .getByText("Use existing course template", { exact: true })
-        .click({ timeout: 15_000 });
+        .getByRole("radio", {
+          name: /^Use (existing course template|a course from the Course Library)$/,
+        })
+        .check({ timeout: 15_000 });
       await page.waitForTimeout(500);
       const picker = page
         .locator("select")
@@ -5990,7 +6094,8 @@ export const SHOTS = [
     // sidebar whose accessible name carries the description too. Anchoring
     // the regex at the start matches both; `$` matched only the hidden
     // phone copy and timed out.
-    prepare: clickByName(/^Form Sections/),
+    prepare: withShiftSignoffs(clickByName(/^Form Sections/)),
+    cleanup: restorePracticalSkills,
     fullPage: true,
   },
   {
@@ -6004,7 +6109,8 @@ export const SHOTS = [
     // The panel opens on the first apparatus type alphabetically (Ambulance),
     // which is as good an illustration as any — every type carries its own
     // skills and tasks.
-    prepare: clickByName(/^Apparatus Skills/),
+    prepare: withShiftSignoffs(clickByName(/^Apparatus Skills/)),
+    cleanup: restorePracticalSkills,
     fullPage: true,
   },
   {
@@ -8052,6 +8158,9 @@ export const SHOTS = [
       "Screenshot of the External Training Integrations page showing a saved provider card with",
     alt: "The Integrations tab with a saved provider — its platform, last sync, auto-sync interval and sync actions",
     route: "/training/admin?page=setup&tab=integrations",
+    // Clipped to the hub's body: the Needs Attention queue and the section
+    // cards above it fill the first screen, and a viewport shot ends there.
+    selector: '[role="tabpanel"]',
   },
   {
     id: "02-45-training-programs",
@@ -8117,6 +8226,10 @@ export const SHOTS = [
     // picturing the wrong audience — and the placeholder says "within Training
     // Admin" in as many words.
     route: "/training/admin?tab=templates",
+    // The whole page, unlike 09-01's clip to the template table: this
+    // caption is about where the section sits, and the Needs Attention queue
+    // and section cards above it fill the first screen.
+    fullPage: true,
   },
   {
     id: "02-66-compliance-thresholds",
@@ -8341,8 +8454,12 @@ export const SHOTS = [
     line: 1468,
     anchor:
       "Minutes Settings as a settings administrator: the section list (Attendance,",
-    alt: "Minutes Settings: the section list (Attendance, Signatures, Reminders, Publishing) beside the Attendance section and its Save row",
+    alt: "Minutes Settings: the section tabs (Attendance, Signatures, Reminders, Publishing) above the Attendance section and its Save row",
     route: "/minutes/settings",
+    // The settings column only: the page opens under the administrator's
+    // malware-scanning notice on a stack with scanning off, which is not a
+    // state a department running the app would be shown.
+    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
     expect: "How attendance is listed",
   },
   {
@@ -8367,6 +8484,10 @@ export const SHOTS = [
       "Minutes Settings, Publishing section: the public-copy switch and the",
     alt: "Minutes Settings, Publishing: the public-copy switch and the Executive-session minutes group with its two switches",
     route: "/minutes/settings?tab=publishing",
+    // The settings column only: the page opens under the administrator's
+    // malware-scanning notice on a stack with scanning off, which is not a
+    // state a department running the app would be shown.
+    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
     expect: "Executive-session minutes",
   },
   {
@@ -8377,7 +8498,11 @@ export const SHOTS = [
       "Minutes Settings, Signatures section with the two default slots, Recording",
     alt: "Minutes Settings, Signatures: the Recording Secretary and Presiding Officer slots, each open to anyone who manages minutes",
     route: "/minutes/settings?tab=signatures",
-    expect: "Anyone who manages minutes",
+    // The settings column only: the page opens under the administrator's
+    // malware-scanning notice on a stack with scanning off, which is not a
+    // state a department running the app would be shown.
+    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
+    expect: { selector: "input[value='Recording Secretary']" },
   },
   {
     id: "04-75-minutes-settings-reminders",
@@ -8387,11 +8512,15 @@ export const SHOTS = [
       "Minutes Settings, Reminders section: the email switch, the first-reminder and",
     alt: "Minutes Settings, Reminders: the email switch, the first-reminder and repeat-while-overdue day fields, and the weekly open-items list switch",
     route: "/minutes/settings?tab=reminders",
+    // The settings column only: the page opens under the administrator's
+    // malware-scanning notice on a stack with scanning off, which is not a
+    // state a department running the app would be shown.
+    selector: "div.mx-auto.flex.w-full.flex-col.gap-5:has(h1)",
     expect: "Email reminders to assignees",
   },
   {
-    // The Early Summer meeting's minutes are the pending one: its Approval of
-    // Previous Minutes motion is prepared and linked to the circulated Spring
+    // The Facilities meeting's minutes are the pending one: its Approval of
+    // Previous Minutes motion is prepared and linked to the circulated Apparatus
     // minutes, with nothing recorded. The form is filled in but never saved.
     id: "04-76-minutes-prepared-acceptance-motion",
     doc: "04-events-meetings.md",
@@ -8405,7 +8534,7 @@ export const SHOTS = [
         "/minutes-records?limit=100",
         (id) => `/minutes/${id}`,
         "minutes",
-        (m) => m.title === "Minutes: Early Summer Business Meeting",
+        (m) => m.title === "Minutes: Facilities Business Meeting",
       )(page);
       const group = page.getByRole("group", {
         name: "Motion for Approval of Previous Minutes",
@@ -8421,28 +8550,32 @@ export const SHOTS = [
     expect: "The minutes were accepted",
   },
   {
-    // As the administrator, who circulated the Spring minutes: the note names
+    // As the administrator, who circulated the Apparatus minutes: the note names
     // the meeting that accepted them. Adopting is left to a second officer.
     id: "04-77-minutes-accepted-by-later-meeting",
     doc: "04-events-meetings.md",
     line: 1726,
     anchor:
       "Circulated minutes as an officer, with the note saying a later meeting accepted",
-    alt: "Circulated minutes with the note that the Late Spring Business Meeting accepted them as submitted, moved and seconded by named members, and that Adopt Minutes opens already filled in",
+    alt: "Circulated minutes with the note that the Membership Business Meeting accepted them as submitted, moved and seconded by named members, and that Adopt Minutes opens already filled in",
     route: "/minutes",
     prepare: async (page) => {
       await openFirstFromApi(
         "/minutes-records?limit=100",
         (id) => `/minutes/${id}`,
         "minutes",
-        (m) => m.title === "Minutes: Spring Business Meeting",
+        (m) => m.title === "Minutes: Apparatus Business Meeting",
       )(page);
       await page
         .getByText("accepted these minutes as submitted")
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(500);
     },
+    selector: "div:has(> p.alert-info:has-text('accepted these minutes'))",
     expect: "accepted these minutes",
+    // "No suggestions yet" is the Suggestions panel further down the page, not
+    // an empty subject: the shot is the note at the top.
+    allowEmptyState: true,
   },
   {
     // As the Secretary: the administrator circulated these minutes, and the
@@ -8452,7 +8585,7 @@ export const SHOTS = [
     line: 1732,
     anchor:
       "The Adopt these minutes dialog opened by a second officer on those minutes",
-    alt: "The Adopt these minutes dialog filled in from the motion recorded at the Late Spring Business Meeting: the date the body voted, the meeting that accepted them, and the note saying where it came from",
+    alt: "The Adopt these minutes dialog filled in from the motion recorded at the Membership Business Meeting: the date the body voted, the meeting that accepted them, and the note saying where it came from",
     route: "/minutes",
     auth: "secretary",
     prepare: async (page) => {
@@ -8460,7 +8593,7 @@ export const SHOTS = [
         "/minutes-records?limit=100",
         (id) => `/minutes/${id}`,
         "minutes",
-        (m) => m.title === "Minutes: Spring Business Meeting",
+        (m) => m.title === "Minutes: Apparatus Business Meeting",
       )(page);
       await page
         .getByRole("button", { name: "Adopt Minutes" })
@@ -8471,6 +8604,29 @@ export const SHOTS = [
     },
     selector: "[role='dialog']",
     expect: "Filled in from the motion recorded at",
+  },
+  {
+    // Ticked but not saved: saving would switch alerts on for the demo
+    // department, and nothing here should persist. The shot is the panel alone,
+    // so the administrator's malware-scanning notice on a stack with scanning
+    // off is not in the frame.
+    id: "02-121-cert-alert-settings",
+    doc: "02-training.md",
+    line: 2012,
+    anchor:
+      "The Expiry alert emails panel at the top of Training Admin → Overview → Expiring",
+    alt: "The Expiry alert emails panel on the Expiring Certs tab: Email members when a certification is close to expiring ticked, with the two copy options for the expired notice available beneath it",
+    route: "/training/admin?page=dashboard&tab=expiring-certs",
+    prepare: async (page) => {
+      const box = page.getByRole("checkbox", {
+        name: /Email members when a certification/,
+      });
+      await box.waitFor({ timeout: 20_000 });
+      await box.check();
+      await page.waitForTimeout(400);
+    },
+    selector: "section[aria-labelledby='cert-alerts-heading']",
+    expect: "Expiry alert emails",
   },
   {
     id: "04-15-action-items",
@@ -9670,6 +9826,9 @@ export const SHOTS = [
     // about, and kept capturing cleanly while picturing the wrong page. The
     // officer-facing library lives under the Training Admin hub.
     route: "/training/admin?tab=templates",
+    // Clipped to the hub's body: the Needs Attention queue and the section
+    // cards above it fill the first screen, and a viewport shot ends there.
+    selector: '[role="tabpanel"]',
   },
   {
     id: "09-02-create-template",
@@ -9772,36 +9931,8 @@ export const SHOTS = [
       'The Officer actions card on an accepted result that is held for release, with the "Release to candidate" button',
     alt: "The Officer actions card on an accepted result held for release, with the green Release to candidate button and the line saying what the candidate will see once it is released",
     route: "/training/skills-testing",
-    // The held result is found by what makes it this fixture -- release on
-    // request, accepted, not yet released -- because the list rows carry none of
-    // that and the weighted sheet's tests hold other states.
     prepare: async (page) => {
-      const testId = await page.evaluate(async () => {
-        const api = async (path) => {
-          const response = await fetch(`/api/v1${path}`, {
-            credentials: "include",
-          });
-          return response.ok ? response.json() : null;
-        };
-        const body = await api("/training/skills-testing/tests?limit=100");
-        const rows = Array.isArray(body)
-          ? body
-          : (body?.items ?? body?.tests ?? []);
-        for (const row of rows) {
-          if (!row.validated_at || row.voided_at || row.is_practice) continue;
-          const detail = await api(`/training/skills-testing/tests/${row.id}`);
-          if (
-            detail?.effective_result_release === "on_release" &&
-            !detail.released_at
-          ) {
-            return row.id;
-          }
-        }
-        return null;
-      });
-      if (!testId) {
-        throw new Error("no accepted result is held for release");
-      }
+      const { id: testId } = await findHeldResult(page);
       await page.goto(
         new URL(
           `/training/skills-testing/test/${testId}`,
@@ -9816,6 +9947,68 @@ export const SHOTS = [
     },
     selector: "div.card:has(> p:text-is('Officer actions'))",
     expect: "Release to candidate",
+  },
+  {
+    id: "09-27-release-icon-test-records",
+    doc: "09-skills-testing.md",
+    line: 1265,
+    anchor:
+      "A Test Records row for an accepted result with the release icon beside the void icon",
+    alt: "A Skills Test Records row for an accepted result, with the release icon, a paper plane, beside the void icon at the right of the row",
+    route: "/training/admin?page=skills-testing&tab=tests",
+    // One row rather than the page: the icons are 16px, and a page shot renders
+    // the row's controls too small to tell apart. The row is the held result
+    // (see findHeldResult), not whichever happens to be first, and it is marked
+    // for the selector because its candidate's name is not known until run time.
+    selector: "[data-shot-subject]",
+    expect: {
+      selector: "[data-shot-subject] button[aria-label^='Release results to']",
+    },
+    prepare: async (page) => {
+      const { candidateName } = await findHeldResult(page);
+      const release = page.getByRole("button", {
+        name: `Release results to ${candidateName}`,
+      });
+      await release.first().waitFor({ state: "visible", timeout: 15_000 });
+      await release.first().scrollIntoViewIfNeeded();
+      await release.first().evaluate((button) => {
+        button
+          .closest("div[role='button']")
+          ?.setAttribute("data-shot-subject", "");
+      });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "09-28-void-result-dialog",
+    doc: "09-skills-testing.md",
+    line: 1320,
+    anchor:
+      'The "Void test result" dialog opened from the Void result button, with a reason typed in',
+    alt: "The Void test result dialog, saying the record stays in the member's history marked as voided, with an example reason typed in and the amber Void result button enabled",
+    route: "/training/skills-testing",
+    // The reason is typed but the dialog is never confirmed: the held result is
+    // shared with the release shots, and voiding it would take them out of the
+    // seeded data.
+    prepare: async (page) => {
+      const { id: testId } = await findHeldResult(page);
+      await page.goto(
+        new URL(
+          `/training/skills-testing/test/${testId}`,
+          page.url(),
+        ).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
+      const open = page.getByRole("button", { name: "Void result" });
+      await open.waitFor({ state: "visible", timeout: 15_000 });
+      await open.click();
+      const reason = page.locator("#void-reason-detail");
+      await reason.waitFor({ state: "visible", timeout: 10_000 });
+      await reason.fill("Scored against the wrong candidate");
+      await page.waitForTimeout(400);
+    },
+    selector: "[role='dialog'] [data-testid='modal-panel']",
+    expect: { selector: "#void-reason-detail" },
   },
   {
     id: "09-09-member-skills-testing",
@@ -10041,7 +10234,7 @@ export const SHOTS = [
         // moved into the bottom bar, so the phone header carries no hamburger
         // and matching the old name alone timed out with the button on screen.
         .getByRole("button", {
-          name: /Open (full navigation|main|navigation) menu/,
+          name: /open (full navigation|main|navigation) menu/i,
         })
         .first()
         .click({ timeout: 20_000 });
@@ -10177,7 +10370,7 @@ export const SHOTS = [
     route: "/finance/purchase-requests/new",
     // "No budget linked" is the Budget picker's first option, not an empty page.
     allowEmptyState: true,
-    expect: "Saved as a draft. Submit it for approval from the next page.",
+    expect: "New Purchase Request",
     fullPage: true,
   },
   {
@@ -10319,10 +10512,12 @@ export const SHOTS = [
     expect: "Override reason",
     // Opened and photographed, never submitted.
     prepare: async (page) => {
+      // Whichever request is waiting on the Captain position: which ones are
+      // depends on how far the seeded chains have advanced, and the expense
+      // report this used to name now sits at the treasurer's own step.
       await page
-        .getByRole("button", {
-          name: "Approve FDIC Conference Expenses as approvals admin",
-        })
+        .getByRole("button", { name: /^Approve .+ as approvals admin$/ })
+        .first()
         .click({ timeout: 15_000 });
       await page.getByText("Override reason").first().waitFor();
       await page.waitForTimeout(400);
@@ -10738,19 +10933,19 @@ export const SHOTS = [
     alt: "Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below",
     route: "/inventory/checklists/my",
     auth: "member",
+    // "No expiration recorded" is another item's lot line further down the
+    // check, not the state of the controls this pictures.
+    allowEmptyState: true,
     prepare: async (page) => {
       await clickByName("Unscheduled checklist")(page);
       await clickByName("Medic 3 Supply Check")(page);
       await page.waitForSelector("text=Trauma Bag", { timeout: 20_000 });
 
       // The photo button lives inside the note panel, so the note has to be
-      // open for it to exist at all. `:near` rather than an index: the Note
-      // buttons are identical and unlabelled, and an index would move the
-      // moment the seeded template gains an item.
+      // open for it to exist at all. The note toggle is an icon button named
+      // for its item, so no index or proximity match is needed.
       await page
-        .locator(
-          'button:has-text("Note"):near(:text-is("Nitrile Gloves — Large"), 160)',
-        )
+        .getByRole("button", { name: "Add a note for Nitrile Gloves — Large" })
         .first()
         .click({ timeout: 15_000 });
       await page.getByLabel("Upload photo for Nitrile Gloves — Large").waitFor({
@@ -10766,9 +10961,10 @@ export const SHOTS = [
         );
         if (heading) heading.scrollIntoView({ block: "start" });
         // `block: "start"` puts the heading under the sticky app bar and the
-        // check's own header; back off far enough that the item's name and its
+        // check's own header, and the compartment's sticky header now sits
+        // between them too; back off far enough that the item's name and its
         // quantity stepper are both in frame.
-        window.scrollBy(0, -190);
+        window.scrollBy(0, -250);
       });
       await page.waitForTimeout(500);
     },
@@ -11636,7 +11832,8 @@ export const SHOTS = [
     anchor: "choosing which optional sections appear on the report form",
     alt: "Shift Reports settings Form Sections, toggling which parts of the report form appear",
     route: "/scheduling/admin/settings/shift-reports",
-    prepare: clickSettingsSection("Form Sections"),
+    prepare: withShiftSignoffs(clickSettingsSection("Form Sections")),
+    cleanup: restorePracticalSkills,
     fullPage: true,
   },
   {
@@ -11646,7 +11843,8 @@ export const SHOTS = [
     anchor: "per-apparatus skills/tasks selector",
     alt: "Shift Reports settings Apparatus Skills, showing the skills and tasks tracked for Engine",
     route: "/scheduling/admin/settings/shift-reports",
-    prepare: async (page) => {
+    cleanup: restorePracticalSkills,
+    prepare: withShiftSignoffs(async (page) => {
       await clickSettingsSection("Apparatus Skills")(page);
       // The section opens on the first apparatus type alphabetically
       // (Ambulance). The guide walks through Engine, so pick that one. The
@@ -11657,7 +11855,7 @@ export const SHOTS = [
         .getByRole("button", { name: /^engine( \(\d+\))?$/i })
         .first()
         .click({ timeout: 10_000 });
-    },
+    }),
     fullPage: true,
   },
   {
@@ -12085,7 +12283,7 @@ export const SHOTS = [
   },
   {
     id: "03-25-equipment-checks-tab",
-    expect: "Equipment & Readiness",
+    expect: "Fleet Readiness",
     doc: "03-scheduling.md",
     line: 1329,
     anchor: "Screenshot of Fleet Readiness showing a list of apparatus with",
@@ -12794,6 +12992,9 @@ export const SHOTS = [
       "Screenshot of the side navigation panel showing the 'Notifications' link with a",
     alt: "Sidebar navigation with the unread notification badge",
     route: "/dashboard",
+    // Tall enough that the navigation does not scroll: Notifications sits
+    // below Finance and Grants & Fundraising, past the fold of a 900px frame.
+    viewport: { width: 1440, height: 1500 },
     selector: "aside, nav",
   },
   {
@@ -14114,15 +14315,16 @@ export const SHOTS = [
       // to none — the guide pictures it set.
       const evoc = page.locator('select[name="requiredEvocLevelId"]');
       await evoc.waitFor({ timeout: 10_000 });
-      // Options read "Level 2 — Intermediate" and their values are seeded ids,
-      // so match on the visible text rather than naming either.
+      // A new organization is given its levels by the product ("EVOC 3 -
+      // Engine / Pumper"), and an older seed named its own ("Intermediate").
+      // Values are seeded ids, so match on the visible text, accepting either.
       const value = await evoc.evaluate(
         (el) =>
           Array.from(el.options).find((option) =>
-            /intermediate/i.test(option.text),
+            /intermediate|engine/i.test(option.text),
           )?.value ?? "",
       );
-      if (!value) throw new Error("no Intermediate EVOC level defined");
+      if (!value) throw new Error("no engine-grade EVOC level defined");
       await evoc.selectOption(value);
     },
     fullPage: true,
@@ -14202,10 +14404,11 @@ export const SHOTS = [
       const evocValue = await evoc.evaluate(
         (el) =>
           Array.from(el.options).find((option) =>
-            /intermediate/i.test(option.text),
+            /intermediate|engine/i.test(option.text),
           )?.value ?? "",
       );
-      if (!evocValue) throw new Error("no Intermediate EVOC level defined");
+      // Same level-name tolerance as 06-21.
+      if (!evocValue) throw new Error("no engine-grade EVOC level defined");
       await evoc.selectOption(evocValue);
 
       await page
@@ -15202,13 +15405,13 @@ export const SHOTS = [
         .click({ timeout: 20_000 });
       await page.waitForTimeout(1500);
       const group = page
-        .locator("div:has(> h3:text-is('Skills-Test Results'))")
+        .locator("div:has(> h4:text-is('Skills-Test Results'))")
         .last();
       await group.waitFor({ timeout: 20_000 });
       await group.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(600);
     },
-    selector: "div:has(> h3:text-is('Skills-Test Results'))",
+    selector: "div:has(> h4:text-is('Skills-Test Results'))",
   },
   {
     id: "09-19-failed-test-result",
@@ -15241,7 +15444,9 @@ export const SHOTS = [
         );
         if (!response.ok) return null;
         const body = await response.json();
-        const rows = Array.isArray(body) ? body : (body.tests ?? []);
+        const rows = Array.isArray(body)
+          ? body
+          : (body.items ?? body.tests ?? []);
         const wanted = rows.find((row) => row.status === "in_progress");
         return wanted ? wanted.id : null;
       });
@@ -15846,7 +16051,7 @@ export const SHOTS = [
         waitUntil: "domcontentloaded",
       });
     },
-    selector: 'div.bg-theme-surface:has(> h2:has-text("Linked Elections"))',
+    selector: 'div.card:has(> h2:has-text("Linked Elections"))',
   },
   {
     id: "04-11-event-notifications",
@@ -15864,7 +16069,7 @@ export const SHOTS = [
     ),
     // Clipped: the panel sits below a 21-row attendance list, which 04-10
     // already pictures in full.
-    selector: 'div.bg-theme-surface:has(> h2:has-text("Notifications"))',
+    selector: 'div.card:has(> h2:has-text("Notifications"))',
   },
   {
     id: "08-36-template-search",
@@ -16168,12 +16373,13 @@ export const SHOTS = [
     alt: "Store Admin's Orders tab narrowed to paid orders, the list showing only the two the status filter matches",
     route: "/inventory/admin/store",
     prepare: async (page) => {
-      // Scoped to the tab strip. A bare name match also hits the Overview's
-      // recent-order rows, and clicking one of those opens the order modal over
-      // the list -- which is what the first capture of this shot contained.
+      // The hub's section card, by role. A bare name match also hits the
+      // Overview's recent-order rows, and clicking one of those opens the
+      // order modal over the list -- which is what the first capture of this
+      // shot contained. The sections were a `.tab-scroll` strip until the
+      // store joined the card-tab admin hubs.
       await page
-        .locator(".tab-scroll button")
-        .filter({ hasText: "Orders" })
+        .getByRole("tab", { name: /^Orders\b/ })
         .first()
         .click({ timeout: 10_000 });
       const status = page.locator("#order-status-filter");
@@ -17219,7 +17425,12 @@ export const SHOTS = [
       await page
         .getByRole("button", { name: /^Next$/ })
         .click({ timeout: 20_000 });
-      await page.getByText(/Use existing course template/).click();
+      // Renamed from "Use existing course template"; see 02-80.
+      await page
+        .getByRole("radio", {
+          name: /^Use (existing course template|a course from the Course Library)$/,
+        })
+        .check({ timeout: 15_000 });
       // Located by its own placeholder option, not by label: the "Select
       // Course" label on this wizard carries no `htmlFor` and the select no
       // `id`, so it has no accessible name to match on.
@@ -17263,9 +17474,10 @@ export const SHOTS = [
     // could not be calculated" above a caption about linking a session: true
     // of this database (the seeded members hold three records against 26
     // requirements) and nothing to do with the marker.
-    // Matched on the h1's inner <span>: the heading also holds an icon, and a
-    // `text-is` on the h1 itself does not match through it.
-    selector: "main:has(h1 > span:text-is('Create Training Session'))",
+    // Clipped to the step itself: the page's own title is screen-reader only
+    // now that the wizard renders inside the hub, so there is no visible
+    // heading to frame on above it.
+    selector: "div.space-y-6:has(> h2:text-is('Training Information'))",
     allowEmptyState:
       '"No category" is the unselected first <option> of the category select, ' +
       "not a state this form is in -- the control reads Driver/Operator " +
@@ -17798,8 +18010,9 @@ export const SHOTS = [
     alt: "The sidebar as an officer, clipped to the navigation: Operations expanded to My Issued Gear, Inventory, Medical Supplies, My Checklists, Fleet Readiness, Apparatus Inventory, Apparatus and Facilities, and below it the Administration section with Scheduling Admin and Inventory Admin",
     route: "/dashboard",
     // Tall enough that the whole navigation fits without its own scroll, so
-    // Operations and Administration share one frame.
-    viewport: { width: 1440, height: 1700 },
+    // Operations and Administration share one frame. Raised from 1700 when
+    // the Finance and Grants & Fundraising groups lengthened the list.
+    viewport: { width: 1440, height: 2100 },
     selector: "nav#side-navigation",
     expect: { selector: 'nav#side-navigation :text-is("Fleet Readiness")' },
     prepare: async (page) => {
@@ -18030,9 +18243,14 @@ export const SHOTS = [
     viewport: { width: 390, height: 844 },
     expect: { selector: '[role="dialog"]' },
     // A phone shows the week as a strip of days, and Shift details only
-    // appears in the day panel under the one tapped.
+    // appears in the day sheet a tap on one opens. The board opens with today
+    // selected, and today carries shifts (see 03-102); tapping a named date
+    // pinned this to the week it was written in.
     prepare: async (page) => {
-      await clickByName(/Thursday, September 24/)(page);
+      await page
+        .getByRole("gridcell", { selected: true })
+        .first()
+        .click({ timeout: 15_000 });
       await page.waitForTimeout(800);
       await clickByName(/^Shift details$/)(page);
       await page
@@ -18041,6 +18259,9 @@ export const SHOTS = [
         .waitFor({ timeout: 10_000 });
       await page.waitForTimeout(800);
     },
+    // As in 03-102: "No calls logged for this shift" is true of today's
+    // shift and sits below the crew board, which is the subject.
+    allowEmptyState: true,
   },
   {
     id: "03-104-my-shifts-hours",
@@ -18429,12 +18650,11 @@ export const SHOTS = [
     // Opened and never saved: Connect is not pressed, so the integration stays
     // available and every switch shows the shipped default.
     prepare: async (page) => {
-      const card = page
-        .locator("div")
-        .filter({ hasText: /^Claude \(MCP\)/ })
-        .filter({ has: page.getByRole("button", { name: /^Connect$/ }) })
-        .last();
-      await card.getByRole("button", { name: /^Connect$/ }).click();
+      // The card's button is named for its integration, so it is reached
+      // directly rather than through a card matched on its text.
+      await page
+        .getByRole("button", { name: "Connect Claude (MCP)", exact: true })
+        .click();
       await page
         .locator('.modal-panel:has-text("Connect Claude (MCP)")')
         .first()
@@ -18469,12 +18689,11 @@ export const SHOTS = [
     // Opened and never saved, like 16-08: the box is ticked in the browser
     // only, so nothing persists.
     prepare: async (page) => {
-      const card = page
-        .locator("div")
-        .filter({ hasText: /^Claude \(MCP\)/ })
-        .filter({ has: page.getByRole("button", { name: /^Connect$/ }) })
-        .last();
-      await card.getByRole("button", { name: /^Connect$/ }).click();
+      // The card's button is named for its integration, so it is reached
+      // directly rather than through a card matched on its text.
+      await page
+        .getByRole("button", { name: "Connect Claude (MCP)", exact: true })
+        .click();
       const modal = page
         .locator('.modal-panel:has-text("Connect Claude (MCP)")')
         .first();
@@ -18637,7 +18856,7 @@ export const SHOTS = [
     doc: "01-membership.md",
     line: 1703,
     anchor: "The profile-visibility controls on a member's own profile",
-    alt: "My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email, phone and mobile the note that the department's own setting has them off for everyone",
+    alt: 'My Account → Privacy as an ordinary member: the five contact fields, each with its value and a switch — personal email and phone off, work email, mobile and mailing address on — and on work email and mobile, which the department\'s own setting has off for everyone, the note "Shared once the department allows it"',
     route: "/account",
     auth: "member",
     expect: "Only you and leadership",
@@ -19499,6 +19718,10 @@ export const SHOTS = [
     // edited. The backup list is therefore served from a fixture; the rest of
     // the screen is the live template.
     beforeNavigate: async (page) => {
+      // The demo backend's link address is localhost, which the template
+      // editor flags in a notice above it; served the demo's public address
+      // like 08-99, so the notice is not pictured where it is not the subject.
+      await mockLinkDomain(GUIDE08_PUBLIC_LINK_DOMAIN)(page);
       await page.route("**/api/v1/email-templates/*/backups", (route) =>
         route.fulfill({
           status: 200,

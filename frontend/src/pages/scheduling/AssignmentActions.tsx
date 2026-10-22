@@ -68,7 +68,7 @@ export const AssignmentActions: React.FC<AssignmentActionsProps> = ({
           <button
             onClick={() => onConfirm(assignmentId)}
             disabled={pendingConfirming}
-            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-1.5 text-green-600 transition-colors hover:bg-green-500/10 disabled:opacity-50 dark:text-green-400 dark:hover:bg-green-500/20"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-1.5 text-green-700 transition-colors hover:bg-green-500/10 disabled:opacity-50 dark:text-green-400 dark:hover:bg-green-500/20"
             aria-label="Confirm assignment"
           >
             {pendingConfirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}

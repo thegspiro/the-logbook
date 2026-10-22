@@ -98,7 +98,7 @@ const ClaudeAuthorizePage: React.FC = () => {
     <div className="mx-auto max-w-xl px-4 py-8">
       <div className="card p-6">
         <div className="mb-4 flex items-center gap-3">
-          <div className="rounded-lg bg-orange-500/10 p-2 text-orange-700 dark:text-orange-400">
+          <div className="rounded-lg bg-orange-500/10 p-2 text-orange-800 dark:text-orange-400">
             <ShieldCheck className="h-6 w-6" />
           </div>
           <h1 className="text-theme-text-primary text-lg font-semibold">Connect Claude to your account</h1>

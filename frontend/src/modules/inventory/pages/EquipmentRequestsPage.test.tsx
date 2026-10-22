@@ -19,6 +19,12 @@ vi.mock('../../../services/api', () => ({
   },
 }));
 
+// A department west of Greenwich, where a bare date read as UTC midnight lands
+// on the previous evening.
+vi.mock('../../../hooks/useTimezone', () => ({
+  useTimezone: () => 'America/New_York',
+}));
+
 vi.mock('react-hot-toast', () => ({
   default: {
     success: (...args: unknown[]) => mockToastSuccess(...args) as unknown,
@@ -335,6 +341,30 @@ describe('EquipmentRequestsPage', () => {
       });
     });
     expect(mockToastSuccess).toHaveBeenCalledWith('Issued to John Doe');
+  });
+
+  it('sends the return-by date as the end of that day in the department zone', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [makeRequest({ status: 'approved', item_id: 'item-9' })],
+    });
+    mockFulfillEquipmentRequest.mockResolvedValue({ id: 'req-1', status: 'fulfilled', message: 'ok' });
+    renderWithRouter(<EquipmentRequestsPage />);
+    await user.click(await screen.findByText('Fulfill'));
+    await user.selectOptions(await screen.findByLabelText('Final fulfillment method'), 'checkout');
+    await user.type(screen.getByLabelText('Expected Return'), '2026-10-24');
+    await user.click(screen.getByRole('button', { name: /Fulfill Request/ }));
+
+    await waitFor(() => {
+      expect(mockFulfillEquipmentRequest).toHaveBeenCalledWith(
+        'req-1',
+        expect.objectContaining({
+          fulfillment_type: 'checkout',
+          // 23:59 EDT, not the bare '2026-10-24' read as midnight UTC.
+          expected_return_at: '2026-10-25T03:59:00.000Z',
+        })
+      );
+    });
   });
 
   // The member named the pool item and said "temporary", so the method opened

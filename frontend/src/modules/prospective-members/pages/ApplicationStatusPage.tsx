@@ -45,16 +45,16 @@ interface StatusData {
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   active: {
     label: 'In Progress',
-    color: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+    color: 'text-emerald-800 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
   },
-  on_hold: { label: 'On Hold', color: 'text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/30' },
+  on_hold: { label: 'On Hold', color: 'text-amber-800 dark:text-amber-400 bg-amber-500/10 border-amber-500/30' },
   approved: { label: 'Approved', color: 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/30' },
   rejected: { label: 'Not Accepted', color: 'text-red-700 dark:text-red-400 bg-red-500/10 border-red-500/30' },
   withdrawn: { label: 'Withdrawn', color: 'text-theme-text-muted bg-theme-surface-hover border-theme-surface-border' },
   inactive: { label: 'Inactive', color: 'text-theme-text-muted bg-theme-surface-hover border-theme-surface-border' },
   transferred: {
     label: 'Accepted',
-    color: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+    color: 'text-emerald-800 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
   },
 };
 

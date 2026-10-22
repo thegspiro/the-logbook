@@ -181,7 +181,7 @@ const RegistryImportModal: React.FC<Props> = ({ registryKey, registryName, onClo
                       }`}
                     >
                       {item.already_imported ? (
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
                       ) : isSelected ? (
                         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
                       ) : (

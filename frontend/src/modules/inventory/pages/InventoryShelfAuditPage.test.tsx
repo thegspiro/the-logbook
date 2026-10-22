@@ -20,7 +20,13 @@ const { service, scanner } = vi.hoisted(() => ({
   scanner: { onTag: null as ((tag: Tag) => void) | null, start: vi.fn(), stop: vi.fn() },
 }));
 
-vi.mock('../../../services/api', () => ({ inventoryService: service }));
+vi.mock('../../../services/api', () => ({
+  inventoryService: service,
+  // Read by the Operations section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
+}));
 vi.mock('../../../components/ux', () => ({ Breadcrumbs: () => null }));
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../../hooks/useNfcScanner', () => ({

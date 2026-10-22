@@ -178,7 +178,7 @@ const WriteOffsPage: React.FC = () => {
                       </p>
                     )}
                     {wo.item_value != null && (
-                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                         Value: ${Number(wo.item_value).toFixed(2)}
                       </p>
                     )}

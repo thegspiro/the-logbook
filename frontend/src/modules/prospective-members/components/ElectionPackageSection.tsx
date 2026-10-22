@@ -161,12 +161,12 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
                 currentElectionPackage.status === ElectionStatus.DRAFT
                   ? 'bg-theme-surface-secondary text-theme-text-muted'
                   : currentElectionPackage.status === 'ready'
-                    ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
+                    ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300'
                     : currentElectionPackage.status === 'added_to_ballot'
                       ? 'bg-purple-500/20 text-purple-600 dark:text-purple-300'
                       : currentElectionPackage.status === 'elected'
-                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
-                        : 'bg-red-500/20 text-red-600 dark:text-red-300'
+                        ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300'
+                        : 'bg-red-500/20 text-red-700 dark:text-red-300'
               }`}
             >
               {currentElectionPackage.status.replace(/_/g, ' ')}
@@ -262,7 +262,7 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
           {/* Ready state -- assign to election */}
           {currentElectionPackage.status === 'ready' && (
             <div className="space-y-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <p className="text-xs text-emerald-600 dark:text-emerald-300">
+              <p className="text-xs text-emerald-700 dark:text-emerald-300">
                 This package is ready for the secretary to add to a ballot.
                 {currentElectionPackage.submitted_at && (
                   <> Submitted {formatDateTime(currentElectionPackage.submitted_at, tz)}.</>
@@ -354,7 +354,7 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({ applica
               <p
                 className={`text-xs ${
                   currentElectionPackage.status === 'elected'
-                    ? 'text-emerald-600 dark:text-emerald-300'
+                    ? 'text-emerald-700 dark:text-emerald-300'
                     : currentElectionPackage.status === 'not_elected'
                       ? 'text-red-600 dark:text-red-300'
                       : 'text-purple-600 dark:text-purple-300'

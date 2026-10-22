@@ -51,7 +51,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.models.analytics import SavedReport
-from app.models.user import Organization, User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
 
 SCHEDULE_FREQUENCIES = ("daily", "weekly", "monthly", "quarterly")
 
@@ -197,7 +197,7 @@ async def permitted_members(
         .options(selectinload(User.positions))
         .where(
             User.organization_id == organization_id,
-            User.status == UserStatus.ACTIVE,
+            User.status.in_(ACTIVE_ACCOUNT_STATUSES),
             User.deleted_at.is_(None),
             User.email.isnot(None),
         )
@@ -335,7 +335,7 @@ async def _owner_may_run(db: AsyncSession, saved: SavedReport) -> bool:
             .where(
                 User.id == saved.created_by,
                 User.organization_id == saved.organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
         )

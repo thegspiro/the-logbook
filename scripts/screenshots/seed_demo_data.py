@@ -2457,7 +2457,18 @@ class Seeder:
             updates = dict(guest_settings)
             if ends and ends < iso(NOW):
                 updates.update(window)
-            self.api.patch(f"/events/{pick(event, 'id')}", updates)
+            # Reopen and retry on the finalized refusal, as the early check-in
+            # fixture does: a capture run finalizes this event (it is the
+            # running event 04-40 ends), and a finalized event's times cannot
+            # move, so the next seed failed here and every guest check-in shot
+            # after it found no live event.
+            try:
+                self.api.patch(f"/events/{pick(event, 'id')}", updates)
+            except ApiError as exc:
+                if exc.code != 409 or "finalized" not in exc.detail.lower():
+                    raise
+                self.api.post(f"/events/{pick(event, 'id')}/reopen-attendance", {})
+                self.api.patch(f"/events/{pick(event, 'id')}", updates)
         else:
             event = self.api.post(
                 "/events",
@@ -2881,17 +2892,17 @@ class Seeder:
     #                 passed, recorded as submitted
     #   pending    -> a meeting whose acceptance motion is prepared and waiting
     #                 for a result
+    # Each has the same four members on the roll, so the mover and seconder the
+    # accepting motion records are names the roll pickers can show.
     # Dated before the July Business Meeting so the Minutes page still opens on
     # the records the other shots picture. Each meeting's minutes are made only
     # after the one before is circulated, because the server links the prepared
     # motion to the latest earlier minutes that are circulated or adopted.
     GUIDE04_ACCEPTANCE_MEETINGS = (
-        ("Spring Business Meeting", 90),
-        ("Late Spring Business Meeting", 62),
-        ("Early Summer Business Meeting", 48),
+        ("Apparatus Business Meeting", 90),
+        ("Membership Business Meeting", 62),
+        ("Facilities Business Meeting", 48),
     )
-    GUIDE04_ACCEPTANCE_MOVER = "Rafael Duarte"
-    GUIDE04_ACCEPTANCE_SECONDER = "Esme Caldwell"
     PREVIOUS_MINUTES_SECTION = "approval_of_previous"
 
     def _guide04_accepted_minutes(self) -> str:
@@ -2899,6 +2910,11 @@ class Seeder:
             str(pick(m, "title")): m
             for m in items(self.api.get("/meetings?limit=100"), "meetings")
         }
+        member_ids = [
+            str(pick(u, "id"))
+            for u in items(self.api.get("/users?limit=200"), "users")
+            if pick(u, "id")
+        ][:4]
         for title, days_ago in self.GUIDE04_ACCEPTANCE_MEETINGS:
             if title in meetings:
                 continue
@@ -2913,6 +2929,9 @@ class Seeder:
                     "location": "Station 1 — Training Room",
                     "called_by": "President",
                     "agenda": "Reports; old business; new business.",
+                    "attendees": [
+                        {"user_id": user_id, "present": True} for user_id in member_ids
+                    ],
                 },
             )
         linked = {
@@ -2969,6 +2988,18 @@ class Seeder:
         motion = prepared[0]
         if str(pick(motion, "status") or "") != "pending":
             return
+        roll = [
+            str(pick(a, "name", "user_name", "userName") or "")
+            for a in pick(detail, "attendees") or []
+            if pick(a, "status") in (None, "present")
+        ]
+        roll = [name for name in roll if name]
+        if len(roll) < 2:
+            self.blocked.append(
+                "accepted minutes: the roll has fewer than two members to move "
+                "and second the motion"
+            )
+            return
         if str(pick(motion, "previous_minutes_id", "previousMinutesId") or "") != str(
             pick(previous, "id")
         ):
@@ -2980,8 +3011,8 @@ class Seeder:
         self.api.put(
             f"/minutes-records/{minutes_id}/motions/{pick(motion, 'id')}",
             {
-                "moved_by": self.GUIDE04_ACCEPTANCE_MOVER,
-                "seconded_by": self.GUIDE04_ACCEPTANCE_SECONDER,
+                "moved_by": roll[0],
+                "seconded_by": roll[1],
                 "status": "passed",
                 "acceptance": "as_submitted",
                 "votes_for": 9,
@@ -7926,10 +7957,16 @@ class Seeder:
         rows then differ visibly (the administrator's own carries the cancel
         control instead of a reviewable state) and pressing Approve on it
         returns the server's refusal.
+
+        The swap offers the seat to a named member. An open swap -- offered to
+        anyone cleared for the seat -- has nothing to approve, since a member
+        completes it by picking it up, so the Requests tab renders no Approve
+        on it and there is nothing to press. An open one left by an earlier
+        seed run is cancelled and replaced.
         """
         me = self.api.get("/auth/me") or {}
         admin_id = str(pick(me, "id") or pick(me.get("user") or {}, "id") or "")
-        mine = [
+        pending = [
             r
             for r in items(
                 self.api.get("/scheduling/swap-requests?limit=100"),
@@ -7937,8 +7974,32 @@ class Seeder:
                 "swap_requests",
             )
             if str(pick(r, "requesting_user_id", "requestingUserId") or "") == admin_id
+            and pick(r, "status") == "pending"
         ]
-        if mine:
+        if any(pick(r, "target_user_id", "targetUserId") for r in pending):
+            return
+        for request in pending:
+            self.api.post(f"/scheduling/swap-requests/{pick(request, 'id')}/cancel", {})
+        # Sorted so a re-run names the same member. Not the demo member: the
+        # offer notifies its target, and the demo member's inbox is pictured.
+        target = next(
+            (
+                str(pick(m, "id"))
+                for m in sorted(
+                    items(self.api.get("/users?limit=100"), "users"),
+                    key=lambda m: str(pick(m, "username") or ""),
+                )
+                if pick(m, "id")
+                and str(pick(m, "id")) != admin_id
+                and pick(m, "username") != DEMO_MEMBER_USERNAME
+                and pick(m, "status") == "active"
+            ),
+            None,
+        )
+        if not target:
+            self.blocked.append(
+                "scheduling requests: no member to offer the administrator's seat to"
+            )
             return
         upcoming = sorted(
             (
@@ -7958,6 +8019,7 @@ class Seeder:
             "/scheduling/swap-requests",
             {
                 "offering_shift_id": pick(upcoming[-1], "id"),
+                "target_user_id": target,
                 "reason": (
                     "Chiefs' association meeting runs long that night — "
                     "looking for cover on the back half."

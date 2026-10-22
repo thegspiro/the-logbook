@@ -9,16 +9,46 @@ from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_display_code
-from app.models.event import Event
+from app.models.apparatus import Apparatus, ApparatusLocationHistory
+from app.models.event import Event, EventTemplate
 from app.models.facilities import Facility, FacilityRoom
 from app.models.location import Location
 from app.models.user import Organization
 from app.schemas.location import LocationCreate, LocationUpdate
 from app.utils.org_locks import ROOM_BOOKING, lock_organization_scope
 from app.utils.org_scoping import assert_in_org
+
+# Every column that points at ``locations.id`` with ON DELETE RESTRICT. A
+# location any of these reference cannot be hard-deleted, so removing it
+# deactivates it instead. A new RESTRICT reference to ``locations`` belongs
+# here, or deleting a location it points at goes back to failing at flush.
+_RESTRICTING_LOCATION_REFERENCES = (
+    Event.location_id,
+    EventTemplate.default_location_id,
+    Apparatus.primary_station_id,
+    Apparatus.current_location_id,
+    ApparatusLocationHistory.location_id,
+)
+
+
+class LocationInUseError(ValueError):
+    """A location gained a reference between the check and the delete.
+
+    A ValueError so a caller that does not tell it apart still answers 400;
+    the delete routes catch it first to answer 409, because the request was
+    well-formed and the conflict is with stored data. Retrying resolves it:
+    the next attempt sees the reference and deactivates instead.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This location was just put into use by another record, so it "
+            "could not be removed. Try again to deactivate it instead."
+        )
 
 
 class LocationService:
@@ -210,31 +240,63 @@ class LocationService:
         """
         Delete a location
 
-        Hard-deletes the location if it has no events.  If events
-        reference this location, it is deactivated (is_active=False)
-        instead so existing events keep a valid FK while the location
-        no longer appears in pickers.
+        Hard-deletes the location when nothing references it. When an event,
+        an event template, an apparatus (home station or current location) or
+        an apparatus location-history entry still points at it, the location
+        is deactivated (is_active=False) instead, so those records keep a
+        valid reference while the location leaves every picker.
 
-        Returns True if deleted or deactivated, False if not found.
+        Returns True if deleted or deactivated, False if not found. Raises
+        ``LocationInUseError`` if a reference appeared mid-delete.
         """
         location = await self.get_location(location_id, organization_id)
         if not location:
             return False
 
-        # Check if location has any events
-        result = await self.db.execute(
-            select(func.count(Event.id)).where(Event.location_id == str(location_id))
-        )
-        event_count = result.scalar() or 0
-        if event_count > 0:
-            # Soft-delete: deactivate so existing events keep their FK
-            location.is_active = False
+        try:
+            await self.remove_location(location)
             await self.db.commit()
-            return True
+        except IntegrityError:
+            await self.db.rollback()
+            raise LocationInUseError()
+
+        return True
+
+    async def location_reference_count(self, location_id: str) -> int:
+        """Rows that reference this location through a RESTRICT foreign key.
+
+        Not org-filtered on purpose: the foreign key does not care which
+        organization a referencing row belongs to, and a count that missed one
+        would send the location down the hard-delete path into the constraint.
+        The location itself has already been resolved in the caller's org.
+        """
+        total = 0
+        for column in _RESTRICTING_LOCATION_REFERENCES:
+            total += (
+                await self.db.scalar(
+                    select(func.count())
+                    .select_from(column.class_)
+                    .where(column == location_id)
+                )
+                or 0
+            )
+        return total
+
+    async def remove_location(self, location: Location) -> bool:
+        """Deactivate a referenced location, otherwise delete it. No commit.
+
+        Returns True when the row was deleted, False when it was deactivated.
+        A reference created between this count and the caller's flush
+        surfaces there as an IntegrityError (``Location.events`` uses
+        ``passive_deletes="all"``, so the ORM leaves the constraint to fire
+        rather than nulling the events' location).
+        """
+        if await self.location_reference_count(location.id) > 0:
+            location.is_active = False
+            location.updated_at = datetime.now(timezone.utc)
+            return False
 
         await self.db.delete(location)
-        await self.db.commit()
-
         return True
 
     async def get_current_events_in_check_in_window(

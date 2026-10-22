@@ -316,3 +316,138 @@ describe('items placed directly on the checklist', () => {
     expect(updateCompartment).not.toHaveBeenCalledWith('loose', expect.anything());
   });
 });
+
+describe('an emptied group of checklist items', () => {
+  // Item edits autosave, so an author may never press Save; a headingless
+  // group left empty would have nothing to find it by.
+  it('is removed as soon as its last item is deleted', async () => {
+    const user = userEvent.setup();
+    deleteCheckItem.mockReset();
+    deleteCheckItem.mockResolvedValue(undefined);
+    getTemplate.mockResolvedValue(
+      template([cab(), loose([line({ id: 'chocks', compartmentId: 'loose', name: 'Wheel chocks' })])])
+    );
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Wheel chocks' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(deleteCheckItem).toHaveBeenCalledWith('chocks'));
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('loose'));
+    await waitFor(() => expect(screen.queryByTestId('inline-group-loose')).not.toBeInTheDocument());
+  });
+
+  it('is removed when its last item is moved into a location', async () => {
+    const user = userEvent.setup();
+    getTemplate.mockResolvedValue(
+      template([cab(), loose([line({ id: 'chocks', compartmentId: 'loose', name: 'Wheel chocks' })])])
+    );
+    renderBuilder();
+
+    await user.click(await screen.findByLabelText('Actions for Wheel chocks'));
+    const selects = await screen.findAllByLabelText(/Move Wheel chocks to compartment/);
+    // Index 0 is Cab in this template.
+    await user.selectOptions(selects[selects.length - 1] as HTMLSelectElement, '0');
+
+    await waitFor(() =>
+      expect(updateCheckItem).toHaveBeenCalledWith('chocks', expect.objectContaining({ compartment_id: 'cab' }))
+    );
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('loose'));
+  });
+
+  it('stays while it still holds an item', async () => {
+    const user = userEvent.setup();
+    deleteCheckItem.mockReset();
+    deleteCheckItem.mockResolvedValue(undefined);
+    getTemplate.mockResolvedValue(
+      template([
+        cab(),
+        loose([
+          line({ id: 'chocks', compartmentId: 'loose', name: 'Wheel chocks' }),
+          line({ id: 'maps', compartmentId: 'loose', name: 'Map book', sortOrder: 1 }),
+        ]),
+      ])
+    );
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Wheel chocks' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(deleteCheckItem).toHaveBeenCalledWith('chocks'));
+    expect(deleteCompartment).not.toHaveBeenCalled();
+    expect(screen.getByTestId('inline-group-loose')).toBeInTheDocument();
+  });
+
+  it('stays on screen when the server refuses the delete, for Save to drop later', async () => {
+    const user = userEvent.setup();
+    deleteCheckItem.mockReset();
+    deleteCheckItem.mockResolvedValue(undefined);
+    deleteCompartment.mockRejectedValue(new Error('offline'));
+    getTemplate.mockResolvedValue(
+      template([cab(), loose([line({ id: 'chocks', compartmentId: 'loose', name: 'Wheel chocks' })])])
+    );
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: 'Delete Wheel chocks' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('loose'));
+    expect(screen.getByTestId('inline-group-loose')).toBeInTheDocument();
+  });
+});
+
+describe('switching "in place" checks to Present', () => {
+  const inPlace = (id: string, name: string, sortOrder = 0) =>
+    line({ id, name, sortOrder, description: 'Confirm the item is in place.' });
+
+  it('switches every marked Works line in one step, and nothing else', async () => {
+    const user = userEvent.setup();
+    getTemplate.mockResolvedValue(
+      template([
+        cab([inPlace('scba', 'SCBA mounted'), line({ id: 'radio', name: 'Radio', sortOrder: 1 })]),
+        {
+          ...rear(),
+          items: [{ ...inPlace('cones', 'Traffic cones'), compartmentId: 'rear' }],
+        },
+      ])
+    );
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: /Switch .in place. checks to Present \(2\)/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('SCBA mounted');
+    expect(dialog).toHaveTextContent('Traffic cones');
+    expect(dialog).not.toHaveTextContent('Radio');
+    await user.click(within(dialog).getByRole('button', { name: 'Switch to Present' }));
+
+    await waitFor(
+      () => expect(updateCheckItem).toHaveBeenCalledWith('scba', expect.objectContaining({ check_type: 'presence' })),
+      { timeout: AUTOSAVE_DEBOUNCE_MS + 2000 }
+    );
+    await waitFor(() =>
+      expect(updateCheckItem).toHaveBeenCalledWith('cones', expect.objectContaining({ check_type: 'presence' }))
+    );
+    expect(updateCheckItem).not.toHaveBeenCalledWith('radio', expect.anything());
+    expect(screen.queryByRole('button', { name: /Switch .in place. checks/ })).not.toBeInTheDocument();
+  });
+
+  it('changes nothing when the author keeps them', async () => {
+    const user = userEvent.setup();
+    getTemplate.mockResolvedValue(template([cab([inPlace('scba', 'SCBA mounted')])]));
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: /Switch .in place. checks to Present \(1\)/ }));
+    await user.click(await screen.findByRole('button', { name: 'Leave them' }));
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
+    expect(updateCheckItem).not.toHaveBeenCalled();
+  });
+
+  it('is not offered when no line carries the old instruction', async () => {
+    renderBuilder();
+    await screen.findByRole('group', { name: 'Check type for Radio' });
+    expect(screen.queryByRole('button', { name: /Switch .in place. checks/ })).not.toBeInTheDocument();
+  });
+});

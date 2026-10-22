@@ -491,7 +491,6 @@ class FacilityPhoto(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     facility_id: Mapped[str] = mapped_column(
         String(36),
@@ -553,7 +552,6 @@ class FacilityDocument(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     facility_id: Mapped[str] = mapped_column(
         String(36),

@@ -49,6 +49,9 @@ async def test_token_action_locks_and_consumes_token(action):
     # terminal-denial probe would read this record back as a denial.
     # Its own coverage is in test_finance_denied_chain_is_terminal.py.
     service._chain_is_denied = AsyncMock(return_value=False)
+    # The same double would read the step back as its own request, whose
+    # status never matches; that guard is covered in test_finance_cancel_closes_chain.py.
+    service._lock_entity_awaiting_approval = AsyncMock()
     service._advance_reachable_steps = AsyncMock()
     service._check_all_steps_complete = AsyncMock(return_value=False)
     service._finalize_denial = AsyncMock()
@@ -91,6 +94,9 @@ async def test_token_action_rejects_a_later_step_out_of_order(action):
     # terminal-denial probe would read this record back as a denial.
     # Its own coverage is in test_finance_denied_chain_is_terminal.py.
     service._chain_is_denied = AsyncMock(return_value=False)
+    # The same double would read the step back as its own request, whose
+    # status never matches; that guard is covered in test_finance_cancel_closes_chain.py.
+    service._lock_entity_awaiting_approval = AsyncMock()
 
     with pytest.raises(ValueError, match="earlier approval step"):
         await getattr(service, action)(record.approval_token, "too soon")
@@ -119,6 +125,9 @@ class TestApproveByTokenSelfApprovalGuard:
         # terminal-denial probe would read this record back as a denial.
         # Its own coverage is in test_finance_denied_chain_is_terminal.py.
         service._chain_is_denied = AsyncMock(return_value=False)
+        # The same double would read the step back as its own request, whose
+        # status never matches; that guard is covered in test_finance_cancel_closes_chain.py.
+        service._lock_entity_awaiting_approval = AsyncMock()
         service._entity_creator_email = AsyncMock(return_value=requester_email)
         service._advance_reachable_steps = AsyncMock()
         service._check_all_steps_complete = AsyncMock(return_value=False)

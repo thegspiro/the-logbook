@@ -14,6 +14,10 @@ const { ORG_TZ } = vi.hoisted(() => {
 });
 
 vi.mock('../services/api', () => ({
+  // Read by the Governance section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   electionService: {
     getElections: (...args: unknown[]) => mockGetElections(...args) as unknown,
     getElectionSettings: vi.fn().mockRejectedValue(new Error('not needed')),

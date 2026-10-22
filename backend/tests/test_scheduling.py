@@ -429,12 +429,16 @@ class TestShiftCRUD:
         org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
-        today = date.today()
+        # Tomorrow: a shift that has not started yet is the only kind the
+        # service will delete.
+        tomorrow = date.today() + timedelta(days=1)
         shift, _ = await svc.create_shift(
             uuid.UUID(org_id),
             {
-                "shift_date": today,
-                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+                "shift_date": tomorrow,
+                "start_time": datetime(
+                    tomorrow.year, tomorrow.month, tomorrow.day, 7, 0
+                ),
             },
             uuid.UUID(user_id),
         )
@@ -444,6 +448,43 @@ class TestShiftCRUD:
 
         fetched = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
         assert fetched is None
+
+    @pytest.mark.asyncio
+    async def test_delete_shift_refuses_a_started_shift(
+        self, db_session, setup_org_and_users
+    ):
+        """Deleting cascades to attendance and calls, so a shift under way —
+        not finalized, no report — would lose its check-in hours. The panel
+        stops offering Delete at the same instant (``hasStarted``)."""
+        org_id, user_id, _ = setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        tomorrow = date.today() + timedelta(days=1)
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": tomorrow,
+                "start_time": datetime(
+                    tomorrow.year, tomorrow.month, tomorrow.day, 7, 0
+                ),
+            },
+            uuid.UUID(user_id),
+        )
+        shift_id = shift.id
+        started_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        shift.shift_date = started_at.date()
+        shift.start_time = started_at
+        await db_session.flush()
+
+        success, err = await svc.delete_shift(uuid.UUID(shift_id), uuid.UUID(org_id))
+
+        assert success is False
+        assert "has started" in err
+        db_session.expire_all()
+        assert (
+            await svc.get_shift_by_id(uuid.UUID(shift_id), uuid.UUID(org_id))
+            is not None
+        )
 
     @pytest.mark.asyncio
     async def test_delete_shift_not_found(self, db_session, setup_org_and_users):
@@ -3095,6 +3136,44 @@ class TestShiftCalls:
 
         remaining = await svc.get_shift_calls(uuid.UUID(shift.id), uuid.UUID(org_id))
         assert len(remaining) == 0
+
+    @pytest.mark.asyncio
+    async def test_delete_call_refuses_a_finalized_shift(
+        self, db_session, setup_org_and_users
+    ):
+        """Finalizing snapshots the shift's calls; a call removed afterwards
+        would leave the snapshot and training tracking describing a call the
+        record no longer holds."""
+        org_id, user_id, _ = setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        call, _ = await svc.create_shift_call(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"incident_type": "ems"},
+        )
+        shift_id, call_id = shift.id, call.id
+        shift.is_finalized = True
+        await db_session.flush()
+
+        success, err = await svc.delete_shift_call(
+            uuid.UUID(call_id), uuid.UUID(org_id)
+        )
+
+        assert success is False
+        assert "finalized" in err
+        db_session.expire_all()
+        remaining = await svc.get_shift_calls(uuid.UUID(shift_id), uuid.UUID(org_id))
+        assert [c.id for c in remaining] == [call_id]
 
 
 # ── Reporting Tests ──────────────────────────────────────────────────

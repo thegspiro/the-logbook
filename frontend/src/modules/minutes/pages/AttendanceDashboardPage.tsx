@@ -9,8 +9,8 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router';
-import { ArrowLeft, Loader2, Users } from 'lucide-react';
+import { Loader2, Users } from 'lucide-react';
+import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
 import { meetingsService } from '../../../services/meetingsServices';
 import type { AttendanceDashboard } from '../../../services/meetingsServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -61,24 +61,18 @@ const AttendanceDashboardPage: React.FC = () => {
   }, [load]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        to="/minutes"
-        className="text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 mb-4 inline-flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        Back to Minutes
-      </Link>
-      <div className="mb-6">
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-          <Users className="h-6 w-6 text-cyan-700 dark:text-cyan-400" aria-hidden="true" />
-          Meeting Attendance
-        </h1>
-        <p className="text-theme-text-muted mt-1 text-sm">
-          Each active member&apos;s attendance since their service began, up to the period chosen. Waived meetings and
-          meetings during a leave of absence are not counted against them.
-        </p>
-      </div>
+    <div className="mx-auto max-w-7xl">
+      <GovernancePageHeader
+        icon={Users}
+        title="Meeting Attendance"
+        breadcrumbLabel="Attendance"
+        subtitle={
+          <>
+            Each active member&apos;s attendance since their service began, up to the period chosen. Waived meetings and
+            meetings during a leave of absence are not counted against them.
+          </>
+        }
+      />
 
       <div className="mb-6 flex flex-wrap gap-3">
         <div>

@@ -10,8 +10,8 @@ as a normal one. The downgrade drops the column; a kiosk session then falls
 back to the standard limits.
 
 Revision ID: cc8c16cb6d98
-Revises: 59449acab7ba
-Create Date: 2026-10-21 18:42:11.204118
+Revises: e5f9bb066e07
+Create Date: 2026-10-22 09:05:11.204118
 
 """
 
@@ -22,7 +22,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "cc8c16cb6d98"
-down_revision: Union[str, None] = "59449acab7ba"
+down_revision: Union[str, None] = "e5f9bb066e07"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

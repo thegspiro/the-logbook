@@ -159,7 +159,7 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
                       {getRSVPStatusLabel(rsvp.status)}
                     </span>
                     {isCheckedIn && (
-                      <span className="text-xs text-green-600">
+                      <span className="text-xs text-green-700 dark:text-green-600">
                         ✓ Checked in at {rsvp.checked_in_at && formatTime(rsvp.checked_in_at, timezone)}
                       </span>
                     )}

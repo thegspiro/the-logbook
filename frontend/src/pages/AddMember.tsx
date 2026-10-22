@@ -4,6 +4,7 @@ import { Save, X, User, MapPin, Phone, Calendar, AlertCircle, Lock, Eye, EyeOff 
 import toast from 'react-hot-toast';
 import { MemberFormData } from '../types/member';
 import { userService, organizationService, roleService, locationsService } from '../services/api';
+import { withoutRankMirrors } from '../utils/positions';
 import type { Location } from '../services/api';
 import { getErrorDetail, getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
@@ -139,7 +140,7 @@ const AddMember: React.FC = () => {
     roleService
       .getRoles()
       .then((roles) => {
-        setAvailablePositions(roles.map((r: { id: string; name: string }) => ({ id: r.id, name: r.name })));
+        setAvailablePositions(withoutRankMirrors(roles).map((r) => ({ id: r.id, name: r.name })));
       })
       .catch(() => {
         /* non-critical */
@@ -897,7 +898,7 @@ const AddMember: React.FC = () => {
                 </select>
                 <p id="add-role-help" className="text-theme-text-muted mt-1 text-xs">
                   The job they hold here, such as Secretary or Training Officer. Positions decide most of what they can
-                  see and do in The Logbook.
+                  see and do in The Logbook. A rank such as Captain or Firefighter is set in the Rank field, not here.
                 </p>
               </div>
 

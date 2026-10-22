@@ -1,6 +1,11 @@
 {
   // TypeScript Settings
-  "typescript.tsdk": "frontend/node_modules/typescript/lib",
+  // TypeScript 7 ships no tsserver.js, so the classic "typescript.tsdk" cannot
+  // load it. The TypeScript 7 extension reads js/ts.tsdk.path instead. Point it
+  // at the aliased 7.x compiler that `npm run typecheck` uses; the plain
+  // "typescript" package is 5.9.3, kept only for typescript-eslint.
+  "js/ts.experimental.useTsgo": true,
+  "js/ts.tsdk.path": "node_modules/typescript-native/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
 
   // Enable TypeScript validation

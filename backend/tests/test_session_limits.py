@@ -24,13 +24,14 @@ from app.services.auth_service import (
 NOW = datetime.now(timezone.utc)
 
 
-def _session(idle_minutes=1, age_hours=1, **extra):
+def _session(idle_minutes=1, age_hours=1, now=None, **extra):
+    now = NOW if now is None else now
     fields = {
         "id": "session-1",
         "user_id": "user-123",
         "is_kiosk": False,
-        "last_activity": NOW - timedelta(minutes=idle_minutes),
-        "created_at": NOW - timedelta(hours=age_hours),
+        "last_activity": now - timedelta(minutes=idle_minutes),
+        "created_at": now - timedelta(hours=age_hours),
     }
     fields.update(extra)
     return SimpleNamespace(**fields)
@@ -138,8 +139,14 @@ def _access_db(session):
 
 
 def _live(**kw):
+    # get_user_from_token measures idleness against the real clock, so the
+    # session is built from the time of the call, not the module-import NOW:
+    # a full suite runs long past the idle limit before these tests are reached.
+    now = datetime.now(timezone.utc)
     token = create_access_token({"sub": "user-123"})
-    return token, _session(token=token, expires_at=NOW + timedelta(minutes=20), **kw)
+    return token, _session(
+        token=token, expires_at=now + timedelta(minutes=20), now=now, **kw
+    )
 
 
 @pytest.mark.unit
@@ -170,7 +177,7 @@ class TestAccessTokenCheck:
         user, _db = await self._check(session, token)
 
         assert user is not None
-        assert session.last_activity > NOW - timedelta(minutes=1)
+        assert session.last_activity > datetime.now(timezone.utc) - timedelta(minutes=1)
 
     async def test_a_background_request_does_not_extend_the_idle_timer(self):
         token, session = _live(idle_minutes=10)

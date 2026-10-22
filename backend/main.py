@@ -2293,7 +2293,7 @@ app.add_middleware(
         "Accept",
         "Origin",
     ],
-    expose_headers=["X-Request-ID", "X-CSRF-Token"],
+    expose_headers=["X-Request-ID", "X-CSRF-Token", "X-Delete-Outcome"],
 )
 
 # Compression

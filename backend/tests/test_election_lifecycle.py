@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.election import Election, ElectionStatus, VotingToken
 from app.services.election_service import ElectionService
+from tests.queued_send_runner import capture_queued_sends
 
 pytestmark = [pytest.mark.integration]
 
@@ -385,8 +386,15 @@ class TestElectionLifecycleTask(TestLifecycleSetup):
                 "https://fd.example/",
             ),
         ):
-            first = await svc.process_election_lifecycle(uuid.UUID(org_id))
-            second = await svc.process_election_lifecycle(uuid.UUID(org_id))
+            async with capture_queued_sends(db_session) as sends:
+                first = await svc.process_election_lifecycle(uuid.UUID(org_id))
+                # Queued, not sent: until the job delivers, another tick is
+                # turned away by the in-progress guard rather than queuing again.
+                assert send_batch.await_count == 0
+                assert await svc.process_election_lifecycle(uuid.UUID(org_id)) == 0
+                assert await sends.drain() == 1
+                second = await svc.process_election_lifecycle(uuid.UUID(org_id))
+                assert sends.queued == []
 
         assert first >= 1
         assert send_batch.await_count == 1, "reminder must fire exactly once"
@@ -432,3 +440,148 @@ class TestElectionLifecycleTask(TestLifecycleSetup):
         assert send_batch.await_count == 0
         election = await self._get_election(db_session, election_id)
         assert election.reminder_sent_at is None
+
+
+# ── automatic reminder as a background job ───────────────────────────
+
+
+@pytest.mark.integration
+class TestAutomaticReminderJob(TestLifecycleSetup):
+    """The pre-close reminder is queued, falls under the one-send-at-a-time
+    guard, and tells the managers when it did not reach everyone — once."""
+
+    ALERT_SUBJECT = "Action needed: reminders for"
+
+    async def _due_reminder(self, db_session, org_id, user1_id) -> str:
+        now = datetime.now(timezone.utc)
+        return await self._insert_election(
+            db_session,
+            org_id,
+            user1_id,
+            start=now - timedelta(days=1),
+            end=now + timedelta(hours=1),
+            reminder_hours=2,
+        )
+
+    @staticmethod
+    def _alerts(send_email: AsyncMock) -> list:
+        return [
+            call
+            for call in send_email.await_args_list
+            if call.kwargs["subject"].startswith(TestAutomaticReminderJob.ALERT_SUBJECT)
+        ]
+
+    async def test_a_partly_failed_reminder_alerts_the_managers(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _user2_id = setup_org_and_users
+        election_id = await self._due_reminder(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+
+        send_email = AsyncMock(return_value=(1, 0))
+        with (
+            patch(
+                "app.services.email_service.EmailService.send_batch",
+                new=AsyncMock(
+                    side_effect=lambda batch: [True] + [False] * (len(batch) - 1)
+                ),
+            ),
+            patch("app.services.email_service.EmailService.send_email", new=send_email),
+            patch("app.api.dependencies.user_has_permission", return_value=True),
+        ):
+            async with capture_queued_sends(db_session) as sends:
+                await svc.process_election_lifecycle(uuid.UUID(org_id))
+                await sends.drain()
+
+        alerts = self._alerts(send_email)
+        assert len(alerts) == 1
+        assert (
+            "1 of 2 reminder email(s) failed to send" in alerts[0].kwargs["html_body"]
+        )
+        assert "Remind Non-Voters" in alerts[0].kwargs["html_body"]
+        # Delivered to someone, so the reminder counts as sent.
+        election = await self._get_election(db_session, election_id)
+        await db_session.refresh(election)
+        assert election.reminder_sent_at is not None
+
+    async def test_a_reminder_that_keeps_failing_alerts_only_once(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        # Nothing delivered leaves reminder_sent_at unset, so each tick retries;
+        # an alert per retry would mail the managers every fifteen minutes.
+        org_id, user1_id, _user2_id = setup_org_and_users
+        election_id = await self._due_reminder(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+
+        send_email = AsyncMock(return_value=(1, 0))
+        with (
+            patch(
+                "app.services.email_service.EmailService.send_batch",
+                new=AsyncMock(side_effect=lambda batch: [False] * len(batch)),
+            ),
+            patch("app.services.email_service.EmailService.send_email", new=send_email),
+            patch("app.api.dependencies.user_has_permission", return_value=True),
+        ):
+            async with capture_queued_sends(db_session) as sends:
+                for _tick in range(3):
+                    await svc.process_election_lifecycle(uuid.UUID(org_id))
+                    assert await sends.drain() == 1
+
+        alerts = self._alerts(send_email)
+        assert len(alerts) == 1
+        assert "all 2 reminder email(s) failed to send" in alerts[0].kwargs["html_body"]
+        election = await self._get_election(db_session, election_id)
+        await db_session.refresh(election)
+        assert election.reminder_sent_at is None
+
+    async def test_a_reminder_that_raises_alerts_the_managers(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _user2_id = setup_org_and_users
+        await self._due_reminder(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+
+        send_email = AsyncMock(return_value=(1, 0))
+        with (
+            patch.object(
+                ElectionService,
+                "send_ballot_emails",
+                new=AsyncMock(side_effect=RuntimeError("smtp down")),
+            ),
+            patch("app.services.email_service.EmailService.send_email", new=send_email),
+            patch("app.api.dependencies.user_has_permission", return_value=True),
+        ):
+            async with capture_queued_sends(db_session) as sends:
+                await svc.process_election_lifecycle(uuid.UUID(org_id))
+                await sends.drain()
+
+        alerts = self._alerts(send_email)
+        assert len(alerts) == 1
+        assert "could not be sent" in alerts[0].kwargs["html_body"]
+
+    async def test_no_reminder_is_queued_while_another_send_is_running(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _user2_id = setup_org_and_users
+        election_id = await self._due_reminder(db_session, org_id, user1_id)
+        await db_session.execute(
+            text(
+                "INSERT INTO ballot_send_jobs (id, organization_id, election_id, "
+                "requested_by, kind, status, created_at) VALUES "
+                "(:id, :org, :eid, :uid, 'ballots', 'running', :now)"
+            ),
+            {
+                "id": _uid(),
+                "org": org_id,
+                "eid": election_id,
+                "uid": user1_id,
+                "now": datetime.now(timezone.utc),
+            },
+        )
+        svc = ElectionService(db_session)
+
+        async with capture_queued_sends(db_session) as sends:
+            actions = await svc.process_election_lifecycle(uuid.UUID(org_id))
+            assert sends.queued == []
+
+        assert actions == 0

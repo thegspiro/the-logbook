@@ -76,7 +76,7 @@ import EventCheckInModal from '../components/event-detail/EventCheckInModal';
 import EventRecordTimesModal from '../components/event-detail/EventRecordTimesModal';
 import EventOverrideAttendanceModal from '../components/event-detail/EventOverrideAttendanceModal';
 import EventEndConfirmModal from '../components/event-detail/EventEndConfirmModal';
-import EventDeleteConfirmModal from '../components/event-detail/EventDeleteConfirmModal';
+import EventDeleteConfirmModal, { type EventDeleteScope } from '../components/event-detail/EventDeleteConfirmModal';
 import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplateModal';
 import TrainingSessionLinkageCard from '../components/event-detail/TrainingSessionLinkageCard';
 import EventProspectsCard from '../components/event-detail/EventProspectsCard';
@@ -85,6 +85,8 @@ import EventAttendancePetitionPrompt from '../components/event-detail/EventAtten
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
 import EventTransferModal from '../components/event-detail/EventTransferModal';
 import { buildCsv, downloadCsv } from '../utils/csv';
+import { formatHoursExact } from '../utils/hoursFormatting';
+import { CREDITED_HOURS_BASIS } from '../components/events/creditedHours';
 
 /**
  * `custom_fields` keys that are not custom fields.
@@ -282,7 +284,7 @@ export const EventDetailPage: React.FC = () => {
       if (canManage) {
         await fetchRSVPs();
         await fetchStats();
-      } else {
+      } else if (event?.can_view_attendees) {
         await fetchAttendees();
       }
     },
@@ -322,15 +324,21 @@ export const EventDetailPage: React.FC = () => {
         void fetchRSVPs();
         void fetchStats();
         void fetchRSVPHistory();
-      } else {
-        // Outside the canManage branch on purpose: this is the one roster an
-        // ordinary member can see. A 403 (the event is not shared) resolves to
-        // an empty list in the service, so there is nothing to handle here.
-        void fetchAttendees();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, canManage]);
+
+  // The one roster an ordinary member can see, asked for only once the event
+  // says it will answer: requesting it regardless took a 403, logged twice,
+  // on every visit to an event whose roster is not shared with members.
+  const canViewAttendees = Boolean(event?.can_view_attendees);
+  useEffect(() => {
+    if (eventId && !canManage && canViewAttendees) {
+      void fetchAttendees();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, canManage, canViewAttendees]);
 
   const fetchEvent = async () => {
     if (!eventId) return;
@@ -654,15 +662,19 @@ export const EventDetailPage: React.FC = () => {
 
   // handleSendNotification is now in notifications.handleSendNotification
 
-  const handleDeleteEvent = async (scope: 'single' | 'series') => {
+  const handleDeleteEvent = async (scope: EventDeleteScope) => {
     if (!eventId || !event) return;
 
     try {
       setSubmitting(true);
-      if (scope === 'series' && (event.is_recurring || event.recurrence_parent_id)) {
-        const parentId = event.recurrence_parent_id || eventId;
+      const inSeries = !!(event.is_recurring || event.recurrence_parent_id);
+      const parentId = event.recurrence_parent_id || eventId;
+      if (scope === 'series' && inSeries) {
         await eventService.deleteEventSeries(parentId);
         toast.success('All events in the series deleted');
+      } else if (scope === 'future' && inSeries) {
+        await eventService.deleteEventSeries(parentId, false, eventId);
+        toast.success('This and future events in the series deleted');
       } else {
         await eventService.deleteEvent(eventId);
         toast.success('Event deleted');
@@ -915,15 +927,29 @@ export const EventDetailPage: React.FC = () => {
   // scheduled end: a "window" event accepts check-ins for a while after it.
   // Payloads predating the field fall back to the event being over.
   const checkInClosed = event.check_in_closes_at ? new Date(event.check_in_closes_at) <= new Date() : isEventOver;
-  const showCheckInQrCode = !event.is_cancelled && !isAttendanceFinalized && !checkInClosed;
-  // Asking to be marked present opens where checking in closes. The member's
-  // own eligibility (the 30-day window, already present) is the server's call;
-  // the page only decides whether to ask.
-  const attendancePetitionsOpen = checkInClosed && !event.is_cancelled && !event.is_draft;
   // The organizer and alternate need not hold events.manage to decide their own
   // event's requests or hand it over. The server decides who that is
   // (CLAUDE.md #29), so the page reads its answer rather than comparing ids.
   const canManageOrganizers = Boolean(event.can_manage_organizers);
+  // The QR page is the code put on display at the event, for members to scan.
+  // A member shown it on their own phone has nothing to scan it with, so it
+  // goes to whoever runs the event; members get Check In below instead.
+  const showCheckInQrCode =
+    (canManage || canManageOrganizers) && !event.is_cancelled && !isAttendanceFinalized && !checkInClosed;
+  // The same window the list card reads, so the page offers Check In exactly
+  // when the "happening now" card does. A payload without the field never
+  // offers it rather than guessing at the window.
+  const checkInOpen =
+    Boolean(event.check_in_opens_at && new Date(event.check_in_opens_at) <= new Date()) &&
+    !checkInClosed &&
+    !event.is_cancelled &&
+    !event.is_draft &&
+    !isAttendanceFinalized;
+  const showSelfCheckIn = checkInOpen && !event.user_attended;
+  // Asking to be marked present opens where checking in closes. The member's
+  // own eligibility (the 30-day window, already present) is the server's call;
+  // the page only decides whether to ask.
+  const attendancePetitionsOpen = checkInClosed && !event.is_cancelled && !event.is_draft;
   const canReviewAttendancePetitions = canManageOrganizers;
 
   // RSVP deadline countdown
@@ -1063,12 +1089,29 @@ export const EventDetailPage: React.FC = () => {
                     Publish
                   </button>
                 )}
+                {showSelfCheckIn && (
+                  <Link
+                    to={`/events/${eventId}/check-in`}
+                    className="btn-success inline-flex items-center rounded-md text-sm font-medium"
+                  >
+                    <QrCode className="mr-2 h-5 w-5" aria-hidden="true" />
+                    Check In
+                  </Link>
+                )}
+                {event.user_attended && (
+                  <span className="badge inline-flex items-center gap-1.5 bg-green-500/10 text-sm text-green-800 dark:text-green-300">
+                    <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                    You&apos;re checked in
+                  </span>
+                )}
                 {canRSVP && (
                   <button
                     onClick={rsvpForm.openModal}
                     className="btn-primary inline-flex items-center rounded-md text-sm font-medium"
                   >
-                    {event.user_rsvp_status ? 'Update RSVP' : event.requires_rsvp ? 'RSVP Now' : "I'm coming"}
+                    {/* "Going", the word the list card's button uses for the
+                        same action. */}
+                    {event.user_rsvp_status ? 'Update RSVP' : event.requires_rsvp ? 'RSVP Now' : 'Going'}
                   </button>
                 )}
                 {rsvpCountdown && !event.user_rsvp_status && (
@@ -1372,6 +1415,20 @@ export const EventDetailPage: React.FC = () => {
                   </div>
                 </div>
 
+                {event.credited_hours != null && (
+                  <div className="flex items-start">
+                    <ClipboardCheck className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
+                    <div>
+                      <p className="text-theme-text-secondary text-sm font-medium">Credit</p>
+                      <p className="text-theme-text-secondary text-sm">
+                        Up to <span className="font-mono">{formatHoursExact(event.credited_hours)}</span>{' '}
+                        {event.hour_category_label ? `${event.hour_category_label} hours` : 'hours'}
+                      </p>
+                      <p className="text-theme-text-muted mt-1 text-xs">{CREDITED_HOURS_BASIS}</p>
+                    </div>
+                  </div>
+                )}
+
                 {(event.location_name || event.location) && (
                   <div className="flex items-start">
                     <MapPin className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
@@ -1501,7 +1558,10 @@ export const EventDetailPage: React.FC = () => {
                       {event.custom_fields.issues_certification && (
                         <div className="sm:col-span-2">
                           <div className="flex items-center rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-500/30 dark:bg-green-500/10">
-                            <CheckCircle className="mr-2 h-5 w-5 text-green-600" aria-hidden="true" />
+                            <CheckCircle
+                              className="mr-2 h-5 w-5 text-green-700 dark:text-green-600"
+                              aria-hidden="true"
+                            />
                             <span className="text-sm font-medium text-green-800 dark:text-green-400">
                               This training issues a certification upon completion
                             </span>
@@ -1647,7 +1707,7 @@ export const EventDetailPage: React.FC = () => {
                        spot would be a promise the server will never keep.
                        Arises when an organizer lowers the cap below a party
                        that had already queued. */
-                    <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
+                    <p className="mt-3 text-sm text-amber-700 dark:text-amber-400">
                       Your party is larger than this event can hold, so it can&apos;t move off the waitlist. Reduce your
                       guest count or contact the event organizer.
                     </p>
@@ -1736,7 +1796,7 @@ export const EventDetailPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-secondary text-sm">Going</span>
-                    <span className="text-sm font-medium text-green-600">{stats.going_count}</span>
+                    <span className="text-sm font-medium text-green-700 dark:text-green-600">{stats.going_count}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-secondary text-sm">Not Going</span>
@@ -1744,7 +1804,9 @@ export const EventDetailPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-secondary text-sm">Maybe</span>
-                    <span className="text-sm font-medium text-yellow-600">{stats.maybe_count}</span>
+                    <span className="text-sm font-medium text-yellow-700 dark:text-yellow-600">
+                      {stats.maybe_count}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-theme-text-secondary text-sm">Checked In</span>

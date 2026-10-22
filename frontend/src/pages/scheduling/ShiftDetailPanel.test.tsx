@@ -39,6 +39,8 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     checkIn: vi.fn().mockResolvedValue({}),
     checkOut: vi.fn().mockResolvedValue({}),
     updateAssignment: vi.fn().mockResolvedValue({}),
+    deleteShift: vi.fn().mockResolvedValue(undefined),
+    withdrawSignup: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -1103,5 +1105,93 @@ describe('ShiftDetailPanel equipment check hints', () => {
 
     expect(await screen.findByText('Not started — use Complete Checklists above')).toBeInTheDocument();
     expect(screen.queryByText(/Go to Checklists tab/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Deleting a shift cascades to its attendance, calls and swap requests, so the
+ * server refuses one that has started and the panel stops offering it at the
+ * same instant. Withdrawing frees a seat somebody else may take, so it asks.
+ * Neither control branches on the viewport; the phone width is stated so the
+ * block does not inherit whatever a neighbour left (pitfall #28a).
+ */
+describe('ShiftDetailPanel delete and withdraw', () => {
+  const mockAssignments = vi.mocked(schedulingService.getShiftAssignments);
+  const mockDeleteShift = vi.mocked(schedulingService.deleteShift);
+  const mockWithdraw = vi.mocked(schedulingService.withdrawSignup);
+
+  const startingIn = (minutes: number) => {
+    const start = new Date(Date.now() + minutes * 60_000);
+    return {
+      ...shift,
+      shift_date: start.toISOString().slice(0, 10),
+      start_time: start.toISOString(),
+      end_time: new Date(start.getTime() + 8 * 60 * 60_000).toISOString(),
+    };
+  };
+
+  beforeEach(() => {
+    grantedPermissions.current = null;
+    mediaListeners = [];
+    mockViewport('phone');
+    mockAssignments.mockReset();
+    mockAssignments.mockResolvedValue([]);
+    mockDeleteShift.mockReset();
+    mockDeleteShift.mockResolvedValue(undefined);
+    mockWithdraw.mockReset();
+    mockWithdraw.mockResolvedValue({} as never);
+  });
+
+  afterEach(() => {
+    mockAssignments.mockResolvedValue([]);
+  });
+
+  it('says what else a shift delete removes', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={startingIn(24 * 60) as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    expect(
+      screen.getByText(/assignments, attendance records, logged calls and swap requests are\s+removed with it/)
+    ).toBeInTheDocument();
+    expect(mockDeleteShift).not.toHaveBeenCalled();
+  });
+
+  it('stops offering Delete once the shift has started, while Edit stays for the day', async () => {
+    renderWithRouter(<ShiftDetailPanel shift={startingIn(-1) as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+  });
+
+  describe('withdrawing', () => {
+    beforeEach(() => {
+      mockAssignments.mockResolvedValue([
+        { id: 'a-1', user_id: 'user-1', user_name: 'A Member', position: 'firefighter', status: 'assigned' },
+      ] as never);
+    });
+
+    it('asks first, and staying does nothing', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ShiftDetailPanel shift={startingIn(24 * 60) as never} onClose={vi.fn()} />);
+
+      await user.click(await screen.findByRole('button', { name: /Withdraw from this shift/ }));
+      expect(await screen.findByText(/Your seat opens for someone else to claim/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Stay on shift' }));
+
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Stay on shift' })).not.toBeInTheDocument());
+      expect(mockWithdraw).not.toHaveBeenCalled();
+    });
+
+    it('withdraws once confirmed', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<ShiftDetailPanel shift={startingIn(24 * 60) as never} onClose={vi.fn()} />);
+
+      await user.click(await screen.findByRole('button', { name: /Withdraw from this shift/ }));
+      await user.click(await screen.findByRole('button', { name: 'Withdraw' }));
+
+      await waitFor(() => expect(mockWithdraw).toHaveBeenCalledWith('shift-1'));
+    });
   });
 });

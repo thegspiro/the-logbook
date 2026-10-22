@@ -5,6 +5,7 @@
  */
 
 import { formatValidationErrors, type ValidationErrorEntry } from '../utils/errorHandler';
+import { setOnboardingGateAnswer } from '../utils/onboardingGateState';
 
 interface ApiResponse<T> {
   data?: T | undefined;
@@ -701,6 +702,8 @@ class SecureApiClient {
     // Clear onboarding session after completion
     if (response.statusCode === 200 || response.statusCode === 201) {
       this.clearSession({ preserveAuth: true });
+      // Setup is closed from here on; the gate must not answer from a stale "open".
+      setOnboardingGateAnswer('closed');
     }
 
     return response;

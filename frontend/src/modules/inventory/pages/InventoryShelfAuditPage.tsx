@@ -29,7 +29,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { AlertTriangle, ArrowLeft, Box, ClipboardCheck, CloudOff, Loader2, Nfc, X } from 'lucide-react';
+import { AlertTriangle, Box, ClipboardCheck, CloudOff, Loader2, Nfc, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '../../../services/api';
 import { useNfcScanner } from '../../../hooks/useNfcScanner';
@@ -37,7 +37,6 @@ import { useScanFeedback } from '../../../hooks/useScanFeedback';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { ScanSuccessFlash } from '../../../components/ux/ScanSuccessFlash';
-import { Breadcrumbs } from '../../../components/ux';
 import { InventoryNfcAuditResult } from '../../../constants/enums';
 import { AUDIT_FREQUENCY_LABELS, parseInventoryTagCode } from '../../../constants/nfc';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
@@ -56,6 +55,7 @@ import {
   type InventoryNfcAuditSummary,
   type InventoryNfcReplayTap,
 } from '../types/nfc';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 interface Shelf {
   id: string;
@@ -455,24 +455,15 @@ export const InventoryShelfAuditPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 sm:px-6">
+    <div className="mx-auto max-w-7xl space-y-4">
       <ScanSuccessFlash active={flashing} />
-      <Breadcrumbs underHub="/inventory/admin" />
-      <Link
-        to="/inventory/storage-areas"
-        className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target justify-start gap-2 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to Storage Areas
-      </Link>
-
-      <header>
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-          <ClipboardCheck className="h-5 w-5" /> Shelf Audit
-        </h1>
-        <p className="text-theme-text-secondary mt-1 text-sm">
-          Tap a shelf, then tap every item on it. Finishing shows what is missing and what should not be there.
-        </p>
-      </header>
+      <OperationsPageHeader
+        underHub="/inventory/admin"
+        icon={ClipboardCheck}
+        title="Shelf Audit"
+        subtitle="Tap a shelf, then tap every item on it. Finishing shows what is missing and what should not be there."
+        parentCrumbs={[{ label: 'Storage Areas', path: '/inventory/storage-areas' }]}
+      />
 
       {!enabled ? (
         <div className="alert-warning" role="status">

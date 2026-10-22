@@ -12,8 +12,6 @@ document moved into a folder the caller cannot open is not served through the
 module's door either.
 """
 
-import asyncio
-import os
 from datetime import date
 from typing import Iterable, Optional
 
@@ -31,7 +29,6 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
-    stored_file_response,
 )
 from app.utils import download_names
 
@@ -107,7 +104,7 @@ async def store_as_document(
     try:
         await db.flush()
     except Exception:
-        await asyncio.to_thread(file_storage.remove_quietly, stored.path)
+        await file_storage.delete_quietly(stored.path)
         raise
     return document
 
@@ -115,7 +112,7 @@ async def store_as_document(
 async def discard_file(document: Optional[Document]) -> None:
     """Remove a just-stored file whose transaction did not commit."""
     if document is not None and document.file_path:
-        await asyncio.to_thread(file_storage.remove_quietly, document.file_path)
+        await file_storage.delete_quietly(document.file_path)
 
 
 async def document_in_org(
@@ -182,7 +179,7 @@ async def serve_document(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
         )
-    if not await asyncio.to_thread(os.path.isfile, path):
+    if not await file_storage.exists(path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
         )
@@ -190,8 +187,8 @@ async def serve_document(
     extension = download_names.stored_extension(path)
     media_type = document.file_type or "application/octet-stream"
     inline = inline_images and media_type in _INLINE_IMAGE_TYPES
-    return stored_file_response(
-        path=path,
+    return await file_storage.file_response(
+        path,
         filename=download_names.descriptive_filename(
             day, *name_parts, extension=extension, fallback=fallback
         ),

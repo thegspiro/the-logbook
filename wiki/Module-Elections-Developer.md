@@ -170,8 +170,13 @@ not sent. The page queues it through `package-send-jobs` and polls the job;
 send has its own one-at-a-time guard and does not wait on a ballot send.
 
 **Nominations-open announcement.** Opening nominations emails each opted-in
-active member a separate message, after the `open-nominations` response, in
-its own session. It is best-effort: the outcome is logged, not shown.
+active member a separate message. `open-nominations` queues it as a
+`ballot_send_jobs` row of `kind = 'announcement'` (`NominationsAnnouncementSend`,
+its own one-at-a-time guard), and the election response carries the latest
+one as `nominations_announcement` for election managers, which the
+Nominations tab follows. A miss or an outright failure is audited
+(`nominations_announcement_failed`) and emails the managers. A failed
+announcement never undoes the phase change.
 
 **Paper ballots.** A recorded tally is plausibility-guarded; exceeding it
 needs `allow_over_count`, which is audited. The recording officer cannot
@@ -184,6 +189,10 @@ a reminder is delivered.
 The page queues it through `reminder-send-jobs` and polls the job, as it
 does for ballot sends; the two kinds share the `ballot_send_jobs` table and
 the one-send-at-a-time guard.
+The election lifecycle task queues its own sends the same way — the ballots
+after an automatic open, and the pre-close reminder — so they share that
+guard too, and the task never waits on a send. An automatic reminder that
+fails for anyone emails the managers once per election.
 
 **Saved ballot templates** store reusable ballot configuration only —
 `name` (1–200), `description`, `ballot_items` (1–250), `voting_method` and

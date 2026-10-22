@@ -93,7 +93,7 @@ const SetupComplete: React.FC = () => {
           {/* Confirmation */}
           <div className="text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10">
-              <PartyPopper className="h-8 w-8 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <PartyPopper className="h-8 w-8 text-emerald-700 dark:text-emerald-400" aria-hidden="true" />
             </div>
             <h2 className="text-theme-text-primary text-3xl font-bold">
               {departmentName ? `${departmentName} is set up` : 'Your department is set up'}

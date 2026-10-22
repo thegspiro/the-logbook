@@ -98,7 +98,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
           <>
             {!overview.platoons_enabled && (
               <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" />
                 <div className="text-sm text-amber-700 dark:text-amber-400">
                   Platoon scheduling is turned off for your department. You can still assign members here, but platoon
                   features won't appear until you enable it in{' '}

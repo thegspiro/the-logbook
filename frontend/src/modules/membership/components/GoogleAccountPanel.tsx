@@ -126,7 +126,7 @@ export const GoogleAccountPanel: React.FC<GoogleAccountPanelProps> = ({ userId, 
         {account.suspension_error && (
           <div
             role="alert"
-            className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-amber-700 dark:text-amber-400"
+            className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-400"
           >
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>{account.suspension_error}</p>
@@ -149,7 +149,7 @@ export const GoogleAccountPanel: React.FC<GoogleAccountPanelProps> = ({ userId, 
         {account.last_error && (
           <div
             role="alert"
-            className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-amber-700 dark:text-amber-400"
+            className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-400"
           >
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>{account.last_error}</p>

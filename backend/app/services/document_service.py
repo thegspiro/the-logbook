@@ -34,6 +34,7 @@ from app.models.user import Organization
 from app.utils.minutes_attendance import derive_status, effective_listing, is_listed
 from app.utils.minutes_settings import attendance_listing_in
 from app.utils.motion_votes import acceptance_label, recorded_motions, vote_summary
+from app.utils.org_timezone import stored_calendar_day
 from app.utils.rich_text import (
     FORMAT_HTML,
     normalize_format,
@@ -815,11 +816,9 @@ class DocumentService:
                 '<tr style="background:#f3f4f6;"><th style="padding:6px; text-align:left; border:1px solid #ddd;">Description</th><th style="padding:6px; text-align:left; border:1px solid #ddd;">Assignee</th><th style="padding:6px; text-align:left; border:1px solid #ddd;">Due</th><th style="padding:6px; text-align:left; border:1px solid #ddd;">Priority</th></tr>'
             )
             for item in minutes.action_items:
-                due = (
-                    self._to_local(item.due_date, tz_name).strftime("%Y-%m-%d")
-                    if item.due_date
-                    else "—"
-                )
+                # A calendar day, not an instant: shown as stored.
+                due_on = stored_calendar_day(item.due_date)
+                due = due_on.isoformat() if due_on else "—"
                 priority = (
                     item.priority
                     if isinstance(item.priority, str)

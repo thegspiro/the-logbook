@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX
 
 # Shared camelCase response config
 _RESPONSE_CONFIG = ConfigDict(
@@ -30,9 +31,9 @@ class AdminHoursCategoryCreate(BaseModel):
     description: Optional[str] = None
     color: Optional[str] = Field(None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
     require_approval: bool = True
-    auto_approve_under_hours: Optional[float] = Field(None, ge=0)
-    max_hours_per_session: Optional[float] = Field(12.0, ge=0.5)
-    sort_order: int = Field(0, ge=0)
+    auto_approve_under_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
+    max_hours_per_session: Optional[float] = Field(12.0, ge=0.5, le=FLOAT32_MAX)
+    sort_order: int = Field(0, ge=0, le=INT32_MAX)
 
 
 class AdminHoursCategoryUpdate(BaseModel):
@@ -42,10 +43,10 @@ class AdminHoursCategoryUpdate(BaseModel):
     description: Optional[str] = None
     color: Optional[str] = Field(None, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$")
     require_approval: Optional[bool] = None
-    auto_approve_under_hours: Optional[float] = Field(None, ge=0)
-    max_hours_per_session: Optional[float] = Field(None, ge=0.5)
+    auto_approve_under_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
+    max_hours_per_session: Optional[float] = Field(None, ge=0.5, le=FLOAT32_MAX)
     is_active: Optional[bool] = None
-    sort_order: Optional[int] = Field(None, ge=0)
+    sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
 
 class AdminHoursCategoryResponse(UTCResponseBase):

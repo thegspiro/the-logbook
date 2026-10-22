@@ -17,7 +17,6 @@ import {
   Bell,
   Repeat,
   AlertTriangle,
-  Upload,
   Paperclip,
   Bold,
   Italic,
@@ -1083,7 +1082,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               aria-live="polite"
             >
               <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-400" />
                 <div>
                   <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Schedule Conflict</p>
                   <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
@@ -1878,24 +1877,25 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       <hr className="border-theme-surface-border" />
 
-      {/* === Attachments === */}
-      <Collapsible
-        title={
-          <span className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
-            <Paperclip className="h-5 w-5 text-red-700" />
-            <span>Attachments</span>
-            {existingAttachments.length > 0 && (
+      {/* === Attachments ===
+          Shown only when the event already has files. Nothing here can add
+          one, and a section whose only content was "Files can't be attached
+          from the app yet" was a control wired to nothing (pitfall 19). */}
+      {existingAttachments.length > 0 && (
+        <Collapsible
+          title={
+            <span className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
+              <Paperclip className="h-5 w-5 text-red-700" />
+              <span>Attachments</span>
               <span className="bg-theme-surface-secondary text-theme-text-muted ml-2 rounded-full px-2 py-0.5 text-xs font-normal">
                 {existingAttachments.length}
               </span>
-            )}
-          </span>
-        }
-        defaultOpen={existingAttachments.length > 0}
-      >
-        <div className="space-y-4">
-          {/* Existing attachments (editing mode) */}
-          {existingAttachments.length > 0 && (
+            </span>
+          }
+          defaultOpen
+        >
+          <div className="space-y-4">
+            {/* Existing attachments (editing mode) */}
             <div className="space-y-2">
               <label className={labelClass}>Current Attachments</label>
               <ul className="divide-theme-surface-border border-theme-surface-border divide-y overflow-hidden rounded-lg border">
@@ -1917,17 +1917,9 @@ export const EventForm: React.FC<EventFormProps> = ({
                 ))}
               </ul>
             </div>
-          )}
-
-          {/* Upload note */}
-          <div className="flex items-start space-x-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
-            <Upload className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-            <div className="text-sm text-blue-700 dark:text-blue-300">
-              <p className="font-medium">Files can&apos;t be attached from the app yet.</p>
-            </div>
           </div>
-        </div>
-      </Collapsible>
+        </Collapsible>
+      )}
 
       {/* === Actions === */}
       <div className="border-theme-surface-border flex flex-wrap items-center justify-between gap-3 border-t pt-6">

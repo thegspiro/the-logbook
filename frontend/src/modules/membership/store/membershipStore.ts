@@ -9,7 +9,7 @@ import { userService } from '../../../services/api';
 import type { ContactInfoSettings, UserWithRoles } from '../types';
 import type { User } from '../../../types/user';
 import type { MemberStats } from '../../../types/member';
-import { UserStatus } from '../../../constants/enums';
+import { UserStatus, isActiveAccount } from '../../../constants/enums';
 import { handleStoreError } from '../../../utils/storeHelpers';
 
 interface MembershipState {
@@ -101,14 +101,18 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
       }
 
       if (state.statusFilter && state.statusFilter !== 'all') {
-        filtered = filtered.filter((m) => m.status?.toLowerCase() === state.statusFilter.toLowerCase());
+        // "Active" means a current account, which includes probationary.
+        const wanted = state.statusFilter.toLowerCase();
+        filtered = filtered.filter((m) =>
+          wanted === UserStatus.ACTIVE ? isActiveAccount(m.status?.toLowerCase()) : m.status?.toLowerCase() === wanted
+        );
       }
 
       // Calculate stats from all members in a single pass
       const stats: MemberStats = allMembers.reduce<MemberStats>(
         (acc, m) => {
           acc.total++;
-          if (m.status === UserStatus.ACTIVE) acc.active++;
+          if (isActiveAccount(m.status)) acc.active++;
           else if (m.status === UserStatus.INACTIVE) acc.inactive++;
           else if (m.status === UserStatus.LEAVE) acc.onLeave++;
           else if (m.status === UserStatus.RETIRED) acc.retired++;

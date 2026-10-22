@@ -640,7 +640,7 @@ const CheckInStationPage: React.FC = () => {
             <div className="flex items-start gap-3">
               {tone === 'success' ? (
                 <CheckCircle2
-                  className="mt-0.5 h-8 w-8 shrink-0 text-green-600 dark:text-green-400"
+                  className="mt-0.5 h-8 w-8 shrink-0 text-green-700 dark:text-green-400"
                   aria-hidden="true"
                 />
               ) : tone === 'info' ? (

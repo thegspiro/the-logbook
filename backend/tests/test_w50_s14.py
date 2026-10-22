@@ -112,7 +112,6 @@ async def test_report_refused_while_voting_is_open(
         success, message = await svc.generate_and_send_election_report(
             election_id=uuid.UUID(data["election_id"]),
             organization_id=uuid.UUID(data["org_id"]),
-            requested=True,
         )
 
     # The live tally must never leave the system before the election closes.
