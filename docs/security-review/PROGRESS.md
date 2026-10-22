@@ -16,20 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#TBD]** (branch `claude/security-review-storefront-payments-p11`) —
-Feature 04 (Storefront & payments), pass 11, a watchdog pickup. PR #3558
-(Feature 03, Public surface & webhooks, pass 11) merged 2026-10-22, not
-docs-only — see `PUB-03-public-surface-webhooks.md`'s **Pass 11** section and
-its own Log entry below — so only this row's clearing rides along here.
+**PR [#3559](https://github.com/thegspiro/the-logbook/pull/3559)** (branch
+`claude/security-review-storefront-payments-p11`) — Feature 04 (Storefront &
+payments), pass 11, a watchdog pickup. PR #3558 (Feature 03, Public surface
+& webhooks, pass 11) merged 2026-10-22, not docs-only — see
+`PUB-03-public-surface-webhooks.md`'s **Pass 11** section and its own Log
+entry below — so only this row's clearing rides along here.
 `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
 returned 0 results, checked once before starting and again immediately
 before branching, and `ListAgents` found no other reachable session. Row 04
 was confirmed the next `⬜` by reading the rotation table directly. This
 iteration reviewed Feature 04, pass 11: **0 fixed, 0 new findings.** See
 `SF-04-storefront-payments.md`'s **Pass 11** section. Rotation row 04 → ✅
-(pending this PR's merge); next is Feature 05 (Finance & approvals). PR not
-yet opened — this row will be replaced with the real link in a second commit
-on this same branch once it is.
+(pending this PR's merge); next is Feature 05 (Finance & approvals).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03 Public surface & webhooks pass 11, PR #3558, before it merged), preserved for history</summary>
