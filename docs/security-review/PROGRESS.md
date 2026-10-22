@@ -16,11 +16,37 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3551](https://github.com/thegspiro/the-logbook/pull/3551)** (branch
+`claude/security-review-frontend-shared-p10`). PR #3547 (Feature 33, Core
+infrastructure, pass 8) had merged 2026-10-22T00:47:05Z (not docs-only — see
+the Log entry below for its own record). `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 results, checked
+once before starting and again immediately before branching, and no branch
+existed for Feature 34 — row 34 (Frontend shared) was confirmed the first
+`⬜`. This iteration (a watchdog pickup — `ListAgents` found no reachable
+session) reviewed Feature 34, pass 10: **0 fixed by this pass itself, 0 new
+findings.** Diffed every feature-owned file against the pass-9 baseline (PR
+#3394); two feature-owned files had non-trivial diffs (a new toast-message
+helper in `errorHandling.ts`, a docstring correction in
+`practicalSkillsStore.ts`) and five module `api.ts` files changed within
+their own feature's business logic — everything else is byte-identical.
+Also audited a new cross-cutting session-activity control
+(`BACKGROUND_REQUEST_CONFIG`) end to end against its backend counterpart and
+found it correctly scoped. See `FE10-34-frontend-shared.md`. Rotation row 34
+→ ✅ (pending this PR's merge) — **this closes out the lap**: every row is
+now ✅. The next iteration resets all rows to ⬜ for pass 11 and starts again
+from Feature 00 (Cross-cutting baseline).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 34 Frontend shared pass 10, PR #3551, before it merged), preserved for history</summary>
+
 _None._ PR #3547 (Feature 33, Core infrastructure, pass 8,
 `claude/security-review-core-infrastructure-p8`) merged 2026-10-22T00:47:05Z
 — not docs-only (ported the `main` Alembic merge-heads fix plus its findings
 file), so it has its own Log entry below. Rotation row 33 is ✅. Next is
 Feature 34 (Frontend shared).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 33 Core infrastructure pass 8, PR #3547, merged), preserved for history</summary>
