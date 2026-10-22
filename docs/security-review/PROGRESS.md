@@ -16,6 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3556](https://github.com/thegspiro/the-logbook/pull/3556)** (branch
+`claude/security-review-auth-session-p11`) — Feature 01 (Auth & session
+lifecycle), pass 11, a watchdog pickup. PR #3555 (Feature 00, Cross-cutting
+baseline, pass 11)
+merged 2026-10-22, closing out rotation row 00. It touched only
+`PROGRESS.md` and `SEC-00-cross-cutting-baseline.md` (a findings file; 0
+fixes that pass), so per the skill's "docs-only PR is not a recordable
+event" rule it got no Log entry of its own — only that row's clearing.
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results. This iteration (a watchdog pickup — `ListAgents` found
+no reachable session) reviewed Feature 01, pass 11: **0 fixed, 0 new
+findings.** Delta against the pass-10 baseline (PR #3397) touched 3 of 12
+scoped files; all three (`auth_service.py`'s new `session_end_reason`
+helper closing a real gap — `refresh_access_token` previously had no
+session-lifetime check of its own — plus `dependencies.py`'s
+`BACKGROUND_REQUEST_CONFIG` wiring and `consent_service.py`'s Pitfall #32
+fix) were already correct, read in full and traced for regressions. See
+`AUTH-01-auth-session.md`'s **Pass 11** section. Rotation row 01 → ✅
+(pending this PR's merge); next is Feature 02 (Permissions & roles).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00 Cross-cutting baseline pass 11, PR #3555, before it merged), preserved for history</summary>
+
 **PR [#3555](https://github.com/thegspiro/the-logbook/pull/3555)** (branch
 `claude/security-review-cross-cutting-baseline-p11`) — Feature 00
 (Cross-cutting baseline), pass 11, a watchdog pickup. PR #3551 (Feature 34,
@@ -37,6 +60,8 @@ mislabeled the _rotation's_ pass counter using Frontend-shared's own
 file-numbering offset; the rotation's own counter was at "reset to ⬜ for
 pass 9" after pass 8 completed, so the lap that closed is rotation pass 9
 and this reset opened rotation pass 10. Corrected here.)
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 34 Frontend shared pass 10, PR #3551, before it merged), preserved for history</summary>
@@ -20510,7 +20535,7 @@ this iteration's commit" rule.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
@@ -20551,6 +20576,27 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-22 — Feature 01 (Auth & session lifecycle, pass 11) — watchdog pickup, 0 fixed, 0 new findings
+
+PR #3555 (Feature 00, Cross-cutting baseline, pass 11) merged 2026-10-22,
+docs-only (`PROGRESS.md` + a findings file), so it got no Log entry of its
+own — only the `Open PR` row's clearing. This iteration (a watchdog
+pickup — `ListAgents` found no reachable session) reviewed Feature 01,
+pass 11: **0 fixed, 0 new findings.** Of 12 scoped files, 3 changed since
+pass 10's baseline (PR #3397): `auth_service.py` extracted a shared
+`session_end_reason` helper and used it to give `refresh_access_token` an
+absolute-lifetime check it previously lacked (closing a real gap —
+previously only the access-token path enforced any session-lifetime
+limit), `dependencies.py` wired the new `X-Background-Request`
+idle-timer-skip header (already audited end-to-end during this same
+rotation's Feature 34 and Feature 00 passes; re-confirmed here since
+`dependencies.py` is this feature's own file), and `consent_service.py`
+closed a Pitfall #32 instance (`== UserStatus.ACTIVE` → `.in_
+(ACTIVE_ACCOUNT_STATUSES)`). All three traced for regressions and found
+correct; the other 9 scoped files are byte-identical to pass 10. See
+`AUTH-01-auth-session.md`'s **Pass 11** section. Rotation row 01 → ✅
+(pending this PR's merge); next is Feature 02 (Permissions & roles).
 
 ### 2026-10-22 — Pass 9 complete; rotation reset to ⬜ for pass 10; Feature 00 (pass 11) reviewed in the same iteration
 
