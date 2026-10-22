@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3559](https://github.com/thegspiro/the-logbook/pull/3559)** (branch
+`claude/security-review-storefront-payments-p11`) — Feature 04 (Storefront &
+payments), pass 11, a watchdog pickup. PR #3558 (Feature 03, Public surface
+& webhooks, pass 11) merged 2026-10-22, not docs-only — see
+`PUB-03-public-surface-webhooks.md`'s **Pass 11** section and its own Log
+entry below — so only this row's clearing rides along here.
+`search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results, checked once before starting and again immediately
+before branching, and `ListAgents` found no other reachable session. Row 04
+was confirmed the next `⬜` by reading the rotation table directly. This
+iteration reviewed Feature 04, pass 11: **0 fixed, 0 new findings.** See
+`SF-04-storefront-payments.md`'s **Pass 11** section. Rotation row 04 → ✅
+(pending this PR's merge); next is Feature 05 (Finance & approvals).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03 Public surface & webhooks pass 11, PR #3558, before it merged), preserved for history</summary>
+
 **PR [#3558](https://github.com/thegspiro/the-logbook/pull/3558)** (branch
 `claude/security-review-public-surface-webhooks-p11`) — Feature 03 (Public
 surface & webhooks), pass 11, a watchdog pickup. PR #3557 (Feature 02,
@@ -29,6 +46,8 @@ once before starting and again immediately before branching, and
 03, pass 11: **0 fixed, 0 new findings.** See
 `PUB-03-public-surface-webhooks.md`'s **Pass 11** section. Rotation row 03
 → ✅ (pending this PR's merge); next is Feature 04 (Storefront & payments).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 02 Permissions & roles pass 11, PR #3557, before it merged), preserved for history</summary>
@@ -20576,7 +20595,7 @@ this iteration's commit" rule.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
@@ -20614,6 +20633,37 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-22 — Feature 04 (Storefront & payments, pass 11) — watchdog pickup, 0 fixed, 0 new findings; SF8-04-2/SF8-04-3 re-confirmed open
+
+PR #3558 (Feature 03, Public surface & webhooks, pass 11) merged 2026-10-22,
+not docs-only — see its own Log entry just below for the record — so this
+iteration only clears the `Open PR` row. This iteration (a watchdog
+pickup — `search_pull_requests` returned 0 open security-review PRs and
+`ListAgents` found no reachable session) reviewed Feature 04, pass 11:
+**0 fixed, 0 new findings.** Delta against the pass-10 baseline (PR #3400,
+`8bb9a74d`) touched 6 non-merge commits, all read in full: a repo-wide
+numeric-bounds hardening pass that strictly tightened (never widened) every
+previously-unbounded field in `schemas/storefront.py`; a CLAUDE.md Pitfall
+#32 fix in `storefront_notification_service.py` (already swept by its own
+guard test); a UTC-datetime correctness fix for `opens_at`/`closes_at`; the
+already-landed W67 workflow-review pass (read-only display logic and a
+clearer error message, no mutation/permission change); and two
+accessibility/contrast-only CSS commits. No migration touched this feature's
+tables. Re-enumerated all 48 routes in `storefront.py` against their
+permission gate directly: unchanged shape (`storefront.view` for member
+self-service, `storefront.order` for order creation, `storefront.manage` for
+staff/admin, `/permissions` authenticated-only self-introspection). The two
+standing findings were re-verified by direct read at current line numbers,
+not taken on the prior pass's say-so: **SF8-04-2 stays OPEN (flagged)** —
+`update_order_status` still reads the order unlocked
+(`storefront_service.py:1905`) before its `settles_payment` branch writes the
+ledger; **SF8-04-3 stays OPEN (flagged)** — `waive_order_payment` still has
+no `_is_settled()` guard before unconditionally setting `payment_status =
+WAIVED` (`:2134`/`:2142`). Both remain an owner decision per pass 8's
+original rationale, unchanged in `KNOWN_LIMITATIONS.md`. See
+`SF-04-storefront-payments.md`'s **Pass 11** section. Rotation row 04 → ✅
+(pending this PR's merge); next is Feature 05 (Finance & approvals).
 
 ### 2026-10-22 — Feature 03 (Public surface & webhooks, pass 11) — watchdog pickup, 0 fixed, 0 new findings
 
