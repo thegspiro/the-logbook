@@ -339,9 +339,9 @@ Nobody else sees a restricted line in the request form's picker, and a request t
 - **A request already on a line stays editable** after the line is restricted; the rule applies to choosing the line.
 - **A budget owner needs no Treasurer for this.** On **Finance > My Budgets**, **Who can charge your lines** lists the categories you own (or that sit under one you own). **Edit** opens **Who can charge** _category_ with the same choices. The Treasurer sets any category from **Finance > Settings**.
 
-_[Screenshot needed: the category settings dialog with Who can charge these lines set to Only the owner and the positions chosen below, positions ticked.]_
+<!-- Screenshot needed: the category settings dialog with Who can charge these lines set to Only the owner and the positions chosen below, positions ticked. -->
 
-_[Screenshot needed: My Budgets with the Who can charge your lines card and its Who can charge dialog.]_
+<!-- Screenshot needed: My Budgets with the Who can charge your lines card and its Who can charge dialog. -->
 
 ### Retiring a Category
 

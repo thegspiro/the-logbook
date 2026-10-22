@@ -2745,9 +2745,7 @@ allow. On a page below a section, such as one apparatus, the strip shows a trail
 in Operations' terms. The side and top navigation draw from the same list, so
 the three can no longer offer different sections.
 
-_[Screenshot to create: the Operations section strip under the page title, on
-Fleet Readiness at 1280px, with the current section marked. Replaces the old
-per-page headers wherever a guide 05 or 06 image shows the page title.]_
+<!-- Screenshot needed: the Operations section strip under the page title, on Fleet Readiness at 1280px, with the current section marked. Replaces the old per-page headers wherever a guide 05 or 06 image shows the page title. -->
 
 ### Phone layouts for the apparatus screens
 
@@ -2764,8 +2762,7 @@ per-page headers wherever a guide 05 or 06 image shows the page title.]_
   apparatus** puts a heading per rig. **Add stock** opens a sheet with Quantity
   and Lot side by side and the amount on the truck now above them.
 
-_[Screenshots to create, at 390px: the apparatus detail header and pinned tabs;
-the supply worklist with its count chips; the Add stock sheet. None exist.]_
+<!-- Screenshot needed: at 390px: the apparatus detail header and pinned tabs; the supply worklist with its count chips; the Add stock sheet. None exist. -->
 
 ### Where checklists live
 
@@ -3041,9 +3038,7 @@ and tiles, not deleted; unticking brings them back. The CSV import and export
 carry the setting as a **Kept on Apparatus Only** column (Yes or No; any other
 value is refused rather than guessed).
 
-_[Screenshots to create: the Medical Supplies list showing "+12 on trucks" and a
-Next expiry that names a truck; the supply form with Kept on apparatus only
-ticked; the Expiring tab with the shelf/truck split on its tiles.]_
+<!-- Screenshot needed: the Medical Supplies list showing "+12 on trucks" and a Next expiry that names a truck; the supply form with Kept on apparatus only ticked; the Expiring tab with the shelf/truck split on its tiles. -->
 
 ### Deleting a medical supply category
 

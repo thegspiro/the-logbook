@@ -43,7 +43,7 @@ Nothing was captured by this pass. It is a gap report: the screens below are the
 ones the Minutes settings consolidation, archive search and accepted-previous-minutes
 changes (merged after the October 18 – 19 pass) put on screen, plus the rows of the
 earlier passes that named screens which no longer exist in that form. Placeholders
-for the new screens are in [04](./04-events-meetings.md) as `_[Screenshot to create: …]_`.
+for the new screens are in [04](./04-events-meetings.md) as `<!-- Screenshot needed: … -->` comments.
 
 ### New screens to create
 
@@ -104,7 +104,7 @@ full-page on a stack with scanning on if the app shell is wanted around them.
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-18--19-2026).
 Nothing was captured by this pass. Placeholders for the new screens are in the
-guides as `_[Screenshot to create: …]_`.
+guides as `<!-- Screenshot needed: … -->` comments.
 
 ### New screens to create
 
@@ -140,7 +140,7 @@ Nothing was captured by this pass. The 2026-10-17 pipeline run (sections below)
 re-shot most guides; these rows are screens that run could not have pictured
 (merged after it, or never in its manifest) and images it took **before** a
 later change landed. Placeholders for the new ones are in the guides as
-`_[Screenshot to create: …]_`.
+`<!-- Screenshot needed: … -->` comments.
 
 ### New screens to create
 

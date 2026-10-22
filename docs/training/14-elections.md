@@ -527,8 +527,7 @@ The package contains:
    until it finishes). If some addresses could not be reached, an error message
    lists them so you can send again to just those people.
 
-_[Screenshot to create: the Email Pre-Meeting Package window while the send runs,
-and the error message naming the addresses that were not reached.]_
+<!-- Screenshot needed: the Email Pre-Meeting Package window while the send runs, and the error message naming the addresses that were not reached. -->
 
 ### Or just download it
 
@@ -844,8 +843,7 @@ identically. Submitting totals for a ranked race is refused. Each paper ballot
 counts as its own ballot in the runoff (before this fix a stack of thirty was
 counted as one).
 
-_[Screenshot to create: Record Paper Ballots on a ranked-choice race, showing
-the rank menus and the copy count.]_
+<!-- Screenshot needed: Record Paper Ballots on a ranked-choice race, showing the rank menus and the copy count. -->
 
 ![Record Paper Ballots refusing a 24-ballot tally against a 22-member roster, with the override checkbox it offers instead](./images/19-27-paper-ballot-over-roster.png)
 
