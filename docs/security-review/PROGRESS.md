@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3564](https://github.com/thegspiro/the-logbook/pull/3564)** (branch
+`claude/security-review-elections-ballots-p11`) — Feature 06 (Elections &
+ballots), pass 11, a watchdog pickup. PR #3562 (Feature 05, pass 11) merged;
+no other `claude/security-review-*` PR was open. **1 flagged MEDIUM
+(ELEC-49: a rollback leaves a stale permanent addendum in circulated
+minutes), 1 LOW fixed as a guard (ELEC-50, `_build_election_response`
+viewer convention).** See `ELEC-06-elections-ballots.md`'s **Pass 11**
+section. Row 06 → ✅ (pending this PR's merge); next is Feature 07.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 11, PR #3562, merged), preserved for history</summary>
+
 **PR [#3562](https://github.com/thegspiro/the-logbook/pull/3562)** (branch
 `claude/security-review-finance-approvals-p11`) — Feature 05 (Finance &
 approvals), pass 11, a watchdog pickup. PR #3559 (Feature 04, Storefront &
@@ -30,6 +42,8 @@ once before starting and again immediately before branching, and
 05, pass 11: **0 fixed, 0 new findings.** See
 `FIN-05-finance-approvals.md`'s **Pass 11** section. Rotation row 05 → ✅
 (pending this PR's merge); next is Feature 06 (Elections & ballots).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04 Storefront & payments pass 11, PR #3559, before it merged), preserved for history</summary>
@@ -20653,6 +20667,15 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-22 — Feature 06 (Elections & ballots, pass 11) — watchdog pickup, 0 fixed in code, 1 flagged (ELEC-49), 1 guard (ELEC-50)
+
+Reviewed the ranked paper-ballot entry, IRV counting by paper ballot, ballot
+send jobs and the new auto-filing of closed-election results into minutes.
+ELEC-49 (MEDIUM, flagged): `rollback_election` leaves the filed result, which
+is a permanent addendum when the minutes were circulated or adopted; owner
+decision recorded in `KNOWN_LIMITATIONS.md`. ELEC-50 (LOW): AST guard for the
+`viewer` default of `_build_election_response`. PR #3564.
 
 ### 2026-10-22 — Feature 05 (Finance & approvals, pass 11) — watchdog pickup, 0 fixed, 0 new findings; FIN8-05-1/FIN-30 re-confirmed open
 
