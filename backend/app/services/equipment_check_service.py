@@ -73,6 +73,12 @@ from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 _REPLACEMENT_DATE = "_replacement_date"
 _REPLACEMENT_LOT = "_replacement_lot"
 
+# Calendar days a missed check stays on the member's own list. Seven was chosen
+# to sit with the fleet board's seven-date strip (DEFAULT_STRIP_DATES), though
+# that one counts duty dates; past it the miss leaves the member's list, while
+# the board and the compliance report go on counting it.
+MY_CHECKLISTS_OVERDUE_DAYS = 7
+
 
 class EquipmentCheckConflictError(ValueError):
     """A completed shift/template check already owns this submission slot."""
@@ -2917,8 +2923,17 @@ class EquipmentCheckService:
         user_id: str,
         organization_id: str,
     ) -> List[Dict[str, Any]]:
-        """Get pending + recently completed checklists for a user."""
+        """Get a user's checklists: today and later, plus missed recent ones.
+
+        A shift dated within the last ``MY_CHECKLISTS_OVERDUE_DAYS`` stays on
+        the list only while one of its checks is unfiled. That is what lets My
+        Checklists mark a passed day overdue and the fleet board rank it first,
+        and it keeps an overnight shift's end-of-shift check reachable after
+        midnight. Older misses drop off the member's list; the fleet board and
+        the compliance report still count them.
+        """
         today = await resolve_org_today(self.db, organization_id)
+        earliest = today - timedelta(days=MY_CHECKLISTS_OVERDUE_DAYS)
         # Get user's active shift assignments with shift data. Same status
         # filter as the submit guard in submit_check: a declined/cancelled
         # assignment can't submit a check, so listing its checklists here
@@ -2929,7 +2944,7 @@ class EquipmentCheckService:
             .where(
                 ShiftAssignment.user_id == user_id,
                 Shift.organization_id == organization_id,
-                Shift.shift_date >= today,
+                Shift.shift_date >= earliest,
                 ShiftAssignment.assignment_status.in_(
                     [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED]
                 ),
@@ -2973,7 +2988,10 @@ class EquipmentCheckService:
                 existing_checks=checks_by_shift.get(str(assignment.shift_id), {}),
             )
             apparatus_name = apparatus_map.get(shift.apparatus_id or "", "")
+            is_past = shift.shift_date < today
             for cl in shift_checklists:
+                if is_past and cl["is_completed"]:
+                    continue
                 cl["shift_id"] = assignment.shift_id
                 cl["shift_date"] = shift.shift_date
                 cl["apparatus_name"] = apparatus_name
@@ -3322,6 +3340,7 @@ class EquipmentCheckService:
                 )
             )
             item_names = {iid: name for iid, name in nres.all()}
+        paths = await self._compartment_paths({str(t.id) for (_, _, t) in rows})
 
         items: List[Dict[str, Any]] = []
         for item, comp, tmpl in rows:
@@ -3332,6 +3351,10 @@ class EquipmentCheckService:
                     "template_item_id": item.id,
                     "item_name": item.name,
                     "compartment_name": comp.name,
+                    # Outermost compartment first, as the checklist nests them
+                    # ("Main Compartment", "Jump Bag"); readers that show one
+                    # name keep using compartment_name.
+                    "compartment_path": paths.get(str(comp.id), [comp.name]),
                     "template_id": tmpl.id,
                     "template_name": tmpl.name,
                     "apparatus_id": tmpl.apparatus_id,
@@ -4296,12 +4319,18 @@ class EquipmentCheckService:
         days_ahead: Optional[int],
         today: date,
         item_ids: Optional[Iterable[str]] = None,
+        lot_number: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Stock on the trucks that expires within ``days_ahead``, or has.
 
         ``days_ahead=None`` drops the window, so every dated unit aboard is
         returned; with ``item_ids`` that is how the supply list finds each
         supply's soonest truck date.
+
+        ``lot_number`` turns this into the recall lookup: every unit aboard
+        whose lot number contains it (case-insensitive), dated or not and
+        whatever ``days_ahead`` says, since a recalled lot has to be found
+        wherever it is. Positions holding nothing are left out.
 
         One row per dated lot aboard a position (a position carrying three
         boxes from two lots expires twice), and one per position with no lot
@@ -4324,6 +4353,30 @@ class EquipmentCheckService:
         ]
         if only is not None:
             position_filters.append(CheckTemplateItem.inventory_item_id.in_(only))
+        needle = (lot_number or "").strip().casefold() or None
+        if needle is not None:
+            pattern = like_pattern(needle)
+            position_filters.append(
+                or_(
+                    CheckTemplateItem.lot_number.ilike(
+                        pattern, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    CheckTemplateItem.id.in_(
+                        select(CheckItemDeployedLot.template_item_id).where(
+                            CheckItemDeployedLot.organization_id == organization_id,
+                            CheckItemDeployedLot.lot_number.ilike(
+                                pattern, escape=LIKE_ESCAPE_CHAR
+                            ),
+                        )
+                    ),
+                )
+            )
+
+        def _wanted(when: Optional[date], number: Optional[str]) -> bool:
+            if needle is not None:
+                return bool(number) and needle in str(number).casefold()
+            return when is not None and (horizon is None or when <= horizon)
+
         positions = (
             await self.db.execute(
                 select(
@@ -4389,6 +4442,10 @@ class EquipmentCheckService:
             )
             base = {
                 "location": "apparatus",
+                # The vehicle, when the template names one, so a reader can
+                # open that truck's inventory; a template for an apparatus
+                # *type* has none.
+                "apparatus_id": str(app_id) if app_id else None,
                 "inventory_item_id": str(item.inventory_item_id),
                 "item_name": item_name,
                 "item_size": item_size,
@@ -4399,7 +4456,7 @@ class EquipmentCheckService:
             if lots:
                 for lot in lots:
                     when = lot.expiration_date
-                    if when is None or (horizon is not None and when > horizon):
+                    if not _wanted(when, lot.lot_number):
                         continue
                     rows.append(
                         {
@@ -4408,12 +4465,17 @@ class EquipmentCheckService:
                             "lot_number": lot.lot_number,
                             "expiration_date": when,
                             "quantity": lot.quantity,
-                            "days_until_expiration": (when - today).days,
+                            "days_until_expiration": (
+                                (when - today).days if when else None
+                            ),
                         }
                     )
                 continue
             when = item.expiration_date if item.has_expiration else None
-            if when is None or (horizon is not None and when > horizon):
+            if not _wanted(when, item.lot_number):
+                continue
+            held = self._on_truck(item) or 0
+            if needle is not None and held <= 0:
                 continue
             rows.append(
                 {
@@ -4421,12 +4483,18 @@ class EquipmentCheckService:
                     "key": f"position:{item.id}",
                     "lot_number": item.lot_number,
                     "expiration_date": when,
-                    "quantity": self._on_truck(item) or 0,
-                    "days_until_expiration": (when - today).days,
+                    "quantity": held,
+                    "days_until_expiration": (when - today).days if when else None,
                 }
             )
+        # Undated units (only the recall lookup returns any) sort last.
         rows.sort(
-            key=lambda r: (r["expiration_date"], r["item_name"] or "", r["where"])
+            key=lambda r: (
+                r["expiration_date"] is None,
+                r["expiration_date"] or date.max,
+                r["item_name"] or "",
+                r["where"],
+            )
         )
         return rows
 

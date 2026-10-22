@@ -462,6 +462,7 @@ PATCH  /api/v1/training/external/providers/{id}/user-mappings/{mappingId}  # Upd
 GET    /api/v1/training/external/providers/{id}/imports    # Import records list
 POST   /api/v1/training/external/providers/{id}/imports/{importId}/import  # Import single
 POST   /api/v1/training/external/providers/{id}/imports/bulk  # Bulk import (up to 500 ids)
+POST   /api/v1/training/external/providers/{id}/imports/import-matched  # Import all pending records whose member is mapped
 ```
 
 ### Shift Completion Reports

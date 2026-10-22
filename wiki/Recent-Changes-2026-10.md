@@ -5,6 +5,43 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md).
 
+## Recent changes: October 21 – 22, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).
+
+- **Delete no longer destroys history.** Deleting a training requirement or pipeline,
+  budget category, shift template, basic vehicle or form that is in use deactivates
+  or archives it instead, and the message says which. Pipelines and basic vehicles
+  can be brought back with **Show inactive** then **Reactivate**.
+- **Gear kits follow the member's size.** A kit line names a product and uses the
+  member's recorded size; issuing shows the sizes for review first.
+- **Recurring events.** Delete this and future events in a series; deleting the first
+  event no longer loses the series. An approved meeting cannot be deleted.
+- **Members.** Permanently deleting a member keeps other members' records (shown as
+  "Former member") and returns gear they held. Leaving the active statuses takes a
+  member off upcoming shifts. Probationary membership type now sets a Probationary
+  account status. Roster names link to profiles.
+- **Training.** Matching a Target Solutions user imports their waiting records.
+- **Screenshots.** Nothing was re-captured by this pass; see
+  `docs/training/SCREENSHOT_CURRENCY.md`.
+
+## Recent changes: October 20 – 21, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-10.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).
+
+- **Check in from the event page.** Members can check in on the event itself and see
+  "You're checked in". The display QR code is for whoever runs the event.
+- **My Training history.** Records with no completion date are grouped under
+  **No completion date**, not "Awaiting approval".
+- **Safer member management.** Deleting, archiving or changing the status of a member
+  is refused if that member holds permissions you do not.
+- **Ranked-choice paper ballots** are entered one ballot at a time and each is counted.
+- **Security.** Public API key changes are audited and revoking a key takes effect at
+  once; dependencies updated for published advisories.
+- **Screenshots.** Nothing was re-captured; see `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Recent changes: October 19 – 20, 2026
 
 The engineering audit is

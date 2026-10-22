@@ -176,6 +176,7 @@ describe('ImportMembers', () => {
       'secondaryPhone',
       'email',
       'joinDate',
+      'membershipType',
       'rank',
       'role',
       'station',
@@ -215,7 +216,7 @@ describe('ImportMembers', () => {
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(
-        'Importing without 23 optional column(s): middleName, membershipNumber, username, dateOfBirth and 19 more',
+        'Importing without 24 optional column(s): middleName, membershipNumber, username, dateOfBirth and 20 more',
         { icon: '⚠️' }
       );
     });
@@ -282,6 +283,43 @@ describe('ImportMembers', () => {
     await waitFor(() => {
       expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ username: 'jdoe' }));
     });
+  });
+
+  it('sends the membershipType column as the class and status pair', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,membershipType\nJohn,Doe,john@example.com,Probationary');
+
+    await clickImport();
+
+    await waitFor(() => {
+      expect(mockCreateMember).toHaveBeenCalledWith(
+        expect.objectContaining({ member_class: 'operational', member_status: 'probationary' })
+      );
+    });
+  });
+
+  it('sends no membership fields for a blank membershipType, so the member imports as regular', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,membershipType\nJohn,Doe,john@example.com,');
+
+    await clickImport();
+
+    await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+    const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('member_class');
+    expect(payload).not.toHaveProperty('member_status');
+  });
+
+  it('rejects a membershipType it cannot express instead of importing the member as regular', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,membershipType\nJohn,Doe,john@example.com,Senior');
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/membershipType "Senior" is not one of probationary, regular, life or administrative/)
+      ).toBeInTheDocument();
+    });
+    expect(mockCreateMember).not.toHaveBeenCalled();
   });
 
   it('resolves the role column to a role id', async () => {
@@ -837,6 +875,54 @@ describe('ImportMembers', () => {
 
       expect(report).toContain('Email already exists');
       expect(report).toContain('is not an email address');
+    });
+  });
+});
+
+describe('ImportMembers — a role column naming a rank', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUsers.mockResolvedValue([]);
+    mockGetWelcomeEmailAvailability.mockReset();
+    mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+  });
+
+  // "Firefighter" in the role column used to assign the seeded position that
+  // mirrors the rank, which put the word on the roster as a position and left
+  // the rank column blank.
+  it('reports the row and points at the rank column instead of assigning the mirror', async () => {
+    mockGetRoles.mockResolvedValue([
+      { id: 'role-1', name: 'Member', mirrors_rank: false },
+      { id: 'role-2', name: 'Firefighter', mirrors_rank: true },
+    ]);
+
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,role\nJohn,Doe,john@example.com,Firefighter');
+
+    await clickImport();
+
+    await waitFor(() => {
+      expect(screen.getByText(/role "Firefighter" is a rank — put it in the rank column instead/)).toBeInTheDocument();
+    });
+    expect(mockCreateMember).not.toHaveBeenCalled();
+  });
+
+  it('still resolves an ordinary role beside it', async () => {
+    mockGetRoles.mockResolvedValue([
+      { id: 'role-1', name: 'Member', mirrors_rank: false },
+      { id: 'role-2', name: 'Firefighter', mirrors_rank: true },
+    ]);
+    mockCreateMember.mockResolvedValue({ id: 'u1' });
+
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,role,rank\nJohn,Doe,john@example.com,Member,Firefighter');
+
+    await clickImport();
+
+    await waitFor(() => {
+      expect(mockCreateMember).toHaveBeenCalledWith(
+        expect.objectContaining({ role_ids: ['role-1'], rank: 'Firefighter' })
+      );
     });
   });
 });

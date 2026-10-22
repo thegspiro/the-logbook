@@ -9,7 +9,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { ArrowLeft, ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Tag, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Tag, Trash2 } from 'lucide-react';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
 import type { InventoryCategory, InventoryItem } from '../../../services/eventServices';
 import { formatNumber } from '../../../utils/dateFormatting';
@@ -21,6 +21,7 @@ import { blankToNull, numberOrNull } from '../../../utils/formValues';
 import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { SkeletonCard } from '../../../components/ux/Skeleton';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 interface FormState {
   name: string;
@@ -280,39 +281,25 @@ const MedicalCategoriesPage: React.FC = () => {
   const mustMove = deleteItemCount !== null && deleteItemCount > 0;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-      <Link
-        to="/medical-supplies"
-        className="text-theme-text-muted hover:text-theme-text-primary mb-3 inline-flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Medical Supplies
-      </Link>
-
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-semibold">
-            <Tag className="h-6 w-6" />
-            Medical Supply Categories
-          </h1>
-          <p className="text-theme-text-muted mt-1 text-sm">
-            Group EMS stock by type, such as airway, trauma or medications. Only supplies in these categories appear
-            under Medical Supplies.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => void load()} className="btn-icon" aria-label="Refresh categories">
-            <RefreshCw className="h-4 w-4" />
-          </button>
-          {canManage && (
-            <button type="button" onClick={openCreate} className="btn-primary inline-flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              New category
+    <div className="mx-auto max-w-7xl">
+      <OperationsPageHeader
+        icon={Tag}
+        title="Medical Supply Categories"
+        subtitle="Group EMS stock by type, such as airway, trauma or medications. Only supplies in these categories appear under Medical Supplies."
+        actions={
+          <>
+            <button type="button" onClick={() => void load()} className="btn-icon" aria-label="Refresh categories">
+              <RefreshCw className="h-4 w-4" />
             </button>
-          )}
-        </div>
-      </div>
+            {canManage && (
+              <button type="button" onClick={openCreate} className="btn-primary inline-flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                New category
+              </button>
+            )}
+          </>
+        }
+      />
 
       {isLoading ? (
         <SkeletonCard />

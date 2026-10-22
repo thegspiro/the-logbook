@@ -45,6 +45,13 @@ vi.mock('../store/apparatusStore', () => ({
   useApparatusStore: () => store,
 }));
 
+// The page header loads the enabled modules through the real service; with a
+// dev stack listening, that request is answered 401, which clears
+// `has_session` and sends the page to /login mid-test.
+vi.mock('../../../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({ enabledModules: null, isModuleOn: () => true, isLoading: false }),
+}));
+
 vi.mock('../hooks/useApparatusNfpaSettings', () => ({
   useApparatusNfpaSettings: () => ({
     enabled: true,
@@ -130,7 +137,12 @@ describe('ApparatusListPage row actions', () => {
   it('opens the maintenance tab from the wrench', async () => {
     renderWithRouter(<ApparatusListPage />);
     await userEvent.click(await screen.findByRole('button', { name: 'Maintenance for E-2' }));
-    expect(window.location.pathname).toBe('/apparatus/a-1');
+    // The router commits the location after the click returns; reading it
+    // straight away raced that on a loaded machine and saw the previous test's
+    // path.
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/apparatus/a-1');
+    });
     expect(window.location.search).toBe('?tab=maintenance');
   });
 

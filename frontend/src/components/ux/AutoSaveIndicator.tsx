@@ -23,8 +23,8 @@ export const AutoSaveIndicator: React.FC<AutoSaveIndicatorProps> = ({ status, cl
   const configs = {
     idle: { icon: Cloud, text: '', color: 'text-theme-text-muted' },
     saving: { icon: Loader2, text: 'Saving...', color: 'text-theme-text-muted' },
-    saved: { icon: Check, text: 'Saved', color: 'text-green-600 dark:text-green-400' },
-    unsaved: { icon: Cloud, text: 'Unsaved changes', color: 'text-yellow-600 dark:text-yellow-400' },
+    saved: { icon: Check, text: 'Saved', color: 'text-green-700 dark:text-green-400' },
+    unsaved: { icon: Cloud, text: 'Unsaved changes', color: 'text-yellow-700 dark:text-yellow-400' },
     error: { icon: CloudOff, text: 'Save failed', color: 'text-red-600 dark:text-red-400' },
   };
 

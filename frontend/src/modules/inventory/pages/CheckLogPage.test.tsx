@@ -25,6 +25,24 @@ vi.mock('../../../hooks/useRegisterPullToRefresh', () => ({
   useRegisterPullToRefresh: () => undefined,
 }));
 
+// The way back from the log is the Operations section strip, which offers only
+// the sections the viewer's grants open — so the grants are the test's input.
+const mockCheckPermission = vi.fn<(permission: string) => boolean>();
+vi.mock('../../../stores/authStore', () => ({
+  useAuthStore: (selector: (state: { checkPermission: (p: string) => boolean; user: null }) => unknown) =>
+    selector({ checkPermission: (p: string) => mockCheckPermission(p), user: null }),
+}));
+vi.mock('../../../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({ enabledModules: null, isLoading: false, isModuleOn: () => true }),
+}));
+
+/** A crew member: submits checks, holds no fleet-board grant. */
+const CREW_GRANTS = (p: string) => p === 'inventory.check_submit';
+/** An officer who can open the fleet board. */
+const FLEET_GRANTS = (p: string) => p === 'inventory.check_view';
+
+const sections = () => within(screen.getByRole('navigation', { name: 'Operations sections' }));
+
 function makeEntry(overrides: Partial<CheckLogEntry> = {}): CheckLogEntry {
   return {
     shiftId: 's-1',
@@ -95,6 +113,8 @@ describe('CheckLogPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetCheckLog.mockResolvedValue(makeResponse());
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockImplementation(FLEET_GRANTS);
   });
 
   it('opens on the grid for a fleet-scoped caller', async () => {
@@ -119,26 +139,31 @@ describe('CheckLogPage', () => {
   });
 
   // The fleet board takes inventory.check_view, which a member reading their
-  // own log does not hold: "← Fleet" led them to Access Denied.
+  // own log does not hold: "← Fleet" led them to Access Denied. The back link
+  // is now the section strip, so the same promise is asserted against it.
   it('sends a member back to their own checklists, not the fleet board', async () => {
+    mockCheckPermission.mockImplementation(CREW_GRANTS);
     mockGetCheckLog.mockResolvedValue(makeResponse({ scope: 'own', rows: [] }));
     renderWithRouter(<CheckLogPage />);
     await screen.findByText('Checks you performed');
-    expect(screen.getByRole('link', { name: /My checklists/ })).toHaveAttribute('href', '/inventory/checklists/my');
-    expect(screen.queryByRole('link', { name: /Fleet/ })).not.toBeInTheDocument();
+    expect(sections().getByRole('link', { name: /My Checklists/ })).toHaveAttribute('href', '/inventory/checklists/my');
+    expect(sections().queryByRole('link', { name: /Fleet/ })).not.toBeInTheDocument();
   });
 
   // W46-6: the fleet board refuses a member, so the log must not offer it.
-  it('offers the way back to the fleet board only on the fleet scope', async () => {
+  it('offers the way back to the fleet board only to whoever may open it', async () => {
+    mockCheckPermission.mockImplementation(CREW_GRANTS);
     mockGetCheckLog.mockResolvedValue(makeResponse({ scope: 'own', rows: [] }));
     const { unmount } = renderWithRouter(<CheckLogPage />);
     await screen.findByText('Checks you performed');
-    expect(screen.queryByRole('link', { name: /Fleet/ })).not.toBeInTheDocument();
+    expect(sections().queryByRole('link', { name: /Fleet/ })).not.toBeInTheDocument();
     unmount();
 
+    mockCheckPermission.mockImplementation(FLEET_GRANTS);
     mockGetCheckLog.mockResolvedValue(makeResponse());
     renderWithRouter(<CheckLogPage />);
-    expect(await screen.findByRole('link', { name: /Fleet/ })).toHaveAttribute('href', '/inventory/checklists');
+    await screen.findByRole('table');
+    expect(sections().getByRole('link', { name: /Fleet Readiness/ })).toHaveAttribute('href', '/inventory/checklists');
   });
 
   it('shows a missed check as a row of its own', async () => {

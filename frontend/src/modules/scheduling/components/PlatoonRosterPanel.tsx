@@ -12,7 +12,7 @@ import toast from 'react-hot-toast';
 import { Loader2, Search, Save, Users } from 'lucide-react';
 import { userService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { UserStatus } from '../../../constants/enums';
+import { isActiveAccount } from '../../../constants/enums';
 import { displayNameOf } from '../../../utils/memberName';
 
 interface RosterRow {
@@ -37,7 +37,7 @@ export const PlatoonRosterPanel: React.FC = () => {
     try {
       const users = await userService.getUsers();
       const mapped: RosterRow[] = users
-        .filter((u) => u.status === UserStatus.ACTIVE)
+        .filter((u) => isActiveAccount(u.status))
         .map((u) => ({
           id: String(u.id),
           name: displayNameOf(u) || String(u.email || u.id),

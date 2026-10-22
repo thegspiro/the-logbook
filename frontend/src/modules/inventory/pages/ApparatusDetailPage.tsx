@@ -11,7 +11,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { AlertTriangle, ArrowLeft, ChevronRight, ClipboardList, Loader2, PackageX, Truck, Wrench } from 'lucide-react';
+import { AlertTriangle, ChevronRight, ClipboardList, Loader2, PackageX, Truck, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type {
@@ -37,6 +37,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { EmptyState } from '../../../components/ux';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTablist } from '../../../hooks/useTablist';
+import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 
 const TABS = [
   { id: 'checks', label: 'Checks' },
@@ -157,37 +158,39 @@ export const ApparatusDetailPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 px-4 py-6">
-      {/* Header — the verdict sits beside the unit so the two read as one
-          line, and the strip gets the card's full width on a phone. */}
+    <div className="mx-auto max-w-7xl space-y-4">
+      {/* The verdict sits beside the unit in the title so the two read as one
+          line; the card below keeps why, and the check strip gets its full
+          width on a phone. */}
+      <OperationsPageHeader
+        icon={Truck}
+        title={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {/* The space makes the heading read as two words to a screen
+                reader; flex does not draw it. */}
+            <span className="font-mono tracking-tight">{unit.unitLabel}</span>{' '}
+            <span
+              className={`shrink-0 rounded-full border px-2.5 py-1 font-sans text-xs font-semibold tracking-normal ${READINESS_PILL[unit.readiness]}`}
+            >
+              {READINESS_LABELS[unit.readiness]}
+            </span>
+          </span>
+        }
+        breadcrumbLabel={unit.unitLabel}
+        subtitle={
+          <>
+            {unit.name ? `${unit.name} · ` : ''}
+            <span className="capitalize">{unit.apparatusType ?? 'Apparatus'}</span>
+          </>
+        }
+      />
+
       <div
         className={`bg-theme-surface border-theme-surface-border rounded-lg border border-l-[3px] p-3 sm:p-4 ${
           READINESS_STRIPE[unit.readiness]
         }`}
       >
-        <div className="flex items-center gap-2">
-          <Link
-            to="/inventory/checklists"
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover mobile-touch-target -ml-1 flex shrink-0 items-center justify-center rounded-lg transition-colors"
-            aria-label="Back to fleet"
-          >
-            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-          </Link>
-          <h1 className="text-theme-text-primary min-w-0 flex-1 truncate font-mono text-2xl font-bold tracking-tight">
-            {unit.unitLabel}
-          </h1>
-          <span
-            className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${READINESS_PILL[unit.readiness]}`}
-          >
-            {READINESS_LABELS[unit.readiness]}
-          </span>
-        </div>
-        <p className="text-theme-text-muted text-sm">
-          {unit.name ? `${unit.name} · ` : ''}
-          <span className="capitalize">{unit.apparatusType ?? 'Apparatus'}</span>
-        </p>
-
-        <p className="text-theme-text-secondary mt-2 flex items-start gap-1.5 text-sm">
+        <p className="text-theme-text-secondary flex items-start gap-1.5 text-sm">
           {unit.readiness === 'out_of_service' ? (
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
           ) : (
@@ -237,13 +240,13 @@ export const ApparatusDetailPage: React.FC = () => {
                 onClick={() => setTab(tab.id)}
                 className={`flex h-11 min-w-0 items-center justify-center border-b-2 px-1 text-sm font-medium whitespace-nowrap transition-colors md:shrink-0 md:px-3 ${
                   activeTab === tab.id
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'text-theme-text-primary border-red-800'
                     : 'text-theme-text-muted hover:text-theme-text-primary border-transparent'
                 }`}
               >
                 {tab.label}
                 {count > 0 && (
-                  <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                  <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-400">
                     {count}
                   </span>
                 )}
@@ -324,7 +327,7 @@ export const ApparatusDetailPage: React.FC = () => {
                         </p>
                       </div>
                       {count > 1 && (
-                        <span className="shrink-0 rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 tabular-nums dark:text-amber-400">
+                        <span className="shrink-0 rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 tabular-nums dark:text-amber-400">
                           {count}&times;
                         </span>
                       )}
@@ -356,12 +359,12 @@ export const ApparatusDetailPage: React.FC = () => {
                           Expired
                         </span>
                       ) : item.daysUntilExpiration !== undefined && item.daysUntilExpiration !== null ? (
-                        <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                        <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-400">
                           {item.daysUntilExpiration} d
                         </span>
                       ) : null}
                       {item.restockNeeded && (
-                        <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                        <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-400">
                           Needs restock
                         </span>
                       )}

@@ -16,7 +16,7 @@ import type {
   ShiftApparatusOption,
 } from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { UserStatus } from '../../../constants/enums';
+import { isActiveAccount } from '../../../constants/enums';
 import { DEFAULT_SIGNUP_WINDOW } from '../utils/shiftBoard';
 import type { CallTypeOption } from '../types';
 import { displayNameOf } from '../../../utils/memberName';
@@ -291,7 +291,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
       // Started under a different account: this roster is not theirs.
       if (generation !== accountGeneration) return;
       const members = users
-        .filter((m) => m.status === UserStatus.ACTIVE)
+        .filter((m) => isActiveAccount(m.status))
         .map((m) => ({
           id: String(m.id),
           label: displayNameOf(m) || String(m.email || m.id),

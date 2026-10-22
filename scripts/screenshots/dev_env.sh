@@ -202,6 +202,16 @@ print(int(bool(s.ENCRYPTION_KEY and s.ENCRYPTION_SALT)), int(s.CLAMAV_ENABLED), 
 fi
 
 if ! frontend_up; then
+  # npm writes node_modules/.package-lock.json on every install. A lockfile
+  # newer than it means main has added or moved a dependency since: Vite then
+  # fails only the pages that import it, and only in the browser, as an error
+  # overlay the capture photographs and every later click lands on.
+  installed="$REPO_ROOT/node_modules/.package-lock.json"
+  if [[ ! -e "$installed" || "$REPO_ROOT/package-lock.json" -nt "$installed" ]]; then
+    echo "frontend dependencies are older than package-lock.json" >&2
+    echo "run: npm ci   (from $REPO_ROOT)" >&2
+    exit 1
+  fi
   echo "starting frontend..."
   cd "$REPO_ROOT/frontend" || exit 1
   VITE_BACKEND_URL="$BACKEND_URL" setsid nohup npm run dev \

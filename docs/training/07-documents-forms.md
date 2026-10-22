@@ -382,6 +382,10 @@ Some templates are marked **Public**, and some say where they send responses
 
 ![Custom Forms, Starter Templates tab: the template cards with their category badges and Use Template buttons; Membership Interest Form is badged Public and says it sends responses to Membership, and Community Event Request, also Public, says it sends responses to Events](./images/07-26-starter-templates.png)
 
+> **Deleting a form that has submissions archives it** instead, so the
+> submissions are kept. A form with none is deleted. The confirmation and toast
+> say which happened.
+
 ## Publishing and Sharing Forms
 
 A form takes submissions only once it is **published**. On a draft form's

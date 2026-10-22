@@ -8,6 +8,7 @@ that only one directory is connected at a time.
 """
 
 import json
+from types import SimpleNamespace
 from typing import Any, Callable, Optional
 from unittest.mock import AsyncMock, patch
 
@@ -691,9 +692,13 @@ class TestOnPremisesAccounts:
         )
         db_session.add(officer)
         await db_session.commit()
-        caller = type(
-            "Caller", (), {"id": officer.id, "organization_id": org.id, "username": "o"}
-        )()
+        caller = SimpleNamespace(
+            id=officer.id,
+            organization_id=org.id,
+            username="o",
+            rank=None,
+            positions=[SimpleNamespace(permissions=["*"])],
+        )
         fake.managed_elsewhere = True
         with patch(f"{SERVICE}.directory_for", return_value=fake):
             await _change_status(db_session, user_id, caller, "dropped_voluntary")

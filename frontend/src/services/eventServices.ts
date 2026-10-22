@@ -2,7 +2,7 @@
  * eventServices — extracted from services/api.ts
  */
 
-import type { AxiosError } from 'axios';
+import type { AxiosError, AxiosRequestConfig } from 'axios';
 import api from './apiClient';
 import type {
   CheckInMonitoringStats,
@@ -37,19 +37,22 @@ export const eventService = {
   /**
    * Get all events with optional filtering
    */
-  async getEvents(params?: {
-    event_type?: string;
-    start_after?: string;
-    start_before?: string;
-    end_after?: string;
-    end_before?: string;
-    include_cancelled?: boolean;
-    include_drafts?: boolean;
-    mandatory_only?: boolean;
-    skip?: number;
-    limit?: number;
-  }): Promise<EventListItem[]> {
-    const response = await api.get<EventListItem[]>('/events', { params });
+  async getEvents(
+    params?: {
+      event_type?: string;
+      start_after?: string;
+      start_before?: string;
+      end_after?: string;
+      end_before?: string;
+      include_cancelled?: boolean;
+      include_drafts?: boolean;
+      mandatory_only?: boolean;
+      skip?: number;
+      limit?: number;
+    },
+    config?: AxiosRequestConfig
+  ): Promise<EventListItem[]> {
+    const response = await api.get<EventListItem[]>('/events', { params, ...config });
     return asArray(response.data);
   },
 
@@ -109,10 +112,17 @@ export const eventService = {
   },
 
   /**
-   * Delete all events in a recurring series
+   * Delete all events in a recurring series. With `fromEventId`, deletes that
+   * occurrence and every later one and keeps the earlier ones; the backend
+   * then ignores `deleteFutureOnly`, which cuts at the current time instead.
    */
-  async deleteEventSeries(parentEventId: string, deleteFutureOnly = false): Promise<void> {
-    await api.delete(`/events/${parentEventId}/series?delete_future_only=${deleteFutureOnly}`);
+  async deleteEventSeries(parentEventId: string, deleteFutureOnly = false, fromEventId?: string): Promise<void> {
+    await api.delete(`/events/${parentEventId}/series`, {
+      params: {
+        delete_future_only: deleteFutureOnly,
+        ...(fromEventId ? { from_event_id: fromEventId } : {}),
+      },
+    });
   },
 
   /**
@@ -1476,6 +1486,47 @@ export interface EquipmentKitCreate {
     size_selectable?: boolean | undefined;
     optional?: boolean | undefined;
   }>;
+}
+
+/** One size/colour/style of a catalog product a kit line can hand out. */
+export interface KitProductVariant {
+  item_id: string;
+  /** Every row of this variant, so a line stored against any one is recognised. */
+  item_ids: string[];
+  label: string;
+  size_label?: string | null;
+  available: number;
+}
+
+/** A catalog product with its sizes collapsed, as the kit editor offers it. */
+export interface KitProductOption {
+  key: string;
+  name: string;
+  category_id?: string | null;
+  category_name?: string | null;
+  has_sizes: boolean;
+  variants: KitProductVariant[];
+}
+
+export interface KitIssuePlanLine {
+  line_id: string;
+  item_name: string;
+  quantity: number;
+  optional: boolean;
+  size_selectable: boolean;
+  /** False when the line names no catalog item, or its item is gone. */
+  issuable: boolean;
+  /** The member's recorded size for this kind of garment, if any. */
+  member_size?: string | null;
+  /** The row that would be issued; null means a size must be chosen. */
+  selected_item_id?: string | null;
+  variants: KitProductVariant[];
+}
+
+export interface KitIssuePlan {
+  kit_id: string;
+  user_id: string;
+  lines: KitIssuePlanLine[];
 }
 
 export interface MemberSizePreferences {

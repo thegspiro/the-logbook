@@ -26,6 +26,7 @@ import { Skeleton } from '../ux/Skeleton';
 import { Pagination } from '../ux/Pagination';
 import { DEFAULT_PAGE_SIZE } from '../../constants/config';
 import { formatScore } from '../../utils/skillScoreFormat';
+import { attributionName } from '../../utils/memberName';
 
 interface MySkillTestsListProps {
   /** The viewing member's user id — scopes the list to tests they took. */
@@ -127,7 +128,8 @@ export const MySkillTestsList: React.FC<MySkillTestsListProps> = ({ userId }) =>
                 )}
               </div>
               <p className="text-theme-text-muted text-xs">
-                Examiner: {test.examiner_name} · {formatDate(test.completed_at ?? test.created_at, tz)}
+                Examiner: {attributionName(test.examiner_name, test.examiner_id)} ·{' '}
+                {formatDate(test.completed_at ?? test.created_at, tz)}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2 pl-3">

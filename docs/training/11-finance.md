@@ -345,17 +345,20 @@ _[Screenshot needed: My Budgets with the Who can charge your lines card and its 
 
 ### Retiring a Category
 
-There is no way to switch a category off on the settings screen, and deleting
-one destroys its history (see below). To retire a category, leave it in place
-and stop adding budget lines to it.
+To retire a category, delete it. A category that has budget lines, requests or
+approval chains is **deactivated** instead of deleted: its budget lines in every
+fiscal year are kept, and a category-specific approval chain stays specific
+rather than becoming a catch-all. The confirmation and the toast say which
+happened. A deactivated category is hidden from new-record pickers but still
+resolves on existing rows. A category nothing uses is deleted outright.
 
 ### Edge Cases
 
-| Scenario                                  | Behavior                                                                                                                                                                                                            |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Deleting a category with existing budgets | Permitted, and destructive -- its budgets in every fiscal year are deleted with it, and requests charged to them are left with no budget. The confirmation says so. Leave the category in place to keep its history |
-| Category with no QuickBooks account       | The category can still be used for budgets; its export accounts can be set on **QuickBooks Export**                                                                                                                 |
-| A category as its own parent or ancestor  | Refused. Deleting a parent leaves its children as top-level categories                                                                                                                                              |
+| Scenario                                  | Behavior                                                                                                                                      |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deleting a category with existing budgets | The category is deactivated, not deleted. Its budgets, requests and approval chains are kept; it no longer appears when you add a budget line |
+| Category with no QuickBooks account       | The category can still be used for budgets; its export accounts can be set on **QuickBooks Export**                                           |
+| A category as its own parent or ancestor  | Refused. Deleting a parent leaves its children as top-level categories                                                                        |
 
 ---
 

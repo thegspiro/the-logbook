@@ -31,7 +31,7 @@ import {
 import toast from 'react-hot-toast';
 import type { Applicant, ChecklistConfig, MultiApprovalConfig, StageHistoryEntry } from '../types';
 import { StepProgressStatus } from '../types';
-import { isSafeUrl, getInitials } from '../utils';
+import { approverRoleLabel, isSafeUrl, getInitials } from '../utils';
 import { STAGE_TYPE_ICONS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { blankToNull } from '../../../utils/formValues';
@@ -342,7 +342,7 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
                 <div className="mx-4 mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
                   <div className="mb-1 flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
-                    <span className="text-sm font-medium text-amber-600 dark:text-amber-300">Application Inactive</span>
+                    <span className="text-sm font-medium text-amber-700 dark:text-amber-300">Application Inactive</span>
                   </div>
                   <p className="text-theme-text-muted text-xs">
                     This application was marked inactive
@@ -405,7 +405,7 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
                               void saveContactEdits();
                             }}
                             disabled={isSavingContact}
-                            className="flex items-center gap-1 text-xs text-emerald-600 transition-colors hover:text-emerald-500 disabled:opacity-50"
+                            className="flex items-center gap-1 text-xs text-emerald-700 transition-colors hover:text-emerald-500 disabled:opacity-50 dark:text-emerald-600"
                           >
                             {isSavingContact ? (
                               <Loader2 className="h-3 w-3 animate-spin" />
@@ -783,11 +783,15 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
                           {requiredApprovers.length > 0 ? (
                             <ul className="space-y-2" aria-label="Approval status">
                               {requiredApprovers.map((role) => {
-                                const approval = approvals.find((a) => a.role.toLowerCase() === role.toLowerCase());
+                                // Signers sign the trimmed role, so a padded stored key
+                                // must be trimmed to find its approval.
+                                const approval = approvals.find(
+                                  (a) => a.role.trim().toLowerCase() === role.trim().toLowerCase()
+                                );
                                 return (
                                   <li key={role} className="flex items-center justify-between text-xs">
-                                    <span className="text-theme-text-secondary capitalize">
-                                      {role.replace(/_/g, ' ')}
+                                    <span className="text-theme-text-secondary">
+                                      {approverRoleLabel(role, applicant.current_stage_approver_labels)}
                                     </span>
                                     {approval ? (
                                       <span className="flex items-center gap-1 text-emerald-500">
@@ -982,9 +986,9 @@ export const ApplicantDetailDialog: React.FC<ApplicantDetailDialogProps> = ({
                               <div
                                 className={`flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs ${
                                   isComplete
-                                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                                    ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-400'
                                     : isSkipped
-                                      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                      ? 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
                                       : isCurrent
                                         ? 'bg-red-500/10 text-red-700 ring-1 ring-red-500/30 dark:text-red-400'
                                         : 'bg-theme-surface-hover text-theme-text-muted'

@@ -21,6 +21,8 @@ import userEvent from '@testing-library/user-event';
 
 const mockUpdateStage = vi.fn();
 const mockAddStage = vi.fn();
+const mockDeleteStage = vi.fn();
+const mockGetPipelineStats = vi.fn();
 const mockToastError = vi.fn();
 
 vi.mock('react-hot-toast', () => ({
@@ -32,7 +34,8 @@ vi.mock('../services/api', () => ({
     updateStage: (...args: unknown[]) => mockUpdateStage(...args) as unknown,
     addStage: (...args: unknown[]) => mockAddStage(...args) as unknown,
     reorderStages: vi.fn(),
-    deleteStage: vi.fn(),
+    deleteStage: (...args: unknown[]) => mockDeleteStage(...args) as unknown,
+    getPipelineStats: (...args: unknown[]) => mockGetPipelineStats(...args) as unknown,
     validateFormForPipeline: vi.fn(),
   },
 }));
@@ -49,6 +52,7 @@ vi.mock('@/services/eventServices', () => ({
 }));
 
 import { PipelineBuilder } from './PipelineBuilder';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import type { Pipeline, PipelineStage } from '../types';
 
 const meetingStage: PipelineStage = {
@@ -96,9 +100,11 @@ const buildPipeline = (stages: PipelineStage[]): Pipeline =>
 /** Mirrors the real page: the builder lives inside a `card`. */
 const renderInCard = (pipeline: Pipeline) =>
   render(
-    <div data-testid="stages-card" className="card bg-theme-input-bg p-4">
-      <PipelineBuilder pipeline={pipeline} onPipelineUpdated={vi.fn()} />
-    </div>
+    <ConfirmProvider>
+      <div data-testid="stages-card" className="card bg-theme-input-bg p-4">
+        <PipelineBuilder pipeline={pipeline} onPipelineUpdated={vi.fn()} />
+      </div>
+    </ConfirmProvider>
   );
 
 describe('PipelineBuilder', () => {
@@ -250,5 +256,61 @@ describe('PipelineBuilder', () => {
     await waitFor(() => {
       expect(mockAddStage).toHaveBeenCalledWith('pipeline-1', expect.not.objectContaining({ description: null }));
     });
+  });
+});
+
+// Deleting a stage deletes every applicant's progress record for it. The old
+// inline "Cancel / Delete" pair said nothing of that.
+describe('PipelineBuilder deleting a stage', () => {
+  const pipelineOf = buildPipeline([meetingStage, bareChecklistStage]);
+
+  beforeEach(() => {
+    mockDeleteStage.mockReset();
+    mockDeleteStage.mockResolvedValue(undefined);
+    mockGetPipelineStats.mockReset();
+    mockGetPipelineStats.mockResolvedValue({
+      by_stage: [
+        { stage_id: 'stage-1', stage_name: 'Interest Meeting', count: 2 },
+        { stage_id: 'stage-2', stage_name: 'Orientation Checklist', count: 0 },
+      ],
+    });
+  });
+
+  it('states the consequence and how many applicants are on the stage', async () => {
+    const user = userEvent.setup();
+    renderInCard(pipelineOf);
+
+    await user.click(screen.getByRole('button', { name: 'Delete stage Interest Meeting' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('2 active applicants are on this stage now.');
+    expect(dialog).toHaveTextContent('moved to the next stage');
+    expect(dialog).toHaveTextContent('Every applicant’s progress record for this stage');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete stage' }));
+
+    await waitFor(() => expect(mockDeleteStage).toHaveBeenCalledWith('pipeline-1', 'stage-1'));
+  });
+
+  it('still warns when the applicant count cannot be read', async () => {
+    const user = userEvent.setup();
+    mockGetPipelineStats.mockRejectedValue(new Error('offline'));
+    renderInCard(pipelineOf);
+
+    await user.click(screen.getByRole('button', { name: 'Delete stage Orientation Checklist' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Anyone on this stage is moved to the previous stage.');
+    expect(dialog).toHaveTextContent('Every applicant’s progress record for this stage');
+  });
+
+  it('does nothing when the officer keeps the stage', async () => {
+    const user = userEvent.setup();
+    renderInCard(pipelineOf);
+
+    await user.click(screen.getByRole('button', { name: 'Delete stage Interest Meeting' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Keep it' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(mockDeleteStage).not.toHaveBeenCalled();
   });
 });

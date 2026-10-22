@@ -25,6 +25,7 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import Request
 
 from app.api.v1.public_portal_admin import create_api_key, update_api_key
 from app.core.public_portal_security import (
@@ -69,6 +70,10 @@ def _admin(org_id: str, admin_id: str) -> SimpleNamespace:
     return SimpleNamespace(organization_id=org_id, id=admin_id)
 
 
+def _request() -> Request:
+    return Request({"type": "http", "headers": [], "client": ("192.0.2.10", 443)})
+
+
 class TestCreateApiKey:
     async def test_create_returns_the_key_and_its_timestamps(
         self, db_session: AsyncSession, setup_org_and_admin
@@ -80,6 +85,7 @@ class TestCreateApiKey:
 
         created = await create_api_key(
             key_data=PublicPortalAPIKeyCreate(name="website", expires_at=expires),
+            request=_request(),
             current_user=_admin(org_id, admin_id),
             db=db_session,
         )
@@ -122,6 +128,7 @@ class TestCreateApiKey:
 
         created = await create_api_key(
             key_data=PublicPortalAPIKeyCreate(name="kiosk"),
+            request=_request(),
             current_user=_admin(org_id, admin_id),
             db=db_session,
         )
@@ -136,6 +143,7 @@ class TestCreateApiKey:
         await _make_config(db_session, org_id)
         created = await create_api_key(
             key_data=PublicPortalAPIKeyCreate(name="website"),
+            request=_request(),
             current_user=_admin(org_id, admin_id),
             db=db_session,
         )
@@ -144,6 +152,7 @@ class TestCreateApiKey:
         await update_api_key(
             key_id=str(created.id),
             key_update=PublicPortalAPIKeyUpdate(expires_at=expires),
+            request=_request(),
             current_user=_admin(org_id, admin_id),
             db=db_session,
         )

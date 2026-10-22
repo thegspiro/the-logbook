@@ -88,7 +88,7 @@ export default function LearningPathPage() {
                   ))}
 
                   <p className="border-theme-surface-border text-theme-text-primary mt-4 flex items-start gap-2 rounded-lg border border-dashed p-3 text-sm">
-                    <Target className="mt-0.5 h-4 w-4 shrink-0 text-green-600" aria-hidden="true" />
+                    <Target className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-600" aria-hidden="true" />
                     <span>
                       <span className="font-semibold">You are done when: </span>
                       {step.success}
@@ -120,7 +120,7 @@ export default function LearningPathPage() {
                       />
                       {checked ? (
                         <CheckCircle2
-                          className="peer-focus-visible:ring-theme-focus-ring h-5 w-5 shrink-0 rounded-full text-green-600 peer-focus-visible:ring-2"
+                          className="peer-focus-visible:ring-theme-focus-ring h-5 w-5 shrink-0 rounded-full text-green-700 peer-focus-visible:ring-2 dark:text-green-600"
                           aria-hidden="true"
                         />
                       ) : (

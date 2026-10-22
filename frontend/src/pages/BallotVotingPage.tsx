@@ -274,7 +274,7 @@ export const BallotVotingPage: React.FC = () => {
         <div className="bg-theme-surface w-full max-w-md rounded-lg p-8 text-center shadow-lg">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-500/20">
             <svg
-              className="h-8 w-8 text-green-600"
+              className="h-8 w-8 text-green-700 dark:text-green-600"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"

@@ -31,9 +31,9 @@ function getStatusBadge(waiver: { start_date: string; end_date: string | null; a
     return { label: 'Permanent', color: 'bg-purple-500/20 text-purple-700 dark:text-purple-400' };
   }
   if (waiver.end_date < today) {
-    return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400' };
+    return { label: 'Expired', color: 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-400' };
   }
-  return { label: 'Active', color: 'bg-green-500/20 text-green-700 dark:text-green-400' };
+  return { label: 'Active', color: 'bg-green-500/20 text-green-800 dark:text-green-400' };
 }
 
 const WAIVER_TYPE_LABELS: Record<string, string> = {

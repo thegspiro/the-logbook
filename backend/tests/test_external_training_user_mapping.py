@@ -26,6 +26,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.api.v1.endpoints.external_training import (
+    import_matched_records,
     list_user_mappings,
     update_user_mapping,
 )
@@ -34,6 +35,7 @@ from app.models.training import (
     ExternalTrainingImport,
     ExternalTrainingProvider,
     ExternalUserMapping,
+    TrainingRecord,
 )
 from app.models.user import Organization, User, UserStatus
 from app.schemas.training import ExternalUserMappingUpdate
@@ -92,7 +94,9 @@ async def _setup(db_session):
     )
     db_session.add(mapping)
     await db_session.flush()
-    caller = SimpleNamespace(id=officer.id, organization_id=org.id)
+    caller = SimpleNamespace(
+        id=officer.id, organization_id=org.id, username=officer.username
+    )
     return org, provider, mapping, caller
 
 
@@ -250,6 +254,134 @@ class TestMapUserByHand:
             )
         assert exc.value.status_code == 404
         assert mapping.internal_user_id is None
+
+
+async def _status_of(db_session, import_id):
+    return (
+        await db_session.execute(
+            select(ExternalTrainingImport.import_status).where(
+                ExternalTrainingImport.id == import_id
+            )
+        )
+    ).scalar_one()
+
+
+async def _records_of(db_session, user_id):
+    return (
+        (
+            await db_session.execute(
+                select(TrainingRecord).where(TrainingRecord.user_id == user_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+class TestMappingCreditsTheMembersHistory:
+    async def test_mapping_turns_waiting_records_into_training_records(
+        self, db_session
+    ):
+        org, provider, mapping, caller = await _setup(db_session)
+        member = await _member(db_session, org)
+        pending = await _import(db_session, provider, "EXT-42", "pending")
+        failed = await _import(db_session, provider, "EXT-42", "failed")
+        imported_before = await _import(
+            db_session, provider, "EXT-42", "imported", user_id=member.id
+        )
+
+        await update_user_mapping(
+            uuid.UUID(provider.id),
+            uuid.UUID(mapping.id),
+            ExternalUserMappingUpdate(internal_user_id=uuid.UUID(member.id)),
+            db_session,
+            caller,
+        )
+
+        assert await _status_of(db_session, pending) == "imported"
+        assert await _status_of(db_session, failed) == "imported"
+        assert await _status_of(db_session, imported_before) == "imported"
+        records = await _records_of(db_session, member.id)
+        assert len(records) == 2
+        assert {r.course_name for r in records} == {"Hazmat Awareness"}
+        assert all(r.created_by == caller.id for r in records)
+
+    async def test_unmapping_creates_no_training_records(self, db_session):
+        org, provider, mapping, caller = await _setup(db_session)
+        member = await _member(db_session, org)
+        pending = await _import(db_session, provider, "EXT-42", "pending")
+        mapping.internal_user_id = member.id
+        mapping.is_mapped = True
+        await db_session.flush()
+
+        await update_user_mapping(
+            uuid.UUID(provider.id),
+            uuid.UUID(mapping.id),
+            ExternalUserMappingUpdate(internal_user_id=None),
+            db_session,
+            caller,
+        )
+
+        assert await _status_of(db_session, pending) == "pending"
+        assert await _records_of(db_session, member.id) == []
+
+
+class TestImportMatchedRecords:
+    async def test_imports_every_record_whose_member_is_known(self, db_session):
+        org, provider, _, caller = await _setup(db_session)
+        first = await _member(db_session, org)
+        second = await _member(db_session, org)
+        a = await _import(db_session, provider, "EXT-1", "pending", user_id=first.id)
+        b = await _import(db_session, provider, "EXT-2", "pending", user_id=second.id)
+        unmatched = await _import(db_session, provider, "EXT-3", "pending")
+
+        response = await import_matched_records(
+            uuid.UUID(provider.id), db_session, caller
+        )
+
+        assert response.imported == 2
+        assert response.failed == 0
+        assert await _status_of(db_session, a) == "imported"
+        assert await _status_of(db_session, b) == "imported"
+        assert await _status_of(db_session, unmatched) == "pending"
+        assert len(await _records_of(db_session, first.id)) == 1
+        assert len(await _records_of(db_session, second.id)) == 1
+
+    async def test_running_it_twice_creates_no_duplicates(self, db_session):
+        org, provider, _, caller = await _setup(db_session)
+        member = await _member(db_session, org)
+        await _import(db_session, provider, "EXT-1", "pending", user_id=member.id)
+
+        await import_matched_records(uuid.UUID(provider.id), db_session, caller)
+        again = await import_matched_records(uuid.UUID(provider.id), db_session, caller)
+
+        assert again.imported == 0
+        assert len(await _records_of(db_session, member.id)) == 1
+
+    async def test_skips_a_deleted_member(self, db_session):
+        org, provider, _, caller = await _setup(db_session)
+        gone = await _member(db_session, org, deleted=True)
+        row = await _import(db_session, provider, "EXT-1", "pending", user_id=gone.id)
+
+        response = await import_matched_records(
+            uuid.UUID(provider.id), db_session, caller
+        )
+
+        assert response.imported == 0
+        assert await _status_of(db_session, row) == "pending"
+        assert await _records_of(db_session, gone.id) == []
+
+    async def test_refuses_a_provider_of_another_org(self, db_session):
+        _, provider, _, _ = await _setup(db_session)
+        other_org = await _org(db_session)
+        outsider = await _member(db_session, other_org)
+        caller = SimpleNamespace(
+            id=outsider.id, organization_id=other_org.id, username="outsider"
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            await import_matched_records(uuid.UUID(provider.id), db_session, caller)
+        assert exc.value.status_code == 404
 
 
 class TestListUserMappings:

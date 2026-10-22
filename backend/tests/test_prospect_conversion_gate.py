@@ -146,8 +146,8 @@ class TestConversionWaitsForRequiredStages:
 
         assert result["success"] is False
         assert "'Officer Sign-Off' is not complete" in result["message"]
-        assert "chief" in result["message"]
-        assert "president" in result["message"]
+        assert "Chief" in result["message"]
+        assert "President" in result["message"]
         after = await svc.get_prospect(prospect.id, org_id)
         assert after.status == ProspectStatus.ACTIVE
         assert after.transferred_user_id is None
@@ -167,7 +167,7 @@ class TestConversionWaitsForRequiredStages:
         result = await svc.transfer_to_membership(prospect.id, org_id, coordinator.id)
 
         assert result["success"] is False
-        assert "Approval still needed from: president" in result["message"]
+        assert "Approval still needed from: President" in result["message"]
 
     async def test_converts_once_every_signer_has_signed(
         self, db_session: AsyncSession, dept

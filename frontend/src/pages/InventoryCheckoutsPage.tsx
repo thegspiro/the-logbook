@@ -16,7 +16,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../hooks/useDeepLinkedRecord';
 import { formatDateCustom, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
-import { Breadcrumbs } from '../components/ux';
+import { OperationsPageHeader } from '../components/operations/OperationsPageHeader';
 import { useTablist } from '../hooks/useTablist';
 
 type TabView = 'active' | 'overdue';
@@ -159,32 +159,24 @@ export const InventoryCheckoutsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        <Breadcrumbs underHub="/inventory/admin" />
-
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div className="flex min-w-0 items-center space-x-3">
-            <div className="shrink-0 rounded-lg bg-blue-600 p-2">
-              <Package className="h-6 w-6 text-white" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Temporary Loans</h1>
-              <p className="text-theme-text-secondary hidden text-sm sm:block">
-                Manage serialized gear expected back by a date
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              void fetchCheckouts();
-            }}
-            className="btn-secondary flex shrink-0 items-center space-x-2 px-3 sm:px-4"
-          >
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            <span className="sr-only sm:not-sr-only">Refresh</span>
-          </button>
-        </div>
+      <div className="mx-auto max-w-7xl">
+        <OperationsPageHeader
+          underHub="/inventory/admin"
+          icon={Package}
+          title="Temporary Loans"
+          subtitle="Manage serialized gear expected back by a date"
+          actions={
+            <button
+              onClick={() => {
+                void fetchCheckouts();
+              }}
+              className="btn-secondary flex shrink-0 items-center space-x-2 px-3 sm:px-4"
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">Refresh</span>
+            </button>
+          }
+        />
 
         {/* Error */}
         {error && (
@@ -365,7 +357,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                                 Overdue
                               </span>
                             ) : (
-                              <span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                              <span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                                 Active
                               </span>
                             )}

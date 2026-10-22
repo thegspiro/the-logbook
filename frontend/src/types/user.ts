@@ -204,6 +204,24 @@ export interface FileStorageSettings {
 }
 
 /**
+ * Where the department's new files go, as the server decided it
+ * (`GET /organization/settings/file-storage/status`). Saving S3 settings does
+ * not move uploads to the bucket: a connection test has to pass with exactly
+ * those settings first, and editing them afterwards sends uploads back to the
+ * server's disk until the test is run again.
+ */
+export interface FileStorageStatus {
+  platform: string;
+  new_files_go_to: 'local' | 's3';
+  bucket: string | null;
+  endpoint_url: string | null;
+  activated_at: string | null;
+  changed_since_test: boolean;
+  s3_problem: string | null;
+  private_endpoints_allowed: boolean;
+}
+
+/**
  * How the application presents itself to every member of the department.
  *
  * `navigationLayout` is a department-wide decision. Setup has always asked for
@@ -592,14 +610,28 @@ export interface ConsentRoster {
   members: ConsentRosterMember[];
 }
 
+/** Rows in one table that a permanent delete removes with the member. */
+export interface DeletionImpactRecord {
+  table: string;
+  label: string;
+  count: number;
+}
+
 export interface DeletionImpact {
   user_id: string;
   full_name?: string;
   display_name?: string;
   status: UserStatus;
   training_records: number;
+  /** Assigned items and pool issuances still held; returned to stock on a permanent delete. */
   inventory_items: number;
+  /** Items checked out to the member; checked back in on a permanent delete. */
+  checked_out_items?: number;
+  /** Uploaded documents; kept, with the uploader cleared. */
   documents: number;
+  /** Every table whose rows go with the member, largest first, derived server-side from the schema. */
+  removed_records?: DeletionImpactRecord[];
+  /** Rows a permanent delete removes outright — the sum of removed_records. */
   total_records: number;
 }
 

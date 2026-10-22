@@ -63,6 +63,9 @@ def _service(record, denied: bool):
     db.flush = AsyncMock()
     service = FinanceService(db)
     service._chain_is_denied = AsyncMock(return_value=denied)
+    # The same double would read the step back as its own request, whose
+    # status never matches; that guard is covered in test_finance_cancel_closes_chain.py.
+    service._lock_entity_awaiting_approval = AsyncMock()
     service.get_current_pending_step = AsyncMock(return_value=record)
     service._advance_reachable_steps = AsyncMock()
     service._check_all_steps_complete = AsyncMock(return_value=False)

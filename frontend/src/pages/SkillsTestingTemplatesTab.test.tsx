@@ -1,9 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
+import type { SkillTemplateListItem } from '../types/skillsTesting';
+
+const mockToastError = vi.fn();
+vi.mock('react-hot-toast', () => ({
+  default: Object.assign(vi.fn(), {
+    success: vi.fn(),
+    error: (...a: unknown[]) => mockToastError(...a) as unknown,
+  }),
+}));
 
 const storeState = {
-  templates: [],
+  templates: [] as SkillTemplateListItem[],
   templatesLoading: false,
   loadTemplates: vi.fn(),
   deleteTemplate: vi.fn(),
@@ -92,5 +102,56 @@ describe('SkillsTestingTemplatesTab pending validation', () => {
 
     expect(screen.queryByText('Needs Validation')).not.toBeInTheDocument();
     expect(screen.getByText('Pass Rate')).toBeInTheDocument();
+  });
+});
+
+describe('SkillsTestingTemplatesTab archiving', () => {
+  const template: SkillTemplateListItem = {
+    id: 'tpl-1',
+    name: 'SCBA Donning',
+    status: 'published',
+    visibility: 'all_members',
+    version: 1,
+    section_count: 2,
+    criteria_count: 8,
+    created_at: '2026-08-01T00:00:00Z',
+    updated_at: '2026-08-01T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    storeState.summary = null;
+    storeState.templates = [structuredClone(template)];
+    canManage = true;
+    storeState.deleteTemplate.mockReset();
+    storeState.loadTemplates.mockReset();
+    storeState.loadSummary.mockReset();
+    mockToastError.mockReset();
+  });
+
+  it('shows why an archive failed and keeps the dialog open, without an unhandled rejection', async () => {
+    storeState.deleteTemplate.mockRejectedValue(new Error('Template is in use by an open test'));
+    const user = userEvent.setup();
+    renderWithRouter(<SkillsTestingTemplatesTab />);
+
+    await user.click(screen.getByTitle('Archive'));
+    const dialog = await screen.findByRole('dialog', { name: 'Archive this template?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Archive' }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Template is in use by an open test'));
+    expect(storeState.deleteTemplate).toHaveBeenCalledWith('tpl-1');
+    expect(screen.getByRole('dialog', { name: 'Archive this template?' })).toBeInTheDocument();
+  });
+
+  it('closes the dialog once the archive succeeds', async () => {
+    storeState.deleteTemplate.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderWithRouter(<SkillsTestingTemplatesTab />);
+
+    await user.click(screen.getByTitle('Archive'));
+    const dialog = await screen.findByRole('dialog', { name: 'Archive this template?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Archive' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockToastError).not.toHaveBeenCalled();
   });
 });

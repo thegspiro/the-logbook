@@ -25,7 +25,8 @@ from app.models.event import (
     RecurrencePattern,
     RSVPStatus,
 )
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase, as_utc
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.schemas.training_session import TrainingSessionAttach
 
 _response_config = ConfigDict(from_attributes=True)
@@ -133,8 +134,8 @@ class EventDefaultsUpdate(BaseModel):
 
     event_type: Optional[str] = Field(None, max_length=100)
     check_in_window_type: Optional[str] = Field(None, max_length=50)
-    check_in_minutes_before: Optional[int] = Field(None, ge=0)
-    check_in_minutes_after: Optional[int] = Field(None, ge=0)
+    check_in_minutes_before: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    check_in_minutes_after: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     require_checkout: Optional[bool] = None
     requires_rsvp: Optional[bool] = None
     allowed_rsvp_statuses: Optional[List[str]] = None
@@ -240,7 +241,7 @@ class EventBase(BaseModel):
     end_datetime: datetime
     requires_rsvp: bool = Field(default=False)
     rsvp_deadline: Optional[datetime] = None
-    max_attendees: Optional[int] = Field(default=None, ge=1)
+    max_attendees: Optional[int] = Field(default=None, ge=1, le=INT32_MAX)
     allowed_rsvp_statuses: Optional[List[str]] = Field(
         default=None,
         description="Allowed RSVP statuses. Defaults to ['going', 'not_going']",
@@ -314,6 +315,12 @@ class EventBase(BaseModel):
     # deleting the attachment the only way back.
     attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: bool = False
+
+    @field_validator("start_datetime", "end_datetime", "rsvp_deadline")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns, which keep no offset; see as_utc.
+        return as_utc(v)
 
 
 class EventCreate(EventBase):
@@ -390,7 +397,7 @@ class EventUpdate(BaseModel):
     end_datetime: Optional[datetime] = None
     requires_rsvp: Optional[bool] = None
     rsvp_deadline: Optional[datetime] = None
-    max_attendees: Optional[int] = Field(None, ge=1)
+    max_attendees: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     allowed_rsvp_statuses: Optional[List[str]] = None
     is_mandatory: Optional[bool] = None
     mandatory_membership_types: Optional[List[str]] = None
@@ -419,6 +426,12 @@ class EventUpdate(BaseModel):
     # GET returned would 422 on the narrower type.
     attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: Optional[bool] = None
+
+    @field_validator("start_datetime", "end_datetime", "rsvp_deadline")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns, which keep no offset; see as_utc.
+        return as_utc(v)
 
     @model_validator(mode="after")
     def validate_dates(self) -> "EventUpdate":
@@ -572,6 +585,19 @@ class EventResponse(EventBase, UTCResponseBase):
     # scheduled end, because a "window" event keeps accepting check-ins for
     # check_in_minutes_after beyond it.
     check_in_closes_at: Optional[datetime] = None
+    # The rest of the list card's derived fields, so the detail screen answers
+    # the same questions from the same rules instead of a second copy of them:
+    # is check-in open, has this member checked in, and what will it credit.
+    # The window is set wherever the builder runs; the rest are per-caller and
+    # filled by the detail endpoint only.
+    check_in_opens_at: Optional[datetime] = None
+    user_attended: bool = False
+    credited_hours: Optional[float] = None
+    hour_category_label: Optional[str] = None
+    # Whether GET /{id}/attendees will answer this caller, decided by the same
+    # rule that endpoint enforces. Without it the page asked and took a 403 on
+    # every visit to an event whose roster is not shared with members.
+    can_view_attendees: bool = False
 
     model_config = _response_config
 
@@ -761,8 +787,17 @@ class RSVPOverride(BaseModel):
         None, description="Override check-out time"
     )
     override_duration_minutes: Optional[int] = Field(
-        None, ge=0, description="Override total attendance duration in minutes"
+        None,
+        ge=0,
+        description="Override total attendance duration in minutes",
+        le=INT32_MAX,
     )
+
+    @field_validator("override_check_in_at", "override_check_out_at")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns and compared by the service; see as_utc.
+        return as_utc(v)
 
 
 class RecordActualTimes(BaseModel):
@@ -774,6 +809,12 @@ class RecordActualTimes(BaseModel):
     actual_end_time: Optional[datetime] = Field(
         None, description="When the event actually ended"
     )
+
+    @field_validator("actual_start_time", "actual_end_time")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns and compared by the service; see as_utc.
+        return as_utc(v)
 
 
 class QRCheckInData(BaseModel):
@@ -1015,15 +1056,15 @@ class EventTemplateCreate(BaseModel):
     default_location_id: Optional[UUID] = None
     default_location: Optional[str] = Field(None, max_length=300)
     default_location_details: Optional[str] = None
-    default_duration_minutes: Optional[int] = Field(None, ge=1)
+    default_duration_minutes: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     requires_rsvp: bool = False
-    max_attendees: Optional[int] = Field(None, ge=1)
+    max_attendees: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     is_mandatory: bool = False
     allow_guests: bool = False
     attendee_visibility: Optional[str] = Field(None, max_length=20)
     check_in_window_type: Optional[str] = None
-    check_in_minutes_before: Optional[int] = Field(default=60, ge=0)
-    check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
+    check_in_minutes_before: Optional[int] = Field(default=60, ge=0, le=INT32_MAX)
+    check_in_minutes_after: Optional[int] = Field(default=15, ge=0, le=INT32_MAX)
     require_checkout: bool = False
     send_reminders: bool = True
     reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
@@ -1052,15 +1093,15 @@ class EventTemplateUpdate(BaseModel):
     default_location_id: Optional[UUID] = None
     default_location: Optional[str] = Field(None, max_length=300)
     default_location_details: Optional[str] = None
-    default_duration_minutes: Optional[int] = Field(None, ge=1)
+    default_duration_minutes: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     requires_rsvp: Optional[bool] = None
-    max_attendees: Optional[int] = Field(None, ge=1)
+    max_attendees: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     is_mandatory: Optional[bool] = None
     allow_guests: Optional[bool] = None
     attendee_visibility: Optional[str] = Field(None, max_length=20)
     check_in_window_type: Optional[str] = None
-    check_in_minutes_before: Optional[int] = Field(None, ge=0)
-    check_in_minutes_after: Optional[int] = Field(None, ge=0)
+    check_in_minutes_before: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    check_in_minutes_after: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     require_checkout: Optional[bool] = None
     send_reminders: Optional[bool] = None
     reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
@@ -1246,6 +1287,8 @@ class RecurringEventCreate(BaseModel):
     recurrence_week_ordinal: Optional[int] = Field(
         None,
         description="Which occurrence: 1=first, 2=second, ..., 5=fifth, -1=last",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     recurrence_month: Optional[int] = Field(
         None,
@@ -1259,7 +1302,7 @@ class RecurringEventCreate(BaseModel):
     # Event settings (same as EventCreate)
     requires_rsvp: bool = False
     rsvp_deadline: Optional[datetime] = None
-    max_attendees: Optional[int] = Field(None, ge=1)
+    max_attendees: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     is_mandatory: bool = False
     mandatory_membership_types: Optional[List[str]] = None
     allow_guests: bool = False
@@ -1273,8 +1316,8 @@ class RecurringEventCreate(BaseModel):
     reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(default=[24])
     check_in_window_type: Optional[str] = Field(default="flexible")
-    check_in_minutes_before: Optional[int] = Field(default=60, ge=0)
-    check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
+    check_in_minutes_before: Optional[int] = Field(default=60, ge=0, le=INT32_MAX)
+    check_in_minutes_after: Optional[int] = Field(default=15, ge=0, le=INT32_MAX)
     require_checkout: bool = False
     allow_guest_check_in: bool = False
     guest_check_in_creates_prospect: bool = False
@@ -1295,6 +1338,15 @@ class RecurringEventCreate(BaseModel):
     is_draft: bool = False
     # Training details attached to every occurrence; see EventCreate.
     training_details: Optional[TrainingSessionAttach] = None
+
+    @field_validator(
+        "start_datetime", "end_datetime", "recurrence_end_date", "rsvp_deadline"
+    )
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Not an EventBase subclass, so it needs its own; see as_utc. The
+        # service steps the series in the department's zone from these.
+        return as_utc(v)
 
     @model_validator(mode="after")
     def validate_recurrence_fields(self):
@@ -1535,6 +1587,12 @@ class AttendancePetitionCreate(BaseModel):
 
     _strip_reason = field_validator("reason")(_strip_required_text)
 
+    @field_validator("requested_check_in_at", "requested_check_out_at")
+    @classmethod
+    def _normalize_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # Stored in DATETIME columns and compared below; see as_utc.
+        return as_utc(v)
+
     @model_validator(mode="after")
     def _times_in_order(self) -> "AttendancePetitionCreate":
         if (
@@ -1549,8 +1607,8 @@ class AttendancePetitionCreate(BaseModel):
 class AttendancePetitionApprove(BaseModel):
     """The reviewer's confirmed times. Required: they decide the credit."""
 
-    check_in_at: datetime
-    check_out_at: datetime
+    check_in_at: UTCDateTime
+    check_out_at: UTCDateTime
     review_note: Optional[str] = Field(None, max_length=1000)
 
     @model_validator(mode="after")

@@ -46,7 +46,6 @@ class AdminHubMetricPreference(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     module_key: Mapped[str] = mapped_column(String(50), nullable=False)
 

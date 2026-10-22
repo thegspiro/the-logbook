@@ -32,6 +32,7 @@ from app.api.v1.endpoints.users import (
     _refuse_administrative_rank,
     update_user_profile,
 )
+from app.models.user import UserStatus
 from app.schemas.user import UserUpdate
 from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
@@ -70,6 +71,11 @@ def _target(*, rank=None, member_class=None, membership_type="active"):
         member_status=None,
         membership_type=membership_type,
         membership_type_changed_at=None,
+        # Every writer of the membership type also moves the account status
+        # (membership drives status), so the mock carries one like a real row.
+        status=UserStatus.ACTIVE,
+        status_changed_at=None,
+        status_change_reason=None,
         full_name="Dana Reyes",
         display_name="Dana Reyes",
     )
@@ -618,6 +624,9 @@ class TestAutomaticTierAdvancement:
             member_status=None,
             membership_type=membership_type,
             membership_type_changed_at=None,
+            status=UserStatus.ACTIVE,
+            status_changed_at=None,
+            status_change_reason=None,
             hire_date=date(date.today().year - 30, 1, 1),
             deleted_at=None,
         )

@@ -176,3 +176,69 @@ describe('MessageComposeForm when the server refuses', () => {
     expect(screen.getByRole('textbox', { name: 'Search members' })).toBeInTheDocument();
   });
 });
+
+// A role deleted, or a member removed, after the message was written left its
+// id in the stored audience: invisible here, sent back on every save, and
+// refused by the server, so even a title fix could not be saved.
+describe('MessageComposeForm editing a message whose audience has since gone', () => {
+  const storedMessage = {
+    id: 'm1',
+    organization_id: 'org1',
+    title: 'Original',
+    body: 'Original body',
+    priority: 'normal',
+    is_pinned: false,
+    is_active: true,
+    is_persistent: false,
+    requires_acknowledgment: false,
+  } as const;
+
+  beforeEach(() => {
+    mockGetRoles.mockReset();
+    mockGetRoles.mockResolvedValue([{ id: 'role-officer', name: 'Officer', slug: 'officer' }]);
+    mockGetUsers.mockReset();
+    mockGetUsers.mockResolvedValue([{ id: 'u1', first_name: 'Jordan', last_name: 'Avery' }]);
+    mockUpdate.mockReset();
+    mockUpdate.mockResolvedValue({ id: 'm1' });
+    mockCreate.mockReset();
+  });
+
+  it('does not send a deleted role back, and keeps a legacy name as its id', async () => {
+    const user = userEvent.setup();
+    render(
+      <MessageComposeForm
+        message={{ ...storedMessage, target_type: 'roles', target_roles: ['role-deleted', 'Officer'] }}
+        onSaved={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByLabelText('Officer')).toBeChecked();
+    await user.clear(screen.getByLabelText('Title'));
+    await user.type(screen.getByLabelText('Title'), 'Renamed');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdate.mock.calls.length).toBe(1));
+    const [, payload] = mockUpdate.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload.title).toBe('Renamed');
+    expect(payload.target_roles).toEqual(['role-officer']);
+  });
+
+  it('does not count or send a member who no longer exists', async () => {
+    const user = userEvent.setup();
+    render(
+      <MessageComposeForm
+        message={{ ...storedMessage, target_type: 'members', target_member_ids: ['u1', 'u-removed'] }}
+        onSaved={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByText('Members (1 selected)')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdate.mock.calls.length).toBe(1));
+    const [, payload] = mockUpdate.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload.target_member_ids).toEqual(['u1']);
+  });
+});

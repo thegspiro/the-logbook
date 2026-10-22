@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { CheckCircle2, Clock, Filter, ClipboardList, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Filter, Loader2 } from 'lucide-react';
 import { dashboardService } from '../services/api';
 import type { ActionItemSummary } from '../services/api';
 import { minutesService } from '../modules/minutes/services/api';
@@ -19,6 +19,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
 import { EmptyState } from '../components/ux';
 import { Modal } from '../components/Modal';
+import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
 
 /** What an assignee may set on their own minutes action item (W52-7). */
 const ASSIGNEE_STATUS_OPTIONS = [
@@ -39,7 +40,7 @@ const STATUS_BADGES: Record<string, string> = {
 const PRIORITY_BADGES: Record<string, string> = {
   low: 'bg-theme-surface-secondary text-theme-text-secondary',
   medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-  high: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+  high: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
   urgent: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
 };
 
@@ -154,14 +155,12 @@ const ActionItemsPage: React.FC = () => {
   const open = items.filter(isOpen).length;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-6">
-        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
-          <ClipboardList className="h-6 w-6 text-red-700 dark:text-red-400" />
-          Action Items
-        </h1>
-        <p className="text-theme-text-muted mt-1 text-sm">Action items from meetings and minutes, soonest due first</p>
-      </div>
+    <div className="mx-auto max-w-7xl">
+      <GovernancePageHeader
+        icon={AlertTriangle}
+        title="Action Items"
+        subtitle="Action items from meetings and minutes, soonest due first"
+      />
 
       {/* Summary Cards */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">

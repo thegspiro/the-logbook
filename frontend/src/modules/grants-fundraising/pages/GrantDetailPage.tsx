@@ -192,8 +192,8 @@ const getDueDateClasses = (dueDate: string): string => {
   const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) return 'text-red-600 font-semibold';
-  if (diffDays <= 7) return 'text-orange-600 font-semibold';
-  if (diffDays <= 30) return 'text-yellow-600';
+  if (diffDays <= 7) return 'text-orange-700 dark:text-orange-600 font-semibold';
+  if (diffDays <= 30) return 'text-yellow-700 dark:text-yellow-600';
   return 'text-theme-text-secondary';
 };
 
@@ -571,7 +571,7 @@ export const GrantDetailPage: React.FC = () => {
                 <DollarSign className="h-4 w-4" />
                 Amount Awarded
               </div>
-              <p className="mt-1 text-xl font-bold text-emerald-600">
+              <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-600">
                 {formatCurrencyWhole(application.amountAwarded)}
               </p>
             </div>
@@ -792,7 +792,9 @@ export const GrantDetailPage: React.FC = () => {
               </div>
               <div className="card p-4 text-center">
                 <p className="text-theme-text-secondary text-sm">Remaining</p>
-                <p className={`mt-1 text-xl font-bold ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <p
+                  className={`mt-1 text-xl font-bold ${remainingTotal >= 0 ? 'text-green-700 dark:text-green-600' : 'text-red-600'}`}
+                >
                   {formatCurrency(remainingTotal)}
                 </p>
               </div>
@@ -883,7 +885,7 @@ export const GrantDetailPage: React.FC = () => {
                               {formatCurrency(item.amountSpent)}
                             </td>
                             <td
-                              className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${isOver ? 'text-red-600' : 'text-green-600'}`}
+                              className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${isOver ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
                             >
                               {formatCurrency(remaining)}
                             </td>
@@ -912,7 +914,7 @@ export const GrantDetailPage: React.FC = () => {
                           {formatCurrency(spentTotal)}
                         </td>
                         <td
-                          className={`px-4 py-3 text-right text-sm whitespace-nowrap ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                          className={`px-4 py-3 text-right text-sm whitespace-nowrap ${remainingTotal >= 0 ? 'text-green-700 dark:text-green-600' : 'text-red-600'}`}
                         >
                           {formatCurrency(remainingTotal)}
                         </td>
@@ -1124,7 +1126,7 @@ export const GrantDetailPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => void handleMarkTaskComplete(task.id)}
-                                className="inline-flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/20"
+                                className="inline-flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-800 transition-colors hover:bg-green-500/20"
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                                 Mark Complete

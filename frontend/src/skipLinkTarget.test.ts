@@ -81,6 +81,7 @@ const renderedComponents = (jsx: string): string[] => {
     'React',
     'Fragment',
     'ProtectedRoute',
+    'OnboardingGate',
     'AppLayout',
     'PullToRefreshProvider',
   ]);

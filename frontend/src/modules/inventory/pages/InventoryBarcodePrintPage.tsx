@@ -376,7 +376,7 @@ function getBarcodeValue(item: InventoryItem): string | null {
 function labelToggleClass(active: boolean): string {
   return `rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
     active
-      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-800 dark:text-emerald-400'
       : 'border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-secondary'
   }`;
 }
@@ -1686,13 +1686,13 @@ const InventoryBarcodePrintPage: React.FC = () => {
           {/* Warning for items without barcodes */}
           {itemsWithoutBarcodes.length > 0 && (
             <div className="mb-4 flex items-start gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-400" />
               <div>
                 <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
                   {itemsWithoutBarcodes.length} item{itemsWithoutBarcodes.length !== 1 ? 's' : ''} missing barcode
                   values
                 </p>
-                <p className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+                <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-400">
                   These items have no barcode, asset tag, or serial number and will print without a scannable barcode:{' '}
                   {itemsWithoutBarcodes.map((i) => i.name).join(', ')}
                 </p>

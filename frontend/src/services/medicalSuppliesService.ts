@@ -77,6 +77,8 @@ export interface MedicalExpiringStockRow {
   item_size?: string | null;
   lot_id?: string | null;
   template_item_id?: string | null;
+  /** The apparatus the units are aboard, when the checklist names one. */
+  apparatus_id?: string | null;
   lot_number?: string | null;
   expiration_date?: string | null;
   days_until_expiration?: number | null;
@@ -392,6 +394,20 @@ export const medicalSuppliesService = {
     const response = await api.get<MedicalExpiringStockRow[]>('/medical-supplies/expiring-stock', {
       params: { days_ahead: daysAhead },
       ...readConfig(options),
+    });
+    return response.data;
+  },
+
+  /**
+   * Every unit of a lot, on the shelves and the apparatus: the recall lookup.
+   * A substring of the lot number, case-insensitive; at least 2 characters.
+   * Read past the cache: after a recall the officer pulls units and searches
+   * again, and a 30-second-old answer would still list the ones just pulled.
+   */
+  async searchLots(lotNumber: string): Promise<MedicalExpiringStockRow[]> {
+    const response = await api.get<MedicalExpiringStockRow[]>('/medical-supplies/lots/search', {
+      params: { lot_number: lotNumber },
+      ...readConfig({ bypassCache: true }),
     });
     return response.data;
   },

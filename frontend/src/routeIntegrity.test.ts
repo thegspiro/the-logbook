@@ -1,10 +1,11 @@
 /**
  * Route integrity
  *
- * A navigation target that matches no declared route does not fail loudly: the
- * catch-all `<Route path="*" element={<Navigate to="/" replace />} />` in
- * App.tsx swallows it and drops the user on the dashboard. That is
- * indistinguishable from a button that simply does not work, and it is what
+ * A navigation target that matches no declared route is an easy bug to ship: the
+ * catch-all `<Route path="*" element={<NotFoundPage />} />` in App.tsx shows a
+ * "Page not found" screen, which is clear to a user but is a dead end the
+ * developer never sees. It used to drop the user on the dashboard instead,
+ * indistinguishable from a button that simply does not work, and that is what
  * the Members Administration "Add Member" button did for as long as it pointed
  * at /admin/members/add — a path that never existed, since only the exact path
  * /admin/members is redirected to the hub.

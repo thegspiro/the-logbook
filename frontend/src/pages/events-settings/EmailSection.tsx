@@ -193,7 +193,8 @@ const EmailSection: React.FC<EmailSectionProps> = ({
                 type="button"
                 onClick={() => onDeleteTemplate(tpl.id)}
                 className="text-theme-text-muted touch-target-phone shrink-0 text-sm transition-colors hover:text-red-600 dark:hover:text-red-400"
-                title="Delete template"
+                title={`Delete "${tpl.name}"`}
+                aria-label={`Delete "${tpl.name}"`}
               >
                 <Trash2 className="h-4 w-4" />
               </button>

@@ -83,7 +83,7 @@ const RequirementRow: React.FC<{
     >
       <div className="flex min-w-0 flex-1 items-start gap-2">
         {done ? (
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
         ) : locked ? (
           <Lock className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         ) : (
@@ -138,7 +138,7 @@ const RequirementRow: React.FC<{
                       />
                     ) : stepDone ? (
                       <CheckCircle2
-                        className="mt-0.5 h-3 w-3 shrink-0 text-green-600 dark:text-green-400"
+                        className="mt-0.5 h-3 w-3 shrink-0 text-green-700 dark:text-green-400"
                         aria-hidden="true"
                       />
                     ) : (
@@ -359,7 +359,7 @@ const MyProgramProgressPage: React.FC = () => {
         {data.next_milestones.length > 0 && (
           <div className="bg-theme-surface mb-4 rounded-lg p-4">
             <h2 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-semibold">
-              <Flag className="h-4 w-4 text-yellow-600 dark:text-yellow-400" /> Next milestones
+              <Flag className="h-4 w-4 text-yellow-700 dark:text-yellow-400" /> Next milestones
             </h2>
             <div className="space-y-1">
               {data.next_milestones.map((m) => (
@@ -396,7 +396,7 @@ const MyProgramProgressPage: React.FC = () => {
                     )}
                     {complete && (
                       <CheckCircle2
-                        className="h-4 w-4 text-green-600 dark:text-green-400"
+                        className="h-4 w-4 text-green-700 dark:text-green-400"
                         aria-label="Phase complete"
                       />
                     )}

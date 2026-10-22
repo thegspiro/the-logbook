@@ -225,7 +225,8 @@ class GoogleWorkspaceDirectory:
         return google_id if isinstance(google_id, str) else None
 
     async def list_users(self, domain: str) -> list[DirectoryAccount]:
-        """Every user in *domain*: id and primary address.
+        """Every user in *domain*: id, primary address and suspension (the
+        departure check compares it with the members who have left).
 
         Paged at Google's maximum of 500, so a department-sized domain takes a
         call or two rather than one per member. Aliases are not users and are
@@ -244,7 +245,7 @@ class GoogleWorkspaceDirectory:
                         maxResults=500,
                         pageToken=token,
                         projection="basic",
-                        fields="users(id,primaryEmail),nextPageToken",
+                        fields="users(id,primaryEmail,suspended),nextPageToken",
                     )
                     .execute()
                 )

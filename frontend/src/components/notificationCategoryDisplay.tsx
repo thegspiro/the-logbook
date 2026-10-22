@@ -25,17 +25,17 @@ const CATEGORY_DISPLAY: Record<string, CategoryDisplay> = {
   },
   members: {
     icon: <Users className="h-4 w-4" />,
-    color: 'text-green-600 dark:text-green-400',
+    color: 'text-green-700 dark:text-green-400',
     label: 'Members',
   },
   maintenance: {
     icon: <AlertTriangle className="h-4 w-4" />,
-    color: 'text-orange-600 dark:text-orange-400',
+    color: 'text-orange-700 dark:text-orange-400',
     label: 'Maintenance',
   },
   general: {
     icon: <FileText className="h-4 w-4" />,
-    color: 'text-cyan-600 dark:text-cyan-400',
+    color: 'text-cyan-700 dark:text-cyan-400',
     label: 'General',
   },
 };

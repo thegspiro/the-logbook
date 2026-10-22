@@ -22,6 +22,7 @@ import { formatHours } from '../utils/hoursFormatting';
 import type { ShiftCompletionReport, TraineeShiftStats } from '../types/training';
 import { StarRating } from '../modules/scheduling/components/StarRating';
 import { ReportContentDisplay } from '../modules/scheduling/components/ReportContentDisplay';
+import { attributionName } from '../utils/memberName';
 
 // ==================== Report Card ====================
 
@@ -81,7 +82,13 @@ const ReportCard: React.FC<{
             </div>
           )}
           <div className="text-theme-text-muted text-xs">
-            Filed by: {memberMap[report.officer_id] || 'Unknown Officer'} on {formatDate(report.created_at, tz)}
+            Filed by:{' '}
+            {attributionName(
+              report.officer_id ? memberMap[report.officer_id] : null,
+              report.officer_id,
+              'Unknown Officer'
+            )}{' '}
+            on {formatDate(report.created_at, tz)}
           </div>
           {(report.reviewer_name || report.reviewed_by) && (
             <div className="text-theme-text-muted text-xs">

@@ -942,7 +942,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                 </h4>
                 <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
                   <AlertCircle
-                    className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
+                    className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400"
                     aria-hidden="true"
                   />
                   <div className="space-y-2">
