@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#3569](https://github.com/thegspiro/the-logbook/pull/3569)** (branch
+`claude/security-review-users-organizations`) — Feature 07 (Users &
+organizations), pass 11. `search_pull_requests` for
+`is:pr is:open head:claude/security-review-` returned 0 before this
+iteration started, so PR #3564 (Feature 06, pass 11) had already merged;
+row 07 was the next `⬜`. **0 fixed, 0 new findings** — real delta (733
+insertions across 7 files): the privilege ceiling was extended to
+delete/status-change/archive, a permanent-delete data-loss bug was fixed,
+membership type now drives account status, Add Member can create a
+directory account, and 3 new S3 file-storage settings routes landed —
+all reviewed end to end and found already correctly guarded. USR-5/USR-8
+(standing, owner-accepted) re-confirmed unchanged. See
+`USR-07-users-organizations.md`'s **Pass 11** section. Row 07 → ✅
+(pending this PR's merge); next is Feature 08 (Membership pipeline).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06, Elections & ballots, pass 11, PR #3564, merged), preserved for history</summary>
+
 **PR [#3564](https://github.com/thegspiro/the-logbook/pull/3564)** (branch
 `claude/security-review-elections-ballots-p11`) — Feature 06 (Elections &
 ballots), pass 11, a watchdog pickup. PR #3562 (Feature 05, pass 11) merged;
@@ -24,6 +42,8 @@ no other `claude/security-review-*` PR was open. **1 flagged MEDIUM
 minutes), 1 LOW fixed as a guard (ELEC-50, `_build_election_response`
 viewer convention).** See `ELEC-06-elections-ballots.md`'s **Pass 11**
 section. Row 06 → ✅ (pending this PR's merge); next is Feature 07.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05, Finance & approvals, pass 11, PR #3562, merged), preserved for history</summary>
