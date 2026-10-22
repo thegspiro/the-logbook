@@ -105,6 +105,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 from sqlalchemy.sql import ColumnElement, and_, func
 
 from app.core.database import Base
+from app.core.permissions import position_mirrors_rank
 from app.core.utils import generate_uuid
 from app.utils.member_badge import generate_badge_code
 from app.utils.member_names import format_display_name, format_legal_name
@@ -869,6 +870,16 @@ class Position(Base):
     __table_args__ = (
         Index("idx_position_org_slug", "organization_id", "slug", unique=True),
     )
+
+    @property
+    def mirrors_rank(self) -> bool:
+        """True for the seeded position that duplicates an operational rank.
+
+        Reported on every role response so the member screens can keep the
+        position out of their pickers and chips; see
+        ``RANK_MIRRORING_POSITION_SLUGS``.
+        """
+        return position_mirrors_rank(self.slug, self.is_system)
 
     def __repr__(self):
         return f"<Position(name={self.name})>"

@@ -170,8 +170,13 @@ not sent. The page queues it through `package-send-jobs` and polls the job;
 send has its own one-at-a-time guard and does not wait on a ballot send.
 
 **Nominations-open announcement.** Opening nominations emails each opted-in
-active member a separate message, after the `open-nominations` response, in
-its own session. It is best-effort: the outcome is logged, not shown.
+active member a separate message. `open-nominations` queues it as a
+`ballot_send_jobs` row of `kind = 'announcement'` (`NominationsAnnouncementSend`,
+its own one-at-a-time guard), and the election response carries the latest
+one as `nominations_announcement` for election managers, which the
+Nominations tab follows. A miss or an outright failure is audited
+(`nominations_announcement_failed`) and emails the managers. A failed
+announcement never undoes the phase change.
 
 **Paper ballots.** A recorded tally is plausibility-guarded; exceeding it
 needs `allow_over_count`, which is audited. The recording officer cannot

@@ -565,6 +565,46 @@ Three changes to how a session ends. None blocks a restart and none needs a migr
 A reverse proxy that strips unknown request headers needs nothing: the header only
 shortens the sender's own session.
 
+### Positions named after a rank leave the member pickers (2026-10-21)
+
+Onboarding seeds Chief, Deputy Chief, Assistant Chief, Captain, Lieutenant,
+Engineer, Firefighter and EMT as **positions** as well as ranks, because those
+positions carry the rank's own permission list. Add Member therefore offered
+"Firefighter" in the position dropdown beside "Firefighter" in the rank
+dropdown, and the roster could show the same word in both columns, or in
+neither.
+
+From this version those positions are not offered or shown on the member
+screens: the Add Member position dropdown, the roster's Positions column, the
+profile's position badges, Member Management's View by Position, and the
+positions a member can be given in Manage Positions. A rank is set in the Rank
+field, and a member holding the rank already has the access the position would
+give. Nothing is removed from the database:
+
+- A member who already holds one of these positions keeps it and its access.
+  It stays listed in that member's Manage Positions dialog, marked **Rank**,
+  so an officer can untick it.
+- **Organization Settings > Role Management** still lists every one of them,
+  marked **Mirrors a rank**, because that is where the access a rank carries is
+  edited.
+- **The member importer rejects a rank name in the `role` column.** A CSV row
+  whose `role` reads `Firefighter` (or any other rank name) is reported with
+  `role "Firefighter" is a rank — put it in the rank column instead` and not
+  imported; before this version it assigned the position. Move the value to
+  the `rank` column.
+
+To list the members who hold one of these positions:
+
+```sql
+SELECT u.id, u.username, u.rank, p.slug AS position
+FROM user_positions up
+JOIN positions p ON p.id = up.position_id
+JOIN users u ON u.id = up.user_id
+WHERE p.is_system = 1
+  AND p.slug IN ('fire_chief', 'deputy_chief', 'assistant_chief', 'captain',
+                 'lieutenant', 'engineer', 'firefighter', 'emt');
+```
+
 ### Account status follows membership type for probationary members (2026-10-21)
 
 A member's **membership type** (probationary, active, life, administrative, or

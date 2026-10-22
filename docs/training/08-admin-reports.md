@@ -667,6 +667,12 @@ the position carries more access than you hold.
 > box stays ticked and cannot be removed. It can only be removed from
 > an archived member.
 
+> **Ranks are not positions.** The list leaves out Chief, Captain,
+> Firefighter and the other ranks; a rank is set from the member's profile
+> and carries its own access. A member given one of those positions before
+> this version still sees it in the list, marked **Rank**, so it can be
+> unticked.
+
 > **What if a member's menus have not changed after you changed their
 > positions?** The Logbook applies new permissions at once, but the member's
 > screen may still show old buttons and menu items until they reload the page.

@@ -3332,7 +3332,7 @@ shown across the top. **Next** moves forward and **Previous** goes back. Steps
 ![The recurrence block with Monthly (by weekday) chosen and its ordinal and weekday pickers](./images/02-83-session-recurrence.png)
 
 5. Set the location, RSVP and participant limits, then select **Next**.
-6. On **Training Info**, choose **Use existing course template** and pick a
+6. On **Training Info**, choose **Use a course from the Course Library** and pick a
    **course**. The form fills in the training type, credit hours, instructor,
    expiry months and maximum participants from the course, and shows a preview
    card of what it took. The other choice, **Create new course for this
