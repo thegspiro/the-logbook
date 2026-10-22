@@ -1,5 +1,24 @@
 # Screenshot currency
 
+## Queued by the October 21 – 22 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 05 | Kit editor with a sized line on **Member's size**; the issue review listing resolved sizes | Create; re-check `05-27-equipment-kit-modal.png` and `05-95-kit-issue-confirm.png` |
+| 01 | Members roster with linked names; profile **Status: Active · Change** chip and Change Status dialog | Re-check `01-29-status-change-modal.png` and the roster shots |
+| 01 | Remove Member dialog, Permanently Delete tab, with the itemized Records affected list | Re-check `01-24-delete-member-modal.png` |
+| 04 | Delete Event dialog with **Delete this and future events in this series** | Replace `04-39-delete-event-series.png` |
+| 02 | Programs list with **Show inactive**, an Inactive badge and **Reactivate**; requirement delete outcome toast | Create |
+| 03 | Basic apparatus list with **Show inactive** and **Reactivate** | Create |
+| 02 | Import Queue with **Import matching pending records** | Create (provider needs a resolvable API host) |
+| 11 | Delete category confirmation that reads as deactivation | Check `11-` category shots for the old destructive wording |
+| 09 | Skills test templates on a phone (cards) | Create |
+| 05 | Checklist settings on a phone: switch rows, compact top | Re-check |
+| 14, 04 | Governance pages (Org Chart, Legal Documents, Elections, Minutes, Attendance) with the shared section header | Re-check any full-page shot |
+
 ## Queued by the October 20 – 21 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).
