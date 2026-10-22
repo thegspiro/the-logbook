@@ -28,7 +28,7 @@ import {
   ClipboardCheck,
   CalendarClock,
 } from 'lucide-react';
-import { trainingModuleConfigService } from '../services/api';
+import { skillsTestingService, trainingModuleConfigService } from '../services/api';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
 import { RequirementMonthlyHours } from '../components/training/RequirementMonthlyHours';
 import { countingWindowLabel } from '../utils/requirementMonths';
@@ -550,6 +550,11 @@ const MyTrainingPage: React.FC = () => {
   const tz = useTimezone();
   const { user } = useAuthStore();
   const practicalSkillsMethod = usePracticalSkillsMethod();
+  const showsSkillsTesting = offersSkillsTesting(practicalSkillsMethod);
+  // Under shift-report sign-offs the Skills Tests section is replaced by a
+  // read-only one, drawn only for a member who has results on file: switching
+  // deleted nothing, and this page is where a member reads their own results.
+  const [hasPastSkillTests, setHasPastSkillTests] = useState(false);
   const [data, setData] = useState<MyTrainingSummary | null>(null);
   const [config, setConfig] = useState<TMConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -596,6 +601,27 @@ const MyTrainingPage: React.FC = () => {
     void loadData();
   }, [loadData]);
 
+  const userId = user?.id;
+  useEffect(() => {
+    if (showsSkillsTesting || !userId) return undefined;
+    let cancelled = false;
+    // candidate_id is required: for a training.manage holder the endpoint
+    // otherwise answers for the whole department.
+    skillsTestingService
+      .getTests({ candidate_id: userId, include_practice: true, limit: 1 })
+      .then((page) => {
+        if (!cancelled) setHasPastSkillTests(page.total > 0);
+      })
+      .catch(() => {
+        // Supplementary: a failed lookup leaves the section out rather than
+        // putting an error on the member's training overview.
+        if (!cancelled) setHasPastSkillTests(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showsSkillsTesting, userId]);
+
   const handleConfigSave = async (updates: Partial<TMConfig>) => {
     const updated = await trainingModuleConfigService.updateConfig(updates);
     setConfig(updated);
@@ -618,7 +644,7 @@ const MyTrainingPage: React.FC = () => {
         : activeTab;
   const recentRecords = (data?.training_records ?? []).slice(0, RECENT_RECORDS_SHOWN);
   const today = getTodayLocalDate(tz);
-  const upcoming = data ? buildUpcomingItems(data, today, offersSkillsTesting(practicalSkillsMethod)) : [];
+  const upcoming = data ? buildUpcomingItems(data, today, showsSkillsTesting) : [];
 
   if (loading) {
     return (
@@ -905,7 +931,7 @@ const MyTrainingPage: React.FC = () => {
               the summary caps at the newest 100, lives on the History tab. */}
           {v?.show_training_history && recentRecords.length > 0 && (
             <Section title="Recent Training" icon={FileText}>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Training records">
                 <table className="w-full text-left text-sm">
                   <thead className="text-theme-text-muted bg-theme-surface-secondary text-xs uppercase">
                     <tr>
@@ -1017,10 +1043,20 @@ const MyTrainingPage: React.FC = () => {
           {/* Skills Tests — the member's own results, official and practice.
               Not behind a show_* visibility flag: these are the member's own
               evaluations, and this page is the only place they can see them at
-              all. Left out only for a department that records skills on shift
-              reports instead; its past results are kept, not deleted. */}
-          {user?.id && offersSkillsTesting(practicalSkillsMethod) && (
+              all. A department that records skills on shift reports instead
+              gets the read-only section below, and only when the member has
+              results on file. */}
+          {user?.id && showsSkillsTesting && (
             <Section title="Skills Tests" icon={ClipboardCheck} defaultOpen={false}>
+              <MySkillTestsList userId={user.id} />
+            </Section>
+          )}
+          {user?.id && !showsSkillsTesting && hasPastSkillTests && (
+            <Section title="Past skills test results" icon={ClipboardCheck} defaultOpen={false}>
+              <p className="text-theme-text-muted mb-3 text-sm">
+                Your department now records practical skills as sign-offs on shift reports, so no new skills tests are
+                taken. Results already on file stay on your record.
+              </p>
               <MySkillTestsList userId={user.id} />
             </Section>
           )}
@@ -1161,7 +1197,7 @@ const MyTrainingPage: React.FC = () => {
                             (s, i) => (
                               <span
                                 key={i}
-                                className={`rounded-sm px-2 py-0.5 text-xs ${s.demonstrated ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}
+                                className={`rounded-sm px-2 py-0.5 text-xs ${s.demonstrated ? 'bg-green-500/20 text-green-800 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}
                               >
                                 {s.skill_name}
                               </span>
@@ -1178,7 +1214,7 @@ const MyTrainingPage: React.FC = () => {
           {/* Submission History */}
           {v?.show_submission_history && data.submissions && data.submissions.length > 0 && (
             <Section title="Self-Reported Training" icon={Send} defaultOpen={false}>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Training records">
                 <table className="w-full text-left text-sm">
                   <thead className="text-theme-text-muted bg-theme-surface-secondary text-xs uppercase">
                     <tr>
@@ -1244,7 +1280,7 @@ const MyTrainingPage: React.FC = () => {
                     class at another agency, an online course or a state certification only counts once you submit it
                     and a training officer approves it.
                   </li>
-                  {offersSkillsTesting(practicalSkillsMethod) && (
+                  {showsSkillsTesting && (
                     <li>
                       <span className="text-theme-text-primary font-medium">Take a skills test.</span> When an examiner
                       tests you on a hands-on skill, the result appears under Skills Tests above.

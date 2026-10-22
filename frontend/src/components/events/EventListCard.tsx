@@ -40,6 +40,7 @@ import {
 import { formatAbsoluteDate } from '../../hooks/useRelativeTime';
 import { formatDateCustom, formatTime } from '../../utils/dateFormatting';
 import { formatHoursExact } from '../../utils/hoursFormatting';
+import { CREDITED_HOURS_BASIS } from './creditedHours';
 import { EventType as EventTypeEnum } from '../../constants/enums';
 import { getUrgencyPresentation } from './eventUrgencyPresentation';
 
@@ -63,10 +64,6 @@ export interface EventListCardProps {
   onStartChangeRsvp: (eventId: string) => void;
   onCancelChangeRsvp: (eventId: string) => void;
 }
-
-/** Why the hours row says "up to" rather than naming a figure. */
-const CREDITED_HOURS_BASIS =
-  "Based on the event's scheduled length. The hours credited to your record are your attended time, settled when you check out.";
 
 const DETAIL_ROW_CLASS = 'text-theme-text-secondary flex items-center gap-2 text-sm';
 const DETAIL_ICON_CLASS = 'text-theme-text-muted h-3.5 w-3.5 shrink-0';

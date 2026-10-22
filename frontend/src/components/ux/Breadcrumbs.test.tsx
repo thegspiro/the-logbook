@@ -92,7 +92,7 @@ describe('Breadcrumbs', () => {
   it('does not link a path no route declares', () => {
     // Only /new and /:templateId are declared under
     // /inventory/admin/checklists/templates; the bare path is not a route, so
-    // App.tsx's catch-all would redirect to the dashboard.
+    // App.tsx's catch-all would show "Page not found".
     grant('inventory.manage', 'inventory.check_manage');
     renderAt('/inventory/admin/checklists/templates/new');
 

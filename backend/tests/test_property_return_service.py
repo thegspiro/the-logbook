@@ -206,6 +206,24 @@ class TestGenerateReport:
         assert data["effective_date"] == "October 06, 2026"
         assert data["return_deadline"] == "October 20, 2026"
 
+    async def test_a_back_dated_drop_counts_from_its_effective_date(self):
+        # The letter says the deadline runs from the effective date of
+        # separation, so a drop entered late states that day and counts from it.
+        db = _db(_member(), _org(), None, [], [])
+
+        data, html = await PropertyReturnService(db).generate_report(
+            "u1",
+            "org-1",
+            "dropped_voluntary",
+            "officer-1",
+            return_deadline_days=14,
+            effective_date=date(2026, 9, 1),
+        )
+
+        assert data["effective_date"] == "September 01, 2026"
+        assert data["return_deadline"] == "September 15, 2026"
+        assert "September 15, 2026" in html
+
     async def test_includes_unreturned_pool_issuances(self):
         # Pool-issued items are accountable property and must appear in the
         # letter (count, value x quantity, and an "Issued" row label).

@@ -34,6 +34,42 @@ describe('onboarding API client session cleanup', () => {
     expect(localStorage.getItem('onboarding-storage')).toBeNull();
   });
 
+  it('tells the setup gate that setup is closed once completion succeeds', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ message: 'complete' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const { apiClient } = await import('./api-client');
+    const { getOnboardingGateAnswer } = await import('../utils/onboardingGateState');
+    await apiClient.completeOnboarding();
+
+    expect(getOnboardingGateAnswer()).toBe('closed');
+  });
+
+  it('leaves the setup gate alone when completion fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: 'nope' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const { apiClient } = await import('./api-client');
+    const { getOnboardingGateAnswer } = await import('../utils/onboardingGateState');
+    await apiClient.completeOnboarding();
+
+    expect(getOnboardingGateAnswer()).toBeNull();
+  });
+
   it('clears the authenticated-session hint for destructive or stale-session cleanup', async () => {
     localStorage.setItem('has_session', '1');
 

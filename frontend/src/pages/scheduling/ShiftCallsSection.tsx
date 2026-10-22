@@ -13,10 +13,11 @@
  * could only ever fail.
  *
  * Reading is *not* gated, and deleting stays available to anyone who could
- * manage the shift, both deliberately and both matching the backend: rows
- * written before a mode switch are still the department's history, so they
- * stay visible, and they must stay clearable — removing one cannot manufacture
- * incident detail the department has opted out of.
+ * manage the shift (behind a confirmation, until the shift is finalized —
+ * `delete_shift_call` refuses after that), both deliberately and both matching
+ * the backend: rows written before a mode switch are still the department's
+ * history, so they stay visible, and they must stay clearable — removing one
+ * cannot manufacture incident detail the department has opted out of.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -26,6 +27,7 @@ import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftCallRecord } from '../../modules/scheduling/types';
 import { formatDateTime, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import { labelCallTypeChoices } from '../../modules/scheduling/components/callTypeChoices';
 import { useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 
@@ -106,6 +108,7 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
   const orgCallTypes = useOrgCallTypes();
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { confirm } = useConfirm();
 
   const loadCalls = useCallback(async () => {
     setLoading(true);
@@ -180,7 +183,19 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
     }
   };
 
-  const handleDelete = async (callId: string) => {
+  const handleDelete = async (call: ShiftCallRecord) => {
+    const callId = call.id;
+    // Named as the row names it, so the dialog says which of several calls goes.
+    const label = call.incident_number ? `${call.incident_type} #${call.incident_number}` : call.incident_type;
+    if (
+      !(await confirm({
+        title: 'Remove call',
+        message: `Remove the ${label} call from this shift? It comes off the shift's call count and cannot be restored.`,
+        confirmLabel: 'Remove',
+        cancelLabel: 'Keep it',
+      }))
+    )
+      return;
     setDeletingId(callId);
     try {
       await schedulingService.deleteCall(callId);
@@ -375,7 +390,7 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
                       <span className="text-theme-text-muted text-xs">#{call.incident_number}</span>
                     )}
                     {call.cancelled_en_route && (
-                      <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                      <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-400">
                         Cancelled en route
                       </span>
                     )}
@@ -407,7 +422,7 @@ export const ShiftCallsSection: React.FC<ShiftCallsSectionProps> = ({ shiftId, c
                     )}
                     <button
                       onClick={() => {
-                        void handleDelete(call.id);
+                        void handleDelete(call);
                       }}
                       disabled={deletingId === call.id}
                       className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"

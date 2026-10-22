@@ -1199,23 +1199,27 @@ export default function LocationsPage() {
     if (
       !(await confirm({
         title: 'Delete station',
-        message: `Delete "${station.name}" and every room in it? This cannot be undone.`,
+        message: `Delete "${station.name}" and every room in it? Any of them that events, event templates or apparatus still use is deactivated instead of deleted, so those records keep it. This cannot be undone.`,
         confirmLabel: 'Delete station',
         cancelLabel: 'Keep it',
       }))
     )
       return;
     try {
-      // Delete rooms first
+      // Rooms first, one request each. The server deactivates rather than
+      // deletes anything still referenced, so a failure here is unexpected —
+      // but the rooms already removed stay removed, which is why the list is
+      // reloaded either way.
       const stationRooms = rooms.get(station.name) || [];
       for (const room of stationRooms) {
         await locationsService.deleteLocation(room.id);
       }
       await locationsService.deleteLocation(station.id);
       toast.success('Station deleted');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete station'));
+    } finally {
       void loadLocations();
-    } catch {
-      toast.error('Failed to delete station. It may have events associated with it.');
     }
   };
 
@@ -1284,7 +1288,7 @@ export default function LocationsPage() {
     if (
       !(await confirm({
         title: 'Delete room',
-        message: `Delete "${room.name}"? This cannot be undone.`,
+        message: `Delete "${room.name}"? If events, event templates or apparatus still use it, it is deactivated instead of deleted, so those records keep it. This cannot be undone.`,
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
@@ -1293,9 +1297,10 @@ export default function LocationsPage() {
     try {
       await locationsService.deleteLocation(room.id);
       toast.success('Room deleted');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete room'));
+    } finally {
       void loadLocations();
-    } catch {
-      toast.error('Failed to delete room. It may have events associated with it.');
     }
   };
 

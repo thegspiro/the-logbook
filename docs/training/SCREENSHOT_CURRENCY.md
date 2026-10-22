@@ -1,5 +1,41 @@
 # Screenshot currency
 
+## Queued by the October 21 – 22 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-21--22-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 05 | Kit editor with a sized line on **Member's size**; the issue review listing resolved sizes | Create; re-check `05-27-equipment-kit-modal.png` and `05-95-kit-issue-confirm.png` |
+| 01 | Members roster with linked names; profile **Status: Active · Change** chip and Change Status dialog | Re-check `01-29-status-change-modal.png` and the roster shots |
+| 01 | Remove Member dialog, Permanently Delete tab, with the itemized Records affected list | Re-check `01-24-delete-member-modal.png` |
+| 04 | Delete Event dialog with **Delete this and future events in this series** | Replace `04-39-delete-event-series.png` |
+| 02 | Programs list with **Show inactive**, an Inactive badge and **Reactivate**; requirement delete outcome toast | Create |
+| 03 | Basic apparatus list with **Show inactive** and **Reactivate** | Create |
+| 02 | Import Queue with **Import matching pending records** | Create (provider needs a resolvable API host) |
+| 11 | Delete category confirmation that reads as deactivation | Check `11-` category shots for the old destructive wording |
+| 09 | Skills test templates on a phone (cards) | Create |
+| 05 | Checklist settings on a phone: switch rows, compact top | Re-check |
+| 14, 04 | Governance pages (Org Chart, Legal Documents, Elections, Minutes, Attendance) with the shared section header | Re-check any full-page shot |
+
+## Queued by the October 20 – 21 documentation pass
+
+Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-20--21-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| ----- | ------ | ------ |
+| 04 | Member's event detail page with **Check In** offered, and again after check-in (**You're checked in**) | Create (placeholder in the guide) |
+| 04 | Event detail as a member without manage rights: no **View QR Code** button | Check existing `04-02-event-detail.png` still matches; replace if it shows the button |
+| 02 | My Training History with the **No completion date** group | Replace any image showing **Awaiting approval** as a group heading |
+| 14 | **Record Paper Ballots** on a ranked-choice race (rank menus, copy count) | Create (placeholder in the guide) |
+| 15 | Applicant drawer **Approval Status** with office labels | Re-check `15-24-approval-status-drawer.png` |
+| 01 | Roster showing rank, membership type and positions apart; reshoot of 01-41 was already done | Verify once |
+| 05 | Medical Supplies truck rows with links to Inventory swap and restock pages; lot recall lookup | Create |
+| 03 | Checklist builder with **Present** presets; checklist reports on a phone | Re-check existing images |
+| 03 | Scheduling weeks now begin on Sunday | Re-check any week-grid image that starts on Monday |
+
 ## Queued by the October 19 – 20 documentation pass
 
 Source: [CHANGE_AUDIT_2026-10](../CHANGE_AUDIT_2026-10.md#change-audit-october-19--20-2026).
@@ -20,16 +56,16 @@ for the new screens are in [04](./04-events-meetings.md) as `_[Screenshot to cre
 | 04 | Minutes Settings → **Publishing**, including the executive-session confirmation | Replaces the "Publishing settings dialog" row below |
 | 04 | **Found in the minutes** card under the Minutes search box, two results, words highlighted | Search a word the seeded minutes share |
 | 04 | A **prepared Approval of Previous Minutes** motion on a draft, with **As submitted / As revised** | Needs earlier circulated minutes of the same meeting type |
-| 04 | Circulated minutes with the note that a later meeting accepted them, and **Adopt these minutes** opened already filled in | Seed a passed acceptance motion |
+| 04 | Circulated minutes with the note that a later meeting accepted them, and **Adopt these minutes** opened already filled in | Seed a passed acceptance motion (done) |
 
-**Pipeline status.** Every row above is in `scripts/screenshots/manifest.mjs`
-(`04-70` to `04-78`; the last row is two shots) with placeholders in the comment form the applier reads. The
-accepted-previous-minutes shots (`04-76` to `04-78`) are seeded by
-`_guide04_accepted_minutes` in `seed_demo_data.py`: three business meetings dated
-90, 62 and 48 days back, so the Spring minutes are circulated and accepted by the
-Late Spring meeting, and the Early Summer minutes carry a prepared motion waiting
-for a result. Re-run the seeder before capturing. Nothing here has been captured,
-and the seeder change has not been run end to end.
+**Captured 2026-10-20.** All nine are in the guide (`04-70` to `04-78`), taken
+from a demo department seeded by `_guide04_accepted_minutes` (three business
+meetings, the Apparatus minutes circulated and accepted by the Membership
+meeting, the Facilities minutes with the acceptance motion prepared). The
+administrator settings shots and `04-77` are clipped to their subject because the
+stack had malware scanning off (ClamAV signatures were not reachable), which
+puts a notice at the top of every full administrator page; recapture them
+full-page on a stack with scanning on if the app shell is wanted around them.
 
 ### Existing images to replace or confirm
 
@@ -89,7 +125,7 @@ guides as `_[Screenshot to create: …]_`.
 
 | Image | Disposition | Why |
 | ----- | ----------- | --- |
-| `01-41` (My Account → Privacy) | **REPLACE** | Label now reads "Shared once the department allows it" beside an on switch |
+| `01-41` (My Account → Privacy) | **CURRENT** 2026-10-20 (re-shot) | Label now reads "Shared once the department allows it" beside an on switch — re-shot from the seeded mix; work email and mobile carry the note, phone reads "Only you and leadership" |
 | `03-*` of My Shifts / Open Shifts after sign-up | **CHECK** | Own sign-up is saved confirmed |
 | `11-*` purchase request form and budget picker | **REPLACE** | Draft line, Save Draft, and the picker shows names only to members |
 | `11-*` approval-chain form | **CHECK** | Min/Max help text now says both are included |
@@ -372,7 +408,7 @@ row.
 | Medical Supplies **Lots** dialog                    | **CURRENT** 2026-10-17, covered by `05-89`                  | The Lots button opens the same dialog: Where it is, then Stock lots with the edit and delete controls and the Add lot form                                                                                                                                                                                                                                                       |
 | Medical categories page                             | **CURRENT** 2026-10-17 as `05-91-medical-categories`        | Cards read "Show N supplies"; Airway & Oxygen opened to its supplies                                                                                                                                                                                                                                                                                                             |
 | Catalog Links, after **Link matches automatically** | **CURRENT** 2026-10-17 as `05-92-catalog-links-auto-linked` | The shot runs a real pass and undoes every link afterwards; the next seed also restores the Rescue 7 lines                                                                                                                                                                                                                                                                       |
-| My Checklists on a phone                            | **NOT POSSIBLE** as described                               | The placeholder asks for the overdue marker, and the member's list never contains a past day: `get_my_checklists` returns shifts dated today or later only, so the marker the page draws for a past day with an unfiled check is never reached. The day headings and the **⋯** menu render; the placeholder is left open until the guide's overdue sentence or the query changes |
+| My Checklists on a phone                            | **NOT POSSIBLE** as described                               | The placeholder asks for the overdue marker, and the member's list never contains a past day: `get_my_checklists` returns shifts dated today or later only, so the marker the page draws for a past day with an unfiled check is never reached. The day headings and the **⋯** menu render; the placeholder is left open until the guide's overdue sentence or the query changes. **Update 2026-10-22:** the query changed — it now also returns a shift from the last seven days while a check on it is unfiled — so the shot can be taken with a member seated on a shift two or three days back whose checklist was never filed |
 | Check form with a count at its minimum              | **CURRENT** 2026-10-17                                      | Checked: no captured image shows a **CRITICAL — below minimum** warning (`03-70` and `03-72` show counts at par with no critical minimum set), so none pictures the old behaviour                                                                                                                                                                                                |
 | Google Workspace card (16)                          | **NOT POSSIBLE** in the demo                                | **Link existing members** appears only on a connected card, and both connecting and its preview call Google with a real service account key                                                                                                                                                                                                                                      |
 | Documents admin-only folder confirmation (07)       | **CURRENT** 2026-10-17 as `07-25-folder-admin-only-confirm` | Manage folder on Forms & Templates with Specific positions set to Historian, a position nobody holds; never confirmed                                                                                                                                                                                                                                                            |
@@ -1186,7 +1222,7 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | `01-26-print-applicant-badges` | **CURRENT** 2026-10-17 (checked) | Bulk bar labels are now Advance Selected / Hold Selected / Reject Selected; manifest alt (manifest.mjs ~5838) still says 'Advance All' — the guide's alt was updated to 'Advance Selected' | #2783, #2653 |
 | `01-33-import-review-rejected-rows` | **CURRENT** 2026-10-17 (checked) | Welcome-email option now 'Send welcome emails now' with temporary-password wording (and an Unavailable note when email is off); button pluralisation | #2751, #2759 |
 | `01-40-member-directory-member` | **CURRENT** 2026-10-17 (checked) | As an ordinary member with emails hidden the search placeholder now reads 'Search by name or membership number...' | #2759 |
-| `01-41-profile-visibility` | **REPLACE** | A switch that is on beside a row the department has off for everyone reads "Shared once the department allows it", not "Off for everyone (department setting)"; a switch that is off there reads "Only you and leadership". Re-shoot the same seeded mix so work email and mobile show the new note | |
+| `01-41-profile-visibility` | **CURRENT** 2026-10-20 (re-shot) | A switch that is on beside a row the department has off for everyone reads "Shared once the department allows it", not "Off for everyone (department setting)"; a switch that is off there reads "Only you and leadership". Re-shoot the same seeded mix so work email and mobile show the new note | |
 | `02-01-my-training` | **CURRENT** 2026-10-17, re-shot as the demo member | The subtitle was rewritten and the 'Requirements' stat is now 'Required Training' with an 'X of Y requirements met' hint. The Pipeline Progress card now carries the program name. | #2827, #2788 |
 | `02-100-checklist-steps-editor` | **CURRENT** 2026-10-17, re-shot | The manifest prepare clicks the button named 'Edit requirement', which is now 'Edit <requirement name>', so re-capture times out until the selector is updated. The pictured UI is unchanged. | #2788 |
 | `02-17-officer-dashboard` | **CURRENT** 2026-10-17, re-shot | Subtitle changed to 'Compliance, expiring certifications, hours, and what needs your attention'. | #2777 |

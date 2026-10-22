@@ -107,6 +107,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
 }) => {
   const navigate = useNavigate();
   const timezone = useTimezone();
+  const { confirm } = useConfirm();
   const isEdit = !!editSubmission;
 
   // Offered in the department's own order, so the type they listed first is
@@ -886,7 +887,20 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                       onClick={() => {
                         const submissionId = editSubmission.id;
                         const index = stored.index;
+                        const fileName = stored.file_name || `Attachment ${stored.index + 1}`;
                         void (async () => {
+                          // The file is deleted from the server immediately,
+                          // not when the form is saved, so cancelling the edit
+                          // afterwards does not bring it back.
+                          const agreed = await confirm({
+                            title: `Remove "${fileName}"?`,
+                            message:
+                              'The file is deleted from this submission right away, even if you cancel the rest of your edits.',
+                            confirmLabel: 'Remove file',
+                            cancelLabel: 'Keep it',
+                            variant: 'danger',
+                          });
+                          if (!agreed) return;
                           try {
                             await trainingSubmissionService.deleteAttachment(submissionId, index);
                             setStoredAttachments(await trainingSubmissionService.getAttachments(submissionId));

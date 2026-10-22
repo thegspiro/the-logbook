@@ -318,7 +318,12 @@ const AuditLogPage: React.FC = () => {
               );
             })}
           </div>
-          <div className="card hidden overflow-x-auto md:block">
+          <div
+            className="card hidden overflow-x-auto md:block"
+            tabIndex={0}
+            role="region"
+            aria-label="Audit log entries"
+          >
             <table className="w-full">
               <thead className="bg-theme-surface-secondary text-theme-text-muted text-left text-xs font-medium uppercase">
                 <tr>
@@ -351,10 +356,22 @@ const AuditLogPage: React.FC = () => {
                       <tr
                         className="hover:bg-theme-surface-hover cursor-pointer"
                         onClick={() => setExpandedId(expanded ? null : entry.id)}
-                        aria-expanded={expanded}
                       >
                         <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
-                          {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
+                          {/* The row click is a pointer convenience; this button is
+                              what a keyboard or screen-reader user operates. */}
+                          <button
+                            type="button"
+                            aria-expanded={expanded}
+                            aria-label={`${expanded ? 'Hide' : 'Show'} details for ${entry.event_type}`}
+                            className="touch:min-h-11 text-left"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedId(expanded ? null : entry.id);
+                            }}
+                          >
+                            {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
+                          </button>
                         </td>
                         <td className="px-4 py-3">
                           {sev && (

@@ -583,14 +583,14 @@ export const PipelineSettingsPage: React.FC = () => {
                         <span
                           className={`rounded px-2 py-0.5 text-xs ${
                             currentPipeline.is_active
-                              ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                              ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300'
                               : 'bg-theme-surface-hover text-theme-text-muted'
                           }`}
                         >
                           {currentPipeline.is_active ? 'Active' : 'Inactive'}
                         </span>
                         {currentPipeline.is_default && (
-                          <span className="flex items-center gap-1 rounded-sm bg-amber-500/20 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400">
+                          <span className="flex items-center gap-1 rounded-sm bg-amber-500/20 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-400">
                             <Star className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
                             Default
                           </span>
@@ -688,13 +688,13 @@ export const PipelineSettingsPage: React.FC = () => {
                       icon={CheckCircle2}
                       label="Converted"
                       value={pipelineStats.converted_count}
-                      color="text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
+                      color="text-emerald-700 dark:text-emerald-400 bg-emerald-500/10"
                     />
                     <StatCard
                       icon={XCircle}
                       label="Rejected"
                       value={pipelineStats.rejected_count}
-                      color="text-red-600 dark:text-red-400 bg-red-500/10"
+                      color="text-red-700 dark:text-red-400 bg-red-500/10"
                     />
                     <StatCard
                       icon={TrendingUp}
@@ -1078,7 +1078,7 @@ export const PipelineSettingsPage: React.FC = () => {
         title="Delete Pipeline"
         message={
           currentPipeline && (currentPipeline.applicant_count ?? 0) > 0
-            ? `This pipeline has ${currentPipeline.applicant_count} applicant${currentPipeline.applicant_count === 1 ? '' : 's'}. Deleting it permanently deletes their application records and can’t be undone. A pipeline with active or on-hold applicants can’t be deleted.`
+            ? `This pipeline has ${currentPipeline.applicant_count} applicant${currentPipeline.applicant_count === 1 ? '' : 's'}. Deleting it deletes its stages and every applicant’s stage-by-stage progress. The applicant records themselves are kept, but no longer belong to any pipeline. This can’t be undone. A pipeline with active or on-hold applicants can’t be deleted.`
             : 'Delete this pipeline and its stages? This can’t be undone.'
         }
         confirmLabel="Delete Pipeline"

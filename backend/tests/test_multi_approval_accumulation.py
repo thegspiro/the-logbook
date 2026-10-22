@@ -277,3 +277,58 @@ class TestRecordStepApproval:
             {"role": "chief", "approved_by": "signer-fire_chief"}
         ]
         service._advance_current_step.assert_awaited_once()
+
+
+class TestPaddedApproverRoles:
+    """The stage editor stores approver roles as typed, so a stage can hold
+    " chief ". Compared verbatim, no holder ever matched it and the stage
+    could not complete."""
+
+    async def test_padded_role_is_signable_and_completes(self):
+        step = _step(required=(" chief ",))
+        prospect = _prospect(step)
+        service = _service(prospect, _signer("fire_chief", "Fire Chief"))
+
+        await service.record_step_approval(
+            prospect_id="prospect-1",
+            organization_id="org-1",
+            step_id="step-1",
+            signer_id="signer-fire_chief",
+            role="chief",
+        )
+
+        added = service.db.add.call_args[0][0]
+        assert added.status == StepProgressStatus.COMPLETED
+        service._advance_current_step.assert_awaited_once()
+
+    async def test_refusal_names_missing_signers_by_office_label(self):
+        """The coordinator reads this refusal; it named the stored keys
+        ("ems_supply_officer") rather than the offices."""
+        step = _step(required=("chief", "ems_supply_officer"))
+        prospect = _prospect(step)
+        service = _service(prospect, _signer("fire_chief", "Fire Chief"))
+
+        with pytest.raises(
+            ValueError,
+            match=r"^Approval still needed from: Chief, EMS Supply Officer\.$",
+        ):
+            await service._validate_step_completion(prospect, step, {})
+
+    async def test_blank_role_still_keeps_the_stage_closed(self):
+        """Stripping must not turn a blank entry into "no approvers
+        required", which would let the stage complete unsigned."""
+        step = _step(required=("chief", "  "))
+        prospect = _prospect(step)
+        service = _service(prospect, _signer("fire_chief", "Fire Chief"))
+
+        await service.record_step_approval(
+            prospect_id="prospect-1",
+            organization_id="org-1",
+            step_id="step-1",
+            signer_id="signer-fire_chief",
+            role="chief",
+        )
+
+        added = service.db.add.call_args[0][0]
+        assert added.status == StepProgressStatus.IN_PROGRESS
+        service._advance_current_step.assert_not_awaited()

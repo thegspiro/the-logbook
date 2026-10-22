@@ -1548,7 +1548,8 @@ You can see your shifts in Google Calendar, Apple Calendar or Outlook.
 3. Copy the link. Add it to your calendar app as a subscribed (or "Internet")
    calendar.
 
-Your shifts then appear and stay up to date. The feed shows your assigned,
+Disconnecting the feed stops the link working for every calendar that
+subscribed to it, and subscribing again issues a new link. Your shifts then appear and stay up to date. The feed shows your assigned,
 non-cancelled shifts from 60 days ago to a year ahead. You cannot edit shifts
 from your calendar.
 
@@ -2356,7 +2357,11 @@ Both take you to My Checklists with that shift's checks at the top.
 
 On a phone the list is compact: one row per checklist under a heading for each
 day (**Today**, **Tomorrow**, then the date). A day that has passed and still
-holds an unfiled check is marked overdue. **Unscheduled checklist** sits beside
+holds an unfiled check is marked overdue, and you can still start that check
+from it. A missed check stays on your list for seven days, which also keeps an
+overnight shift's end-of-shift check reachable after midnight; after that it
+drops off your list, though the fleet board and compliance report still count
+it. **Unscheduled checklist** sits beside
 the title (shortened to **Unscheduled**), and **Apparatus Inventory** and
 **Manage Templates** fold into a **⋯** menu. Completed checklists are grouped
 by the day checked. The **All / Start / End** filter is gone; every row carries
@@ -2956,6 +2961,17 @@ Drag a saved row by its handle to reorder it among the rows beside it. Tick
 **Sealed** on a location that is a tamper-sealed bag or kit (see
 [Sealed Containers](#sealed-containers)).
 
+**Items directly on the checklist.** When you delete or move out the last item
+in a group of items that sit directly on the checklist, the group goes too.
+It has no heading, so there would be nothing left to find it by.
+
+**Older "in place" checks.** Lines that asked the crew to "Confirm the item is
+in place." were Works checks before the **Present** type existed. When a
+checklist still has any, **Tools** offers **Switch "in place" checks to
+Present** with the number found. It lists the lines first, and switches all of
+them in one step. Other Works lines are never changed. The built-in vehicle
+layouts and equipment kits already add these lines as **Present**.
+
 #### Starting from a vehicle layout
 
 On an empty checklist, a **How would you like to start?** card offers **Use a
@@ -3084,6 +3100,16 @@ same tabs.
 ### Templates
 
 Select **New Template** to create one, or select a template to edit it.
+
+**Deleting a template or a basic vehicle.** A shift template used by any shift
+or pattern, and a basic apparatus named by any template, shift, pre-work
+session, equipment check or call, is **deactivated** rather than deleted, so
+existing shifts keep their checklists and templates keep saving. Inactive
+records are hidden from pickers for new records. Unused ones are deleted. The
+confirmation and toast say which happened. On the basic apparatus list, anyone
+with scheduling manage rights can turn on **Show inactive** and select
+**Reactivate**; reactivating changes only the flag and re-adds nothing to
+shifts.
 
 | Field                                                                | What it does                                                                                                                                             |
 | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -13,7 +13,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.meeting import Meeting, MeetingAttendee
-from app.models.user import MemberLeaveOfAbsence, Organization, User, UserStatus
+from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
+    MemberLeaveOfAbsence,
+    Organization,
+    User,
+)
 from app.services.member_service_history_service import MemberServiceHistoryService
 from app.services.membership_tier_service import attendance_window, tally_attendance
 from app.utils.org_scoping import assert_in_org
@@ -53,7 +58,7 @@ class AttendanceDashboardService:
         member_result = await self.db.execute(
             select(User)
             .where(User.organization_id == org_id)
-            .where(User.status == UserStatus.ACTIVE)
+            .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
             .where(User.deleted_at.is_(None))
             .order_by(User.last_name, User.first_name)
         )

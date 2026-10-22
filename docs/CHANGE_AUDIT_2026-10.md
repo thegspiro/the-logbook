@@ -5,6 +5,65 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-10.md`](../wiki/Recent-Changes-2026-10.md).
 
+## Change audit: October 21 – 22, 2026
+
+Merged to `main` since the [October 20 – 21 pass](#change-audit-october-20--21-2026)
+(written against `c41d7b47`), up to `68c22b0f` (2026-10-22 12:53 UTC). About 50
+non-merge commits besides the security-review passes (all "0 fixed, 0 new
+findings", recorded in `docs/security-review/PROGRESS.md`). Several changes brought
+their own docs (Elections report recipients and announcement delivery, skills tests
+under shift-report sign-offs, library course name, expiry alert switch, My
+Checklists overdue week, property return letter deadline, positions that mirror a
+rank, file storage, KNOWN_LIMITATIONS and UPGRADING); this pass covered what no
+guide yet said and corrected one statement that had become false. `CHANGELOG.md`
+stays closed.
+
+| Change                                                                                                                                                                    | Guide          | Disposition                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------- |
+| Gear-kit lines name a product and default to **Member's size**; issuing opens a review of resolved sizes (`issue-plan`, optional `selections`)                            | 05             | "Kit does not pick sizes" note was false; rewritten                               |
+| Delete deactivates in-use records: training requirements, pipelines, budget categories, shift templates, basic apparatus; forms with submissions are archived             | 02, 03, 07, 11 | Added; finance "destructive delete" row and "no way to switch off" text rewritten |
+| **Reactivate** and **Show inactive** for basic apparatus and training pipelines                                                                                           | 02, 03         | Added                                                                             |
+| Delete "this and future events in this series"; first occurrence deleted promotes the next; approved meeting cannot be deleted                                            | 04             | Added; "no delete future" warning rewritten                                       |
+| Permanent member delete keeps others' records (examiner and officer show **Former member**), returns held gear, itemizes the preview; deactivation releases future shifts | 01             | Added under Deleting Members                                                      |
+| Membership type drives account status between Active and Probationary                                                                                                     | 01             | Added to Changing a Member's Status (already in UPGRADING)                        |
+| Roster names link to profiles; row actions named; Change Status is a real dialog                                                                                          | 01             | Added; screenshot re-check                                                        |
+| Renaming a rank code moves every stored reference                                                                                                                         | 08             | Added                                                                             |
+| Mapping a Target Solutions user imports their pending records; **Import matching pending records**                                                                        | 02             | Added; wiki developer page already had it                                         |
+| Governance pages share the Operations-style section header; Skills test templates reflow to cards on a phone; Checklist settings phone layout; `rwd-table-lead` fixed     | 04, 09, 05     | Layout only; no text quotes them; screenshots to re-check                         |
+| Numeric request fields bounded; storage interface; pypdf 6.21.1; Alembic merge heads; TypeScript 7 editor settings; a11y and layout sweep                                 | —              | No guide impact; KNOWN_LIMITATIONS, UPGRADING and CLAUDE.md carry them            |
+
+Screenshots: the training-guide shots were recaptured by `aa87bbfb` before this
+pass; this pass captured nothing. The gap list is the top section of
+[`SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md#queued-by-the-october-21--22-documentation-pass).
+YouTube rows are in [`SCRIPT_CURRENCY.md`](./youtube-scripts/SCRIPT_CURRENCY.md).
+
+## Change audit: October 20 – 21, 2026
+
+Merged to `main` since the [October 19 – 20 pass](#change-audit-october-19--20-2026)
+(written against `4f346dab`), up to `c41d7b47` (2026-10-21 12:12 UTC). About 90
+non-merge commits, most of them the same Pillow 13.0.0, follow-redirects 1.16.1 and
+session-limit test fixes landed on many branches. Several changes brought their own
+docs (Medical Supplies, Minutes, UPGRADING, KNOWN_LIMITATIONS, the Google / Microsoft
+wiki pages, the scheduling checklist text, roster and Minutes screenshots); this pass
+covered what no guide yet said. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                   | Guide             | Disposition                                                     |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------- |
+| Event detail: **Check In** and "You're checked in"; **View QR Code** only for managers/organizers; attendee list asked only when shared                                                  | 04                | Added; screenshot placeholder                                   |
+| My Training "Awaiting approval" group renamed **No completion date**                                                                                                                     | 02                | Both mentions rewritten; YouTube 06 cue updated                 |
+| Member delete, status change and archive refused above the caller's privileges                                                                                                           | 01                | Added under When Deletion Is Refused                            |
+| Ranked-choice paper ballots counted individually; entered ballot by ballot                                                                                                               | 14                | Added; screenshot placeholder                                   |
+| Multi-signer approvers labelled by office                                                                                                                                                | 15                | Added                                                           |
+| Shift feed disconnect revokes the link for all subscribers                                                                                                                               | 03                | Added                                                           |
+| Weeks start on Sunday; ballot print layout; operations header on 16 sub-pages; checklist report phone layout                                                                             | 03, 14, 05        | No text quotes them; screenshots to re-check                    |
+| Create Training Session apparatus picker removed                                                                                                                                         | 02                | Nothing named it                                                |
+| Delete fixes (operations, governance, finance, people, training, events); public API key audit and immediate revocation; `/health/detailed` development only; session lifetime hardening | 08, wiki Security | Operator-facing; session lifetime already in UPGRADING and wiki |
+| Dependency bumps (Pillow 13.0.0, follow-redirects 1.16.1); UTC normalization sweep; probationary counted as current member                                                               | —                 | No guide impact; UTC and probationary are in UPGRADING          |
+
+Screenshots: nothing captured. The gap list is the top section of
+[`SCREENSHOT_CURRENCY.md`](./training/SCREENSHOT_CURRENCY.md#queued-by-the-october-20--21-documentation-pass).
+YouTube rows are in [`SCRIPT_CURRENCY.md`](./youtube-scripts/SCRIPT_CURRENCY.md).
+
 ## Change audit: October 19 – 20, 2026
 
 A check of the training guides (`docs/training/`) against the application as of

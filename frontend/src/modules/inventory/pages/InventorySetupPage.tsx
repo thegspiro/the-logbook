@@ -605,7 +605,7 @@ const InventorySetupPage: React.FC = () => {
                     }`}
                   >
                     {already ? (
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400" />
                     ) : (
                       <input
                         type="checkbox"
@@ -770,7 +770,7 @@ const InventorySetupPage: React.FC = () => {
         >
           <div className="space-y-4">
             <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/10 p-3">
-              <PartyPopper className="h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+              <PartyPopper className="h-5 w-5 shrink-0 text-green-700 dark:text-green-400" />
               <p className="text-sm text-green-700 dark:text-green-300">
                 {locations.length} room{locations.length === 1 ? '' : 's'}, {storageAreas.length} storage area
                 {storageAreas.length === 1 ? '' : 's'}, {categories.length} categor
@@ -820,7 +820,7 @@ const InventorySetupPage: React.FC = () => {
                 to="/inventory/print-labels"
                 className="card-secondary hover:bg-theme-surface-hover flex items-start gap-3 p-3"
               >
-                <Package className="mt-0.5 h-5 w-5 shrink-0 text-cyan-600 dark:text-cyan-400" />
+                <Package className="mt-0.5 h-5 w-5 shrink-0 text-cyan-700 dark:text-cyan-400" />
                 <span>
                   <span className="text-theme-text-primary block text-sm font-semibold">Barcode labels</span>
                   <span className="text-theme-text-muted block text-xs">

@@ -7,6 +7,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
+import toast from 'react-hot-toast';
 import {
   ClipboardCheck,
   Plus,
@@ -28,6 +29,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import type { SkillTemplateListItem } from '../types/skillsTesting';
 import { FormStatus } from '../constants/enums';
+import { getErrorMessage } from '../utils/errorHandling';
 import { ConfirmDialog } from '../components/ux';
 import { SkillSheetLibraryModal } from '../components/training/SkillSheetLibraryModal';
 
@@ -95,16 +97,18 @@ const TemplateRow: React.FC<{
   onDelete: () => void;
 }> = ({ template, onEdit, onView, onPublish, onDuplicate, onPrint, onDelete }) => (
   <tr className="hover:bg-theme-surface-hover transition-colors">
-    <td className="px-4 py-3">
+    <td data-label="Template" className="rwd-table-lead px-4 py-3">
       <div>
         <p className="text-theme-text-primary font-medium">{template.name}</p>
-        {template.description && <p className="text-theme-text-muted line-clamp-1 text-sm">{template.description}</p>}
+        {template.description && (
+          <p className="text-theme-text-muted line-clamp-2 text-sm md:line-clamp-1">{template.description}</p>
+        )}
       </div>
     </td>
-    <td className="hidden px-4 py-3 md:table-cell">
+    <td data-label="Category" className="hidden px-4 py-3 md:table-cell">
       <span className="text-theme-text-muted text-sm">{template.category ?? '—'}</span>
     </td>
-    <td className="px-4 py-3">
+    <td data-label="Status" className="px-4 py-3">
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusBadge status={template.status} />
         {template.visibility && template.visibility !== 'all_members' && (
@@ -114,24 +118,28 @@ const TemplateRow: React.FC<{
         )}
       </div>
     </td>
-    <td className="hidden px-4 py-3 text-center lg:table-cell">
+    <td data-label="Sections" className="hidden px-4 py-3 text-center lg:table-cell">
       <span className="text-theme-text-muted text-sm">{template.section_count}</span>
     </td>
-    <td className="hidden px-4 py-3 text-center lg:table-cell">
+    <td data-label="Criteria" className="hidden px-4 py-3 text-center lg:table-cell">
       <span className="text-theme-text-muted text-sm">{template.criteria_count}</span>
     </td>
-    <td className="px-4 py-3">
-      <div className="flex items-center justify-end gap-1">
+    {/* rwd-table-lead drops the "Actions" prefix on a phone: beside it, five
+        touch-sized buttons were wider than the card. The row of icons needs no
+        label at the foot of the card. Wrapping is phone-only — at desktop widths
+        the column sizes to its buttons, as it always has. */}
+    <td data-label="Actions" className="rwd-table-lead px-4 py-3">
+      <div className="flex items-center justify-end gap-1 max-md:min-w-0 max-md:flex-wrap">
         <button
           onClick={onView}
-          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          className="hover:bg-theme-surface-hover touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-sm p-1.5 transition-colors"
           title="View"
         >
           <Eye className="text-theme-text-muted h-4 w-4" />
         </button>
         <button
           onClick={onEdit}
-          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          className="hover:bg-theme-surface-hover touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-sm p-1.5 transition-colors"
           title="Edit"
         >
           <Pencil className="text-theme-text-muted h-4 w-4" />
@@ -139,15 +147,15 @@ const TemplateRow: React.FC<{
         {template.status === FormStatus.DRAFT && (
           <button
             onClick={onPublish}
-            className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+            className="hover:bg-theme-surface-hover touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-sm p-1.5 transition-colors"
             title="Publish"
           >
-            <Send className="h-4 w-4 text-green-600" />
+            <Send className="h-4 w-4 text-green-700 dark:text-green-600" />
           </button>
         )}
         <button
           onClick={onDuplicate}
-          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          className="hover:bg-theme-surface-hover touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-sm p-1.5 transition-colors"
           title="Duplicate"
         >
           <Copy className="text-theme-text-muted h-4 w-4" />
@@ -157,14 +165,14 @@ const TemplateRow: React.FC<{
             easily on the printed form than in the builder. */}
         <button
           onClick={onPrint}
-          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          className="hover:bg-theme-surface-hover touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-sm p-1.5 transition-colors"
           title="Print blank sheet"
         >
           <Printer className="text-theme-text-muted h-4 w-4" />
         </button>
         <button
           onClick={onDelete}
-          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          className="hover:bg-theme-surface-hover touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-sm p-1.5 transition-colors"
           title="Archive"
         >
           <Trash2 className="h-4 w-4 text-red-500" />
@@ -222,6 +230,8 @@ const SkillsTestingTemplatesTab: React.FC = () => {
       await publishTemplate(publishTarget.id);
       setPublishTarget(null);
       void loadTemplates(statusFilter ? { status: statusFilter } : undefined);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to publish template'));
     } finally {
       setBusy(false);
     }
@@ -229,8 +239,12 @@ const SkillsTestingTemplatesTab: React.FC = () => {
 
   const handleDuplicate = useCallback(
     async (id: string) => {
-      const newTemplate = await duplicateTemplate(id);
-      void navigate(`/training/skills-testing/templates/${newTemplate.id}/edit`);
+      try {
+        const newTemplate = await duplicateTemplate(id);
+        void navigate(`/training/skills-testing/templates/${newTemplate.id}/edit`);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to duplicate template'));
+      }
     },
     [duplicateTemplate, navigate]
   );
@@ -241,6 +255,9 @@ const SkillsTestingTemplatesTab: React.FC = () => {
     try {
       await deleteTemplate(archiveTarget.id);
       setArchiveTarget(null);
+    } catch (err: unknown) {
+      // The dialog stays open so the officer can retry or cancel.
+      toast.error(getErrorMessage(err, 'Failed to archive template'));
     } finally {
       setBusy(false);
     }
@@ -280,13 +297,13 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           <SummaryCard
             label="Pass Rate"
             value={percentOrDash(summary.pass_rate)}
-            icon={<TrendingUp className="h-5 w-5 text-green-600" />}
+            icon={<TrendingUp className="h-5 w-5 text-green-700 dark:text-green-600" />}
             color="bg-green-100 dark:bg-green-900/30"
           />
           <SummaryCard
             label="Avg Score"
             value={percentOrDash(summary.average_score)}
-            icon={<BarChart3 className="h-5 w-5 text-orange-600" />}
+            icon={<BarChart3 className="h-5 w-5 text-orange-700 dark:text-orange-600" />}
             color="bg-orange-100 dark:bg-orange-900/30"
           />
         </div>
@@ -368,7 +385,10 @@ const SkillsTestingTemplatesTab: React.FC = () => {
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            {/* Reflows to one card per template under 768px. Scrolled sideways,
+                the name was left a few characters wide and half the actions
+                sat off the edge of a phone. */}
+            <table className="rwd-table w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th

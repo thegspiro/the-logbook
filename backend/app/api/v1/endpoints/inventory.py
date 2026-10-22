@@ -145,6 +145,9 @@ from app.schemas.inventory import (
     ItemVariantGroupDetailResponse,
     ItemVariantGroupResponse,
     ItemVariantGroupUpdate,
+    KitIssuePlanResponse,
+    KitIssueRequest,
+    KitProductOptionResponse,
     LabelGenerateRequest,
     LabelMarkPrintedRequest,
     LabelMarkPrintedResponse,
@@ -201,7 +204,12 @@ from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.equipment_request_notifications import (
     send_equipment_request_notice,
 )
-from app.services.inventory_service import InventoryService, is_pool_without_stock
+from app.services.inventory_service import (
+    InventoryService,
+    LotReceivedAgainstReorderError,
+    StorageAreaNotEmptyError,
+    is_pool_without_stock,
+)
 from app.services.label_printer_service import LabelPrinterService
 from app.services.label_service import UNSET, LabelService
 from app.services.organization_service import OrganizationService
@@ -4943,18 +4951,20 @@ async def delete_storage_area(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
-    """Delete (deactivate) a storage area"""
-    result = await db.execute(
-        select(StorageArea)
-        .where(StorageArea.id == str(area_id))
-        .where(StorageArea.organization_id == str(current_user.organization_id))
-    )
-    area = result.scalar_one_or_none()
+    """Delete (deactivate) a storage area.
+
+    Refused (409) while it holds active items or active nested areas.
+    """
+    try:
+        area = await InventoryService(db).deactivate_storage_area(
+            str(area_id), str(current_user.organization_id)
+        )
+    except StorageAreaNotEmptyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
     if not area:
         raise HTTPException(status_code=404, detail="Storage area not found")
-
-    area.is_active = False
-    await db.commit()
 
     await log_audit_event(
         db=db,
@@ -7204,6 +7214,23 @@ async def create_equipment_kit(
     return EquipmentKitDetailResponse.model_validate(kit)
 
 
+# Declared before /kits/{kit_id}: that route would otherwise claim the path and
+# reject "product-options" as an invalid UUID.
+@router.get("/kits/product-options", response_model=List[KitProductOptionResponse])
+async def list_kit_product_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    The catalog grouped into products, for choosing what a kit line issues.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    return await service.get_kit_product_options(current_user.organization_id)
+
+
 @router.get("/kits/{kit_id}", response_model=EquipmentKitDetailResponse)
 async def get_equipment_kit(
     kit_id: UUID,
@@ -7279,25 +7306,57 @@ async def delete_equipment_kit(
     )
 
 
+@router.get("/kits/{kit_id}/issue-plan", response_model=KitIssuePlanResponse)
+async def get_kit_issue_plan(
+    kit_id: UUID,
+    user_id: UUID = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Preview a kit issue: each line sized from the member's size preferences.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    plan, error = await service.get_kit_issue_plan(
+        kit_id, user_id, current_user.organization_id
+    )
+    if error or plan is None:
+        raise HTTPException(status_code=404, detail=sanitize_error_message(error or ""))
+    return plan
+
+
 @router.post("/kits/{kit_id}/issue/{user_id}")
 async def issue_kit_to_member(
     kit_id: UUID,
     user_id: UUID,
+    body: Optional[KitIssueRequest] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     Issue all items in a kit to a member.
 
+    The optional body carries the quartermaster's size choices per line;
+    lines left out are issued in the member's recorded size.
+
     **Authentication required**
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
+    selections = (
+        {str(line): str(item) for line, item in body.selections.items()}
+        if body
+        else None
+    )
     issuances, error = await service.issue_kit_to_member(
         kit_id=kit_id,
         user_id=user_id,
         organization_id=current_user.organization_id,
         issued_by=UUID(current_user.id),
+        selections=selections,
     )
     if error or issuances is None:
         raise HTTPException(status_code=400, detail=sanitize_error_message(error or ""))
@@ -7663,9 +7722,14 @@ async def delete_item_lot(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
-    """Delete a stock lot."""
+    """Delete a stock lot. A lot received against a reorder is refused (409)."""
     service = InventoryService(db)
-    deleted = await service.delete_lot(lot_id, str(current_user.organization_id))
+    try:
+        deleted = await service.delete_lot(lot_id, str(current_user.organization_id))
+    except LotReceivedAgainstReorderError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
     if not deleted:
         raise HTTPException(status_code=404, detail="Lot not found")
 

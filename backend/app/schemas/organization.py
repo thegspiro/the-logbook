@@ -21,6 +21,7 @@ from pydantic import (
 
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.utils import membership_numbers
 
 
@@ -480,6 +481,36 @@ class FileStorageSettings(BaseModel):
         return copied
 
 
+class FileStorageStatusResponse(BaseModel):
+    """Where a department's new files go, and why (decision 31)."""
+
+    platform: str = Field(description="The platform saved in File Storage settings")
+    new_files_go_to: Literal["local", "s3"] = Field(
+        description="Where an upload made now is stored"
+    )
+    bucket: Optional[str] = Field(
+        None, description="The bucket the last passed connection test used"
+    )
+    endpoint_url: Optional[str] = None
+    activated_at: Optional[str] = Field(
+        None, description="When the last connection test passed (UTC, ISO 8601)"
+    )
+    changed_since_test: bool = Field(
+        False,
+        description=(
+            "The S3 settings were edited after the last passed test, so new "
+            "files go to local disk until it is run again"
+        ),
+    )
+    s3_problem: Optional[str] = Field(
+        None, description="Why the saved S3 settings cannot be used, if they cannot"
+    )
+    private_endpoints_allowed: bool = Field(
+        False,
+        description="The operator allows a private or plain-HTTP S3 endpoint",
+    )
+
+
 class SchedulingNotificationSettings(BaseModel):
     """Configuration for shift scheduling notifications.
 
@@ -690,6 +721,8 @@ class MembershipTier(BaseModel):
     sort_order: int = Field(
         default=0,
         description="Display and progression order (lower = earlier tier)",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     benefits: MembershipTierBenefits = Field(
         default_factory=MembershipTierBenefits,
@@ -1356,6 +1389,13 @@ class MinutesSettingsUpdate(BaseModel):
         description=(
             "Which attendance statuses the minutes name. The roll is always "
             "recorded in full. Absent reads as all."
+        ),
+    )
+    auto_file_election_results: Optional[bool] = Field(
+        None,
+        description=(
+            "File a closed election's result with the minutes of the meeting "
+            "it was held at, without a manager importing it. Absent reads as on."
         ),
     )
     executive_library_publishing: Optional[bool] = Field(

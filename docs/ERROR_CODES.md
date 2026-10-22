@@ -93,13 +93,14 @@ fails if this document misses a curated code).
 
 ## File uploads (LB-UPLD)
 
-| Code        | Meaning                                                                                                   | What to do                                                                                                        |
-| ----------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| LB-UPLD-001 | File exceeds the size limit for this upload type (limit stated in the message).                           | Compress/resize the file, or split archives into parts.                                                           |
-| LB-UPLD-002 | File type not accepted — checked by content, so renaming the extension doesn't help.                      | Convert to one of the listed types; re-export if the file may be corrupted.                                       |
-| LB-UPLD-003 | Server-side upload inspection temporarily unavailable; upload refused rather than unvetted.               | Retry in a few minutes; if persistent, check backend logs for the libmagic dependency.                            |
-| LB-UPLD-004 | The file was identified as malicious by the ClamAV scan; nothing was stored and the rejection is audited. | Get a fresh copy from the source; an admin can check the audit log (`upload_malware_detected`) for the signature. |
-| LB-UPLD-005 | Malware scanning is on but ClamAV was unreachable or timed out; upload refused rather than unscanned.     | Retry in a few minutes; if persistent, check the `clamav` container is healthy and `CLAMAV_HOST`/`CLAMAV_PORT`.   |
+| Code        | Meaning                                                                                                      | What to do                                                                                                           |
+| ----------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| LB-UPLD-001 | File exceeds the size limit for this upload type (limit stated in the message).                              | Compress/resize the file, or split archives into parts.                                                              |
+| LB-UPLD-002 | File type not accepted — checked by content, so renaming the extension doesn't help.                         | Convert to one of the listed types; re-export if the file may be corrupted.                                          |
+| LB-UPLD-003 | Server-side upload inspection temporarily unavailable; upload refused rather than unvetted.                  | Retry in a few minutes; if persistent, check backend logs for the libmagic dependency.                               |
+| LB-UPLD-004 | The file was identified as malicious by the ClamAV scan; nothing was stored and the rejection is audited.    | Get a fresh copy from the source; an admin can check the audit log (`upload_malware_detected`) for the signature.    |
+| LB-UPLD-005 | Malware scanning is on but ClamAV was unreachable or timed out; upload refused rather than unscanned.        | Retry in a few minutes; if persistent, check the `clamav` container is healthy and `CLAMAV_HOST`/`CLAMAV_PORT`.      |
+| LB-UPLD-006 | The department's own S3 / MinIO bucket was unreachable or refused the request; nothing was stored elsewhere. | Retry in a few minutes; if persistent, an administrator checks File Storage settings and runs Test and switch to S3. |
 
 ## Onboarding (LB-ONBD)
 

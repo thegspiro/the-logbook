@@ -49,13 +49,21 @@ department's own progression they are.  Three spellings appear in both —
 ``probationary``, ``retired``, and the non-participating case — which is
 precisely why they get read as one thing and are not.
 
-Nothing reconciles them, deliberately.  A probationary member (ladder) has an
-active account (status); a member on leave (status) is still a regular member
-(ladder).  ``POST /member-status/{id}/status`` writes ``status`` and never
-touches ``membership_type``, and that is correct — but it means a rule that
-consults only membership sees a retired member as a regular operational one.
-Any gate about *participation* must ask both; ``ShiftEligibilityService``
-does.
+They are reconciled in one direction only (owner decision 2026-10-20).
+Membership drives status, between the two statuses that say nothing about
+leave or separation: writing a membership type of ``probationary`` puts an
+``active`` account on ``probationary``, and writing any other type moves a
+``probationary`` account back to ``active``.  A member on leave, suspended,
+inactive, retired or dropped keeps that status whatever their type says; the
+status catches up when they return.  ``PATCH /users/{id}/status`` still
+writes ``status`` on its own and never touches ``membership_type`` — an
+officer can put an active-type member on probation by hand, and it holds
+until the type is next written.  ``account_status_for_membership`` below is
+the rule, ``sync_account_status_with_membership`` applies it, and the flush
+listener runs it whenever a membership field was written.  A rule that
+consults only membership still sees a retired member as a regular operational
+one, so any gate about *participation* must ask both;
+``ShiftEligibilityService`` does.
 
 ``membership_type`` cannot be enum-constrained
 ----------------------------------------------
@@ -97,6 +105,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 from sqlalchemy.sql import ColumnElement, and_, func
 
 from app.core.database import Base
+from app.core.permissions import position_mirrors_rank
 from app.core.utils import generate_uuid
 from app.utils.member_badge import generate_badge_code
 from app.utils.member_names import format_display_name, format_legal_name
@@ -709,9 +718,7 @@ def _reconcile_membership(_mapper, _connection, target: "User") -> None:
         target.membership_type = derive_membership_type(
             target.member_class, target.member_status
         )
-        return
-
-    if legacy_written or target.member_class is None or target.member_status is None:
+    elif legacy_written or target.member_class is None or target.member_status is None:
         member_class, member_status = split_membership_type(target.membership_type)
         # Keep what is already recorded when the split cannot answer.
         #
@@ -729,6 +736,78 @@ def _reconcile_membership(_mapper, _connection, target: "User") -> None:
         # not ride.
         target.member_class = member_class or target.member_class
         target.member_status = member_status or target.member_status
+
+    # Only a membership write moves the account status. Gating on the write,
+    # not on the pair disagreeing, is what lets an officer's by-hand
+    # "probationary" (set from the profile on an active-type member) survive
+    # every later save of an unrelated field.
+    if class_written or legacy_written:
+        sync_account_status_with_membership(target)
+
+
+#: The one membership type with an account status of its own. Compared on the
+#: legacy column after reconciliation, so a class/status write, a legacy write
+#: and a tier id all answer the same way.
+PROBATIONARY_MEMBERSHIP_TYPE = "probationary"
+
+#: Prefix of the status-change reason the sync records, so the profile's
+#: status history says where an automatic move came from.
+STATUS_FOLLOWS_MEMBERSHIP_REASON = "Follows membership type"
+
+
+def account_status_for_membership(
+    membership_type: Optional[str], status: "UserStatus | str | None"
+) -> Optional["UserStatus"]:
+    """The account status a membership-type write implies, or None to leave it.
+
+    Membership type drives account status one way, and only between the two
+    statuses that say nothing about leave or separation (owner decision
+    2026-10-20):
+
+    * type ``probationary`` and status ``active`` (or unset, on insert) ->
+      ``probationary``;
+    * any other type and status ``probationary`` -> ``active``;
+    * every other status is left alone — a member on leave who is promoted
+      off probation stays on leave, and comes back as active.
+
+    Judged on the legacy ``membership_type`` *after* reconciliation rather than
+    on ``member_status``: a custom tier id (``senior``) leaves ``member_status``
+    where it was, and a member advanced onto one has left probation whatever
+    the stale column says.
+    """
+    probationary = (
+        membership_type or ""
+    ).strip().lower() == PROBATIONARY_MEMBERSHIP_TYPE
+    current = status.value if isinstance(status, UserStatus) else status
+    if probationary and current in (None, UserStatus.ACTIVE.value):
+        return UserStatus.PROBATIONARY
+    if not probationary and current == UserStatus.PROBATIONARY.value:
+        return UserStatus.ACTIVE
+    return None
+
+
+def sync_account_status_with_membership(
+    target: "User", now: Optional[datetime] = None
+) -> Optional[tuple[Optional[str], str]]:
+    """Apply ``account_status_for_membership`` to ``target``.
+
+    Returns ``(previous, new)`` status values when the status moved, else
+    None. Idempotent, so the flush listener and an endpoint that wants the
+    outcome for its audit entry can both call it on the same change.
+    """
+    new_status = account_status_for_membership(target.membership_type, target.status)
+    if new_status is None:
+        return None
+    previous = target.status
+    previous_value = previous.value if isinstance(previous, UserStatus) else previous
+    if previous_value == new_status.value:
+        return None
+    target.status = new_status
+    target.status_changed_at = now or datetime.now(timezone.utc)
+    target.status_change_reason = (
+        f"{STATUS_FOLLOWS_MEMBERSHIP_REASON} '{target.membership_type}'"
+    )
+    return (previous_value, new_status.value)
 
 
 event.listen(User, "before_insert", _reconcile_membership)
@@ -791,6 +870,16 @@ class Position(Base):
     __table_args__ = (
         Index("idx_position_org_slug", "organization_id", "slug", unique=True),
     )
+
+    @property
+    def mirrors_rank(self) -> bool:
+        """True for the seeded position that duplicates an operational rank.
+
+        Reported on every role response so the member screens can keep the
+        position out of their pickers and chips; see
+        ``RANK_MIRRORING_POSITION_SLUGS``.
+        """
+        return position_mirrors_rank(self.slug, self.is_system)
 
     def __repr__(self):
         return f"<Position(name={self.name})>"

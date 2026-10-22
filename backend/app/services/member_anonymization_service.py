@@ -41,7 +41,6 @@ Preconditions: the member must already be departed (soft-deleted or in a
 departed/archived status). Anonymization is irreversible by design.
 """
 
-import os
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -68,6 +67,7 @@ from app.models.user import (
     User,
     UserStatus,
 )
+from app.services import file_storage_service as file_storage
 from app.services.membership_pipeline_service import prospect_document_path
 from app.utils.sql_results import rows_affected
 
@@ -372,11 +372,8 @@ class MemberAnonymizationService:
                 confined = prospect_document_path(
                     doc.file_path, prospect.organization_id
                 )
-                if confined:
-                    try:
-                        os.remove(confined)
-                    except OSError:
-                        pass  # already gone or unreachable — the row still goes
+                # Best effort: already gone or unreachable, the row still goes.
+                await file_storage.delete_quietly(confined)
             await self.db.execute(
                 delete(ProspectDocument).where(
                     ProspectDocument.prospect_id == prospect.id

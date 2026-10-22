@@ -81,6 +81,7 @@ import { isOwnedByCurrentMember } from '../../utils/offlineQueueOwner';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { EmptyState } from '../../components/ux/EmptyState';
+import { attributionName } from '../../utils/memberName';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'department' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -892,10 +893,10 @@ export const ShiftReportsTab: React.FC = () => {
     const label = ratingScaleLabels[String(rating)] || `Level ${rating}`;
     const colorMap: Record<number, string> = {
       1: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
-      2: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
-      3: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+      2: 'bg-orange-500/10 text-orange-800 dark:text-orange-400 border-orange-500/20',
+      3: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
       4: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-      5: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+      5: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
     };
 
     return (
@@ -954,13 +955,13 @@ export const ShiftReportsTab: React.FC = () => {
           )}
           {traineeStats.total_calls != null && (
             <div className="rounded-lg border border-green-500/15 bg-green-500/5 p-3 text-center">
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{traineeStats.total_calls}</p>
+              <p className="text-2xl font-bold text-green-700 dark:text-green-400">{traineeStats.total_calls}</p>
               <p className="text-theme-text-muted mt-0.5 text-xs">Calls</p>
             </div>
           )}
           {traineeStats.avg_rating != null && (
             <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 p-3 text-center">
-              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{traineeStats.avg_rating}</p>
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{traineeStats.avg_rating}</p>
               <p className="text-theme-text-muted mt-0.5 text-xs">Avg Rating</p>
             </div>
           )}
@@ -1034,7 +1035,7 @@ export const ShiftReportsTab: React.FC = () => {
             <p className="text-theme-text-muted mt-0.5 text-xs">Shift hours covered</p>
           </div>
           <div className="rounded-lg border border-green-500/15 bg-green-500/5 p-3 text-center">
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{officerAnalytics.total_calls}</p>
+            <p className="text-2xl font-bold text-green-700 dark:text-green-400">{officerAnalytics.total_calls}</p>
             <p className="text-theme-text-muted mt-0.5 text-xs">Calls covered</p>
           </div>
           {/* These two lead somewhere, so they are buttons and say where. As
@@ -1058,7 +1059,7 @@ export const ShiftReportsTab: React.FC = () => {
               className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-center transition-colors hover:bg-amber-500/10"
               onClick={() => setViewMode('pending-review')}
             >
-              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingCount}</p>
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{pendingCount}</p>
               <p className="text-theme-text-muted mt-0.5 text-xs">
                 Awaiting review <span aria-hidden="true">→</span>
               </p>
@@ -1173,7 +1174,7 @@ export const ShiftReportsTab: React.FC = () => {
                   days >= 7
                     ? 'text-red-600 dark:text-red-400'
                     : days >= 3
-                      ? 'text-amber-600 dark:text-amber-400'
+                      ? 'text-amber-700 dark:text-amber-400'
                       : 'text-theme-text-muted'
                 }`}
               >
@@ -1194,7 +1195,7 @@ export const ShiftReportsTab: React.FC = () => {
           {statusStyle.label}
         </span>
         {isMyReport && !report.trainee_acknowledged && report.review_status === SubmissionStatus.APPROVED && (
-          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-400">
             Needs Acknowledgment
           </span>
         )}
@@ -1209,7 +1210,7 @@ export const ShiftReportsTab: React.FC = () => {
             </span>
           )}
         {report.trainee_acknowledged && (
-          <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400">
+          <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:text-green-400">
             Acknowledged
           </span>
         )}
@@ -1267,9 +1268,9 @@ export const ShiftReportsTab: React.FC = () => {
                 </span>
                 {report.performance_rating && renderRating(report.performance_rating)}
                 {/* In "Written by me" every report's author is the viewer. */}
-                {report.officer_name && viewMode !== 'filed-by-me' && (
+                {(report.officer_name || !report.officer_id) && viewMode !== 'filed-by-me' && (
                   <span className="text-theme-text-muted flex items-center gap-1 text-xs">
-                    <UserIcon className="h-3 w-3" /> {report.officer_name}
+                    <UserIcon className="h-3 w-3" /> {attributionName(report.officer_name, report.officer_id)}
                   </span>
                 )}
                 {report.reviewer_name && (
@@ -1527,7 +1528,7 @@ export const ShiftReportsTab: React.FC = () => {
                             onClick={() => toggleSkill(setDraftForm, skill)}
                             className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
                               isSelected
-                                ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                                ? 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-400'
                                 : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
                             }`}
                           >
@@ -1774,7 +1775,7 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Encryption notice for officers */}
       {canManage && viewMode === 'create' && (
-        <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-xs text-green-700 dark:text-green-400">
+        <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-xs text-green-800 dark:text-green-400">
           <Shield className="h-3.5 w-3.5 shrink-0" />
           Narratives and evaluations are encrypted at rest (AES-256).
         </div>
@@ -1782,7 +1783,7 @@ export const ShiftReportsTab: React.FC = () => {
 
       {/* Offline indicator */}
       {!isOnline && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-400">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
           You&apos;re offline. Reports are saved on this device and sent automatically when you&apos;re back online.
           {pendingOfflineCount > 0 && <span className="ml-1 font-medium">({pendingOfflineCount} pending)</span>}
@@ -2004,7 +2005,7 @@ export const ShiftReportsTab: React.FC = () => {
                             key={member.user_id}
                             className="bg-theme-surface-hover flex items-center gap-3 rounded-lg px-4 py-3 opacity-60"
                           >
-                            <Check className="h-4 w-4 shrink-0 text-green-600" />
+                            <Check className="h-4 w-4 shrink-0 text-green-700 dark:text-green-600" />
                             <div className="min-w-0 flex-1">
                               <span className="text-theme-text-muted text-sm line-through">{member.user_name}</span>
                               <span className="text-theme-text-muted ml-2 text-xs">Already reported</span>
@@ -2229,7 +2230,7 @@ export const ShiftReportsTab: React.FC = () => {
                                           }}
                                           className={`rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
                                             selected
-                                              ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                                              ? 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-400'
                                               : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
                                           }`}
                                         >
@@ -2498,7 +2499,7 @@ export const ShiftReportsTab: React.FC = () => {
                   let oldestDays = 0;
                   const now = Date.now();
                   for (const r of reports) {
-                    const name = r.officer_name || 'Unknown';
+                    const name = attributionName(r.officer_name, r.officer_id);
                     byOfficer.set(name, (byOfficer.get(name) ?? 0) + 1);
                     const age = Math.floor((now - new Date(r.created_at).getTime()) / 86400000);
                     if (age > oldestDays) oldestDays = age;
@@ -2517,7 +2518,7 @@ export const ShiftReportsTab: React.FC = () => {
                               oldestDays >= 7
                                 ? 'bg-red-500/10 text-red-700 dark:text-red-400'
                                 : oldestDays >= 3
-                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                                  ? 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
                                   : 'bg-theme-surface-hover text-theme-text-muted'
                             }`}
                           >
@@ -2734,9 +2735,9 @@ export const ShiftReportsTab: React.FC = () => {
                           tz
                         )}
                       </span>
-                      {reviewReport.officer_name && (
+                      {(reviewReport.officer_name || !reviewReport.officer_id) && (
                         <span className="text-theme-text-muted flex items-center gap-1">
-                          Filed by {reviewReport.officer_name}
+                          Filed by {attributionName(reviewReport.officer_name, reviewReport.officer_id)}
                         </span>
                       )}
                     </div>

@@ -24,7 +24,8 @@ from app.models.storefront import (
     StoreProductStatus,
     StoreWindowStatus,
 )
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN, MONEY_MAX
 from app.utils.embroidery import (
     DEFAULT_THREAD_COLOR_HEX,
     EmbroideryThreadColor,
@@ -91,7 +92,7 @@ class StoreSettingsUpdate(BaseModel):
     payment_instructions: Optional[str] = None
 
     tax_rate: Optional[Decimal] = Field(None, ge=0, le=1)
-    shipping_flat_rate: Optional[Decimal] = Field(None, ge=0)
+    shipping_flat_rate: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     allow_pickup: Optional[bool] = None
     allow_shipping: Optional[bool] = None
     pickup_location: Optional[str] = Field(None, max_length=300)
@@ -228,10 +229,10 @@ class StoreProductVariantCreate(BaseModel):
     id: Optional[str] = None
     label: str = Field(..., min_length=1, max_length=120)
     sku: Optional[str] = Field(None, max_length=100)
-    price_delta: Decimal = Field(default=Decimal("0"))
-    stock_quantity: Optional[int] = Field(None, ge=0)
+    price_delta: Decimal = Field(default=Decimal("0"), ge=-MONEY_MAX, le=MONEY_MAX)
+    stock_quantity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     is_active: bool = True
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
 
 
 class StoreProductVariantResponse(UTCResponseBase):
@@ -260,22 +261,22 @@ class StoreProductBase(BaseModel):
     image_url: Optional[str] = Field(None, max_length=500)
     category: Optional[str] = Field(None, max_length=100)
     inventory_item_id: Optional[str] = Field(None, max_length=36)
-    price: Decimal = Field(..., ge=0)
-    cost: Optional[Decimal] = Field(None, ge=0)
+    price: Decimal = Field(..., ge=0, le=MONEY_MAX)
+    cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     is_taxable: bool = False
     status: StoreProductStatus = StoreProductStatus.DRAFT
-    max_per_member: Optional[int] = Field(None, ge=1)
+    max_per_member: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     personalization_enabled: bool = False
     personalization_required: bool = False
     personalization_label: Optional[str] = Field(None, max_length=120)
     personalization_max_length: int = Field(default=30, ge=1, le=200)
-    personalization_price: Decimal = Field(default=Decimal("0"), ge=0)
+    personalization_price: Decimal = Field(default=Decimal("0"), ge=0, le=MONEY_MAX)
     personalization_thread_color: EmbroideryThreadColor = EmbroideryThreadColor.GOLD
     personalization_method: PersonalizationMethod = PersonalizationMethod.EMBROIDERY
     track_stock: bool = False
-    stock_quantity: Optional[int] = Field(None, ge=0)
+    stock_quantity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     requires_variant: bool = False
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     internal_notes: Optional[str] = None
 
 
@@ -308,22 +309,22 @@ class StoreProductUpdate(BaseModel):
     image_url: Optional[str] = Field(None, max_length=500)
     category: Optional[str] = Field(None, max_length=100)
     inventory_item_id: Optional[str] = Field(None, max_length=36)
-    price: Optional[Decimal] = Field(None, ge=0)
-    cost: Optional[Decimal] = Field(None, ge=0)
+    price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     is_taxable: Optional[bool] = None
     status: Optional[StoreProductStatus] = None
-    max_per_member: Optional[int] = Field(None, ge=1)
+    max_per_member: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     personalization_enabled: Optional[bool] = None
     personalization_required: Optional[bool] = None
     personalization_label: Optional[str] = Field(None, max_length=120)
     personalization_max_length: Optional[int] = Field(None, ge=1, le=200)
-    personalization_price: Optional[Decimal] = Field(None, ge=0)
+    personalization_price: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     personalization_thread_color: Optional[EmbroideryThreadColor] = None
     personalization_method: Optional[PersonalizationMethod] = None
     track_stock: Optional[bool] = None
-    stock_quantity: Optional[int] = Field(None, ge=0)
+    stock_quantity: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     requires_variant: Optional[bool] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     internal_notes: Optional[str] = None
     variants: Optional[List[StoreProductVariantCreate]] = None
 
@@ -461,10 +462,10 @@ class StoreWindowOfferingInput(BaseModel):
     model_config = _REQUEST_CONFIG
 
     product_id: str = Field(..., min_length=1, max_length=36)
-    price_override: Optional[Decimal] = Field(None, ge=0)
-    quantity_limit: Optional[int] = Field(None, ge=1)
-    max_per_member: Optional[int] = Field(None, ge=1)
-    sort_order: int = 0
+    price_override: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    quantity_limit: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    max_per_member: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
 
 
 class StoreWindowOfferingResponse(UTCResponseBase):
@@ -488,8 +489,8 @@ class StoreOrderWindowBase(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    opens_at: Optional[datetime] = None
-    closes_at: Optional[datetime] = None
+    opens_at: Optional[UTCDateTime] = None
+    closes_at: Optional[UTCDateTime] = None
     auto_open: bool = True
     auto_close: bool = True
     expected_delivery_date: Optional[date] = None
@@ -518,8 +519,8 @@ class StoreOrderWindowUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
-    opens_at: Optional[datetime] = None
-    closes_at: Optional[datetime] = None
+    opens_at: Optional[UTCDateTime] = None
+    closes_at: Optional[UTCDateTime] = None
     auto_open: Optional[bool] = None
     auto_close: Optional[bool] = None
     expected_delivery_date: Optional[date] = None
@@ -861,7 +862,7 @@ class StoreOrderPaymentRecord(BaseModel):
 
     model_config = _REQUEST_CONFIG
 
-    amount: Decimal = Field(..., gt=0)
+    amount: Decimal = Field(..., gt=0, le=MONEY_MAX)
     payment_method: Optional[StorePaymentMethod] = None
     reference: Optional[str] = Field(None, max_length=200)
     mark_paid: bool = True
@@ -921,7 +922,7 @@ class StoreOrderRefund(BaseModel):
 
     model_config = _REQUEST_CONFIG
 
-    amount: Optional[Decimal] = Field(None, gt=0)
+    amount: Optional[Decimal] = Field(None, gt=0, le=MONEY_MAX)
     reason: Optional[str] = None
     notify_member: bool = True
 

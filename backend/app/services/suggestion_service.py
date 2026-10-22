@@ -19,6 +19,10 @@ Anonymity invariants — every one is load-bearing, and the tests in
   replies are all truncated to 12:00 UTC of the day, so a row cannot be lined
   up against session or login activity. Noon rather than midnight keeps the
   calendar date the same when the frontend renders it in any US timezone.
+  **One exception, accepted by the owner (2026-10-22):** a department that
+  keeps its files in its own S3 bucket stores screenshots there too, and the
+  bucket stamps each object with its exact upload time, which nothing here
+  can change. Whoever can list the bucket, or read its access logs, sees it.
 * An anonymous submitter in a follow-up box is identified by a random key
   whose SHA-256 digest alone is stored; the key itself is returned once and
   never persisted or logged.
@@ -33,11 +37,9 @@ Anonymity invariants — every one is load-bearing, and the tests in
   ``app.core.error_reporting``, and the frontend's ``reportApiError``).
 """
 
-import asyncio
 import copy
 import hashlib
 import html
-import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -47,7 +49,7 @@ from loguru import logger
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from app.core.config import settings
 from app.models.suggestion import (
@@ -204,11 +206,50 @@ def _display_name(user: Optional[User]) -> Optional[str]:
     return user.display_name or user.username or None
 
 
-def _remove_quietly(path: str) -> None:
-    try:
-        os.remove(path)
-    except OSError:
-        pass
+async def assert_position_not_sole_box_reviewer(
+    db: AsyncSession, organization_id: str, position_id: str
+) -> None:
+    """Refuse to delete a position that alone reviews an open suggestion box.
+
+    Called by RoleService.delete_role before it deletes anything. The reviewer
+    grant cascades with the position, so the box would keep accepting
+    submissions that nobody can read — the state the box form already refuses
+    to save. A closed box is not held back: reopening it goes through that
+    form, which asks for a reviewer.
+    """
+    other = aliased(SuggestionBoxReviewer)
+    names = (
+        (
+            await db.execute(
+                select(SuggestionBox.name)
+                .join(
+                    SuggestionBoxReviewer,
+                    SuggestionBoxReviewer.box_id == SuggestionBox.id,
+                )
+                .where(
+                    SuggestionBox.organization_id == str(organization_id),
+                    SuggestionBox.is_active.is_(True),
+                    SuggestionBoxReviewer.position_id == str(position_id),
+                    ~exists().where(
+                        other.box_id == SuggestionBox.id,
+                        other.id != SuggestionBoxReviewer.id,
+                    ),
+                )
+                .order_by(SuggestionBox.name)
+                # Locked so a concurrent edit to the box's reviewers cannot
+                # slip between this check and the delete.
+                .with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if names:
+        raise ValueError(
+            "This is the only reviewer of these open suggestion boxes: "
+            f"{', '.join(names)}. Add another reviewer or close the box "
+            "before deleting it"
+        )
 
 
 class SuggestionService:
@@ -307,7 +348,7 @@ class SuggestionService:
         await self.db.delete(box)
         await self.db.commit()
         for path in paths:
-            _remove_quietly(path)
+            await file_storage.delete_quietly(path)
         return count
 
     async def create_box(
@@ -891,7 +932,7 @@ class SuggestionService:
         except Exception:
             await self.db.rollback()
             for path in written:
-                await asyncio.to_thread(_remove_quietly, path)
+                await file_storage.delete_quietly(path)
             raise
         return suggestion, key
 
@@ -923,22 +964,19 @@ class SuggestionService:
         content: bytes,
         mtime: Optional[datetime],
     ) -> str:
-        directory = file_storage.area_directory(
-            organization_id, StorageArea.SUGGESTIONS, suggestion_id
+        # A named submission keeps its true time; an anonymous one is stamped
+        # with the truncated time on the uploads volume. A bucket records its
+        # own upload time and cannot be told otherwise (owner decision
+        # 2026-10-22; see the module docstring).
+        return await file_storage.write_file(
+            organization_id,
+            StorageArea.SUGGESTIONS,
+            suggestion_id,
+            f"{uuid.uuid4().hex}.webp",
+            content,
+            db=self.db,
+            local_mtime=mtime,
         )
-
-        def _write() -> str:
-            path = file_storage.write_atomically(
-                directory, f"{uuid.uuid4().hex}.webp", content
-            )
-            if mtime is not None:
-                # The filesystem would otherwise keep the exact upload time the
-                # row itself declines to record.
-                seconds = mtime.timestamp()
-                os.utime(path, (seconds, seconds))
-            return path
-
-        return await asyncio.to_thread(_write)
 
     # ------------------------------------------------------------------
     # The submitter's side

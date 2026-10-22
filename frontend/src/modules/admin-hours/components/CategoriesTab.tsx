@@ -223,13 +223,13 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
       ) : (
         <div className="grid gap-4">
           {categories.map((cat) => (
-            <div key={cat.id} className="bg-theme-surface flex items-center gap-4 rounded-lg p-4 shadow-md">
+            <div key={cat.id} className="bg-theme-surface flex min-w-0 items-center gap-4 rounded-lg p-4 shadow-md">
               <div className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: cat.color ?? '#6B7280' }} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h3 className="text-theme-text-primary font-semibold">{cat.name}</h3>
                   {!cat.isActive && (
-                    <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
+                    <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-800 dark:text-red-400">
                       Inactive
                     </span>
                   )}
@@ -237,7 +237,7 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
                 {cat.description && (
                   <p className="text-theme-text-secondary mt-0.5 truncate text-sm">{cat.description}</p>
                 )}
-                <div className="text-theme-text-muted mt-1 flex gap-4 text-xs">
+                <div className="text-theme-text-muted mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
                   <span>Approval: {cat.requireApproval ? 'Required' : 'Not required'}</span>
                   {cat.requireApproval && cat.autoApproveUnderHours ? (
                     <span>Auto-approved under {cat.autoApproveUnderHours}h</span>
@@ -246,7 +246,7 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
                   {cat.maxHoursPerSession && <span>Max {cat.maxHoursPerSession}h/session</span>}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <Link
                   to={`/admin-hours/categories/${cat.id}/qr-code`}
                   className="text-theme-text-secondary touch-target-phone p-2 transition hover:text-blue-500"

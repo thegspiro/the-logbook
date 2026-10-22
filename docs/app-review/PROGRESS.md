@@ -54,7 +54,7 @@ from its open list.
 | B13 | forms                      | FORM2  | ✅     |
 | B14 | grants & fundraising       | GF2    | ✅     |
 | B15 | admin-hours                | AH2    | ✅     |
-| B16 | reports & analytics        | RPT2   | ⬜     |
+| B16 | reports & analytics        | RPT2   | ✅     |
 | B17 | events                     | EV2    | ⬜     |
 | B18 | training                   | TR2    | ⬜     |
 | B19 | scheduling                 | SCH2   | ⬜     |
@@ -3296,3 +3296,48 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   **191 passed** · new file 13 pass, 2 fail without the fix, 0 under the unit job's marker
   expression · route-permission check 0 errors · no frontend change. See admin-hours.md →
   Pass 5. Next: B16 reports & analytics.
+
+---
+
+## 🏁 Final page sweep (2026-10-20)
+
+A pre-deployment pass over all 249 fixed routes and 35 detail pages at phone,
+tablet and desktop widths, signed in as an administrator and as a plain member,
+plus the public pages signed out — driven in a real browser against a real
+backend. **Fixed:** pages that scrolled sideways at phone or tablet width, accessibility defects
+(unnamed controls, nested interactive rows, QR codes with no alternative, a
+malformed definition list), contrast failures in the orange, emerald and
+warning-text palettes and on the compliance print sheet, and two unused
+components. `GET /health/detailed` was found unauthenticated on staging; `main`
+closed it independently by serving the route in development only, and that fix
+was kept over a `settings.manage` dependency. `/onboarding/*` now redirects to sign-in once setup is
+finished and an unknown URL shows "Page not found" instead of redirecting
+silently (both approved by the owner). No owner decision from the sweep is left open.
+**Verified good:** every protected route redirects signed
+out, a member is denied every administrative page, no token in a response body,
+secrets redacted for non-admins. See
+[final-sweep-2026-10.md](./final-sweep-2026-10.md).
+
+- **B16 reports & analytics ✅ (pass 5) — one member could take the analytics dashboard down
+  for the whole organization (RPT2-1).** The module's one update route, `PATCH
+/reports/saved/{id}`, came back clean: a real change saves and answers 200, `null` on the
+  two NOT NULL columns is a 400, nullable ones are accepted, and the handler commits and
+  refreshes, so the B14 `updated_at` shape is absent (nine cases kept as a regression file).
+  So the pass looked at what a client-supplied value does when it is read back.
+  `POST /analytics/track` stores any `metadata` dict from any member, and `/analytics/metrics`
+  keys its failure breakdown by `metadata["error_reason"]`: a dict or list is unhashable, the
+  row stays stored, and every later `/metrics` call for the organization answered 500 until
+  the row was deleted by hand (reproduced over HTTP). **Fixed** — the reason is used only if
+  it is a string, cut to 100 characters, otherwise `unknown`. **Fixed (RPT2-2)** — track
+  accepted metadata of any size under a 60 MB body limit, and `/export` returns 1,000 rows of
+  it; now 422 above 4,096 bytes (no rate limit added: a shared station network would drop
+  legitimate events silently). **Flagged (RPT2-3):** nothing in the application writes an
+  analytics event — `track*` is never called and the check-in handlers write none — so the QR
+  dashboard reads zeros; the CLAUDE.md #19 shape in reverse, mirrored to KNOWN_LIMITATIONS
+  with a correction under the accepted "no per-event analytics panel" entry. **Verified
+  good:** AST scan found nothing unreferenced; gating and the PII gate; every analytics query
+  org-scoped. **Not read:** the report generators (their suites pass), platform analytics
+  beyond its gate, the `modules/reports` frontend. Gate: flake8 / black / isort / mypy clean ·
+  14 related suites **180 passed** · new files 17 pass, 4 fail without the fix, 0 under the
+  unit job's marker expression · route-permission check 0 errors · no frontend change. See
+  reports-analytics.md → Pass 5. Next: B17 events.

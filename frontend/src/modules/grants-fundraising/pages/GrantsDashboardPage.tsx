@@ -85,8 +85,8 @@ const getDeadlineColor = (deadlineDate: string | null, timezone: string): string
   const days = daysUntil(deadlineDate, timezone);
   if (isNaN(days)) return 'text-theme-text-secondary';
   if (days < 14) return 'text-red-600';
-  if (days < 30) return 'text-yellow-600';
-  return 'text-green-600';
+  if (days < 30) return 'text-yellow-700 dark:text-yellow-600';
+  return 'text-green-700 dark:text-green-600';
 };
 
 const getDeadlineBadgeColor = (deadlineDate: string | null, timezone: string): string => {
@@ -580,7 +580,7 @@ const GrantsDashboardPage: React.FC = () => {
         <KpiCard
           label="Total Grant Funding"
           value={formatCurrencyWhole(dashboard?.totalGrantFunding ?? 0)}
-          icon={<DollarSign className="h-5 w-5 text-green-600" />}
+          icon={<DollarSign className="h-5 w-5 text-green-700 dark:text-green-600" />}
           iconBgClass="bg-green-100 dark:bg-green-500/20"
           linkTo="/grants/applications?group=funded"
         />
@@ -594,14 +594,14 @@ const GrantsDashboardPage: React.FC = () => {
         <KpiCard
           label="Pending Applications"
           value={String(dashboard?.pendingApplications ?? 0)}
-          icon={<Clock className="h-5 w-5 text-yellow-600" />}
+          icon={<Clock className="h-5 w-5 text-yellow-700 dark:text-yellow-600" />}
           iconBgClass="bg-yellow-100 dark:bg-yellow-500/20"
           linkTo="/grants/applications?group=pending"
         />
         <KpiCard
           label="Total Raised YTD"
           value={formatCurrencyWhole(dashboard?.totalRaisedYtd ?? 0)}
-          icon={<TrendingUp className="h-5 w-5 text-emerald-600" />}
+          icon={<TrendingUp className="h-5 w-5 text-emerald-700 dark:text-emerald-600" />}
           iconBgClass="bg-emerald-100 dark:bg-emerald-500/20"
           linkTo="/grants/campaigns"
         />
@@ -626,14 +626,14 @@ const GrantsDashboardPage: React.FC = () => {
         <KpiCard
           label="Outstanding Pledges"
           value={formatCurrencyWhole(dashboard?.outstandingPledges ?? 0)}
-          icon={<HandCoins className="h-5 w-5 text-orange-600" />}
+          icon={<HandCoins className="h-5 w-5 text-orange-700 dark:text-orange-600" />}
           iconBgClass="bg-orange-100 dark:bg-orange-500/20"
           linkTo="/grants/pledges"
         />
         <KpiCard
           label="Total Raised (12mo)"
           value={formatCurrencyWhole(dashboard?.totalRaised12Mo ?? 0)}
-          icon={<BarChart3 className="h-5 w-5 text-teal-600" />}
+          icon={<BarChart3 className="h-5 w-5 text-teal-700 dark:text-teal-600" />}
           iconBgClass="bg-teal-100 dark:bg-teal-500/20"
         />
       </div>

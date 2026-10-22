@@ -18,7 +18,8 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN, MONEY_MAX, decimal_max
 from app.utils.external_url import safe_external_url
 
 # Shared config for response schemas that need camelCase serialization
@@ -149,7 +150,7 @@ class ApparatusTypeBase(BaseModel):
     category: ApparatusCategoryEnum = Field(default=ApparatusCategoryEnum.FIRE)
     icon: Optional[str] = Field(None, max_length=50, description="Icon identifier")
     color: Optional[str] = Field(None, max_length=20, description="Color code")
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: int = Field(default=0, ge=0, le=INT32_MAX)
     is_active: bool = Field(default=True)
 
 
@@ -170,7 +171,7 @@ class ApparatusTypeUpdate(BaseModel):
     category: Optional[ApparatusCategoryEnum] = None
     icon: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=20)
-    sort_order: Optional[int] = Field(None, ge=0)
+    sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     is_active: Optional[bool] = None
 
 
@@ -224,7 +225,7 @@ class ApparatusStatusBase(BaseModel):
     )
     color: Optional[str] = Field(None, max_length=20, description="Color code")
     icon: Optional[str] = Field(None, max_length=50)
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: int = Field(default=0, ge=0, le=INT32_MAX)
     is_active: bool = Field(default=True)
 
 
@@ -248,7 +249,7 @@ class ApparatusStatusUpdate(BaseModel):
     is_archived_status: Optional[bool] = None
     color: Optional[str] = Field(None, max_length=20)
     icon: Optional[str] = Field(None, max_length=50)
-    sort_order: Optional[int] = Field(None, ge=0)
+    sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     is_active: Optional[bool] = None
 
 
@@ -343,12 +344,12 @@ class ApparatusBase(BaseModel):
 
     # Fuel
     fuel_type: Optional[FuelTypeEnum] = Field(None)
-    fuel_capacity_gallons: Optional[Decimal] = Field(None, ge=0)
+    fuel_capacity_gallons: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
     # Capacity
-    seating_capacity: Optional[int] = Field(None, ge=1)
+    seating_capacity: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     gvwr: Optional[int] = Field(
-        None, ge=0, description="Gross Vehicle Weight Rating (lbs)"
+        None, ge=0, description="Gross Vehicle Weight Rating (lbs)", le=INT32_MAX
     )
 
     # Staffing
@@ -378,16 +379,16 @@ class ApparatusBase(BaseModel):
 
     # Fire/EMS Specifications
     pump_capacity_gpm: Optional[int] = Field(
-        None, ge=0, description="Pump capacity in GPM"
+        None, ge=0, description="Pump capacity in GPM", le=INT32_MAX
     )
     tank_capacity_gallons: Optional[int] = Field(
-        None, ge=0, description="Water tank capacity"
+        None, ge=0, description="Water tank capacity", le=INT32_MAX
     )
     foam_capacity_gallons: Optional[int] = Field(
-        None, ge=0, description="Foam tank capacity"
+        None, ge=0, description="Foam tank capacity", le=INT32_MAX
     )
     ladder_length_feet: Optional[int] = Field(
-        None, ge=0, description="Aerial ladder length"
+        None, ge=0, description="Aerial ladder length", le=INT32_MAX
     )
 
     # Location
@@ -397,12 +398,14 @@ class ApparatusBase(BaseModel):
     current_location_id: Optional[str] = Field(None, description="Current location ID")
 
     # Usage Tracking
-    current_mileage: Optional[int] = Field(None, ge=0)
-    current_hours: Optional[Decimal] = Field(None, ge=0, description="Engine hours")
+    current_mileage: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    current_hours: Optional[Decimal] = Field(
+        None, ge=0, description="Engine hours", le=MONEY_MAX
+    )
 
     # Purchase Information
     purchase_date: Optional[date] = None
-    purchase_price: Optional[Decimal] = Field(None, ge=0)
+    purchase_price: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
     purchase_vendor: Optional[str] = Field(None, max_length=200)
     purchase_order_number: Optional[str] = Field(None, max_length=100)
     in_service_date: Optional[date] = None
@@ -411,14 +414,14 @@ class ApparatusBase(BaseModel):
     is_financed: bool = Field(default=False)
     financing_company: Optional[str] = Field(None, max_length=200)
     financing_end_date: Optional[date] = None
-    monthly_payment: Optional[Decimal] = Field(None, ge=0)
+    monthly_payment: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
     # Value Tracking
-    original_value: Optional[Decimal] = Field(None, ge=0)
-    current_value: Optional[Decimal] = Field(None, ge=0)
+    original_value: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    current_value: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
     depreciation_method: Optional[str] = Field(None, max_length=50)
-    depreciation_years: Optional[int] = Field(None, ge=0)
-    salvage_value: Optional[Decimal] = Field(None, ge=0)
+    depreciation_years: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    salvage_value: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
 
     # Warranty
     warranty_expiration: Optional[date] = None
@@ -478,11 +481,11 @@ class ApparatusUpdate(BaseModel):
 
     # Fuel
     fuel_type: Optional[FuelTypeEnum] = None
-    fuel_capacity_gallons: Optional[Decimal] = Field(None, ge=0)
+    fuel_capacity_gallons: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
     # Capacity
-    seating_capacity: Optional[int] = Field(None, ge=1)
-    gvwr: Optional[int] = Field(None, ge=0)
+    seating_capacity: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+    gvwr: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
     # Staffing
     min_staffing: Optional[int] = Field(None, ge=1, le=50)
@@ -502,22 +505,22 @@ class ApparatusUpdate(BaseModel):
     required_evoc_level_id: Optional[str] = None
 
     # Fire/EMS Specifications
-    pump_capacity_gpm: Optional[int] = Field(None, ge=0)
-    tank_capacity_gallons: Optional[int] = Field(None, ge=0)
-    foam_capacity_gallons: Optional[int] = Field(None, ge=0)
-    ladder_length_feet: Optional[int] = Field(None, ge=0)
+    pump_capacity_gpm: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    tank_capacity_gallons: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    foam_capacity_gallons: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    ladder_length_feet: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
     # Location
     primary_station_id: Optional[str] = None
     current_location_id: Optional[str] = None
 
     # Usage Tracking
-    current_mileage: Optional[int] = Field(None, ge=0)
-    current_hours: Optional[Decimal] = Field(None, ge=0)
+    current_mileage: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    current_hours: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
     # Purchase Information
     purchase_date: Optional[date] = None
-    purchase_price: Optional[Decimal] = Field(None, ge=0)
+    purchase_price: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
     purchase_vendor: Optional[str] = Field(None, max_length=200)
     purchase_order_number: Optional[str] = Field(None, max_length=100)
     in_service_date: Optional[date] = None
@@ -526,14 +529,14 @@ class ApparatusUpdate(BaseModel):
     is_financed: Optional[bool] = None
     financing_company: Optional[str] = Field(None, max_length=200)
     financing_end_date: Optional[date] = None
-    monthly_payment: Optional[Decimal] = Field(None, ge=0)
+    monthly_payment: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
     # Value Tracking
-    original_value: Optional[Decimal] = Field(None, ge=0)
-    current_value: Optional[Decimal] = Field(None, ge=0)
+    original_value: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
+    current_value: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
     depreciation_method: Optional[str] = Field(None, max_length=50)
-    depreciation_years: Optional[int] = Field(None, ge=0)
-    salvage_value: Optional[Decimal] = Field(None, ge=0)
+    depreciation_years: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    salvage_value: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
 
     # Warranty
     warranty_expiration: Optional[date] = None
@@ -648,10 +651,10 @@ class ApparatusStatusChange(BaseModel):
     status_id: str = Field(..., description="New status ID")
     reason: Optional[str] = Field(None, description="Reason for status change")
     current_mileage: Optional[int] = Field(
-        None, ge=0, description="Current mileage at time of change"
+        None, ge=0, description="Current mileage at time of change", le=INT32_MAX
     )
     current_hours: Optional[Decimal] = Field(
-        None, ge=0, description="Current hours at time of change"
+        None, ge=0, description="Current hours at time of change", le=MONEY_MAX
     )
 
 
@@ -670,7 +673,7 @@ class ApparatusArchive(BaseModel):
 
     # For sold apparatus
     sold_date: Optional[date] = None
-    sold_price: Optional[Decimal] = Field(None, ge=0)
+    sold_price: Optional[Decimal] = Field(None, ge=0, le=decimal_max(12, 2))
     sold_to: Optional[str] = Field(None, max_length=200, description="Buyer name")
     sold_to_contact: Optional[str] = Field(
         None, max_length=200, description="Buyer contact info"
@@ -703,15 +706,19 @@ class ApparatusCustomFieldBase(BaseModel):
 
     options: Optional[List[CustomFieldOption]] = None
 
-    min_value: Optional[Decimal] = None
-    max_value: Optional[Decimal] = None
-    min_length: Optional[int] = Field(None, ge=0)
-    max_length: Optional[int] = Field(None, ge=0)
+    min_value: Optional[Decimal] = Field(
+        None, ge=-decimal_max(20, 6), le=decimal_max(20, 6)
+    )
+    max_value: Optional[Decimal] = Field(
+        None, ge=-decimal_max(20, 6), le=decimal_max(20, 6)
+    )
+    min_length: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    max_length: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     regex_pattern: Optional[str] = Field(None, max_length=500)
 
     applies_to_types: Optional[List[str]] = None
 
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: int = Field(default=0, ge=0, le=INT32_MAX)
     show_in_list: bool = Field(default=False)
     show_in_detail: bool = Field(default=True)
     is_active: bool = Field(default=True)
@@ -739,15 +746,19 @@ class ApparatusCustomFieldUpdate(BaseModel):
 
     options: Optional[List[CustomFieldOption]] = None
 
-    min_value: Optional[Decimal] = None
-    max_value: Optional[Decimal] = None
-    min_length: Optional[int] = Field(None, ge=0)
-    max_length: Optional[int] = Field(None, ge=0)
+    min_value: Optional[Decimal] = Field(
+        None, ge=-decimal_max(20, 6), le=decimal_max(20, 6)
+    )
+    max_value: Optional[Decimal] = Field(
+        None, ge=-decimal_max(20, 6), le=decimal_max(20, 6)
+    )
+    min_length: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    max_length: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     regex_pattern: Optional[str] = Field(None, max_length=500)
 
     applies_to_types: Optional[List[str]] = None
 
-    sort_order: Optional[int] = Field(None, ge=0)
+    sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     show_in_list: Optional[bool] = None
     show_in_detail: Optional[bool] = None
     is_active: Optional[bool] = None
@@ -780,16 +791,16 @@ class ApparatusMaintenanceTypeBase(BaseModel):
         default=MaintenanceCategoryEnum.PREVENTIVE
     )
 
-    default_interval_value: Optional[int] = Field(None, ge=1)
+    default_interval_value: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     default_interval_unit: Optional[MaintenanceIntervalUnitEnum] = None
-    default_interval_miles: Optional[int] = Field(None, ge=0)
-    default_interval_hours: Optional[int] = Field(None, ge=0)
+    default_interval_miles: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    default_interval_hours: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
     is_nfpa_required: bool = Field(default=False)
     nfpa_reference: Optional[str] = Field(None, max_length=100)
 
     applies_to_types: Optional[List[str]] = None
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: int = Field(default=0, ge=0, le=INT32_MAX)
     is_active: bool = Field(default=True)
 
 
@@ -809,16 +820,16 @@ class ApparatusMaintenanceTypeUpdate(BaseModel):
     description: Optional[str] = None
     category: Optional[MaintenanceCategoryEnum] = None
 
-    default_interval_value: Optional[int] = Field(None, ge=1)
+    default_interval_value: Optional[int] = Field(None, ge=1, le=INT32_MAX)
     default_interval_unit: Optional[MaintenanceIntervalUnitEnum] = None
-    default_interval_miles: Optional[int] = Field(None, ge=0)
-    default_interval_hours: Optional[int] = Field(None, ge=0)
+    default_interval_miles: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    default_interval_hours: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
     is_nfpa_required: Optional[bool] = None
     nfpa_reference: Optional[str] = Field(None, max_length=100)
 
     applies_to_types: Optional[List[str]] = None
-    sort_order: Optional[int] = Field(None, ge=0)
+    sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     is_active: Optional[bool] = None
 
 
@@ -887,16 +898,16 @@ class ApparatusMaintenanceBase(BaseModel):
     work_performed: Optional[str] = None
     findings: Optional[str] = None
 
-    mileage_at_service: Optional[int] = Field(None, ge=0)
-    hours_at_service: Optional[Decimal] = Field(None, ge=0)
+    mileage_at_service: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    hours_at_service: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
-    cost: Optional[Decimal] = Field(None, ge=0)
+    cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     vendor: Optional[str] = Field(None, max_length=200)
     invoice_number: Optional[str] = Field(None, max_length=100)
 
     next_due_date: Optional[date] = None
-    next_due_mileage: Optional[int] = Field(None, ge=0)
-    next_due_hours: Optional[Decimal] = Field(None, ge=0)
+    next_due_mileage: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    next_due_hours: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
     notes: Optional[str] = None
 
@@ -950,16 +961,16 @@ class ApparatusMaintenanceUpdate(BaseModel):
     work_performed: Optional[str] = None
     findings: Optional[str] = None
 
-    mileage_at_service: Optional[int] = Field(None, ge=0)
-    hours_at_service: Optional[Decimal] = Field(None, ge=0)
+    mileage_at_service: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    hours_at_service: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
-    cost: Optional[Decimal] = Field(None, ge=0)
+    cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
     vendor: Optional[str] = Field(None, max_length=200)
     invoice_number: Optional[str] = Field(None, max_length=100)
 
     next_due_date: Optional[date] = None
-    next_due_mileage: Optional[int] = Field(None, ge=0)
-    next_due_hours: Optional[Decimal] = Field(None, ge=0)
+    next_due_mileage: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    next_due_hours: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
     notes: Optional[str] = None
 
@@ -1003,14 +1014,14 @@ class ApparatusFuelLogBase(BaseModel):
     """Base fuel log schema"""
 
     apparatus_id: str = Field(..., description="Apparatus ID")
-    fuel_date: datetime
+    fuel_date: UTCDateTime
     fuel_type: FuelTypeEnum
-    gallons: Decimal = Field(..., gt=0)
-    price_per_gallon: Optional[Decimal] = Field(None, ge=0)
-    total_cost: Optional[Decimal] = Field(None, ge=0)
+    gallons: Decimal = Field(..., gt=0, le=decimal_max(10, 3))
+    price_per_gallon: Optional[Decimal] = Field(None, ge=0, le=decimal_max(6, 3))
+    total_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
-    mileage_at_fill: Optional[int] = Field(None, ge=0)
-    hours_at_fill: Optional[Decimal] = Field(None, ge=0)
+    mileage_at_fill: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    hours_at_fill: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
     is_full_tank: bool = Field(default=True)
     station_name: Optional[str] = Field(None, max_length=200)
@@ -1061,7 +1072,7 @@ class EvocLevelBase(BaseModel):
     training_program_id: Optional[str] = Field(
         None, description="Training program that certifies this level"
     )
-    sort_order: int = Field(default=0)
+    sort_order: int = Field(default=0, ge=INT32_MIN, le=INT32_MAX)
     is_active: bool = Field(default=True)
 
 
@@ -1080,7 +1091,7 @@ class EvocLevelUpdate(BaseModel):
     description: Optional[str] = None
     is_cumulative: Optional[bool] = None
     training_program_id: Optional[str] = None
-    sort_order: Optional[int] = None
+    sort_order: Optional[int] = Field(None, ge=INT32_MIN, le=INT32_MAX)
     is_active: Optional[bool] = None
 
 
@@ -1339,7 +1350,7 @@ class ApparatusEquipmentBase(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    quantity: int = Field(default=1, ge=1)
+    quantity: int = Field(default=1, ge=1, le=INT32_MAX)
 
     location_on_apparatus: Optional[str] = Field(None, max_length=200)
 
@@ -1368,7 +1379,7 @@ class ApparatusEquipmentUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
-    quantity: Optional[int] = Field(None, ge=1)
+    quantity: Optional[int] = Field(None, ge=1, le=INT32_MAX)
 
     location_on_apparatus: Optional[str] = Field(None, max_length=200)
 
@@ -1404,7 +1415,7 @@ class ApparatusPhotoBase(BaseModel):
 
     title: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
-    taken_at: Optional[datetime] = None
+    taken_at: Optional[UTCDateTime] = None
     photo_type: Optional[str] = Field(
         None, max_length=50, description="exterior, interior, damage, detail"
     )
@@ -1419,7 +1430,7 @@ class ApparatusPhotoCreate(ApparatusPhotoBase):
     apparatus_id: str = Field(..., description="Apparatus ID")
     file_path: str = Field(..., description="Path in storage system")
     file_name: str = Field(..., max_length=255)
-    file_size: Optional[int] = Field(None, ge=0)
+    file_size: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     mime_type: Optional[str] = Field(None, max_length=100)
 
 
@@ -1486,7 +1497,7 @@ class ApparatusDocumentCreate(ApparatusDocumentBase):
     apparatus_id: str = Field(..., description="Apparatus ID")
     file_path: str = Field(..., description="Path in storage system")
     file_name: str = Field(..., max_length=255)
-    file_size: Optional[int] = Field(None, ge=0)
+    file_size: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     mime_type: Optional[str] = Field(None, max_length=100)
 
 
@@ -1773,7 +1784,7 @@ class ApparatusReportConfigBase(BaseModel):
 
     # Data Range
     data_range_type: Optional[str] = Field(None, max_length=50)
-    data_range_days: Optional[int] = Field(None, ge=1)
+    data_range_days: Optional[int] = Field(None, ge=1, le=INT32_MAX)
 
     # Filters
     include_apparatus_ids: Optional[List[str]] = None
@@ -1821,7 +1832,7 @@ class ApparatusReportConfigUpdate(BaseModel):
     )
 
     data_range_type: Optional[str] = Field(None, max_length=50)
-    data_range_days: Optional[int] = Field(None, ge=1)
+    data_range_days: Optional[int] = Field(None, ge=1, le=INT32_MAX)
 
     include_apparatus_ids: Optional[List[str]] = None
     include_type_ids: Optional[List[str]] = None
@@ -2018,14 +2029,14 @@ class ApparatusComponentBase(BaseModel):
 
     install_date: Optional[date] = None
     warranty_expiration: Optional[date] = None
-    expected_life_years: Optional[int] = Field(None, ge=0)
+    expected_life_years: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
     condition: ComponentConditionEnum = Field(default=ComponentConditionEnum.GOOD)
     last_serviced_date: Optional[date] = None
     last_inspected_date: Optional[date] = None
 
     notes: Optional[str] = None
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: int = Field(default=0, ge=0, le=INT32_MAX)
     is_active: bool = Field(default=True)
 
 
@@ -2050,14 +2061,14 @@ class ApparatusComponentUpdate(BaseModel):
 
     install_date: Optional[date] = None
     warranty_expiration: Optional[date] = None
-    expected_life_years: Optional[int] = Field(None, ge=0)
+    expected_life_years: Optional[int] = Field(None, ge=0, le=INT32_MAX)
 
     condition: Optional[ComponentConditionEnum] = None
     last_serviced_date: Optional[date] = None
     last_inspected_date: Optional[date] = None
 
     notes: Optional[str] = None
-    sort_order: Optional[int] = Field(None, ge=0)
+    sort_order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     is_active: Optional[bool] = None
 
 
@@ -2098,8 +2109,8 @@ class ApparatusComponentNoteBase(BaseModel):
 
     service_provider_id: Optional[str] = Field(None, description="Service provider")
 
-    estimated_cost: Optional[Decimal] = Field(None, ge=0)
-    actual_cost: Optional[Decimal] = Field(None, ge=0)
+    estimated_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    actual_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
     resolution_notes: Optional[str] = None
     attachments: Optional[Sequence[NoteAttachment]] = None
@@ -2127,8 +2138,8 @@ class ApparatusComponentNoteUpdate(BaseModel):
 
     service_provider_id: Optional[str] = None
 
-    estimated_cost: Optional[Decimal] = Field(None, ge=0)
-    actual_cost: Optional[Decimal] = Field(None, ge=0)
+    estimated_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
+    actual_cost: Optional[Decimal] = Field(None, ge=0, le=MONEY_MAX)
 
     resolution_notes: Optional[str] = None
     attachments: Optional[List[FileAttachmentInput]] = None

@@ -42,6 +42,7 @@ from app.schemas.organization import (
     EmailServiceSettings,
     EnabledModulesResponse,
     FileStorageSettings,
+    FileStorageStatusResponse,
     MembershipIdSettings,
     ModuleSettingsUpdate,
     OrganizationProfileUpdate,
@@ -51,6 +52,7 @@ from app.schemas.organization import (
     SetupChecklistResponse,
     decrypt_settings_secrets,
 )
+from app.services import file_storage_service as file_storage
 from app.services.branding_service import reset_branding_cache
 from app.services.org_template_service import OrgTemplateService
 from app.services.organization_service import OrganizationService
@@ -617,6 +619,124 @@ async def update_file_storage_settings(
 
         # SEC: Redact secrets before returning to the client
         return storage_settings.redacted()
+
+
+async def _file_storage_status(
+    db: AsyncSession, organization_id: Any
+) -> FileStorageStatusResponse:
+    org_service = OrganizationService(db)
+    saved = await org_service.get_organization_settings(organization_id)
+    view = await file_storage.org_storage(organization_id, db)
+    activation = view.activation or {}
+    return FileStorageStatusResponse(
+        platform=saved.file_storage.platform,
+        new_files_go_to="s3" if view.writes_to_s3 else "local",
+        bucket=activation.get("bucket"),
+        endpoint_url=activation.get("endpoint_url"),
+        activated_at=activation.get("activated_at"),
+        changed_since_test=view.changed_since_test,
+        s3_problem=view.s3_problem,
+        private_endpoints_allowed=app_settings.S3_ALLOW_PRIVATE_ENDPOINT,
+    )
+
+
+@router.get("/settings/file-storage/status", response_model=FileStorageStatusResponse)
+async def get_file_storage_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """
+    Where new files are stored for this department, and why
+
+    Local disk until a connection test passes with the S3 settings saved now
+    (see `POST /settings/file-storage/s3/activate`).
+
+    **Authentication and admin permission required**
+    """
+    return await _file_storage_status(db, current_user.organization_id)
+
+
+async def _rate_limit_settings_test_storage(request: Request) -> None:
+    # Each attempt makes signed requests to the department's endpoint; the
+    # window matches the email test's so a troubleshooting admin is not
+    # locked out for longer than the UI says.
+    await check_rate_limit(
+        request, scope="settings_test_storage", window_seconds=60, lockout_seconds=60
+    )
+
+
+@router.post(
+    "/settings/file-storage/s3/activate", response_model=FileStorageStatusResponse
+)
+async def activate_s3_file_storage(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+    _rate_limited: None = Depends(_rate_limit_settings_test_storage),
+):
+    """
+    Test the saved S3 settings and, if they work, store new files there
+
+    Writes a small test object to the bucket, reads it back and removes it.
+    Only when all three succeed does the department switch; on any failure
+    nothing changes. Files already on local disk stay there and keep working.
+
+    **Authentication and admin permission required**
+    """
+    try:
+        await file_storage.activate_s3(
+            db, current_user.organization_id, current_user.id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    status_view = await _file_storage_status(db, current_user.organization_id)
+    await log_audit_event(
+        db=db,
+        event_type="file_storage_s3_activated",
+        event_category="administration",
+        severity="warning",
+        event_data={
+            "bucket": status_view.bucket,
+            "endpoint_url": status_view.endpoint_url,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return status_view
+
+
+@router.post(
+    "/settings/file-storage/s3/deactivate", response_model=FileStorageStatusResponse
+)
+async def deactivate_s3_file_storage(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """
+    Store new files on local disk again
+
+    Files already in the bucket stay there and are still served from it.
+
+    **Authentication and admin permission required**
+    """
+    async with handle_service_errors("Failed to change where files are stored"):
+        await file_storage.deactivate_s3(db, current_user.organization_id)
+    status_view = await _file_storage_status(db, current_user.organization_id)
+    await log_audit_event(
+        db=db,
+        event_type="file_storage_s3_deactivated",
+        event_category="administration",
+        severity="warning",
+        event_data={},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return status_view
 
 
 @router.patch("/settings/auth", response_model=AuthSettings)

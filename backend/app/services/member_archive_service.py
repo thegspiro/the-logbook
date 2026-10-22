@@ -28,7 +28,7 @@ from app.models.inventory import (
     ItemAssignment,
     ItemIssuance,
 )
-from app.models.user import Organization, User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User, UserStatus
 from app.schemas.organization import RejoinServiceCredit
 from app.services.email_policy import (
     EmailKind,
@@ -180,7 +180,7 @@ async def check_and_auto_archive(
             select(User)
             .where(
                 User.organization_id == organization_id,
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
             .options(selectinload(User.roles))

@@ -139,7 +139,7 @@ const GuestCheckInPage: React.FC = () => {
       <main id="main-content" className="bg-theme-surface-secondary mx-auto min-h-screen max-w-xl p-6">
         <div className="bg-theme-surface rounded-lg p-8 text-center shadow-md">
           <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-500/20">
-            <CheckCircle2 className="h-12 w-12 text-green-600 dark:text-green-400" />
+            <CheckCircle2 className="h-12 w-12 text-green-700 dark:text-green-400" />
           </div>
           <h1 className="text-theme-text-primary mb-2 text-3xl font-bold">You're signed in!</h1>
           <p className="text-theme-text-secondary mb-8 text-lg">{result.message}</p>
@@ -164,7 +164,7 @@ const GuestCheckInPage: React.FC = () => {
           {info.collects_prospect_details && (
             <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-left dark:border-green-500/30 dark:bg-green-500/10">
               <div className="flex items-start">
-                <UserPlus className="mt-0.5 mr-2 h-5 w-5 shrink-0 text-green-600" />
+                <UserPlus className="mt-0.5 mr-2 h-5 w-5 shrink-0 text-green-700 dark:text-green-600" />
                 <div>
                   <p className="mb-1 text-sm font-medium text-green-900 dark:text-green-300">We have your details</p>
                   <p className="text-sm text-green-800 dark:text-green-400">

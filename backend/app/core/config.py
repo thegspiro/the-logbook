@@ -94,8 +94,9 @@ RETIRED_SETTINGS: dict[str, str] = {
     ),
     "DB_POOL_MIN": "only DB_POOL_MAX reaches the connection pool",
     "STORAGE_TYPE": (
-        "uploads are always written to local disk under /app/uploads; there is "
-        "no S3, Azure or GCS backend"
+        "there is no installation-wide storage setting: uploads go to local "
+        "disk under /app/uploads, or to a department's own S3 bucket chosen in "
+        "its File Storage settings"
     ),
     "UPLOAD_DIR": (
         "every upload writer uses its own fixed path under /app/uploads; mount "
@@ -307,6 +308,14 @@ class Settings(BaseSettings):
     # private-resolution check is waived; HTTPS-scheme and cloud-metadata-
     # endpoint checks still apply.
     AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION: bool = False
+    # Explicit operator risk acceptance: allow a department's own S3 endpoint
+    # (File Storage settings) to resolve to a private address, and to use
+    # plain HTTP — the bundled MinIO at http://minio:9000 is both. The endpoint
+    # is typed by a department administrator, not the operator, so the default
+    # stays closed: open, it lets that administrator point the server's
+    # signed requests at any internal service. Cloud-metadata hosts stay
+    # blocked either way.
+    S3_ALLOW_PRIVATE_ENDPOINT: bool = False
     # Comma-separated IP addresses/CIDRs containing operator-approved label
     # printers. Empty disables direct network printing. This is deliberately a
     # platform setting rather than tenant-managed configuration: organization

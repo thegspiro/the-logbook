@@ -22,11 +22,11 @@ from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 from loguru import logger
 
-from app.core import file_encryption
 from app.core.config import settings
 from app.models.email_template import EmailTemplateType
 from app.models.user import Organization
 from app.schemas.organization import decrypt_settings_secrets
+from app.services import file_storage_service as file_storage
 from app.services.branding_service import email_logo_src
 from app.services.email_template_service import EmailTemplateService
 from app.services.email_theme import (
@@ -897,7 +897,7 @@ class EmailService:
     _SMTP_ATTACHMENT_BUDGET = int(18 * 1024 * 1024)
 
     @classmethod
-    def _build_cloudflare_attachments(
+    async def _build_cloudflare_attachments(
         cls,
         attachment_paths: Optional[Sequence[AttachmentSpec]],
         budget_bytes: Optional[int] = None,
@@ -919,13 +919,13 @@ class EmailService:
         used = 0
         for spec in attachment_paths or []:
             resolved, display_name = _attachment_path_and_name(spec)
-            if not os.path.isfile(resolved):
+            if not await file_storage.exists(resolved):
                 logger.warning("Attachment not found, skipping")
                 continue
             # Stored attachments are encrypted at rest; the recipient gets
             # the plaintext.
             content_b64 = base64.b64encode(
-                file_encryption.read_plaintext(resolved)
+                await file_storage.read_bytes(resolved)
             ).decode("ascii")
             if used + len(content_b64) > budget:
                 logger.warning(
@@ -1402,7 +1402,9 @@ class EmailService:
         # --- Cloudflare Email Service path (REST API, no SMTP) ---
         if self._use_cloudflare:
             try:
-                cf_attachments = self._build_cloudflare_attachments(attachment_paths)
+                cf_attachments = await self._build_cloudflare_attachments(
+                    attachment_paths
+                )
                 results = await self._cloudflare_send(
                     to_emails=to_emails,
                     subject=subject,
@@ -1427,10 +1429,10 @@ class EmailService:
             attachment_bytes_used = 0
             for spec in attachment_paths or []:
                 resolved, display_name = _attachment_path_and_name(spec)
-                if not os.path.isfile(resolved):
+                if not await file_storage.exists(resolved):
                     logger.warning("Attachment not found, skipping")
                     continue
-                file_size = file_encryption.plaintext_size(resolved)
+                file_size = await file_storage.plaintext_size(resolved)
                 if attachment_bytes_used + file_size > self._SMTP_ATTACHMENT_BUDGET:
                     logger.warning(
                         "Attachment exceeds per-message size budget, skipping: {}",
@@ -1439,7 +1441,7 @@ class EmailService:
                     continue
                 attachment_bytes_used += file_size
                 part = MIMEBase("application", "octet-stream")
-                part.set_payload(file_encryption.read_plaintext(resolved))
+                part.set_payload(await file_storage.read_bytes(resolved))
                 encoders.encode_base64(part)
                 filename = _sanitize_header(display_name)
                 part.add_header("Content-Disposition", "attachment", filename=filename)

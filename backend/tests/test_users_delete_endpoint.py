@@ -47,6 +47,7 @@ def _member(**kw):
         rank=kw.get("rank"),
         status=kw.get("status", UserStatus.ACTIVE),
         roles=kw.get("roles", []),
+        positions=kw.get("positions", []),
         membership_number=kw.get("membership_number"),
         previous_membership_number=None,
         deleted_at=None,
@@ -55,12 +56,22 @@ def _member(**kw):
 
 @pytest.fixture(autouse=True)
 def _quiet_collaborators(monkeypatch):
-    """Neutralise audit logging and the administrator-continuity guards."""
+    """Neutralise audit logging, the administrator-continuity guards, and the
+    inventory return / shift release side effects (each has its own
+    database-backed tests)."""
     monkeypatch.setattr(users_endpoint, "log_audit_event", AsyncMock())
     monkeypatch.setattr(users_endpoint, "assert_not_last_administrator", AsyncMock())
     monkeypatch.setattr(
         users_endpoint, "assert_positions_retain_administrator", AsyncMock()
     )
+    monkeypatch.setattr(
+        users_endpoint,
+        "return_member_inventory",
+        AsyncMock(
+            return_value=SimpleNamespace(unassigned=0, pool_returns=0, checked_in=0)
+        ),
+    )
+    monkeypatch.setattr(users_endpoint, "release_future_shift_commitments", AsyncMock())
 
 
 class TestDeleteUserHard:
@@ -102,6 +113,41 @@ class TestDeleteUserHard:
         )
 
         release.assert_awaited_once_with(db, str(target.id))
+
+    async def test_returns_held_inventory_before_deleting(self, monkeypatch):
+        """Gear goes back to stock in the delete's own transaction, before the
+        holding rows CASCADE away with the member."""
+        order: list[str] = []
+        returned = AsyncMock(
+            side_effect=lambda *a, **k: order.append("return")
+            or SimpleNamespace(unassigned=1, pool_returns=2, checked_in=0)
+        )
+        monkeypatch.setattr(users_endpoint, "return_member_inventory", returned)
+        target = _member()
+        db = _db(_result(scalar_one=target))
+        db.delete = AsyncMock(side_effect=lambda *_: order.append("delete"))
+        db.commit = AsyncMock(side_effect=lambda: order.append("commit"))
+
+        await users_endpoint.delete_user(
+            user_id=target.id, hard=True, db=db, current_user=_member(id="admin-1")
+        )
+
+        returned.assert_awaited_once_with(
+            db, str(target.id), "org-1", performed_by="admin-1"
+        )
+        assert order == ["return", "delete", "commit"]
+
+    async def test_hard_delete_does_not_run_the_shift_release(self):
+        """The member's assignments CASCADE with them; there is nothing to
+        hand back through the roster."""
+        target = _member()
+        db = _db(_result(scalar_one=target))
+
+        await users_endpoint.delete_user(
+            user_id=target.id, hard=True, db=db, current_user=_member(id="admin-1")
+        )
+
+        users_endpoint.release_future_shift_commitments.assert_not_awaited()
 
     async def test_refuses_when_records_must_keep_an_owner(self, monkeypatch):
         monkeypatch.setattr(
@@ -162,6 +208,86 @@ class TestDeleteUserSoft:
         assert target.membership_number is None
         assert target.deleted_at is not None
         db.delete.assert_not_awaited()
+
+    async def test_releases_future_shifts_after_committing(self):
+        target = _member()
+        db = _db(_result(scalar_one=target))
+
+        await users_endpoint.delete_user(
+            user_id=target.id, hard=False, db=db, current_user=_member(id="admin-1")
+        )
+
+        release = users_endpoint.release_future_shift_commitments
+        release.assert_awaited_once()
+        assert release.await_args.kwargs["user_id"] == str(target.id)
+        assert release.await_args.kwargs["organization_id"] == "org-1"
+        assert release.await_args.kwargs["reason"] == "soft_deleted"
+        db.commit.assert_awaited_once()
+
+
+def _position(*permissions):
+    return SimpleNamespace(permissions=list(permissions))
+
+
+class TestDeleteUserPrivilegeCeiling:
+    """A member manager may not delete an account holding permissions they
+    lack — the same ceiling password and MFA resets apply."""
+
+    @pytest.fixture(autouse=True)
+    def _no_blocking_references(self, monkeypatch):
+        monkeypatch.setattr(
+            users_endpoint, "find_hard_delete_blockers", AsyncMock(return_value=[])
+        )
+        monkeypatch.setattr(
+            users_endpoint, "release_user_references", AsyncMock(return_value=0)
+        )
+
+    @pytest.mark.parametrize("hard", [False, True])
+    async def test_refuses_a_more_privileged_member(self, monkeypatch, hard):
+        report = AsyncMock()
+        monkeypatch.setattr(
+            users_endpoint, "report_privilege_escalation_attempt", report
+        )
+        target = _member(positions=[_position("members.manage", "settings.manage")])
+        caller = _member(id="secretary-1", positions=[_position("members.manage")])
+        db = _db(_result(scalar_one=target))
+
+        with pytest.raises(HTTPException) as exc:
+            await users_endpoint.delete_user(
+                user_id=target.id, hard=hard, db=db, current_user=caller
+            )
+
+        assert exc.value.status_code == 403
+        assert "privileges beyond your own" in exc.value.detail
+        report.assert_awaited_once()
+        assert report.await_args.args[2] == f"member-delete:{target.id}"
+        assert target.deleted_at is None
+        db.delete.assert_not_awaited()
+        db.commit.assert_not_awaited()
+
+    async def test_allows_a_member_within_the_callers_permissions(self):
+        target = _member(positions=[_position("events.view")])
+        caller = _member(
+            id="secretary-1", positions=[_position("members.manage", "events.view")]
+        )
+        db = _db(_result(scalar_one=target))
+
+        await users_endpoint.delete_user(
+            user_id=target.id, hard=False, db=db, current_user=caller
+        )
+
+        assert target.deleted_at is not None
+
+    async def test_wildcard_administrator_may_delete_anyone(self):
+        target = _member(positions=[_position("members.manage", "security.manage")])
+        caller = _member(id="owner-1", positions=[_position("*")])
+        db = _db(_result(scalar_one=target))
+
+        await users_endpoint.delete_user(
+            user_id=target.id, hard=False, db=db, current_user=caller
+        )
+
+        assert target.deleted_at is not None
 
 
 class TestAssignUserRoles:
