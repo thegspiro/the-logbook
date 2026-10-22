@@ -140,7 +140,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W74 | IP security, and a member's access request                                | member → admin   | `/ip-security/my-requests`, `/ip-security` | ✅     |
 | W75 | Audit log, error monitoring and analytics                                 | admin            | `/admin/audit-log`, `/admin/errors`        | ✅     |
 | W76 | Public portal and the public pages                                        | admin, anonymous | `/admin/public-portal`, `/`, `/privacy`    | ✅     |
-| W77 | The testing module and its printed report                                 | admin            | `/testing`                                 | ⬜     |
+| W77 | The testing module and its printed report                                 | admin            | `/testing`                                 | ✅     |
 | W78 | Platform administration                                                   | admin            | `/admin/platform-analytics`                | ⬜     |
 | W79 | Phone pass: W08, W19, W24, W33, W39 and W70 again at 390×844              | member, officers | as those rows                              | ⬜     |
 
@@ -223,7 +223,41 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   placed at a facility (`location_id`) would publish no location; read from
   code, not driven (W76).
 
+- **Tooling** — a full `npm run lint` needs about 3.5 GB of heap (2,350
+  files with type-aware rules). It aborted out of memory under the 2 GB default
+  of the W77 container and passed with `--max-old-space-size=8192`. CI's
+  `ubuntu-latest` default is larger, but the margin is thin (W77).
+
 ## Log
+
+### W77 — The testing module and its printed report — 2026-10-22
+
+Driven as: `admin` and `member` at 1280×900 and 390×844.
+
+Held:
+
+- members are refused the admin actions on screen and through the API;
+- marks and notes survive a reload and reach the admin's combined view;
+- an archived run is read-only;
+- the report, CSV and Markdown agree with the page;
+- both clears ask first, and the department-wide one is audited.
+
+Fixed:
+
+- W77-1 (MED — recording a correct refusal as Pass was reported as a
+  permissions defect, and nothing said to mark it Blocked).
+- W77-2 (LOW — another tester's note was tooltip-only).
+- W77-3 (LOW — the Markdown summary dropped "to confirm" and printed
+  "(s)").
+- W77-4 (LOW — Clear everyone counted 0 testers).
+- W77-5 (LOW — both pages scrolled sideways at 390px).
+
+Flagged: none.
+
+Gate: typecheck clean; lint clean with an 8 GB heap (it runs out of memory at
+this container's 2 GB default); 110 testing-module tests pass.
+
+Next: W78.
 
 ### W76 — Public portal and the public pages — 2026-10-21
 

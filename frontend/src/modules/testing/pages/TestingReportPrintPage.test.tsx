@@ -103,6 +103,16 @@ describe('TestingReportPrintPage', () => {
     expect(screen.getByText(/Build: build-1/)).toBeInTheDocument();
   });
 
+  it('lets its tables scroll sideways on a phone rather than widening the page (W77)', async () => {
+    savedEntries.push(mark({}));
+    renderWithRouter(<TestingReportPrintPage />);
+
+    const coverage = await screen.findByRole('region', { name: 'Coverage by area' });
+    expect(coverage).toHaveClass('overflow-x-auto');
+    expect(within(coverage).getByRole('table')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Failures' })).toHaveClass('overflow-x-auto');
+  });
+
   it('lists a failure with the note that explains it', async () => {
     savedEntries.push(mark({}));
     renderWithRouter(<TestingReportPrintPage />);

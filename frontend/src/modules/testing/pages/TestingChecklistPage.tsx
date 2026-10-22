@@ -248,9 +248,10 @@ export const TestingChecklistPage: React.FC = () => {
   };
 
   const handleClear = async () => {
+    const markCount = summary.pass + summary.fail + summary.blocked;
     const confirmed = await confirm({
       title: 'Clear your marks?',
-      message: `This deletes your ${summary.pass + summary.fail + summary.blocked} marks and their notes from the run. Other testers' marks stay. Copy the Markdown first if you need a record.`,
+      message: `This deletes your ${markCount} ${markCount === 1 ? 'mark' : 'marks'} and their notes from the run. Other testers' marks stay. Copy the Markdown first if you need a record.`,
       confirmLabel: 'Delete my marks',
       cancelLabel: 'Keep them',
       variant: 'danger',
@@ -450,7 +451,8 @@ export const TestingChecklistPage: React.FC = () => {
               </p>
               <p className="text-theme-text-secondary mt-1 text-xs">
                 To check the gates, sign in as each position in turn. A red permission badge means the page should
-                refuse with Access Denied; a green one means it should open. Your marks are saved under this account —{' '}
+                refuse with Access Denied; a green one means it should open. Mark a refusal Blocked and a page that
+                opened Pass. Your marks are saved under this account —{' '}
                 {canSeeAllTesters
                   ? 'and every tester’s appear on the boxes below.'
                   : 'an administrator sees them alongside every other tester’s.'}
@@ -710,7 +712,7 @@ export const TestingChecklistPage: React.FC = () => {
             </button>
 
             {isOpen && (
-              <div className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {group.visible.map((page) => (
                   <TestPageCard
                     key={page.path}
