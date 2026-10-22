@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+_None yet._ PR #3556 (Feature 01, Auth & session lifecycle, pass 11) merged
+2026-10-22, not docs-only — see `AUTH-01-auth-session.md`'s **Pass 11**
+section and its own Log entry below — so only this row's clearing rides
+along here. `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
+returned 0 results, checked once before starting and again immediately
+before branching, and `ListAgents` found no other reachable session — a
+watchdog pickup. Row 02 (Permissions & roles) was confirmed the next `⬜` by
+reading the rotation table directly. This iteration reviewed Feature 02,
+pass 11: **0 fixed, 0 new findings.** See `PERM-02-permissions-roles.md`'s
+**Pass 11** section. Rotation row 02 → ✅ (pending this PR's merge); next is
+Feature 03 (Public surface & webhooks). PR not yet opened — this row will be
+replaced with the real link in a second commit on this same branch once it
+is.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01 Auth & session lifecycle pass 11, PR #3556, before it merged), preserved for history</summary>
+
 **PR [#3556](https://github.com/thegspiro/the-logbook/pull/3556)** (branch
 `claude/security-review-auth-session-p11`) — Feature 01 (Auth & session
 lifecycle), pass 11, a watchdog pickup. PR #3555 (Feature 00, Cross-cutting
@@ -35,6 +52,8 @@ session-lifetime check of its own — plus `dependencies.py`'s
 fix) were already correct, read in full and traced for regressions. See
 `AUTH-01-auth-session.md`'s **Pass 11** section. Rotation row 01 → ✅
 (pending this PR's merge); next is Feature 02 (Permissions & roles).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00 Cross-cutting baseline pass 11, PR #3555, before it merged), preserved for history</summary>
@@ -20536,7 +20555,7 @@ this iteration's commit" rule.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
@@ -20576,6 +20595,38 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-22 — Feature 02 (Permissions & roles, pass 11) — watchdog pickup, 0 fixed, 0 new findings
+
+PR #3556 (Feature 01, Auth & session lifecycle, pass 11) merged 2026-10-22,
+not docs-only — see its own Log entry just below for the record — so this
+iteration only clears the `Open PR` row. This iteration (a watchdog
+pickup — `search_pull_requests` returned 0 open security-review PRs and
+`ListAgents` found no reachable session) reviewed Feature 02, pass 11:
+**0 fixed, 0 new findings.** Delta against the pass-10 baseline (PR #3398)
+touched 7 of 12 scoped files (`dependencies.py`, `core/permissions.py`,
+`role_service.py`, `operational_ranks.py`, `operational_rank_service.py`,
+`org_chart_service.py`, `admin_continuity_service.py`); all traced in full
+and found correct: `dependencies.py`'s `BACKGROUND_REQUEST_CONFIG` wiring
+(already audited by Features 00/34/01 this rotation); a new, grant-free
+`position_mirrors_rank` helper in `core/permissions.py` with no Pitfall
+#23 exposure; two new org-scoped, correctly-locked `delete_role` guards in
+`role_service.py` (a sole-suggestion-box-reviewer check and a
+message-target-role cleanup, the latter Pitfall #12 compliant); a
+rank-code-rename propagation in `operational_rank_service.py` that now
+updates every store referencing the old code (`User.rank`,
+`OrgChartNode.rank_code`, `TrainingRequirement.required_roles`,
+`InventoryImpactPlan.filters["ranks"]`) inside one locked transaction, with
+a new audit event and a parallel orphan-seat guard on `delete_rank`; and
+Pitfall #32 fixes (`== UserStatus.ACTIVE` → `.in_(ACTIVE_ACCOUNT_STATUSES)`)
+in `org_chart_service.py` and `admin_continuity_service.py`. `users.py` has
+a large diff this pass too, but every hunk is new directory-account
+provisioning logic in `create_member`/`update_user_profile`/`delete_user`/
+`get_deletion_impact` — Feature 07's (Users & organizations) territory, not
+touching this feature's rank/role-assignment handlers, which remain
+byte-identical to pass 10. See `PERM-02-permissions-roles.md`'s **Pass 11**
+section. Rotation row 02 → ✅ (pending this PR's merge); next is Feature 03
+(Public surface & webhooks).
 
 ### 2026-10-22 — Feature 01 (Auth & session lifecycle, pass 11) — watchdog pickup, 0 fixed, 0 new findings
 
