@@ -971,21 +971,23 @@ application server and has no indication of it — the step offers the options
 without saying they are not yet in effect (CLAUDE.md pitfall #19).
 
 **Partly resolved (2026-10-22): the S3 / MinIO option works** (decision 31,
-step 2, in `docs/FILE_STORAGE_HARDENING.md`). A department's uploads go to its
+steps 2 and 3, in `docs/FILE_STORAGE_HARDENING.md`). A department's uploads go to its
 own bucket once **Test and switch to S3** passes with its saved settings, and
 the Storage screen reports where new files go whatever platform is picked.
 Still open:
 
 - **Google Drive, OneDrive / SharePoint and "Other" are still unread.** The
   screen now says files stay on the server for them.
-- **Existing files stay where they were written** until step 3's migration
-  command moves them. Both are served, so nothing breaks.
-- **Key rotation and the plain-file notice cover the volume only.**
-  `scripts/encrypt_uploads.py`'s rewrap does not reach objects in a bucket,
-  so after a key rotation they stay under the old key, which must be kept
-  until step 3 rewraps them. Every object is written encrypted, so the
-  plain-file notice has nothing to find there.
-- **Backups:** `scripts/backup.sh` copies the volume, not a bucket.
+- **Resolved 2026-10-22: existing files move with
+  `scripts/migrate_uploads_to_s3.py`** (apply, rollback, finalize), and
+  `scripts/encrypt_uploads.py --rewrap` reaches bucket objects. Every object
+  is written encrypted, so the plain-file notice has nothing to find in a
+  bucket; until a migration is finalized, the disk copies it keeps are still
+  covered by the notice.
+- **Backups do not include buckets, by decision (2026-10-22).**
+  `scripts/backup.sh` names the buckets it left out; `docs/BACKUP.md` says how
+  to protect them with the provider's tooling. A department that skips that
+  has no second copy of its bucket.
 - **A settings change reaches other workers within 30 seconds.** Each worker
   caches a department's storage view for that long; the worker that saved
   clears its own copy at once.

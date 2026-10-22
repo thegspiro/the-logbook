@@ -72,8 +72,12 @@ current recommendation, which auditors do check.
    # Apply:
    docker exec -it intranet-backend python scripts/rotate_encryption_key.py --commit
    ```
-6. Move stored files to the new key too. This rewraps each file's own key,
-   not its body, so it is quick:
+6. Move stored files to the new key too. On the uploads volume this rewraps
+   each file's own key, not its body, so it is quick. Files in a department's
+   own S3 bucket are covered by the same command: each object under the old
+   key is downloaded, re-encrypted and uploaded again in one write, which
+   takes as long as transferring it. The report lists the volume and the
+   buckets separately:
    ```bash
    # Report only:
    docker exec -it intranet-backend python scripts/encrypt_uploads.py --rewrap
@@ -84,7 +88,8 @@ current recommendation, which auditors do check.
    It has a new fingerprint, so the old confirmation no longer counts.
 7. When the field script reports zero rotated and zero unreadable values on a
    `--commit` run, and the file rewrap reports nothing left under a retired
-   key, remove the drained key from `ENCRYPTION_KEYS_LEGACY` and restart.
+   key (`under_a_retired_key` for the volume and
+   `bucket_objects_under_a_retired_key` for buckets, both zero), remove the drained key from `ENCRYPTION_KEYS_LEGACY` and restart.
 8. Update the offline copies of your secrets (see BACKUP.md) — an old backup
    restored later will need whichever key encrypted it, so keep retired keys
    where you keep the current one, labeled with the dates of the backups they

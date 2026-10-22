@@ -277,17 +277,26 @@ class S3Backend:
             raise file_encryption.FileDecryptionError("The file is truncated")
         return data
 
-    def plaintext_size(self, location: S3Location) -> int:
+    def _head_bytes(self, location: S3Location) -> tuple[bytes, Mapping[str, Any]]:
         response = self._get(
             location, Range=f"bytes=0-{file_encryption.HEADER_SIZE - 1}"
         )
         body = response["Body"]
         try:
-            head = body.read()
+            head: bytes = body.read()
         except (BotoCoreError, ClientError) as exc:
             raise self._fail("read", location, exc) from exc
         finally:
             body.close()
+        return head, response
+
+    def key_id(self, location: S3Location) -> Optional[bytes]:
+        """The key the object was encrypted under; None for a plain object."""
+        head, _response = self._head_bytes(location)
+        return file_encryption.key_id_from_head(head)
+
+    def plaintext_size(self, location: S3Location) -> int:
+        head, response = self._head_bytes(location)
         # A ranged response's ContentLength is the range's; the whole object's
         # length is the figure after the slash in ContentRange.
         content_range = str(response.get("ContentRange") or "")

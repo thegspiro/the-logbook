@@ -12,6 +12,7 @@ check the archive each layout produces and where a restore writes it.
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import uuid
 from collections.abc import Iterator
@@ -187,6 +188,64 @@ class TestBackupUploads:
         assert "Uploaded files were NOT backed up" in result.stdout
         assert "no running backend container" in result.stdout
         assert not _archive(env).exists()
+
+
+def _install_bucket_check(env: dict[str, str], output: str, exit_code: int = 0):
+    """The backend's ``migrate_uploads_to_s3.py --buckets``, as the docker
+    stub runs it: a host ``python`` on a script under the fake /app."""
+    script = Path(env["STUB_ROOT"]) / "app" / "scripts" / "migrate_uploads_to_s3.py"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text(
+        f"import sys\nsys.stdout.write({output!r})\nsys.exit({exit_code})\n"
+    )
+    python = Path(env["PATH"].split(":", 1)[0]) / "python"
+    if not python.exists():
+        python.symlink_to(sys.executable)
+
+
+@pytest.mark.unit
+class TestBucketNotice:
+    """A department's own bucket is not on the uploads volume, so the backup
+    says which buckets it left out."""
+
+    def _uploads(self, env):
+        _install_docker(env, "intranet-backend")
+        _write(Path(env["STUB_ROOT"]) / "app" / "uploads", {"a/b.pdf": "pdf"})
+
+    def test_buckets_holding_files_are_named(self, env):
+        self._uploads(env)
+        _install_bucket_check(
+            env,
+            '[{"organization_id": "org-1", "bucket": "dept-files", "files": 3}]',
+        )
+
+        result = _run(env, "backup_uploads")
+
+        assert result.returncode == 0, result.stderr + result.stdout
+        assert "NOT in this backup" in result.stdout
+        assert "dept-files: 3 file(s) of organization org-1" in result.stdout
+        log = Path(env["STUB_LOG"]).read_text()
+        assert "migrate_uploads_to_s3.py --buckets" in log
+
+    def test_no_bucket_files_says_nothing(self, env):
+        self._uploads(env)
+        _install_bucket_check(env, "[]")
+
+        result = _run(env, "backup_uploads")
+
+        assert result.returncode == 0, result.stderr + result.stdout
+        assert "NOT in this backup" not in result.stdout
+        assert "Could not" not in result.stdout
+
+    def test_a_failed_check_does_not_fail_the_backup(self, env):
+        self._uploads(env)
+        _install_bucket_check(env, "", exit_code=2)
+
+        result = _run(env, "backup_uploads")
+
+        assert result.returncode == 0, result.stderr + result.stdout
+        assert "Could not check for files kept" in result.stdout
+        assert _archive(env).exists()
 
 
 @pytest.mark.unit
