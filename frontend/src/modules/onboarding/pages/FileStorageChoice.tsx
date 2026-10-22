@@ -133,7 +133,8 @@ const FileStorageChoice: React.FC = () => {
         '99.999999999% durability',
         'Advanced security and compliance',
       ],
-      setupInfo: "You'll need an AWS account, Access Key ID, and Secret Access Key.",
+      setupInfo:
+        "You'll need an AWS account, Access Key ID, and Secret Access Key. New files go to the bucket once the connection test in Settings > Storage passes.",
     },
     {
       id: 'local',

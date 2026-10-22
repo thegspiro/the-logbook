@@ -970,10 +970,32 @@ too. A department that chose S3 or SharePoint is keeping its files on the
 application server and has no indication of it — the step offers the options
 without saying they are not yet in effect (CLAUDE.md pitfall #19).
 
-**In progress (2026-10-21): the S3 / MinIO option is being built** (decision
-31 in `docs/FILE_STORAGE_HARDENING.md`), reading each department's own
-settings. The choice is still unread until step 2 lands, and Google Drive and
-OneDrive / SharePoint stay deferred.
+**Partly resolved (2026-10-22): the S3 / MinIO option works** (decision 31,
+step 2, in `docs/FILE_STORAGE_HARDENING.md`). A department's uploads go to its
+own bucket once **Test and switch to S3** passes with its saved settings, and
+the Storage screen reports where new files go whatever platform is picked.
+Still open:
+
+- **Google Drive, OneDrive / SharePoint and "Other" are still unread.** The
+  screen now says files stay on the server for them.
+- **Existing files stay where they were written** until step 3's migration
+  command moves them. Both are served, so nothing breaks.
+- **Key rotation and the plain-file notice cover the volume only.**
+  `scripts/encrypt_uploads.py`'s rewrap does not reach objects in a bucket,
+  so after a key rotation they stay under the old key, which must be kept
+  until step 3 rewraps them. Every object is written encrypted, so the
+  plain-file notice has nothing to find there.
+- **Backups:** `scripts/backup.sh` copies the volume, not a bucket.
+- **A settings change reaches other workers within 30 seconds.** Each worker
+  caches a department's storage view for that long; the worker that saved
+  clears its own copy at once.
+- **DNS rebinding.** The endpoint's address is checked each time a client is
+  built, but botocore resolves the host again when it connects, the same
+  window the integrations' save-time checks leave. Blocking metadata hosts
+  and private ranges (without the operator's opt-in) is what narrows it.
+- **Anonymous suggestion screenshots carry their exact upload time in a
+  bucket** (owner decision, 2026-10-22). On the volume that time is truncated
+  to noon of the day; a bucket stamps its own and cannot be told otherwise.
 
 What has to exist before any option other than Local Storage does anything:
 

@@ -19,6 +19,10 @@ Anonymity invariants — every one is load-bearing, and the tests in
   replies are all truncated to 12:00 UTC of the day, so a row cannot be lined
   up against session or login activity. Noon rather than midnight keeps the
   calendar date the same when the frontend renders it in any US timezone.
+  **One exception, accepted by the owner (2026-10-22):** a department that
+  keeps its files in its own S3 bucket stores screenshots there too, and the
+  bucket stamps each object with its exact upload time, which nothing here
+  can change. Whoever can list the bucket, or read its access logs, sees it.
 * An anonymous submitter in a follow-up box is identified by a random key
   whose SHA-256 digest alone is stored; the key itself is returned once and
   never persisted or logged.
@@ -33,11 +37,9 @@ Anonymity invariants — every one is load-bearing, and the tests in
   ``app.core.error_reporting``, and the frontend's ``reportApiError``).
 """
 
-import asyncio
 import copy
 import hashlib
 import html
-import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -962,22 +964,19 @@ class SuggestionService:
         content: bytes,
         mtime: Optional[datetime],
     ) -> str:
-        directory = file_storage.area_directory(
-            organization_id, StorageArea.SUGGESTIONS, suggestion_id
+        # A named submission keeps its true time; an anonymous one is stamped
+        # with the truncated time on the uploads volume. A bucket records its
+        # own upload time and cannot be told otherwise (owner decision
+        # 2026-10-22; see the module docstring).
+        return await file_storage.write_file(
+            organization_id,
+            StorageArea.SUGGESTIONS,
+            suggestion_id,
+            f"{uuid.uuid4().hex}.webp",
+            content,
+            db=self.db,
+            local_mtime=mtime,
         )
-
-        def _write() -> str:
-            path = file_storage.write_atomically(
-                directory, f"{uuid.uuid4().hex}.webp", content
-            )
-            if mtime is not None:
-                # The filesystem would otherwise keep the exact upload time the
-                # row itself declines to record.
-                seconds = mtime.timestamp()
-                os.utime(path, (seconds, seconds))
-            return path
-
-        return await asyncio.to_thread(_write)
 
     # ------------------------------------------------------------------
     # The submitter's side
