@@ -7957,10 +7957,16 @@ class Seeder:
         rows then differ visibly (the administrator's own carries the cancel
         control instead of a reviewable state) and pressing Approve on it
         returns the server's refusal.
+
+        The swap offers the seat to a named member. An open swap -- offered to
+        anyone cleared for the seat -- has nothing to approve, since a member
+        completes it by picking it up, so the Requests tab renders no Approve
+        on it and there is nothing to press. An open one left by an earlier
+        seed run is cancelled and replaced.
         """
         me = self.api.get("/auth/me") or {}
         admin_id = str(pick(me, "id") or pick(me.get("user") or {}, "id") or "")
-        mine = [
+        pending = [
             r
             for r in items(
                 self.api.get("/scheduling/swap-requests?limit=100"),
@@ -7968,8 +7974,32 @@ class Seeder:
                 "swap_requests",
             )
             if str(pick(r, "requesting_user_id", "requestingUserId") or "") == admin_id
+            and pick(r, "status") == "pending"
         ]
-        if mine:
+        if any(pick(r, "target_user_id", "targetUserId") for r in pending):
+            return
+        for request in pending:
+            self.api.post(f"/scheduling/swap-requests/{pick(request, 'id')}/cancel", {})
+        # Sorted so a re-run names the same member. Not the demo member: the
+        # offer notifies its target, and the demo member's inbox is pictured.
+        target = next(
+            (
+                str(pick(m, "id"))
+                for m in sorted(
+                    items(self.api.get("/users?limit=100"), "users"),
+                    key=lambda m: str(pick(m, "username") or ""),
+                )
+                if pick(m, "id")
+                and str(pick(m, "id")) != admin_id
+                and pick(m, "username") != DEMO_MEMBER_USERNAME
+                and pick(m, "status") == "active"
+            ),
+            None,
+        )
+        if not target:
+            self.blocked.append(
+                "scheduling requests: no member to offer the administrator's seat to"
+            )
             return
         upcoming = sorted(
             (
@@ -7989,6 +8019,7 @@ class Seeder:
             "/scheduling/swap-requests",
             {
                 "offering_shift_id": pick(upcoming[-1], "id"),
+                "target_user_id": target,
                 "reason": (
                     "Chiefs' association meeting runs long that night — "
                     "looking for cover on the back half."
