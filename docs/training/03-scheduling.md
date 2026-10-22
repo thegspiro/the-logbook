@@ -3101,6 +3101,16 @@ same tabs.
 
 Select **New Template** to create one, or select a template to edit it.
 
+**Deleting a template or a basic vehicle.** A shift template used by any shift
+or pattern, and a basic apparatus named by any template, shift, pre-work
+session, equipment check or call, is **deactivated** rather than deleted, so
+existing shifts keep their checklists and templates keep saving. Inactive
+records are hidden from pickers for new records. Unused ones are deleted. The
+confirmation and toast say which happened. On the basic apparatus list, anyone
+with scheduling manage rights can turn on **Show inactive** and select
+**Reactivate**; reactivating changes only the flag and re-adds nothing to
+shifts.
+
 | Field                                                                | What it does                                                                                                                                             |
 | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Name**                                                             | Required, for example "Day Shift A"                                                                                                                      |

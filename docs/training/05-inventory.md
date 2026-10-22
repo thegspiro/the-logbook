@@ -555,9 +555,10 @@ A kit must have at least one item.
 
 1. On the kit's card, select the issue button ("Issue _kit_ to a member").
 2. In **Issue "_kit_" — Select a Member**, choose the member.
-3. A confirmation names the kit, the number of items and the member, for
-   example: Issue 6 items from "New Recruit PPE Kit" to Jane Smith. Select
-   **Issue to _member_**, or **Don't issue** to back out.
+3. A review lists every line of the kit with the size The Logbook resolved for
+   that member from their size preferences. Change a line's size from its
+   list if the quartermaster knows better. Select **Issue to _member_**, or
+   **Don't issue** to back out.
 
 Each item in the kit is then given to the member on its own record: tracked
 items as assignments, counted items as issuances. The message says how many
@@ -567,9 +568,14 @@ were issued.
 
 ![Equipment kit detail listing its component items](./images/05-50-equipment-kit-detail.png)
 
-> **Important.** A kit issues the exact items listed in it. It does not pick
-> sizes from the member's size preferences. For a size the kit does not name,
-> issue that item separately.
+> **Sizes follow the member, not the kit.** A kit line names a product, not one
+> size. When you add a sized product (a jacket, boots, gloves) the line
+> defaults to **Member's size**, and issuing resolves it from the size the
+> member recorded under **My Sizes**. Pin a line to one size only when every
+> member should get that size. The review shows the resolved size per line,
+> and the quartermaster can change it for this issue only. A member with no
+> size on file for a sized line is told so on the review rather than being
+> handed the size the kit was built with.
 
 > **What if one part cannot be issued?** If a required part cannot be handed
 > out (for example none is on hand, or a tracked item is already assigned),
@@ -586,6 +592,8 @@ were issued.
 - Each kit is a card with its name, number of items, description and status.
 - **Show inactive** shows kits that are switched off.
 - Select a kit to see everything in it, with quantities.
+- The kit editor lists products with their sizes collapsed. A kit built
+  before this change keeps its pinned sizes.
 - **Deactivate** stops a kit being issued. Items already handed out are not
   affected. **Activate** brings it back. Only active kits show the issue
   button.
