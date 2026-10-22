@@ -260,13 +260,17 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
               <li>
                 <code className="text-red-800 dark:text-red-400">course_name</code> - Training course title
               </li>
+              <li>
+                <code className="text-red-800 dark:text-red-400">completion_date</code> - When it was completed; a row
+                without one is not imported
+              </li>
             </ul>
           </div>
           <div>
             <p className="text-theme-text-primary mb-1 font-medium">Optional Columns</p>
             <ul className="text-theme-text-muted space-y-0.5">
               <li>
-                <code>completion_date</code>, <code>hours</code>, <code>training_type</code>
+                <code>hours</code>, <code>training_type</code>
               </li>
               <li>
                 <code>certification_number</code>, <code>expiration_date</code>

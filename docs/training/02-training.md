@@ -2847,6 +2847,12 @@ training records from a CSV file.
    matched, and which did not, with a filter for each.
 5. Confirm the import.
 
+**Every row needs a completion date.** A row whose date is blank, missing or
+unreadable is listed under **Errors** in the preview and is not imported, and
+a file with no date column has every row flagged. Each record is imported as
+completed, and a completed record with no date would show in the member's
+history while counting toward no requirement and no month or year total.
+
 **A bad value does not stop the import.** A row whose training type is not a
 recognised type is imported with the import's default training type instead.
 Capitals and spaces are forgiven, so _"Certification"_ is kept as a
