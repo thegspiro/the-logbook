@@ -36,7 +36,7 @@ export const ComplianceOverviewWidget = ({ data }: { data: TrainingDashboardSumm
     <Card title="Department Compliance" icon={CheckCircle} href="/training/admin?page=setup&tab=requirements">
       <div className="text-theme-text-primary text-3xl font-bold">Not set up</div>
       <p className="text-theme-text-muted text-sm">
-        No training requirements exist yet, so there is nothing to measure members against. Add one under Setup →
+        No training requirements exist yet, so there is nothing to measure members against. Add one under Curriculum ›
         Requirements.
       </p>
     </Card>

@@ -15,6 +15,10 @@ const { getNfcSettings, getStorageAreas, resolveAnyNfcTag, putAwayItem, scanner 
 }));
 
 vi.mock('../../../services/api', () => ({
+  // Read by the Operations section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   inventoryService: { getNfcSettings, getStorageAreas, resolveAnyNfcTag, putAwayItem },
 }));
 vi.mock('../../../components/ux', () => ({ Breadcrumbs: () => null }));

@@ -290,7 +290,11 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
                 placeholder="e.g., 40"
                 min={0}
                 step={0.5}
+                aria-describedby="course-duration-hours-help"
               />
+              <p id="course-duration-hours-help" className="text-theme-text-muted mt-1 text-xs">
+                How long the class runs.
+              </p>
             </div>
             <div>
               <label htmlFor="course-credit-hours" className="text-theme-text-secondary mb-1 block text-sm font-medium">
@@ -305,7 +309,12 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
                 placeholder="e.g., 40"
                 min={0}
                 step={0.5}
+                aria-describedby="course-credit-hours-help"
               />
+              <p id="course-credit-hours-help" className="text-theme-text-muted mt-1 text-xs">
+                The training hours a member is credited with. Left blank, a session from this course credits its
+                duration.
+              </p>
             </div>
           </div>
 
@@ -448,11 +457,11 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
 const TypeBadge: React.FC<{ type: TrainingType }> = ({ type }) => {
   const colors: Record<TrainingType, string> = {
     certification: 'bg-blue-500/20 text-blue-700 dark:text-blue-400',
-    continuing_education: 'bg-green-500/20 text-green-700 dark:text-green-400',
+    continuing_education: 'bg-green-500/20 text-green-800 dark:text-green-400',
     skills_practice: 'bg-purple-500/20 text-purple-700 dark:text-purple-400',
-    orientation: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
-    refresher: 'bg-orange-500/20 text-orange-700 dark:text-orange-400',
-    specialty: 'bg-pink-500/20 text-pink-700 dark:text-pink-400',
+    orientation: 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-400',
+    refresher: 'bg-orange-500/20 text-orange-800 dark:text-orange-400',
+    specialty: 'bg-pink-500/20 text-pink-800 dark:text-pink-400',
     policy_acknowledgment: 'bg-slate-500/20 text-slate-700 dark:text-slate-300',
   };
 
@@ -665,7 +674,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
               onClick={() => setShowFilters(!showFilters)}
               className={`touch:min-h-[44px] flex items-center space-x-2 rounded-lg border px-4 py-2 text-sm ${
                 showFilters || filterType || filterCategory || includeInactive
-                  ? 'border-red-500 bg-red-600/20 text-red-700 dark:text-red-400'
+                  ? 'border-red-500 bg-red-600/20 text-red-800 dark:text-red-400'
                   : 'bg-theme-surface-secondary border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
@@ -832,14 +841,14 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                     {/* Which courses actually certify something is otherwise
                         invisible until you open each one. */}
                     {course.grants_qualification && (
-                      <span className="rounded-sm bg-teal-500/15 px-2 py-0.5 text-xs text-teal-700 dark:text-teal-400">
+                      <span className="rounded-sm bg-teal-500/15 px-2 py-0.5 text-xs text-teal-800 dark:text-teal-400">
                         Certifies:{' '}
                         {COURSE_QUALIFICATIONS.find((p) => p.value === course.grants_qualification)?.label ??
                           course.grants_qualification}
                       </span>
                     )}
                     {!course.active && (
-                      <span className="rounded-sm bg-red-500/20 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
+                      <span className="rounded-sm bg-red-500/20 px-2 py-0.5 text-xs text-red-800 dark:text-red-400">
                         Inactive
                       </span>
                     )}

@@ -289,3 +289,25 @@ describe('RoleManagementPage', () => {
     expect(await screen.findByText('events.view')).toBeInTheDocument();
   });
 });
+
+describe('RoleManagementPage deleting a role', () => {
+  beforeEach(() => {
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([{ ...role, user_count: 4 }]);
+    vi.mocked(roleService.getPermissionsByCategory).mockReset();
+    vi.mocked(roleService.getPermissionsByCategory).mockResolvedValue([]);
+    vi.mocked(roleService.deleteRole).mockReset();
+  });
+
+  it('says how many members hold the role, and deletes nothing when kept', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<RoleManagementPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('4 members hold it and will lose its permissions.');
+    await user.click(within(dialog).getByRole('button', { name: 'Keep it' }));
+    expect(roleService.deleteRole).not.toHaveBeenCalled();
+  });
+});

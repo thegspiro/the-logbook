@@ -7,6 +7,7 @@ const getLocations = vi.fn();
 const getSettings = vi.fn();
 const updateLocation = vi.fn();
 const createLocation = vi.fn();
+const deleteLocation = vi.fn();
 const mockToastError = vi.fn();
 let permissions: string[] = [];
 
@@ -15,6 +16,7 @@ vi.mock('../services/api', () => ({
     getLocations: (...args: unknown[]) => getLocations(...args) as unknown,
     updateLocation: (...args: unknown[]) => updateLocation(...args) as unknown,
     createLocation: (...args: unknown[]) => createLocation(...args) as unknown,
+    deleteLocation: (...args: unknown[]) => deleteLocation(...args) as unknown,
   },
   organizationService: {
     getSettings: (...args: unknown[]) => getSettings(...args) as unknown,
@@ -333,5 +335,59 @@ describe('LocationsPage setup wizard', () => {
       'Gym',
     ]);
     expect(createLocation.mock.calls[0]?.[0]).not.toHaveProperty('capacity');
+  });
+});
+
+describe('LocationsPage deleting a station', () => {
+  beforeEach(() => {
+    permissions = ['locations.manage'];
+    getLocations.mockReset();
+    getSettings.mockReset();
+    deleteLocation.mockReset();
+    mockToastError.mockReset();
+    getLocations.mockResolvedValue([station, room]);
+    getSettings.mockResolvedValue({ station_mode: null });
+    deleteLocation.mockResolvedValue(undefined);
+  });
+
+  it('says that referenced rooms and stations are kept as inactive, not that events block it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<LocationsPage />);
+    await user.click(await screen.findByRole('button', { name: 'Delete station' }));
+
+    expect(
+      await screen.findByText(/events, event templates or apparatus still use is deactivated instead of deleted/)
+    ).toBeInTheDocument();
+    expect(deleteLocation).not.toHaveBeenCalled();
+  });
+
+  it("shows the server's message and reloads the list when a delete fails part-way", async () => {
+    // The room goes, then the station is refused: the room is already gone,
+    // so the list has to be re-read rather than left showing it.
+    deleteLocation.mockImplementation((id: string) =>
+      id === 'st-1'
+        ? Promise.reject({
+            response: {
+              status: 409,
+              data: { detail: 'This location was just put into use by another record, so it could not be removed.' },
+            },
+          })
+        : Promise.resolve(undefined)
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<LocationsPage />);
+    await user.click(await screen.findByRole('button', { name: 'Delete station' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete station' });
+    await user.click(within(dialog).getByRole('button', { name: 'Delete station' }));
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith(
+        'This location was just put into use by another record, so it could not be removed.'
+      )
+    );
+    expect(deleteLocation).toHaveBeenCalledWith('rm-1');
+    expect(deleteLocation).toHaveBeenCalledWith('st-1');
+    await waitFor(() => expect(getLocations).toHaveBeenCalledTimes(2));
+    expect(mockToastError).not.toHaveBeenCalledWith(expect.stringContaining('may have events'));
   });
 });

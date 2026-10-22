@@ -184,6 +184,10 @@ a reminder is delivered.
 The page queues it through `reminder-send-jobs` and polls the job, as it
 does for ballot sends; the two kinds share the `ballot_send_jobs` table and
 the one-send-at-a-time guard.
+The election lifecycle task queues its own sends the same way — the ballots
+after an automatic open, and the pre-close reminder — so they share that
+guard too, and the task never waits on a send. An automatic reminder that
+fails for anyone emails the managers once per election.
 
 **Saved ballot templates** store reusable ballot configuration only —
 `name` (1–200), `description`, `ballot_items` (1–250), `voting_method` and

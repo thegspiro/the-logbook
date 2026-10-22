@@ -170,7 +170,7 @@ export const McpOAuthPanel: React.FC<McpOAuthPanelProps> = ({ onBusyChange, conf
   return (
     <div className="card mt-6 p-6" data-testid="mcp-oauth-panel">
       <div className="mb-4 flex items-center space-x-3">
-        <div className="rounded-lg bg-orange-500/10 p-2 text-orange-700 dark:text-orange-400">
+        <div className="rounded-lg bg-orange-500/10 p-2 text-orange-800 dark:text-orange-400">
           <UserCheck className="h-5 w-5" />
         </div>
         <div>

@@ -1665,6 +1665,7 @@ PATCH  /api/v1/training/external/providers/{id}/user-mappings/{mapping_id}
 GET    /api/v1/training/external/providers/{id}/imports
 POST   /api/v1/training/external/providers/{id}/imports/{import_id}/import
 POST   /api/v1/training/external/providers/{id}/imports/bulk
+POST   /api/v1/training/external/providers/{id}/imports/import-matched
 ```
 
 ### Security (SSRF & Import Tenancy) _(2026-07-02)_

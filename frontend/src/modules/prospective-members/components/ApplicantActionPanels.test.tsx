@@ -215,6 +215,23 @@ describe('stage requirement hints', () => {
     expect(screen.queryByText(/before advancing/)).toBeNull();
   });
 
+  it('names a multi_approval stage’s signers by their office labels', () => {
+    renderPanels({
+      current_stage_id: 's1',
+      current_stage_type: 'multi_approval',
+      current_stage_config: { required_approvers: ['chief', 'ems_supply_officer'], require_notes: false },
+      current_stage_approver_labels: { chief: 'Chief', ems_supply_officer: 'EMS Supply Officer' },
+    } as unknown as Partial<Applicant>);
+
+    expect(screen.getByText('Waiting for approval from: Chief, EMS Supply Officer.')).toBeInTheDocument();
+  });
+
+  it('humanizes a multi_approval role the response has no label for', () => {
+    onStage('multi_approval', { required_approvers: ['president', ' hose_master '], require_notes: false });
+
+    expect(screen.getByText('Waiting for approval from: President, Hose Master.')).toBeInTheDocument();
+  });
+
   it('warns that a ballot holds an election_vote stage until the result is in', () => {
     onStage('election_vote', { voting_method: 'simple_majority', victory_condition: 'majority' });
 

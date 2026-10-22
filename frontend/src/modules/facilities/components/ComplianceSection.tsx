@@ -228,7 +228,7 @@ export default function ComplianceSection({ facilityId, canCreate, canDelete }: 
                         </span>
                       )}
                       {checklist.isCompleted && checklist.completedDate && (
-                        <span className="text-emerald-600 dark:text-emerald-400">
+                        <span className="text-emerald-700 dark:text-emerald-400">
                           Completed: {formatDate(checklist.completedDate, tz)}
                         </span>
                       )}

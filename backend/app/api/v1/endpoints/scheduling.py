@@ -9,7 +9,15 @@ import copy
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Response,
+    status,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -145,6 +153,7 @@ from app.services.scheduling_widget_service import (
 )
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftService
+from app.utils.delete_outcome import set_delete_outcome
 from app.utils.hours import hours_from_minutes
 from app.utils.org_timezone import resolve_org_today
 from app.utils.outreach_roles import normalize_staffing_roles
@@ -2118,18 +2127,25 @@ async def update_template(
 @router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_template(
     template_id: UUID,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.manage")),
 ):
-    """Delete a shift template"""
+    """Delete a shift template, or deactivate it while it is in use.
+
+    A template any shift (any date) or pattern names is deactivated instead,
+    so those keep their template and its equipment checklists. 204 either
+    way; ``X-Delete-Outcome`` says which happened.
+    """
     service = SchedulingService(db)
-    success, error = await service.delete_template(
+    deleted, error = await service.remove_template(
         template_id, current_user.organization_id
     )
-    if not success:
+    if deleted is None:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to delete template.", error)
         )
+    set_delete_outcome(response, deleted)
 
 
 # ============================================
@@ -3776,13 +3792,22 @@ async def update_basic_apparatus(
     return existing
 
 
-@router.delete("/apparatus/{apparatus_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_basic_apparatus(
+@router.post(
+    "/apparatus/{apparatus_id}/reactivate", response_model=BasicApparatusResponse
+)
+async def reactivate_basic_apparatus(
     apparatus_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.manage")),
 ):
-    """Delete a basic apparatus entry"""
+    """Put a deactivated vehicle back in the vehicle pickers.
+
+    The only way a vehicle becomes inactive is a delete it was in use for, so
+    this is the delete's undo and has its own endpoint rather than an
+    ``is_active`` field on the edit form. Only the flag changes: nothing the
+    deactivation left alone is touched, and nothing is re-added to any shift.
+    Reactivating an active vehicle is a no-op and is not audited.
+    """
     result = await db.execute(
         select(BasicApparatus).where(
             BasicApparatus.id == str(apparatus_id),
@@ -3790,8 +3815,50 @@ async def delete_basic_apparatus(
         )
     )
     existing = ensure_found(result.scalar_one_or_none(), "Apparatus")
-    await db.delete(existing)
-    await db.commit()
+    if existing.is_active is not True:
+        existing.is_active = True
+        await log_audit_event(
+            db=db,
+            event_type="basic_apparatus_reactivated",
+            event_category="scheduling",
+            severity="INFO",
+            event_data={
+                "organization_id": str(current_user.organization_id),
+                "apparatus_id": str(existing.id),
+                "unit_number": existing.unit_number,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await db.commit()
+        await db.refresh(existing)
+    return existing
+
+
+@router.delete("/apparatus/{apparatus_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_basic_apparatus(
+    apparatus_id: UUID,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Delete a basic apparatus entry, or deactivate it while it is in use.
+
+    A vehicle any shift template, shift, pre-work session, equipment check or
+    call response names is deactivated instead, so those records still
+    resolve it. 204 either way; ``X-Delete-Outcome`` says which happened.
+    """
+    result = await db.execute(
+        select(BasicApparatus).where(
+            BasicApparatus.id == str(apparatus_id),
+            BasicApparatus.organization_id == str(current_user.organization_id),
+        )
+    )
+    existing = ensure_found(result.scalar_one_or_none(), "Apparatus")
+    deleted = await SchedulingService(db).remove_basic_apparatus(
+        existing, str(current_user.organization_id)
+    )
+    set_delete_outcome(response, deleted)
 
 
 # ============================================

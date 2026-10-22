@@ -395,7 +395,7 @@ const MessagesAdminPage: React.FC = () => {
                                     : {
                                         icon: Clock,
                                         label: report.requires_acknowledgment ? 'Not acknowledged' : 'Unread',
-                                        cls: 'text-amber-600 dark:text-amber-400',
+                                        cls: 'text-amber-700 dark:text-amber-400',
                                       };
                               const StateIcon = state.icon;
                               const deliveryNotes = [

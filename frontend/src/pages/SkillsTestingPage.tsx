@@ -17,16 +17,17 @@ import { useTimezone } from '../hooks/useTimezone';
 import type { SkillTemplateListItem, SkillTestListItem } from '../types/skillsTesting';
 import { Breadcrumbs, Pagination } from '../components/ux';
 import { DEFAULT_PAGE_SIZE } from '../constants/config';
+import { attributionName } from '../utils/memberName';
 
 // ── Sub-components ─────────────────────────────────────────────
 
 const ResultBadge: React.FC<{ result: string }> = ({ result }) => {
   const styles: Record<string, string> = {
-    pass: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+    pass: 'bg-green-500/10 text-green-800 dark:bg-green-500/20 dark:text-green-400',
     fail: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
     incomplete: 'bg-theme-surface-secondary text-theme-text-primary',
     in_progress: 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-    completed: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+    completed: 'bg-green-500/10 text-green-800 dark:bg-green-500/20 dark:text-green-400',
   };
 
   return (
@@ -102,7 +103,7 @@ const TestHistoryCard: React.FC<{
             )}
           </div>
           <p className="text-theme-text-muted text-sm">
-            Examiner: {test.examiner_name}
+            Examiner: {attributionName(test.examiner_name, test.examiner_id)}
             {test.completed_at && <> &middot; {formatDate(test.completed_at, tz)}</>}
           </p>
         </div>
@@ -120,7 +121,7 @@ const TestHistoryCard: React.FC<{
                 <XCircle className="h-5 w-5 text-red-500" />
               ) : null}
               <p
-                className={`text-lg font-bold ${test.result === 'pass' ? 'text-green-600' : test.result === 'fail' ? 'text-red-600' : 'text-theme-text-primary'}`}
+                className={`text-lg font-bold ${test.result === 'pass' ? 'text-green-700 dark:text-green-600' : test.result === 'fail' ? 'text-red-600' : 'text-theme-text-primary'}`}
               >
                 {Math.round(test.overall_score)}%
               </p>

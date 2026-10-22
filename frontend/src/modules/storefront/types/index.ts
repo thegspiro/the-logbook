@@ -158,8 +158,8 @@ export const WINDOW_STATUS_LABELS: Record<string, string> = {
 
 export const ORDER_STATUS_BADGES: Record<string, string> = {
   submitted: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30',
-  awaiting_payment: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30',
-  paid: 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30',
+  awaiting_payment: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border border-amber-500/30',
+  paid: 'bg-green-500/10 text-green-800 dark:text-green-400 border border-green-500/30',
   ordered: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/30',
   ready_for_pickup: 'bg-teal-500/10 text-teal-700 dark:text-teal-400 border border-teal-500/30',
   fulfilled: 'bg-theme-surface-secondary text-theme-text-muted border border-theme-surface-border',
@@ -168,9 +168,9 @@ export const ORDER_STATUS_BADGES: Record<string, string> = {
 
 export const PAYMENT_STATUS_BADGES: Record<string, string> = {
   unpaid: 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30',
-  pending_verification: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30',
-  partial: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30',
-  paid: 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30',
+  pending_verification: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border border-amber-500/30',
+  partial: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border border-amber-500/30',
+  paid: 'bg-green-500/10 text-green-800 dark:text-green-400 border border-green-500/30',
   refunded: 'bg-theme-surface-secondary text-theme-text-muted border border-theme-surface-border',
   waived: 'bg-theme-surface-secondary text-theme-text-muted border border-theme-surface-border',
 };
@@ -178,8 +178,8 @@ export const PAYMENT_STATUS_BADGES: Record<string, string> = {
 export const WINDOW_STATUS_BADGES: Record<string, string> = {
   draft: 'bg-theme-surface-secondary text-theme-text-muted border border-theme-surface-border',
   scheduled: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30',
-  open: 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/30',
-  closed: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30',
+  open: 'bg-green-500/10 text-green-800 dark:text-green-400 border border-green-500/30',
+  closed: 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border border-amber-500/30',
   fulfilled: 'bg-theme-surface-secondary text-theme-text-muted border border-theme-surface-border',
   cancelled: 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30',
 };

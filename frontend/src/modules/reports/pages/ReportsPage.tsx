@@ -574,7 +574,7 @@ export const ReportsPage: React.FC = () => {
                     <Icon className="h-6 w-6 text-red-500" aria-hidden="true" />
                   </div>
                   {!report.available && (
-                    <span className="rounded-sm bg-yellow-500/20 px-2 py-1 text-xs font-medium text-yellow-700 dark:text-yellow-300">
+                    <span className="rounded-sm bg-yellow-500/20 px-2 py-1 text-xs font-medium text-yellow-800 dark:text-yellow-300">
                       Coming Soon
                     </span>
                   )}

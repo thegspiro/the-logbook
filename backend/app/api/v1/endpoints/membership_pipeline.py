@@ -5,8 +5,6 @@ Endpoints for managing prospective member pipelines, prospects,
 step progression, and transfer to full membership.
 """
 
-import asyncio
-import os
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -94,13 +92,13 @@ from app.schemas.membership_pipeline import (
     TransferProspectRequest,
     TransferProspectResponse,
 )
+from app.services import file_storage_service as file_storage
 from app.services import membership_pipeline_service
 from app.services.email_service import welcome_email_can_send
 from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
-    stored_file_response,
 )
 from app.services.membership_pipeline_service import (
     DuplicateApplicantError,
@@ -724,6 +722,18 @@ async def delete_step(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Step or pipeline not found"
         )
+    # Deleting a stage deletes every applicant's progress record for it, so
+    # the trail has to say who removed it.
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.step_deleted",
+        event_category="membership",
+        severity="warning",
+        event_data={"pipeline_id": str(pipeline_id), "step_id": str(step_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+        organization_id=str(current_user.organization_id),
+    )
 
 
 # ============================================
@@ -2059,14 +2069,6 @@ PROSPECT_DOCUMENT_RULES = FileRules(
 )
 
 
-def _remove_prospect_document_file(path: str) -> None:
-    """Best-effort cleanup of a stored file after a failed upload."""
-    try:
-        os.remove(path)
-    except OSError:
-        logger.warning(f"Failed to clean up prospect document file: {path}")
-
-
 @router.get(
     "/prospects/{prospect_id}/documents", response_model=list[ProspectDocumentResponse]
 )
@@ -2143,13 +2145,13 @@ async def add_prospect_document(
             uploaded_by=current_user.id,
         )
     except ValueError as e:
-        await asyncio.to_thread(_remove_prospect_document_file, stored_path)
+        await file_storage.delete_quietly(stored_path)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception:
-        await asyncio.to_thread(_remove_prospect_document_file, stored_path)
+        await file_storage.delete_quietly(stored_path)
         raise
     if not doc:
-        await asyncio.to_thread(_remove_prospect_document_file, stored_path)
+        await file_storage.delete_quietly(stored_path)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
@@ -2199,7 +2201,7 @@ async def download_prospect_document(
             status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
 
-    if not os.path.exists(resolved_path):
+    if not await file_storage.exists(resolved_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document file not found on disk",
@@ -2210,8 +2212,8 @@ async def download_prospect_document(
     )
     extension = download_names.stored_extension(resolved_path)
     tz = await resolve_scheduling_timezone(db, current_user.organization_id)
-    return stored_file_response(
-        path=resolved_path,
+    return await file_storage.file_response(
+        resolved_path,
         filename=download_names.descriptive_filename(
             download_names.local_day(doc.created_at, tz),
             download_names.member_name_part(

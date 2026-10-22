@@ -557,7 +557,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ co
                 aria-pressed={meetingDays.includes(day.value)}
                 className={`mobile-touch-target rounded-lg border px-3 text-sm ${
                   meetingDays.includes(day.value)
-                    ? 'border-red-500 bg-red-600/20 text-red-700 dark:text-red-400'
+                    ? 'border-red-500 bg-red-600/20 text-red-800 dark:text-red-400'
                     : 'border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted'
                 }`}
               >
@@ -665,7 +665,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ co
                     </span>
                     {item.section_name && <span className="badge">{item.section_name}</span>}
                     {item.class_course_active === false && (
-                      <span className="badge bg-red-500/20 text-red-700 dark:text-red-400">Course archived</span>
+                      <span className="badge bg-red-500/20 text-red-800 dark:text-red-400">Course archived</span>
                     )}
                   </div>
 

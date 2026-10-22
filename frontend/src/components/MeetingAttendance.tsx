@@ -226,8 +226,8 @@ export const MeetingAttendance: React.FC<MeetingAttendanceProps> = ({ electionId
                     <span
                       className={`rounded px-1.5 py-0.5 text-xs ${
                         member.status === UserStatus.PROBATIONARY
-                          ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300'
-                          : 'bg-green-500/20 text-green-700 dark:text-green-300'
+                          ? 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-300'
+                          : 'bg-green-500/20 text-green-800 dark:text-green-300'
                       }`}
                     >
                       {member.status}

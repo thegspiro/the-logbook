@@ -33,7 +33,6 @@ import {
   Lightbulb,
   Plug,
   MapPin,
-  Network,
   Rocket,
   ShieldCheck,
   ShieldAlert,
@@ -43,7 +42,6 @@ import {
   CreditCard,
   ScanLine,
   Nfc,
-  Scale,
   Stethoscope,
   Store,
   HandCoins,
@@ -61,7 +59,6 @@ import { useConnectedIntegrations } from '../../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idCards';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
-import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
 import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -69,6 +66,7 @@ import { usePendingSyncStore } from '../../stores/pendingSyncStore';
 import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
+import { governanceNavItems } from './governanceNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 
@@ -199,7 +197,6 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
   // section items' gates — extend it there, never inline, so Side/Top
   // navigation cannot drift apart.
   const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission, { checkInStationOn: isNfcCardsOn });
-  const canReviewLegalDocuments = LEGAL_DOCUMENTS_PERMISSIONS.some((p) => checkPermission(p));
 
   const navItems: NavItem[] = [
     // ── Member-facing pages ──
@@ -290,33 +287,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
       label: 'Governance',
       path: '/governance/org-chart',
       icon: Vote,
-      subItems: [
-        { label: 'Org Chart', path: '/governance/org-chart', icon: Network },
-        ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections', icon: Vote }] : []),
-        ...(isModuleOn('minutes')
-          ? [
-              {
-                label: 'Minutes',
-                path: '/minutes',
-                icon: ClipboardList,
-              },
-              {
-                label: 'Action Items',
-                path: '/action-items',
-                icon: AlertTriangle,
-              },
-            ]
-          : []),
-        ...(canReviewLegalDocuments
-          ? [
-              {
-                label: 'Legal Documents',
-                path: '/governance/legal',
-                icon: Scale,
-              },
-            ]
-          : []),
-      ],
+      // One list with TopNavigation and the section strip on every Governance
+      // page; see governanceNavigation.ts.
+      subItems: governanceNavItems(isModuleOn),
     },
     // Every member holds finance.request, so the group is how they reach their
     // own purchase requests, expense reports and check requests.
@@ -858,7 +831,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                         {!collapsed ? (
                           <div className="px-4 pt-3 pb-2 md:pt-5">
                             <div className="border-theme-surface-border border-t" />
-                            <span className="text-theme-text-muted/70 mt-3 block text-[10px] font-bold tracking-widest uppercase">
+                            <span className="text-theme-text-muted mt-3 block text-[10px] font-bold tracking-widest uppercase">
                               {item.label}
                             </span>
                           </div>
@@ -1086,7 +1059,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               aria-pressed={theme === 'high-contrast'}
               className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg transition-all focus:ring-2 focus:outline-hidden ${
                 theme === 'high-contrast'
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                  ? 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
                   : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
               } ${collapsed ? 'justify-center p-3' : 'px-4 py-3'}`}
               title={

@@ -11,7 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.public_portal_fields import catalogue_entry
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
 
 # ==============================================================================
 # Configuration Schemas
@@ -82,7 +82,9 @@ class PublicPortalAPIKeyCreate(BaseModel):
         le=100000,
         description="Override default rate limit (NULL = use default)",
     )
-    expires_at: Optional[datetime] = Field(None, description="Optional expiration date")
+    expires_at: Optional[UTCDateTime] = Field(
+        None, description="Optional expiration date"
+    )
 
 
 class PublicPortalAPIKeyResponse(UTCResponseBase):
@@ -127,7 +129,7 @@ class PublicPortalAPIKeyUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     rate_limit_override: Optional[int] = Field(None, ge=1, le=100000)
-    expires_at: Optional[datetime] = None
+    expires_at: Optional[UTCDateTime] = None
     is_active: Optional[bool] = None
 
 

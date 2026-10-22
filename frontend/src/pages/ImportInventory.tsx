@@ -6,7 +6,7 @@ import { inventoryService } from '../services/api';
 import type { InventoryImportResult } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
-import { Breadcrumbs } from '@/components/ux';
+import { OperationsPageHeader } from '@/components/operations/OperationsPageHeader';
 
 interface PreviewRow {
   name: string;
@@ -134,32 +134,15 @@ const ImportInventory: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="bg-theme-input-bg border-theme-surface-border border-b px-6 py-4 backdrop-blur-sm">
-        <div className="mx-auto max-w-4xl">
-          <Breadcrumbs underHub="/inventory/admin" />
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        <OperationsPageHeader
+          underHub="/inventory/admin"
+          icon={Upload}
+          title="Import Inventory from CSV"
+          breadcrumbLabel="Import"
+          subtitle="Add many items at once from a spreadsheet"
+        />
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="shrink-0 rounded-lg bg-blue-600 p-2">
-                <Upload className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-theme-text-primary text-xl font-bold">Import Inventory from CSV</h1>
-                <p className="text-theme-text-muted text-sm">Add many items at once from a spreadsheet</p>
-              </div>
-            </div>
-            <button
-              onClick={() => void navigate('/inventory')}
-              className="text-theme-text-secondary hover:text-theme-text-primary self-start text-sm transition-colors sm:self-auto"
-            >
-              &larr; Back to Inventory
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div data-page-main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Instructions */}
         <div className="mb-8 rounded-lg border border-blue-500/50 bg-blue-500/10 p-6">
           <h2 className="text-theme-text-primary mb-3 flex items-center space-x-2 font-bold">

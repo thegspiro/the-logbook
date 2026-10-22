@@ -825,14 +825,20 @@ const IntegrationsPage: React.FC = () => {
     // W73: this acted on one tap. For Claude (MCP) it revokes every service key
     // and ends every member's connection, and reconnecting restores neither.
     const isMcp = integration?.integration_type === 'claude-mcp';
+    // Disconnecting iCal deletes the feed token, so the published link is gone
+    // for good and connecting again issues a different one.
+    const isIcal = integration?.integration_type === 'ical';
+    const disconnectMessage = isMcp
+      ? 'Every service key is revoked and every member who connected with their own account is signed out. Reconnecting does not bring them back: keys must be issued again and members must reconnect.'
+      : isIcal
+        ? 'The department feed link stops working at once, and every calendar subscribed to it stops updating. Reconnecting does not bring the link back: it issues a new one, which has to be shared with members again.'
+        : `${name} stops working for the department until it is ${activation ? 'activated' : 'connected'} again. Its saved settings are kept.`;
     const confirmed = await confirm({
       title: `${activation ? 'Deactivate' : 'Disconnect'} ${name}?`,
-      message: isMcp
-        ? 'Every service key is revoked and every member who connected with their own account is signed out. Reconnecting does not bring them back: keys must be issued again and members must reconnect.'
-        : `${name} stops working for the department until it is ${activation ? 'activated' : 'connected'} again. Its saved settings are kept.`,
+      message: disconnectMessage,
       confirmLabel: activation ? 'Deactivate' : 'Disconnect',
       cancelLabel: activation ? 'Keep it active' : 'Keep it connected',
-      variant: isMcp ? 'danger' : 'warning',
+      variant: isMcp || isIcal ? 'danger' : 'warning',
     });
     if (!confirmed) return;
     try {
@@ -2063,7 +2069,7 @@ const IntegrationsPage: React.FC = () => {
           {showDelegatedMcpCard && (
             <div className="card p-6" data-testid="integration-card-claude-mcp-delegated">
               <div className="mb-4 flex items-start space-x-3">
-                <div className="rounded-lg bg-orange-500/10 p-2 text-orange-700 dark:text-orange-400">
+                <div className="rounded-lg bg-orange-500/10 p-2 text-orange-800 dark:text-orange-400">
                   <KeyRound className="h-5 w-5" />
                 </div>
                 <div>
@@ -2078,7 +2084,7 @@ const IntegrationsPage: React.FC = () => {
                   onClick={toggleMcpPanel}
                   disabled={mcpBusy}
                   title={mcpBusy ? 'Wait for the current key request to finish' : undefined}
-                  className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
+                  className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-800 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
                 >
                   <KeyRound className="h-3.5 w-3.5" />
                   <span>Service key</span>
@@ -2106,7 +2112,7 @@ const IntegrationsPage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1">
                     {integration.status === ConnectionStatus.CONNECTED && (
-                      <span className="flex items-center space-x-1 rounded-sm border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">
+                      <span className="flex items-center space-x-1 rounded-sm border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
                         {activation ? <Check className="h-3 w-3" /> : <Wifi className="h-3 w-3" />}
                         <span>{activation ? 'Active' : 'Connected'}</span>
                       </span>
@@ -2164,7 +2170,7 @@ const IntegrationsPage: React.FC = () => {
                         onClick={toggleMcpPanel}
                         disabled={mcpBusy}
                         title={mcpBusy ? 'Wait for the current key request to finish' : undefined}
-                        className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
+                        className="touch:min-h-11 flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-800 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
                       >
                         <KeyRound className="h-3.5 w-3.5" />
                         <span>Service key</span>

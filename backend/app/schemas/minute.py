@@ -17,7 +17,8 @@ from pydantic import (
 )
 
 from app.models.minute import MinutesAttachmentCategory, MinutesMeetingType
-from app.schemas.base import UTCResponseBase
+from app.schemas.base import UTCDateTime, UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX
 from app.utils.minutes_attendance import COUNTS_TOWARD_QUORUM, derive_status
 from app.utils.redline import describe_change
 from app.utils.rich_text import MAX_HTML_LENGTH, sanitize_html
@@ -75,7 +76,7 @@ class SectionDocument(BaseModel):
 class SectionEntry(BaseModel):
     """A single content section within minutes or a template"""
 
-    order: int = Field(..., ge=0, description="Display order")
+    order: int = Field(..., ge=0, description="Display order", le=INT32_MAX)
     key: str = Field(
         ..., min_length=1, max_length=100, description="Unique key for the section"
     )
@@ -134,7 +135,7 @@ class SectionEntry(BaseModel):
 class TemplateSectionEntry(BaseModel):
     """A section definition within a template"""
 
-    order: int = Field(..., ge=0)
+    order: int = Field(..., ge=0, le=INT32_MAX)
     key: str = Field(..., min_length=1, max_length=100)
     title: str = Field(..., min_length=1, max_length=200)
     default_content: str = Field(default="", description="Default content to pre-fill")
@@ -343,10 +344,10 @@ class MotionBase(BaseModel):
         description="For the motion that accepts the previous minutes: accepted "
         "as submitted or as revised",
     )
-    votes_for: Optional[int] = Field(None, ge=0)
-    votes_against: Optional[int] = Field(None, ge=0)
-    votes_abstain: Optional[int] = Field(None, ge=0)
-    votes_recused: Optional[int] = Field(None, ge=0)
+    votes_for: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_against: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_abstain: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_recused: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     threshold: Optional[Literal["majority_cast", "majority_present", "two_thirds"]] = (
         Field(
             None,
@@ -376,7 +377,9 @@ class MotionBase(BaseModel):
 class MotionCreate(MotionBase):
     """Schema for creating a motion"""
 
-    order: int = Field(default=0, ge=0, description="Display order within the minutes")
+    order: int = Field(
+        default=0, ge=0, description="Display order within the minutes", le=INT32_MAX
+    )
 
 
 class MotionUpdate(BaseModel):
@@ -389,15 +392,15 @@ class MotionUpdate(BaseModel):
     section_key: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = None
     acceptance: Optional[Literal["as_submitted", "as_revised"]] = None
-    votes_for: Optional[int] = Field(None, ge=0)
-    votes_against: Optional[int] = Field(None, ge=0)
-    votes_abstain: Optional[int] = Field(None, ge=0)
-    votes_recused: Optional[int] = Field(None, ge=0)
+    votes_for: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_against: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_abstain: Optional[int] = Field(None, ge=0, le=INT32_MAX)
+    votes_recused: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     threshold: Optional[Literal["majority_cast", "majority_present", "two_thirds"]] = (
         None
     )
     roll_call: Optional[List[RollCallEntry]] = None
-    order: Optional[int] = Field(None, ge=0)
+    order: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     election_id: Optional[str] = Field(None, max_length=36)
     ballot_item_id: Optional[str] = Field(None, max_length=100)
 
@@ -573,16 +576,16 @@ class MinutesBase(BaseModel):
         description="Meeting type: business, special, committee, board, "
         "trustee, executive, annual, other",
     )
-    meeting_date: datetime = Field(..., description="Date and time of the meeting")
+    meeting_date: UTCDateTime = Field(..., description="Date and time of the meeting")
     location: Optional[str] = Field(None, max_length=300)
     called_by: Optional[str] = Field(
         None, max_length=200, description="Person who called the meeting"
     )
-    called_to_order_at: Optional[datetime] = None
-    adjourned_at: Optional[datetime] = None
+    called_to_order_at: Optional[UTCDateTime] = None
+    adjourned_at: Optional[UTCDateTime] = None
     attendees: Optional[List[AttendeeEntry]] = None
     quorum_met: Optional[bool] = None
-    quorum_count: Optional[int] = Field(None, ge=0)
+    quorum_count: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     event_id: Optional[str] = Field(None, description="Optional link to an event")
 
 
@@ -624,14 +627,14 @@ class MinutesUpdate(BaseModel):
 
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     meeting_type: Optional[str] = None
-    meeting_date: Optional[datetime] = None
+    meeting_date: Optional[UTCDateTime] = None
     location: Optional[str] = Field(None, max_length=300)
     called_by: Optional[str] = Field(None, max_length=200)
-    called_to_order_at: Optional[datetime] = None
-    adjourned_at: Optional[datetime] = None
+    called_to_order_at: Optional[UTCDateTime] = None
+    adjourned_at: Optional[UTCDateTime] = None
     attendees: Optional[List[AttendeeEntry]] = None
     quorum_met: Optional[bool] = None
-    quorum_count: Optional[int] = Field(None, ge=0)
+    quorum_count: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     event_id: Optional[str] = None
     attendance_listing: Optional[Literal["all", "present_excused", "present"]] = Field(
         None,
@@ -671,8 +674,8 @@ class MinutesResponse(UTCResponseBase):
     meeting_date: datetime
     location: Optional[str] = None
     called_by: Optional[str] = None
-    called_to_order_at: Optional[datetime] = None
-    adjourned_at: Optional[datetime] = None
+    called_to_order_at: Optional[UTCDateTime] = None
+    adjourned_at: Optional[UTCDateTime] = None
     attendees: Optional[List[AttendeeEntry]] = None
     # This set's own choice (null = department default) and what is in force.
     attendance_listing: Optional[str] = None
@@ -751,7 +754,7 @@ class AdoptionProposal(BaseModel):
 class MinutesAdopt(BaseModel):
     """What the body did when it adopted the minutes"""
 
-    adopted_on: Optional[datetime] = Field(
+    adopted_on: Optional[UTCDateTime] = Field(
         None, description="When the body voted; defaults to now"
     )
     adopting_minutes_id: Optional[str] = Field(
@@ -844,6 +847,7 @@ class MinutesReminderSettingsResponse(BaseModel):
     executive_effective_library: bool = False
     executive_effective_public: bool = False
     attendance_listing: Literal["all", "present_excused", "present"] = "all"
+    auto_file_election_results: bool = True
 
 
 class PublishingStatusResponse(BaseModel):
@@ -1126,8 +1130,8 @@ class ClosedSessionParticipant(BaseModel):
 
     user_id: Optional[str] = Field(None, max_length=36)
     name: str = Field(..., min_length=1, max_length=200)
-    joined_at: Optional[datetime] = None
-    left_at: Optional[datetime] = None
+    joined_at: Optional[UTCDateTime] = None
+    left_at: Optional[UTCDateTime] = None
 
     @model_validator(mode="after")
     def _left_after_joined(self):
@@ -1163,8 +1167,8 @@ def _validate_participants(
 class ClosedSessionBase(BaseModel):
     reason: str = Field(..., min_length=1, max_length=300)
     legal_basis: Optional[str] = Field(None, max_length=300)
-    started_at: datetime
-    ended_at: Optional[datetime] = None
+    started_at: UTCDateTime
+    ended_at: Optional[UTCDateTime] = None
     motion_id: Optional[str] = Field(
         None, max_length=36, description="The motion that moved into closed session"
     )
@@ -1194,8 +1198,8 @@ class ClosedSessionUpdate(BaseModel):
 
     reason: Optional[str] = Field(None, min_length=1, max_length=300)
     legal_basis: Optional[str] = Field(None, max_length=300)
-    started_at: Optional[datetime] = None
-    ended_at: Optional[datetime] = None
+    started_at: Optional[UTCDateTime] = None
+    ended_at: Optional[UTCDateTime] = None
     motion_id: Optional[str] = Field(None, max_length=36)
     participants: Optional[List[ClosedSessionParticipant]] = Field(None, max_length=300)
     summary: Optional[str] = Field(None, max_length=4000)

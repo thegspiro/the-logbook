@@ -25,7 +25,7 @@ import { EQUIPMENT_REQUEST_STATUS_LABELS, REQUEST_STATUS_BADGES, sizeLabel } fro
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
-import { formatDate } from '../../../utils/dateFormatting';
+import { formatDate, localToUTC } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 import { Breadcrumbs } from '../../../components/ux';
@@ -355,7 +355,10 @@ const EquipmentRequestsPage: React.FC = () => {
         fulfillment_type: fulfillmentType,
         item_id: fulfillItemId.trim() || undefined,
         quantity: Number(fulfillQuantity) || undefined,
-        expected_return_at: fulfillReturnAt || undefined,
+        // A return-by date is due at the end of that day in the department's
+        // zone, as the checkout extend dialogs send it. The bare date was
+        // stored as midnight UTC, the previous evening west of Greenwich.
+        expected_return_at: (fulfillReturnAt && localToUTC(`${fulfillReturnAt}T23:59`, tz)) || undefined,
         override_allowance: fulfillOverride,
         substitution_override_reason: substitutionOverride ? substitutionReason.trim() : undefined,
       });
@@ -473,7 +476,7 @@ const EquipmentRequestsPage: React.FC = () => {
                       <p className="text-theme-text-muted mt-1 text-xs italic">Review: {req.review_notes}</p>
                     )}
                     {req.status === 'fulfilled' && req.fulfillment_type && (
-                      <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                      <p className="mt-1 text-xs text-green-700 dark:text-green-400">
                         Fulfilled via {req.fulfillment_type}
                         {req.fulfilled_at ? ` on ${fmtDate(req.fulfilled_at)}` : ''}
                       </p>

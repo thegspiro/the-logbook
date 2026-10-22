@@ -55,7 +55,7 @@ from app.services.election_service import ElectionService
 pytestmark = [pytest.mark.integration]
 
 SEND_BATCH = "app.services.email_service.EmailService.send_batch"
-START_JOB = "app.api.v1.endpoints.elections.start_ballot_send_job"
+START_JOB = "app.services.ballot_send_jobs.start_ballot_send_job"
 
 
 def _uid() -> str:

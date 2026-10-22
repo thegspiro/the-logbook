@@ -103,7 +103,9 @@ const RollbackElectionModal: React.FC<RollbackElectionModalProps> = ({
 
             <div>
               <label className="text-theme-text-secondary block text-sm font-medium">New Status After Rollback</label>
-              <div className="mt-1 text-sm font-semibold text-green-600">{targetStatus.toUpperCase()}</div>
+              <div className="mt-1 text-sm font-semibold text-green-700 dark:text-green-600">
+                {targetStatus.toUpperCase()}
+              </div>
             </div>
 
             <div>

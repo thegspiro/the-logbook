@@ -157,3 +157,37 @@ describe('PatternFormModal payload', () => {
     expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty('schedule_config');
   });
 });
+
+// A template that shifts or patterns still use is deactivated rather than
+// deleted. It stays selected on a pattern that already names it, and is not
+// offered to any other.
+describe('PatternFormModal deactivated templates', () => {
+  const withRetired = [
+    ...templates,
+    { id: 'tpl-old', name: 'Old Night Shift', start_time_of_day: '20:00', end_time_of_day: '08:00', is_active: false },
+  ] as ShiftTemplate[];
+
+  it('does not offer a deactivated template to a new pattern', () => {
+    renderWithRouter(
+      <PatternFormModal isOpen onClose={vi.fn()} onSubmit={vi.fn()} title="Create Pattern" templates={withRetired} />
+    );
+
+    expect(screen.getByRole('option', { name: /Day Shift/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Old Night Shift/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps a deactivated template selected on a pattern that names it', () => {
+    renderWithRouter(
+      <PatternFormModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+        initialData={{ ...storedPattern, template_id: 'tpl-old' }}
+        title="Edit Pattern"
+        templates={withRetired}
+      />
+    );
+
+    expect(screen.getByLabelText('Shift Template')).toHaveValue('tpl-old');
+  });
+});

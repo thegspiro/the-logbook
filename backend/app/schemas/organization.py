@@ -21,6 +21,7 @@ from pydantic import (
 
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.utils import membership_numbers
 
 
@@ -690,6 +691,8 @@ class MembershipTier(BaseModel):
     sort_order: int = Field(
         default=0,
         description="Display and progression order (lower = earlier tier)",
+        ge=INT32_MIN,
+        le=INT32_MAX,
     )
     benefits: MembershipTierBenefits = Field(
         default_factory=MembershipTierBenefits,
@@ -1356,6 +1359,13 @@ class MinutesSettingsUpdate(BaseModel):
         description=(
             "Which attendance statuses the minutes name. The roll is always "
             "recorded in full. Absent reads as all."
+        ),
+    )
+    auto_file_election_results: Optional[bool] = Field(
+        None,
+        description=(
+            "File a closed election's result with the minutes of the meeting "
+            "it was held at, without a manager importing it. Absent reads as on."
         ),
     )
     executive_library_publishing: Optional[bool] = Field(

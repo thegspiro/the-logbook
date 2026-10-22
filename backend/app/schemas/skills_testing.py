@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models.skills_testing import ResultDisclosure, ResultRelease
 from app.schemas.base import UTCResponseBase
+from app.schemas.column_bounds import FLOAT32_MAX, INT32_MAX, INT32_MIN
 from app.services.skills_testing_service import SCORE_MODES
 
 # ============================================
@@ -84,10 +85,10 @@ class SkillCriterionSchema(BaseModel):
     description: Optional[str] = None
     type: str = Field("pass_fail", max_length=50)
     required: bool = False
-    sort_order: int = 0
-    passing_score: Optional[float] = Field(None, ge=0)
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
+    passing_score: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     max_score: Optional[float] = Field(None, ge=0)
-    time_limit_seconds: Optional[int] = Field(None, ge=0)
+    time_limit_seconds: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     checklist_items: Optional[List[str]] = Field(None, max_length=MAX_CHECKLIST_ITEMS)
     statement_text: Optional[str] = None
     # How a pass/fail-judged step touches the overall percentage:
@@ -183,7 +184,7 @@ class SkillTemplateSectionSchema(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    sort_order: int = 0
+    sort_order: int = Field(0, ge=INT32_MIN, le=INT32_MAX)
     criteria: List[SkillCriterionSchema] = Field(
         default_factory=list, max_length=MAX_SECTION_CRITERIA
     )
@@ -203,7 +204,7 @@ class SkillTemplateCreate(BaseModel):
     sections: List[SkillTemplateSectionSchema] = Field(
         ..., min_length=1, max_length=MAX_TEMPLATE_SECTIONS
     )
-    time_limit_seconds: Optional[int] = Field(None, ge=0)
+    time_limit_seconds: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     passing_percentage: Optional[float] = Field(None, ge=0, le=100)
     require_all_critical: bool = True
     # Off by default so a template's percentage keeps the meaning it has
@@ -269,7 +270,7 @@ class SkillTemplateUpdate(BaseModel):
     sections: Optional[List[SkillTemplateSectionSchema]] = Field(
         None, max_length=MAX_TEMPLATE_SECTIONS
     )
-    time_limit_seconds: Optional[int] = Field(None, ge=0)
+    time_limit_seconds: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     passing_percentage: Optional[float] = Field(None, ge=0, le=100)
     require_all_critical: Optional[bool] = None
     score_pass_fail_criteria: Optional[bool] = None
@@ -359,7 +360,7 @@ class CriterionResultSchema(BaseModel):
     criterion_id: Optional[str] = None
     criterion_label: Optional[str] = None
     passed: Optional[bool] = None
-    score: Optional[float] = Field(None, ge=0)
+    score: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
     time_seconds: Optional[int] = None
     checklist_completed: Optional[List[bool]] = Field(
         None, max_length=MAX_CHECKLIST_ITEMS
@@ -447,7 +448,7 @@ class SkillTestUpdate(BaseModel):
         None, max_length=MAX_TEMPLATE_SECTIONS
     )
     overall_score: Optional[float] = Field(None, ge=0, le=100)
-    elapsed_seconds: Optional[int] = Field(None, ge=0)
+    elapsed_seconds: Optional[int] = Field(None, ge=0, le=INT32_MAX)
     notes: Optional[str] = None
     result: Optional[str] = None
     requirement_id: Optional[UUID] = None
@@ -576,7 +577,8 @@ class SkillTestResponse(UTCResponseBase):
     organization_id: UUID
     template_id: UUID
     candidate_id: UUID
-    examiner_id: UUID
+    # None once the examiner's account has been permanently deleted.
+    examiner_id: Optional[UUID] = None
     requirement_id: Optional[UUID] = None
     status: str
     result: str
@@ -679,7 +681,8 @@ class SkillTestListResponse(UTCResponseBase):
     template_name: Optional[str] = None
     candidate_id: UUID
     candidate_name: Optional[str] = None
-    examiner_id: UUID
+    # None once the examiner's account has been permanently deleted.
+    examiner_id: Optional[UUID] = None
     examiner_name: Optional[str] = None
     status: str
     result: str

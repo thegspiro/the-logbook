@@ -81,7 +81,7 @@ describe('check-in window fields', () => {
     const opens = await opensField();
 
     await user.clear(opens);
-    expect(opens).toHaveValue(null);
+    expect(opens).toHaveValue('');
     // Clearing is an edit in progress, not a request to allow check-in only
     // from the start time onward.
     expect(updateSettings).not.toHaveBeenCalled();
@@ -95,7 +95,7 @@ describe('check-in window fields', () => {
     await user.clear(opens);
     await user.tab();
 
-    await waitFor(() => expect(opens).toHaveValue(2));
+    await waitFor(() => expect(opens).toHaveValue('2'));
     expect(updateSettings).not.toHaveBeenCalled();
   });
 
@@ -152,7 +152,7 @@ describe('what the save touches', () => {
     mountPage();
     await opensField();
 
-    await user.click(screen.getByRole('checkbox', { name: /Start-of-shift checklists/i }));
+    await user.click(screen.getByRole('switch', { name: /Start-of-shift checklists/i }));
 
     await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
     const payload = lastPayload();
@@ -167,8 +167,8 @@ describe('what the save touches', () => {
 
     // Absence must mean "current behaviour", never "off" (CLAUDE.md pitfall
     // #19) — a department that never opened this screen keeps being prompted.
-    expect(screen.getByRole('checkbox', { name: /Start-of-shift checklists/i })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: /End-of-shift checklists/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /Start-of-shift checklists/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /End-of-shift checklists/i })).toBeChecked();
   });
 });
 
@@ -191,7 +191,7 @@ describe('the scheduling cushion this setting feeds', () => {
     mountPage();
     await opensField();
 
-    await user.click(screen.getByRole('checkbox', { name: /Start-of-shift checklists/i }));
+    await user.click(screen.getByRole('switch', { name: /Start-of-shift checklists/i }));
     await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
 
     // Invalidated rather than recomputed: the server resolves the cushion (a
@@ -206,7 +206,7 @@ describe('the scheduling cushion this setting feeds', () => {
     mountPage();
     await opensField();
 
-    await user.click(screen.getByRole('checkbox', { name: /Start-of-shift checklists/i }));
+    await user.click(screen.getByRole('switch', { name: /Start-of-shift checklists/i }));
     await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
 
     // Nothing was stored, so nothing the store holds went stale.

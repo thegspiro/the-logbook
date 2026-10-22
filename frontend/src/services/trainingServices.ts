@@ -46,8 +46,10 @@ import type {
   BulkEnrollmentResponse,
   BulkImportRequest,
   BulkImportResponse,
+  ImportMatchedResponse,
   BulkTrainingRecordCreate,
   BulkTrainingRecordResult,
+  CertAlertSettings,
   ComplianceSummary,
   ExternalCategoryMapping,
   ExternalCategoryMappingUpdate,
@@ -451,6 +453,16 @@ export const trainingService = {
     return asArray(response.data);
   },
 
+  async getCertAlertSettings(): Promise<CertAlertSettings> {
+    const response = await api.get<CertAlertSettings>('/training/certifications/alert-settings');
+    return response.data;
+  },
+
+  async updateCertAlertSettings(settings: CertAlertSettings): Promise<CertAlertSettings> {
+    const response = await api.put<CertAlertSettings>('/training/certifications/alert-settings', settings);
+    return response.data;
+  },
+
   // ==================== Historical Training Import ====================
 
   async parseHistoricalImport(
@@ -700,6 +712,16 @@ export const externalTrainingService = {
     );
     return response.data;
   },
+
+  /**
+   * Import every pending record whose member is already mapped
+   */
+  async importMatched(providerId: string): Promise<ImportMatchedResponse> {
+    const response = await api.post<ImportMatchedResponse>(
+      `/training/external/providers/${providerId}/imports/import-matched`
+    );
+    return response.data;
+  },
 };
 
 export const trainingProgramService = {
@@ -755,7 +777,12 @@ export const trainingProgramService = {
   /**
    * Get all training programs
    */
-  async getPrograms(params?: { target_position?: string; is_template?: boolean }): Promise<TrainingProgram[]> {
+  async getPrograms(params?: {
+    target_position?: string;
+    is_template?: boolean;
+    /** Also return deactivated programs (`active: false`). */
+    include_inactive?: boolean;
+  }): Promise<TrainingProgram[]> {
     const response = await api.get<TrainingProgram[]>('/training/programs/programs', { params });
     return asArray(response.data);
   },

@@ -23,7 +23,7 @@ import {
   Users,
   FolderTree,
   Download,
-  Trash2,
+  Power,
   Edit2,
   PlayCircle,
   Upload,
@@ -704,9 +704,10 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
         <button
           onClick={() => onDelete(provider.id)}
           className="bg-theme-surface text-theme-text-primary flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-red-800"
-          aria-label="Delete provider"
+          aria-label="Deactivate provider"
+          title="Deactivate"
         >
-          <Trash2 className="h-4 w-4" aria-hidden="true" />
+          <Power className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -1602,6 +1603,25 @@ interface ImportQueuePanelProps {
 const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers, refreshKey, onOpenMappings }) => {
   const [summaries, setSummaries] = useState<Record<string, ProviderImportSummary>>({});
   const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [importingProvider, setImportingProvider] = useState<string | null>(null);
+
+  const handleImportMatched = async (providerId: string) => {
+    setImportingProvider(providerId);
+    try {
+      const result = await externalTrainingService.importMatched(providerId);
+      if (result.failed > 0) {
+        toast.error(`Imported ${result.imported} records; ${result.failed} failed. See the Failed list for details.`);
+      } else {
+        toast.success(`Imported ${result.imported} records`);
+      }
+      setReloadKey((key) => key + 1);
+    } catch (err: unknown) {
+      toast.error(`Import failed: ${getErrorMessage(err)}`);
+    } finally {
+      setImportingProvider(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1635,7 +1655,7 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers, refreshK
     return () => {
       cancelled = true;
     };
-  }, [providers, refreshKey]);
+  }, [providers, refreshKey, reloadKey]);
 
   if (loading) {
     return (
@@ -1669,14 +1689,25 @@ const ImportQueuePanel: React.FC<ImportQueuePanelProps> = ({ providers, refreshK
               <h2 id={`import-queue-${provider.id}`} className="text-theme-text-primary text-lg font-semibold">
                 {provider.name}
               </h2>
-              <button
-                onClick={() => onOpenMappings(provider.id)}
-                aria-label={`Open mappings for ${provider.name}`}
-                className="btn-primary flex shrink-0 items-center gap-2 self-start sm:self-auto"
-              >
-                <FolderTree className="h-4 w-4" aria-hidden="true" />
-                Open mappings
-              </button>
+              <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+                <button
+                  onClick={() => void handleImportMatched(provider.id)}
+                  disabled={importingProvider === provider.id}
+                  aria-label={`Import matching pending records for ${provider.name}`}
+                  className="btn-primary flex shrink-0 items-center gap-2"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  {importingProvider === provider.id ? 'Importing...' : 'Import matching pending records'}
+                </button>
+                <button
+                  onClick={() => onOpenMappings(provider.id)}
+                  aria-label={`Open mappings for ${provider.name}`}
+                  className="btn-primary flex shrink-0 items-center gap-2"
+                >
+                  <FolderTree className="h-4 w-4" aria-hidden="true" />
+                  Open mappings
+                </button>
+              </div>
             </div>
             {summary.failedToLoad && (
               <p className="alert-warning mb-4 text-sm" role="alert">
@@ -1803,22 +1834,25 @@ const ExternalTrainingPage: React.FC = () => {
     setEditModal({ isOpen: true, provider });
   };
 
+  // The backend only deactivates a provider (it stays listed as Inactive and
+  // its imported records are kept), so the dialog must not promise removal.
   const handleDelete = async (providerId: string) => {
+    const providerName = providers.find((p) => p.id === providerId)?.name || 'this integration';
     const agreed = await confirm({
-      title: 'Delete this integration?',
+      title: `Deactivate ${providerName}?`,
       message:
-        'Every training record imported through it is removed with it. Records logged in The Logbook directly are untouched.',
-      confirmLabel: 'Delete integration',
-      cancelLabel: 'Keep it',
+        'It stops syncing, and no further records are pulled or uploaded through it. Training records already imported through it are kept, and the integration stays listed here as Inactive.',
+      confirmLabel: 'Deactivate integration',
+      cancelLabel: 'Keep it active',
       variant: 'danger',
     });
     if (!agreed) return;
     try {
       await externalTrainingService.deleteProvider(providerId);
       await loadProviders();
-      toast.success('Provider deleted');
+      toast.success('Integration deactivated');
     } catch (err: unknown) {
-      toast.error(`Failed to delete: ${getErrorMessage(err)}`);
+      toast.error(`Failed to deactivate: ${getErrorMessage(err)}`);
     }
   };
 

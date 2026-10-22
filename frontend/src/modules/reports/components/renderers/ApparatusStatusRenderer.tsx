@@ -23,9 +23,9 @@ export const ApparatusStatusRenderer: React.FC<Props> = ({ data }) => {
       render: (v: unknown) => {
         const s = toStr(v, 'unknown');
         const colors: Record<string, string> = {
-          in_service: 'bg-green-500/20 text-green-700 dark:text-green-300',
-          out_of_service: 'bg-red-500/20 text-red-700 dark:text-red-300',
-          maintenance: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300',
+          in_service: 'bg-green-500/20 text-green-800 dark:text-green-300',
+          out_of_service: 'bg-red-500/20 text-red-800 dark:text-red-300',
+          maintenance: 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-300',
           reserve: 'bg-blue-500/20 text-blue-700 dark:text-blue-300',
         };
         return (

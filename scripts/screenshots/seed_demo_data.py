@@ -2457,7 +2457,18 @@ class Seeder:
             updates = dict(guest_settings)
             if ends and ends < iso(NOW):
                 updates.update(window)
-            self.api.patch(f"/events/{pick(event, 'id')}", updates)
+            # Reopen and retry on the finalized refusal, as the early check-in
+            # fixture does: a capture run finalizes this event (it is the
+            # running event 04-40 ends), and a finalized event's times cannot
+            # move, so the next seed failed here and every guest check-in shot
+            # after it found no live event.
+            try:
+                self.api.patch(f"/events/{pick(event, 'id')}", updates)
+            except ApiError as exc:
+                if exc.code != 409 or "finalized" not in exc.detail.lower():
+                    raise
+                self.api.post(f"/events/{pick(event, 'id')}/reopen-attendance", {})
+                self.api.patch(f"/events/{pick(event, 'id')}", updates)
         else:
             event = self.api.post(
                 "/events",
@@ -2881,17 +2892,17 @@ class Seeder:
     #                 passed, recorded as submitted
     #   pending    -> a meeting whose acceptance motion is prepared and waiting
     #                 for a result
+    # Each has the same four members on the roll, so the mover and seconder the
+    # accepting motion records are names the roll pickers can show.
     # Dated before the July Business Meeting so the Minutes page still opens on
     # the records the other shots picture. Each meeting's minutes are made only
     # after the one before is circulated, because the server links the prepared
     # motion to the latest earlier minutes that are circulated or adopted.
     GUIDE04_ACCEPTANCE_MEETINGS = (
-        ("Spring Business Meeting", 90),
-        ("Late Spring Business Meeting", 62),
-        ("Early Summer Business Meeting", 48),
+        ("Apparatus Business Meeting", 90),
+        ("Membership Business Meeting", 62),
+        ("Facilities Business Meeting", 48),
     )
-    GUIDE04_ACCEPTANCE_MOVER = "Rafael Duarte"
-    GUIDE04_ACCEPTANCE_SECONDER = "Esme Caldwell"
     PREVIOUS_MINUTES_SECTION = "approval_of_previous"
 
     def _guide04_accepted_minutes(self) -> str:
@@ -2899,6 +2910,11 @@ class Seeder:
             str(pick(m, "title")): m
             for m in items(self.api.get("/meetings?limit=100"), "meetings")
         }
+        member_ids = [
+            str(pick(u, "id"))
+            for u in items(self.api.get("/users?limit=200"), "users")
+            if pick(u, "id")
+        ][:4]
         for title, days_ago in self.GUIDE04_ACCEPTANCE_MEETINGS:
             if title in meetings:
                 continue
@@ -2913,6 +2929,9 @@ class Seeder:
                     "location": "Station 1 — Training Room",
                     "called_by": "President",
                     "agenda": "Reports; old business; new business.",
+                    "attendees": [
+                        {"user_id": user_id, "present": True} for user_id in member_ids
+                    ],
                 },
             )
         linked = {
@@ -2969,6 +2988,18 @@ class Seeder:
         motion = prepared[0]
         if str(pick(motion, "status") or "") != "pending":
             return
+        roll = [
+            str(pick(a, "name", "user_name", "userName") or "")
+            for a in pick(detail, "attendees") or []
+            if pick(a, "status") in (None, "present")
+        ]
+        roll = [name for name in roll if name]
+        if len(roll) < 2:
+            self.blocked.append(
+                "accepted minutes: the roll has fewer than two members to move "
+                "and second the motion"
+            )
+            return
         if str(pick(motion, "previous_minutes_id", "previousMinutesId") or "") != str(
             pick(previous, "id")
         ):
@@ -2980,8 +3011,8 @@ class Seeder:
         self.api.put(
             f"/minutes-records/{minutes_id}/motions/{pick(motion, 'id')}",
             {
-                "moved_by": self.GUIDE04_ACCEPTANCE_MOVER,
-                "seconded_by": self.GUIDE04_ACCEPTANCE_SECONDER,
+                "moved_by": roll[0],
+                "seconded_by": roll[1],
                 "status": "passed",
                 "acceptance": "as_submitted",
                 "votes_for": 9,

@@ -38,8 +38,8 @@ const CONFIDENCE_LABEL: Record<string, string> = {
 };
 
 const CONFIDENCE_CLASS: Record<string, string> = {
-  exact: 'bg-green-500/10 text-green-700 dark:text-green-400',
-  strong: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  exact: 'bg-green-500/10 text-green-800 dark:text-green-400',
+  strong: 'bg-amber-500/10 text-amber-800 dark:text-amber-400',
   weak: 'bg-theme-surface-secondary text-theme-text-muted',
 };
 
@@ -156,7 +156,7 @@ const InventoryMatchModal: React.FC<InventoryMatchModalProps> = ({ templateId, i
 
             {matches.length === 0 ? (
               <div className="py-8 text-center">
-                <Check className="mx-auto mb-2 h-8 w-8 text-green-600 dark:text-green-400" />
+                <Check className="mx-auto mb-2 h-8 w-8 text-green-700 dark:text-green-400" />
                 <p className="text-theme-text-primary text-sm font-medium">Everything is already linked.</p>
               </div>
             ) : (

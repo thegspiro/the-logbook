@@ -50,6 +50,18 @@ export function signalUserActivity(): void {
 const WARNING_SECONDS = 60;
 const DEFAULT_TIMEOUT_MINUTES = 15;
 
+/**
+ * How often real input is reported to the server.
+ *
+ * The server ends a session after a stretch with no activity, and counts only
+ * requests a person caused (background polls say they are not). Somebody who
+ * spends twenty minutes typing a report makes no request at all, so without
+ * this the server would log them out and lose the work. One ordinary request
+ * every couple of minutes of real input keeps the two timers agreeing. It is
+ * kept well inside the timeout: a short timeout shortens it.
+ */
+const HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000;
+
 export function useIdleTimer() {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
@@ -60,6 +72,7 @@ export function useIdleTimer() {
   const timeoutMsRef = useRef(DEFAULT_TIMEOUT_MINUTES * 60 * 1000);
   const warningShownRef = useRef(false);
   const settingsFetchedRef = useRef(false);
+  const lastHeartbeatRef = useRef(0);
 
   // Keep mutable refs to latest values so resetTimers never needs to change identity
   const logoutRef = useRef(logout);
@@ -146,8 +159,17 @@ export function useIdleTimer() {
       resetTimers();
     }
 
-    // Add activity listeners
-    const handler = () => resetTimers();
+    // Add activity listeners. Real input also reaches the server, throttled.
+    const handler = () => {
+      resetTimers();
+      const now = Date.now();
+      const interval = Math.min(HEARTBEAT_INTERVAL_MS, timeoutMsRef.current / 3);
+      if (now - lastHeartbeatRef.current < interval) return;
+      lastHeartbeatRef.current = now;
+      // An ordinary (not background) request, so the server counts it. A 401
+      // is handled like any other by the API client; nothing to do here.
+      void authService.getSessionSettings().catch(() => undefined);
+    };
     ACTIVITY_EVENTS.forEach((event) => {
       document.addEventListener(event, handler, { passive: true });
     });

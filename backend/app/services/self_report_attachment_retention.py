@@ -20,8 +20,6 @@ unlink after a committed update would orphan a file nothing points at any more,
 and no later run could find it.
 """
 
-import asyncio
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -61,18 +59,6 @@ def _org_confined_path(attachment: Any, organization_id: str) -> str | None:
     return file_storage.resolve(
         attachment.get("file_path"), organization_id, StorageArea.SELF_REPORTS
     )
-
-
-def _unlink(path: str) -> bool:
-    """Delete one file. True when it is gone afterwards, however it went."""
-    try:
-        os.remove(path)
-    except FileNotFoundError:
-        return True
-    except OSError as exc:
-        logger.error(f"Self-report attachment retention could not delete {path}: {exc}")
-        return False
-    return True
 
 
 class SelfReportAttachmentRetention:
@@ -200,7 +186,7 @@ class SelfReportAttachmentRetention:
         kept: list[Any] = []
         for attachment in attachments:
             path = _org_confined_path(attachment, org_id)
-            if path is not None and await asyncio.to_thread(_unlink, path):
+            if path is not None and await file_storage.delete(path):
                 removed.add(path)
                 continue
             kept.append(attachment)
@@ -241,11 +227,8 @@ class SelfReportAttachmentRetention:
             kept = [
                 attachment
                 for attachment in record.attachments
-                if not (
-                    isinstance(attachment, dict)
-                    and isinstance(attachment.get("file_path"), str)
-                    and os.path.realpath(attachment["file_path"]) in removed
-                )
+                if _org_confined_path(attachment, submission.organization_id)
+                not in removed
             ]
             if len(kept) != len(record.attachments):
                 record.attachments = kept

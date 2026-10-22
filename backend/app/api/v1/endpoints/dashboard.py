@@ -53,7 +53,7 @@ from app.models.training import (
     TrainingRecord,
     TrainingStatus,
 )
-from app.models.user import Organization, User, UserStatus
+from app.models.user import ACTIVE_ACCOUNT_STATUSES, Organization, User
 from app.schemas.dashboard_pulse import (
     DashboardPulseLayout,
     DashboardPulseResponse,
@@ -811,7 +811,7 @@ async def get_operations_dashboard(
             select(func.count(User.id)).where(
                 User.organization_id == org_id,
                 User.deleted_at.is_(None),
-                User.status == UserStatus.ACTIVE,
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
             )
         )
         sections.append(
@@ -1130,7 +1130,7 @@ async def get_dashboard_stats(
     result = await db.execute(
         select(func.count(User.id)).where(
             User.organization_id == org_id,
-            User.status == UserStatus.ACTIVE,
+            User.status.in_(ACTIVE_ACCOUNT_STATUSES),
             User.deleted_at.is_(None),
         )
     )
@@ -1196,7 +1196,7 @@ async def get_admin_summary(
     result = await db.execute(
         select(func.count(User.id)).where(
             User.organization_id == org_id,
-            User.status == UserStatus.ACTIVE,
+            User.status.in_(ACTIVE_ACCOUNT_STATUSES),
             User.deleted_at.is_(None),
         )
     )

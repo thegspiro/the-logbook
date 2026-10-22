@@ -211,6 +211,14 @@ choice an owner may want to revisit:
   member, so a Google failure while suspending is recorded only in the audit
   log; an administrator suspends the account by hand.
 - **No rename.** A member's name change in The Logbook does not reach Google.
+- **A departed member's account cannot be kept on.** The daily departure check
+  (owner decision, 2026-10-20) suspends again any departed member's account
+  found active in the directory, every morning, with no exemption: an
+  administrator who re-enables one to export a mailbox must finish within the
+  day or return the member in The Logbook. The check runs once a day, so an
+  account re-enabled just after it is active for up to a day; the morning
+  email reports only what the last day's check found, and anything older is
+  in the audit log.
 - **Add Member creates an account only when asked; import never does.** Add
   Member's **Create a … account** box starts unticked (owner decision,
   2026-10-20), and a roster import only links members to accounts already at
@@ -489,12 +497,12 @@ numbers a column cannot hold, duplicate identifiers, a tracking-mode change
 under a live assignment, the assign URL/body mismatch, category loops) is fixed;
 these were left because each is a policy choice or needs a schema change.
 
-| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                  |
-| ----------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.               |
-| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                       |
-| Same overflow class on the other inventory schemas    | Open          | Bounds now match the column types on item create/update, category create/update and the bulk-entry name. Other request schemas with unbounded `int`/`Decimal` fields (stock lots, issuances, requests, kits) were not audited and will still report a 1264 overflow as a generic error. |
-| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                  |
+| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings.                                                                                                                                                                                                                                                                                                                                                                        |
+| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                                                                                                                                                                                                                                                                                                                                                                                                |
+| Numeric request fields with no column behind them     | Open          | Every numeric request field that is stored in a column is now bounded to that column's range, across the whole API, and `tests/test_request_numeric_bounds.py` walks the live routes and fails on a new unbounded one (`tests/request_bound_columns.py` maps each field to its column). 51 fields are listed there as deliberately unbounded because no column limits them: values kept inside JSON columns, values only compared against another value, transient inputs, and values a service validates itself. Those need an owner-chosen business limit (for example `CohortShiftRequest.days`) rather than one invented from a column type. |
+| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 ## Medical Supplies — Automatic Reorders Land in a Queue the EMS Officer Cannot Open (2026-10-11)
 
@@ -509,6 +517,21 @@ quartermaster, and the email tells the medical officer what was filed. Opening
 the queue to `inventory.manage_medical` for medical items would need
 domain-pinned reorder routes on `/medical-supplies` and a page to show them —
 reopen this if the department moves medical purchasing to the EMS officer.
+
+## Locations — Deleting One Clears Its Location From Eight Kinds of Records (2026-10-21)
+
+Found by the pass-8 security review of Locations & Kiosk
+([`LOC8-32-locations-kiosk.md`](./security-review/LOC8-32-locations-kiosk.md),
+LOC8-2). Deleting a location that events, event templates or apparatus still
+reference deactivates it instead, so those records keep it
+(`LocationService.remove_location`). Eight other kinds of record reference a
+location with `ON DELETE SET NULL`, so a location that only they reference is
+hard-deleted and each of them silently loses its location.
+
+| Records                                                                         | Status        | Detail                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `training_records`, `course_classes`, `course_cohorts`, `course_cohort_classes` | Open decision | Where a class or training record took place may be part of the history the record exists to keep. Adding these columns to `_RESTRICTING_LOCATION_REFERENCES` makes such a location deactivate instead; `tests/test_location_restrict_references.py` then needs the same list. |
+| `meetings`, `event_requests`, `inventory_items`, `storage_areas`                | Open decision | An item or storage area with no location is an ordinary state, so clearing it may be the right outcome here. A meeting or request is closer to an event, which is already protected, so it is worth deciding deliberately.                                                    |
 
 ## Room Kiosk Badge Check-In — A Copied Card Works With Nobody Watching (2026-10-03)
 
@@ -883,13 +906,16 @@ made these choices where nothing had been decided. Each is easy to reverse.
   it and can never be deleted from approved minutes. If the department would
   rather file the signed copy as a Document and leave the minutes wholly
   untouched, remove the `signed_copy` branch in `MinutesRecordService.store_minutes_attachment`.
-- **Election results are filed by hand.** A manager imports a closed election's
-  result into the minutes; nothing files it when the election is certified.
-  The copy is taken at that moment. In a draft it can be removed and filed again
-  if the election is revised (a voided ballot after certification, W50); once the
+- **Election results are filed automatically, and a correction is a second
+  addendum.** A closed election tied to a meeting (its calendar event or meeting
+  record) files its certified result with that meeting's minutes: when the
+  election closes if the minutes exist, otherwise when they are made. The copy
+  is taken at that moment. In a draft it can be removed and filed again if the
+  election is revised (a voided ballot after certification, W50); once the
   minutes are circulated or adopted it is filed as a permanent addendum and
   cannot be removed, so a later correction is a second addendum, not a
-  replacement.
+  replacement. A department that prefers to file by hand switches
+  **Minutes → Settings → Elections** off; the manual import is unchanged.
 - **Approved minutes from before this change have no approved version.**
   `GET /{id}/verify` says so rather than inventing a hash for content nobody
   hashed. Reopening and re-approving one creates version 1.
@@ -944,10 +970,17 @@ too. A department that chose S3 or SharePoint is keeping its files on the
 application server and has no indication of it — the step offers the options
 without saying they are not yet in effect (CLAUDE.md pitfall #19).
 
+**In progress (2026-10-21): the S3 / MinIO option is being built** (decision
+31 in `docs/FILE_STORAGE_HARDENING.md`), reading each department's own
+settings. The choice is still unread until step 2 lands, and Google Drive and
+OneDrive / SharePoint stay deferred.
+
 What has to exist before any option other than Local Storage does anything:
 
 - a storage interface the upload, download and delete paths all go through —
-  Phase 2 of `docs/FILE_STORAGE_HARDENING.md` builds it with a local backend;
+  Phase 2 of `docs/FILE_STORAGE_HARDENING.md` built the write side, and
+  step 1 of decision 31 (2026-10-21) routes every read, existence check,
+  delete and download through `file_storage_service` as well;
 - one backend per platform: S3 (which also covers MinIO; the compose file's
   `minio` service under the `with-s3` profile has nothing connecting to it
   either), then Google Drive and OneDrive / SharePoint, which need OAuth token
@@ -1913,6 +1946,51 @@ encumbrance accruing on approval, so the progress bar was permanently stuck at
 0% — is unblocked by this; the transaction-table stub in the section above is
 not, and remains unwired.
 
+## Upgraded and Fresh Databases Still Differ (2026-10-20)
+
+A fresh install is built from the models (`main.py`'s fast path:
+`create_all`, then `MIGRATION_ONLY_FILES` and the seed files, then a stamp at
+head). An existing installation is built by the Alembic chain plus the startup
+column repair. A comparison of the two on 2026-10-20 found two defects, which
+are fixed (duplicate RESTRICT foreign keys on 18 apparatus columns, and three
+redundant `organization_id` indexes), and the differences below, which are
+**accepted** for now. `backend/tests/test_live_schema_drift.py` guards the
+fixed directions on CI's migrated database. It deliberately does not assert
+these.
+
+**Tables only an upgraded database has: by design.** Three bookkeeping tables,
+`document_unfiled_backfill`, `facility_document_refile_backfill` and
+`facility_folder_tier_backfill`, are written by the 2026-10-11 folder backfills
+so their downgrades can move each document back. A fresh install never ran
+those backfills and has nothing to undo. Drop them only after deciding those
+downgrades are no longer needed.
+
+**Five tables that no code reads.** `compliance_policies`,
+`policy_acknowledgments`, `compliance_checklists`, `checklist_submissions` and
+`compliance_incidents` come from `20260201_0016`. Every installation has them,
+fresh ones included, because `MIGRATION_ONLY_FILES` replays that migration, but
+nothing under `backend/app/` references them. The facilities module's checklist
+tables are the separately named `facility_compliance_checklists` family.
+**Open decision:** retire them (this drops whatever rows a department has in
+them), or leave them as harmless empty tables.
+
+**Upgraded databases are stricter than the models.** About 100 columns are
+`NOT NULL` on an upgraded database and nullable in the models, and about 177
+carry a server default that a fresh install lacks. They are mostly booleans,
+sort orders and timestamps. The
+application supplies every one of these values on insert, so ordinary use does
+not reach the gap. It shows up when code writes an explicit `null` to one of
+these columns: `apply_updates` reads nullability from the models, so it passes
+the write, and an upgraded database then rejects it at flush time with a 500
+instead of a 400. Closing it means choosing, per column, which side is right.
+That makes it a sweep with its own review, not a mechanical migration.
+
+**One unused index on upgraded databases.** `20260808_0003` dropped the
+foreign key on `shift_equipment_checks.apparatus_id`, and MySQL kept the index
+it had created for that key (`fk_shift_equipment_checks_apparatus_id_apparatus`).
+Nothing queries it and fresh installs do not have it. It costs one index write
+per equipment-check submission.
+
 ## Two Migrations Claimed 20260808_0002 — and What It Left Behind (2026-08-09)
 
 Two pull requests merged migrations numbered `20260808_0002`: "drop the
@@ -2164,8 +2242,8 @@ not be set through `PATCH /elections/{id}` at all.
 2026-10-05 answer for **Send Report Email** was to trim the guide, but the
 build had already overtaken it: **Send Report** under **Email Results Report**
 on a closed election's **Results & Publishing** panel (`PublishResultsPanel`,
-`POST /elections/{id}/send-report`) emails the results report to the election
-secretary, so the guide now describes the button rather than being trimmed —
+`POST /elections/{id}/send-report`) emails the results report to the officer
+who presses it (since 2026-10-21; it went to the election's creator before), so the guide now describes the button rather than being trimmed —
 resolved. The election-side link control also exists: the **Linked Meeting**
 field on `ElectionDetailPage` offers **Link a meeting** / **(change)** on a
 draft election, opening a picker of upcoming events and minutes records. There
@@ -2913,12 +2991,22 @@ Two limitations remain:
   that it reads as failed with a message to check who received a ballot, and it
   stops blocking a new send. Moving sends to a real worker would remove this,
   at the cost of a new service in every deployment (Docker, Unraid, AWS).
-- **The automatic pre-close reminder does not consult the guard.** It runs
-  from the election lifecycle task, not through a job, so it does not check
-  for a send in progress. If a secretary's manual send happens to be running
-  at the moment the lifecycle task fires, both mint tokens for the same
-  members. The reminder's one-hour cooldown and `reminder_sent_at` stamp keep
-  this to one overlap at most, and only around the pre-close window.
+- ~~**The automatic pre-close reminder does not consult the guard.**~~
+  **Fixed 2026-10-20.** The lifecycle task now queues both of its sends — the
+  ballots after an automatic open, and the pre-close reminder — as
+  `ballot_send_jobs` rows instead of sending inside the task, so they fall
+  under the same guard as the buttons. That closed two further problems the
+  inline sends had: a department-sized send held up every other election's
+  scheduled open and close behind it, and a send longer than the scheduler's
+  three-minute claim let a second backend worker (four run by default) take
+  over and start the same reminder again, because `reminder_sent_at` is
+  stamped only when a reminder delivers. A second tick or worker now finds the
+  first job in progress and queues nothing. An automatic reminder that fails
+  for anyone also emails the managers "Action needed: reminders for … were
+  not all sent", once per election: one that delivered nothing is retried
+  every tick, and an alert per retry would mail them every fifteen minutes
+  through an outage. Tests: `test_election_lifecycle.py`
+  (`TestAutomaticReminderJob`), `test_w50_auto_open_sends_ballots.py`.
 - **The synchronous endpoints can still race each other directly (ELEC-48,
   security review pass 10, 2026-10-18).** The "refused with 409" guard above
   was, until pass 10, a plain read behind a snapshot the auth dependency's own
@@ -5696,7 +5784,7 @@ each row carries the evidence and the file.
 | **A manager can accept a nomination for the nominee, and the slate is not frozen at Close Nominations** | ✅ Resolved (2026-10-08, owner decision; workflow review W50-38; ELEC-46)                | Managers may accept for a nominee before nominations close: `PATCH …/candidates/{id}` routes `accepted` through `ElectionService.set_candidate_acceptance`, which stamps `candidates.accepted_on_behalf_by` / `_at` (migration `7adc810c57f9`) when the acceptor is not the nominee, audits `nomination_accepted_on_behalf` and emails the nominee; the Candidates tab labels the row "Accepted by manager" and the button reads "Accept on their behalf". Close Nominations stamps `elections.nominations_closed_at` and freezes the slate: `respond_to_nomination` and the manager toggle both refuse with "the slate is final" until nominations reopen, and the toggle is disabled on screen. This removes the earlier "nominee may respond after the phase closes but before the ballot opens" window, as decided. Elections whose nominations closed before the migration have no stamp and keep the old, unfrozen behaviour. Tests: `test_w50_manager_accept_frozen_slate.py`, `CandidateManagement.w50-38-accept.test.tsx`.                                                                                                                                            |
 | **A ballot item added after tokens were issued never reaches already-sent links**                       | ✅ Resolved (2026-10-08, owner decision; workflow review W50-47)                         | A change to `ballot_items`, `positions` or `position_eligibility` (compared by value, so resaving an unchanged ballot retires nothing) now retires every outstanding link — expired and stamped `superseded_at` (`invalidate_tokens_for_ballot_change`) — and the election response reports `ballots_must_be_resent` with `ballots_resend_reason` ("ballot_changed" or "reopened"), derived from the latest real link retirement later than the last ballot or reminder send. The W50-36 banner now reads that flag: on an open election it says the ballot changed and offers Resend Ballot Emails; on a draft it explains the dead links without a send the server would refuse. A retired link answers "The ballot changed after this link was sent". Remaining: a resend to a subset of members clears the banner for everyone (the flag compares against the last send stamp). Test: `test_w50_stale_token_items.py`, `ElectionDetailPage.w50-resend-banner.test.tsx`.                                                                                                                                                                                                    |
 | **Members read the recipient list and live counts from the election body**                              | ✅ Resolved (2026-10-08, owner decision; workflow review W50-70; ELEC-44)                | While an election is OPEN, `GET /elections/{id}` withholds `email_recipients`, `eligible_voters` and the resend flag from callers without `elections.manage`, and `total_votes` / `total_voters` / `voter_turnout_percentage` too unless the election publishes results immediately; `GET /elections` withholds `total_votes` by the same rule. The ballot lookup and the in-app ballot now return `BallotCandidateResponse`, which carries no `user_id`, `nominated_by` or `accepted_on_behalf_by`. Not changed: `GET /elections/{id}/candidates` still returns `user_id` to members, because a nominee finds their own pending nomination by it during the nomination phase. Test: `test_w50_member_live_detail.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **Auto-open sends no ballots**                                                                          | ✅ Resolved (2026-10-08, owner decision; workflow review W50-72)                         | After the lifecycle task opens a flagged draft it calls `send_ballot_emails` with links on the configured `FRONTEND_URL` (never a request host); the mail's reply-to and contact are the election's creator, and the `ballots_auto_sent` audit row is attributed to them. A send that raises, fails for any recipient, or reaches nobody does not roll the open back: it writes `ballots_auto_send_failed` and emails every active `elections.manage` holder "Action needed: ballots for <election> were not sent". The Election Settings copy and the manual say so. Test: `test_w50_auto_open_sends_ballots.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Auto-open sends no ballots**                                                                          | ✅ Resolved (2026-10-08, owner decision; workflow review W50-72)                         | After the lifecycle task opens a flagged draft it queues the ballot send as a background job (since 2026-10-20; it called `send_ballot_emails` inline before), with links on the configured `FRONTEND_URL` (never a request host); the mail's reply-to and contact are the election's creator, and the `ballots_auto_sent` audit row is attributed to them. A send that raises, fails for any recipient, or reaches nobody does not roll the open back: it writes `ballots_auto_send_failed` and emails every active `elections.manage` holder "Action needed: ballots for <election> were not sent". The Election Settings copy and the manual say so. Test: `test_w50_auto_open_sends_ballots.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **A proxy ballot on an anonymous election is attributable**                                             | ✅ Resolved (2026-10-08, owner decision; workflow review W50-2, S01; ELEC-43)            | The owner allowed proxy ballots on anonymous elections, on condition that the delegating member acknowledges they are attributable. `add_proxy_authorization` now refuses an anonymous-election authorization without `anonymity_acknowledged` and stamps `anonymity_acknowledged_at` on the record; the Proxy Voting form shows the warning with a required checkbox; the delegating member is emailed "Proxy authorized" with the same warning; the interim refusal (`_proxy_anonymity_error`) now refuses only an unstamped authorization on an anonymous election, so one created before the rule must be revoked and re-authorized; and the certified PDF names the proxy votes as the exception to "de-anonymization impossible". The linkage itself is still stored in clear on the vote row — by decision, not as a salted hash. Tests: `test_w50_proxy_anonymity_ack.py`, `ProxyVotingManagement.w50-anonymity.test.tsx`.                                                                                                                                                                                                                                             |
 | **Audit rows written before S01 still name anonymous in-app voters**                                    | Accepted by the owner (2026-10-05; MED, workflow review W50-2, residual)                 | `vote_cast` rows written before `3de83db` carry the voter's `user_id` beside `vote_id`, and they cannot be scrubbed without breaking `verify_integrity` — the same shape as the ELEC-6 IP residual above. `7aa3405` removes the other half of the join (`candidate_id` in `deleted_votes` on anonymous elections), so such a row can no longer be paired with a choice through forensics, but a database read still can. The operator should be told that the audit trail of any anonymous election held before the fix names its in-app voters. **Accepted by the owner (2026-10-05), and this is the operator notice:** `vote_cast` audit rows written before the S01 fix (`3de83db`) name the in-app voters of anonymous elections, and they are left as they are, because rewriting them breaks the audit hash chain that `verify_integrity` checks. Any anonymous election held before that fix has an audit trail that names who voted in the app; forensics no longer pairs those rows with a choice, but a direct database read still can. Recorded here rather than in `docs/UPGRADING.md`, which this repository keeps for changes that can stop an upgrade booting. |
 | **Votes stored across the deploy on an open ballot-item election can count twice**                      | ✅ Resolved 2026-10-08; one upgrade caveat stays documented (workflow review W50-3, S03) | Documented for operators in `docs/UPGRADING.md` — "Close any election that is OPEN before you upgrade (2026-09-30)". In-app rows written before the change carry no `voter_hash` and link rows no `voter_id`, so the two never collide; a backfill of `voter_hash` from `voter_id` is possible only while the election's salt exists, and a closed named election that was double-voted cannot be repaired. Separately, a link vote in a named election stored the hash only, so the roster of who voted could not name link voters after close — **resolved 2026-10-08 (owner decision)**: migration `edb445ae5806` adds a nullable `voting_tokens.user_id`, set at issue on named elections only (never on anonymous ones), and both token routes copy it to the vote's `voter_id`; a token issued before the column is resolved by matching its voter hash against the roster at submit time (`_token_voter_id`). Votes already cast by link before the change keep no `voter_id` — they cannot be attributed once the salt is gone. Test: `test_w50_token_voter_id.py`.                                                                                                    |

@@ -282,6 +282,8 @@ async def update_saved_report(
         select(SavedReport).where(
             SavedReport.id == report_id,
             SavedReport.organization_id == str(current_user.organization_id),
+            # Deleting is a soft delete; a deleted report stays gone here too.
+            SavedReport.is_active.is_(True),
         )
     )
     report = ensure_found(result.scalar_one_or_none(), "Saved report")
@@ -339,6 +341,7 @@ async def run_saved_report(
         select(SavedReport).where(
             SavedReport.id == report_id,
             SavedReport.organization_id == str(current_user.organization_id),
+            SavedReport.is_active.is_(True),
         )
     )
     report = ensure_found(result.scalar_one_or_none(), "Saved report")

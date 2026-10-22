@@ -19,11 +19,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import require_permission
+from app.api.v1.endpoints.users import _enforce_account_reset_ceiling
 from app.core.audit import log_audit_event
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.core.database import database_manager, get_db
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
-from app.models.user import Organization, User, UserStatus
+from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
+    STATUS_FOLLOWS_MEMBERSHIP_REASON,
+    Organization,
+    User,
+    UserStatus,
+    sync_account_status_with_membership,
+)
 from app.schemas.member_service import RejoinServiceOptions
 from app.schemas.organization import MembershipTierSettings
 from app.services.admin_continuity_service import (
@@ -33,11 +41,14 @@ from app.services.admin_continuity_service import (
 )
 from app.services.member_service_history_service import (
     MemberServiceHistoryService,
+    effective_separation_at,
     is_separated,
+)
+from app.services.member_shift_release_service import (
+    release_future_shift_commitments,
 )
 from app.utils.membership import LEGACY_MEMBERSHIP_TYPES, is_administrative
 from app.utils.org_timezone import (
-    local_date,
     resolve_org_today,
     resolve_scheduling_timezone,
 )
@@ -350,6 +361,18 @@ async def change_member_status(
     )
     member = ensure_found(result.scalar_one_or_none(), "Member")
 
+    # A status change can take an account out of service (or put one back),
+    # so it gets the same ceiling as deleting or resetting it: a member
+    # manager may not change the status of someone holding permissions they
+    # lack.
+    await _enforce_account_reset_ceiling(
+        current_user,
+        member,
+        db,
+        action="member-status-change",
+        detail="You cannot change the status of a member with privileges beyond your own.",
+    )
+
     previous_status = (
         member.status.value
         if isinstance(member.status, UserStatus)
@@ -429,10 +452,10 @@ async def change_member_status(
             )
 
     # Update the status and record when it changed. status_changed_at stays
-    # the moment of the change even when the separation is back-dated: the
-    # property-return reminder schedule counts from it, and must not open a
-    # return deadline already overdue. The undo-drop window is the exception
-    # -- it counts from the effective date (see _undo_drop_availability).
+    # the moment of the change even when the separation is back-dated; the
+    # clocks that should run from the day the member left -- the undo-drop
+    # window and the property-return reminders -- derive that from the stint
+    # closed above (effective_separation_at).
     member.status = new_status
     member.status_changed_at = datetime.now(timezone.utc)
     member.status_change_reason = request.reason
@@ -462,6 +485,21 @@ async def change_member_status(
         username=current_user.username,
     )
 
+    # A status outside ACTIVE_ACCOUNT_STATUSES fails the is_active check that
+    # signing in and scheduling require, so the member cannot work the seats
+    # still ahead of them. Hand those back to the roster. Run on every such
+    # change, not only on leaving active: it is idempotent, and it also sweeps
+    # up anything rostered while the member was already inactive.
+    if new_status not in ACTIVE_ACCOUNT_STATUSES:
+        await release_future_shift_commitments(
+            db,
+            organization_id=str(current_user.organization_id),
+            user_id=str(user_id),
+            reason=f"status_changed:{new_status.value}",
+            performed_by_id=str(current_user.id),
+            performed_by_username=current_user.username,
+        )
+
     response = MemberStatusChangeResponse(
         user_id=str(user_id),
         previous_status=previous_status,
@@ -472,6 +510,14 @@ async def change_member_status(
     if new_status in (UserStatus.DROPPED_VOLUNTARY, UserStatus.DROPPED_INVOLUNTARY):
         from app.services.property_return_service import PropertyReturnService
 
+        # The letter and the departure clearance both count the return
+        # deadline from the effective date, so they name the same due day.
+        # This is effective_separation_at's moment for a drop recorded now:
+        # the recording moved back by the days it was back-dated.
+        dropped_at = datetime.now(timezone.utc)
+        if separation_date is not None:
+            dropped_at -= timedelta(days=(today - separation_date).days)
+
         prs = PropertyReturnService(db)
         report_data, html_content = await prs.generate_report(
             user_id=str(user_id),
@@ -481,6 +527,7 @@ async def change_member_status(
             return_deadline_days=request.return_deadline_days,
             custom_instructions=request.custom_instructions,
             reason=request.reason,
+            effective_date=separation_date,
         )
 
         response.property_return_report = {
@@ -515,6 +562,7 @@ async def change_member_status(
                 departure_type=new_status.value,
                 return_deadline_days=request.return_deadline_days,
                 notes=f"Auto-created from status change to {new_status.value}",
+                counted_from=dropped_at,
             )
             if _cl_err:
                 from loguru import logger as _lg
@@ -548,7 +596,7 @@ async def change_member_status(
                     select(User)
                     .where(
                         User.organization_id == current_user.organization_id,
-                        User.status == UserStatus.ACTIVE,
+                        User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                         User.deleted_at.is_(None),
                     )
                     .options(selectinload(User.roles))
@@ -677,25 +725,17 @@ async def _undo_drop_availability(
             detail="This drop has no recorded date, so it cannot be undone. "
             "Change the member's status instead.",
         )
-    if changed.tzinfo is None:
-        changed = changed.replace(tzinfo=timezone.utc)
 
     # The window counts from the drop's effective date, the day the member
-    # actually left, not the day an officer recorded it: a drop entered three
-    # weeks late is three weeks old. It keeps the time of day of the recording,
-    # so a drop that was not back-dated keeps exactly the window it always had.
-    # It is never later than the recording, though -- the stint's end can be
-    # edited in the service history afterwards, and that must not stretch the
-    # undo into the backdating tool the week was chosen to prevent.
-    effective = await MemberServiceHistoryService(db).separation_date(
-        member, UserStatus(member.status)
+    # actually left, not the day an officer recorded it (see
+    # effective_separation_at, which the property-return reminders share).
+    history = MemberServiceHistoryService(db)
+    anchor = effective_separation_at(
+        changed,
+        await history.list_periods(member.organization_id, member.id),
+        UserStatus(member.status),
+        await resolve_scheduling_timezone(db, member.organization_id),
     )
-    anchor = changed
-    if effective is not None:
-        tz = await resolve_scheduling_timezone(db, member.organization_id)
-        backdated_days = (local_date(changed, tz) - effective).days
-        if backdated_days > 0:
-            anchor = changed - timedelta(days=backdated_days)
     until = anchor + timedelta(days=UNDO_DROP_WINDOW_DAYS)
     if datetime.now(timezone.utc) > until:
         return UndoDropAvailability(
@@ -915,8 +955,17 @@ async def archive_member(
         .where(User.id == str(user_id))
         .where(User.organization_id == current_user.organization_id)
         .where(User.deleted_at.is_(None))
+        .options(selectinload(User.positions))
     )
     member = ensure_found(result.scalar_one_or_none(), "Member")
+
+    await _enforce_account_reset_ceiling(
+        current_user,
+        member,
+        db,
+        action="member-archive",
+        detail="You cannot archive a member with privileges beyond your own.",
+    )
 
     if member.status not in (
         UserStatus.DROPPED_VOLUNTARY,
@@ -964,6 +1013,15 @@ async def archive_member(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+    await release_future_shift_commitments(
+        db,
+        organization_id=str(current_user.organization_id),
+        user_id=str(user_id),
+        reason="archived",
+        performed_by_id=str(current_user.id),
+        performed_by_username=current_user.username,
     )
 
     return {
@@ -1279,6 +1337,10 @@ async def change_membership_type(
         member.rank = None
         cleared_rank = previous_rank
 
+    # Applied here as well as at flush so the audit entry below can say what
+    # moved. The flush listener finds nothing left to do.
+    status_change = sync_account_status_with_membership(member, now=now)
+
     await db.commit()
 
     await log_audit_event(
@@ -1293,10 +1355,33 @@ async def change_membership_type(
             "new_type": request.membership_type,
             "reason": request.reason,
             "cleared_rank": cleared_rank,
+            **(
+                {"previous_status": status_change[0], "new_status": status_change[1]}
+                if status_change
+                else {}
+            ),
         },
         user_id=str(current_user.id),
         username=current_user.username,
     )
+    if status_change:
+        # Its own entry too, so the member's status history reads the move
+        # the same way it reads one made from the Change Status dialog.
+        await log_audit_event(
+            db=db,
+            event_type="member_status_changed",
+            event_category="user_management",
+            severity="info",
+            event_data={
+                "target_user_id": str(user_id),
+                "member_name": member.full_name,
+                "previous_status": status_change[0],
+                "new_status": status_change[1],
+                "reason": f"{STATUS_FOLLOWS_MEMBERSHIP_REASON} '{request.membership_type}'",
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
 
     return {
         "user_id": str(user_id),
@@ -1304,6 +1389,11 @@ async def change_membership_type(
         "previous_membership_type": previous_type,
         "new_membership_type": request.membership_type,
         "changed_at": now.isoformat(),
+        "account_status": (
+            member.status.value
+            if isinstance(member.status, UserStatus)
+            else member.status
+        ),
     }
 
 

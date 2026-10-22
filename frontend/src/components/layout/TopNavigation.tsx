@@ -23,7 +23,6 @@ import { useConnectedIntegrations } from '../../hooks/useConnectedIntegrations';
 import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idCards';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
-import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
@@ -31,6 +30,7 @@ import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 import { fitNavItems } from './topNavigationOverflow';
 import { GRANTS_NAV_ITEMS } from './grantsNavigation';
 import { operationsNavItems } from './operationsNavigation';
+import { governanceNavItems } from './governanceNavigation';
 import { FINANCE_NAV_PERMISSIONS, financeNavItems, financeNavPath } from './financeNavigation';
 import { useOwnsBudgets, usePlansNextYear } from '../../modules/finance/hooks/useOwnsBudgets';
 
@@ -155,7 +155,6 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   const ThemeIcon = themeIcon;
 
   const hasAnyAdminPermission = canOpenAdministrationSection(checkPermission, { checkInStationOn: isNfcCardsOn });
-  const canReviewLegalDocuments = LEGAL_DOCUMENTS_PERMISSIONS.some((p) => checkPermission(p));
 
   // Build the divider sentinel used between Admin sub-groups
   const DIV: SubNavItem = { label: '', path: '', isDivider: true };
@@ -220,17 +219,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     {
       label: 'Governance',
       path: '/governance/org-chart',
-      subItems: [
-        { label: 'Org Chart', path: '/governance/org-chart' },
-        ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections' }] : []),
-        ...(isModuleOn('minutes')
-          ? [
-              { label: 'Minutes', path: '/minutes' },
-              { label: 'Action Items', path: '/action-items' },
-            ]
-          : []),
-        ...(canReviewLegalDocuments ? [{ label: 'Legal Documents', path: '/governance/legal' }] : []),
-      ],
+      // One list with SideNavigation and the section strip on every
+      // Governance page; see governanceNavigation.ts.
+      subItems: governanceNavItems(isModuleOn).map(({ label, path, permission, anyPermission }) => ({
+        label,
+        path,
+        ...(permission ? { permission } : {}),
+        ...(anyPermission ? { anyPermission } : {}),
+      })),
     },
     // See SideNavigation: the group is every member's way to their own requests.
     ...(isModuleOn('finance')
@@ -711,7 +707,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                     </button>
                   ) : (
                     <span
-                      className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+                      className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-xs font-medium text-amber-800 dark:text-amber-300"
                       role="status"
                       aria-live="polite"
                       title={
@@ -769,7 +765,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   onClick={toggleHighContrast}
                   aria-pressed={theme === 'high-contrast'}
                   className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden ${
-                    theme === 'high-contrast' ? 'text-amber-600 dark:text-amber-400' : 'text-theme-text-secondary'
+                    theme === 'high-contrast' ? 'text-amber-700 dark:text-amber-400' : 'text-theme-text-secondary'
                   }`}
                   title={theme === 'high-contrast' ? 'High contrast on — click to restore' : 'Turn on high contrast'}
                   aria-label={
@@ -903,7 +899,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 <div className="border-theme-surface-border mt-2 space-y-1 border-t pt-2">
                   {!isOnline && (
                     <div
-                      className="flex items-center space-x-2 rounded-md bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300"
+                      className="flex items-center space-x-2 rounded-md bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-800 dark:text-amber-300"
                       role="status"
                       aria-live="polite"
                     >
@@ -970,7 +966,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                     onClick={toggleHighContrast}
                     aria-pressed={theme === 'high-contrast'}
                     className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
-                      theme === 'high-contrast' ? 'text-amber-600 dark:text-amber-400' : 'text-theme-text-secondary'
+                      theme === 'high-contrast' ? 'text-amber-700 dark:text-amber-400' : 'text-theme-text-secondary'
                     }`}
                   >
                     <Contrast className="h-4 w-4" aria-hidden="true" />

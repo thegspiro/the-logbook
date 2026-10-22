@@ -178,7 +178,9 @@ export const PatternsTab: React.FC = () => {
     try {
       const [patternsData, templatesData] = await Promise.all([
         schedulingService.getPatterns(),
-        schedulingService.getTemplates(),
+        // Deactivated templates too: a pattern that names one still shows its
+        // name. The pickers below offer only `activeTemplates`.
+        schedulingService.getTemplates({ active_only: false }),
       ]);
       setPatterns(patternsData);
       setTemplates(templatesData);
@@ -445,6 +447,17 @@ export const PatternsTab: React.FC = () => {
   };
 
   const activeTemplates = templates.filter((t) => t.is_active);
+
+  // Advisory, never a block: some departments staff a 24/48 as two 12-hour
+  // halves, so a shorter template can be exactly what they mean. What was
+  // wrong was saying nothing while the preset promised 24 hours on duty.
+  const presetLengthMismatch = (() => {
+    const expected = creationMode === 'preset' ? selectedPreset?.shiftHours : undefined;
+    const template = activeTemplates.find((t) => t.id === createForm.template_id);
+    if (!expected || !template?.duration_hours) return null;
+    if (Math.abs(template.duration_hours - expected) < 0.01) return null;
+    return { expected, template };
+  })();
 
   if (loading) {
     return (
@@ -880,8 +893,17 @@ export const PatternsTab: React.FC = () => {
                         ))}
                       </select>
                       {activeTemplates.length === 0 && (
-                        <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                        <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
                           No templates found. Create one in the Templates tab first.
+                        </p>
+                      )}
+                      {presetLengthMismatch && (
+                        <p className="alert-warning mt-2 text-xs" role="status">
+                          This rotation is built on {presetLengthMismatch.expected}-hour shifts, but{' '}
+                          {presetLengthMismatch.template.name} runs {presetLengthMismatch.template.duration_hours}{' '}
+                          hours, so each duty day gets one {presetLengthMismatch.template.duration_hours}-hour shift.
+                          That is right if you staff the rotation in shorter halves; otherwise choose a{' '}
+                          {presetLengthMismatch.expected}-hour template.
                         </p>
                       )}
                     </div>
@@ -1195,7 +1217,7 @@ export const PatternsTab: React.FC = () => {
                           {cyclePattern.map((entry, i) => {
                             let cls = 'bg-theme-surface-hover text-theme-text-muted';
                             if (entry === 'on') cls = 'bg-violet-500/20 text-violet-600 dark:text-violet-400';
-                            else if (entry === 'day') cls = 'bg-amber-500/20 text-amber-700 dark:text-amber-400';
+                            else if (entry === 'day') cls = 'bg-amber-500/20 text-amber-800 dark:text-amber-400';
                             else if (entry === 'night') cls = 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400';
                             return (
                               <span key={i} className={`rounded-sm px-2 py-1 text-[10px] font-semibold ${cls}`}>

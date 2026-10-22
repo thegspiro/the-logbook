@@ -5,8 +5,6 @@ Endpoints for document management including folders,
 document CRUD, and file uploads.
 """
 
-import asyncio
-import os
 from typing import Optional
 from uuid import UUID
 
@@ -43,7 +41,6 @@ from app.services.file_storage_service import (
     FileRules,
     FileStorageService,
     StorageArea,
-    stored_file_response,
 )
 from app.utils import download_names
 from app.utils.org_timezone import resolve_scheduling_timezone
@@ -565,7 +562,7 @@ async def upload_document(
         )
     except Exception as e:
         # Clean up file on error
-        await asyncio.to_thread(file_storage.remove_quietly, file_path)
+        await file_storage.delete_quietly(file_path)
         logger.error(f"Failed to create document record: {e}")
         raise HTTPException(
             status_code=400, detail=safe_error_detail(e, "Unable to save document")
@@ -694,7 +691,7 @@ async def download_document(
         )
         raise HTTPException(status_code=403, detail="Access denied")
 
-    if not await asyncio.to_thread(os.path.exists, resolved_path):
+    if not await file_storage.exists(resolved_path):
         raise HTTPException(status_code=404, detail="Document file not found on disk")
 
     await log_audit_event(
@@ -709,8 +706,8 @@ async def download_document(
 
     extension = download_names.stored_extension(resolved_path)
     tz = await resolve_scheduling_timezone(db, current_user.organization_id)
-    return stored_file_response(
-        path=resolved_path,
+    return await file_storage.file_response(
+        resolved_path,
         filename=download_names.descriptive_filename(
             download_names.local_day(document.created_at, tz),
             download_names.without_extension(document.name, extension),

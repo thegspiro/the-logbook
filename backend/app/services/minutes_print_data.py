@@ -22,7 +22,7 @@ from app.services.minutes_signature_service import MinutesSignatureService
 from app.utils.minutes_attendance import effective_listing, listed_attendees
 from app.utils.minutes_settings import attendance_listing_in
 from app.utils.motion_votes import acceptance_label, recorded_motions, vote_summary
-from app.utils.org_timezone import scheduling_timezone
+from app.utils.org_timezone import scheduling_timezone, stored_calendar_day
 
 
 def adopting_title(minutes: Any) -> Optional[str]:
@@ -195,7 +195,12 @@ async def build_print_data(
             {
                 "description": a.description,
                 "assignee": a.assignee_name,
-                "due": local(a.due_date, "%Y-%m-%d"),
+                # A calendar day, not an instant: shown as stored.
+                "due": (
+                    due_on.isoformat()
+                    if (due_on := stored_calendar_day(a.due_date))
+                    else None
+                ),
                 "priority": (
                     a.priority if isinstance(a.priority, str) else a.priority.value
                 ),

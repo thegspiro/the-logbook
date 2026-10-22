@@ -139,7 +139,7 @@ const MessagesInboxPage: React.FC = () => {
                       Acknowledged
                     </span>
                   ) : msg.requires_acknowledgment ? (
-                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Action needed</span>
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Action needed</span>
                   ) : null}
                   <ChevronRight className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
                 </div>

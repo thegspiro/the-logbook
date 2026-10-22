@@ -138,7 +138,7 @@ const AnalyticsDashboardPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
 
         <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
           <div className="text-theme-text-muted mb-1 text-sm font-medium">Successful Check-Ins</div>
-          <div className="text-3xl font-bold text-green-600">{metrics.successfulCheckIns}</div>
+          <div className="text-3xl font-bold text-green-700 dark:text-green-600">{metrics.successfulCheckIns}</div>
         </div>
 
         <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">

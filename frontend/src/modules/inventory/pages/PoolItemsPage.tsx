@@ -118,7 +118,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
           <p className="text-theme-text-muted text-xs">{categoryName}</p>
         </div>
         {onHand <= 0 && (
-          <span className="shrink-0 rounded bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600 dark:text-red-400">
+          <span className="shrink-0 rounded bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
             Out of stock
           </span>
         )}
@@ -534,7 +534,7 @@ const PoolItemsPage: React.FC = () => {
         <SummaryCard
           label="Total On-Hand"
           value={totalOnHand}
-          icon={<ArrowDownToLine size={20} className="text-green-600 dark:text-green-400" />}
+          icon={<ArrowDownToLine size={20} className="text-green-700 dark:text-green-400" />}
           accent="bg-green-500/10"
         />
         <SummaryCard
@@ -546,14 +546,14 @@ const PoolItemsPage: React.FC = () => {
         <SummaryCard
           label="Low Stock Alerts"
           value={lowStockCount}
-          icon={<AlertTriangle size={20} className="text-amber-600 dark:text-amber-400" />}
+          icon={<AlertTriangle size={20} className="text-amber-700 dark:text-amber-400" />}
           accent="bg-amber-500/10"
         />
       </div>
 
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
+        <div className="relative min-w-0 flex-1">
           <Search size={16} className="text-theme-text-muted absolute top-1/2 left-3 -translate-y-1/2" />
           <input
             autoCapitalize="none"

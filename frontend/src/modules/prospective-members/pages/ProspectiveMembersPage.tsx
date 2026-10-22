@@ -862,7 +862,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         type="checkbox"
                         checked={selectedApplicants.size === applicants.length}
                         onChange={toggleAllApplicants}
-                        className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                        className="form-checkbox h-6 w-6 text-red-700 dark:text-red-500"
                       />
                       {selectedApplicants.size} selected
                     </label>
@@ -1029,7 +1029,7 @@ export const ProspectiveMembersPage: React.FC = () => {
               </div>
             ) : inactiveApplicants.length === 0 ? (
               <div className="card bg-theme-input-bg border-dashed py-20 text-center">
-                <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-600" />
+                <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-700 dark:text-emerald-600" />
                 <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No inactive applications</h3>
                 <p className="text-theme-text-muted text-sm">
                   Applications with no activity past the inactivity timeout appear here.
@@ -1052,7 +1052,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                               setSelectedInactive(new Set());
                             }
                           }}
-                          className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                          className="form-checkbox h-6 w-6 text-red-700 dark:text-red-500"
                         />
                       </th>
                       <th
@@ -1108,7 +1108,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                               }
                               setSelectedInactive(next);
                             }}
-                            className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                            className="form-checkbox h-6 w-6 text-red-700 dark:text-red-500"
                           />
                         </td>
                         <td className="p-3">

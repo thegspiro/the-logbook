@@ -185,11 +185,11 @@ const AllEntriesTab: React.FC = () => {
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                           entry.status === 'approved'
-                            ? 'bg-green-500/20 text-green-700 dark:text-green-400'
+                            ? 'bg-green-500/20 text-green-800 dark:text-green-400'
                             : entry.status === 'pending'
-                              ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
+                              ? 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-400'
                               : entry.status === 'rejected'
-                                ? 'bg-red-500/20 text-red-700 dark:text-red-400'
+                                ? 'bg-red-500/20 text-red-800 dark:text-red-400'
                                 : entry.status === 'withdrawn'
                                   ? 'bg-theme-surface-hover text-theme-text-secondary'
                                   : 'bg-blue-500/20 text-blue-700 dark:text-blue-400'

@@ -34,6 +34,8 @@ import type { FormSubmission, FormField } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatShortDateTime } from '../../utils/dateFormatting';
 import { buildCsv, downloadCsv } from '../../utils/csv';
+import { getErrorMessage } from '../../utils/errorHandling';
+import { useConfirm } from '../../contexts/ConfirmContext';
 
 export interface SubmissionViewerProps {
   /** Fetch submissions for this form */
@@ -62,6 +64,7 @@ const SubmissionViewer = ({
   compact = false,
 }: SubmissionViewerProps) => {
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const [submissions, setSubmissions] = useState<FormSubmission[]>(directSubmission ? [directSubmission] : []);
   const [fields, setFields] = useState<FormField[]>(directFields || []);
   const [total, setTotal] = useState(0);
@@ -115,16 +118,25 @@ const SubmissionViewer = ({
     }
   };
 
-  const handleDelete = async (submissionId: string) => {
+  const handleDelete = async (submission: FormSubmission) => {
     if (!formId) return;
+    const submissionId = submission.id;
+    const subject = submission.submitter_name ? `The submission from ${submission.submitter_name}` : 'This submission';
+    const confirmed = await confirm({
+      title: 'Delete this submission?',
+      message: `${subject} is deleted permanently, with every answer in it. This cannot be undone.`,
+      confirmLabel: 'Delete submission',
+      cancelLabel: 'Keep it',
+    });
+    if (!confirmed) return;
     try {
       setDeleting(submissionId);
       await formsService.deleteSubmission(formId, submissionId);
       setSubmissions((prev) => prev.filter((s) => s.id !== submissionId));
       setTotal((prev) => prev - 1);
       onDelete?.(submissionId);
-    } catch {
-      setError('Failed to delete submission.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to delete submission.'));
     } finally {
       setDeleting(null);
     }
@@ -325,7 +337,7 @@ const SubmissionViewer = ({
                       </span>
                     ) : allOk ? (
                       <span
-                        className="flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-700 dark:text-green-400"
+                        className="flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-800 dark:text-green-400"
                         title="Integration succeeded"
                       >
                         <CheckCircle2 className="h-3 w-3" />
@@ -413,7 +425,7 @@ const SubmissionViewer = ({
                           }}
                           disabled={reprocessing === sub.id}
                           aria-label="Reprocess integrations for this submission"
-                          className="flex items-center gap-1.5 rounded-lg bg-orange-500/10 px-3 py-1.5 text-xs text-orange-700 transition-colors hover:bg-orange-500/20 hover:text-orange-700 disabled:opacity-50 dark:text-orange-400 dark:hover:text-orange-300"
+                          className="flex items-center gap-1.5 rounded-lg bg-orange-500/10 px-3 py-1.5 text-xs text-orange-800 transition-colors hover:bg-orange-500/20 hover:text-orange-700 disabled:opacity-50 dark:text-orange-400 dark:hover:text-orange-300"
                         >
                           {reprocessing === sub.id ? (
                             <RefreshCw className="h-3 w-3 animate-spin" />
@@ -425,7 +437,7 @@ const SubmissionViewer = ({
                         <button
                           type="button"
                           onClick={() => {
-                            void handleDelete(sub.id);
+                            void handleDelete(sub);
                           }}
                           disabled={deleting === sub.id}
                           aria-label={`Delete submission by ${sub.submitter_name || sub.submitted_by || 'Anonymous'}`}

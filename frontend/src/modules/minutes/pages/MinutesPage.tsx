@@ -32,13 +32,14 @@ import { AgendaEditorDialog } from '../components/AgendaEditorDialog';
 import { ArchiveSearchResults } from '../components/ArchiveSearchResults';
 import { MyActionItemsPanel } from '../components/MyActionItemsPanel';
 import { OutlinePickerDialog } from '../components/OutlinePickerDialog';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorDetail, getErrorMessage } from '../../../utils/errorHandling';
 import { toDisplayString } from '../../../utils/displayValue';
 import type { MeetingType, MinutesListItem, MinutesStats } from '../types/minutes';
 import { formatCalendarDate, formatTimeOfDay } from '../../../utils/dateFormatting';
 import TimeQuarterHour from '../../../components/ux/TimeQuarterHour';
 import { asArray } from '../../../utils/asArray';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
 
 const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   {
@@ -64,7 +65,7 @@ const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   {
     value: 'trustee',
     label: 'Trustee Meeting',
-    color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400',
+    color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
   },
   {
     value: 'executive',
@@ -264,11 +265,12 @@ const MinutesPage: React.FC = () => {
     await createMinutesFor(meetingId);
   };
 
-  const handleDeleteMeeting = async (meetingId: string) => {
+  const handleDeleteMeeting = async (meeting: MeetingRecord) => {
+    const meetingId = meeting.id;
     if (
       !(await confirm({
         title: 'Delete meeting',
-        message: 'Delete this meeting with its attendees and action items? Minutes already created from it are kept.',
+        message: `Delete "${meeting.title}"? Its attendance record is removed with it, so that attendance no longer counts toward anyone's membership tier, and its action items are deleted. Minutes already created from it are kept. This cannot be undone.`,
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
       }))
@@ -278,8 +280,10 @@ const MinutesPage: React.FC = () => {
     try {
       await meetingsService.deleteMeeting(meetingId);
       await fetchData();
-    } catch {
-      setError('Unable to delete the meeting. Check your connection and try again.');
+    } catch (err: unknown) {
+      // The server's reason when it gave one — a refusal is not a network
+      // problem, and saying "check your connection" sent the clerk the wrong way.
+      toast.error(getErrorDetail(err) ?? 'Unable to delete the meeting. Check your connection and try again.');
     } finally {
       setDeletingId(null);
     }
@@ -323,50 +327,40 @@ const MinutesPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-4">
-          <div className="flex items-center space-x-3">
-            <div className="shrink-0 rounded-lg bg-cyan-600 p-2">
-              <ClipboardList className="h-6 w-6 text-white" aria-hidden="true" />
-            </div>
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">Meeting Minutes</h1>
-              <p className="text-theme-text-muted text-sm">
-                Record meetings, write up their minutes, and track action items
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {canManage && (
-              <Link to="/minutes/outlines" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
-                <ListOrdered className="h-4 w-4" aria-hidden="true" />
-                <span>Outlines</span>
-              </Link>
-            )}
-            {canManage && (
-              <Link to="/minutes/settings" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
-                <Settings className="h-4 w-4" aria-hidden="true" />
-                <span>Settings</span>
-              </Link>
-            )}
-            {canViewAttendance && (
-              <Link to="/minutes/attendance" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
-                <Users className="h-4 w-4" aria-hidden="true" />
-                <span>Attendance</span>
-              </Link>
-            )}
-            {canManage && (
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="flex items-center space-x-2 rounded-lg bg-cyan-700 px-4 py-2 text-white transition-colors hover:bg-cyan-800"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                <span>Record Minutes</span>
-              </button>
-            )}
-          </div>
-        </div>
+      <div className="mx-auto max-w-7xl">
+        <GovernancePageHeader
+          icon={ClipboardList}
+          title="Meeting Minutes"
+          subtitle="Record meetings, write up their minutes, and track action items"
+          actions={
+            <>
+              {canManage && (
+                <Link to="/minutes/outlines" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
+                  <ListOrdered className="h-4 w-4" aria-hidden="true" />
+                  <span>Outlines</span>
+                </Link>
+              )}
+              {canManage && (
+                <Link to="/minutes/settings" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
+                  <Settings className="h-4 w-4" aria-hidden="true" />
+                  <span>Settings</span>
+                </Link>
+              )}
+              {canViewAttendance && (
+                <Link to="/minutes/attendance" className="btn-secondary touch:min-h-11 inline-flex items-center gap-2">
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                  <span>Attendance</span>
+                </Link>
+              )}
+              {canManage && (
+                <button onClick={() => setShowCreateModal(true)} className="btn-primary inline-flex items-center gap-2">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  <span>Record Minutes</span>
+                </button>
+              )}
+            </>
+          }
+        />
 
         {/* Quick Stats */}
         <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -486,10 +480,10 @@ const MinutesPage: React.FC = () => {
                           <span
                             className={`rounded px-2 py-0.5 text-xs ${
                               meeting.status === 'approved'
-                                ? 'border border-green-500/30 bg-green-500/10 text-green-700'
+                                ? 'border border-green-500/30 bg-green-500/10 text-green-800'
                                 : meeting.status === 'draft'
                                   ? 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border border'
-                                  : 'border border-yellow-500/30 bg-yellow-500/10 text-yellow-700'
+                                  : 'border border-yellow-500/30 bg-yellow-500/10 text-yellow-800'
                             }`}
                           >
                             {meeting.status.charAt(0).toUpperCase() + meeting.status.slice(1)}
@@ -596,21 +590,25 @@ const MinutesPage: React.FC = () => {
                         >
                           <BookOpen className="h-4 w-4" aria-hidden="true" />
                         </button>
-                        <button
-                          onClick={() => {
-                            void handleDeleteMeeting(meeting.id);
-                          }}
-                          disabled={deletingId === meeting.id}
-                          className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-700 disabled:opacity-50"
-                          title="Delete meeting"
-                          aria-label={`Delete ${meeting.title}`}
-                        >
-                          {deletingId === meeting.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </button>
+                        {/* An approved meeting's attendance is the settled record and the
+                            server refuses to delete it, so the control is not offered. */}
+                        {meeting.status !== 'approved' && (
+                          <button
+                            onClick={() => {
+                              void handleDeleteMeeting(meeting);
+                            }}
+                            disabled={deletingId === meeting.id}
+                            className="text-theme-text-muted touch-target-phone rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-700 disabled:opacity-50"
+                            title="Delete meeting"
+                            aria-label={`Delete ${meeting.title}`}
+                          >
+                            {deletingId === meeting.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -641,7 +639,7 @@ const MinutesPage: React.FC = () => {
                                 <span className="text-theme-text-primary font-medium">
                                   {toDisplayString(waiver.user_name ?? waiver.user_id ?? 'Unknown')}
                                 </span>
-                                <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                                <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:bg-green-500/20 dark:text-green-400">
                                   Waived
                                 </span>
                               </div>
@@ -683,9 +681,9 @@ const MinutesPage: React.FC = () => {
                     Structured templates for recording meeting minutes with attendees, motions, and votes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700">Roll Call</span>
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700">Motions</span>
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700">Votes</span>
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800">Roll Call</span>
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800">Motions</span>
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800">Votes</span>
                   </div>
                 </div>
                 <div className="card p-6">
@@ -695,9 +693,9 @@ const MinutesPage: React.FC = () => {
                     Track action items from meetings with assignees, due dates, and completion status.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-700">Assignees</span>
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-700">Due Dates</span>
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-700">Follow-up</span>
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800">Assignees</span>
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800">Due Dates</span>
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800">Follow-up</span>
                   </div>
                 </div>
                 <div className="card p-6">
@@ -707,8 +705,8 @@ const MinutesPage: React.FC = () => {
                     Search past meetings by title, or by any words in their minutes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700">Search</span>
-                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700">
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800">Search</span>
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800">
                       Publish to Documents
                     </span>
                   </div>

@@ -15,6 +15,10 @@ const mockGetLocations = vi.fn();
 const mockCheckPermission = vi.fn();
 
 vi.mock('../../../services/api', () => ({
+  // Read by the Operations section strip in the page header.
+  organizationService: {
+    getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
+  },
   inventoryService: {
     getItem: (...a: unknown[]) => mockGetItem(...a) as unknown,
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
