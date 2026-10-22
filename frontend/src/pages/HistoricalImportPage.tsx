@@ -246,23 +246,25 @@ const UploadStep: React.FC<UploadStepProps> = ({ onParsed, matchBy, onMatchByCha
         <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
           <div>
             <p className="text-theme-text-primary mb-1 font-medium">Required Columns</p>
+            {/* Bold primary text, not red: high contrast paints this card #111111,
+                where red-800 falls short of 7:1 (mobile-accessibility.spec.ts). */}
             <ul className="text-theme-text-muted space-y-0.5">
               {matchBy === 'email' && (
                 <li>
-                  <code className="text-red-800 dark:text-red-400">email</code> - Member email for matching
+                  <code className="text-theme-text-primary font-semibold">email</code> - Member email for matching
                 </li>
               )}
               {matchBy === 'membership_number' && (
                 <li>
-                  <code className="text-red-800 dark:text-red-400">membership_number</code> - Membership number
+                  <code className="text-theme-text-primary font-semibold">membership_number</code> - Membership number
                 </li>
               )}
               <li>
-                <code className="text-red-800 dark:text-red-400">course_name</code> - Training course title
+                <code className="text-theme-text-primary font-semibold">course_name</code> - Training course title
               </li>
               <li>
-                <code className="text-red-800 dark:text-red-400">completion_date</code> - When it was completed; a row
-                without one is not imported
+                <code className="text-theme-text-primary font-semibold">completion_date</code> - When it was completed;
+                a row without one is not imported
               </li>
             </ul>
           </div>
