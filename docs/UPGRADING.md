@@ -504,6 +504,31 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Moving a department's existing files into its bucket, and key rotation on S3 (2026-10-22)
+
+Nothing runs on upgrade. Three operator commands, all inside the backend
+container (`intranet-backend`, or `logbook-backend` on Unraid):
+
+- **`python scripts/migrate_uploads_to_s3.py`** moves the files a department
+  stored on the `uploads` volume before it switched to its own bucket. A dry
+  run by default; `--apply` copies, verifies and repoints them and keeps the
+  disk copies; `--rollback MANIFEST` undoes it; `--finalize MANIFEST` deletes
+  the disk copies once each bucket copy verifies again. `--org ID` limits it
+  to one department, which must already have passed **Test and switch to
+  S3**. A file still in a module's pre-2026-10 folder is reported: run
+  `scripts/relocate_uploads.py` first.
+- **`python scripts/encrypt_uploads.py --rewrap`** now covers objects in
+  departments' buckets as well as the volume (`docs/KEY_ROTATION.md`). A
+  bucket object is downloaded and re-uploaded whole, so a large bucket takes
+  as long as moving its data. Keep a retired key in `ENCRYPTION_KEYS_LEGACY`
+  until both counts read zero.
+- **`scripts/backup.sh`** now lists the buckets holding department files,
+  under a warning that they are not in the archive. It never downloads them;
+  `docs/BACKUP.md` says how to back them up.
+
+`scripts/relocate_uploads.py` no longer reports a file in a department's
+bucket as missing on disk. It counts it as already in the new layout.
+
 ### A department can keep its files in its own S3 or MinIO bucket (2026-10-22)
 
 The Amazon S3 choice under **Organization Settings > Storage** (and in
@@ -516,8 +541,8 @@ switch to S3** on that screen. The test writes, reads back and deletes a small
 object with the saved settings, and only then are new uploads sent to the
 bucket. Editing those settings afterwards sends uploads back to the volume
 until the test passes again, and the screen says so. Files already stored stay
-where they are and keep working either way. Moving existing files into a bucket
-is a later release (step 3 of decision 31 in `docs/FILE_STORAGE_HARDENING.md`).
+where they are and keep working either way. `scripts/migrate_uploads_to_s3.py`
+moves them into the bucket (see the next entry up).
 
 What an operator needs to know:
 
@@ -531,9 +556,9 @@ What an operator needs to know:
   (`with-s3` profile, `http://minio:9000`). A department administrator types the
   endpoint, so the default stays closed. Cloud-metadata addresses are refused
   either way. The variable is in all three compose files' `environment:` blocks.
-- **Backups:** `scripts/backup.sh` still copies only the `uploads` volume. Back
+- **Backups:** `scripts/backup.sh` copies only the `uploads` volume. Back
   up a department's bucket with the provider's own tooling (versioning or
-  replication on AWS, `mc mirror` on MinIO) until step 3 adds it.
+  replication on AWS, `mc mirror` on MinIO); see `docs/BACKUP.md`.
 - **Anonymous suggestions:** a department on S3 stores suggestion screenshots in
   its bucket too, and the bucket records each object's exact upload time. On
   the volume that time is truncated to noon of the day so an anonymous
