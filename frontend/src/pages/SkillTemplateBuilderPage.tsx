@@ -198,7 +198,7 @@ const CriterionEditor: React.FC<{
                     nothing. Said here as well as in the save-time errors
                     because this is where the author can still fix it. */}
                 {(criterion.max_score == null || criterion.max_score <= 0) && (
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                     Without a maximum this step earns no points toward the score.
                   </p>
                 )}
@@ -441,9 +441,11 @@ const CriterionEditor: React.FC<{
 
         {/* Remove button */}
         <button
+          type="button"
           onClick={onRemove}
-          className="mt-6 rounded-sm p-1.5 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
+          className="touch:min-h-11 touch:min-w-11 mt-6 inline-flex items-center justify-center rounded-sm p-1.5 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
           title="Remove criterion"
+          aria-label="Remove criterion"
         >
           <Trash2 className="h-4 w-4 text-red-500" />
         </button>
@@ -510,15 +512,20 @@ const SectionEditor: React.FC<{
         </div>
 
         <button
+          type="button"
           onClick={() => onChange({ ...section, collapsed: !section.collapsed })}
-          className="hover:bg-theme-surface-hover rounded-sm p-1.5 transition-colors"
+          className="hover:bg-theme-surface-hover touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-sm p-1.5 transition-colors"
+          aria-label={section.collapsed ? 'Expand section' : 'Collapse section'}
+          aria-expanded={!section.collapsed}
         >
           {section.collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
         </button>
         <button
+          type="button"
           onClick={onRemove}
-          className="rounded-sm p-1.5 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
+          className="touch:min-h-11 touch:min-w-11 inline-flex items-center justify-center rounded-sm p-1.5 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
           title="Remove section"
+          aria-label="Remove section"
         >
           <Trash2 className="h-4 w-4 text-red-500" />
         </button>

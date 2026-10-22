@@ -55,7 +55,7 @@ import AdminHoursSection from '../components/member-profile/AdminHoursSection';
 import ContactInfoSection from '../components/member-profile/ContactInfoSection';
 import EmergencyContactsSection from '../components/member-profile/EmergencyContactsSection';
 import { VisibilityControl } from '../components/member-profile/VisibilityControl';
-import { useOverlaySurface } from '../hooks/useOverlaySurface';
+import { useDialog } from '../hooks/useDialog';
 import { canViewMemberIdCard } from '../utils/memberIdCardAccess';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
 import { GoogleAccountPanel } from '../modules/membership/components/GoogleAccountPanel';
@@ -85,6 +85,10 @@ interface InventoryItem {
 }
 
 /** Check if a module is enabled by its id. */
+function statusLabel(status: string): string {
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function isModuleEnabled(moduleId: string): boolean {
   const mod = AVAILABLE_MODULES.find((m) => m.id === moduleId);
   return mod?.enabled ?? false;
@@ -163,10 +167,14 @@ export const MemberProfilePage: React.FC = () => {
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [reactivateModalOpen, setReactivateModalOpen] = useState(false);
   const [anonymizeModalOpen, setAnonymizeModalOpen] = useState(false);
-
-  // Takes the fixed mobile bottom bar off this overlay while it is open.
-  useOverlaySurface(statusModalOpen);
   const [statusChanging, setStatusChanging] = useState(false);
+  // Escape stays off mid-save so the dialog cannot vanish while the request
+  // it started is still deciding the member's status.
+  const statusDialogRef = useDialog<HTMLDivElement>({
+    isOpen: statusModalOpen,
+    onClose: () => setStatusModalOpen(false),
+    closeOnEscape: !statusChanging,
+  });
   const [newStatus, setNewStatus] = useState<string>('');
   const [statusReason, setStatusReason] = useState('');
   const [separationDate, setSeparationDate] = useState('');
@@ -903,13 +911,17 @@ export const MemberProfilePage: React.FC = () => {
                     onClick={handleOpenStatusModal}
                     className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold transition hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 ${
                       user.status === UserStatus.ACTIVE
-                        ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                        ? 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-400'
                         : 'bg-theme-surface-secondary text-theme-text-secondary'
                     }`}
                     title={user.status === UserStatus.ARCHIVED ? 'Reactivate member' : 'Change member status'}
+                    aria-label={`${user.status === UserStatus.ARCHIVED ? 'Reactivate member' : 'Change status'}, currently ${statusLabel(user.status)}`}
                   >
-                    {user.status.replace(/_/g, ' ')}
-                    <Pencil className="h-3 w-3" />
+                    Status: {statusLabel(user.status)}
+                    <span className="inline-flex items-center gap-1 font-normal underline" aria-hidden="true">
+                      <Pencil className="h-3 w-3" />
+                      {user.status === UserStatus.ARCHIVED ? 'Reactivate' : 'Change'}
+                    </span>
                   </button>
                 ) : (
                   // The account lifecycle status is leadership's concern; a
@@ -1478,8 +1490,16 @@ export const MemberProfilePage: React.FC = () => {
         {/* Status Change Modal */}
         {statusModalOpen && (
           <div className="modal-overlay z-50 flex items-center justify-center">
-            <div className="bg-theme-surface-modal modal-panel-scroll mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
-              <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Change Member Status</h3>
+            <div
+              ref={statusDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="status-dialog-title"
+              className="bg-theme-surface-modal modal-panel-scroll mx-4 w-full max-w-md rounded-lg p-6 shadow-xl"
+            >
+              <h3 id="status-dialog-title" className="text-theme-text-primary mb-4 text-lg font-semibold">
+                Change Member Status
+              </h3>
               <div className="space-y-4">
                 <div>
                   <label
@@ -1500,7 +1520,7 @@ export const MemberProfilePage: React.FC = () => {
                       .filter((s) => s !== UserStatus.ARCHIVED)
                       .map((s) => (
                         <option key={s} value={s}>
-                          {s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                          {statusLabel(s)}
                         </option>
                       ))}
                   </select>
@@ -1549,7 +1569,7 @@ export const MemberProfilePage: React.FC = () => {
                   </div>
                 )}
                 {(newStatus === UserStatus.DROPPED_VOLUNTARY || newStatus === UserStatus.DROPPED_INVOLUNTARY) && (
-                  <p className="rounded-md border border-yellow-500/20 bg-yellow-500/10 p-2 text-xs text-yellow-600 dark:text-yellow-400">
+                  <p className="rounded-md border border-yellow-500/20 bg-yellow-500/10 p-2 text-xs text-yellow-800 dark:text-yellow-400">
                     Dropping a member creates a property return report and may send an email notification.
                   </p>
                 )}

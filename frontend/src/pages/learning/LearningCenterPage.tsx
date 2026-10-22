@@ -93,7 +93,10 @@ export default function LearningCenterPage() {
                   return (
                     <li key={step.id} className="flex items-start gap-2.5">
                       {stepDone ? (
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" aria-hidden="true" />
+                        <CheckCircle2
+                          className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-600"
+                          aria-hidden="true"
+                        />
                       ) : (
                         <Circle className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                       )}

@@ -331,7 +331,7 @@ export const GiveUpShiftModal: React.FC<GiveUpShiftModalProps> = ({
       {step === 2 && (
         <div className="py-4 text-center">
           <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-green-200 bg-green-50 dark:border-green-500/40 dark:bg-green-500/10">
-            <Check className="h-6 w-6 text-green-600 dark:text-green-400" aria-hidden="true" />
+            <Check className="h-6 w-6 text-green-700 dark:text-green-400" aria-hidden="true" />
           </span>
           <h4 className="text-theme-text-primary text-[17px] font-bold">
             {choice === 'trade'

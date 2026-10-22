@@ -24,7 +24,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { userService, roleService, locationsService } from '../services/api';
 import type { Location } from '../services/api';
 import type { UserWithRoles, Role } from '../types/role';
@@ -609,9 +609,12 @@ export const MembersAdminPage: React.FC = () => {
                           </span>
                         </div>
                         <div className="ml-4">
-                          <div className="text-theme-text-primary text-sm font-medium">
+                          <Link
+                            to={`/members/${user.id}`}
+                            className="text-theme-text-primary text-sm font-medium hover:underline"
+                          >
                             {displayNameOf(user) || user.username}
-                          </div>
+                          </Link>
                           <div className="text-theme-text-muted text-sm">@{user.username}</div>
                         </div>
                       </div>
@@ -679,12 +682,14 @@ export const MembersAdminPage: React.FC = () => {
                       <div className="flex flex-wrap justify-end gap-3">
                         <button
                           onClick={() => void navigate(`/members/admin/edit/${user.id}`)}
+                          aria-label={`Edit ${displayNameOf(user) || user.username}`}
                           className="touch-target-phone text-green-700 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleEditRoles(user)}
+                          aria-label={`Manage positions for ${displayNameOf(user) || user.username}`}
                           className="touch-target-phone text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                         >
                           Manage Positions
@@ -692,6 +697,7 @@ export const MembersAdminPage: React.FC = () => {
                         {currentUser?.id !== user.id && (
                           <button
                             onClick={() => setResetPasswordUser(user)}
+                            aria-label={`Reset password for ${displayNameOf(user) || user.username}`}
                             className="touch-target-phone text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
                           >
                             Reset Password
@@ -700,6 +706,7 @@ export const MembersAdminPage: React.FC = () => {
                         {currentUser?.id !== user.id && user.locked_until && (
                           <button
                             onClick={() => void handleUnlock(user)}
+                            aria-label={`Unlock ${displayNameOf(user) || user.username}`}
                             disabled={unlockingUserId === user.id}
                             className="touch-target-phone text-yellow-700 hover:text-yellow-800 disabled:opacity-50 dark:text-yellow-400 dark:hover:text-yellow-300"
                           >
@@ -709,6 +716,7 @@ export const MembersAdminPage: React.FC = () => {
                         {currentUser?.id !== user.id && user.mfa_enabled && (
                           <button
                             onClick={() => setResetMfaUser(user)}
+                            aria-label={`Reset MFA for ${displayNameOf(user) || user.username}`}
                             className="touch-target-phone text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
                           >
                             Reset MFA
@@ -717,6 +725,7 @@ export const MembersAdminPage: React.FC = () => {
                         {currentUser?.id !== user.id && (
                           <button
                             onClick={() => handleDeleteUser(user)}
+                            aria-label={`Delete ${displayNameOf(user) || user.username}`}
                             className="touch-target-phone text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                           >
                             Delete
@@ -781,9 +790,12 @@ export const MembersAdminPage: React.FC = () => {
                                 </span>
                               </div>
                               <div>
-                                <div className="text-theme-text-primary text-sm font-medium">
+                                <Link
+                                  to={`/members/${user.id}`}
+                                  className="text-theme-text-primary text-sm font-medium hover:underline"
+                                >
                                   {displayNameOf(user) || user.username}
-                                </div>
+                                </Link>
                                 {user.membership_number && (
                                   <div className="text-theme-text-muted text-xs">#{user.membership_number}</div>
                                 )}

@@ -112,7 +112,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
               type="checkbox"
               checked={selected}
               onChange={onSelect}
-              className="border-theme-input-border h-5 w-5 rounded-sm text-emerald-600 focus:ring-emerald-500"
+              className="border-theme-input-border h-5 w-5 rounded-sm text-emerald-700 focus:ring-emerald-500 dark:text-emerald-600"
               aria-label={`Select ${name}`}
             />
           </div>

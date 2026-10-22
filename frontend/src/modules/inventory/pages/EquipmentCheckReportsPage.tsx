@@ -394,7 +394,7 @@ const ComplianceTab: React.FC<TabProps> = ({ startDate, endDate, tz, dateControl
                     <span
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
                         a.lastStatus === 'pass'
-                          ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                          ? 'bg-green-500/10 text-green-800 dark:text-green-400'
                           : 'bg-red-500/10 text-red-700 dark:text-red-400'
                       }`}
                     >

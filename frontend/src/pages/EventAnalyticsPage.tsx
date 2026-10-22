@@ -242,7 +242,7 @@ export const EventAnalyticsPage: React.FC = () => {
         <Breadcrumbs underHub="/events/admin" />
 
         {/* Header */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-center gap-3">
             <Link
               to="/events"
@@ -343,7 +343,7 @@ export const EventAnalyticsPage: React.FC = () => {
             {data.monthlyEventCounts.length === 0 ? (
               <p className="text-theme-text-muted text-sm">No event data available.</p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Monthly event trend chart">
                 <div className="flex h-48 min-w-full items-end gap-2">
                   {data.monthlyEventCounts.map((m) => {
                     const heightPct = Math.max(Math.round((m.count / maxMonthlyCount) * 100), 4);
@@ -373,7 +373,7 @@ export const EventAnalyticsPage: React.FC = () => {
           {data.topEvents.length === 0 ? (
             <p className="text-theme-text-muted text-sm">No attendance data available.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Top events by attendance">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-theme-surface-border text-theme-text-secondary border-b text-left">

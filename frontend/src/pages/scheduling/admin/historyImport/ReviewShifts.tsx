@@ -77,7 +77,7 @@ const AttendanceLine: React.FC<{
               </span>
             )}
             {att.confidence < 100 && (
-              <span className="badge border border-yellow-500/20 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
+              <span className="badge border border-yellow-500/20 bg-yellow-500/10 text-yellow-800 dark:text-yellow-400">
                 {att.confidence}% match
               </span>
             )}

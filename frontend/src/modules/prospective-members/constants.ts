@@ -51,16 +51,16 @@ export const STAGE_TYPE_HUE: Record<StageType, string> = {
 /** Badge style: text + bg for stage type labels/pills. */
 export const STAGE_TYPE_COLORS: Record<StageType, string> = {
   form_submission: 'text-blue-700 dark:text-blue-400 bg-blue-500/10',
-  document_upload: 'text-amber-700 dark:text-amber-400 bg-amber-500/10',
+  document_upload: 'text-amber-800 dark:text-amber-400 bg-amber-500/10',
   election_vote: 'text-purple-700 dark:text-purple-400 bg-purple-500/10',
-  manual_approval: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10',
+  manual_approval: 'text-emerald-800 dark:text-emerald-400 bg-emerald-500/10',
   meeting: 'text-teal-700 dark:text-teal-400 bg-teal-500/10',
   status_page_toggle: 'text-sky-700 dark:text-sky-400 bg-sky-500/10',
   automated_email: 'text-rose-700 dark:text-rose-400 bg-rose-500/10',
-  reference_check: 'text-orange-700 dark:text-orange-400 bg-orange-500/10',
-  checklist: 'text-cyan-700 dark:text-cyan-400 bg-cyan-500/10',
+  reference_check: 'text-orange-800 dark:text-orange-400 bg-orange-500/10',
+  checklist: 'text-cyan-800 dark:text-cyan-400 bg-cyan-500/10',
   interview_requirement: 'text-indigo-700 dark:text-indigo-400 bg-indigo-500/10',
-  multi_approval: 'text-lime-700 dark:text-lime-400 bg-lime-500/10',
+  multi_approval: 'text-lime-800 dark:text-lime-400 bg-lime-500/10',
   medical_screening: 'text-pink-700 dark:text-pink-400 bg-pink-500/10',
 };
 
@@ -97,11 +97,11 @@ export const STAGE_TYPE_LABELS: Record<StageType, string> = {
 };
 
 export const APPLICANT_STATUS_COLORS: Record<ApplicantStatus, string> = {
-  active: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400',
-  on_hold: 'bg-amber-500/20 text-amber-700 dark:text-amber-400',
+  active: 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300',
+  on_hold: 'bg-amber-500/20 text-amber-800 dark:text-amber-400',
   withdrawn: 'bg-theme-surface-hover text-theme-text-muted',
   converted: 'bg-blue-500/20 text-blue-700 dark:text-blue-400',
-  rejected: 'bg-red-500/20 text-red-700 dark:text-red-400',
+  rejected: 'bg-red-500/20 text-red-800 dark:text-red-400',
   inactive: 'bg-theme-surface-hover text-theme-text-muted',
 };
 

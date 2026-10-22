@@ -337,7 +337,7 @@ const SubmissionViewer = ({
                       </span>
                     ) : allOk ? (
                       <span
-                        className="flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-700 dark:text-green-400"
+                        className="flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-800 dark:text-green-400"
                         title="Integration succeeded"
                       >
                         <CheckCircle2 className="h-3 w-3" />
@@ -425,7 +425,7 @@ const SubmissionViewer = ({
                           }}
                           disabled={reprocessing === sub.id}
                           aria-label="Reprocess integrations for this submission"
-                          className="flex items-center gap-1.5 rounded-lg bg-orange-500/10 px-3 py-1.5 text-xs text-orange-700 transition-colors hover:bg-orange-500/20 hover:text-orange-700 disabled:opacity-50 dark:text-orange-400 dark:hover:text-orange-300"
+                          className="flex items-center gap-1.5 rounded-lg bg-orange-500/10 px-3 py-1.5 text-xs text-orange-800 transition-colors hover:bg-orange-500/20 hover:text-orange-700 disabled:opacity-50 dark:text-orange-400 dark:hover:text-orange-300"
                         >
                           {reprocessing === sub.id ? (
                             <RefreshCw className="h-3 w-3 animate-spin" />

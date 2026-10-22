@@ -181,7 +181,7 @@ const ExpenseReportsPage: React.FC = () => {
         />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Expense reports">
             <table className="w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
