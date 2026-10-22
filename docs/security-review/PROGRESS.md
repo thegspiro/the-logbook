@@ -16,6 +16,11 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None currently open.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04 Storefront & payments pass 11, PR #3559, before it merged), preserved for history</summary>
+
 **PR [#3559](https://github.com/thegspiro/the-logbook/pull/3559)** (branch
 `claude/security-review-storefront-payments-p11`) — Feature 04 (Storefront &
 payments), pass 11, a watchdog pickup. PR #3558 (Feature 03, Public surface
@@ -29,6 +34,8 @@ was confirmed the next `⬜` by reading the rotation table directly. This
 iteration reviewed Feature 04, pass 11: **0 fixed, 0 new findings.** See
 `SF-04-storefront-payments.md`'s **Pass 11** section. Rotation row 04 → ✅
 (pending this PR's merge); next is Feature 05 (Finance & approvals).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03 Public surface & webhooks pass 11, PR #3558, before it merged), preserved for history</summary>
@@ -20596,7 +20603,7 @@ this iteration's commit" rule.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (28 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
@@ -20633,6 +20640,48 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-10-22 — Feature 05 (Finance & approvals, pass 11) — watchdog pickup, 0 fixed, 0 new findings; FIN8-05-1/FIN-30 re-confirmed open
+
+PR #3559 (Feature 04, Storefront & payments, pass 11) merged 2026-10-22,
+docs-only (0 fixed, 0 new findings — a re-verification pass with no code
+delta), so per the "docs-only PR is not a recordable event" rule it gets no
+Log entry of its own — only this row's clearing. This iteration (a watchdog
+pickup — `search_pull_requests` returned 0 open security-review PRs and
+`ListAgents` found no reachable session) reviewed Feature 05, pass 11: **0
+fixed, 0 new findings.** Delta against the pass-10 baseline (PR #3401,
+`765f79f5`) was substantially larger than recent near-zero-delta passes — 26
+non-merge commits, all read in full rather than spot-checked — but every
+real change held up: a numeric-bounds hardening pass (strictly tightened,
+never widened); a new QuickBooks chart-of-accounts upload feature
+(org-scoped, `finance.manage`-gated, file-size/row/account/name-length capped,
+malware-scanned before parsing, `defusedxml`-protected XLSX parsing, formula-
+injection-safe); a reimport-confirmation flow on top of it (org-scoped,
+audit-logged); an approval-chain min/max range validator; a genuine
+approve/cancel race fix (`_lock_entity_awaiting_approval`, matching the
+capacity-locking "lock the parent row" pattern); a chain-matching fix that
+stops expense reports/check requests from silently borrowing purchase-request
+approval chains; a coverage-report fix distinguishing "no one in this step"
+from "someone's in the step but lacks the grant" (diagnostic only — the
+actual `finance.approve` authorization check was already separate and
+unchanged); budget-category deactivate-instead-of-delete when still
+referenced; dues overdue-status correctness fixes; and a data-exposure
+tightening hiding `amount_remaining` from non-owning `finance.request`
+callers. `public/finance_approvals.py` (the token-scoped email-approval
+surface) and `finance_settings.py` are byte-identical to pass 10, confirmed
+by `git diff --stat`. Two real migrations landed (QuickBooks chart-of-accounts
+
+- export-log import columns; a one-time UTC timestamp backfill for 19 finance
+  tables), both reviewed directly — correct `nullable=True` SET NULL FKs,
+  `create_all`-tolerant, identifier-allowlisted before building per-table SQL.
+  The two standing findings were re-verified by direct read at current line
+  numbers: **FIN8-05-1 stays OPEN (flagged)** — `decide_request`
+  (`finance_budget_request_service.py:660`) still has no
+  `assert_different_person` check, unlike `review_request`; **FIN-30 stays
+  FLAGGED** — `list_dues_payments` (`finance_service.py:6116`) still takes no
+  limit/offset. See `FIN-05-finance-approvals.md`'s **Pass 11** section.
+  Rotation row 05 → ✅ (pending this PR's merge); next is Feature 06
+  (Elections & ballots).
 
 ### 2026-10-22 — Feature 04 (Storefront & payments, pass 11) — watchdog pickup, 0 fixed, 0 new findings; SF8-04-2/SF8-04-3 re-confirmed open
 
