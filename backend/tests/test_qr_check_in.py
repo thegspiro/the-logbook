@@ -21,6 +21,7 @@ Test Coverage:
 """
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -273,6 +274,91 @@ class TestQRCheckInRecordsTraining:
         assert data["records_training"] is False
         assert data["training_requires_approval"] is False
         assert queries == 2
+
+
+class TestQRCheckInOwnRecord:
+    """What the QR data says about the member who scanned.
+
+    The check-in page opens on the check-out screen for a member who is already
+    checked in, so it needs their own times. Nothing was returned before, and a
+    second scan showed a plain check-in button that only repeated the first
+    answer.
+    """
+
+    def _db(self, event, org, own):
+        mock_db = _mock_db_returning(event, org)
+        base = mock_db.execute
+        own_result = MagicMock()
+        own_result.first.return_value = own
+        calls = {"n": 0}
+
+        async def execute(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 3:
+                return own_result
+            return await base(*args, **kwargs)
+
+        mock_db.execute = execute
+        return mock_db, calls
+
+    async def _qr(self, own, user_id=None):
+        org_id = uuid4()
+        event = _make_event(org_id=org_id)
+        db, calls = self._db(event, _make_org(org_id=org_id), own)
+        data, error = await _make_service(db).get_qr_check_in_data(
+            event.id, org_id, user_id=user_id
+        )
+        assert error is None
+        return data, calls["n"]
+
+    @pytest.mark.asyncio
+    async def test_without_a_user_nothing_about_them_is_looked_up(self):
+        data, queries = await self._qr(own=None)
+
+        assert queries == 2
+        assert data["user_checked_in_at"] is None
+        assert data["user_checked_out_at"] is None
+
+    @pytest.mark.asyncio
+    async def test_a_member_with_no_record_has_neither_time(self):
+        data, _ = await self._qr(own=None, user_id=uuid4())
+
+        assert data["user_checked_in_at"] is None
+        assert data["user_checked_out_at"] is None
+
+    @pytest.mark.asyncio
+    async def test_an_rsvp_alone_does_not_count_as_checked_in(self):
+        own = SimpleNamespace(checked_in=False, checked_in_at=None, checked_out_at=None)
+
+        data, _ = await self._qr(own=own, user_id=uuid4())
+
+        assert data["user_checked_in_at"] is None
+
+    @pytest.mark.asyncio
+    async def test_a_checked_in_member_gets_their_check_in_time(self):
+        arrived = datetime(2026, 10, 20, 14, 5, tzinfo=timezone.utc)
+        own = SimpleNamespace(
+            checked_in=True, checked_in_at=arrived, checked_out_at=None
+        )
+
+        data, queries = await self._qr(own=own, user_id=uuid4())
+
+        assert queries == 3
+        assert data["user_checked_in_at"] == "2026-10-20T14:05:00Z"
+        assert data["user_checked_out_at"] is None
+
+    @pytest.mark.asyncio
+    async def test_a_member_who_left_gets_both_times(self):
+        arrived = datetime(2026, 10, 20, 14, 5, tzinfo=timezone.utc)
+        left = datetime(2026, 10, 20, 16, 30, tzinfo=timezone.utc)
+        own = SimpleNamespace(
+            checked_in=True, checked_in_at=arrived, checked_out_at=left
+        )
+
+        data, _ = await self._qr(own=own, user_id=uuid4())
+
+        assert data["user_checked_in_at"] == "2026-10-20T14:05:00Z"
+        assert data["user_checked_out_at"] == "2026-10-20T16:30:00Z"
 
 
 class TestSelfCheckIn:
