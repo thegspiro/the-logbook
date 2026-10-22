@@ -2716,6 +2716,7 @@ async def get_qr_check_in_data(
     data, error = await service.get_qr_check_in_data(
         event_id=event_id,
         organization_id=current_user.organization_id,
+        user_id=current_user.id,
     )
 
     if error or data is None:

@@ -45,6 +45,8 @@ PDF_RULES = FileRules(
 @pytest.fixture
 def root(tmp_path, monkeypatch):
     monkeypatch.setattr(file_storage, "UPLOADS_ROOT", str(tmp_path))
+    # No saved S3 settings: every department here keeps its files on disk.
+    monkeypatch.setattr(file_storage, "_load_settings", AsyncMock(return_value={}))
     return tmp_path
 
 

@@ -1,6 +1,6 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 (this PR)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-15 (pass 6), 2026-10-05 (pass 7), 2026-10-12 (pass 8), 2026-10-14 (pass 9), 2026-10-18 (pass 10), 2026-10-22 (pass 11) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), [#2400](https://github.com/thegspiro/the-logbook/pull/2400) (pass 4), [#2546](https://github.com/thegspiro/the-logbook/pull/2546) (pass 5), [#2600](https://github.com/thegspiro/the-logbook/pull/2600) (pass 6 — corrected here from the "(this PR)" placeholder pass 6's own write-up left unresolved after merge), [#2947](https://github.com/thegspiro/the-logbook/pull/2947) (pass 7), [#3142](https://github.com/thegspiro/the-logbook/pull/3142) (pass 8), [#3248](https://github.com/thegspiro/the-logbook/pull/3248) (pass 9), pass 10 ([#3404](https://github.com/thegspiro/the-logbook/pull/3404)), pass 11 (this PR)
 
 ---
 
@@ -109,6 +109,82 @@ eligibility`'s "already voted in this election" applies only to a ballot
   Paper-tally sessions per election are naturally few; no cap and no
   pagination. Revisit if an election ever carries more than a few dozen
   batches. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+## Pass 11 (2026-10-22)
+
+**Scoping.** Step 0 (via GitHub, not the tracker): `list_pull_requests`
+(state=open) returned no `claude/security-review-*` branch. Row 05 had
+merged (#3562); row 06 was the next `⬜`. Baseline is pass 10 (#3404);
+the delta read in full is paper-ballot ranked entry (`votes.paper_ballot_id`,
+migration `59449acab7ba`), ranked-choice counting by paper ballot,
+`BallotSendJob` automatic sends, and the new auto-filing of a closed
+election's result into its meeting's minutes
+(`services/minutes_election_filing.py`).
+
+**Verified good (mechanisms).**
+
+- Ranked paper ballots: `RankedPaperBallot` bounds rankings (1..50, no
+  repeats) and count (1..500); `record_manual_ballots` stamps one
+  `paper_ballot_id` per ballot, org-scopes the election, and checks every
+  ranked candidate belongs to it and has accepted nomination; the id is
+  covered by `_sign_vote`, so the hash chain detects tampering with it.
+- IRV counting groups rows by `voter_hash`, else `voter_id`, else
+  `paper_ballot_id`, else the row id, so a paper ballot is one ballot and
+  never merges with another voter's.
+- Send jobs: `enqueue_send` / `queue_automatic_send` org-scope the election
+  and take the row lock before the active-job read (ELEC-47 holds); job
+  errors reach the client through `safe_error_detail`.
+- Report/announcement recipients are managers only
+  (`_election_report_recipients`); `nominations_announcement` is attached
+  only for `elections.manage` viewers.
+- PDF routes (`ballot`, `certified-results`, `package-pdf`) are
+  `elections.manage`, audited, and build `Content-Disposition` filenames
+  from a slug of `[A-Za-z0-9_-]`, so a title cannot inject a header.
+- Auto-filing never raises into the close, is org-scoped on both the
+  election and the minutes, and goes through `capture_election_result`.
+
+### ELEC-49 — MEDIUM — FLAGGED — A rolled-back election leaves a stale, permanent addendum in circulated minutes
+
+`close_election` (`election_service.py`) now calls `file_closed_election`;
+`rollback_election` (`election_service.py`, CLOSED → OPEN) does not touch the
+filing. When the meeting's minutes were already circulated or adopted, the
+filing is a **permanent addendum** that `remove_election_result` refuses to
+delete.
+
+Reproduced with a scratch integration test (removed): close an election with
+3 votes at a meeting whose minutes are adopted → addendum filed; roll the
+election back, change votes, close again → the second close files nothing
+(unique pair minutes/election), and the removal attempt returns 400 "A result
+filed after the minutes were circulated is a permanent addendum and cannot be
+removed". The adopted minutes keep a result that no longer matches the
+election.
+
+Not fixed: whether a rollback should supersede, annotate, or be refused once
+its result sits in adopted minutes is a records-integrity policy decision
+(it touches the permanence guarantee that circulated minutes carry). Owner
+decision recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+### ELEC-50 — LOW — FIXED (guard) — The `viewer` default of `_build_election_response` was an unguarded convention
+
+`viewer=None` means "the route already required `elections.manage`"; a route
+reachable by `elections.view` that omitted `viewer` would have exposed the
+manager-only announcement with nothing failing. All current callers are
+correct. Guard added:
+`tests/test_election_response_viewer_convention.py` (AST: every caller
+without `viewer=` is gated by `elections.manage` alone).
+
+**Standing findings re-confirmed unchanged:** ELEC-12, ELEC-14, ELEC-16,
+ELEC-28, ELEC-40, ELEC-48.
+
+## Guard tests added (pass 11)
+
+- `tests/test_election_response_viewer_convention.py` (2 tests).
+
+## Completion gate (pass 11)
+
+See the PR body for the gate run; no migration or schema change in this pass.
+
+---
 
 ## Pass 9 (2026-10-14)
 

@@ -166,7 +166,13 @@ class TestBulkRows:
         assert [r.course_name for r in db.added] == ["Ladders"]
 
 
-def _historical_row(member_id, number, course="New Course", training_type=None):
+def _historical_row(
+    member_id,
+    number,
+    course="New Course",
+    training_type=None,
+    completion_date=date(2026, 1, 1),
+):
     return HistoricalImportParsedRow(
         row_number=number,
         user_id=str(member_id),
@@ -174,7 +180,7 @@ def _historical_row(member_id, number, course="New Course", training_type=None):
         course_matched=False,
         training_type=training_type,
         hours_completed=1,
-        completion_date=date(2026, 1, 1),
+        completion_date=completion_date,
     )
 
 
@@ -228,6 +234,37 @@ class TestHistoricalImport:
         assert result.imported == 1
         records = [obj for obj in db.added if isinstance(obj, TrainingRecord)]
         assert records[0].training_type == "refresher"
+
+    async def test_a_completed_row_with_no_date_fails_only_its_row(self):
+        member_id = uuid4()
+        db = _Session(results=[_rows([(str(member_id),)])])
+        request = HistoricalImportConfirmRequest(
+            rows=[
+                _historical_row(member_id, 1),
+                _historical_row(member_id, 2, completion_date=None),
+            ]
+        )
+
+        result = await confirm_historical_import(request, db, _user())
+
+        assert result.imported == 1
+        assert result.failed == 1
+        assert result.errors == ["Row 2: no completion date"]
+        records = [obj for obj in db.added if isinstance(obj, TrainingRecord)]
+        assert [r.completion_date for r in records] == [date(2026, 1, 1)]
+
+    async def test_a_scheduled_import_may_leave_the_date_blank(self):
+        member_id = uuid4()
+        db = _Session(results=[_rows([(str(member_id),)])])
+        request = HistoricalImportConfirmRequest(
+            rows=[_historical_row(member_id, 1, completion_date=None)],
+            default_status="scheduled",
+        )
+
+        result = await confirm_historical_import(request, db, _user())
+
+        assert result.imported == 1
+        assert result.failed == 0
 
     @pytest.mark.parametrize("field", ["default_training_type", "default_status"])
     def test_a_bad_request_default_is_refused_up_front(self, field):

@@ -156,6 +156,14 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
       2. The S3 backend and the per-department settings it reads.
       3. The migration command, the encryption and rewrap tooling on S3,
          backups, and docs.
+    - Step 2 decisions (2026-10-22): a department's uploads move to its
+      bucket only after **Test and switch to S3** passes with the saved
+      settings, and go back to local disk if those settings are edited
+      afterwards; an unreachable bucket **refuses** the upload (503,
+      `LB-UPLD-006`) rather than writing to disk; the endpoint must be public
+      HTTPS unless the operator sets `S3_ALLOW_PRIVATE_ENDPOINT`; and
+      anonymous suggestion screenshots go to the bucket too, accepting that
+      the bucket records their exact upload time.
 
 ## Phases
 
@@ -166,7 +174,9 @@ to local disk regardless (`docs/KNOWN_LIMITATIONS.md`, CI3-33-4).
 | 3     | A folder per module with module-specific rights; narrow `documents.view`; admin-only see-all; apparatus files and finance receipts as documents | done (#3031) |
 | 4     | Encryption at rest, with the onboarding key-custody confirmation                                                                                | done         |
 | 5     | Every document lives in a folder: no more organization-wide "unfiled" documents                                                                 | done         |
-| 6     | A department's own S3 / MinIO bucket (decision 31), step 1 of 3: one storage interface every caller uses                                        | this change  |
+| 6     | A department's own S3 / MinIO bucket (decision 31), step 1 of 3: one storage interface every caller uses                                        | done (#3537) |
+| 7     | Decision 31, step 2 of 3: the S3 backend, each department's settings, the connection test that switches it                                      | done (#3561) |
+| 8     | Decision 31, step 3 of 3: moving existing files into a bucket, rewrap on S3, backup notice                                                      | this change  |
 
 ### Phase 1 — what changed
 
@@ -344,6 +354,42 @@ form's "No folder" choice reads "General Documents (default)".
 
 This revision also joins the two Alembic heads `3f3bd6f3c7e4` and
 `990e288940bc`, published with the same parent.
+
+### Phase 7 — a department's own bucket (2026-10-22)
+
+| Piece                 | Where                                                                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Talking to a bucket   | `app/services/s3_storage.py`, the only module that imports boto3 (`tests/test_storage_operations.py`)                                                           |
+| A stored reference    | `s3://<bucket>/<org>/<area>/<record>/<uuid><ext>`; `resolve()` confines it by its leading key segments, as it confines a path by directory                      |
+| Where a new file goes | `file_storage.write_file`: the bucket when the platform is S3 **and** the saved settings' keyed fingerprint matches the last passed test; otherwise the volume  |
+| The connection test   | `POST /organization/settings/file-storage/s3/activate` (write, read back, delete a probe; re-checked under the row lock); `.../s3/deactivate` goes back to disk |
+| What the screen shows | `GET /organization/settings/file-storage/status`, rendered by `StorageLocationPanel`                                                                            |
+| Bucket down           | 503 `LB-UPLD-006` on upload, download and existence checks; a delete reports failure as on disk                                                                 |
+| Endpoint check        | `assert_outbound_url_safe` each time a department's client is built; private or plain HTTP only with `S3_ALLOW_PRIVATE_ENDPOINT`                                |
+| Settings cache        | Per worker, 30 s, 256 departments; cleared in the worker that saves. Another worker follows within 30 s                                                         |
+
+Encrypted before upload with the same format and key as the volume, so the
+bucket's operator never holds plaintext. Step 3 (phase 8, below) covers
+moving existing files in, key rotation and backups.
+
+### Phase 8 — moving existing files into a bucket (2026-10-22)
+
+Owner decisions: the copies on disk are **kept until finalize**, as relocation
+and encryption keep theirs; and backups **stay with the bucket's own tooling**
+— `backup.sh` names the buckets it leaves out rather than downloading them.
+
+| Piece        | Where                                                                                                                                                    |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The move     | `app/services/s3_migration.py`, driven by `scripts/migrate_uploads_to_s3.py`: apply (copy, read back, compare SHA-256, repoint), rollback, finalize      |
+| Which rows   | `upload_relocation.collect_references`, now including minutes attachments; one file shared by several rows moves once                                    |
+| Which files  | Only files in the org-first layout, for departments that passed the connection test; a legacy-layout file is reported for `relocate_uploads.py` first    |
+| Manifest     | `/app/uploads/.s3-migration/`, written before any row changes                                                                                            |
+| Key rotation | `encrypt_uploads.py --rewrap` also rewraps bucket objects, found through the rows that reference them                                                    |
+| Backups      | `backup.sh` calls `migrate_uploads_to_s3.py --buckets` and warns which buckets hold files the archive does not; `docs/BACKUP.md` covers provider tooling |
+
+A moved anonymous screenshot's bucket copy carries the migration's time, not
+the submission's. Relocation now counts an `s3://` reference as already in the
+new layout; before this it reported one as missing on disk.
 
 ### Found in passing, not in this change
 
