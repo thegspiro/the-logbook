@@ -16,19 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_None yet._ PR #3556 (Feature 01, Auth & session lifecycle, pass 11) merged
-2026-10-22, not docs-only — see `AUTH-01-auth-session.md`'s **Pass 11**
-section and its own Log entry below — so only this row's clearing rides
-along here. `search_pull_requests` (`is:pr is:open head:claude/security-review-`)
-returned 0 results, checked once before starting and again immediately
-before branching, and `ListAgents` found no other reachable session — a
-watchdog pickup. Row 02 (Permissions & roles) was confirmed the next `⬜` by
-reading the rotation table directly. This iteration reviewed Feature 02,
-pass 11: **0 fixed, 0 new findings.** See `PERM-02-permissions-roles.md`'s
+**PR [#3557](https://github.com/thegspiro/the-logbook/pull/3557)** (branch
+`claude/security-review-permissions-roles-p11`) — Feature 02 (Permissions &
+roles), pass 11, a watchdog pickup. PR #3556 (Feature 01, Auth & session
+lifecycle, pass 11) merged 2026-10-22, not docs-only — see
+`AUTH-01-auth-session.md`'s **Pass 11** section and its own Log entry below
+— so only this row's clearing rides along here. `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 results, checked
+once before starting and again immediately before branching, and
+`ListAgents` found no other reachable session. Row 02 was confirmed the next
+`⬜` by reading the rotation table directly. This iteration reviewed Feature
+02, pass 11: **0 fixed, 0 new findings.** See `PERM-02-permissions-roles.md`'s
 **Pass 11** section. Rotation row 02 → ✅ (pending this PR's merge); next is
-Feature 03 (Public surface & webhooks). PR not yet opened — this row will be
-replaced with the real link in a second commit on this same branch once it
-is.
+Feature 03 (Public surface & webhooks).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01 Auth & session lifecycle pass 11, PR #3556, before it merged), preserved for history</summary>
