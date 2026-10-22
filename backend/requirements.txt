@@ -164,6 +164,8 @@ schemathesis==4.31.1
 # has now proposed an out-of-range bump twice.
 jsonschema-rs==0.58.6
 faker==40.43.0
+# Stands in for a department's S3 bucket in tests; never imported by app/.
+moto[s3]==5.2.4
 
 # Code Quality
 black==26.10.1

@@ -43,7 +43,7 @@ import os
 import struct
 import threading
 from dataclasses import dataclass
-from typing import BinaryIO, Iterator
+from typing import Iterator, Protocol
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes
@@ -95,6 +95,13 @@ class _Header:
 _lock = threading.Lock()
 # Keyed by (key, salt): the derivation depends on both.
 _keks: dict[tuple[str, str], _Kek] = {}
+
+
+class _Readable(Protocol):
+    """A file object or an object store's response body."""
+
+    def read(self, size: int = -1, /) -> bytes:
+        """Up to *size* bytes; all that remain when negative."""
 
 
 def _kek_for(master_key: str) -> _Kek:
@@ -226,7 +233,7 @@ def encrypt_bytes(data: bytes, *, chunk_size: int = CHUNK_SIZE) -> bytes:
     return b"".join(parts)
 
 
-def _iter_chunks(handle: BinaryIO) -> Iterator[bytes]:
+def _iter_chunks(handle: _Readable) -> Iterator[bytes]:
     header = _parse_header(handle.read(HEADER_SIZE))
     aead = _unwrap(header)
     count = _chunk_count(header.plain_size, header.chunk_size)
@@ -292,6 +299,62 @@ def plaintext_size(path: str) -> int:
     if is_encrypted_bytes(head):
         return _parse_header(head).plain_size
     return os.path.getsize(path)
+
+
+def plaintext_size_from_head(head: bytes, stored_size: int) -> int:
+    """:func:`plaintext_size` for a file read elsewhere than local disk: *head*
+    is its first :data:`HEADER_SIZE` bytes (fewer for a short file) and
+    *stored_size* its length as stored."""
+    if is_encrypted_bytes(head):
+        return _parse_header(head[:HEADER_SIZE]).plain_size
+    return stored_size
+
+
+class _Rejoined:
+    """A stream whose first bytes were already read, read from the start."""
+
+    def __init__(self, head: bytes, rest: _Readable):
+        self._head = head
+        self._rest = rest
+
+    def read(self, size: int = -1) -> bytes:
+        if size < 0:
+            data = self._head + self._rest.read()
+            self._head = b""
+            return data
+        out = self._head[:size]
+        self._head = self._head[size:]
+        if len(out) < size:
+            out += self._rest.read(size - len(out))
+        return out
+
+
+def open_plaintext_reader(
+    handle: _Readable, stored_size: int, chunk_size: int = CHUNK_SIZE
+) -> tuple[int, Iterator[bytes]]:
+    """``(plaintext size, chunk iterator)`` for a stored file arriving as a
+    stream (an object store's response body), encrypted or not.
+
+    As :func:`open_plaintext_stream`: the header is parsed and the key
+    unwrapped before this returns, so a file under an unknown key fails before
+    a download response has started.
+    """
+    head = handle.read(HEADER_SIZE)
+    if not is_encrypted_bytes(head):
+
+        def plain() -> Iterator[bytes]:
+            if head:
+                yield head
+            while True:
+                block = handle.read(chunk_size)
+                if not block:
+                    return
+                yield block
+
+        return stored_size, plain()
+    header = _parse_header(head)
+    _unwrap(header)
+    return header.plain_size, _iter_chunks(_Rejoined(head, handle))
 
 
 def key_id_of(path: str) -> bytes | None:

@@ -481,6 +481,36 @@ class FileStorageSettings(BaseModel):
         return copied
 
 
+class FileStorageStatusResponse(BaseModel):
+    """Where a department's new files go, and why (decision 31)."""
+
+    platform: str = Field(description="The platform saved in File Storage settings")
+    new_files_go_to: Literal["local", "s3"] = Field(
+        description="Where an upload made now is stored"
+    )
+    bucket: Optional[str] = Field(
+        None, description="The bucket the last passed connection test used"
+    )
+    endpoint_url: Optional[str] = None
+    activated_at: Optional[str] = Field(
+        None, description="When the last connection test passed (UTC, ISO 8601)"
+    )
+    changed_since_test: bool = Field(
+        False,
+        description=(
+            "The S3 settings were edited after the last passed test, so new "
+            "files go to local disk until it is run again"
+        ),
+    )
+    s3_problem: Optional[str] = Field(
+        None, description="Why the saved S3 settings cannot be used, if they cannot"
+    )
+    private_endpoints_allowed: bool = Field(
+        False,
+        description="The operator allows a private or plain-HTTP S3 endpoint",
+    )
+
+
 class SchedulingNotificationSettings(BaseModel):
     """Configuration for shift scheduling notifications.
 

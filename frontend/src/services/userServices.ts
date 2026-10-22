@@ -14,6 +14,7 @@ import type {
   EmailLinkDomain,
   EmailServiceSettings,
   FileStorageSettings,
+  FileStorageStatus,
   User,
   UserProfileUpdate,
 } from '../types/user';
@@ -577,6 +578,30 @@ export const organizationService = {
    */
   async updateFileStorageSettings(settings: FileStorageSettings): Promise<FileStorageSettings> {
     const response = await api.patch<FileStorageSettings>('/organization/settings/file-storage', settings);
+    return response.data;
+  },
+
+  /**
+   * Where new files go now, and whether the saved S3 settings have been tested
+   */
+  async getFileStorageStatus(): Promise<FileStorageStatus> {
+    const response = await api.get<FileStorageStatus>('/organization/settings/file-storage/status');
+    return response.data;
+  },
+
+  /**
+   * Test the saved S3 settings; on success new files go to the bucket
+   */
+  async activateS3Storage(): Promise<FileStorageStatus> {
+    const response = await api.post<FileStorageStatus>('/organization/settings/file-storage/s3/activate');
+    return response.data;
+  },
+
+  /**
+   * Store new files on the server's disk again
+   */
+  async deactivateS3Storage(): Promise<FileStorageStatus> {
+    const response = await api.post<FileStorageStatus>('/organization/settings/file-storage/s3/deactivate');
     return response.data;
   },
 
