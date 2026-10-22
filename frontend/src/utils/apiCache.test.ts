@@ -682,6 +682,7 @@ describe('apiCache', () => {
       // the event's attendee visibility.
       expect(isCacheable('/events/123/attendees')).toBe(false);
       expect(isCacheable('/events/123/eligible-members')).toBe(false);
+      expect(isCacheable('/inventory/kits/k-1/issue-plan?user_id=u-1')).toBe(false);
       expect(isCacheable('/events/123/external-attendees')).toBe(false);
       expect(isCacheable('/events/123/check-in-monitoring')).toBe(false);
     });
