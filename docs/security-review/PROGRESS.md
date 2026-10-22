@@ -16,7 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None currently open.
+**PR [#3562](https://github.com/thegspiro/the-logbook/pull/3562)** (branch
+`claude/security-review-finance-approvals-p11`) — Feature 05 (Finance &
+approvals), pass 11, a watchdog pickup. PR #3559 (Feature 04, Storefront &
+payments, pass 11) merged 2026-10-22, docs-only (0 fixed, 0 new findings — a
+re-verification pass with no code delta), so per the "docs-only PR is not a
+recordable event" rule it got no Log entry of its own — only this row's
+clearing rides along here. `search_pull_requests`
+(`is:pr is:open head:claude/security-review-`) returned 0 results, checked
+once before starting and again immediately before branching, and
+`ListAgents` found no other reachable session. Row 05 was confirmed the next
+`⬜` by reading the rotation table directly. This iteration reviewed Feature
+05, pass 11: **0 fixed, 0 new findings.** See
+`FIN-05-finance-approvals.md`'s **Pass 11** section. Rotation row 05 → ✅
+(pending this PR's merge); next is Feature 06 (Elections & ballots).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04 Storefront & payments pass 11, PR #3559, before it merged), preserved for history</summary>
