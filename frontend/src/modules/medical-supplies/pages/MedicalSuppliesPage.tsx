@@ -882,7 +882,7 @@ const MedicalSuppliesPage: React.FC = () => {
       {/* A real tablist (WAI-ARIA tabs pattern): screen readers announce
           "tab, 1 of 2, selected", and the arrow keys move between tabs with
           only the selected one in the Tab order. */}
-      <div className="tab-scroll mb-4" role="tablist" aria-label="Medical supply views">
+      <div className="tab-scroll mb-4" data-mobile-scroll-region role="tablist" aria-label="Medical supply views">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
