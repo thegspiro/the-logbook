@@ -16,20 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR not yet opened.** PR #3557 (Feature 02, Permissions & roles, pass 11)
-merged 2026-10-22, not docs-only — see `PERM-02-permissions-roles.md`'s
-**Pass 11** section and its own Log entry below — so only this row's
-clearing rides along here. `search_pull_requests`
+**PR [#3558](https://github.com/thegspiro/the-logbook/pull/3558)** (branch
+`claude/security-review-public-surface-webhooks-p11`) — Feature 03 (Public
+surface & webhooks), pass 11, a watchdog pickup. PR #3557 (Feature 02,
+Permissions & roles, pass 11) merged 2026-10-22, not docs-only — see
+`PERM-02-permissions-roles.md`'s **Pass 11** section and its own Log entry
+below — so only this row's clearing rides along here. `search_pull_requests`
 (`is:pr is:open head:claude/security-review-`) returned 0 results, checked
 once before starting and again immediately before branching, and
-`ListAgents` found no other reachable session — a watchdog pickup. Row 03
-(Public surface & webhooks) was confirmed the next `⬜` by reading the
-rotation table directly. This iteration reviewed Feature 03, pass 11:
-**0 fixed, 0 new findings.** See
+`ListAgents` found no other reachable session. Row 03 was confirmed the next
+`⬜` by reading the rotation table directly. This iteration reviewed Feature
+03, pass 11: **0 fixed, 0 new findings.** See
 `PUB-03-public-surface-webhooks.md`'s **Pass 11** section. Rotation row 03
 → ✅ (pending this PR's merge); next is Feature 04 (Storefront & payments).
-This row will be replaced with the real PR link in a second commit on this
-same branch once it is opened.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 02 Permissions & roles pass 11, PR #3557, before it merged), preserved for history</summary>
