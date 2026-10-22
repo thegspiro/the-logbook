@@ -3050,15 +3050,22 @@ send each address its own message and record each address's outcome.
   is not counted. A package send has its own one-at-a-time guard and does not
   wait on a ballot send. `POST /elections/{id}/send-package` keeps the
   synchronous path for API callers.
-- **Nominations-open announcement:** sent after the open-nominations response,
-  in its own session. It skips sending if nominations have closed again by
+- **Nominations-open announcement:** queued by the open-nominations endpoint
+  as a `ballot_send_jobs` row of `kind = 'announcement'`, with its own
+  one-at-a-time guard. It skips sending if nominations have closed again by
   then.
+
+**Fixed 2026-10-21: the announcement's outcome is shown.** It used to run as
+a FastAPI background task whose outcome only reached the log and the audit
+table. The election response now carries the latest announcement job
+(`nominations_announcement`, election managers only), and the Nominations tab
+shows "Emailing members…", then how many members were emailed and how many
+could not be reached. A miss, or a send that fails outright, writes a
+`nominations_announcement_failed` audit row and emails the election managers.
+A restart mid-send reads as interrupted after 30 minutes, like any other job.
 
 What remains:
 
-- **The announcement's outcome is only logged.** It was best-effort before
-  and still is: nobody is shown which members it missed, and a restart while
-  it runs stops it partway with no record beyond the log.
 - **A package job interrupted by a restart** has the same limits as an
   interrupted ballot job (see the entry above): it reads as failed after 30
   minutes, and some recipients may already have the package.

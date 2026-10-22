@@ -719,6 +719,9 @@ class ElectionResponse(UTCResponseBase):
     # Resolved by the endpoint; reason is "ballot_changed" or "reopened".
     ballots_must_be_resent: bool = False
     ballots_resend_reason: Optional[str] = None
+    # The latest nominations-open announcement, for the managers only.
+    # Resolved by the endpoint.
+    nominations_announcement: Optional["BallotSendJobResponse"] = None
     tie_policy: str = "co_winners"
     status: str
     created_by: Optional[UUID] = None
@@ -1326,7 +1329,7 @@ class EmailBallotResponse(BaseModel):
 class BallotSendJobResponse(UTCResponseBase):
     """A background ballot send and, once it has finished, its outcome.
 
-    ``kind`` is ballots or reminder. ``status`` is queued, running, completed
+    ``kind`` is ballots, reminder, package or announcement. ``status`` is queued, running, completed
     or failed. ``result`` is set on completed and carries what the synchronous
     send-ballot / remind-non-voters endpoint returns; ``error`` is set on
     failed.
@@ -1879,6 +1882,7 @@ class VoteVoidSummary(BaseModel):
 
 
 VoteIntegrityResponse.model_rebuild()
+ElectionResponse.model_rebuild()
 
 
 class SoftDeleteVoteResponse(BaseModel):

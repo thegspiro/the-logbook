@@ -97,6 +97,8 @@ export interface Election {
   /** Ballot links already sent were retired and not yet resent (W50-36 / W50-47). */
   ballots_must_be_resent?: boolean;
   ballots_resend_reason?: 'ballot_changed' | 'reopened' | null;
+  /** The latest nominations-open announcement; election managers only. */
+  nominations_announcement?: BallotSendJob | null;
   // Corrections to the result after close, oldest first (W50-9)
   results_revisions?: ResultsRevision[] | null;
   created_at: string;
@@ -447,7 +449,7 @@ export interface EmailBallotResponse {
   message: string;
 }
 
-/** A ballot send or non-voter reminder running in the background; `result` is set once it completes, `error` once it fails. */
+/** A background send (ballots, reminder, package or nominations announcement); `result` is set once it completes, `error` once it fails. */
 export interface BallotSendJob {
   id: string;
   election_id: string;
