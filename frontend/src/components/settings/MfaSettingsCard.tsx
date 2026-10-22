@@ -258,7 +258,7 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         {enabled ? (
-          <ShieldCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
+          <ShieldCheck className="h-5 w-5 text-green-700 dark:text-green-400" />
         ) : (
           <ShieldOff className="text-theme-text-muted h-5 w-5" />
         )}

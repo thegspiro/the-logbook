@@ -3296,3 +3296,24 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   **191 passed** · new file 13 pass, 2 fail without the fix, 0 under the unit job's marker
   expression · route-permission check 0 errors · no frontend change. See admin-hours.md →
   Pass 5. Next: B16 reports & analytics.
+
+---
+
+## 🏁 Final page sweep (2026-10-20)
+
+A pre-deployment pass over all 249 fixed routes and 35 detail pages at phone,
+tablet and desktop widths, signed in as an administrator and as a plain member,
+plus the public pages signed out — driven in a real browser against a real
+backend. **Fixed:** pages that scrolled sideways at phone or tablet width, accessibility defects
+(unnamed controls, nested interactive rows, QR codes with no alternative, a
+malformed definition list), contrast failures in the orange, emerald and
+warning-text palettes and on the compliance print sheet, and two unused
+components. `GET /health/detailed` was found unauthenticated on staging; `main`
+closed it independently by serving the route in development only, and that fix
+was kept over a `settings.manage` dependency. `/onboarding/*` now redirects to sign-in once setup is
+finished and an unknown URL shows "Page not found" instead of redirecting
+silently (both approved by the owner). No owner decision from the sweep is left open.
+**Verified good:** every protected route redirects signed
+out, a member is denied every administrative page, no token in a response body,
+secrets redacted for non-admins. See
+[final-sweep-2026-10.md](./final-sweep-2026-10.md).

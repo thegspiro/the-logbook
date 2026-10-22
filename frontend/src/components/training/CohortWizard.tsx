@@ -387,7 +387,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
                   aria-pressed={meetingDays.includes(day.value)}
                   className={`mobile-touch-target rounded-lg border px-3 text-sm ${
                     meetingDays.includes(day.value)
-                      ? 'border-red-500 bg-red-600/20 text-red-700 dark:text-red-400'
+                      ? 'border-red-500 bg-red-600/20 text-red-800 dark:text-red-400'
                       : 'border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted'
                   }`}
                 >
@@ -496,7 +496,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel
                         aria-pressed={blackoutDates.includes(day)}
                         className={`mobile-touch-target rounded-lg border px-3 text-xs whitespace-nowrap ${
                           blackoutDates.includes(day)
-                            ? 'border-red-500 bg-red-600/20 text-red-700 dark:text-red-400'
+                            ? 'border-red-500 bg-red-600/20 text-red-800 dark:text-red-400'
                             : 'border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted'
                         }`}
                       >

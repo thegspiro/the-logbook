@@ -1422,7 +1422,7 @@ export const EventsPage: React.FC = () => {
                     }`}
                   >
                     <Check
-                      className={`h-5 w-5 shrink-0 ${importResult.importedCount > 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}
+                      className={`h-5 w-5 shrink-0 ${importResult.importedCount > 0 ? 'text-green-700 dark:text-green-400' : 'text-yellow-700 dark:text-yellow-400'}`}
                     />
                     <span className="text-theme-text-primary text-sm font-medium">
                       {importResult.importedCount} event{importResult.importedCount !== 1 ? 's' : ''} imported

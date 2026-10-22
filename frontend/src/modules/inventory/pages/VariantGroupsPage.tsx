@@ -176,7 +176,7 @@ const StockMatrix: React.FC<{ items: InventoryItem[] }> = ({ items }) => {
                       className={`inline-flex min-w-[2rem] items-center justify-center rounded px-1.5 py-0.5 text-xs font-semibold ${
                         isLow
                           ? 'bg-red-500/10 text-red-700 dark:text-red-400'
-                          : 'bg-green-500/10 text-green-700 dark:text-green-400'
+                          : 'bg-green-500/10 text-green-800 dark:text-green-400'
                       }`}
                     >
                       {onHand}
@@ -606,7 +606,7 @@ const VariantGroupsPage: React.FC = () => {
               <span
                 className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
                   detailGroup.active
-                    ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                    ? 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-400'
                     : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
                 }`}
               >

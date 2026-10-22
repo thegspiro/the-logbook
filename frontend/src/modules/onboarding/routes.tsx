@@ -21,6 +21,10 @@ import {
   SetupPrerequisites,
 } from './pages';
 import { SecurityCheckPlaceholder } from './components/PlaceholderPages';
+import { OnboardingGate } from './components/OnboardingGate';
+
+/** Wraps a setup step so a configured installation redirects to sign-in. */
+const gated = (page: React.ReactElement) => <OnboardingGate>{page}</OnboardingGate>;
 
 /**
  * Onboarding Module Routes
@@ -38,51 +42,60 @@ export const getOnboardingRoutes = () => {
       {/* Onboarding flow */}
       <Route path="/onboarding" element={<OnboardingCheck />} />
 
+      {/* The final handoff is outside the gate: the last step of a first run
+          lands here just after setup has been marked finished. */}
+      <Route path="/onboarding/complete" element={<SetupComplete />} />
+
+      {/* Every other setup step is for a department that is not set up yet. The
+          gate sends a visitor to sign-in once setup is finished, instead of
+          showing a form the backend would refuse to save. Each page is wrapped
+          rather than nested under a layout route: modules keep their routes flat
+          (App.tsx owns the nesting), which test_module_api_gating relies on. */}
       {/* Pre-flight, not a step: nothing is collected or saved here. It says
           what the flow will ask for, so nobody starts and then leaves to go
           hunting for an SMTP password. */}
-      <Route path="/onboarding/prepare" element={<SetupPrerequisites />} />
+      <Route path="/onboarding/prepare" element={gated(<SetupPrerequisites />)} />
 
       {/* Step 1 - Organization Setup. Order lives in config/steps.ts. */}
-      <Route path="/onboarding/start" element={<OrganizationSetup />} />
+      <Route path="/onboarding/start" element={gated(<OrganizationSetup />)} />
 
       {/* Legacy route redirect: the old department-info step is now folded into OrganizationSetup */}
       <Route path="/onboarding/department" element={<Navigate to="/onboarding/start" replace />} />
 
       {/* Stations beyond headquarters */}
-      <Route path="/onboarding/stations" element={<StationSetup />} />
+      <Route path="/onboarding/stations" element={gated(<StationSetup />)} />
 
       {/* Apparatus */}
-      <Route path="/onboarding/apparatus" element={<ApparatusSetup />} />
+      <Route path="/onboarding/apparatus" element={gated(<ApparatusSetup />)} />
 
       {/* Navigation Choice - last step; a preference, not a prerequisite */}
-      <Route path="/onboarding/navigation-choice" element={<NavigationChoice />} />
+      <Route path="/onboarding/navigation-choice" element={gated(<NavigationChoice />)} />
 
       {/* Onboarding wizard - Email Platform */}
-      <Route path="/onboarding/email-platform" element={<EmailPlatformChoice />} />
+      <Route path="/onboarding/email-platform" element={gated(<EmailPlatformChoice />)} />
 
       {/* Onboarding wizard - Email Configuration */}
-      <Route path="/onboarding/email-config" element={<EmailConfiguration />} />
+      <Route path="/onboarding/email-config" element={gated(<EmailConfiguration />)} />
 
       {/* Onboarding wizard - File Storage Choice */}
-      <Route path="/onboarding/file-storage" element={<FileStorageChoice />} />
+      <Route path="/onboarding/file-storage" element={gated(<FileStorageChoice />)} />
 
       {/* Onboarding wizard - File Storage Configuration */}
-      <Route path="/onboarding/file-storage-config" element={<FileStorageConfiguration />} />
+      <Route path="/onboarding/file-storage-config" element={gated(<FileStorageConfiguration />)} />
 
       {/* Onboarding wizard - Authentication Choice */}
-      <Route path="/onboarding/authentication" element={<AuthenticationChoice />} />
+      <Route path="/onboarding/authentication" element={gated(<AuthenticationChoice />)} />
 
       {/* Onboarding wizard - IT Team & Backup Access */}
-      <Route path="/onboarding/it-team" element={<ITTeamBackupAccess />} />
+      <Route path="/onboarding/it-team" element={gated(<ITTeamBackupAccess />)} />
 
       {/* Onboarding wizard - Position Setup */}
-      <Route path="/onboarding/positions" element={<PositionSetup />} />
+      <Route path="/onboarding/positions" element={gated(<PositionSetup />)} />
       {/* Legacy route redirect for roles */}
       <Route path="/onboarding/roles" element={<Navigate to="/onboarding/positions" replace />} />
 
       {/* Onboarding wizard - Module Overview */}
-      <Route path="/onboarding/modules" element={<ModuleOverview />} />
+      <Route path="/onboarding/modules" element={gated(<ModuleOverview />)} />
 
       {/* Legacy route redirect: the per-module configuration step is gone. It
           collected manage positions into the wizard's store and submitted
@@ -92,22 +105,19 @@ export const getOnboardingRoutes = () => {
       <Route path="/onboarding/modules/:moduleId/config" element={<Navigate to="/onboarding/modules" replace />} />
 
       {/* Legacy route redirect */}
-      <Route path="/onboarding/module-selection" element={<ModuleOverview />} />
+      <Route path="/onboarding/module-selection" element={gated(<ModuleOverview />)} />
 
       {/* Step 2 - System Owner Creation. Identity before the rest of setup. */}
-      <Route path="/onboarding/system-owner" element={<SystemOwnerCreation />} />
+      <Route path="/onboarding/system-owner" element={gated(<SystemOwnerCreation />)} />
 
       {/* Encryption key safekeeping - required; there is no skip */}
-      <Route path="/onboarding/encryption-key" element={<KeyCustody />} />
+      <Route path="/onboarding/encryption-key" element={gated(<KeyCustody />)} />
 
       {/* Legacy route redirect for admin-user */}
       <Route path="/onboarding/admin-user" element={<Navigate to="/onboarding/system-owner" replace />} />
 
-      {/* Onboarding wizard - final handoff into the department setup checklist */}
-      <Route path="/onboarding/complete" element={<SetupComplete />} />
-
       {/* Security Check - Placeholder */}
-      <Route path="/onboarding/security-check" element={<SecurityCheckPlaceholder />} />
+      <Route path="/onboarding/security-check" element={gated(<SecurityCheckPlaceholder />)} />
     </React.Fragment>
   );
 };

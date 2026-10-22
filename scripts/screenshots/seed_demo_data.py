@@ -2457,7 +2457,18 @@ class Seeder:
             updates = dict(guest_settings)
             if ends and ends < iso(NOW):
                 updates.update(window)
-            self.api.patch(f"/events/{pick(event, 'id')}", updates)
+            # Reopen and retry on the finalized refusal, as the early check-in
+            # fixture does: a capture run finalizes this event (it is the
+            # running event 04-40 ends), and a finalized event's times cannot
+            # move, so the next seed failed here and every guest check-in shot
+            # after it found no live event.
+            try:
+                self.api.patch(f"/events/{pick(event, 'id')}", updates)
+            except ApiError as exc:
+                if exc.code != 409 or "finalized" not in exc.detail.lower():
+                    raise
+                self.api.post(f"/events/{pick(event, 'id')}/reopen-attendance", {})
+                self.api.patch(f"/events/{pick(event, 'id')}", updates)
         else:
             event = self.api.post(
                 "/events",

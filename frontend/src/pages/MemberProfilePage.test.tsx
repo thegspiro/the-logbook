@@ -513,6 +513,30 @@ describe('MemberProfilePage membership and privacy', () => {
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 
+  // Members review B: the chip read a bare lowercase "active" with only a
+  // tooltip saying it was a control, and the dialog it opened was a styled
+  // div — no dialog role, no name, and Escape did nothing.
+  it('labels the status chip with the status and what pressing it does', async () => {
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    const chip = await screen.findByRole('button', { name: 'Change status, currently Active' });
+    expect(chip).toHaveTextContent('Status: Active');
+    expect(chip).toHaveTextContent('Change');
+  });
+
+  it('opens the status change as a named dialog that Escape closes', async () => {
+    grantedPermissions = ['members.manage'];
+    renderWithRouter(<MemberProfilePage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Change status, currently Active' }));
+    const dialog = screen.getByRole('dialog', { name: 'Change Member Status' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Change Member Status' })).not.toBeInTheDocument();
+  });
+
   it('does not offer Archived as an ordinary status change', async () => {
     grantedPermissions = ['members.manage'];
     renderWithRouter(<MemberProfilePage />);

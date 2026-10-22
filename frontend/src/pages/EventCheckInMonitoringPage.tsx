@@ -294,7 +294,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
         >
           <div className="flex items-start gap-3">
             <AlertTriangle
-              className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400"
+              className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-400"
               aria-hidden="true"
             />
             <div className="min-w-0 flex-1">

@@ -154,7 +154,7 @@ const DepartmentSetupPage: React.FC = () => {
           </div>
           <div className="text-right">
             {allComplete ? (
-              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
                 <PartyPopper className="h-6 w-6" />
                 <span className="text-lg font-semibold">All done</span>
               </div>
@@ -170,7 +170,7 @@ const DepartmentSetupPage: React.FC = () => {
           />
         </div>
         {allComplete && (
-          <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400">
+          <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-400">
             Every step is complete. Come back here any time to review your setup.
           </p>
         )}
@@ -261,12 +261,12 @@ const SetupCard: React.FC<SetupCardProps> = ({ item, onNavigate, onAcknowledge, 
                 {item.title}
               </h3>
               {item.required && !item.is_complete && (
-                <span className="rounded-sm bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-600 uppercase dark:text-red-400">
+                <span className="rounded-sm bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-700 uppercase dark:text-red-400">
                   Required
                 </span>
               )}
               {item.is_complete && item.count > 0 && item.kind !== 'review' && (
-                <span className="rounded-sm bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                <span className="rounded-sm bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:text-emerald-400">
                   {item.count} {item.count === 1 ? 'item' : 'items'}
                 </span>
               )}

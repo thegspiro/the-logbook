@@ -46,7 +46,7 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
               className="border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
             >
               <div className="flex items-center gap-3">
-                <Eye className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <Eye className="h-4 w-4 text-green-700 dark:text-green-400" />
                 <span
                   className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getEventTypeBadgeColor(eventType)}`}
                 >
@@ -129,7 +129,7 @@ const VisibilitySection: React.FC<VisibilitySectionProps> = ({
                 >
                   <div className="flex items-center gap-3">
                     {isVisible ? (
-                      <Eye className="h-4 w-4 text-green-600 dark:text-green-400" />
+                      <Eye className="h-4 w-4 text-green-700 dark:text-green-400" />
                     ) : (
                       <EyeOff className="text-theme-text-muted h-4 w-4" />
                     )}

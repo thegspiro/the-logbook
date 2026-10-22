@@ -904,7 +904,7 @@ export const UserSettingsPage: React.FC = () => {
             <div className="space-y-6">
               {forcePasswordChange && (
                 <div className="flex items-start gap-3 rounded-lg border border-yellow-300 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
-                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-400" />
                   <div>
                     <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Password change required</p>
                     <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-400">
@@ -1020,7 +1020,7 @@ export const UserSettingsPage: React.FC = () => {
                             />
                           )}
                           <span
-                            className={check.valid ? 'text-green-600 dark:text-green-300' : 'text-theme-text-muted'}
+                            className={check.valid ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}
                           >
                             {check.label}
                           </span>

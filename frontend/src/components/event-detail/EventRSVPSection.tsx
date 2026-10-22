@@ -164,7 +164,7 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
                           rsvp.early_check_in_minutes != null &&
                           rsvp.early_check_in_minutes > 0 && (
                             <span
-                              className="text-[10px] text-yellow-600 dark:text-yellow-400"
+                              className="text-[10px] text-yellow-700 dark:text-yellow-400"
                               title="Credited from the event's scheduled start. Edit times if this member was working before then."
                             >
                               (tapped in {rsvp.early_check_in_minutes} min early)

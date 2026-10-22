@@ -671,6 +671,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       </select>
                     ) : (
                       <input
+                        id="session-location"
                         type="text"
                         value={formData.location || ''}
                         onChange={(e) => updateField('location', e.target.value)}

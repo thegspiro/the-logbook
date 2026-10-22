@@ -127,7 +127,7 @@ export const DriverBlockedDialog: React.FC<DriverBlockedDialogProps> = ({
     <Modal isOpen={isOpen} onClose={onClose} title="Driver qualification required" size="md">
       <div className="space-y-4">
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-          <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
           <div className="min-w-0">
             <p className="text-theme-text-primary text-sm font-medium">
               {userName} was not assigned as driver

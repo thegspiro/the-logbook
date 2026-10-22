@@ -801,7 +801,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           </button>
           <div className="flex items-center gap-3">
             {saved && (
-              <span className="text-sm text-green-600 dark:text-green-400" role="status" aria-live="polite">
+              <span className="text-sm text-green-700 dark:text-green-400" role="status" aria-live="polite">
                 Settings saved
               </span>
             )}

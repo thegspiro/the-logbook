@@ -6059,8 +6059,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       aria-label="Template status"
       className={`flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
         form.isActive
-          ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-          : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+          ? 'bg-green-500/10 text-green-800 dark:text-green-400'
+          : 'bg-amber-500/10 text-amber-800 dark:text-amber-400'
       }`}
     >
       {form.isActive ? 'Published' : 'Draft'}
@@ -6233,7 +6233,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             const first = blockers[0];
             if (first) goToBlocker(first.anchorId, first.expandKey, first.focusId, first.editorTarget, first.addKey);
           }}
-          className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-700 hover:bg-amber-500/25 dark:text-amber-400"
+          className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-800 hover:bg-amber-500/25 dark:text-amber-400"
         >
           {blockers.length} to fix
         </button>
@@ -6415,7 +6415,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPresetPicker(!showPresetPicker)}
-                  className="flex min-h-8 items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-2.5 text-xs font-medium text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                  className="flex min-h-8 items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-2.5 text-xs font-medium text-orange-800 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
                 >
                   <Truck className="h-3.5 w-3.5" />
                   Vehicle preset
@@ -6470,7 +6470,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   onClick={() => void loadVehiclePreset(key)}
                   className="border-theme-surface-border hover:bg-theme-surface-hover flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:rounded-b-xl last:border-b-0"
                 >
-                  <Truck className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" aria-hidden="true" />
+                  <Truck className="h-4 w-4 shrink-0 text-orange-700 dark:text-orange-400" aria-hidden="true" />
                   <span className="min-w-0 flex-1">
                     <span className="text-theme-text-primary block text-sm font-semibold">{preset.label}</span>
                     <span className="text-theme-text-muted block text-xs">
@@ -6503,7 +6503,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     onClick={() => setShowPresetPicker(true)}
                     className="border-theme-surface-border hover:bg-theme-surface-hover flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:rounded-b-xl last:border-b-0"
                   >
-                    <Truck className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" aria-hidden="true" />
+                    <Truck className="h-4 w-4 shrink-0 text-orange-700 dark:text-orange-400" aria-hidden="true" />
                     <span className="min-w-0 flex-1">
                       <span className="text-theme-text-primary block text-sm font-semibold">Use a vehicle layout</span>
                       <span className="text-theme-text-muted block text-xs">
@@ -7004,7 +7004,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <div className="space-y-3">
                   {changelogEntries.map((entry) => {
                     const actionColors: Record<string, string> = {
-                      add: 'text-green-600',
+                      add: 'text-green-700 dark:text-green-600',
                       update: 'text-blue-600',
                       delete: 'text-red-600',
                       swap: 'text-violet-600',

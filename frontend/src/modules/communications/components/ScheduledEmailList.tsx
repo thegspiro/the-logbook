@@ -88,7 +88,9 @@ const ScheduledEmailList: React.FC = () => {
                 </div>
                 {email.error_message && <div className="mt-1 text-xs text-red-500">{email.error_message}</div>}
                 {email.sent_at && (
-                  <div className="mt-0.5 text-xs text-green-600">Sent: {formatShortDateTime(email.sent_at, tz)}</div>
+                  <div className="mt-0.5 text-xs text-green-700 dark:text-green-600">
+                    Sent: {formatShortDateTime(email.sent_at, tz)}
+                  </div>
                 )}
               </div>
             </div>

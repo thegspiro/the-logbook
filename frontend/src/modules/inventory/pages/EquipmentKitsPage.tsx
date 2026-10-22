@@ -584,7 +584,7 @@ const EquipmentKitsPage: React.FC = () => {
               <span
                 className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
                   detailKit.active
-                    ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+                    ? 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-400'
                     : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
                 }`}
               >
@@ -614,7 +614,7 @@ const EquipmentKitsPage: React.FC = () => {
                             <Ruler className="h-3 w-3" /> Size select
                           </span>
                         )}
-                        {li.optional && <span className="text-amber-600 dark:text-amber-400">Optional</span>}
+                        {li.optional && <span className="text-amber-700 dark:text-amber-400">Optional</span>}
                       </div>
                     </div>
                   ))}

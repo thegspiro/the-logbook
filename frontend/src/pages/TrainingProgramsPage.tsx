@@ -560,7 +560,7 @@ const TrainingProgramsPage: React.FC = () => {
                               <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                                 <h3 className="text-theme-text-primary text-xl font-semibold">{program.name}</h3>
                                 {program.target_position && (
-                                  <span className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-700 dark:text-red-400">
+                                  <span className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-800 dark:text-red-400">
                                     {program.target_position}
                                   </span>
                                 )}
@@ -717,7 +717,7 @@ const TrainingProgramsPage: React.FC = () => {
                                     req.source === 'national'
                                       ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
                                       : req.source === 'state'
-                                        ? 'bg-green-500/20 text-green-700 dark:text-green-400'
+                                        ? 'bg-green-500/20 text-green-800 dark:text-green-400'
                                         : 'bg-theme-surface-secondary text-theme-text-muted'
                                   }`}
                                 >
@@ -728,7 +728,7 @@ const TrainingProgramsPage: React.FC = () => {
                                     {req.registry_name}
                                   </span>
                                 )}
-                                <span className="rounded-sm bg-orange-500/20 px-2 py-1 text-xs text-orange-700 dark:text-orange-400">
+                                <span className="rounded-sm bg-orange-500/20 px-2 py-1 text-xs text-orange-800 dark:text-orange-400">
                                   {req.requirement_type}
                                 </span>
                               </div>

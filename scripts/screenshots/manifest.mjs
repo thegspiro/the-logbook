@@ -6414,6 +6414,11 @@ export const SHOTS = [
     anchor: "what a picture adds is the effect",
     alt: "Settings → Email with SMTP (any provider) selected and the Fastmail preset applied — the credential line naming the provider, and the host, port and encryption it filled in",
     route: "/settings?tab=email",
+    // The demo backend's link address is localhost, which the email screens
+    // now flag in a red notice above the card; served the demo's public
+    // address like 08-99, so the notice is not pictured where it is not the
+    // subject.
+    beforeNavigate: mockLinkDomain(GUIDE08_PUBLIC_LINK_DOMAIN),
     expect: "SMTP Server",
     // Clipped to the card. A fullPage shot of this route is two thirds
     // navigation and footer, and the subject is one panel.
@@ -16021,6 +16026,11 @@ export const SHOTS = [
       "Screenshot of the Email Configuration page showing the Cloudflare platform",
     alt: "Email configuration with the sending platform and credentials",
     route: "/settings?tab=email",
+    // The demo backend's link address is localhost, which the email screens
+    // now flag in a red notice above the card; served the demo's public
+    // address like 08-99, so the notice is not pictured where it is not the
+    // subject.
+    beforeNavigate: mockLinkDomain(GUIDE08_PUBLIC_LINK_DOMAIN),
     // The credential fields are per-platform and the demo org has none set, so
     // the page opens on "Other / None" with nothing below it. Selecting
     // Cloudflare reveals the fields the placeholder names; it is local state
@@ -18688,6 +18698,11 @@ export const SHOTS = [
       "Settings → Email with the Test Connection button and a successful test result",
     alt: "Settings → Email with Microsoft 365 selected: the App registration (OAuth) and App Password choice with App Password chosen, the notice that Microsoft disables it by default at the end of December 2026, and a Test Connection toast reading SMTP connection successful — a simulated result, since the demo has no Microsoft 365 tenant",
     route: "/settings?tab=email",
+    // The demo backend's link address is localhost, which the email screens
+    // now flag in a red notice above the card; served the demo's public
+    // address like 08-99, so the notice is not pictured where it is not the
+    // subject.
+    beforeNavigate: mockLinkDomain(GUIDE08_PUBLIC_LINK_DOMAIN),
     viewport: { width: 1440, height: 1300 },
     expect: "SMTP connection successful",
     prepare: async (page) => {
@@ -19615,6 +19630,8 @@ export const SHOTS = [
     // edited. The backup list is therefore served from a fixture; the rest of
     // the screen is the live template.
     beforeNavigate: async (page) => {
+      // Not the localhost link-address notice above the editor: see 20-11.
+      await mockLinkDomain(GUIDE08_PUBLIC_LINK_DOMAIN)(page);
       await page.route("**/api/v1/email-templates/*/backups", (route) =>
         route.fulfill({
           status: 200,

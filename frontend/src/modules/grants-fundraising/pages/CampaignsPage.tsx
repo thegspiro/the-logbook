@@ -469,6 +469,7 @@ const CampaignsPage: React.FC = () => {
 
         {/* Status filter */}
         <select
+          aria-label="Filter by status"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className={selectClass + ' w-auto'}
@@ -482,7 +483,12 @@ const CampaignsPage: React.FC = () => {
         </select>
 
         {/* Type filter */}
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={selectClass + ' w-auto'}>
+        <select
+          aria-label="Filter by type"
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className={selectClass + ' w-auto'}
+        >
           <option value="">All Types</option>
           {TYPE_OPTIONS.map((t) => (
             <option key={t} value={t}>

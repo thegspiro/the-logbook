@@ -131,7 +131,7 @@ const NeedsAttention: React.FC<{
             <span className="text-theme-text-secondary text-sm">{row.party}</span>
             <span className="text-theme-text-muted text-sm">{row.when}</span>
             <span
-              className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ${row.severity === 'Critical' ? 'bg-red-500/15 text-red-700 dark:text-red-300' : row.severity === 'High' ? 'bg-orange-500/15 text-orange-700 dark:text-orange-300' : 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300'}`}
+              className={`w-fit rounded-full px-2 py-1 text-xs font-semibold ${row.severity === 'Critical' ? 'bg-red-500/15 text-red-700 dark:text-red-300' : row.severity === 'High' ? 'bg-orange-500/15 text-orange-800 dark:text-orange-300' : 'bg-yellow-500/15 text-yellow-800 dark:text-yellow-300'}`}
             >
               {row.severity}
             </span>
@@ -155,15 +155,15 @@ const NeedsAttention: React.FC<{
 const TONE_CLASSES: Record<InventoryHubTone, string> = {
   blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   purple: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-  orange: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-  cyan: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
-  yellow: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
-  green: 'bg-green-500/10 text-green-600 dark:text-green-400',
-  red: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  orange: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+  cyan: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400',
+  yellow: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+  green: 'bg-green-500/10 text-green-700 dark:text-green-400',
+  red: 'bg-red-500/10 text-red-700 dark:text-red-400',
   indigo: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
-  amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  sky: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
-  emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  amber: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  sky: 'bg-sky-500/10 text-sky-700 dark:text-sky-400',
+  emerald: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
   slate: 'bg-theme-surface-secondary text-theme-text-muted group-hover:text-theme-text-primary',
 };
 
@@ -584,23 +584,23 @@ export const InventoryAdminHub: React.FC = () => {
     items: { badge: summary?.non_medical_items },
     checkouts: {
       badge: summary?.overdue_checkouts,
-      badgeColor: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+      badgeColor: 'bg-amber-500/10 text-amber-800 dark:text-amber-400',
     },
     maintenance: {
       badge: summary?.maintenance_due_count,
-      badgeColor: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+      badgeColor: 'bg-orange-500/10 text-orange-800 dark:text-orange-400',
     },
     requests: {
       badge: pendingRequests > 0 ? pendingRequests : undefined,
-      badgeColor: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+      badgeColor: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
     },
     returns: {
       badge: pendingReturns > 0 ? pendingReturns : undefined,
-      badgeColor: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+      badgeColor: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
     },
     reorder: {
       badge: lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined,
-      badgeColor: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+      badgeColor: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400',
     },
   };
   const statFor = (id: string): CardStat => cardStats[id] ?? {};

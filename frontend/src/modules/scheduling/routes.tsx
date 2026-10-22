@@ -192,7 +192,7 @@ export const getSchedulingRoutes = () => {
       {/* Sections are routes, so the bare path names none. It forwards to the
           one its `?tab=` names, which is what keeps every link written against
           the older query-parameter contract landing somewhere real instead of
-          on the catch-all's redirect to the dashboard. */}
+          on the "Page not found" screen. */}
       <Route
         path="/scheduling/admin/settings"
         element={

@@ -259,7 +259,7 @@ export const EventTemplatesPage: React.FC = () => {
                       aria-label={template.is_active ? `Deactivate ${template.name}` : `Activate ${template.name}`}
                     >
                       {template.is_active ? (
-                        <ToggleRight className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        <ToggleRight className="h-5 w-5 text-green-700 dark:text-green-400" />
                       ) : (
                         <ToggleLeft className="h-5 w-5" />
                       )}
